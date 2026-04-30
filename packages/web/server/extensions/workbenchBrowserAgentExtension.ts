@@ -70,21 +70,10 @@ const ScriptParams = Type.Object({
   timeoutMs: Type.Optional(Type.Number({ description: 'Hard timeout in milliseconds. Defaults to 30000, max 60000.' })),
 });
 
-const EmptyParams = Type.Object({});
-const ScreenshotParams = Type.Object({
-  reason: Type.Union([
-    Type.Literal('visual'),
-    Type.Literal('visual_layout'),
-    Type.Literal('image_or_canvas'),
-    Type.Literal('user_requested'),
-    Type.Literal('snapshot_insufficient'),
-  ], { description: 'Why a screenshot is necessary. Allowed values: visual_layout, image_or_canvas, user_requested, snapshot_insufficient. The legacy alias visual is accepted as visual_layout. Do not use screenshots for normal page text, feeds, lists, forms, or navigation state.' }),
-  note: Type.String({ description: 'Short explanation of why browser_snapshot is insufficient for this observation.' }),
+const SnapshotParams = Type.Object({
+  includeScreenshot: Type.Optional(Type.Boolean({ description: 'Also include a screenshot image. Default false; use only when visual layout/image rendering matters or the user requested it.' })),
 });
-
-function normalizeScreenshotReason(reason: string): 'visual_layout' | 'image_or_canvas' | 'user_requested' | 'snapshot_insufficient' {
-  return reason === 'visual' ? 'visual_layout' : reason as 'visual_layout' | 'image_or_canvas' | 'user_requested' | 'snapshot_insufficient';
-}
+const ScreenshotParams = Type.Object({});
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
@@ -96,15 +85,40 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       promptGuidelines: [
         'Targets the visible built-in Workbench Browser, not agent-browser or Chrome.',
         'Use this before browser_script when you need selectors or refs like @e1.',
+        'Set includeScreenshot=true only when visual layout/image rendering matters or the user requested a screenshot; leave it false for normal text, feeds, forms, and page state.',
         'Refs are snapshot-scoped; refresh the snapshot after navigation or major page changes.',
       ],
-      parameters: EmptyParams,
-      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      parameters: SnapshotParams,
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         const snapshot = await requireHost().snapshot(conversationId);
+        const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+          { type: 'text' as const, text: formatSnapshot(snapshot) },
+        ];
+        let screenshotDetails: Record<string, unknown> | undefined;
+        if (params.includeScreenshot === true) {
+          const screenshot = await requireHost().screenshot(conversationId) as {
+            dataBase64?: string;
+            mimeType?: string;
+            url?: string;
+            title?: string;
+            viewport?: unknown;
+            capturedAt?: string;
+          };
+          content.push({ type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' });
+          screenshotDetails = {
+            url: screenshot.url,
+            title: screenshot.title,
+            viewport: screenshot.viewport,
+            capturedAt: screenshot.capturedAt,
+          };
+        }
         return {
-          content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
-          details: snapshot as Record<string, unknown>,
+          content,
+          details: {
+            snapshot: snapshot as Record<string, unknown>,
+            ...(screenshotDetails ? { screenshot: screenshotDetails } : {}),
+          },
         };
       },
     });
@@ -138,22 +152,16 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
     pi.registerTool({
       name: 'browser_screenshot',
       label: 'Browser Screenshot',
-      description: 'Opt-in visual capture for the built-in Workbench Browser. Requires a visual-use reason; prefer browser_snapshot for normal page understanding.',
-      promptSnippet: 'Do not use browser_screenshot for normal browsing. Prefer browser_snapshot for pages, lists, feeds, forms, text, selectors, and state. Use this only with reason="visual_layout", "image_or_canvas", "user_requested", or "snapshot_insufficient" plus a note explaining why snapshot is insufficient.',
+      description: 'Capture a screenshot image of the built-in Workbench Browser. Prefer browser_snapshot for normal page understanding, optionally with includeScreenshot=true when visual capture is needed.',
+      promptSnippet: 'Prefer browser_snapshot. Use browser_screenshot only when the user explicitly asks for a screenshot or image-only capture.',
       promptGuidelines: [
-        'Default to browser_snapshot. It is cheaper, more structured, gives selectors/refs, and is better for text and page state.',
+        'Default to browser_snapshot. It is cheaper, more structured, gives selectors/refs, and can include a screenshot with includeScreenshot=true.',
         'Do not use browser_screenshot to read normal text, lists, feeds, buttons, form state, or navigation state.',
-        'Do not pass vague reasons like "visual"; use the exact enum value visual_layout when checking rendered layout.',
-        'If browser_screenshot validation fails, do not retry the same call. Use browser_snapshot or browser_script instead unless the user explicitly requested a screenshot.',
-        'Use browser_screenshot only for visual layout, rendering, screenshots requested by the user, image/canvas-heavy content, or when snapshot output is clearly insufficient.',
+        'Use browser_snapshot with includeScreenshot=true for visual layout checks so the agent also gets structured page state.',
         'Targets the visible built-in Workbench Browser session for this conversation.',
       ],
       parameters: ScreenshotParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        const note = params.note.trim();
-        if (!note) {
-          throw new Error('browser_screenshot requires a note explaining why browser_snapshot is insufficient. Use browser_snapshot for normal page reading.');
-        }
+      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         const screenshot = await requireHost().screenshot(conversationId) as {
           dataBase64?: string;
@@ -169,8 +177,6 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
             { type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' },
           ],
           details: {
-            reason: normalizeScreenshotReason(params.reason),
-            note,
             url: screenshot.url,
             title: screenshot.title,
             viewport: screenshot.viewport,

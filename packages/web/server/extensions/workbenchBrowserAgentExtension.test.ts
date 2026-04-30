@@ -39,23 +39,24 @@ describe('workbench browser agent extension', () => {
     const script = await tools[1]!.execute('tool-2' as never, { script: 'return 1;' } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
     expect(script.content[0]?.text).toContain('return 1;');
 
-    const screenshot = await tools[2]!.execute('tool-3' as never, { reason: 'visual_layout', note: 'checking visual layout' } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
+    const screenshot = await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
     expect(screenshot.content[1]).toMatchObject({ type: 'image', data: 'aW1n' });
 
     setWorkbenchBrowserToolHost(null);
   });
 
-  it('accepts the legacy visual screenshot reason as visual_layout', async () => {
+  it('can include a screenshot with the structured browser snapshot', async () => {
     setWorkbenchBrowserToolHost({
-      snapshot: async () => ({}),
+      snapshot: async () => ({ url: 'https://example.com/', title: 'Example', loading: false, text: 'Example text', elements: [] }),
       screenshot: async () => ({ mimeType: 'image/png', dataBase64: 'aW1n' }),
       runScript: async () => ({}),
     });
 
-    const screenshotTool = collectTools().find((tool) => tool.name === 'browser_screenshot')!;
-    const result = await screenshotTool.execute('tool-3' as never, { reason: 'visual', note: 'checking rendered layout' } as never, undefined as never, undefined as never, ctx as never) as { details: { reason: string } };
+    const snapshotTool = collectTools().find((tool) => tool.name === 'browser_snapshot')!;
+    const result = await snapshotTool.execute('tool-3' as never, { includeScreenshot: true } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
 
-    expect(result.details.reason).toBe('visual_layout');
+    expect(result.content[0]?.type).toBe('text');
+    expect(result.content[1]).toMatchObject({ type: 'image', data: 'aW1n' });
     setWorkbenchBrowserToolHost(null);
   });
 });

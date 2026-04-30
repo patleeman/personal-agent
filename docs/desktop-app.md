@@ -41,7 +41,7 @@ Workbench Browser sessions are scoped to the conversation. Switching conversatio
 
 Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot`, `browser_script`, and `browser_screenshot`. `browser_script` is the browser-context equivalent of `bash`: the agent writes one script using the constrained `browser` API, an isolated worker runs it, and Electron main brokers validated operations to the visible Workbench Browser.
 
-Agents should default to `browser_snapshot` for page understanding. `browser_screenshot` is only for visual layout, image/canvas-heavy content, or explicit screenshot requests; it should not be used to read normal page text or feeds.
+Agents should default to `browser_snapshot` for page understanding. When visual layout or image/canvas-heavy content matters, call `browser_snapshot` with `includeScreenshot: true` so structured state and the image arrive together. `browser_screenshot` is argument-free and reserved for explicit screenshot requests or image-only capture; it should not be used to read normal page text or feeds.
 
 The embedded browser tracks a revision counter. When Patrick changes the page after the agent's last `browser_snapshot`, the next prompt injects `browser-changed-since-snapshot` context so the agent knows its old page observation is stale and should snapshot again.
 

@@ -180,7 +180,7 @@ Implementation note: `setInputFiles` is reserved in the script API but currently
 
 ### `browser_screenshot`
 
-Use `browser_screenshot` only when visual layout matters or when DOM/accessibility snapshots are not enough. It requires a `reason` and `note`; if you cannot clearly explain why `browser_snapshot` is insufficient, do not call it. Use exact reasons: `visual_layout`, `image_or_canvas`, `user_requested`, or `snapshot_insufficient`; do not invent vague reasons like `visual`.
+Use `browser_snapshot` with `includeScreenshot: true` when visual layout matters or when DOM/accessibility snapshots are not enough. That keeps the structured page state and the image together. `browser_screenshot` has no arguments and is only for explicit user screenshot requests or image-only capture.
 
 Default to `browser_snapshot`. Snapshot is preferred for normal browsing because it is structured, cheaper, includes refs/selectors, and is better for text, feeds, lists, forms, buttons, and current page state. Do not use screenshots just to read a page.
 
