@@ -472,6 +472,33 @@ describe('live session routes', () => {
     expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
   });
 
+  it('does not inject related conversation pointers on a second turn once the conversation is already running', async () => {
+    createDesktopHarness();
+    isLiveMock.mockReturnValue(true);
+    readSessionBlocksMock.mockReturnValue({ totalBlocks: 0 });
+    liveRegistry.set('live-running', {
+      cwd: '/repo/worktree',
+      title: 'Live running',
+      session: {
+        isStreaming: true,
+        state: { messages: [] },
+      },
+    });
+
+    const promptRes = createResponse();
+    await handleLiveSessionPrompt(createRequest({
+      params: { id: 'live-running' },
+      body: {
+        relatedConversationIds: ['related-1'],
+        text: 'One more thing.',
+      },
+    }), promptRes);
+
+    expect(buildRelatedConversationPointersMock).not.toHaveBeenCalled();
+    expect(queuePromptContextMock).not.toHaveBeenCalled();
+    expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+  });
+
   it('handles prompt validation, hidden context injection, resumed sessions, and control conflicts', async () => {
     const flushLiveDeferredResumes = vi.fn(async () => {});
     createDesktopHarness({

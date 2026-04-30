@@ -546,7 +546,15 @@ interface PreparedLiveSessionPrompt {
 
 function hasConversationTranscriptContent(conversationId: string): boolean {
   const liveEntry = liveRegistry.get(conversationId);
-  const liveStateMessages = (liveEntry?.session as { state?: { messages?: unknown[] } } | undefined)?.state?.messages;
+  const liveSession = liveEntry?.session as {
+    isStreaming?: boolean;
+    state?: { messages?: unknown[] };
+  } | undefined;
+  if (liveSession?.isStreaming) {
+    return true;
+  }
+
+  const liveStateMessages = liveSession?.state?.messages;
   if ((liveStateMessages?.length ?? 0) > 0) {
     return true;
   }
