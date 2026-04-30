@@ -38,8 +38,11 @@ import {
   getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
   isLive as isLiveSession,
+  promptSession,
+  queuePromptContext,
   registry as liveRegistry,
   renameSession,
+  resumeSession,
   subscribe as subscribeLiveSession,
 } from '../conversations/liveSessions.js';
 import {
@@ -164,7 +167,7 @@ import {
 } from '../conversations/conversationAssetsCapability.js';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import { createLiveDeferredResumeFlusher } from '../conversations/liveDeferredResumes.js';
-import { startDeferredResumeLoop } from './bootstrap.js';
+import { startConversationRecovery, startDeferredResumeLoop } from './bootstrap.js';
 import { createProfileState } from './profileState.js';
 import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserAgentExtension.js';
 import { createServerRouteContext } from './routeContext.js';
@@ -527,6 +530,16 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     listProfileAgentItems: () => [],
     withTemporaryProfileAgentDir: profileState.withTemporaryProfileAgentDir,
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
+  });
+
+  startConversationRecovery({
+    flushLiveDeferredResumes,
+    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
+    isLive: isLiveSession,
+    resumeSession,
+    queuePromptContext,
+    promptSession,
   });
 
   localServerRouteContext = context;
