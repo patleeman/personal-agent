@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/desktop",
-  "version": "0.5.19",
+  "version": "0.5.20",
   "description": "Personal Agent Electron desktop shell",
   "productName": "Personal Agent",
   "type": "module",
