@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { BrowserWindow, net } from 'electron';
+import { net } from 'electron';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 interface AuthFileShape {
@@ -151,87 +151,6 @@ async function parseCodexTranscribeResponse(response: Response): Promise<string>
   return transcript;
 }
 
-async function loadHiddenChatGptWindow(): Promise<BrowserWindow> {
-  const window = new BrowserWindow({
-    show: false,
-    width: 480,
-    height: 360,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      partition: 'persist:personal-agent-chatgpt-transcription',
-    },
-  });
-
-  await window.loadURL('https://chatgpt.com/');
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  return window;
-}
-
-async function transcribeWithCodexBrowser(input: DesktopTranscribeFileInput, auth: { token: string; accountId?: string }): Promise<string> {
-  const window = await loadHiddenChatGptWindow();
-  try {
-    const result = await window.webContents.executeJavaScript(`(async () => {
-      const input = ${JSON.stringify(input)};
-      const token = ${JSON.stringify(auth.token)};
-      const accountId = ${JSON.stringify(auth.accountId ?? '')};
-      const binary = atob(String(input.dataBase64 || '').trim());
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-      }
-
-      const form = new FormData();
-      form.append('file', new Blob([bytes], { type: input.mimeType || 'application/octet-stream' }), input.fileName || 'dictation.webm');
-      if (input.language && String(input.language).trim()) {
-        form.append('language', String(input.language).trim());
-      }
-
-      const headers = { Authorization: 'Bearer ' + token, originator: 'codex_cli_rs' };
-      if (accountId) {
-        headers['chatgpt-account-id'] = accountId;
-      }
-
-      const response = await fetch('/backend-api/transcribe', {
-        method: 'POST',
-        headers,
-        body: form,
-        credentials: 'include',
-      });
-      return {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        cfMitigated: response.headers.get('cf-mitigated'),
-        text: await response.text(),
-      };
-    })()`, true) as { ok: boolean; status: number; statusText?: string; cfMitigated?: string | null; text: string };
-
-    if (!result.ok) {
-      const challengeHint = result.status === 403 && result.cfMitigated === 'challenge' ? ' Cloudflare challenge.' : '';
-      throw new Error(`Codex transcription failed: ${result.status}${challengeHint}${result.text ? ` ${result.text.slice(0, 240)}` : ''}`);
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(result.text) as unknown;
-    } catch {
-      throw new Error('Codex transcription returned non-JSON response.');
-    }
-
-    const transcript = extractTranscriptText(parsed).trim();
-    if (!transcript) {
-      throw new Error('Codex transcription returned an empty transcript. Try speaking longer or check microphone input.');
-    }
-    return transcript;
-  } finally {
-    if (!window.isDestroyed()) {
-      window.destroy();
-    }
-  }
-}
-
 export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFileInput): Promise<DesktopTranscriptionResult> {
   const auth = await readOpenAICodexAuth();
   const { body, contentType } = buildMultipartBody(input);
@@ -246,16 +165,7 @@ export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFile
     body: body as unknown as RequestInit['body'],
   });
 
-  let transcript: string;
-  try {
-    transcript = await parseCodexTranscribeResponse(response);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes('Cloudflare challenge')) {
-      throw error;
-    }
-    transcript = await transcribeWithCodexBrowser(input, auth);
-  }
+  const transcript = await parseCodexTranscribeResponse(response);
 
   return {
     text: transcript,
