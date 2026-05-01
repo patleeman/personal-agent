@@ -95,6 +95,13 @@ describe('desktop-config', () => {
     expect(readDesktopAppPreferences(initial)).toEqual({
       autoInstallUpdates: false,
       startOnSystemStart: false,
+      keyboardShortcuts: {
+        conversationMode: 'F1',
+        workbenchMode: 'F2',
+        zenMode: 'F3',
+        toggleSidebar: 'CommandOrControl+/',
+        toggleRightRail: 'CommandOrControl+\\',
+      },
     });
 
     updateDesktopAppPreferences({ autoInstallUpdates: true, startOnSystemStart: true });
@@ -102,6 +109,29 @@ describe('desktop-config', () => {
     expect(readDesktopAppPreferences(loadDesktopConfig())).toEqual({
       autoInstallUpdates: true,
       startOnSystemStart: true,
+      keyboardShortcuts: {
+        conversationMode: 'F1',
+        workbenchMode: 'F2',
+        zenMode: 'F3',
+        toggleSidebar: 'CommandOrControl+/',
+        toggleRightRail: 'CommandOrControl+\\',
+      },
+    });
+  });
+
+  it('persists partial keyboard shortcut updates without resetting the rest', () => {
+    updateDesktopAppPreferences({
+      keyboardShortcuts: {
+        conversationMode: 'F4',
+      },
+    });
+
+    expect(readDesktopAppPreferences(loadDesktopConfig()).keyboardShortcuts).toEqual({
+      conversationMode: 'F4',
+      workbenchMode: 'F2',
+      zenMode: 'F3',
+      toggleSidebar: 'CommandOrControl+/',
+      toggleRightRail: 'CommandOrControl+\\',
     });
   });
 });

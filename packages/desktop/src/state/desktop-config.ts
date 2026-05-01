@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { DesktopAppPreferences, DesktopConfig, DesktopHostRecord } from '../hosts/types.js';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
+import { normalizeDesktopKeyboardShortcuts, validateDesktopKeyboardShortcuts } from '../keyboard-shortcuts.js';
 
 const DEFAULT_WINDOW_STATE = {
   width: 1440,
@@ -11,6 +12,7 @@ function createDefaultDesktopAppPreferences(): DesktopAppPreferences {
   return {
     autoInstallUpdates: false,
     startOnSystemStart: false,
+    keyboardShortcuts: normalizeDesktopKeyboardShortcuts(null),
   };
 }
 
@@ -62,6 +64,7 @@ function normalizeDesktopAppPreferences(value: unknown): DesktopAppPreferences {
   return {
     autoInstallUpdates: candidate.autoInstallUpdates === true,
     startOnSystemStart: candidate.startOnSystemStart === true,
+    keyboardShortcuts: normalizeDesktopKeyboardShortcuts(candidate.keyboardShortcuts),
   };
 }
 
@@ -141,7 +144,9 @@ export function readDesktopAppPreferences(config = loadDesktopConfig()): Desktop
   return normalizeDesktopAppPreferences(config.appPreferences);
 }
 
-export function updateDesktopAppPreferences(appPreferences: Partial<DesktopAppPreferences>): DesktopConfig {
+export function updateDesktopAppPreferences(appPreferences: Partial<Omit<DesktopAppPreferences, 'keyboardShortcuts'>> & {
+  keyboardShortcuts?: Partial<DesktopAppPreferences['keyboardShortcuts']>;
+}): DesktopConfig {
   const current = loadDesktopConfig();
   const next: DesktopConfig = {
     ...current,
@@ -149,6 +154,12 @@ export function updateDesktopAppPreferences(appPreferences: Partial<DesktopAppPr
       ...readDesktopAppPreferences(current),
       ...(appPreferences.autoInstallUpdates !== undefined ? { autoInstallUpdates: appPreferences.autoInstallUpdates } : {}),
       ...(appPreferences.startOnSystemStart !== undefined ? { startOnSystemStart: appPreferences.startOnSystemStart } : {}),
+      ...(appPreferences.keyboardShortcuts !== undefined
+        ? { keyboardShortcuts: validateDesktopKeyboardShortcuts({
+            ...readDesktopAppPreferences(current).keyboardShortcuts,
+            ...appPreferences.keyboardShortcuts,
+          }) }
+        : {}),
     },
   };
   saveDesktopConfig(next);

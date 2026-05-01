@@ -750,6 +750,13 @@ export interface DesktopAppPreferencesState {
   supportsStartOnSystemStart: boolean;
   autoInstallUpdates: boolean;
   startOnSystemStart: boolean;
+  keyboardShortcuts: {
+    conversationMode: string;
+    workbenchMode: string;
+    zenMode: string;
+    toggleSidebar: string;
+    toggleRightRail: string;
+  };
   update: DesktopAppUpdateState;
 }
 

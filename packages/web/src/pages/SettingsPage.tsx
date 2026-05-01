@@ -45,6 +45,7 @@ const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
+  { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
   { id: 'settings-general', label: 'General', summary: 'Defaults and knowledge base' },
   { id: 'settings-dictation', label: 'Dictation', summary: 'Transcription provider and model' },
   { id: 'settings-skills', label: 'Skills', summary: 'Folders, wrappers, and instructions' },
@@ -56,6 +57,34 @@ const SETTINGS_QUICK_LINKS = [
 type SettingsQuickLink = (typeof SETTINGS_QUICK_LINKS)[number];
 type SettingsQuickLinkId = SettingsQuickLink['id'];
 type ModelOption = ModelState['models'][number];
+
+type DesktopKeyboardShortcutId = keyof DesktopAppPreferencesState['keyboardShortcuts'];
+
+const DESKTOP_KEYBOARD_SHORTCUT_LABELS: Record<DesktopKeyboardShortcutId, { label: string; description: string }> = {
+  conversationMode: { label: 'Conversation mode', description: 'Show the normal chat layout.' },
+  workbenchMode: { label: 'Workbench mode', description: 'Show the chat and workbench layout.' },
+  zenMode: { label: 'Zen mode', description: 'Hide side panels for focused chat.' },
+  toggleSidebar: { label: 'Toggle left sidebar', description: 'Collapse or restore the conversation sidebar.' },
+  toggleRightRail: { label: 'Toggle right rail', description: 'Collapse or restore the active workbench rail.' },
+};
+
+const DESKTOP_KEYBOARD_SHORTCUT_OPTIONS: Record<DesktopKeyboardShortcutId, string[]> = {
+  conversationMode: ['F1', 'F4', 'CommandOrControl+1'],
+  workbenchMode: ['F2', 'F5', 'CommandOrControl+2'],
+  zenMode: ['F3', 'F6', 'CommandOrControl+3'],
+  toggleSidebar: ['CommandOrControl+/', 'CommandOrControl+B', 'CommandOrControl+Shift+/'],
+  toggleRightRail: ['CommandOrControl+\\', 'CommandOrControl+Shift+\\', 'CommandOrControl+Alt+\\'],
+};
+
+const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopAppPreferencesState['keyboardShortcuts'] = {
+  conversationMode: 'F1',
+  workbenchMode: 'F2',
+  zenMode: 'F3',
+  toggleSidebar: 'CommandOrControl+/',
+  toggleRightRail: 'CommandOrControl+\\',
+};
+
+const DESKTOP_KEYBOARD_SHORTCUT_IDS = Object.keys(DESKTOP_KEYBOARD_SHORTCUT_LABELS) as DesktopKeyboardShortcutId[];
 
 const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string }> = [
   { value: 'openai-completions', label: 'OpenAI Completions' },
@@ -386,6 +415,164 @@ function formatStartOnSystemStartSummary(state: DesktopAppPreferencesState | nul
   return state.startOnSystemStart
     ? 'Personal Agent will launch in the background when you sign in to this Mac.'
     : 'Personal Agent only starts when you open it manually.';
+}
+
+function formatKeyboardShortcutLabel(shortcut: string): string {
+  return shortcut
+    .replace(/CommandOrControl/g, '⌘/Ctrl')
+    .replace(/Command/g, '⌘')
+    .replace(/Control/g, 'Ctrl')
+    .replace(/\+/g, ' + ');
+}
+
+function DesktopKeyboardShortcutsSettingsSection() {
+  const [preferencesState, setPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
+  const [draft, setDraft] = useState<DesktopAppPreferencesState['keyboardShortcuts']>(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const dirty = useMemo(() => {
+    if (!preferencesState) return false;
+    return DESKTOP_KEYBOARD_SHORTCUT_IDS.some((id) => draft[id] !== preferencesState.keyboardShortcuts[id]);
+  }, [draft, preferencesState]);
+
+  const duplicateShortcut = useMemo(() => {
+    const seen = new Map<string, DesktopKeyboardShortcutId>();
+    for (const id of DESKTOP_KEYBOARD_SHORTCUT_IDS) {
+      const shortcut = draft[id].toLowerCase();
+      const previous = seen.get(shortcut);
+      if (previous) return { shortcut: draft[id], first: previous, second: id };
+      seen.set(shortcut, id);
+    }
+    return null;
+  }, [draft]);
+
+  const loadPreferences = useCallback(async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setLoading(false);
+      setError('Desktop bridge unavailable. Restart the desktop app and try again.');
+      return;
+    }
+
+    try {
+      const state = await bridge.readDesktopAppPreferences();
+      setPreferencesState(state);
+      setDraft(state.keyboardShortcuts);
+      setError(null);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPreferences();
+  }, [loadPreferences]);
+
+  async function saveKeyboardShortcuts(nextShortcuts = draft) {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setError('Desktop bridge unavailable. Restart the desktop app and try again.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const state = await bridge.updateDesktopAppPreferences({ keyboardShortcuts: nextShortcuts });
+      setPreferencesState(state);
+      setDraft(state.keyboardShortcuts);
+      setNotice('Keyboard shortcuts saved. The app menu updated immediately.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SettingsSection
+      id="settings-keyboard"
+      label="Keyboard"
+      description="Configure desktop app shortcuts for layout and panel controls."
+      className="order-1"
+    >
+      <SettingsPanel
+        title="Keyboard shortcuts"
+        description="Pick one shortcut per action. Changes reinstall the desktop menu immediately."
+      >
+        {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
+        {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
+        {preferencesState ? (
+          <div className="space-y-4">
+            <div className="divide-y divide-border-subtle/70">
+              {DESKTOP_KEYBOARD_SHORTCUT_IDS.map((id) => {
+                const metadata = DESKTOP_KEYBOARD_SHORTCUT_LABELS[id];
+                return (
+                  <label key={id} htmlFor={`settings-keyboard-${id}`} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center">
+                    <span className="min-w-0 space-y-1">
+                      <span className="block text-[13px] font-medium text-primary">{metadata.label}</span>
+                      <span className="block text-[12px] leading-5 text-secondary">{metadata.description}</span>
+                    </span>
+                    <select
+                      id={`settings-keyboard-${id}`}
+                      value={draft[id]}
+                      onChange={(event) => {
+                        setDraft((current) => ({ ...current, [id]: event.target.value }));
+                        setError(null);
+                        setNotice(null);
+                      }}
+                      disabled={saving}
+                      className={INPUT_CLASS}
+                    >
+                      {DESKTOP_KEYBOARD_SHORTCUT_OPTIONS[id].map((shortcut) => (
+                        <option key={shortcut} value={shortcut}>{formatKeyboardShortcutLabel(shortcut)}</option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            </div>
+
+            {duplicateShortcut ? (
+              <p className="text-[12px] text-danger">
+                {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.first].label} and {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.second].label}.
+              </p>
+            ) : null}
+            {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+            {notice ? <p className="text-[12px] text-success">{notice}</p> : null}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { void saveKeyboardShortcuts(); }}
+                disabled={saving || !dirty || duplicateShortcut !== null}
+                className={ACTION_BUTTON_CLASS}
+              >
+                {saving ? 'Saving…' : 'Save shortcuts'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
+                  void saveKeyboardShortcuts(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
+                }}
+                disabled={saving}
+                className={ACTION_BUTTON_CLASS}
+              >
+                Reset to defaults
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </SettingsPanel>
+    </SettingsSection>
+  );
 }
 
 interface CompanionHelloState {
@@ -883,7 +1070,7 @@ export function DesktopConnectionsSettingsPanel() {
     setNotice(null);
   }
 
-  async function handleUpdateAppPreferences(nextPreferences: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) {
+  async function handleUpdateAppPreferences(nextPreferences: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }) {
     const bridge = getDesktopBridge();
     if (!bridge) {
       setAppPreferencesError('Desktop bridge unavailable. Restart the desktop app and try again.');
@@ -1359,7 +1546,7 @@ export function SettingsPage() {
   const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(
     () => (desktopEnvironment?.isElectron || isDesktopShell())
       ? SETTINGS_QUICK_LINKS
-      : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop'),
+      : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard'),
     [desktopEnvironment?.isElectron],
   );
 
@@ -4066,6 +4253,8 @@ export function SettingsPage() {
           </SettingsSection>
 
           <DesktopConnectionsSettingsPanel />
+
+          {(desktopEnvironment?.isElectron || isDesktopShell()) ? <DesktopKeyboardShortcutsSettingsSection /> : null}
 
           <SettingsSection
             id="settings-interface"

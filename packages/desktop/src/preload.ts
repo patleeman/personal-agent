@@ -83,7 +83,7 @@ const desktopBridge = {
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-selection-context-menu`, input),
   openPath: (targetPath: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-path`, targetPath),
   readDesktopAppPreferences: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-desktop-app-preferences`),
-  updateDesktopAppPreferences: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) =>
+  updateDesktopAppPreferences: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, input),
   ensureCompanionNetworkReachable: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:ensure-companion-network-reachable`),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),

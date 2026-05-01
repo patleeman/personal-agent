@@ -101,6 +101,13 @@ describe('DesktopConnectionsSettingsPanel', () => {
       supportsStartOnSystemStart: true,
       autoInstallUpdates: true,
       startOnSystemStart: false,
+      keyboardShortcuts: {
+        conversationMode: 'F1',
+        workbenchMode: 'F2',
+        zenMode: 'F3',
+        toggleSidebar: 'CommandOrControl+/',
+        toggleRightRail: 'CommandOrControl+\\',
+      },
       update: {
         supported: true,
         status: 'idle',
@@ -112,6 +119,13 @@ describe('DesktopConnectionsSettingsPanel', () => {
       supportsStartOnSystemStart: true,
       autoInstallUpdates: true,
       startOnSystemStart: false,
+      keyboardShortcuts: {
+        conversationMode: 'F1',
+        workbenchMode: 'F2',
+        zenMode: 'F3',
+        toggleSidebar: 'CommandOrControl+/',
+        toggleRightRail: 'CommandOrControl+\\',
+      },
       update: {
         supported: true,
         status: 'idle',

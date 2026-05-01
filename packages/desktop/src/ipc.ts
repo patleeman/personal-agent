@@ -23,7 +23,7 @@ export function registerDesktopIpc(options: {
   onHostStateChanged?: () => void;
   onCheckForUpdates?: () => Promise<void> | void;
   readDesktopAppPreferences?: () => Promise<unknown> | unknown;
-  updateDesktopAppPreferences?: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) => Promise<unknown> | unknown;
+  updateDesktopAppPreferences?: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }) => Promise<unknown> | unknown;
   ensureCompanionNetworkReachable?: () => Promise<unknown> | unknown;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();

@@ -55,6 +55,13 @@ export interface DesktopRemoteOperationBridgeEvent {
 export interface DesktopAppPreferences {
   autoInstallUpdates: boolean;
   startOnSystemStart: boolean;
+  keyboardShortcuts: {
+    conversationMode: string;
+    workbenchMode: string;
+    zenMode: string;
+    toggleSidebar: string;
+    toggleRightRail: string;
+  };
 }
 
 export interface DesktopConfig {

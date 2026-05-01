@@ -16,7 +16,8 @@ import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
 import { loadLocalApiModule } from './local-api-module.js';
-import { installDesktopApplicationMenu } from './menu.js';
+import { installDesktopApplicationMenu, setDesktopApplicationMenuKeyboardShortcutsReader } from './menu.js';
+import { validateDesktopKeyboardShortcuts, type DesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
 import { readDesktopDaemonOwnership } from './backend/daemon-ownership.js';
@@ -67,6 +68,7 @@ function buildDesktopAppPreferencesState() {
     supportsStartOnSystemStart: app.isPackaged,
     autoInstallUpdates: preferences.autoInstallUpdates,
     startOnSystemStart: readStartOnSystemStartFromSystem(),
+    keyboardShortcuts: preferences.keyboardShortcuts,
     update: updateManager?.getState() ?? {
       supported: app.isPackaged,
       currentVersion: app.getVersion(),
@@ -78,6 +80,7 @@ function buildDesktopAppPreferencesState() {
 async function updateDesktopAppPreferencesState(input: {
   autoInstallUpdates?: boolean;
   startOnSystemStart?: boolean;
+  keyboardShortcuts?: Partial<DesktopKeyboardShortcuts>;
 }) {
   const nextPreferences = readDesktopAppPreferences(loadDesktopConfig());
   let changed = false;
@@ -100,8 +103,16 @@ async function updateDesktopAppPreferencesState(input: {
     changed = true;
   }
 
+  if (input.keyboardShortcuts !== undefined) {
+    nextPreferences.keyboardShortcuts = validateDesktopKeyboardShortcuts({
+      ...nextPreferences.keyboardShortcuts,
+      ...input.keyboardShortcuts,
+    });
+    changed = true;
+  }
+
   if (!changed) {
-    throw new Error('Provide autoInstallUpdates and/or startOnSystemStart.');
+    throw new Error('Provide autoInstallUpdates, startOnSystemStart, and/or keyboardShortcuts.');
   }
 
   updateDesktopAppPreferences(nextPreferences);
@@ -459,6 +470,7 @@ async function bootstrapDesktopApp(): Promise<void> {
     onOpenLogs: shellActions.onOpenLogs,
     onQuit: shellActions.onQuit,
   });
+  setDesktopApplicationMenuKeyboardShortcutsReader(() => readDesktopAppPreferences(loadDesktopConfig()).keyboardShortcuts);
   installDesktopApplicationMenu(shellActions);
 
   registerDesktopIpc({
@@ -469,7 +481,11 @@ async function bootstrapDesktopApp(): Promise<void> {
     },
     onCheckForUpdates: () => checkForDesktopUpdates(),
     readDesktopAppPreferences: () => buildDesktopAppPreferencesState(),
-    updateDesktopAppPreferences: (input) => updateDesktopAppPreferencesState(input ?? {}),
+    updateDesktopAppPreferences: async (input) => {
+      const state = await updateDesktopAppPreferencesState(input ?? {});
+      installDesktopApplicationMenu(shellActions);
+      return state;
+    },
     ensureCompanionNetworkReachable: () => ensureCompanionNetworkReachable(),
   });
 

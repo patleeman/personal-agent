@@ -186,7 +186,7 @@ export interface PersonalAgentDesktopBridge {
   showSelectionContextMenu(input: { x: number; y: number; canReply?: boolean; canCopy?: boolean }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
-  updateDesktopAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }): Promise<DesktopAppPreferencesState>;
+  updateDesktopAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }): Promise<DesktopAppPreferencesState>;
   ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;

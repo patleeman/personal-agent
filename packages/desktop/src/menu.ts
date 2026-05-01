@@ -1,4 +1,5 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron';
+import { DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS, type DesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
 
 export interface DesktopApplicationMenuActions {
   onOpen: () => void;
@@ -29,6 +30,7 @@ export interface DesktopApplicationMenuActions {
 interface DesktopApplicationMenuTemplateOptions {
   platform?: NodeJS.Platform;
   appName?: string;
+  keyboardShortcuts?: DesktopKeyboardShortcuts;
 }
 
 function getReopenClosedTabAccelerator(platform: NodeJS.Platform): string {
@@ -42,6 +44,7 @@ export function buildDesktopApplicationMenuTemplate(
   const platform = options.platform ?? process.platform;
   const appName = options.appName ?? 'Personal Agent';
   const isMac = platform === 'darwin';
+  const keyboardShortcuts = options.keyboardShortcuts ?? DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS;
 
   const fileMenu: MenuItemConstructorOptions = {
     label: 'File',
@@ -179,27 +182,27 @@ export function buildDesktopApplicationMenuTemplate(
       { type: 'separator' },
       {
         label: 'Toggle Sidebar',
-        accelerator: 'CommandOrControl+/',
+        accelerator: keyboardShortcuts.toggleSidebar,
         click: actions.onToggleSidebar,
       },
       {
         label: 'Toggle Right Rail',
-        accelerator: 'CommandOrControl+\\',
+        accelerator: keyboardShortcuts.toggleRightRail,
         click: actions.onToggleRightRail,
       },
       {
         label: 'Conversation Mode',
-        accelerator: 'F1',
+        accelerator: keyboardShortcuts.conversationMode,
         click: actions.onShowConversationMode,
       },
       {
         label: 'Workbench Mode',
-        accelerator: 'F2',
+        accelerator: keyboardShortcuts.workbenchMode,
         click: actions.onShowWorkbenchMode,
       },
       {
         label: 'Zen Mode',
-        accelerator: 'F3',
+        accelerator: keyboardShortcuts.zenMode,
         click: actions.onShowZenMode,
       },
       { type: 'separator' },
@@ -267,9 +270,17 @@ export function buildDesktopApplicationMenuTemplate(
 }
 
 export function installDesktopApplicationMenu(actions: DesktopApplicationMenuActions): void {
+  const keyboardShortcuts = readDesktopApplicationMenuKeyboardShortcuts?.();
   const menu = Menu.buildFromTemplate(buildDesktopApplicationMenuTemplate(actions, {
     platform: process.platform,
     appName: app.name,
+    ...(keyboardShortcuts ? { keyboardShortcuts } : {}),
   }));
   Menu.setApplicationMenu(menu);
+}
+
+let readDesktopApplicationMenuKeyboardShortcuts: (() => DesktopKeyboardShortcuts) | null = null;
+
+export function setDesktopApplicationMenuKeyboardShortcutsReader(reader: (() => DesktopKeyboardShortcuts) | null): void {
+  readDesktopApplicationMenuKeyboardShortcuts = reader;
 }
