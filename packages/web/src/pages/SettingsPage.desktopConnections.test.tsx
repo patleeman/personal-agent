@@ -2,7 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesktopConnectionsSettingsPanel } from './SettingsPage';
+import { DesktopConnectionsSettingsPanel, DesktopKeyboardShortcutsSettingsSection } from './SettingsPage';
 import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -174,5 +174,90 @@ describe('DesktopConnectionsSettingsPanel', () => {
     expect(container.textContent).toContain('macOS arm64');
     expect(container.textContent).toContain('cache /Users/patrick/.cache/personal-agent/ssh-runtime');
     expect(container.textContent).toContain('home /Users/patrick');
+  });
+});
+
+describe('DesktopKeyboardShortcutsSettingsSection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    installDesktopBridge();
+    mocks.readDesktopAppPreferences.mockResolvedValue({
+      available: true,
+      supportsStartOnSystemStart: true,
+      autoInstallUpdates: true,
+      startOnSystemStart: false,
+      keyboardShortcuts: {
+        conversationMode: 'F1',
+        workbenchMode: 'F2',
+        zenMode: 'F3',
+        toggleSidebar: 'CommandOrControl+/',
+        toggleRightRail: 'CommandOrControl+\\',
+      },
+      update: {
+        supported: true,
+        status: 'idle',
+        currentVersion: '0.3.7',
+      },
+    });
+    mocks.updateDesktopAppPreferences.mockImplementation(async (patch) => ({
+      available: true,
+      supportsStartOnSystemStart: true,
+      autoInstallUpdates: true,
+      startOnSystemStart: false,
+      keyboardShortcuts: {
+        conversationMode: 'F4',
+        workbenchMode: 'F2',
+        zenMode: 'F3',
+        toggleSidebar: 'CommandOrControl+/',
+        toggleRightRail: 'CommandOrControl+\\',
+        ...patch.keyboardShortcuts,
+      },
+      update: {
+        supported: true,
+        status: 'idle',
+        currentVersion: '0.3.7',
+      },
+    }));
+  });
+
+  afterEach(() => {
+    for (const root of mountedRoots.splice(0)) {
+      act(() => {
+        root.unmount();
+      });
+    }
+    document.body.innerHTML = '';
+    document.documentElement.dataset.personalAgentDesktop = '';
+    delete window.personalAgentDesktop;
+  });
+
+  it('auto-saves configurable shortcuts and lists built-in shortcuts', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoots.push(root);
+
+    act(() => {
+      root.render(<DesktopKeyboardShortcutsSettingsSection />);
+    });
+    await flushAsyncWork();
+
+    const select = container.querySelector('#settings-keyboard-conversationMode');
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Expected conversation mode select');
+    }
+
+    act(() => {
+      select.value = 'F4';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mocks.updateDesktopAppPreferences).toHaveBeenCalledWith({
+      keyboardShortcuts: expect.objectContaining({ conversationMode: 'F4' }),
+    });
+    expect(container.textContent).toContain('Built-in shortcuts');
+    expect(container.textContent).toContain('Show Personal Agent');
+    expect(container.textContent).not.toContain('Save shortcuts');
   });
 });

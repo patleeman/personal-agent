@@ -70,6 +70,38 @@ const DESKTOP_KEYBOARD_SHORTCUT_LABELS: Record<DesktopKeyboardShortcutId, { labe
   toggleRightRail: { label: 'Toggle right rail', description: 'Collapse or restore the active workbench rail.' },
 };
 
+const READ_ONLY_KEYBOARD_SHORTCUTS: Array<{ category: string; label: string; description: string; shortcut: string }> = [
+  { category: 'App', label: 'Show Personal Agent', description: 'Bring the desktop window forward.', shortcut: 'CommandOrControl+Shift+A' },
+  { category: 'App', label: 'New conversation', description: 'Start a fresh chat.', shortcut: 'CommandOrControl+N' },
+  { category: 'App', label: 'Close tab', description: 'Close the active conversation tab.', shortcut: 'CommandOrControl+W' },
+  { category: 'App', label: 'Reopen closed tab', description: 'Restore the most recently closed conversation tab.', shortcut: 'Command+Shift+N / Ctrl+Shift+W' },
+  { category: 'App', label: 'Previous conversation', description: 'Move to the previous open conversation.', shortcut: 'CommandOrControl+[' },
+  { category: 'App', label: 'Next conversation', description: 'Move to the next open conversation.', shortcut: 'CommandOrControl+]' },
+  { category: 'App', label: 'Jump to conversation', description: 'Open conversation 1-9 from the sidebar.', shortcut: 'CommandOrControl+1-9' },
+  { category: 'App', label: 'Move conversation left/right', description: 'Reorder the active conversation tab.', shortcut: 'CommandOrControl+Alt+[/]' },
+  { category: 'App', label: 'Toggle pinned', description: 'Pin or unpin the active conversation.', shortcut: 'CommandOrControl+Alt+P' },
+  { category: 'App', label: 'Archive / restore', description: 'Archive or restore the active conversation.', shortcut: 'CommandOrControl+Alt+A' },
+  { category: 'App', label: 'Rename conversation', description: 'Rename the active conversation.', shortcut: 'CommandOrControl+Alt+R' },
+  { category: 'App', label: 'Focus composer', description: 'Move focus to the message composer.', shortcut: 'CommandOrControl+L' },
+  { category: 'App', label: 'Edit working directory', description: 'Open the working-directory editor.', shortcut: 'CommandOrControl+Shift+L' },
+  { category: 'App', label: 'Settings', description: 'Open this settings page.', shortcut: 'CommandOrControl+,' },
+  { category: 'App', label: 'Find on page', description: 'Search text in the current page.', shortcut: 'CommandOrControl+F' },
+  { category: 'App', label: 'Find next / previous', description: 'Move through page search matches.', shortcut: 'CommandOrControl+G / CommandOrControl+Shift+G' },
+  { category: 'App', label: 'Quit', description: 'Quit the desktop app.', shortcut: 'CommandOrControl+Q / Alt+F4' },
+  { category: 'Command palette', label: 'Threads palette', description: 'Open the command palette for conversations.', shortcut: 'CommandOrControl+K' },
+  { category: 'Command palette', label: 'Files palette', description: 'Open the command palette for workspace files.', shortcut: 'CommandOrControl+P' },
+  { category: 'Command palette', label: 'Search palette', description: 'Open the command palette in search mode.', shortcut: 'CommandOrControl+Shift+F' },
+  { category: 'Composer', label: 'Send message', description: 'Submit the current composer text.', shortcut: 'Enter' },
+  { category: 'Composer', label: 'New line', description: 'Insert a line break in the composer.', shortcut: 'Shift+Enter' },
+  { category: 'Composer', label: 'Parallel prompt', description: 'Start a parallel prompt while a conversation is busy.', shortcut: 'CommandOrControl+Enter' },
+  { category: 'Composer', label: 'Queue follow-up', description: 'Queue a follow-up while a conversation is busy.', shortcut: 'Alt+Enter' },
+  { category: 'Composer', label: 'Prompt history', description: 'Recall older or newer composer prompts.', shortcut: 'ArrowUp / ArrowDown' },
+  { category: 'Composer', label: 'Clear composer', description: 'Clear composer text.', shortcut: 'Ctrl+C' },
+  { category: 'Composer', label: 'Stop streaming', description: 'Abort the current streaming response.', shortcut: 'Escape' },
+  { category: 'Composer', label: 'Pick related thread', description: 'Toggle related-thread attachment 1-9.', shortcut: 'Ctrl+1-9' },
+  { category: 'Composer', label: 'Choose pending answer', description: 'Select answers in inline questions.', shortcut: '1-9 / Tab / Shift+Tab / Arrow keys / Enter' },
+];
+
 const DESKTOP_KEYBOARD_SHORTCUT_OPTIONS: Record<DesktopKeyboardShortcutId, string[]> = {
   conversationMode: ['F1', 'F4', 'CommandOrControl+1'],
   workbenchMode: ['F2', 'F5', 'CommandOrControl+2'],
@@ -512,7 +544,7 @@ function formatKeyboardShortcutLabel(shortcut: string): string {
     .replace(/\+/g, ' + ');
 }
 
-function DesktopKeyboardShortcutsSettingsSection() {
+export function DesktopKeyboardShortcutsSettingsSection() {
   const [preferencesState, setPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
   const [draft, setDraft] = useState<DesktopAppPreferencesState['keyboardShortcuts']>(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
   const [loading, setLoading] = useState(true);
@@ -574,7 +606,7 @@ function DesktopKeyboardShortcutsSettingsSection() {
       const state = await bridge.updateDesktopAppPreferences({ keyboardShortcuts: nextShortcuts });
       setPreferencesState(state);
       setDraft(state.keyboardShortcuts);
-      setNotice('Keyboard shortcuts saved. The app menu updated immediately.');
+      setNotice('Saved. The app menu updated immediately.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -586,12 +618,12 @@ function DesktopKeyboardShortcutsSettingsSection() {
     <SettingsSection
       id="settings-keyboard"
       label="Keyboard"
-      description="Configure desktop app shortcuts for layout and panel controls."
+      description="Configure desktop app shortcuts and review built-in hotkeys."
       className="order-1"
     >
       <SettingsPanel
         title="Keyboard shortcuts"
-        description="Pick one shortcut per action. Changes reinstall the desktop menu immediately."
+        description="Configurable shortcuts auto-save. Built-in shortcuts are listed so there is no mystery meat in the menu."
       >
         {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
         {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
@@ -610,9 +642,11 @@ function DesktopKeyboardShortcutsSettingsSection() {
                       id={`settings-keyboard-${id}`}
                       value={draft[id]}
                       onChange={(event) => {
-                        setDraft((current) => ({ ...current, [id]: event.target.value }));
+                        const nextDraft = { ...draft, [id]: event.target.value };
+                        setDraft(nextDraft);
                         setError(null);
                         setNotice(null);
+                        void saveKeyboardShortcuts(nextDraft);
                       }}
                       disabled={saving}
                       className={INPUT_CLASS}
@@ -635,25 +669,39 @@ function DesktopKeyboardShortcutsSettingsSection() {
             {notice ? <p className="text-[12px] text-success">{notice}</p> : null}
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => { void saveKeyboardShortcuts(); }}
-                disabled={saving || !dirty || duplicateShortcut !== null}
-                className={ACTION_BUTTON_CLASS}
-              >
-                {saving ? 'Saving…' : 'Save shortcuts'}
-              </button>
+              <span className="ui-card-meta">{saving ? 'Saving…' : dirty ? 'Unsaved change pending…' : 'Auto-saved'}</span>
               <button
                 type="button"
                 onClick={() => {
                   setDraft(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
                   void saveKeyboardShortcuts(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
                 }}
-                disabled={saving}
+                disabled={saving || duplicateShortcut !== null}
                 className={ACTION_BUTTON_CLASS}
               >
                 Reset to defaults
               </button>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <div>
+                <h3 className="text-[14px] font-medium text-primary">Built-in shortcuts</h3>
+                <p className="mt-1 text-[12px] leading-5 text-secondary">These are wired elsewhere in the app and are not configurable yet.</p>
+              </div>
+              <div className="divide-y divide-border-subtle/70">
+                {READ_ONLY_KEYBOARD_SHORTCUTS.map((shortcut) => (
+                  <div key={`${shortcut.category}:${shortcut.label}`} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_14rem] sm:items-center">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-dim">{shortcut.category}</span>
+                    <span className="min-w-0 space-y-1">
+                      <span className="block text-[13px] font-medium text-primary">{shortcut.label}</span>
+                      <span className="block text-[12px] leading-5 text-secondary">{shortcut.description}</span>
+                    </span>
+                    <span className="rounded-lg border border-border-subtle bg-surface/50 px-3 py-2 font-mono text-[12px] text-secondary">
+                      {formatKeyboardShortcutLabel(shortcut.shortcut)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}
@@ -2456,6 +2504,62 @@ export function SettingsPage() {
     }
   }
 
+  useEffect(() => {
+    if (!skillFoldersState || !skillFoldersDirty || savingSkillFolders || pickingSkillFolders) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void handleSaveSkillFolders();
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [pickingSkillFolders, savingSkillFolders, skillFoldersDirty, skillFoldersDraft, skillFoldersState]);
+
+  useEffect(() => {
+    if (!instructionFilesState || !instructionFilesDirty || savingInstructionFiles || pickingInstructionFiles) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void handleSaveInstructionFiles();
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [instructionFilesDirty, instructionFilesDraft, instructionFilesState, pickingInstructionFiles, savingInstructionFiles]);
+
+  useEffect(() => {
+    if (!knowledgeBaseState || !knowledgeBaseDirty || knowledgeBaseAction !== null) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void handleKnowledgeBaseSave();
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [knowledgeBaseAction, knowledgeBaseBranchDraft, knowledgeBaseDirty, knowledgeBaseRepoUrlDraft, knowledgeBaseState]);
+
+  useEffect(() => {
+    if (!defaultCwdState || !defaultCwdDirty || savingDefaultCwd || pickingDefaultCwd) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void handleDefaultCwdSave();
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [defaultCwdDirty, defaultCwdDraft, defaultCwdState, pickingDefaultCwd, savingDefaultCwd]);
+
   async function handleConversationTitleSettingChange(
     input: { enabled?: boolean; model?: string | null },
     field: 'enabled' | 'model',
@@ -3047,14 +3151,7 @@ export function SettingsPage() {
                       >
                         {pickingSkillFolders ? 'Picking…' : 'Add folder'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleSaveSkillFolders(); }}
-                        disabled={savingSkillFolders || !skillFoldersDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {savingSkillFolders ? 'Saving…' : 'Save'}
-                      </button>
+                      <span className="ui-card-meta">{savingSkillFolders ? 'Saving…' : skillFoldersDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
                     </div>
                     <p className="ui-card-meta">Folders load in the saved order after the root skills directory.</p>
                   </div>
@@ -3221,14 +3318,7 @@ export function SettingsPage() {
                       >
                         {pickingInstructionFiles ? 'Picking…' : 'Add files'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleSaveInstructionFiles(); }}
-                        disabled={savingInstructionFiles || !instructionFilesDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {savingInstructionFiles ? 'Saving…' : 'Save'}
-                      </button>
+                      <span className="ui-card-meta">{savingInstructionFiles ? 'Saving…' : instructionFilesDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
                     </div>
                     <p className="ui-card-meta">Files append in the saved order after the root AGENTS.md.</p>
                   </div>
@@ -3391,13 +3481,7 @@ export function SettingsPage() {
                     </p>
                     <p className="ui-card-meta break-all">Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> · {knowledgeBaseState.recoveredEntryCount} saved</p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={knowledgeBaseAction !== null || !knowledgeBaseDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {knowledgeBaseAction === 'save' ? 'Saving…' : 'Save repo'}
-                      </button>
+                      <span className="ui-card-meta">{knowledgeBaseAction === 'save' ? 'Saving…' : knowledgeBaseDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
                       <button
                         type="button"
                         onClick={() => { void handleKnowledgeBaseSync(); }}
@@ -3478,13 +3562,7 @@ export function SettingsPage() {
                           : `Process cwd · ${defaultCwdState.effectiveCwd}`}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={savingDefaultCwd || pickingDefaultCwd || !defaultCwdDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
-                      </button>
+                      <span className="ui-card-meta">{savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
                       <button
                         type="button"
                         onClick={() => { void handleDefaultCwdSave(''); }}
