@@ -231,6 +231,7 @@ export interface PublicLiveSessionMeta {
   title?: string;
   isStreaming: boolean;
   hasPendingHiddenTurn?: boolean;
+  lastDurableRunState?: string;
 }
 
 export function toPublicLiveSessionMeta(session: {
@@ -240,6 +241,7 @@ export function toPublicLiveSessionMeta(session: {
   title?: string;
   isStreaming: boolean;
   hasPendingHiddenTurn?: boolean;
+  lastDurableRunState?: string;
 }): PublicLiveSessionMeta {
   return {
     id: session.id,
@@ -248,6 +250,7 @@ export function toPublicLiveSessionMeta(session: {
     ...(typeof session.title === 'string' ? { title: session.title } : {}),
     isStreaming: session.isStreaming,
     ...(typeof session.hasPendingHiddenTurn === 'boolean' ? { hasPendingHiddenTurn: session.hasPendingHiddenTurn } : {}),
+    ...(typeof session.lastDurableRunState === 'string' ? { lastDurableRunState: session.lastDurableRunState } : {}),
   };
 }
 
@@ -330,7 +333,7 @@ function buildSyntheticLiveSessionSnapshot(
   liveEntry: ReturnType<typeof listAllLiveSessions>[number],
   deferredResumesBySessionFile: ReturnType<typeof listDeferredResumeSummariesBySessionFile>,
 ) {
-  const isRunning = liveEntry.isStreaming || Boolean(liveEntry.hasPendingHiddenTurn);
+  const isRunning = isLiveEntryRunning(liveEntry);
   return {
     id: liveEntry.id,
     file: liveEntry.sessionFile,
@@ -353,7 +356,12 @@ function buildSyntheticLiveSessionSnapshot(
 }
 
 function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[number] | null | undefined): boolean {
-  return Boolean(liveEntry?.isStreaming || liveEntry?.hasPendingHiddenTurn);
+  return Boolean(
+    liveEntry?.isStreaming
+      || liveEntry?.hasPendingHiddenTurn
+      || liveEntry?.lastDurableRunState === 'running'
+      || liveEntry?.lastDurableRunState === 'recovering',
+  );
 }
 
 export function listConversationSessionsSnapshot() {

@@ -426,6 +426,14 @@ describe('conversationService', () => {
         title: 'Live workspace',
         isStreaming: true,
       },
+      {
+        id: 'optimistic-running-1',
+        cwd: '/repo/optimistic',
+        sessionFile: '/sessions/optimistic-running-1.jsonl',
+        title: 'Optimistic running',
+        isStreaming: false,
+        lastDurableRunState: 'running',
+      },
     ]);
     summarizeConversationAttentionMock.mockImplementation(({ conversations }: { conversations: Array<{ conversationId: string }> }) => conversations.map((conversation) => ({
       conversationId: conversation.conversationId,
@@ -452,6 +460,11 @@ describe('conversationService', () => {
       expect.objectContaining({
         id: 'workspace-1',
         title: 'Live workspace',
+        isLive: true,
+        isRunning: true,
+      }),
+      expect.objectContaining({
+        id: 'optimistic-running-1',
         isLive: true,
         isRunning: true,
       }),

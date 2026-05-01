@@ -9,6 +9,7 @@ export interface LiveSessionReadHost extends LiveSessionHiddenTurnState {
   cwd: string;
   session: AgentSession;
   title: string;
+  lastDurableRunState?: string;
 }
 
 export function listLiveSessions<TEntry extends LiveSessionReadHost>(
@@ -20,8 +21,11 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
     cwd: entry.cwd,
     sessionFile: resolveLiveSessionFile(entry.session) ?? '',
     title: resolveTitle(entry),
-    isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
+    isStreaming: (entry.session.isStreaming && !entry.activeHiddenTurnCustomType)
+      || entry.lastDurableRunState === 'running'
+      || entry.lastDurableRunState === 'recovering',
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
+    ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
   }));
 }
 
