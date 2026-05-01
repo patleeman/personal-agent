@@ -48,6 +48,21 @@ describe('transcription settings', () => {
     });
   });
 
+  it('does not surface old cloud transcription model ids when dictation is disabled', () => {
+    const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
+    writeFileSync(settingsFile, JSON.stringify({
+      transcription: {
+        provider: null,
+        model: 'gpt-4o-mini-transcribe',
+      },
+    }));
+
+    expect(readTranscriptionSettings(settingsFile)).toEqual({
+      provider: null,
+      model: 'base.en',
+    });
+  });
+
   it('allows explicitly disabling dictation', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
 

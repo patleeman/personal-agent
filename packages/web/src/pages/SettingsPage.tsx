@@ -248,7 +248,7 @@ function formatMcpServerSourcePathLabel(server: McpServerConfig): string {
 }
 
 function normalizeTranscriptionModelDraft(provider: TranscriptionProviderId | '', model: string): string {
-  if (provider === 'local-whisper' && CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model.trim())) {
+  if (CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model.trim())) {
     return 'base.en';
   }
   return model;
@@ -1897,10 +1897,12 @@ export function SettingsPage() {
   const transcriptionModelOptions = transcriptionProviderDraft
     ? TRANSCRIPTION_MODEL_OPTIONS[transcriptionProviderDraft]
     : Array.from(new Set(Object.values(TRANSCRIPTION_MODEL_OPTIONS).flat()));
+  const transcriptionStatusMatchesDraft = transcriptionModelStatus?.provider === transcriptionProviderDraft
+    && transcriptionModelStatus.model === transcriptionModelDraft.trim();
   const transcriptionModelStatusLabel = transcriptionProviderDraft && transcriptionModelDraft.trim()
     ? loadingTranscriptionModelStatus
       ? 'Checking model cache…'
-      : transcriptionModelStatus?.provider === transcriptionProviderDraft && transcriptionModelStatus.model === transcriptionModelDraft.trim()
+      : transcriptionStatusMatchesDraft
         ? transcriptionModelStatus.installed
           ? `Installed locally${transcriptionModelStatus.sizeBytes ? ` · ${formatBytes(transcriptionModelStatus.sizeBytes)}` : ''}`
           : 'Not installed yet'
@@ -1941,6 +1943,25 @@ export function SettingsPage() {
     }
   }, [transcriptionState?.settings.model, transcriptionState?.settings.provider]);
 
+  const refreshTranscriptionModelStatus = useCallback(async (provider: TranscriptionProviderId | '', model: string) => {
+    const normalizedModel = model.trim();
+    if (!provider || !normalizedModel) {
+      setTranscriptionModelStatus(null);
+      setLoadingTranscriptionModelStatus(false);
+      return;
+    }
+
+    setLoadingTranscriptionModelStatus(true);
+    try {
+      const status = await api.transcriptionModelStatus({ provider, model: normalizedModel });
+      setTranscriptionModelStatus(status);
+    } catch {
+      setTranscriptionModelStatus(null);
+    } finally {
+      setLoadingTranscriptionModelStatus(false);
+    }
+  }, []);
+
   useEffect(() => {
     const provider = transcriptionProviderDraft;
     const model = transcriptionModelDraft.trim();
@@ -1973,6 +1994,39 @@ export function SettingsPage() {
       cancelled = true;
     };
   }, [transcriptionModelDraft, transcriptionProviderDraft]);
+
+  useEffect(() => {
+    if (!transcriptionState || !transcriptionDirty || savingTranscription || installingTranscriptionModel) {
+      return;
+    }
+
+    const model = transcriptionModelDraft.trim();
+    if (!model) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setTranscriptionSaveError(null);
+      setSavingTranscription(true);
+      api.updateTranscriptionSettings({
+        provider: transcriptionProviderDraft || null,
+        model,
+      })
+        .then((saved) => {
+          replaceTranscriptionState(saved);
+        })
+        .catch((error) => {
+          setTranscriptionSaveError(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => {
+          setSavingTranscription(false);
+        });
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [installingTranscriptionModel, replaceTranscriptionState, savingTranscription, transcriptionDirty, transcriptionModelDraft, transcriptionProviderDraft, transcriptionState]);
 
   useEffect(() => {
     if (skillFoldersState) {
@@ -2431,33 +2485,6 @@ export function SettingsPage() {
     }
   }
 
-  async function handleTranscriptionSave() {
-    if (!transcriptionState || savingTranscription || !transcriptionDirty) {
-      return;
-    }
-
-    const model = transcriptionModelDraft.trim();
-    if (!model) {
-      setTranscriptionSaveError('Transcription model is required.');
-      return;
-    }
-
-    setTranscriptionSaveError(null);
-    setSavingTranscription(true);
-
-    try {
-      const saved = await api.updateTranscriptionSettings({
-        provider: transcriptionProviderDraft || null,
-        model,
-      });
-      replaceTranscriptionState(saved);
-    } catch (error) {
-      setTranscriptionSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingTranscription(false);
-    }
-  }
-
   async function handleTranscriptionInstallModel() {
     if (installingTranscriptionModel) {
       return;
@@ -2483,12 +2510,7 @@ export function SettingsPage() {
         model,
       });
       setTranscriptionInstallNotice(`Installed ${installed.model} in ${installed.cacheDir}.`);
-      setTranscriptionModelStatus({
-        provider: installed.provider,
-        model: installed.model,
-        cacheDir: installed.cacheDir,
-        installed: true,
-      });
+      await refreshTranscriptionModelStatus(installed.provider, installed.model);
     } catch (error) {
       setTranscriptionInstallError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3566,13 +3588,7 @@ export function SettingsPage() {
                 ) : transcriptionError && !transcriptionState ? (
                   <p className="text-[12px] text-danger">Failed to load dictation settings: {transcriptionError}</p>
                 ) : transcriptionState ? (
-                  <form
-                    className="space-y-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleTranscriptionSave();
-                    }}
-                  >
+                  <div className="space-y-3">
                     <label className="ui-card-meta" htmlFor="settings-transcription-provider">Provider</label>
                     <select
                       id="settings-transcription-provider"
@@ -3586,7 +3602,7 @@ export function SettingsPage() {
                         setTranscriptionInstallError(null);
                         setTranscriptionModelStatus(null);
                       }}
-                      disabled={savingTranscription || installingTranscriptionModel}
+                      disabled={installingTranscriptionModel}
                       className={INPUT_CLASS}
                     >
                       <option value="">Disabled</option>
@@ -3604,53 +3620,51 @@ export function SettingsPage() {
                         : 'Dictation is disabled until a provider is selected.'}
                     </p>
 
-                    <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">Model</label>
-                    <input
-                      id="settings-transcription-model"
-                      list="settings-transcription-model-options"
-                      value={transcriptionModelDraft}
-                      onChange={(event) => {
-                        setTranscriptionModelDraft(event.target.value);
-                        setTranscriptionSaveError(null);
-                        setTranscriptionInstallNotice(null);
-                        setTranscriptionInstallError(null);
-                        setTranscriptionModelStatus(null);
-                      }}
-                      disabled={savingTranscription || installingTranscriptionModel}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      placeholder="base.en"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <datalist id="settings-transcription-model-options">
-                      {transcriptionModelOptions.map((model) => (
-                        <option key={model} value={model} />
-                      ))}
-                    </datalist>
-                    <p className="ui-card-meta">Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.</p>
-                    <p className={cx('text-[12px]', transcriptionModelStatus?.installed ? 'text-success' : 'text-dim')}>{transcriptionModelStatusLabel}</p>
+                    {transcriptionProviderDraft ? (
+                      <>
+                        <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">Model</label>
+                        <input
+                          id="settings-transcription-model"
+                          list="settings-transcription-model-options"
+                          value={transcriptionModelDraft}
+                          onChange={(event) => {
+                            setTranscriptionModelDraft(event.target.value);
+                            setTranscriptionSaveError(null);
+                            setTranscriptionInstallNotice(null);
+                            setTranscriptionInstallError(null);
+                            setTranscriptionModelStatus(null);
+                          }}
+                          disabled={installingTranscriptionModel}
+                          className={`${INPUT_CLASS} font-mono text-[13px]`}
+                          placeholder="base.en"
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        <datalist id="settings-transcription-model-options">
+                          {transcriptionModelOptions.map((model) => (
+                            <option key={model} value={model} />
+                          ))}
+                        </datalist>
+                        <p className="ui-card-meta">Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.</p>
+                        <p className={cx('text-[12px]', transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'text-success' : 'text-dim')}>{transcriptionModelStatusLabel}</p>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={savingTranscription || installingTranscriptionModel || !transcriptionDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {savingTranscription ? 'Saving…' : 'Save dictation'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={installingTranscriptionModel || savingTranscription || !transcriptionProviderDraft || !transcriptionModelDraft.trim()}
-                        onClick={() => { void handleTranscriptionInstallModel(); }}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {installingTranscriptionModel ? 'Installing…' : 'Install local model'}
-                      </button>
-                    </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={installingTranscriptionModel || savingTranscription || !transcriptionModelDraft.trim()}
+                            onClick={() => { void handleTranscriptionInstallModel(); }}
+                            className={ACTION_BUTTON_CLASS}
+                          >
+                            {installingTranscriptionModel ? 'Installing…' : transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'Reinstall local model' : 'Install local model'}
+                          </button>
+                          {savingTranscription ? <span className="ui-card-meta">Saving…</span> : null}
+                        </div>
+                      </>
+                    ) : null}
 
                     {transcriptionInstallNotice && <p className="text-[12px] text-accent">{transcriptionInstallNotice}</p>}
                     {transcriptionInstallError && <p className="text-[12px] text-danger">{transcriptionInstallError}</p>}
-                  </form>
+                  </div>
                 ) : null}
 
                 {transcriptionSaveError && <p className="text-[12px] text-danger">{transcriptionSaveError}</p>}

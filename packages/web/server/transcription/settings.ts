@@ -38,7 +38,7 @@ export function normalizeTranscriptionModelForProvider(
     ? value.trim()
     : DEFAULT_TRANSCRIPTION_MODEL;
 
-  if (provider === 'local-whisper' && CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model)) {
+  if (CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model)) {
     return DEFAULT_TRANSCRIPTION_MODEL;
   }
 
