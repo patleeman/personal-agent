@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/web",
-  "version": "0.5.28",
+  "version": "0.5.29",
   "description": "Personal Agent desktop renderer",
   "type": "module",
   "scripts": {
