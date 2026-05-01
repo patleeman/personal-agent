@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
-import { readStoredPanelWidth, readStoredWorkbenchExplorerOpen, resolveActiveWorkspaceCwd } from './Layout';
+import { readStoredPanelWidth, readStoredWorkbenchExplorerOpen, resolveActiveWorkspaceCwd, shouldShowConversationRunsTab } from './Layout';
 
 function createSession(overrides: Partial<SessionMeta>): SessionMeta {
   return {
@@ -48,6 +48,11 @@ describe('Layout workbench rail state', () => {
 
     storage.set('pa:workbench-explorer-open', 'true');
     expect(readStoredWorkbenchExplorerOpen(localStorage)).toBe(true);
+  });
+
+  it('only shows the runs tab when the conversation has runs', () => {
+    expect(shouldShowConversationRunsTab(0)).toBe(false);
+    expect(shouldShowConversationRunsTab(1)).toBe(true);
   });
 });
 

@@ -196,6 +196,7 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
   const profile = getRunTargetProfile(run);
   const connections = getRunConnections(run, lookups).filter((connection) => connection.label !== 'Source file');
   const transcript = connections.find((connection) => connection.label === 'Conversation transcript' && connection.to);
+  const related = connections.filter((connection) => connection.key !== transcript?.key);
   const canCancel = !terminalStatus(run.status?.status) && (run.manifest?.kind === 'background-run' || run.manifest?.kind === 'raw-shell');
   const resultSummary = typeof run.result?.summary === 'string' ? run.result.summary : undefined;
 
@@ -238,17 +239,18 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
           <Meta label="Result" value={resultSummary ?? run.status?.lastError ?? statusLabel(run)} />
         </div>
 
+        <Related connections={related} />
+
         {!isShellRun(run) && transcript ? (
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="mt-4">
             <div className="min-h-[340px] rounded-lg border border-border-subtle bg-elevated/30 p-4">
               <p className="ui-section-label">Subagent transcript</p>
               <p className="mt-3 text-[13px] leading-6 text-secondary">This run produced a conversation transcript. Open it to inspect the full subagent work, messages, tool calls, and final answer.</p>
               <Link to={transcript.to!} className="mt-4 inline-flex ui-toolbar-button text-[12px] text-accent">Open transcript →</Link>
             </div>
-            <Related connections={connections} />
           </div>
         ) : (
-          <div className="mt-4 grid min-h-[420px] gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="mt-4 min-h-[420px]">
             <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border-subtle bg-black/35">
               <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-dim">
                 <span>Output</span>
@@ -258,7 +260,6 @@ function RunDetail({ runId, lookups }: { runId: string; lookups: RunPresentation
                 {log?.log ? <pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-primary">{log.log}</pre> : <p className="text-[12px] italic text-dim">No output yet.</p>}
               </div>
             </div>
-            <Related connections={connections} />
           </div>
         )}
       </div>
@@ -276,24 +277,30 @@ function Meta({ label, value, mono = false }: { label: string; value: string; mo
 }
 
 function Related({ connections }: { connections: ReturnType<typeof getRunConnections> }) {
+  const relatedConnections = connections.filter((connection) => (
+    connection.label === 'Automation'
+    || connection.label === 'Conversation'
+    || connection.label === 'Conversation to reopen'
+  ));
+
+  if (relatedConnections.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="min-w-0 rounded-lg border border-border-subtle bg-elevated/20 p-3">
+    <div className="mt-4 min-w-0 rounded-lg border border-border-subtle bg-elevated/20 p-3">
       <p className="ui-section-label">Related</p>
-      {connections.length === 0 ? (
-        <p className="mt-3 text-[12px] text-dim">No linked conversation or automation.</p>
-      ) : (
-        <div className="mt-3 space-y-3">
-          {connections.map((connection) => connection.to ? (
-            <Link key={connection.key} to={connection.to} className="block text-[12px] text-accent hover:underline">
-              {connection.label}: {connection.value}
-            </Link>
-          ) : (
-            <div key={connection.key} className="text-[12px] text-secondary">
-              <span className="text-dim">{connection.label}: </span>{connection.value}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+        {relatedConnections.map((connection) => connection.to ? (
+          <Link key={connection.key} to={connection.to} className="text-[12px] text-accent hover:underline">
+            {connection.label}: {connection.value}
+          </Link>
+        ) : (
+          <div key={connection.key} className="text-[12px] text-secondary">
+            <span className="text-dim">{connection.label}: </span>{connection.value}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

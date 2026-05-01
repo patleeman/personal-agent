@@ -8,7 +8,7 @@ import { PageSearchBar } from './PageSearchBar';
 import { VaultEditor } from './knowledge/VaultEditor';
 import { ConversationArtifactRailContent, ConversationArtifactWorkbenchPane, useConversationArtifactSummaries } from './ConversationArtifactWorkbench';
 import { ConversationCheckpointWorkbenchPane, ConversationDiffRailContent, useConversationCheckpointSummaries } from './ConversationCheckpointWorkbench';
-import { ConversationRunsRailContent, ConversationRunWorkbenchPane } from './ConversationRunsWorkbench';
+import { ConversationRunsRailContent, ConversationRunWorkbenchPane, useConversationRunList } from './ConversationRunsWorkbench';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { APP_LAYOUT_MODE_CHANGED_EVENT, readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
@@ -135,6 +135,10 @@ export function readStoredWorkbenchExplorerOpen(storage: Pick<Storage, 'getItem'
 
 function writeStoredWorkbenchExplorerOpen(open: boolean, storage: Pick<Storage, 'setItem'> = localStorage): void {
   try { storage.setItem(WORKBENCH_EXPLORER_OPEN_STORAGE_KEY, open ? 'true' : 'false'); } catch { /* ignore */ }
+}
+
+export function shouldShowConversationRunsTab(runCount: number): boolean {
+  return runCount > 0;
 }
 
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
@@ -851,6 +855,8 @@ function WorkbenchKnowledgeRail({
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
   const { checkpoints, loading: checkpointsLoading, error: checkpointsError } = useConversationCheckpointSummaries(conversationId);
   const runLookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
+  const connectedRuns = useConversationRunList(conversationId, runs, runLookups);
+  const showRunsTab = shouldShowConversationRunsTab(connectedRuns.length) || activeRunId !== null;
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback((id: string) => {
     onActiveToolChange('knowledge');
@@ -1013,6 +1019,19 @@ function WorkbenchKnowledgeRail({
   }, [activeRunId, onActiveToolChange, onWorkspaceFileClear]);
 
   useEffect(() => {
+    if (activeTool !== 'runs' || showRunsTab) {
+      return;
+    }
+
+    onActiveToolChange('knowledge');
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('run');
+      return next;
+    }, { replace: true });
+  }, [activeTool, onActiveToolChange, setSearchParams, showRunsTab]);
+
+  useEffect(() => {
     if (activeTool === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
       onActiveToolChange('knowledge');
       setSearchParams((current) => {
@@ -1083,14 +1102,16 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">Browser</span>
         </button>
-        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'runs' && 'ui-sidebar-nav-item-active')} title="Runs" onClick={handleRunsModeSelect}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
-            <path d="M4.5 6.75h15v10.5h-15z" />
-            <path d="m8 10 2 2-2 2" />
-            <path d="M12 14h4" />
-          </svg>
-          <span className="flex-1 text-left">Runs</span>
-        </button>
+        {showRunsTab ? (
+          <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'runs' && 'ui-sidebar-nav-item-active')} title="Runs" onClick={handleRunsModeSelect}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
+              <path d="M4.5 6.75h15v10.5h-15z" />
+              <path d="m8 10 2 2-2 2" />
+              <path d="M12 14h4" />
+            </svg>
+            <span className="flex-1 text-left">Runs</span>
+          </button>
+        ) : null}
       </div>
       {activeTool === 'knowledge' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
