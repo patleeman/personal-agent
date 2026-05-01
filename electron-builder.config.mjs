@@ -55,7 +55,6 @@ const electronBuilderConfig = {
     'node_modules/better-sqlite3/**/*',
     'node_modules/bindings/**/*',
     'node_modules/file-uri-to-path/**/*',
-    'node_modules/sharp/**/*',
   ],
   extraMetadata: {
     main: './dist/main.js',

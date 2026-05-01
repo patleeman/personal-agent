@@ -33,6 +33,10 @@ describe('desktop release config', () => {
     ]));
   });
 
+  it('does not treat the local sharp stub as a native module', () => {
+    expect(electronBuilderConfig.asarUnpack).not.toContain('node_modules/sharp/**/*');
+  });
+
   it('normalizes version tags and asset names for updater artifacts', () => {
     expect(buildDesktopReleaseTag('v0.1.14')).toBe('v0.1.14');
     expect(buildDesktopReleaseAssetName({ version: 'v0.1.14', ext: 'zip' })).toBe('Personal-Agent-0.1.14-mac-arm64.zip');
