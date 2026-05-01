@@ -63,6 +63,20 @@ type ModelOption = ModelState['models'][number];
 type DesktopKeyboardShortcutId = keyof DesktopAppPreferencesState['keyboardShortcuts'];
 
 const DESKTOP_KEYBOARD_SHORTCUT_LABELS: Record<DesktopKeyboardShortcutId, { label: string; description: string }> = {
+  showApp: { label: 'Show Personal Agent', description: 'Bring the desktop window forward.' },
+  newConversation: { label: 'New conversation', description: 'Start a fresh chat.' },
+  closeTab: { label: 'Close tab', description: 'Close the active conversation tab.' },
+  reopenClosedTab: { label: 'Reopen closed tab', description: 'Restore the most recently closed conversation tab.' },
+  previousConversation: { label: 'Previous conversation', description: 'Move to the previous open conversation.' },
+  nextConversation: { label: 'Next conversation', description: 'Move to the next open conversation.' },
+  togglePinned: { label: 'Toggle pinned', description: 'Pin or unpin the active conversation.' },
+  archiveRestoreConversation: { label: 'Archive / restore', description: 'Archive or restore the active conversation.' },
+  renameConversation: { label: 'Rename conversation', description: 'Rename the active conversation.' },
+  focusComposer: { label: 'Focus composer', description: 'Move focus to the message composer.' },
+  editWorkingDirectory: { label: 'Edit working directory', description: 'Open the working-directory editor.' },
+  findOnPage: { label: 'Find on page', description: 'Search text in the current page.' },
+  settings: { label: 'Settings', description: 'Open this settings page.' },
+  quit: { label: 'Quit', description: 'Quit the desktop app.' },
   conversationMode: { label: 'Conversation mode', description: 'Show the normal chat layout.' },
   workbenchMode: { label: 'Workbench mode', description: 'Show the chat and workbench layout.' },
   zenMode: { label: 'Zen mode', description: 'Hide side panels for focused chat.' },
@@ -70,39 +84,21 @@ const DESKTOP_KEYBOARD_SHORTCUT_LABELS: Record<DesktopKeyboardShortcutId, { labe
   toggleRightRail: { label: 'Toggle right rail', description: 'Collapse or restore the active workbench rail.' },
 };
 
-const READ_ONLY_KEYBOARD_SHORTCUTS: Array<{ category: string; label: string; description: string; shortcut: string }> = [
-  { category: 'App', label: 'Show Personal Agent', description: 'Bring the desktop window forward.', shortcut: 'CommandOrControl+Shift+A' },
-  { category: 'App', label: 'New conversation', description: 'Start a fresh chat.', shortcut: 'CommandOrControl+N' },
-  { category: 'App', label: 'Close tab', description: 'Close the active conversation tab.', shortcut: 'CommandOrControl+W' },
-  { category: 'App', label: 'Reopen closed tab', description: 'Restore the most recently closed conversation tab.', shortcut: 'Command+Shift+N / Ctrl+Shift+W' },
-  { category: 'App', label: 'Previous conversation', description: 'Move to the previous open conversation.', shortcut: 'CommandOrControl+[' },
-  { category: 'App', label: 'Next conversation', description: 'Move to the next open conversation.', shortcut: 'CommandOrControl+]' },
-  { category: 'App', label: 'Jump to conversation', description: 'Open conversation 1-9 from the sidebar.', shortcut: 'CommandOrControl+1-9' },
-  { category: 'App', label: 'Move conversation left/right', description: 'Reorder the active conversation tab.', shortcut: 'CommandOrControl+Alt+[/]' },
-  { category: 'App', label: 'Toggle pinned', description: 'Pin or unpin the active conversation.', shortcut: 'CommandOrControl+Alt+P' },
-  { category: 'App', label: 'Archive / restore', description: 'Archive or restore the active conversation.', shortcut: 'CommandOrControl+Alt+A' },
-  { category: 'App', label: 'Rename conversation', description: 'Rename the active conversation.', shortcut: 'CommandOrControl+Alt+R' },
-  { category: 'App', label: 'Focus composer', description: 'Move focus to the message composer.', shortcut: 'CommandOrControl+L' },
-  { category: 'App', label: 'Edit working directory', description: 'Open the working-directory editor.', shortcut: 'CommandOrControl+Shift+L' },
-  { category: 'App', label: 'Settings', description: 'Open this settings page.', shortcut: 'CommandOrControl+,' },
-  { category: 'App', label: 'Find on page', description: 'Search text in the current page.', shortcut: 'CommandOrControl+F' },
-  { category: 'App', label: 'Find next / previous', description: 'Move through page search matches.', shortcut: 'CommandOrControl+G / CommandOrControl+Shift+G' },
-  { category: 'App', label: 'Quit', description: 'Quit the desktop app.', shortcut: 'CommandOrControl+Q / Alt+F4' },
-  { category: 'Command palette', label: 'Threads palette', description: 'Open the command palette for conversations.', shortcut: 'CommandOrControl+K' },
-  { category: 'Command palette', label: 'Files palette', description: 'Open the command palette for workspace files.', shortcut: 'CommandOrControl+P' },
-  { category: 'Command palette', label: 'Search palette', description: 'Open the command palette in search mode.', shortcut: 'CommandOrControl+Shift+F' },
-  { category: 'Composer', label: 'Send message', description: 'Submit the current composer text.', shortcut: 'Enter' },
-  { category: 'Composer', label: 'New line', description: 'Insert a line break in the composer.', shortcut: 'Shift+Enter' },
-  { category: 'Composer', label: 'Parallel prompt', description: 'Start a parallel prompt while a conversation is busy.', shortcut: 'CommandOrControl+Enter' },
-  { category: 'Composer', label: 'Queue follow-up', description: 'Queue a follow-up while a conversation is busy.', shortcut: 'Alt+Enter' },
-  { category: 'Composer', label: 'Prompt history', description: 'Recall older or newer composer prompts.', shortcut: 'ArrowUp / ArrowDown' },
-  { category: 'Composer', label: 'Clear composer', description: 'Clear composer text.', shortcut: 'Ctrl+C' },
-  { category: 'Composer', label: 'Stop streaming', description: 'Abort the current streaming response.', shortcut: 'Escape' },
-  { category: 'Composer', label: 'Pick related thread', description: 'Toggle related-thread attachment 1-9.', shortcut: 'Ctrl+1-9' },
-  { category: 'Composer', label: 'Choose pending answer', description: 'Select answers in inline questions.', shortcut: '1-9 / Tab / Shift+Tab / Arrow keys / Enter' },
-];
-
 const DESKTOP_KEYBOARD_SHORTCUT_OPTIONS: Record<DesktopKeyboardShortcutId, string[]> = {
+  showApp: ['CommandOrControl+Shift+A', 'CommandOrControl+Shift+P', 'CommandOrControl+Alt+Space'],
+  newConversation: ['CommandOrControl+N', 'CommandOrControl+Shift+N', 'CommandOrControl+Alt+N'],
+  closeTab: ['CommandOrControl+W', 'CommandOrControl+Shift+W', 'CommandOrControl+Alt+W'],
+  reopenClosedTab: ['Command+Shift+N', 'CommandOrControl+Shift+W', 'CommandOrControl+Shift+T'],
+  previousConversation: ['CommandOrControl+[', 'CommandOrControl+Shift+[', 'CommandOrControl+Alt+['],
+  nextConversation: ['CommandOrControl+]', 'CommandOrControl+Shift+]', 'CommandOrControl+Alt+]'],
+  togglePinned: ['CommandOrControl+Alt+P', 'CommandOrControl+Shift+P', 'CommandOrControl+Alt+Shift+P'],
+  archiveRestoreConversation: ['CommandOrControl+Alt+A', 'CommandOrControl+Shift+A', 'CommandOrControl+Alt+Shift+A'],
+  renameConversation: ['CommandOrControl+Alt+R', 'CommandOrControl+Shift+R', 'CommandOrControl+Alt+Shift+R'],
+  focusComposer: ['CommandOrControl+L', 'CommandOrControl+Shift+L', 'CommandOrControl+Alt+L'],
+  editWorkingDirectory: ['CommandOrControl+Shift+L', 'CommandOrControl+Alt+L', 'CommandOrControl+Alt+Shift+L'],
+  findOnPage: ['CommandOrControl+F', 'CommandOrControl+Shift+F', 'CommandOrControl+Alt+F'],
+  settings: ['CommandOrControl+,', 'CommandOrControl+Shift+,', 'CommandOrControl+Alt+,'],
+  quit: ['CommandOrControl+Q', 'CommandOrControl+Shift+Q', 'Alt+F4'],
   conversationMode: ['F1', 'F4', 'CommandOrControl+1'],
   workbenchMode: ['F2', 'F5', 'CommandOrControl+2'],
   zenMode: ['F3', 'F6', 'CommandOrControl+3'],
@@ -111,6 +107,20 @@ const DESKTOP_KEYBOARD_SHORTCUT_OPTIONS: Record<DesktopKeyboardShortcutId, strin
 };
 
 const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopAppPreferencesState['keyboardShortcuts'] = {
+  showApp: 'CommandOrControl+Shift+A',
+  newConversation: 'CommandOrControl+N',
+  closeTab: 'CommandOrControl+W',
+  reopenClosedTab: 'Command+Shift+N',
+  previousConversation: 'CommandOrControl+[',
+  nextConversation: 'CommandOrControl+]',
+  togglePinned: 'CommandOrControl+Alt+P',
+  archiveRestoreConversation: 'CommandOrControl+Alt+A',
+  renameConversation: 'CommandOrControl+Alt+R',
+  focusComposer: 'CommandOrControl+L',
+  editWorkingDirectory: 'CommandOrControl+Shift+L',
+  findOnPage: 'CommandOrControl+F',
+  settings: 'CommandOrControl+,',
+  quit: 'CommandOrControl+Q',
   conversationMode: 'F1',
   workbenchMode: 'F2',
   zenMode: 'F3',
@@ -618,12 +628,12 @@ export function DesktopKeyboardShortcutsSettingsSection() {
     <SettingsSection
       id="settings-keyboard"
       label="Keyboard"
-      description="Configure desktop app shortcuts and review built-in hotkeys."
+      description="Configure desktop app shortcuts."
       className="order-1"
     >
       <SettingsPanel
         title="Keyboard shortcuts"
-        description="Configurable shortcuts auto-save. Built-in shortcuts are listed so there is no mystery meat in the menu."
+        description="Every desktop menu shortcut is configurable and auto-saves immediately."
       >
         {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
         {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
@@ -681,27 +691,6 @@ export function DesktopKeyboardShortcutsSettingsSection() {
               >
                 Reset to defaults
               </button>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div>
-                <h3 className="text-[14px] font-medium text-primary">Built-in shortcuts</h3>
-                <p className="mt-1 text-[12px] leading-5 text-secondary">These are wired elsewhere in the app and are not configurable yet.</p>
-              </div>
-              <div className="divide-y divide-border-subtle/70">
-                {READ_ONLY_KEYBOARD_SHORTCUTS.map((shortcut) => (
-                  <div key={`${shortcut.category}:${shortcut.label}`} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_14rem] sm:items-center">
-                    <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-dim">{shortcut.category}</span>
-                    <span className="min-w-0 space-y-1">
-                      <span className="block text-[13px] font-medium text-primary">{shortcut.label}</span>
-                      <span className="block text-[12px] leading-5 text-secondary">{shortcut.description}</span>
-                    </span>
-                    <span className="rounded-lg border border-border-subtle bg-surface/50 px-3 py-2 font-mono text-[12px] text-secondary">
-                      {formatKeyboardShortcutLabel(shortcut.shortcut)}
-                    </span>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         ) : null}

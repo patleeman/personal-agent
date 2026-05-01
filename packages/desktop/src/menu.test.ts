@@ -106,7 +106,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'New Window' }),
       expect.objectContaining({ label: 'New Conversation', accelerator: 'CommandOrControl+N' }),
       expect.objectContaining({ label: 'Close Tab', accelerator: 'CommandOrControl+W' }),
-      expect.objectContaining({ label: 'Reopen Closed Tab', accelerator: 'CommandOrControl+Shift+W' }),
+      expect.objectContaining({ label: 'Reopen Closed Tab', accelerator: 'Command+Shift+N' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),
@@ -117,7 +117,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Settings…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Restart Runtime' }),
-      expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'Alt+F4' }),
+      expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'CommandOrControl+Q' }),
     ]));
 
     const editMenu = template[1];

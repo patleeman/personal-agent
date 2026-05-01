@@ -759,6 +759,20 @@ export interface DesktopAppPreferencesState {
   autoInstallUpdates: boolean;
   startOnSystemStart: boolean;
   keyboardShortcuts: {
+    showApp: string;
+    newConversation: string;
+    closeTab: string;
+    reopenClosedTab: string;
+    previousConversation: string;
+    nextConversation: string;
+    togglePinned: string;
+    archiveRestoreConversation: string;
+    renameConversation: string;
+    focusComposer: string;
+    editWorkingDirectory: string;
+    findOnPage: string;
+    settings: string;
+    quit: string;
     conversationMode: string;
     workbenchMode: string;
     zenMode: string;

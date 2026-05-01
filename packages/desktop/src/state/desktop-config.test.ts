@@ -16,6 +16,7 @@ import {
   readDesktopAppPreferences,
   updateDesktopAppPreferences,
 } from './desktop-config.js';
+import { DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS } from '../keyboard-shortcuts.js';
 
 describe('desktop-config', () => {
   let dir: string;
@@ -95,13 +96,7 @@ describe('desktop-config', () => {
     expect(readDesktopAppPreferences(initial)).toEqual({
       autoInstallUpdates: false,
       startOnSystemStart: false,
-      keyboardShortcuts: {
-        conversationMode: 'F1',
-        workbenchMode: 'F2',
-        zenMode: 'F3',
-        toggleSidebar: 'CommandOrControl+/',
-        toggleRightRail: 'CommandOrControl+\\',
-      },
+      keyboardShortcuts: DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS,
     });
 
     updateDesktopAppPreferences({ autoInstallUpdates: true, startOnSystemStart: true });
@@ -109,13 +104,7 @@ describe('desktop-config', () => {
     expect(readDesktopAppPreferences(loadDesktopConfig())).toEqual({
       autoInstallUpdates: true,
       startOnSystemStart: true,
-      keyboardShortcuts: {
-        conversationMode: 'F1',
-        workbenchMode: 'F2',
-        zenMode: 'F3',
-        toggleSidebar: 'CommandOrControl+/',
-        toggleRightRail: 'CommandOrControl+\\',
-      },
+      keyboardShortcuts: DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS,
     });
   });
 
@@ -127,11 +116,8 @@ describe('desktop-config', () => {
     });
 
     expect(readDesktopAppPreferences(loadDesktopConfig()).keyboardShortcuts).toEqual({
+      ...DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS,
       conversationMode: 'F4',
-      workbenchMode: 'F2',
-      zenMode: 'F3',
-      toggleSidebar: 'CommandOrControl+/',
-      toggleRightRail: 'CommandOrControl+\\',
     });
   });
 });

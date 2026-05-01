@@ -7,6 +7,29 @@ import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
+const DEFAULT_KEYBOARD_SHORTCUTS = {
+  showApp: 'CommandOrControl+Shift+A',
+  newConversation: 'CommandOrControl+N',
+  closeTab: 'CommandOrControl+W',
+  reopenClosedTab: 'Command+Shift+N',
+  previousConversation: 'CommandOrControl+[',
+  nextConversation: 'CommandOrControl+]',
+  togglePinned: 'CommandOrControl+Alt+P',
+  archiveRestoreConversation: 'CommandOrControl+Alt+A',
+  renameConversation: 'CommandOrControl+Alt+R',
+  focusComposer: 'CommandOrControl+L',
+  editWorkingDirectory: 'CommandOrControl+Shift+L',
+  findOnPage: 'CommandOrControl+F',
+  settings: 'CommandOrControl+,',
+  quit: 'CommandOrControl+Q',
+  conversationMode: 'F1',
+  workbenchMode: 'F2',
+  zenMode: 'F3',
+  toggleSidebar: 'CommandOrControl+/',
+  toggleRightRail: 'CommandOrControl+\\',
+};
+
+
 const mountedRoots: Root[] = [];
 const mocks = vi.hoisted(() => ({
   getEnvironment: vi.fn(),
@@ -101,13 +124,7 @@ describe('DesktopConnectionsSettingsPanel', () => {
       supportsStartOnSystemStart: true,
       autoInstallUpdates: true,
       startOnSystemStart: false,
-      keyboardShortcuts: {
-        conversationMode: 'F1',
-        workbenchMode: 'F2',
-        zenMode: 'F3',
-        toggleSidebar: 'CommandOrControl+/',
-        toggleRightRail: 'CommandOrControl+\\',
-      },
+      keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
       update: {
         supported: true,
         status: 'idle',
@@ -119,13 +136,7 @@ describe('DesktopConnectionsSettingsPanel', () => {
       supportsStartOnSystemStart: true,
       autoInstallUpdates: true,
       startOnSystemStart: false,
-      keyboardShortcuts: {
-        conversationMode: 'F1',
-        workbenchMode: 'F2',
-        zenMode: 'F3',
-        toggleSidebar: 'CommandOrControl+/',
-        toggleRightRail: 'CommandOrControl+\\',
-      },
+      keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
       update: {
         supported: true,
         status: 'idle',
@@ -186,13 +197,7 @@ describe('DesktopKeyboardShortcutsSettingsSection', () => {
       supportsStartOnSystemStart: true,
       autoInstallUpdates: true,
       startOnSystemStart: false,
-      keyboardShortcuts: {
-        conversationMode: 'F1',
-        workbenchMode: 'F2',
-        zenMode: 'F3',
-        toggleSidebar: 'CommandOrControl+/',
-        toggleRightRail: 'CommandOrControl+\\',
-      },
+      keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
       update: {
         supported: true,
         status: 'idle',
@@ -205,11 +210,8 @@ describe('DesktopKeyboardShortcutsSettingsSection', () => {
       autoInstallUpdates: true,
       startOnSystemStart: false,
       keyboardShortcuts: {
+        ...DEFAULT_KEYBOARD_SHORTCUTS,
         conversationMode: 'F4',
-        workbenchMode: 'F2',
-        zenMode: 'F3',
-        toggleSidebar: 'CommandOrControl+/',
-        toggleRightRail: 'CommandOrControl+\\',
         ...patch.keyboardShortcuts,
       },
       update: {
@@ -256,8 +258,9 @@ describe('DesktopKeyboardShortcutsSettingsSection', () => {
     expect(mocks.updateDesktopAppPreferences).toHaveBeenCalledWith({
       keyboardShortcuts: expect.objectContaining({ conversationMode: 'F4' }),
     });
-    expect(container.textContent).toContain('Built-in shortcuts');
     expect(container.textContent).toContain('Show Personal Agent');
+    expect(container.textContent).toContain('Find on page');
+    expect(container.textContent).not.toContain('Built-in shortcuts');
     expect(container.textContent).not.toContain('Save shortcuts');
   });
 });

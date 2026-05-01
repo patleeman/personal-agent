@@ -1,4 +1,18 @@
 export type DesktopKeyboardShortcutId =
+  | 'showApp'
+  | 'newConversation'
+  | 'closeTab'
+  | 'reopenClosedTab'
+  | 'previousConversation'
+  | 'nextConversation'
+  | 'togglePinned'
+  | 'archiveRestoreConversation'
+  | 'renameConversation'
+  | 'focusComposer'
+  | 'editWorkingDirectory'
+  | 'findOnPage'
+  | 'settings'
+  | 'quit'
   | 'conversationMode'
   | 'workbenchMode'
   | 'zenMode'
@@ -8,6 +22,20 @@ export type DesktopKeyboardShortcutId =
 export type DesktopKeyboardShortcuts = Record<DesktopKeyboardShortcutId, string>;
 
 export const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopKeyboardShortcuts = {
+  showApp: 'CommandOrControl+Shift+A',
+  newConversation: 'CommandOrControl+N',
+  closeTab: 'CommandOrControl+W',
+  reopenClosedTab: 'Command+Shift+N',
+  previousConversation: 'CommandOrControl+[',
+  nextConversation: 'CommandOrControl+]',
+  togglePinned: 'CommandOrControl+Alt+P',
+  archiveRestoreConversation: 'CommandOrControl+Alt+A',
+  renameConversation: 'CommandOrControl+Alt+R',
+  focusComposer: 'CommandOrControl+L',
+  editWorkingDirectory: 'CommandOrControl+Shift+L',
+  findOnPage: 'CommandOrControl+F',
+  settings: 'CommandOrControl+,',
+  quit: 'CommandOrControl+Q',
   conversationMode: 'F1',
   workbenchMode: 'F2',
   zenMode: 'F3',
@@ -16,6 +44,20 @@ export const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopKeyboardShortcuts = {
 };
 
 export const DESKTOP_KEYBOARD_SHORTCUT_IDS: DesktopKeyboardShortcutId[] = [
+  'showApp',
+  'newConversation',
+  'closeTab',
+  'reopenClosedTab',
+  'previousConversation',
+  'nextConversation',
+  'togglePinned',
+  'archiveRestoreConversation',
+  'renameConversation',
+  'focusComposer',
+  'editWorkingDirectory',
+  'findOnPage',
+  'settings',
+  'quit',
   'conversationMode',
   'workbenchMode',
   'zenMode',
@@ -24,6 +66,20 @@ export const DESKTOP_KEYBOARD_SHORTCUT_IDS: DesktopKeyboardShortcutId[] = [
 ];
 
 export const DESKTOP_KEYBOARD_SHORTCUT_OPTIONS: Record<DesktopKeyboardShortcutId, string[]> = {
+  showApp: ['CommandOrControl+Shift+A', 'CommandOrControl+Shift+P', 'CommandOrControl+Alt+Space'],
+  newConversation: ['CommandOrControl+N', 'CommandOrControl+Shift+N', 'CommandOrControl+Alt+N'],
+  closeTab: ['CommandOrControl+W', 'CommandOrControl+Shift+W', 'CommandOrControl+Alt+W'],
+  reopenClosedTab: ['Command+Shift+N', 'CommandOrControl+Shift+W', 'CommandOrControl+Shift+T'],
+  previousConversation: ['CommandOrControl+[', 'CommandOrControl+Shift+[', 'CommandOrControl+Alt+['],
+  nextConversation: ['CommandOrControl+]', 'CommandOrControl+Shift+]', 'CommandOrControl+Alt+]'],
+  togglePinned: ['CommandOrControl+Alt+P', 'CommandOrControl+Shift+P', 'CommandOrControl+Alt+Shift+P'],
+  archiveRestoreConversation: ['CommandOrControl+Alt+A', 'CommandOrControl+Shift+A', 'CommandOrControl+Alt+Shift+A'],
+  renameConversation: ['CommandOrControl+Alt+R', 'CommandOrControl+Shift+R', 'CommandOrControl+Alt+Shift+R'],
+  focusComposer: ['CommandOrControl+L', 'CommandOrControl+Shift+L', 'CommandOrControl+Alt+L'],
+  editWorkingDirectory: ['CommandOrControl+Shift+L', 'CommandOrControl+Alt+L', 'CommandOrControl+Alt+Shift+L'],
+  findOnPage: ['CommandOrControl+F', 'CommandOrControl+Shift+F', 'CommandOrControl+Alt+F'],
+  settings: ['CommandOrControl+,', 'CommandOrControl+Shift+,', 'CommandOrControl+Alt+,'],
+  quit: ['CommandOrControl+Q', 'CommandOrControl+Shift+Q', 'Alt+F4'],
   conversationMode: ['F1', 'F4', 'CommandOrControl+1'],
   workbenchMode: ['F2', 'F5', 'CommandOrControl+2'],
   zenMode: ['F3', 'F6', 'CommandOrControl+3'],

@@ -33,10 +33,6 @@ interface DesktopApplicationMenuTemplateOptions {
   keyboardShortcuts?: DesktopKeyboardShortcuts;
 }
 
-function getReopenClosedTabAccelerator(platform: NodeJS.Platform): string {
-  return platform === 'darwin' ? 'Command+Shift+N' : 'CommandOrControl+Shift+W';
-}
-
 export function buildDesktopApplicationMenuTemplate(
   actions: DesktopApplicationMenuActions,
   options: DesktopApplicationMenuTemplateOptions = {},
@@ -51,7 +47,7 @@ export function buildDesktopApplicationMenuTemplate(
     submenu: [
       {
         label: `Show ${appName}`,
-        accelerator: 'CommandOrControl+Shift+A',
+        accelerator: keyboardShortcuts.showApp,
         click: actions.onOpen,
       },
       {
@@ -60,52 +56,52 @@ export function buildDesktopApplicationMenuTemplate(
       },
       {
         label: 'New Conversation',
-        accelerator: 'CommandOrControl+N',
+        accelerator: keyboardShortcuts.newConversation,
         click: actions.onNewConversation,
       },
       {
         label: 'Close Tab',
-        accelerator: 'CommandOrControl+W',
+        accelerator: keyboardShortcuts.closeTab,
         click: actions.onCloseConversation,
       },
       {
         label: 'Reopen Closed Tab',
-        accelerator: getReopenClosedTabAccelerator(platform),
+        accelerator: keyboardShortcuts.reopenClosedTab,
         click: actions.onReopenClosedConversation,
       },
       {
         label: 'Previous Conversation',
-        accelerator: 'CommandOrControl+[',
+        accelerator: keyboardShortcuts.previousConversation,
         click: actions.onPreviousConversation,
       },
       {
         label: 'Next Conversation',
-        accelerator: 'CommandOrControl+]',
+        accelerator: keyboardShortcuts.nextConversation,
         click: actions.onNextConversation,
       },
       {
         label: 'Toggle Pinned',
-        accelerator: 'CommandOrControl+Alt+P',
+        accelerator: keyboardShortcuts.togglePinned,
         click: actions.onToggleConversationPin,
       },
       {
         label: 'Archive / Restore Conversation',
-        accelerator: 'CommandOrControl+Alt+A',
+        accelerator: keyboardShortcuts.archiveRestoreConversation,
         click: actions.onToggleConversationArchive,
       },
       {
         label: 'Rename Conversation',
-        accelerator: 'CommandOrControl+Alt+R',
+        accelerator: keyboardShortcuts.renameConversation,
         click: actions.onRenameConversation,
       },
       {
         label: 'Focus Composer',
-        accelerator: 'CommandOrControl+L',
+        accelerator: keyboardShortcuts.focusComposer,
         click: actions.onFocusComposer,
       },
       {
         label: 'Edit Working Directory',
-        accelerator: 'CommandOrControl+Shift+L',
+        accelerator: keyboardShortcuts.editWorkingDirectory,
         click: actions.onEditWorkingDirectory,
       },
       ...(isMac
@@ -120,7 +116,7 @@ export function buildDesktopApplicationMenuTemplate(
             },
             {
               label: 'Settings…',
-              accelerator: 'CommandOrControl+,',
+              accelerator: keyboardShortcuts.settings,
               click: actions.onSettings,
             },
             {
@@ -142,7 +138,7 @@ export function buildDesktopApplicationMenuTemplate(
             },
             {
               label: `Quit ${appName}`,
-              accelerator: 'Alt+F4',
+              accelerator: keyboardShortcuts.quit,
               click: actions.onQuit,
             },
           ]
@@ -162,7 +158,7 @@ export function buildDesktopApplicationMenuTemplate(
       { type: 'separator' },
       {
         label: 'Find on Page',
-        accelerator: 'CommandOrControl+F',
+        accelerator: keyboardShortcuts.findOnPage,
         click: actions.onFindInPage,
       },
       { role: 'selectAll' },
@@ -248,7 +244,7 @@ export function buildDesktopApplicationMenuTemplate(
       },
       {
         label: 'Settings…',
-        accelerator: 'CommandOrControl+,',
+        accelerator: keyboardShortcuts.settings,
         click: actions.onSettings,
       },
       { type: 'separator' },
@@ -260,7 +256,7 @@ export function buildDesktopApplicationMenuTemplate(
       { type: 'separator' },
       {
         label: `Quit ${appName}`,
-        accelerator: 'CommandOrControl+Q',
+        accelerator: keyboardShortcuts.quit,
         click: actions.onQuit,
       },
     ],
