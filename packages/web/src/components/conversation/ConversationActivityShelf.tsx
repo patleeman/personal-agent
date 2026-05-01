@@ -17,6 +17,7 @@ export function ConversationActivityShelf({
   cancellingBackgroundRunIds,
   onToggleBackgroundRunDetails,
   onCancelBackgroundRun,
+  onOpenBackgroundRun,
   deferredResumes,
   deferredResumeIndicatorText,
   deferredResumeNowMs,
@@ -36,6 +37,7 @@ export function ConversationActivityShelf({
   cancellingBackgroundRunIds?: Set<string>;
   onToggleBackgroundRunDetails: () => void;
   onCancelBackgroundRun?: (runId: string) => void;
+  onOpenBackgroundRun?: (runId: string) => void;
   deferredResumes: DeferredResumeSummary[];
   deferredResumeIndicatorText: string;
   deferredResumeNowMs: number;
@@ -88,13 +90,27 @@ export function ConversationActivityShelf({
 
                 return (
                   <div key={run.runId} className="flex items-start gap-3 text-[12px]">
-                    <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => { onOpenBackgroundRun?.(run.runId); }}
+                      className="min-w-0 flex-1 text-left transition-colors hover:text-primary disabled:pointer-events-none"
+                      disabled={!onOpenBackgroundRun}
+                    >
                       <div className="flex min-w-0 items-center gap-2">
                         <span className={cx('shrink-0 font-medium', statusClass)}>{statusLabel}</span>
                         <span className="truncate text-primary">{headline.title}</span>
                       </div>
                       <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
-                    </div>
+                    </button>
+                    {onOpenBackgroundRun && (
+                      <button
+                        type="button"
+                        onClick={() => { onOpenBackgroundRun(run.runId); }}
+                        className="shrink-0 text-[11px] text-accent transition-colors hover:text-accent/80"
+                      >
+                        open
+                      </button>
+                    )}
                     {onCancelBackgroundRun && (
                       <button
                         type="button"

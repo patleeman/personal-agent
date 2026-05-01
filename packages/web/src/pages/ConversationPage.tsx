@@ -47,7 +47,7 @@ import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConve
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { APP_LAYOUT_MODE_CHANGED_EVENT, readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { collectCompletedToolAutoOpenBlockKeys, findRequestedToolPresentationToOpen } from '../conversation/toolAutoOpen';
-import { createConversationLiveRunId } from '../conversation/conversationRuns';
+import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
 import { formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
@@ -437,6 +437,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
+  const selectedRunId = getConversationRunIdFromSearch(location.search);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const artifactOpensInWorkbenchPane = appLayoutMode === 'workbench' && new URLSearchParams(location.search).get('view') !== 'zen';
   const { versions } = useAppEvents();
@@ -477,6 +478,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, [location.pathname, location.search, navigate, selectedCheckpointId]);
 
+  const openRun = useCallback((runId: string) => {
+    setAppLayoutMode('workbench');
+    writeAppLayoutMode('workbench');
+
+    const nextSearch = setConversationArtifactIdInSearch(
+      setConversationCheckpointIdInSearch(
+        setConversationRunIdInSearch(location.search, runId),
+        null,
+      ),
+      null,
+    );
+
+    navigate({
+      pathname: location.pathname,
+      search: nextSearch,
+    });
+  }, [location.pathname, location.search, navigate]);
+
   const openWorkbenchBrowser = useCallback(() => {
     window.dispatchEvent(new CustomEvent(DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT));
   }, []);
@@ -502,6 +521,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setAppLayoutMode('workbench');
     writeAppLayoutMode('workbench');
   }, [appLayoutMode, selectedCheckpointId]);
+
+  useEffect(() => {
+    if (!selectedRunId || appLayoutMode === 'workbench') {
+      return;
+    }
+
+    setAppLayoutMode('workbench');
+    writeAppLayoutMode('workbench');
+  }, [appLayoutMode, selectedRunId]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -6047,6 +6075,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     cancellingBackgroundRunIds={cancellingBackgroundRunIds}
                     onToggleBackgroundRunDetails={() => { setShowBackgroundRunDetails((open) => !open); }}
                     onCancelBackgroundRun={cancelBackgroundRunFromShelf}
+                    onOpenBackgroundRun={openRun}
                     deferredResumes={orderedDeferredResumes}
                     deferredResumeIndicatorText={deferredResumeIndicatorText}
                     deferredResumeNowMs={deferredResumeNowMs}
