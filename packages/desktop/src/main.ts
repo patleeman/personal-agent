@@ -416,11 +416,14 @@ async function bootstrapDesktopApp(): Promise<void> {
     onToggleRightRail: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-right-rail');
     },
-    onToggleLayoutMode: () => {
-      windowController?.sendShortcutToFocusedWindow('toggle-layout-mode');
+    onShowConversationMode: () => {
+      windowController?.sendShortcutToFocusedWindow('show-conversation-mode');
     },
-    onCycleViewMode: () => {
-      windowController?.sendShortcutToFocusedWindow('cycle-view-mode');
+    onShowWorkbenchMode: () => {
+      windowController?.sendShortcutToFocusedWindow('show-workbench-mode');
+    },
+    onShowZenMode: () => {
+      windowController?.sendShortcutToFocusedWindow('show-zen-mode');
     },
     onHideWindow: () => {
       windowController?.hideFocusedWindow();

@@ -16,8 +16,9 @@ export interface DesktopApplicationMenuActions {
   onFindInPage: () => void;
   onToggleSidebar: () => void;
   onToggleRightRail: () => void;
-  onToggleLayoutMode: () => void;
-  onCycleViewMode: () => void;
+  onShowConversationMode: () => void;
+  onShowWorkbenchMode: () => void;
+  onShowZenMode: () => void;
   onHideWindow: () => void;
   onSettings: () => void;
   onCheckForUpdates: () => void;
@@ -178,23 +179,28 @@ export function buildDesktopApplicationMenuTemplate(
       { type: 'separator' },
       {
         label: 'Toggle Sidebar',
-        accelerator: 'CommandOrControl+\\',
+        accelerator: 'CommandOrControl+/',
         click: actions.onToggleSidebar,
       },
       {
         label: 'Toggle Right Rail',
-        accelerator: 'CommandOrControl+Shift+\\',
+        accelerator: 'CommandOrControl+\\',
         click: actions.onToggleRightRail,
       },
       {
-        label: 'Toggle Layout Mode',
-        accelerator: 'CommandOrControl+Alt+\\',
-        click: actions.onToggleLayoutMode,
+        label: 'Conversation Mode',
+        accelerator: 'F1',
+        click: actions.onShowConversationMode,
       },
       {
-        label: 'Cycle View Mode',
-        accelerator: 'CommandOrControl+Shift+V',
-        click: actions.onCycleViewMode,
+        label: 'Workbench Mode',
+        accelerator: 'F2',
+        click: actions.onShowWorkbenchMode,
+      },
+      {
+        label: 'Zen Mode',
+        accelerator: 'F3',
+        click: actions.onShowZenMode,
       },
       { type: 'separator' },
       { role: 'togglefullscreen' },

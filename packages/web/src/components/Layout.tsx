@@ -44,12 +44,25 @@ const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
 const WORKBENCH_EXPLORER_OPEN_STORAGE_KEY = 'pa:workbench-explorer-open';
 const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z';
 
-type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode' | 'cycle-view-mode';
+type DesktopLayoutShortcutAction =
+  | 'toggle-sidebar'
+  | 'toggle-right-rail'
+  | 'toggle-layout-mode'
+  | 'cycle-view-mode'
+  | 'show-conversation-mode'
+  | 'show-workbench-mode'
+  | 'show-zen-mode';
 
 type WorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs';
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
-  return value === 'toggle-sidebar' || value === 'toggle-right-rail' || value === 'toggle-layout-mode' || value === 'cycle-view-mode';
+  return value === 'toggle-sidebar'
+    || value === 'toggle-right-rail'
+    || value === 'toggle-layout-mode'
+    || value === 'cycle-view-mode'
+    || value === 'show-conversation-mode'
+    || value === 'show-workbench-mode'
+    || value === 'show-zen-mode';
 }
 
 function isDesktopNavigateDetail(value: unknown): value is { route: string; replace?: boolean } {
@@ -1486,6 +1499,24 @@ export function Layout() {
 
       if (action === 'toggle-layout-mode') {
         handleAppLayoutModeChange(appLayoutMode === 'workbench' ? 'compact' : 'workbench');
+        return;
+      }
+
+      if (action === 'show-conversation-mode') {
+        handleZenModeChange(false);
+        handleAppLayoutModeChange('compact');
+        return;
+      }
+
+      if (action === 'show-workbench-mode') {
+        handleZenModeChange(false);
+        handleAppLayoutModeChange('workbench');
+        return;
+      }
+
+      if (action === 'show-zen-mode') {
+        handleAppLayoutModeChange('workbench');
+        handleZenModeChange(true);
         return;
       }
 

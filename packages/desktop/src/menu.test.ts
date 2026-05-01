@@ -18,8 +18,9 @@ function createActions() {
     onFindInPage: vi.fn(),
     onToggleSidebar: vi.fn(),
     onToggleRightRail: vi.fn(),
-    onToggleLayoutMode: vi.fn(),
-    onCycleViewMode: vi.fn(),
+    onShowConversationMode: vi.fn(),
+    onShowWorkbenchMode: vi.fn(),
+    onShowZenMode: vi.fn(),
     onHideWindow: vi.fn(),
     onSettings: vi.fn(),
     onCheckForUpdates: vi.fn(),
@@ -73,10 +74,11 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     const viewMenu = template[3];
     expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: 'toggleDevTools' }),
-      expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
-      expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+Shift+\\' }),
-      expect.objectContaining({ label: 'Toggle Layout Mode', accelerator: 'CommandOrControl+Alt+\\' }),
-      expect.objectContaining({ label: 'Cycle View Mode', accelerator: 'CommandOrControl+Shift+V' }),
+      expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+/' }),
+      expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+\\' }),
+      expect.objectContaining({ label: 'Conversation Mode', accelerator: 'F1' }),
+      expect.objectContaining({ label: 'Workbench Mode', accelerator: 'F2' }),
+      expect.objectContaining({ label: 'Zen Mode', accelerator: 'F3' }),
     ]));
 
     const windowMenu = template[4];
