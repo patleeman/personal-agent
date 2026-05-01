@@ -1404,6 +1404,15 @@ export function Layout() {
   }, [activeConversationId, activeWorkbenchRunFromSearch]);
 
   useEffect(() => {
+    if (!activeWorkbenchKnowledgeFileId) {
+      return;
+    }
+
+    setActiveWorkbenchTool('knowledge');
+    setActiveWorkspaceFile(null);
+  }, [activeWorkbenchKnowledgeFileId]);
+
+  useEffect(() => {
     function handleWorkbenchCloseActiveFile() {
       if (activeWorkbenchArtifactId) {
         setSearchParams((current) => {

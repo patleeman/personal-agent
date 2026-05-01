@@ -500,6 +500,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     window.dispatchEvent(new CustomEvent(DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT));
   }, []);
 
+  const openKnowledgeFilePath = useCallback((fileId: string) => {
+    const normalizedFileId = fileId.trim();
+    if (!normalizedFileId) {
+      return;
+    }
+
+    setAppLayoutMode('workbench');
+    writeAppLayoutMode('workbench');
+
+    const nextSearch = new URLSearchParams(location.search);
+    nextSearch.delete('artifact');
+    nextSearch.delete('checkpoint');
+    nextSearch.delete('run');
+    nextSearch.set('file', normalizedFileId);
+
+    navigate({
+      pathname: location.pathname,
+      search: nextSearch.toString(),
+    });
+  }, [location.pathname, location.search, navigate]);
+
   useEffect(() => {
     function handleAppLayoutModeChanged() {
       setAppLayoutMode(readAppLayoutMode());
@@ -5760,6 +5781,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onOpenCheckpoint={renderingStaleTranscript ? undefined : openCheckpoint}
               activeCheckpointId={renderingStaleTranscript ? null : selectedCheckpointId}
               onOpenBrowser={renderingStaleTranscript ? undefined : openWorkbenchBrowser}
+              onOpenFilePath={renderingStaleTranscript ? undefined : openKnowledgeFilePath}
               onSubmitAskUserQuestion={renderingStaleTranscript ? undefined : submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
               onResumeConversation={renderingStaleTranscript || !conversationResumeState.canResume ? undefined : resumeConversation}

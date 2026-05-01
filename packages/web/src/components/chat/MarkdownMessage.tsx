@@ -18,7 +18,8 @@ const INLINE_COMMIT_HASH_BUTTON_CLASS = 'inline-flex items-center font-mono text
 
 type EnhancedTextFragment = {
   text: string;
-  kind: 'text' | 'mention' | 'commit';
+  kind: 'text' | 'mention' | 'commit' | 'knowledge-file';
+  fileId?: string;
 };
 
 function looksLikeCommitHash(value: string): boolean {
@@ -50,9 +51,55 @@ function CommitHashButton({
   );
 }
 
+function readKnowledgeBaseFileIdFromPath(value: string): string | null {
+  const normalized = value.trim().replace(/[),.;:!?\]}>]+$/, '');
+  const marker = '/knowledge-base/repo/';
+  const markerIndex = normalized.indexOf(marker);
+  if (markerIndex < 0 || normalized.endsWith('/')) {
+    return null;
+  }
+
+  const fileId = normalized.slice(markerIndex + marker.length);
+  return fileId && !fileId.endsWith('/') ? fileId : null;
+}
+
+function KnowledgeFileLink({
+  path,
+  fileId,
+  onOpenFilePath,
+}: {
+  path: string;
+  fileId: string;
+  onOpenFilePath?: (path: string) => void;
+}) {
+  if (!onOpenFilePath) {
+    return <React.Fragment>{path}</React.Fragment>;
+  }
+
+  const href = `/knowledge?file=${encodeURIComponent(fileId)}`;
+
+  return (
+    <a
+      href={href}
+      className="font-mono text-[0.82em] text-accent underline decoration-accent/35 underline-offset-2 transition-colors hover:decoration-accent"
+      title={`Open ${fileId} in Knowledge`}
+      onClick={(event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+          return;
+        }
+
+        event.preventDefault();
+        onOpenFilePath(fileId);
+      }}
+    >
+      {path}
+    </a>
+  );
+}
+
 function splitEnhancedTextFragments(text: string): EnhancedTextFragment[] {
   const fragments: EnhancedTextFragment[] = [];
-  const tokenRegex = /@[A-Za-z0-9_][A-Za-z0-9_./-]*|[A-Fa-f0-9]{7,64}/g;
+  const tokenRegex = /\/[^\s`<>]*knowledge-base\/repo\/[^\s`<>]+|@[A-Za-z0-9_][A-Za-z0-9_./-]*|[A-Fa-f0-9]{7,64}/g;
   let cursor = 0;
   let match: RegExpExecArray | null = null;
 
@@ -60,6 +107,18 @@ function splitEnhancedTextFragments(text: string): EnhancedTextFragment[] {
     const rawToken = match[0];
     const start = match.index;
     const previous = start > 0 ? text[start - 1] : '';
+
+    const knowledgeFileId = rawToken.startsWith('/') ? readKnowledgeBaseFileIdFromPath(rawToken) : null;
+    if (knowledgeFileId) {
+      const path = rawToken.replace(/[),.;:!?\]}>]+$/, '');
+      if (start > cursor) {
+        fragments.push({ text: text.slice(cursor, start), kind: 'text' });
+      }
+
+      fragments.push({ text: path, kind: 'knowledge-file', fileId: knowledgeFileId });
+      cursor = start + path.length;
+      continue;
+    }
 
     if (rawToken.startsWith('@')) {
       const mention = rawToken.replace(/[),.;:!?\]}>]+$/, '');
@@ -106,7 +165,10 @@ function splitEnhancedTextFragments(text: string): EnhancedTextFragment[] {
 
 function renderEnhancedTextFragments(
   text: string,
-  options?: { onOpenCheckpoint?: (checkpointId: string) => void },
+  options?: {
+    onOpenFilePath?: (path: string) => void;
+    onOpenCheckpoint?: (checkpointId: string) => void;
+  },
 ): ReactNode[] {
   return splitEnhancedTextFragments(text).map((fragment, index) => {
     if (fragment.kind === 'mention') {
@@ -115,6 +177,10 @@ function renderEnhancedTextFragments(
 
     if (fragment.kind === 'commit') {
       return <CommitHashButton key={`${fragment.text}-${index}`} hash={fragment.text} onOpenCheckpoint={options?.onOpenCheckpoint} />;
+    }
+
+    if (fragment.kind === 'knowledge-file' && fragment.fileId) {
+      return <KnowledgeFileLink key={`${fragment.text}-${index}`} path={fragment.text} fileId={fragment.fileId} onOpenFilePath={options?.onOpenFilePath} />;
     }
 
     return <React.Fragment key={`${index}-${fragment.text}`}>{fragment.text}</React.Fragment>;
@@ -177,7 +243,10 @@ function extractMarkdownCodeBlock(children: ReactNode): { className?: string; co
 
 function renderChildrenWithEnhancements(
   children: ReactNode,
-  options?: { onOpenCheckpoint?: (checkpointId: string) => void },
+  options?: {
+    onOpenFilePath?: (path: string) => void;
+    onOpenCheckpoint?: (checkpointId: string) => void;
+  },
 ): ReactNode {
   return Children.map(children, (child, index) => {
     if (typeof child === 'string') {
@@ -220,10 +289,12 @@ function MarkdownInlineCodeWithCommitHash({
   className,
   children,
   onOpenCheckpoint,
+  onOpenFilePath,
 }: {
   className?: string;
   children?: ReactNode;
   onOpenCheckpoint?: (checkpointId: string) => void;
+  onOpenFilePath?: (path: string) => void;
 }) {
   const content = extractMarkdownTextContent(children).replace(/\n$/, '');
   const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
@@ -232,12 +303,17 @@ function MarkdownInlineCodeWithCommitHash({
     return <CommitHashButton hash={content} onOpenCheckpoint={onOpenCheckpoint} />;
   }
 
+  const knowledgeFileId = !isBlock ? readKnowledgeBaseFileIdFromPath(content) : null;
+  if (knowledgeFileId && onOpenFilePath) {
+    return <KnowledgeFileLink path={content} fileId={knowledgeFileId} onOpenFilePath={onOpenFilePath} />;
+  }
+
   return <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>;
 }
 
 const MarkdownText = memo(function MarkdownText({
   text,
-  onOpenFilePath: _onOpenFilePath,
+  onOpenFilePath,
   onOpenCheckpoint,
 }: {
   text: string;
@@ -253,16 +329,16 @@ const MarkdownText = memo(function MarkdownText({
         remarkPlugins={MARKDOWN_REMARK_PLUGINS}
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</td>,
+          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h1>,
+          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h2>,
+          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h3>,
+          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h4>,
+          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h5>,
+          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h6>,
+          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</p>,
+          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</li>,
+          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</th>,
+          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</td>,
           a: ({ href, children, title }) => {
             if (typeof href !== 'string' || href.trim().length === 0) {
               return <span title={title}>{children}</span>;
@@ -289,7 +365,7 @@ const MarkdownText = memo(function MarkdownText({
             </div>
           ),
           pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
-          code: ({ className, children }) => <MarkdownInlineCodeWithCommitHash className={className} onOpenCheckpoint={onOpenCheckpoint}>{children}</MarkdownInlineCodeWithCommitHash>,
+          code: ({ className, children }) => <MarkdownInlineCodeWithCommitHash className={className} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint}>{children}</MarkdownInlineCodeWithCommitHash>,
           img: ({ src, alt, title }) => src
             ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
             : <span className="text-dim">{alt ?? 'image'}</span>,

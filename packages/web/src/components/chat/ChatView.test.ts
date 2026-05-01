@@ -1135,6 +1135,34 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('>Copy<');
   });
 
+  it('renders knowledge base file paths as links when file opening is available', () => {
+    const html = renderAssistantText(
+      'Open `/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md` next.',
+      { onOpenFilePath: () => undefined },
+    );
+
+    expect(html).toContain('href="/knowledge?file=skills%2Fcheckpoint%2FSKILL.md"');
+    expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md');
+  });
+
+  it('keeps knowledge base paths as plain inline code without file opening', () => {
+    const html = renderAssistantText('Open `/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md` next.');
+
+    expect(html).toContain('<code');
+    expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md');
+    expect(html).not.toContain('/knowledge?file=skills%2Fcheckpoint%2FSKILL.md');
+  });
+
+  it('links knowledge base paths in prose without swallowing trailing punctuation', () => {
+    const html = renderAssistantText(
+      'Read /runtime/knowledge-base/repo/projects/Personal/Plan.md, then continue.',
+      { onOpenFilePath: () => undefined },
+    );
+
+    expect(html).toContain('href="/knowledge?file=projects%2FPersonal%2FPlan.md"');
+    expect(html).toContain('/runtime/knowledge-base/repo/projects/Personal/Plan.md</a>, then continue.');
+  });
+
   it('defers content-visibility on the initial render of long conversations', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: Array.from({ length: 130 }, (_, index) => ({
