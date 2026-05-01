@@ -12,15 +12,12 @@ import {
   getRunTargetProfile,
   getRunTargetPrompt,
   getRunWorkingDirectory,
-  isRunActive,
   listConnectedConversationBackgroundRuns,
   runNeedsAttention,
   type RunPresentationLookups,
 } from '../automation/runPresentation';
 import type { DurableRunListResult, DurableRunRecord } from '../shared/types';
 import { ErrorState, LoadingState, cx } from './ui';
-
-type RunFilter = 'active' | 'recent' | 'all';
 
 function timeAgo(iso: string | undefined): string {
   if (!iso) return '';
@@ -40,7 +37,7 @@ function statusTone(run: DurableRunRecord): string {
   if (status === 'completed') return 'text-success';
   if (status === 'cancelled') return 'text-dim';
   if (status === 'recovering' || runNeedsAttention(run)) return 'text-warning';
-  if (isRunActive(run)) return 'text-accent';
+  if (status === 'queued' || status === 'waiting' || status === 'running') return 'text-accent';
   return 'text-secondary';
 }
 
@@ -80,16 +77,11 @@ export function ConversationRunsRailContent({
   lookups: RunPresentationLookups;
   onOpenRun: (runId: string) => void;
 }) {
-  const [filter, setFilter] = useState<RunFilter>('active');
   const connectedRuns = useConversationRunList(conversationId, runs, lookups);
-  const filteredRuns = useMemo(() => {
-    const source = filter === 'active'
-      ? connectedRuns.filter((run) => isRunActive(run) || runNeedsAttention(run))
-      : filter === 'recent'
-        ? connectedRuns.filter((run) => !isRunActive(run)).slice(0, 12)
-        : connectedRuns;
-    return [...source].sort((a, b) => runSortTimestamp(b).localeCompare(runSortTimestamp(a)));
-  }, [connectedRuns, filter]);
+  const sortedRuns = useMemo(
+    () => [...connectedRuns].sort((a, b) => runSortTimestamp(b).localeCompare(runSortTimestamp(a))),
+    [connectedRuns],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -98,22 +90,13 @@ export function ConversationRunsRailContent({
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Runs</p>
           <span className="text-[10px] text-dim">{connectedRuns.length}</span>
         </div>
-        <div className="mt-2 ui-segmented-control w-full" role="tablist" aria-label="Run filter">
-          {([
-            ['active', 'Active'],
-            ['recent', 'Recent'],
-            ['all', 'All'],
-          ] as Array<[RunFilter, string]>).map(([value, label]) => (
-            <button key={value} type="button" role="tab" aria-selected={filter === value} onClick={() => setFilter(value)} className={cx('ui-segmented-button flex-1', filter === value && 'ui-segmented-button-active')}>{label}</button>
-          ))}
-        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
-        {filteredRuns.length === 0 ? (
-          <div className="px-3 py-4 text-[12px] text-dim">No {filter === 'all' ? '' : filter} runs for this conversation.</div>
+        {sortedRuns.length === 0 ? (
+          <div className="px-3 py-4 text-[12px] text-dim">No runs for this conversation.</div>
         ) : (
           <div className="flex flex-col gap-1">
-            {filteredRuns.map((run) => {
+            {sortedRuns.map((run) => {
               const headline = getRunHeadline(run, lookups);
               const selected = run.runId === activeRunId;
               const moment = getRunMoment(run);
