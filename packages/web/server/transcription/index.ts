@@ -1,4 +1,5 @@
 import { createModelRegistryForAuthFile } from '../models/modelRegistry.js';
+import { OpenAITranscriptionProvider } from './openaiApiProvider.js';
 import { OpenAICodexRealtimeTranscriptionProvider } from './openaiCodexRealtimeProvider.js';
 import { PlannedTranscriptionProvider, StaticTranscriptionProviderRegistry } from './registry.js';
 import type { TranscriptionProviderRegistry, TranscriptionSettings } from './types.js';
@@ -14,7 +15,10 @@ export function createTranscriptionProviderRegistry(input: {
       modelRegistry,
       model: input.settings.model,
     }),
-    new PlannedTranscriptionProvider('openai-api', 'OpenAI API transcription', ['file', 'stream']),
+    new OpenAITranscriptionProvider({
+      modelRegistry,
+      model: input.settings.model,
+    }),
     new PlannedTranscriptionProvider('whisperkit-local', 'WhisperKit local', ['file', 'stream']),
   ]);
 }

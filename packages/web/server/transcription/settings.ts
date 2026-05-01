@@ -84,8 +84,8 @@ export function buildTranscriptionSettingsState(settingsFile: string): Transcrip
       {
         id: 'openai-api',
         label: 'OpenAI API transcription',
-        status: 'planned',
-        transports: ['file', 'stream'],
+        status: 'implemented',
+        transports: ['file'],
       },
       {
         id: 'whisperkit-local',

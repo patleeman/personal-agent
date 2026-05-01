@@ -33,7 +33,7 @@ describe('transcription settings', () => {
     });
   });
 
-  it('documents planned providers in state', () => {
+  it('documents provider implementation status in state', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
     const state = buildTranscriptionSettingsState(settingsFile);
 
@@ -43,7 +43,7 @@ describe('transcription settings', () => {
       status: 'implemented',
       transports: ['file'],
     });
-    expect(state.providers.find((provider) => provider.id === 'openai-api')?.status).toBe('planned');
+    expect(state.providers.find((provider) => provider.id === 'openai-api')?.status).toBe('implemented');
     expect(state.providers.find((provider) => provider.id === 'whisperkit-local')?.status).toBe('planned');
   });
 });
