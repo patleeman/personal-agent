@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
-import { readStoredPanelWidth, resolveActiveWorkspaceCwd } from './Layout';
+import { readStoredPanelWidth, readStoredWorkbenchExplorerOpen, resolveActiveWorkspaceCwd } from './Layout';
 
 function createSession(overrides: Partial<SessionMeta>): SessionMeta {
   return {
@@ -31,6 +31,23 @@ describe('Layout workspace selection', () => {
     expect(resolveActiveWorkspaceCwd([
       createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' }),
     ], 'remote-conversation-only')).toBeNull();
+  });
+});
+
+describe('Layout workbench rail state', () => {
+  it('defaults the workbench sidebar open and restores an explicit collapsed state', () => {
+    const storage = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+    } as Storage;
+
+    expect(readStoredWorkbenchExplorerOpen(localStorage)).toBe(true);
+
+    storage.set('pa:workbench-explorer-open', 'false');
+    expect(readStoredWorkbenchExplorerOpen(localStorage)).toBe(false);
+
+    storage.set('pa:workbench-explorer-open', 'true');
+    expect(readStoredWorkbenchExplorerOpen(localStorage)).toBe(true);
   });
 });
 

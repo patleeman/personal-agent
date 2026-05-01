@@ -39,6 +39,7 @@ const WORKBENCH_BROWSER_COMMENT_ADDED_EVENT = 'pa:workbench-browser-comment-adde
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
+const WORKBENCH_EXPLORER_OPEN_STORAGE_KEY = 'pa:workbench-explorer-open';
 const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z';
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode' | 'cycle-view-mode';
@@ -120,6 +121,18 @@ export function readStoredPanelWidth(storageKey: string, initial: number, min: n
   } catch { /* ignore */ }
 
   return Math.max(min, initial);
+}
+
+export function readStoredWorkbenchExplorerOpen(storage: Pick<Storage, 'getItem'> = localStorage): boolean {
+  try {
+    return storage.getItem(WORKBENCH_EXPLORER_OPEN_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function writeStoredWorkbenchExplorerOpen(open: boolean, storage: Pick<Storage, 'setItem'> = localStorage): void {
+  try { storage.setItem(WORKBENCH_EXPLORER_OPEN_STORAGE_KEY, open ? 'true' : 'false'); } catch { /* ignore */ }
 }
 
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
@@ -1119,6 +1132,7 @@ export function Layout() {
     side: 'right',
   });
   const [railOpen, setRailOpen] = useState(true);
+  const [workbenchExplorerOpen, setWorkbenchExplorerOpen] = useState(() => readStoredWorkbenchExplorerOpen());
   const pageSearchRootRef = useRef<HTMLDivElement | null>(null);
   const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
@@ -1251,7 +1265,20 @@ export function Layout() {
     return () => window.removeEventListener(WORKBENCH_CLOSE_ACTIVE_FILE_EVENT, handleWorkbenchCloseActiveFile);
   }, [activeWorkbenchArtifactId, activeWorkbenchCheckpointId, activeWorkbenchKnowledgeFileId, clearActiveConversationCheckpoint, setSearchParams]);
 
-  const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
+  const toggleWorkbenchExplorer = useCallback(() => {
+    setWorkbenchExplorerOpen((current) => {
+      const next = !current;
+      writeStoredWorkbenchExplorerOpen(next);
+      return next;
+    });
+  }, []);
+
+  const activeRightRailControl = showWorkbench
+    ? {
+        railOpen: workbenchExplorerOpen,
+        toggleRail: toggleWorkbenchExplorer,
+      }
+    : registeredRightRailControl ?? (canShowContextRail
     ? {
         railOpen: showContextRail,
         toggleRail: () => setRailOpen((current) => !current),
@@ -1356,7 +1383,7 @@ export function Layout() {
             environment={desktopEnvironment}
             sidebarOpen={effectiveSidebarOpen}
             onToggleSidebar={() => setSidebarOpen((current) => !current)}
-            showRailToggle={activeRightRailControl !== null}
+            showRailToggle={showWorkbench && activeRightRailControl !== null}
             railOpen={activeRightRailControl?.railOpen ?? false}
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
@@ -1401,25 +1428,29 @@ export function Layout() {
                       onMissingCheckpoint={clearActiveConversationCheckpoint}
                     />
                   </section>
-                  <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
-                  <aside
-                    style={{ width: workbenchExplorer.width }}
-                    className="flex-shrink-0 overflow-hidden bg-surface select-text"
-                    aria-label="Workbench sidebar"
-                  >
-                    <WorkbenchKnowledgeRail
-                      conversationId={activeConversationId}
-                      workspaceCwd={activeWorkspaceCwd}
-                      activeArtifactId={activeWorkbenchArtifactId}
-                      activeCheckpointId={activeWorkbenchCheckpointId}
-                      activeWorkspaceFile={activeWorkspaceFile}
-                      activeTool={activeWorkbenchTool}
-                      onActiveToolChange={setActiveWorkbenchTool}
-                      onCheckpointSelect={setActiveConversationCheckpoint}
-                      onWorkspaceFileSelect={setActiveWorkspaceFile}
-                      onWorkspaceFileClear={clearActiveWorkspaceFile}
-                    />
-                  </aside>
+                  {workbenchExplorerOpen ? (
+                    <>
+                      <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
+                      <aside
+                        style={{ width: workbenchExplorer.width }}
+                        className="flex-shrink-0 overflow-hidden bg-surface select-text"
+                        aria-label="Workbench sidebar"
+                      >
+                        <WorkbenchKnowledgeRail
+                          conversationId={activeConversationId}
+                          workspaceCwd={activeWorkspaceCwd}
+                          activeArtifactId={activeWorkbenchArtifactId}
+                          activeCheckpointId={activeWorkbenchCheckpointId}
+                          activeWorkspaceFile={activeWorkspaceFile}
+                          activeTool={activeWorkbenchTool}
+                          onActiveToolChange={setActiveWorkbenchTool}
+                          onCheckpointSelect={setActiveConversationCheckpoint}
+                          onWorkspaceFileSelect={setActiveWorkspaceFile}
+                          onWorkspaceFileClear={clearActiveWorkspaceFile}
+                        />
+                      </aside>
+                    </>
+                  ) : null}
                 </>
               ) : null}
 

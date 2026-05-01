@@ -229,6 +229,7 @@ export function DesktopTopBar({
             className="ui-desktop-layout-switcher__button"
             role="radio"
             aria-checked={!zenMode && layoutMode === 'compact'}
+            aria-label="Compact"
             title="Compact view"
             onClick={() => {
               onZenModeChange?.(false);
@@ -236,13 +237,13 @@ export function DesktopTopBar({
             }}
           >
             <CompactViewIcon />
-            <span>Compact</span>
           </button>
           <button
             type="button"
             className="ui-desktop-layout-switcher__button"
             role="radio"
             aria-checked={!zenMode && layoutMode === 'workbench'}
+            aria-label="Workbench"
             title="Workbench view"
             onClick={() => {
               onZenModeChange?.(false);
@@ -250,26 +251,25 @@ export function DesktopTopBar({
             }}
           >
             <WorkbenchViewIcon />
-            <span>Workbench</span>
           </button>
           <button
             type="button"
             className="ui-desktop-layout-switcher__button"
             role="radio"
             aria-checked={zenMode}
+            aria-label="Zen"
             title="Zen view"
             onClick={() => onZenModeChange?.(true)}
           >
             <ZenViewIcon />
-            <span>Zen</span>
           </button>
         </div>
         {showRailToggle ? (
           <ToolbarButton
             className="ui-desktop-top-bar__icon-button"
             onClick={onToggleRail}
-            aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-            title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+            aria-label={railOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
+            title={railOpen ? 'Collapse right sidebar' : 'Expand right sidebar'}
           >
             <RightRailToggleIcon open={railOpen} />
           </ToolbarButton>

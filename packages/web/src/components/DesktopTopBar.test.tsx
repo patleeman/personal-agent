@@ -140,7 +140,7 @@ describe('DesktopTopBar', () => {
     expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
     expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
     expect(html.indexOf('Go forward')).toBeLessThan(html.indexOf('View mode'));
-    expect(html.indexOf('View mode')).toBeLessThan(html.indexOf('Hide right sidebar'));
+    expect(html.indexOf('View mode')).toBeLessThan(html.indexOf('Collapse right sidebar'));
   });
 
   it('shows the view mode switcher in the top-right controls', () => {
@@ -154,9 +154,9 @@ describe('DesktopTopBar', () => {
       launchLabel: null,
     }, { layoutMode: 'workbench' });
 
-    expect(html).toContain('Workbench');
-    expect(html).toContain('Compact');
-    expect(html).toContain('Zen');
+    expect(html).toContain('aria-label="Workbench"');
+    expect(html).toContain('aria-label="Compact"');
+    expect(html).toContain('aria-label="Zen"');
     expect(html).toContain('aria-checked="true"');
   });
 
@@ -171,7 +171,7 @@ describe('DesktopTopBar', () => {
       launchLabel: null,
     }, { zenMode: true });
 
-    expect(html).toContain('>Zen<');
+    expect(html).toContain('aria-label="Zen"');
     expect(html).not.toContain('Hide sidebar');
     expect(html).toContain('title="Zen view"');
     expect(html).toContain('aria-checked="true"');
