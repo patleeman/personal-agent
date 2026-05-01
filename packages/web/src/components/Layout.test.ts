@@ -51,8 +51,10 @@ describe('Layout workbench rail state', () => {
   });
 
   it('only shows the runs tab when the conversation has runs', () => {
-    expect(shouldShowConversationRunsTab(0)).toBe(false);
-    expect(shouldShowConversationRunsTab(1)).toBe(true);
+    expect(shouldShowConversationRunsTab({ runCount: 0 })).toBe(false);
+    expect(shouldShowConversationRunsTab({ runCount: 1 })).toBe(true);
+    expect(shouldShowConversationRunsTab({ runCount: 0, activeRunId: 'run-1', activeRunConnected: false, runsLoaded: false })).toBe(true);
+    expect(shouldShowConversationRunsTab({ runCount: 0, activeRunId: 'run-1', activeRunConnected: false, runsLoaded: true })).toBe(false);
   });
 });
 

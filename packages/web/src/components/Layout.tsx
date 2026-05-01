@@ -137,8 +137,16 @@ function writeStoredWorkbenchExplorerOpen(open: boolean, storage: Pick<Storage, 
   try { storage.setItem(WORKBENCH_EXPLORER_OPEN_STORAGE_KEY, open ? 'true' : 'false'); } catch { /* ignore */ }
 }
 
-export function shouldShowConversationRunsTab(runCount: number): boolean {
-  return runCount > 0;
+export function shouldShowConversationRunsTab(input: { runCount: number; activeRunId?: string | null; activeRunConnected?: boolean; runsLoaded?: boolean }): boolean {
+  if (input.runCount > 0) {
+    return true;
+  }
+
+  if (!input.activeRunId) {
+    return false;
+  }
+
+  return input.runsLoaded === false || input.activeRunConnected === true;
 }
 
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
@@ -856,7 +864,13 @@ function WorkbenchKnowledgeRail({
   const { checkpoints, loading: checkpointsLoading, error: checkpointsError } = useConversationCheckpointSummaries(conversationId);
   const runLookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
   const connectedRuns = useConversationRunList(conversationId, runs, runLookups);
-  const showRunsTab = shouldShowConversationRunsTab(connectedRuns.length) || activeRunId !== null;
+  const activeRunConnected = activeRunId !== null && connectedRuns.some((run) => run.runId === activeRunId);
+  const showRunsTab = shouldShowConversationRunsTab({
+    runCount: connectedRuns.length,
+    activeRunId,
+    activeRunConnected,
+    runsLoaded: runs !== null,
+  });
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback((id: string) => {
     onActiveToolChange('knowledge');
