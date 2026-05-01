@@ -97,6 +97,7 @@ export function InlineTraceRunCard({
   const targetModel = detailRun ? getRunTargetModel(detailRun) : null;
   const targetProfile = detailRun ? getRunTargetProfile(detailRun) : null;
   const timeline = detailRun ? getRunTimeline(detailRun) : [];
+  const runIsShell = detailRun?.manifest?.kind === 'raw-shell' || Boolean(targetCommand);
   const latestTimelinePoint = timeline.at(-1);
   const resolvedFromMention = resolvedRunId !== run.runId;
 
@@ -111,6 +112,14 @@ export function InlineTraceRunCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {detailRun && (
+                <span className={cx(
+                  'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[8px] uppercase tracking-wider',
+                  runIsShell ? 'border-accent/20 text-accent/70 font-mono' : 'border-accent/20 text-accent',
+                )}>
+                  {runIsShell ? '›_ Shell' : '✦ Agent'}
+                </span>
+              )}
               <Pill tone={status.tone}>{status.text}</Pill>
               <span className="truncate text-[12px] font-medium text-primary">{headline.title}</span>
             </div>
