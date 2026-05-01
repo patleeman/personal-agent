@@ -14,10 +14,12 @@ const {
   createConversationAutoModeAgentExtensionMock,
   createConversationInspectAgentExtensionMock,
   createConversationQueueAgentExtensionMock,
+  createConversationTitleAgentExtensionMock,
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
   createScheduledTaskAgentExtensionMock,
   createWorkbenchBrowserAgentExtensionMock,
+  renameSessionMock,
   requestConversationWorkingDirectoryChangeMock,
 } = vi.hoisted(() => ({
   getProfilesRootMock: vi.fn(() => '/profiles-root'),
@@ -32,10 +34,12 @@ const {
   createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
   createConversationInspectAgentExtensionMock: vi.fn(() => 'conversation-inspect-extension'),
   createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
+  createConversationTitleAgentExtensionMock: vi.fn(() => 'conversation-title-extension'),
   createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
   createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
   createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
   createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
+  renameSessionMock: vi.fn(),
   requestConversationWorkingDirectoryChangeMock: vi.fn(),
 }));
 
@@ -75,6 +79,10 @@ vi.mock('../extensions/conversationInspectAgentExtension.js', () => ({
   createConversationInspectAgentExtension: createConversationInspectAgentExtensionMock,
 }));
 
+vi.mock('../extensions/conversationTitleAgentExtension.js', () => ({
+  createConversationTitleAgentExtension: createConversationTitleAgentExtensionMock,
+}));
+
 vi.mock('../extensions/reminderAgentExtension.js', () => ({
   createReminderAgentExtension: createReminderAgentExtensionMock,
 }));
@@ -92,6 +100,7 @@ vi.mock('../extensions/workbenchBrowserAgentExtension.js', () => ({
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({
+  renameSession: renameSessionMock,
   requestConversationWorkingDirectoryChange: requestConversationWorkingDirectoryChangeMock,
 }));
 
@@ -123,6 +132,7 @@ describe('createProfileState', () => {
     createConversationAutoModeAgentExtensionMock.mockClear();
     createConversationInspectAgentExtensionMock.mockClear();
     createConversationQueueAgentExtensionMock.mockClear();
+    createConversationTitleAgentExtensionMock.mockClear();
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
@@ -160,6 +170,7 @@ describe('createProfileState', () => {
       'change-working-directory-extension',
       'run-extension',
       'conversation-inspect-extension',
+      'conversation-title-extension',
       expect.any(Function),
       'artifact-extension',
       'checkpoint-extension',
@@ -180,6 +191,9 @@ describe('createProfileState', () => {
       stateRoot: '/state-root',
       repoRoot: '/repo-root',
       getCurrentProfile: expect.any(Function),
+    });
+    expect(createConversationTitleAgentExtensionMock).toHaveBeenCalledWith({
+      setConversationTitle: renameSessionMock,
     });
 
     const changeWorkingDirectoryOptions = createChangeWorkingDirectoryAgentExtensionMock.mock.calls[0]?.[0] as {

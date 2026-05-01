@@ -14,12 +14,13 @@ import { createChangeWorkingDirectoryAgentExtension } from '../extensions/change
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
 import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
+import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
-import { requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
+import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 
 export interface ProfileStateLogger {
@@ -104,6 +105,9 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         profilesRoot: getProfilesRoot(),
       }),
       createConversationInspectAgentExtension(),
+      createConversationTitleAgentExtension({
+        setConversationTitle: renameSession,
+      }),
       createImageAgentExtension(),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
