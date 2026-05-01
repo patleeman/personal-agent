@@ -515,6 +515,12 @@ function RunContextPanel({
 
         <div className="mt-3 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
+            <span className={cx(
+              'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-wider',
+              terminalRun ? 'border-accent/20 text-accent/70 font-mono' : 'border-accent/20 text-accent',
+            )}>
+              {terminalRun ? '›_ Shell' : '✦ Agent'}
+            </span>
             <p className="ui-card-title break-words">{headline.title}</p>
             <Pill tone={status.cls === 'text-danger' ? 'danger' : status.cls === 'text-warning' ? 'warning' : status.cls === 'text-success' ? 'success' : 'muted'}>
               {status.text}

@@ -7,7 +7,15 @@ import {
   describeDeferredResumeStatus,
   formatDeferredResumeWhen,
 } from '../../deferred-resume/deferredResumeIndicator';
-import { getRunHeadline, type RunPresentationLookups } from '../../automation/runPresentation';
+import {
+  getRunHeadline,
+  getRunTargetCommand,
+  type RunPresentationLookups,
+} from '../../automation/runPresentation';
+
+function isRunShell(run: DurableRunRecord): boolean {
+  return run.manifest?.kind === 'raw-shell' || Boolean(getRunTargetCommand(run));
+}
 
 export function ConversationActivityShelf({
   backgroundRuns,
@@ -89,7 +97,13 @@ export function ConversationActivityShelf({
                 const cancelling = cancellingBackgroundRunIds?.has(run.runId) ?? false;
 
                 return (
-                  <div key={run.runId} className="flex items-start gap-3 text-[12px]">
+                  <div key={run.runId} className="flex items-start gap-2 text-[12px]">
+                    <span className={cx(
+                      'mt-1 shrink-0 font-mono text-[10px]',
+                      isRunShell(run) ? 'text-accent/60' : 'text-accent',
+                    )}>
+                      {isRunShell(run) ? '›_' : '✦'}
+                    </span>
                     <button
                       type="button"
                       onClick={() => { onOpenBackgroundRun?.(run.runId); }}
@@ -99,6 +113,7 @@ export function ConversationActivityShelf({
                       <div className="flex min-w-0 items-center gap-2">
                         <span className={cx('shrink-0 font-medium', statusClass)}>{statusLabel}</span>
                         <span className="truncate text-primary">{headline.title}</span>
+                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-dim/60">{isRunShell(run) ? 'Shell' : 'Agent'}</span>
                       </div>
                       <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
                     </button>
