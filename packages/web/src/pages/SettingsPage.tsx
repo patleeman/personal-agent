@@ -98,6 +98,7 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
 const TRANSCRIPTION_MODEL_OPTIONS: Record<TranscriptionProviderId, string[]> = {
   'local-whisper': ['tiny.en', 'base.en', 'small.en', 'medium.en'],
 };
+const CLOUD_TRANSCRIPTION_MODEL_PATTERN = /^(?:gpt-4o(?:-mini)?-transcribe|whisper-1)$/i;
 
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
@@ -244,6 +245,13 @@ function formatMcpServerCommand(server: McpServerConfig): string {
 
 function formatMcpServerSourcePathLabel(server: McpServerConfig): string {
   return server.source === 'skill' ? 'Manifest' : 'Config';
+}
+
+function normalizeTranscriptionModelDraft(provider: TranscriptionProviderId | '', model: string): string {
+  if (provider === 'local-whisper' && CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model.trim())) {
+    return 'base.en';
+  }
+  return model;
 }
 
 function formatBytes(bytes: number): string {
@@ -1927,8 +1935,9 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (transcriptionState) {
-      setTranscriptionProviderDraft(transcriptionState.settings.provider ?? '');
-      setTranscriptionModelDraft(transcriptionState.settings.model);
+      const provider = transcriptionState.settings.provider ?? '';
+      setTranscriptionProviderDraft(provider);
+      setTranscriptionModelDraft(normalizeTranscriptionModelDraft(provider, transcriptionState.settings.model));
     }
   }, [transcriptionState?.settings.model, transcriptionState?.settings.provider]);
 
@@ -3569,7 +3578,9 @@ export function SettingsPage() {
                       id="settings-transcription-provider"
                       value={transcriptionProviderDraft}
                       onChange={(event) => {
-                        setTranscriptionProviderDraft(event.target.value as TranscriptionProviderId | '');
+                        const provider = event.target.value as TranscriptionProviderId | '';
+                        setTranscriptionProviderDraft(provider);
+                        setTranscriptionModelDraft((current) => normalizeTranscriptionModelDraft(provider, current));
                         setTranscriptionSaveError(null);
                         setTranscriptionInstallNotice(null);
                         setTranscriptionInstallError(null);
@@ -3639,8 +3650,6 @@ export function SettingsPage() {
 
                     {transcriptionInstallNotice && <p className="text-[12px] text-accent">{transcriptionInstallNotice}</p>}
                     {transcriptionInstallError && <p className="text-[12px] text-danger">{transcriptionInstallError}</p>}
-
-                    <p className="ui-card-meta">Runs fully local through Transformers.js + ONNX Runtime. No OpenAI dictation backend, because apparently we enjoy dignity.</p>
                   </form>
                 ) : null}
 

@@ -33,6 +33,21 @@ describe('transcription settings', () => {
     });
   });
 
+  it('migrates old cloud transcription model ids to the local default', () => {
+    const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
+    writeFileSync(settingsFile, JSON.stringify({
+      transcription: {
+        provider: 'local-whisper',
+        model: 'gpt-4o-mini-transcribe',
+      },
+    }));
+
+    expect(readTranscriptionSettings(settingsFile)).toEqual({
+      provider: 'local-whisper',
+      model: 'base.en',
+    });
+  });
+
   it('allows explicitly disabling dictation', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
 

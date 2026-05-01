@@ -9,6 +9,8 @@ export const TRANSCRIPTION_PROVIDER_IDS: TranscriptionProviderId[] = [
 export const DEFAULT_TRANSCRIPTION_MODEL = 'base.en';
 export const DEFAULT_TRANSCRIPTION_PROVIDER: TranscriptionProviderId = 'local-whisper';
 
+const CLOUD_TRANSCRIPTION_MODEL_PATTERN = /^(?:gpt-4o(?:-mini)?-transcribe|whisper-1)$/i;
+
 export interface TranscriptionSettingsState {
   settingsFile: string;
   settings: TranscriptionSettings;
@@ -28,6 +30,21 @@ export function isTranscriptionProviderId(value: unknown): value is Transcriptio
   return typeof value === 'string' && TRANSCRIPTION_PROVIDER_IDS.includes(value as TranscriptionProviderId);
 }
 
+export function normalizeTranscriptionModelForProvider(
+  provider: TranscriptionProviderId | null,
+  value: unknown,
+): string {
+  const model = typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : DEFAULT_TRANSCRIPTION_MODEL;
+
+  if (provider === 'local-whisper' && CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model)) {
+    return DEFAULT_TRANSCRIPTION_MODEL;
+  }
+
+  return model;
+}
+
 export function normalizeTranscriptionSettings(value: unknown): TranscriptionSettings {
   const input = isRecord(value) ? value : {};
   const provider = 'provider' in input
@@ -35,9 +52,7 @@ export function normalizeTranscriptionSettings(value: unknown): TranscriptionSet
       ? input.provider
       : null
     : DEFAULT_TRANSCRIPTION_PROVIDER;
-  const model = typeof input.model === 'string' && input.model.trim().length > 0
-    ? input.model.trim()
-    : DEFAULT_TRANSCRIPTION_MODEL;
+  const model = normalizeTranscriptionModelForProvider(provider, input.model);
 
   return { provider, model };
 }
