@@ -19,7 +19,7 @@ Supported provider ids:
 
 | Provider | Status | Transports | Notes |
 | --- | --- | --- | --- |
-| `local-whisper` | implemented | file | Runs `Xenova/whisper-*` models locally through Transformers.js. Models are downloaded into the runtime `transcription-models/` cache on first use. |
+| `local-whisper` | implemented | file | Runs `Xenova/whisper-*` models locally through Transformers.js. Models are downloaded into the runtime `transcription-models/` cache on first use or via the Settings install button. |
 
 Recommended models:
 
@@ -30,6 +30,8 @@ Recommended models:
 
 The provider still accepts legacy model ids like `openai_whisper-base` and normalizes them to Whisper model names.
 
+Models are not bundled with the app. Even `tiny.en` is roughly tens of MB on disk, while the better models are much larger, so the app downloads the selected quantized model on demand and reuses the local cache after that. Settings exposes **Install local model** to preload the selected model instead of making the first dictation do the download.
+
 ## Request flow
 
 The settings API is:
@@ -37,8 +39,20 @@ The settings API is:
 ```text
 GET   /api/transcription/settings
 PATCH /api/transcription/settings
+POST  /api/transcription/install-model
 POST  /api/transcription/transcribe-file
 ```
+
+`POST /api/transcription/install-model` accepts JSON:
+
+```json
+{
+  "provider": "local-whisper",
+  "model": "base.en"
+}
+```
+
+It downloads/loads the selected local model into the runtime cache and returns the cache path.
 
 `POST /api/transcription/transcribe-file` accepts JSON:
 
@@ -63,6 +77,7 @@ interface TranscriptionProvider {
   label: string
   transports: Array<'stream' | 'file'>
   isAvailable(): Promise<boolean>
+  installModel?(): Promise<TranscriptionInstallResult>
   transcribeFile?(input: TranscriptionFileInput, options?: TranscriptionOptions): Promise<TranscriptionResult>
   stream?(chunks: AsyncIterable<TranscriptionAudioChunk>, options?: TranscriptionOptions): AsyncIterable<TranscriptionStreamEvent>
 }

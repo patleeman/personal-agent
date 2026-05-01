@@ -39,4 +39,24 @@ describe('Local Whisper transcription provider', () => {
     });
     expect(transcriber).toHaveBeenCalledWith(expect.any(Float32Array), { task: 'transcribe' });
   });
+
+  it('installs the selected model into the local model cache', async () => {
+    const transcriber = vi.fn(async () => ({ text: 'unused' }));
+    const pipelineFactory = vi.fn(async () => transcriber);
+    const provider = new LocalWhisperTranscriptionProvider({
+      model: 'tiny.en',
+      modelRootPath: '/tmp/pa-models',
+      pipelineFactory: pipelineFactory as never,
+    });
+
+    await expect(provider.installModel()).resolves.toEqual({
+      provider: 'local-whisper',
+      model: 'tiny.en',
+      cacheDir: '/tmp/pa-models',
+    });
+    expect(pipelineFactory).toHaveBeenCalledWith('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+      cache_dir: '/tmp/pa-models',
+      quantized: true,
+    });
+  });
 });

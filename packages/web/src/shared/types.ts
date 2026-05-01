@@ -1320,6 +1320,12 @@ export interface TranscriptionSettingsState {
   }>;
 }
 
+export interface TranscriptionInstallResult {
+  provider: TranscriptionProviderId;
+  model: string;
+  cacheDir: string;
+}
+
 export interface TranscriptionResult {
   text: string;
   provider: TranscriptionProviderId;

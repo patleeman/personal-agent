@@ -22,12 +22,11 @@ describe('registerTranscriptionRoutes', () => {
 
   function createHarness(settingsFile = '/tmp/transcription-settings.json') {
     let patchHandler: ((req: { body: unknown }, res: ReturnType<typeof createResponse>) => void) | undefined;
-    let postHandler: ((req: { body: unknown }, res: ReturnType<typeof createResponse>) => Promise<void>) | undefined;
+    const postHandlers = new Map<string, (req: { body: unknown }, res: ReturnType<typeof createResponse>) => Promise<void>>();
     const router = {
       get: vi.fn(),
-      post: vi.fn((path: string, next: typeof postHandler) => {
-        expect(path).toBe('/api/transcription/transcribe-file');
-        postHandler = next;
+      post: vi.fn((path: string, next: (req: { body: unknown }, res: ReturnType<typeof createResponse>) => Promise<void>) => {
+        postHandlers.set(path, next);
       }),
       patch: vi.fn((path: string, next: typeof patchHandler) => {
         expect(path).toBe('/api/transcription/settings');
@@ -40,7 +39,11 @@ describe('registerTranscriptionRoutes', () => {
       getAuthFile: () => '/tmp/auth.json',
     });
 
-    return { patchHandler: patchHandler!, postHandler: postHandler! };
+    return {
+      patchHandler: patchHandler!,
+      postHandler: postHandlers.get('/api/transcription/transcribe-file')!,
+      installModelHandler: postHandlers.get('/api/transcription/install-model')!,
+    };
   }
 
   function createResponse() {
@@ -90,5 +93,18 @@ describe('registerTranscriptionRoutes', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'dataBase64 must contain valid base64 data.' });
+  });
+
+  it('returns a client error when installing without a provider', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pa-transcription-route-'));
+    const settingsFile = join(root, 'settings.json');
+    writeFileSync(settingsFile, JSON.stringify({ transcription: { provider: 'local-whisper', model: 'base.en' } }));
+    const { installModelHandler } = createHarness(settingsFile);
+    const res = createResponse();
+
+    await installModelHandler({ body: { provider: null, model: 'base.en' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Choose a transcription provider in Settings before using dictation.' });
   });
 });

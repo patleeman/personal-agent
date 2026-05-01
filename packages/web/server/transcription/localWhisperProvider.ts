@@ -1,6 +1,6 @@
 import { pipeline } from '@xenova/transformers';
 import type { AutomaticSpeechRecognitionPipelineType } from '@xenova/transformers/types/pipelines.js';
-import type { TranscriptionFileInput, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
+import type { TranscriptionFileInput, TranscriptionInstallResult, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
 
 const DEFAULT_LOCAL_WHISPER_MODEL = 'base.en';
 const PCM_SAMPLE_RATE = 16_000;
@@ -109,6 +109,19 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
 
   async isAvailable(): Promise<boolean> {
     return true;
+  }
+
+  async installModel(): Promise<TranscriptionInstallResult> {
+    await getAsrPipeline({
+      model: this.model,
+      modelRootPath: this.modelRootPath,
+      pipelineFactory: this.pipelineFactory,
+    });
+    return {
+      provider: this.id,
+      model: this.model,
+      cacheDir: this.modelRootPath,
+    };
   }
 
   async transcribeFile(input: TranscriptionFileInput, options: TranscriptionOptions = {}): Promise<TranscriptionResult> {

@@ -1512,6 +1512,9 @@ export function SettingsPage() {
   const [transcriptionModelDraft, setTranscriptionModelDraft] = useState('base.en');
   const [savingTranscription, setSavingTranscription] = useState(false);
   const [transcriptionSaveError, setTranscriptionSaveError] = useState<string | null>(null);
+  const [installingTranscriptionModel, setInstallingTranscriptionModel] = useState(false);
+  const [transcriptionInstallNotice, setTranscriptionInstallNotice] = useState<string | null>(null);
+  const [transcriptionInstallError, setTranscriptionInstallError] = useState<string | null>(null);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
   const [modelProviderModalOpen, setModelProviderModalOpen] = useState(false);
   const [modelProviderModalMode, setModelProviderModalMode] = useState<'provider' | 'custom'>('provider');
@@ -2318,6 +2321,38 @@ export function SettingsPage() {
       setTranscriptionSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingTranscription(false);
+    }
+  }
+
+  async function handleTranscriptionInstallModel() {
+    if (installingTranscriptionModel) {
+      return;
+    }
+
+    const model = transcriptionModelDraft.trim();
+    if (!transcriptionProviderDraft) {
+      setTranscriptionInstallError('Select a dictation provider first.');
+      return;
+    }
+    if (!model) {
+      setTranscriptionInstallError('Transcription model is required.');
+      return;
+    }
+
+    setTranscriptionInstallError(null);
+    setTranscriptionInstallNotice(null);
+    setInstallingTranscriptionModel(true);
+
+    try {
+      const installed = await api.installTranscriptionModel({
+        provider: transcriptionProviderDraft,
+        model,
+      });
+      setTranscriptionInstallNotice(`Installed ${installed.model} in ${installed.cacheDir}.`);
+    } catch (error) {
+      setTranscriptionInstallError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setInstallingTranscriptionModel(false);
     }
   }
 
@@ -3421,8 +3456,10 @@ export function SettingsPage() {
                       onChange={(event) => {
                         setTranscriptionProviderDraft(event.target.value as TranscriptionProviderId | '');
                         setTranscriptionSaveError(null);
+                        setTranscriptionInstallNotice(null);
+                        setTranscriptionInstallError(null);
                       }}
-                      disabled={savingTranscription}
+                      disabled={savingTranscription || installingTranscriptionModel}
                       className={INPUT_CLASS}
                     >
                       <option value="">Disabled</option>
@@ -3448,8 +3485,10 @@ export function SettingsPage() {
                       onChange={(event) => {
                         setTranscriptionModelDraft(event.target.value);
                         setTranscriptionSaveError(null);
+                        setTranscriptionInstallNotice(null);
+                        setTranscriptionInstallError(null);
                       }}
-                      disabled={savingTranscription}
+                      disabled={savingTranscription || installingTranscriptionModel}
                       className={`${INPUT_CLASS} font-mono text-[13px]`}
                       placeholder="base.en"
                       autoComplete="off"
@@ -3460,19 +3499,30 @@ export function SettingsPage() {
                         <option key={model} value={model} />
                       ))}
                     </datalist>
-                    <p className="ui-card-meta">First use downloads the selected Whisper model and builds whisper.cpp locally. base.en is the sane default.</p>
+                    <p className="ui-card-meta">Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.</p>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="submit"
-                        disabled={savingTranscription || !transcriptionDirty}
+                        disabled={savingTranscription || installingTranscriptionModel || !transcriptionDirty}
                         className={ACTION_BUTTON_CLASS}
                       >
                         {savingTranscription ? 'Saving…' : 'Save dictation'}
                       </button>
+                      <button
+                        type="button"
+                        disabled={installingTranscriptionModel || savingTranscription || !transcriptionProviderDraft || !transcriptionModelDraft.trim()}
+                        onClick={() => { void handleTranscriptionInstallModel(); }}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {installingTranscriptionModel ? 'Installing…' : 'Install local model'}
+                      </button>
                     </div>
 
-                    <p className="ui-card-meta">Runs fully local through whisper.cpp. No OpenAI dictation backend, because apparently we enjoy dignity.</p>
+                    {transcriptionInstallNotice && <p className="text-[12px] text-accent">{transcriptionInstallNotice}</p>}
+                    {transcriptionInstallError && <p className="text-[12px] text-danger">{transcriptionInstallError}</p>}
+
+                    <p className="ui-card-meta">Runs fully local through Transformers.js + ONNX Runtime. No OpenAI dictation backend, because apparently we enjoy dignity.</p>
                   </form>
                 ) : null}
 
