@@ -111,13 +111,21 @@ describe('desktop-config', () => {
   it('persists partial keyboard shortcut updates without resetting the rest', () => {
     updateDesktopAppPreferences({
       keyboardShortcuts: {
-        conversationMode: 'F4',
+        conversationMode: 'CommandOrControl+Alt+K',
       },
     });
 
     expect(readDesktopAppPreferences(loadDesktopConfig()).keyboardShortcuts).toEqual({
       ...DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS,
-      conversationMode: 'F4',
+      conversationMode: 'CommandOrControl+Alt+K',
     });
+  });
+
+  it('rejects shortcut updates that would steal plain typing keys', () => {
+    expect(() => updateDesktopAppPreferences({
+      keyboardShortcuts: {
+        conversationMode: 'K',
+      },
+    })).toThrow(/Unsupported keyboard shortcut/);
   });
 });

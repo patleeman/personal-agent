@@ -233,7 +233,7 @@ describe('DesktopKeyboardShortcutsSettingsSection', () => {
     delete window.personalAgentDesktop;
   });
 
-  it('auto-saves configurable shortcuts and lists built-in shortcuts', async () => {
+  it('captures arbitrary shortcut chords and auto-saves every desktop shortcut', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -244,19 +244,30 @@ describe('DesktopKeyboardShortcutsSettingsSection', () => {
     });
     await flushAsyncWork();
 
-    const select = container.querySelector('#settings-keyboard-conversationMode');
-    if (!(select instanceof HTMLSelectElement)) {
-      throw new Error('Expected conversation mode select');
+    const shortcutButton = container.querySelector('#settings-keyboard-conversationMode');
+    if (!(shortcutButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected conversation mode shortcut capture button');
     }
 
     act(() => {
-      select.value = 'F4';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      shortcutButton.focus();
+      shortcutButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    act(() => {
+      shortcutButton.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        key: 'k',
+        code: 'KeyK',
+        metaKey: true,
+        altKey: true,
+      }));
     });
     await flushAsyncWork();
 
     expect(mocks.updateDesktopAppPreferences).toHaveBeenCalledWith({
-      keyboardShortcuts: expect.objectContaining({ conversationMode: 'F4' }),
+      keyboardShortcuts: expect.objectContaining({ conversationMode: 'CommandOrControl+Alt+K' }),
     });
     expect(container.textContent).toContain('Show Personal Agent');
     expect(container.textContent).toContain('Find on page');

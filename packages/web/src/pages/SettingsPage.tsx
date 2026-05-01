@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../client/api';
@@ -82,28 +82,6 @@ const DESKTOP_KEYBOARD_SHORTCUT_LABELS: Record<DesktopKeyboardShortcutId, { labe
   zenMode: { label: 'Zen mode', description: 'Hide side panels for focused chat.' },
   toggleSidebar: { label: 'Toggle left sidebar', description: 'Collapse or restore the conversation sidebar.' },
   toggleRightRail: { label: 'Toggle right rail', description: 'Collapse or restore the active workbench rail.' },
-};
-
-const DESKTOP_KEYBOARD_SHORTCUT_OPTIONS: Record<DesktopKeyboardShortcutId, string[]> = {
-  showApp: ['CommandOrControl+Shift+A', 'CommandOrControl+Shift+P', 'CommandOrControl+Alt+Space'],
-  newConversation: ['CommandOrControl+N', 'CommandOrControl+Shift+N', 'CommandOrControl+Alt+N'],
-  closeTab: ['CommandOrControl+W', 'CommandOrControl+Shift+W', 'CommandOrControl+Alt+W'],
-  reopenClosedTab: ['Command+Shift+N', 'CommandOrControl+Shift+W', 'CommandOrControl+Shift+T'],
-  previousConversation: ['CommandOrControl+[', 'CommandOrControl+Shift+[', 'CommandOrControl+Alt+['],
-  nextConversation: ['CommandOrControl+]', 'CommandOrControl+Shift+]', 'CommandOrControl+Alt+]'],
-  togglePinned: ['CommandOrControl+Alt+P', 'CommandOrControl+Shift+P', 'CommandOrControl+Alt+Shift+P'],
-  archiveRestoreConversation: ['CommandOrControl+Alt+A', 'CommandOrControl+Shift+A', 'CommandOrControl+Alt+Shift+A'],
-  renameConversation: ['CommandOrControl+Alt+R', 'CommandOrControl+Shift+R', 'CommandOrControl+Alt+Shift+R'],
-  focusComposer: ['CommandOrControl+L', 'CommandOrControl+Shift+L', 'CommandOrControl+Alt+L'],
-  editWorkingDirectory: ['CommandOrControl+Shift+L', 'CommandOrControl+Alt+L', 'CommandOrControl+Alt+Shift+L'],
-  findOnPage: ['CommandOrControl+F', 'CommandOrControl+Shift+F', 'CommandOrControl+Alt+F'],
-  settings: ['CommandOrControl+,', 'CommandOrControl+Shift+,', 'CommandOrControl+Alt+,'],
-  quit: ['CommandOrControl+Q', 'CommandOrControl+Shift+Q', 'Alt+F4'],
-  conversationMode: ['F1', 'F4', 'CommandOrControl+1'],
-  workbenchMode: ['F2', 'F5', 'CommandOrControl+2'],
-  zenMode: ['F3', 'F6', 'CommandOrControl+3'],
-  toggleSidebar: ['CommandOrControl+/', 'CommandOrControl+B', 'CommandOrControl+Shift+/'],
-  toggleRightRail: ['CommandOrControl+\\', 'CommandOrControl+Shift+\\', 'CommandOrControl+Alt+\\'],
 };
 
 const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopAppPreferencesState['keyboardShortcuts'] = {
@@ -554,6 +532,135 @@ function formatKeyboardShortcutLabel(shortcut: string): string {
     .replace(/\+/g, ' + ');
 }
 
+function normalizeKeyboardShortcutKey(event: ReactKeyboardEvent): string | null {
+  if (/^Key[A-Z]$/.test(event.code)) return event.code.slice(3);
+  if (/^Digit[0-9]$/.test(event.code)) return event.code.slice(5);
+  if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(event.code)) return event.code;
+
+  switch (event.code) {
+    case 'Space': return 'Space';
+    case 'Tab': return 'Tab';
+    case 'Enter':
+    case 'NumpadEnter': return 'Enter';
+    case 'Escape': return 'Escape';
+    case 'Backspace': return 'Backspace';
+    case 'Delete': return 'Delete';
+    case 'Insert': return 'Insert';
+    case 'Home': return 'Home';
+    case 'End': return 'End';
+    case 'PageUp': return 'PageUp';
+    case 'PageDown': return 'PageDown';
+    case 'ArrowUp': return 'Up';
+    case 'ArrowDown': return 'Down';
+    case 'ArrowLeft': return 'Left';
+    case 'ArrowRight': return 'Right';
+    case 'Minus': return '-';
+    case 'Equal': return '=';
+    case 'BracketLeft': return '[';
+    case 'BracketRight': return ']';
+    case 'Backslash': return '\\';
+    case 'Semicolon': return ';';
+    case 'Quote': return "'";
+    case 'Comma': return ',';
+    case 'Period': return '.';
+    case 'Slash': return '/';
+    case 'Backquote': return '`';
+    case 'NumpadAdd': return 'Plus';
+    case 'NumpadSubtract': return '-';
+    case 'NumpadMultiply': return '*';
+    case 'NumpadDivide': return '/';
+    case 'NumpadDecimal': return '.';
+    default:
+      if (/^Numpad[0-9]$/.test(event.code)) return event.code.slice(6);
+      return null;
+  }
+}
+
+function resolveKeyboardShortcutFromEvent(event: ReactKeyboardEvent): string | null {
+  const key = normalizeKeyboardShortcutKey(event);
+  if (!key) return null;
+
+  const parts: string[] = [];
+  if (event.metaKey || event.ctrlKey) parts.push('CommandOrControl');
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+
+  if (parts.length === 0 && !/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(key)) {
+    return null;
+  }
+
+  parts.push(key);
+  return parts.join('+');
+}
+
+function KeyboardShortcutCaptureInput({
+  id,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  disabled?: boolean;
+  onChange: (shortcut: string) => void;
+}) {
+  const [capturing, setCapturing] = useState(false);
+  const [invalid, setInvalid] = useState(false);
+
+  return (
+    <button
+      id={id}
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        setCapturing(true);
+        setInvalid(false);
+      }}
+      onBlur={() => {
+        setCapturing(false);
+        setInvalid(false);
+      }}
+      onKeyDown={(event) => {
+        if (!capturing) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setCapturing(true);
+            setInvalid(false);
+          }
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (event.key === 'Escape') {
+          setCapturing(false);
+          setInvalid(false);
+          return;
+        }
+
+        const shortcut = resolveKeyboardShortcutFromEvent(event);
+        if (!shortcut) {
+          setInvalid(true);
+          return;
+        }
+
+        setInvalid(false);
+        setCapturing(false);
+        onChange(shortcut);
+      }}
+      className={cx(INPUT_CLASS, 'text-left', capturing && 'border-accent/60 bg-surface', invalid && 'border-danger/70')}
+      aria-label={capturing ? 'Press a keyboard shortcut' : `Keyboard shortcut ${formatKeyboardShortcutLabel(value)}`}
+    >
+      <span className={cx('block truncate', capturing && 'text-accent', invalid && 'text-danger')}>
+        {capturing
+          ? invalid ? 'Use a modifier, or press an F-key…' : 'Press shortcut…'
+          : formatKeyboardShortcutLabel(value)}
+      </span>
+    </button>
+  );
+}
+
 export function DesktopKeyboardShortcutsSettingsSection() {
   const [preferencesState, setPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
   const [draft, setDraft] = useState<DesktopAppPreferencesState['keyboardShortcuts']>(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
@@ -648,23 +755,18 @@ export function DesktopKeyboardShortcutsSettingsSection() {
                       <span className="block text-[13px] font-medium text-primary">{metadata.label}</span>
                       <span className="block text-[12px] leading-5 text-secondary">{metadata.description}</span>
                     </span>
-                    <select
+                    <KeyboardShortcutCaptureInput
                       id={`settings-keyboard-${id}`}
                       value={draft[id]}
-                      onChange={(event) => {
-                        const nextDraft = { ...draft, [id]: event.target.value };
+                      onChange={(shortcut) => {
+                        const nextDraft = { ...draft, [id]: shortcut };
                         setDraft(nextDraft);
                         setError(null);
                         setNotice(null);
                         void saveKeyboardShortcuts(nextDraft);
                       }}
                       disabled={saving}
-                      className={INPUT_CLASS}
-                    >
-                      {DESKTOP_KEYBOARD_SHORTCUT_OPTIONS[id].map((shortcut) => (
-                        <option key={shortcut} value={shortcut}>{formatKeyboardShortcutLabel(shortcut)}</option>
-                      ))}
-                    </select>
+                    />
                   </label>
                 );
               })}
