@@ -30,7 +30,7 @@ Recommended models:
 
 The provider still accepts legacy model ids like `openai_whisper-base` and normalizes them to Whisper model names.
 
-Models are not bundled with the app. Even `tiny.en` is roughly tens of MB on disk, while the better models are much larger, so the app downloads the selected quantized model on demand and reuses the local cache after that. Settings exposes **Install local model** to preload the selected model instead of making the first dictation do the download.
+Models are not bundled with the app. Even `tiny.en` is roughly tens of MB on disk, while the better models are much larger, so the app downloads the selected quantized model on demand and reuses the local cache after that. Settings exposes **Install local model** to preload the selected model instead of making the first dictation do the download, and it shows whether the selected provider/model is already installed locally.
 
 ## Request flow
 
@@ -40,6 +40,7 @@ The settings API is:
 GET   /api/transcription/settings
 PATCH /api/transcription/settings
 POST  /api/transcription/install-model
+POST  /api/transcription/model-status
 POST  /api/transcription/transcribe-file
 ```
 
@@ -53,6 +54,8 @@ POST  /api/transcription/transcribe-file
 ```
 
 It downloads/loads the selected local model into the runtime cache and returns the cache path.
+
+`POST /api/transcription/model-status` accepts the same provider/model body and returns whether the local cache already contains files for that model.
 
 `POST /api/transcription/transcribe-file` accepts JSON:
 
@@ -78,6 +81,7 @@ interface TranscriptionProvider {
   transports: Array<'stream' | 'file'>
   isAvailable(): Promise<boolean>
   installModel?(): Promise<TranscriptionInstallResult>
+  getModelStatus?(): Promise<TranscriptionModelStatus>
   transcribeFile?(input: TranscriptionFileInput, options?: TranscriptionOptions): Promise<TranscriptionResult>
   stream?(chunks: AsyncIterable<TranscriptionAudioChunk>, options?: TranscriptionOptions): AsyncIterable<TranscriptionStreamEvent>
 }

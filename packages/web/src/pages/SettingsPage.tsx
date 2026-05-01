@@ -36,6 +36,7 @@ import type {
   ProviderAuthSummary,
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
+  TranscriptionModelStatus,
   TranscriptionProviderId,
 } from '../shared/types';
 import { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, Pill, ToolbarButton, cx } from '../components/ui';
@@ -242,6 +243,13 @@ function formatMcpServerCommand(server: McpServerConfig): string {
 
 function formatMcpServerSourcePathLabel(server: McpServerConfig): string {
   return server.source === 'skill' ? 'Manifest' : 'Config';
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 function ThemeButton({
@@ -1515,6 +1523,8 @@ export function SettingsPage() {
   const [installingTranscriptionModel, setInstallingTranscriptionModel] = useState(false);
   const [transcriptionInstallNotice, setTranscriptionInstallNotice] = useState<string | null>(null);
   const [transcriptionInstallError, setTranscriptionInstallError] = useState<string | null>(null);
+  const [transcriptionModelStatus, setTranscriptionModelStatus] = useState<TranscriptionModelStatus | null>(null);
+  const [loadingTranscriptionModelStatus, setLoadingTranscriptionModelStatus] = useState(false);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
   const [modelProviderModalOpen, setModelProviderModalOpen] = useState(false);
   const [modelProviderModalMode, setModelProviderModalMode] = useState<'provider' | 'custom'>('provider');
@@ -1806,6 +1816,15 @@ export function SettingsPage() {
   const transcriptionModelOptions = transcriptionProviderDraft
     ? TRANSCRIPTION_MODEL_OPTIONS[transcriptionProviderDraft]
     : Array.from(new Set(Object.values(TRANSCRIPTION_MODEL_OPTIONS).flat()));
+  const transcriptionModelStatusLabel = transcriptionProviderDraft && transcriptionModelDraft.trim()
+    ? loadingTranscriptionModelStatus
+      ? 'Checking model cache…'
+      : transcriptionModelStatus?.provider === transcriptionProviderDraft && transcriptionModelStatus.model === transcriptionModelDraft.trim()
+        ? transcriptionModelStatus.installed
+          ? `Installed locally${transcriptionModelStatus.sizeBytes ? ` · ${formatBytes(transcriptionModelStatus.sizeBytes)}` : ''}`
+          : 'Not installed yet'
+        : 'Model cache status unavailable'
+    : 'Select a provider and model to check install status.';
   const skillFoldersDirty = skillFoldersState
     ? skillFoldersDraft.length !== skillFoldersState.skillDirs.length
       || skillFoldersDraft.some((value, index) => value !== skillFoldersState.skillDirs[index])
@@ -1839,6 +1858,39 @@ export function SettingsPage() {
       setTranscriptionModelDraft(transcriptionState.settings.model);
     }
   }, [transcriptionState?.settings.model, transcriptionState?.settings.provider]);
+
+  useEffect(() => {
+    const provider = transcriptionProviderDraft;
+    const model = transcriptionModelDraft.trim();
+    if (!provider || !model) {
+      setTranscriptionModelStatus(null);
+      setLoadingTranscriptionModelStatus(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingTranscriptionModelStatus(true);
+    api.transcriptionModelStatus({ provider, model })
+      .then((status) => {
+        if (!cancelled) {
+          setTranscriptionModelStatus(status);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTranscriptionModelStatus(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingTranscriptionModelStatus(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transcriptionModelDraft, transcriptionProviderDraft]);
 
   useEffect(() => {
     if (skillFoldersState) {
@@ -2349,6 +2401,12 @@ export function SettingsPage() {
         model,
       });
       setTranscriptionInstallNotice(`Installed ${installed.model} in ${installed.cacheDir}.`);
+      setTranscriptionModelStatus({
+        provider: installed.provider,
+        model: installed.model,
+        cacheDir: installed.cacheDir,
+        installed: true,
+      });
     } catch (error) {
       setTranscriptionInstallError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2411,22 +2469,6 @@ export function SettingsPage() {
     setModelDraftMessage(null);
     setProviderCredentialError(null);
     setProviderCredentialNotice(null);
-  }
-
-  function selectKnownModelProvider(providerId: string) {
-    const normalizedProviderId = providerId.trim();
-    if (!normalizedProviderId) {
-      startNewModelProvider();
-      return;
-    }
-
-    const provider = modelProviderState?.providers.find((candidate) => candidate.id === normalizedProviderId) ?? null;
-    if (provider) {
-      selectModelProvider(provider.id);
-      return;
-    }
-
-    startNewModelProvider(normalizedProviderId);
   }
 
   function startEditingProviderModel(modelId: string) {
@@ -3458,6 +3500,7 @@ export function SettingsPage() {
                         setTranscriptionSaveError(null);
                         setTranscriptionInstallNotice(null);
                         setTranscriptionInstallError(null);
+                        setTranscriptionModelStatus(null);
                       }}
                       disabled={savingTranscription || installingTranscriptionModel}
                       className={INPUT_CLASS}
@@ -3487,6 +3530,7 @@ export function SettingsPage() {
                         setTranscriptionSaveError(null);
                         setTranscriptionInstallNotice(null);
                         setTranscriptionInstallError(null);
+                        setTranscriptionModelStatus(null);
                       }}
                       disabled={savingTranscription || installingTranscriptionModel}
                       className={`${INPUT_CLASS} font-mono text-[13px]`}
@@ -3500,6 +3544,7 @@ export function SettingsPage() {
                       ))}
                     </datalist>
                     <p className="ui-card-meta">Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.</p>
+                    <p className={cx('text-[12px]', transcriptionModelStatus?.installed ? 'text-success' : 'text-dim')}>{transcriptionModelStatusLabel}</p>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
@@ -3576,6 +3621,12 @@ export function SettingsPage() {
                     <p className="text-[12px] text-danger">Failed to load provider definitions: {modelProviderError}</p>
                   ) : modelProviderState ? (
                     <>
+                      {providerAuthLoading && !providerAuthState && (
+                        <p className="ui-card-meta">Loading provider credentials…</p>
+                      )}
+                      {providerAuthError && !providerAuthState && (
+                        <p className="text-[12px] text-danger">Failed to load provider credentials: {providerAuthError}</p>
+                      )}
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <p className="ui-card-meta">Configured providers</p>
@@ -4272,6 +4323,55 @@ export function SettingsPage() {
                             </button>
                           )}
                         </div>
+
+                        {selectedProviderLogin?.status === 'running' && (
+                          <div className="space-y-2 border-t border-border-subtle pt-3">
+                            <p className="ui-card-meta">
+                              OAuth login running for {selectedProviderLogin.providerName}.
+                              {selectedProviderLogin.authUrl ? ` Opened ${selectedProviderLogin.authUrl}` : ''}
+                            </p>
+                            {selectedProviderLogin.progress.length > 0 && (
+                              <p className="ui-card-meta">{selectedProviderLogin.progress[selectedProviderLogin.progress.length - 1]}</p>
+                            )}
+                            {selectedProviderLogin.prompt && (
+                              <form
+                                className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  void handleSubmitProviderOAuthInput();
+                                }}
+                              >
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                  <label className="ui-card-meta" htmlFor="settings-provider-oauth-input">{selectedProviderLogin.prompt.message}</label>
+                                  <input
+                                    id="settings-provider-oauth-input"
+                                    value={oauthInputValue}
+                                    onChange={(event) => { setOauthInputValue(event.target.value); }}
+                                    className={INPUT_CLASS}
+                                    placeholder={selectedProviderLogin.prompt.placeholder}
+                                    autoComplete="off"
+                                    disabled={oauthAction !== null}
+                                  />
+                                </div>
+                                <button
+                                  type="submit"
+                                  disabled={oauthAction !== null || (!selectedProviderLogin.prompt.allowEmpty && oauthInputValue.trim().length === 0)}
+                                  className={ACTION_BUTTON_CLASS}
+                                >
+                                  {oauthAction === 'submit' ? 'Submitting…' : 'Submit'}
+                                </button>
+                              </form>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => { void handleCancelProviderOAuthLogin(); }}
+                              disabled={oauthAction !== null}
+                              className={ACTION_BUTTON_CLASS}
+                            >
+                              {oauthAction === 'cancel' ? 'Cancelling…' : 'Cancel OAuth login'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ) : editableModelProviderId ? (
                       <p className="ui-card-meta">Save or select the provider before managing stored credentials.</p>

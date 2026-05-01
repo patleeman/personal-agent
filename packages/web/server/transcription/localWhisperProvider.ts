@@ -1,6 +1,8 @@
+import { readdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pipeline } from '@xenova/transformers';
 import type { AutomaticSpeechRecognitionPipelineType } from '@xenova/transformers/types/pipelines.js';
-import type { TranscriptionFileInput, TranscriptionInstallResult, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
+import type { TranscriptionFileInput, TranscriptionInstallResult, TranscriptionModelStatus, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
 
 const DEFAULT_LOCAL_WHISPER_MODEL = 'base.en';
 const PCM_SAMPLE_RATE = 16_000;
@@ -86,6 +88,31 @@ async function getAsrPipeline(input: {
   return created;
 }
 
+async function readDirectorySize(path: string): Promise<number | null> {
+  try {
+    const entries = await readdir(path, { withFileTypes: true });
+    let total = 0;
+    for (const entry of entries) {
+      const entryPath = join(path, entry.name);
+      if (entry.isDirectory()) {
+        total += (await readDirectorySize(entryPath)) ?? 0;
+      } else if (entry.isFile()) {
+        total += (await stat(entryPath)).size;
+      }
+    }
+    return total;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function getLocalModelCachePath(modelRootPath: string, model: string): string {
+  return join(modelRootPath, ...resolveLocalWhisperModelRepo(model).split('/'));
+}
+
 function readAsrText(output: Awaited<ReturnType<AutomaticSpeechRecognitionPipelineType>>): string {
   if (Array.isArray(output)) {
     return output.map((entry) => entry.text).join(' ').replace(/\s+/g, ' ').trim();
@@ -121,6 +148,17 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
       provider: this.id,
       model: this.model,
       cacheDir: this.modelRootPath,
+    };
+  }
+
+  async getModelStatus(): Promise<TranscriptionModelStatus> {
+    const sizeBytes = await readDirectorySize(getLocalModelCachePath(this.modelRootPath, this.model));
+    return {
+      provider: this.id,
+      model: this.model,
+      cacheDir: this.modelRootPath,
+      installed: sizeBytes !== null && sizeBytes > 0,
+      ...(sizeBytes !== null ? { sizeBytes } : {}),
     };
   }
 
@@ -163,4 +201,5 @@ export const testExports = {
   resolveLocalWhisperModelRepo,
   pcm16ToFloat32,
   readAsrText,
+  getLocalModelCachePath,
 };

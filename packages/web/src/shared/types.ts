@@ -387,10 +387,18 @@ interface DaemonRuntimeSummary {
   maxQueueDepth?: number;
 }
 
+interface DaemonPowerSummary {
+  keepAwake: boolean;
+  supported: boolean;
+  active: boolean;
+  error?: string;
+}
+
 export interface DaemonState {
   warnings: string[];
   service: DaemonServiceSummary;
   runtime: DaemonRuntimeSummary;
+  power: DaemonPowerSummary;
   log: LogTail;
 }
 
@@ -1324,6 +1332,14 @@ export interface TranscriptionInstallResult {
   provider: TranscriptionProviderId;
   model: string;
   cacheDir: string;
+}
+
+export interface TranscriptionModelStatus {
+  provider: TranscriptionProviderId;
+  model: string;
+  cacheDir: string;
+  installed: boolean;
+  sizeBytes?: number;
 }
 
 export interface TranscriptionResult {

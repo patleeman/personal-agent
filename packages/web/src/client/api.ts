@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContentSearchResult, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationSummaryRecord, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionInstallResult, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultSearchResponse, VaultShareImportResult, VaultTreeResult, WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceFileContent } from '../shared/types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContentSearchResult, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationSummaryRecord, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionInstallResult, TranscriptionModelStatus, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultSearchResponse, VaultShareImportResult, VaultTreeResult, WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceFileContent } from '../shared/types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -218,6 +218,7 @@ export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => get<AppStatus>('/status'),
   daemon:       async () => get<DaemonState>('/daemon'),
+  updateDaemonPower: async (input: { keepAwake: boolean }) => patch<DaemonState>('/daemon/power', input),
   sessions:     async () => get<SessionMeta[]>('/sessions'),
   sessionMeta:  async (id: string) => get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`),
   sessionDetail: async (id: string, options?: {
@@ -362,6 +363,9 @@ export const api = {
   },
   installTranscriptionModel: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
     return post<TranscriptionInstallResult>('/transcription/install-model', input);
+  },
+  transcriptionModelStatus: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
+    return post<TranscriptionModelStatus>('/transcription/model-status', input);
   },
   transcribeFile: async (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string }) => {
     return post<TranscriptionResult>('/transcription/transcribe-file', input);

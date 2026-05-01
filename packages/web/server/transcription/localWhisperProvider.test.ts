@@ -1,4 +1,7 @@
 import { Buffer } from 'node:buffer';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { LocalWhisperTranscriptionProvider, testExports } from './localWhisperProvider.js';
 
@@ -57,6 +60,31 @@ describe('Local Whisper transcription provider', () => {
     expect(pipelineFactory).toHaveBeenCalledWith('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
       cache_dir: '/tmp/pa-models',
       quantized: true,
+    });
+  });
+
+  it('reports whether the selected model is installed in the local cache', async () => {
+    const modelRootPath = join(tmpdir(), `pa-model-status-${Date.now()}`);
+    const modelPath = join(modelRootPath, 'Xenova', 'whisper-tiny.en');
+    const provider = new LocalWhisperTranscriptionProvider({
+      model: 'tiny.en',
+      modelRootPath,
+      pipelineFactory: vi.fn() as never,
+    });
+
+    await expect(provider.getModelStatus()).resolves.toMatchObject({
+      provider: 'local-whisper',
+      model: 'tiny.en',
+      cacheDir: modelRootPath,
+      installed: false,
+    });
+
+    await mkdir(modelPath, { recursive: true });
+    await writeFile(join(modelPath, 'config.json'), '{}');
+
+    await expect(provider.getModelStatus()).resolves.toMatchObject({
+      installed: true,
+      sizeBytes: 2,
     });
   });
 });

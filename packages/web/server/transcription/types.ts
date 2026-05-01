@@ -45,6 +45,14 @@ export interface TranscriptionInstallResult {
   cacheDir: string;
 }
 
+export interface TranscriptionModelStatus {
+  provider: TranscriptionProviderId;
+  model: string;
+  cacheDir: string;
+  installed: boolean;
+  sizeBytes?: number;
+}
+
 export type TranscriptionStreamEvent =
   | { type: 'delta'; delta: string }
   | { type: 'done'; text: string; result: TranscriptionResult }
@@ -56,6 +64,7 @@ export interface TranscriptionProvider {
   transports: TranscriptionTransport[];
   isAvailable(): Promise<boolean>;
   installModel?(): Promise<TranscriptionInstallResult>;
+  getModelStatus?(): Promise<TranscriptionModelStatus>;
   transcribeFile?(input: TranscriptionFileInput, options?: TranscriptionOptions): Promise<TranscriptionResult>;
   stream?(chunks: AsyncIterable<TranscriptionAudioChunk>, options?: TranscriptionOptions): AsyncIterable<TranscriptionStreamEvent>;
 }
