@@ -1,4 +1,4 @@
-export type TranscriptionProviderId = 'openai-codex-realtime' | 'openai-api' | 'whisperkit-local';
+export type TranscriptionProviderId = 'local-whisper';
 
 export type TranscriptionTransport = 'stream' | 'file';
 

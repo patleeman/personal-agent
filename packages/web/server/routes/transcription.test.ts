@@ -60,16 +60,16 @@ describe('registerTranscriptionRoutes', () => {
 
     patchHandler({
       body: {
-        provider: 'openai-codex-realtime',
-        model: 'gpt-4o-mini-transcribe',
+        provider: 'local-whisper',
+        model: 'base.en',
       },
     }, res);
 
     expect(persistSettingsWriteMock).toHaveBeenCalledTimes(1);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       settings: {
-        provider: 'openai-codex-realtime',
-        model: 'gpt-4o-mini-transcribe',
+        provider: 'local-whisper',
+        model: 'base.en',
       },
     }));
   });
@@ -82,7 +82,7 @@ describe('registerTranscriptionRoutes', () => {
   it('returns a client error for malformed transcription file base64', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-transcription-route-'));
     const settingsFile = join(root, 'settings.json');
-    writeFileSync(settingsFile, JSON.stringify({ transcription: { provider: 'openai-api' } }));
+    writeFileSync(settingsFile, JSON.stringify({ transcription: { provider: 'local-whisper' } }));
     const { postHandler } = createHarness(settingsFile);
     const res = createResponse();
 

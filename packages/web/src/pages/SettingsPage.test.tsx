@@ -242,7 +242,7 @@ describe('SettingsPage', () => {
 
       if (fetcher === api.transcriptionSettings) {
         return buildUseApiResult({
-          settings: { provider: null, model: 'gpt-4o-mini-transcribe' },
+          settings: { provider: 'local-whisper', model: 'base.en' },
           providers: [],
         });
       }

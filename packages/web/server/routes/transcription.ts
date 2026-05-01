@@ -53,7 +53,7 @@ export function registerTranscriptionRoutes(
 
       if ('provider' in body) {
         if (body.provider !== null && !isTranscriptionProviderId(body.provider)) {
-          res.status(400).json({ error: 'provider must be one of openai-codex-realtime, openai-api, whisperkit-local, or null' });
+          res.status(400).json({ error: 'provider must be local-whisper or null' });
           return;
         }
         update.provider = body.provider;

@@ -1,25 +1,17 @@
-import { createModelRegistryForAuthFile } from '../models/modelRegistry.js';
-import { OpenAITranscriptionProvider } from './openaiApiProvider.js';
-import { OpenAICodexRealtimeTranscriptionProvider } from './openaiCodexRealtimeProvider.js';
-import { PlannedTranscriptionProvider, StaticTranscriptionProviderRegistry } from './registry.js';
+import { dirname, join } from 'node:path';
+import { LocalWhisperTranscriptionProvider } from './localWhisperProvider.js';
+import { StaticTranscriptionProviderRegistry } from './registry.js';
 import type { TranscriptionProviderRegistry, TranscriptionSettings } from './types.js';
 
 export function createTranscriptionProviderRegistry(input: {
   authFile: string;
   settings: TranscriptionSettings;
 }): TranscriptionProviderRegistry {
-  const modelRegistry = createModelRegistryForAuthFile(input.authFile);
-
   return new StaticTranscriptionProviderRegistry([
-    new OpenAICodexRealtimeTranscriptionProvider({
-      modelRegistry,
+    new LocalWhisperTranscriptionProvider({
       model: input.settings.model,
+      modelRootPath: join(dirname(input.authFile), 'transcription-models'),
     }),
-    new OpenAITranscriptionProvider({
-      modelRegistry,
-      model: input.settings.model,
-    }),
-    new PlannedTranscriptionProvider('whisperkit-local', 'WhisperKit local', ['file', 'stream']),
   ]);
 }
 

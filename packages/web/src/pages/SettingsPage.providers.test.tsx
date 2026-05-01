@@ -253,8 +253,8 @@ describe('SettingsPage provider model editor', () => {
     });
     const transcriptionSettingsResult = buildUseApiResult({
       settings: {
-        provider: null,
-        model: 'gpt-4o-mini-transcribe',
+        provider: 'local-whisper',
+        model: 'base.en',
       },
       providers: [],
     });

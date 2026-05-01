@@ -361,14 +361,6 @@ export const api = {
     return patch<TranscriptionSettingsState>('/transcription/settings', input);
   },
   transcribeFile: async (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string }) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      const settings = await get<TranscriptionSettingsState>('/transcription/settings');
-      if (settings.settings.provider === 'openai-codex-realtime') {
-        return desktopBridge.transcribeFile(input);
-      }
-    }
-
     return post<TranscriptionResult>('/transcription/transcribe-file', input);
   },
   syncKnowledgeBase: async () => {

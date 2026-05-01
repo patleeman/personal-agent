@@ -94,9 +94,7 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
 ];
 
 const TRANSCRIPTION_MODEL_OPTIONS: Record<TranscriptionProviderId, string[]> = {
-  'openai-codex-realtime': ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe'],
-  'openai-api': ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1'],
-  'whisperkit-local': ['openai_whisper-base', 'openai_whisper-small', 'openai_whisper-medium'],
+  'local-whisper': ['tiny.en', 'base.en', 'small.en', 'medium.en'],
 };
 
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
@@ -1511,7 +1509,7 @@ export function SettingsPage() {
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [transcriptionProviderDraft, setTranscriptionProviderDraft] = useState<TranscriptionProviderId | ''>('');
-  const [transcriptionModelDraft, setTranscriptionModelDraft] = useState('gpt-4o-mini-transcribe');
+  const [transcriptionModelDraft, setTranscriptionModelDraft] = useState('base.en');
   const [savingTranscription, setSavingTranscription] = useState(false);
   const [transcriptionSaveError, setTranscriptionSaveError] = useState<string | null>(null);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
@@ -3453,7 +3451,7 @@ export function SettingsPage() {
                       }}
                       disabled={savingTranscription}
                       className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      placeholder="gpt-4o-mini-transcribe"
+                      placeholder="base.en"
                       autoComplete="off"
                       spellCheck={false}
                     />
@@ -3462,7 +3460,7 @@ export function SettingsPage() {
                         <option key={model} value={model} />
                       ))}
                     </datalist>
-                    <p className="ui-card-meta">Pick a known model from the dropdown or type a custom id.</p>
+                    <p className="ui-card-meta">First use downloads the selected Whisper model and builds whisper.cpp locally. base.en is the sane default.</p>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
@@ -3474,9 +3472,7 @@ export function SettingsPage() {
                       </button>
                     </div>
 
-                    <p className="ui-card-meta">
-                      Implemented now: OpenAI Codex Realtime. Planned adapters: OpenAI API and WhisperKit local.
-                    </p>
+                    <p className="ui-card-meta">Runs fully local through whisper.cpp. No OpenAI dictation backend, because apparently we enjoy dignity.</p>
                   </form>
                 ) : null}
 

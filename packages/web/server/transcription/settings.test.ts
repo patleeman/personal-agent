@@ -9,41 +9,48 @@ import {
 } from './settings.js';
 
 describe('transcription settings', () => {
-  it('defaults to no provider and codex transcribe model', () => {
+  it('defaults to local Whisper and the base English model', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
     expect(readTranscriptionSettings(settingsFile)).toEqual({
-      provider: null,
-      model: 'gpt-4o-mini-transcribe',
+      provider: 'local-whisper',
+      model: 'base.en',
     });
   });
 
-  it('persists explicit provider configuration without auto resolution', () => {
+  it('persists explicit provider configuration without touching other settings', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
     writeFileSync(settingsFile, JSON.stringify({ theme: 'cobalt2' }));
 
     const settings = writeTranscriptionSettings(settingsFile, {
-      provider: 'openai-codex-realtime',
-      model: 'gpt-4o-mini-transcribe',
+      provider: 'local-whisper',
+      model: 'small.en',
     });
 
-    expect(settings).toEqual({ provider: 'openai-codex-realtime', model: 'gpt-4o-mini-transcribe' });
+    expect(settings).toEqual({ provider: 'local-whisper', model: 'small.en' });
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toMatchObject({
       theme: 'cobalt2',
       transcription: settings,
     });
   });
 
-  it('documents provider implementation status in state', () => {
+  it('allows explicitly disabling dictation', () => {
+    const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
+
+    expect(writeTranscriptionSettings(settingsFile, { provider: null })).toEqual({
+      provider: null,
+      model: 'base.en',
+    });
+  });
+
+  it('documents the local provider in state', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
     const state = buildTranscriptionSettingsState(settingsFile);
 
-    expect(state.providers).toContainEqual({
-      id: 'openai-codex-realtime',
-      label: 'OpenAI Codex Transcribe',
+    expect(state.providers).toEqual([{
+      id: 'local-whisper',
+      label: 'Local Whisper',
       status: 'implemented',
       transports: ['file'],
-    });
-    expect(state.providers.find((provider) => provider.id === 'openai-api')?.status).toBe('implemented');
-    expect(state.providers.find((provider) => provider.id === 'whisperkit-local')?.status).toBe('planned');
+    }]);
   });
 });

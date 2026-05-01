@@ -1302,7 +1302,7 @@ export interface WorkspaceDiffOverlay extends WorkspaceRootSnapshot {
 
 // ── Transcription / dictation ───────────────────────────────────────────────
 
-export type TranscriptionProviderId = 'openai-codex-realtime' | 'openai-api' | 'whisperkit-local';
+export type TranscriptionProviderId = 'local-whisper';
 
 export interface TranscriptionSettings {
   provider: TranscriptionProviderId | null;

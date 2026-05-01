@@ -29,6 +29,7 @@ await build({
     '@personal-agent/core',
     '@personal-agent/daemon',
     '@mariozechner/pi-coding-agent',
+    '@xenova/transformers',
     'better-sqlite3',
     'electron',
     'jsdom',

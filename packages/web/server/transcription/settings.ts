@@ -3,12 +3,11 @@ import { dirname } from 'node:path';
 import type { TranscriptionProviderId, TranscriptionSettings } from './types.js';
 
 export const TRANSCRIPTION_PROVIDER_IDS: TranscriptionProviderId[] = [
-  'openai-codex-realtime',
-  'openai-api',
-  'whisperkit-local',
+  'local-whisper',
 ];
 
-export const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
+export const DEFAULT_TRANSCRIPTION_MODEL = 'base.en';
+export const DEFAULT_TRANSCRIPTION_PROVIDER: TranscriptionProviderId = 'local-whisper';
 
 export interface TranscriptionSettingsState {
   settingsFile: string;
@@ -31,7 +30,11 @@ export function isTranscriptionProviderId(value: unknown): value is Transcriptio
 
 export function normalizeTranscriptionSettings(value: unknown): TranscriptionSettings {
   const input = isRecord(value) ? value : {};
-  const provider = isTranscriptionProviderId(input.provider) ? input.provider : null;
+  const provider = 'provider' in input
+    ? isTranscriptionProviderId(input.provider)
+      ? input.provider
+      : null
+    : DEFAULT_TRANSCRIPTION_PROVIDER;
   const model = typeof input.model === 'string' && input.model.trim().length > 0
     ? input.model.trim()
     : DEFAULT_TRANSCRIPTION_MODEL;
@@ -76,22 +79,10 @@ export function buildTranscriptionSettingsState(settingsFile: string): Transcrip
     settings: readTranscriptionSettings(settingsFile),
     providers: [
       {
-        id: 'openai-codex-realtime',
-        label: 'OpenAI Codex Transcribe',
+        id: 'local-whisper',
+        label: 'Local Whisper',
         status: 'implemented',
         transports: ['file'],
-      },
-      {
-        id: 'openai-api',
-        label: 'OpenAI API transcription',
-        status: 'implemented',
-        transports: ['file'],
-      },
-      {
-        id: 'whisperkit-local',
-        label: 'WhisperKit local',
-        status: 'planned',
-        transports: ['file', 'stream'],
       },
     ],
   };

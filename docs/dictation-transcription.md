@@ -1,6 +1,6 @@
 # Dictation transcription
 
-PA dictation uses an explicit transcription provider setting. There is intentionally no auto-provider resolution: if dictation is enabled, the selected provider is the one used, and failures stay visible.
+PA dictation is local-first. The composer captures microphone audio as 16 kHz mono PCM, sends it to the server, and the server transcribes it with a local Whisper model via Transformers.js/ONNX Runtime. No OpenAI dictation backend is used.
 
 ## Settings
 
@@ -9,8 +9,8 @@ Runtime settings live in the normal web/profile `settings.json` file under `tran
 ```json
 {
   "transcription": {
-    "provider": "openai-codex-realtime",
-    "model": "gpt-4o-mini-transcribe"
+    "provider": "local-whisper",
+    "model": "base.en"
   }
 }
 ```
@@ -19,11 +19,18 @@ Supported provider ids:
 
 | Provider | Status | Transports | Notes |
 | --- | --- | --- | --- |
-| `openai-codex-realtime` | implemented | file | Historical id. Uses configured `openai-codex` auth and the ChatGPT/Codex `/backend-api/transcribe` endpoint. |
-| `openai-api` | planned | file, stream | Should adapt the official OpenAI audio/realtime APIs. Not implemented yet. |
-| `whisperkit-local` | planned | file, stream | Should call a local Swift/WhisperKit helper on macOS and native WhisperKit on iOS. Not implemented yet. |
+| `local-whisper` | implemented | file | Runs `Xenova/whisper-*` models locally through Transformers.js. Models are downloaded into the runtime `transcription-models/` cache on first use. |
 
-The current composer flow is batch dictation: record audio, stop, transcribe, then insert the final text. The provider abstraction already has a streaming transport, but the UI does not consume partial transcript events yet. Streaming dictation should use a realtime provider adapter that accepts PCM chunks and emits `delta` / `done` events; the existing Codex upload endpoint is not that API.
+Recommended models:
+
+- `tiny.en`: fastest smoke-test / low accuracy.
+- `base.en`: default; good enough for short dictation.
+- `small.en`: better accuracy, slower first load and inference.
+- `medium.en`: heavier local option.
+
+The provider still accepts legacy model ids like `openai_whisper-base` and normalizes them to Whisper model names.
+
+## Request flow
 
 The settings API is:
 
@@ -33,18 +40,18 @@ PATCH /api/transcription/settings
 POST  /api/transcription/transcribe-file
 ```
 
-`POST /api/transcription/transcribe-file` currently accepts JSON:
+`POST /api/transcription/transcribe-file` accepts JSON:
 
 ```json
 {
   "dataBase64": "...",
-  "mimeType": "audio/webm;codecs=opus",
-  "fileName": "dictation.webm",
+  "mimeType": "audio/pcm;rate=16000;channels=1",
+  "fileName": "dictation.pcm",
   "language": "en"
 }
 ```
 
-The web composer records with `MediaRecorder` and prefers `audio/webm;codecs=opus`, matching Codex desktop’s upload-style dictation path. The server forwards the captured file as multipart form-data to the selected provider.
+The web composer no longer uses `MediaRecorder`/WebM for dictation. It uses `AudioContext`, resamples to 16 kHz mono PCM, and sends raw little-endian PCM16 bytes. This avoids server-side ffmpeg, native compiler toolchains, and cloud transcription services.
 
 ## Provider abstraction
 
@@ -61,30 +68,4 @@ interface TranscriptionProvider {
 }
 ```
 
-This keeps the composer and iOS UI dumb: record audio, pass chunks or a normalized file to the selected provider, insert returned text. New models should add a provider adapter instead of leaking backend-specific protocol into the UI.
-
-## Codex transcribe notes
-
-Codex desktop dictation uses an upload endpoint rather than the realtime websocket endpoint. PA mirrors that shape for the `openai-codex-realtime` provider id:
-
-```text
-POST https://chatgpt.com/backend-api/transcribe
-Content-Type: multipart/form-data; boundary=...
-Authorization: Bearer <openai-codex token>
-originator: codex_cli_rs
-
-file=<audio blob>
-language=<optional>
-```
-
-The normal `openai-codex` provider base URL in PA is often `https://chatgpt.com/backend-api`; the adapter normalizes that to `/backend-api/transcribe`. If a custom base URL ends in `/backend-api/codex`, the adapter also normalizes it back to `/backend-api/transcribe` because this endpoint is not under the `/codex` path.
-
-The normal expected response is:
-
-```json
-{ "text": "transcribed text" }
-```
-
-PA also accepts a few common transcript response shapes (`transcript`, `transcription`, and arrays of segment objects with `text`) so provider quirks do not silently produce an empty insertion. Empty transcripts are treated as visible failures instead of showing “Dictation inserted.”
-
-The Settings “model” field remains provider configuration for future adapters, but Codex’s current `/transcribe` endpoint does not expose a model parameter in the observed desktop-app request shape.
+The current UI is still batch dictation: record audio, stop, transcribe, then insert the final text. Streaming dictation can reuse the same PCM capture path later by sending chunks instead of one final buffer.
