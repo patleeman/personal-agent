@@ -945,16 +945,7 @@ export class PersonalAgentDaemon {
     };
     this.activeBackgroundRuns.set(record.runId, handle);
 
-    await markBackgroundRunStarted({
-      runId: record.runId,
-      runPaths: record.paths,
-      startedAt,
-      pid: child.pid ?? -1,
-      taskSlug: input.taskSlug,
-      cwd: input.cwd,
-    });
-
-    child.once('exit', (code, signal) => {
+    const finalizeExitedRun = (code: number | null, signal: NodeJS.Signals | null) => {
       handle.settled = true;
       if (handle.forceKillTimer) {
         clearTimeout(handle.forceKillTimer);
@@ -982,7 +973,33 @@ export class PersonalAgentDaemon {
         .finally(() => {
           outputStream.end();
         });
+    };
+
+    let exitBeforeStartMarked: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+    let startMarked = false;
+    child.once('exit', (code, signal) => {
+      if (!startMarked) {
+        exitBeforeStartMarked = { code, signal };
+        return;
+      }
+
+      finalizeExitedRun(code, signal);
     });
+
+    await markBackgroundRunStarted({
+      runId: record.runId,
+      runPaths: record.paths,
+      startedAt,
+      pid: child.pid ?? -1,
+      taskSlug: input.taskSlug,
+      cwd: input.cwd,
+    });
+
+    startMarked = true;
+    if (exitBeforeStartMarked) {
+      const exitInfo: { code: number | null; signal: NodeJS.Signals | null } = exitBeforeStartMarked;
+      finalizeExitedRun(exitInfo.code, exitInfo.signal);
+    }
 
     this.log('info', `background run started id=${record.runId} pid=${String(child.pid ?? 'n/a')} cwd=${input.cwd}`);
     return {
@@ -1109,7 +1126,7 @@ export class PersonalAgentDaemon {
     const runs = scanDurableRunsForRecovery(this.runsRoot);
 
     await Promise.all(runs.map(async (run) => {
-      if (run.manifest?.kind !== 'background-run') {
+      if (run.manifest?.kind !== 'background-run' && run.manifest?.kind !== 'raw-shell') {
         return;
       }
 

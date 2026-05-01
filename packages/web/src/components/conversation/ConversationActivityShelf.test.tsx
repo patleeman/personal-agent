@@ -32,6 +32,7 @@ describe('ConversationActivityShelf', () => {
         showBackgroundRunDetails
         runLookups={{}}
         onToggleBackgroundRunDetails={vi.fn()}
+        onCancelBackgroundRun={vi.fn()}
         deferredResumes={[]}
         deferredResumeIndicatorText="none"
         deferredResumeNowMs={Date.parse('2026-04-01T09:00:00.000Z')}
@@ -49,6 +50,7 @@ describe('ConversationActivityShelf', () => {
     expect(html).toContain('Background Work');
     expect(html).toContain('running · code-review');
     expect(html).toContain('code-review');
+    expect(html).toContain('cancel');
     expect(html).toContain('hide');
   });
 

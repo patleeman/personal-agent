@@ -1898,6 +1898,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
+  const [cancellingBackgroundRunIds, setCancellingBackgroundRunIds] = useState<Set<string>>(() => new Set());
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -1918,6 +1919,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, [draft, runs, setRuns]);
+
+  const cancelBackgroundRunFromShelf = useCallback((runId: string) => {
+    const normalizedRunId = runId.trim();
+    if (!normalizedRunId) {
+      return;
+    }
+
+    setCancellingBackgroundRunIds((current) => new Set(current).add(normalizedRunId));
+    void api.cancelDurableRun(normalizedRunId)
+      .then(() => api.runs())
+      .then((result) => { setRuns(result); })
+      .catch(() => {})
+      .finally(() => {
+        setCancellingBackgroundRunIds((current) => {
+          const next = new Set(current);
+          next.delete(normalizedRunId);
+          return next;
+        });
+      });
+  }, [setRuns]);
 
   useEffect(() => {
     if (autocompleteCatalogDemand.needsMemoryData) {
@@ -6023,7 +6044,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     backgroundRunIndicatorText={backgroundRunIndicatorText}
                     showBackgroundRunDetails={showActiveBackgroundRunDetails}
                     runLookups={runLookups}
+                    cancellingBackgroundRunIds={cancellingBackgroundRunIds}
                     onToggleBackgroundRunDetails={() => { setShowBackgroundRunDetails((open) => !open); }}
+                    onCancelBackgroundRun={cancelBackgroundRunFromShelf}
                     deferredResumes={orderedDeferredResumes}
                     deferredResumeIndicatorText={deferredResumeIndicatorText}
                     deferredResumeNowMs={deferredResumeNowMs}

@@ -14,7 +14,9 @@ export function ConversationActivityShelf({
   backgroundRunIndicatorText,
   showBackgroundRunDetails,
   runLookups,
+  cancellingBackgroundRunIds,
   onToggleBackgroundRunDetails,
+  onCancelBackgroundRun,
   deferredResumes,
   deferredResumeIndicatorText,
   deferredResumeNowMs,
@@ -31,7 +33,9 @@ export function ConversationActivityShelf({
   backgroundRunIndicatorText: string;
   showBackgroundRunDetails: boolean;
   runLookups: RunPresentationLookups;
+  cancellingBackgroundRunIds?: Set<string>;
   onToggleBackgroundRunDetails: () => void;
+  onCancelBackgroundRun?: (runId: string) => void;
   deferredResumes: DeferredResumeSummary[];
   deferredResumeIndicatorText: string;
   deferredResumeNowMs: number;
@@ -80,6 +84,7 @@ export function ConversationActivityShelf({
                   : run.status?.status === 'queued' || run.status?.status === 'waiting'
                     ? 'text-dim'
                     : 'text-accent';
+                const cancelling = cancellingBackgroundRunIds?.has(run.runId) ?? false;
 
                 return (
                   <div key={run.runId} className="flex items-start gap-3 text-[12px]">
@@ -90,6 +95,16 @@ export function ConversationActivityShelf({
                       </div>
                       <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
                     </div>
+                    {onCancelBackgroundRun && (
+                      <button
+                        type="button"
+                        onClick={() => { onCancelBackgroundRun(run.runId); }}
+                        className="shrink-0 text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
+                        disabled={cancelling}
+                      >
+                        {cancelling ? 'cancelling…' : 'cancel'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
