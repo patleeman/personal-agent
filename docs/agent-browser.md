@@ -2,7 +2,7 @@
 
 `agent-browser` is a CLI/dev validation tool. It is separate from the Electron desktop app's built-in Workbench Browser tab.
 
-Use the built-in Workbench Browser for product UI behavior and browser comments. Use `agent-browser` when developing or validating the app from an agent-run shell. Do not treat `agent-browser` sessions as the same browser session shown in the Workbench Browser unless a future bridge explicitly unifies them.
+Use the built-in Workbench Browser as a communication surface: Patrick can show a page, attach browser comments, and let the agent inspect or act on that same visible conversation-scoped page. Use `agent-browser` when developing, validating, smoke-testing, or automating the app from an agent-run shell. Do not treat `agent-browser` sessions as the same browser session shown in the Workbench Browser unless a future bridge explicitly unifies them.
 
 Use `agent-browser` through the repo wrapper instead of calling it raw.
 

@@ -25,9 +25,11 @@ It is for:
 
 - letting Patrick browse a page beside a conversation
 - letting Patrick right-click page elements and attach comments to the next prompt
-- eventually giving agents a visible browser surface inside the app
+- giving agents and Patrick a shared, visible page context for communication
 
 It is not a general-purpose replacement for Chrome, and it should not expose agent/debug controls directly to normal users.
+
+This distinction matters in prompts: the built-in browser tools are a **communication tool**. Use them when Patrick is showing the agent a page, asking about the visible Workbench Browser, or wants the agent to act on the same page he can see. Do not treat them as the default development automation harness.
 
 ## User-facing behavior
 
@@ -69,6 +71,8 @@ There is one browser session per conversation workbench and three agent-facing b
 - `browser_screenshot` — capture the current browser viewport as an image
 
 These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
+
+Use these tools for shared conversation context. If the task is autonomous development validation, black-box UI testing, local app smoke checks, repeatable browser automation, or screenshots of the product under test, use the `agent-browser` skill/CLI through shell instead.
 
 The product model:
 
@@ -183,8 +187,8 @@ Do not show raw script/debug panels in the user Browser tab. The transcript is w
 
 Do not confuse that with the built-in Workbench Browser:
 
-- **Workbench Browser**: product UI surface in Electron; user-visible; supports comments and future built-in agent browser tools.
-- **agent-browser CLI**: external automation/dev validation tool; Playwright/CDP-backed; used by agents while developing or validating UI.
+- **Workbench Browser**: product UI surface in Electron; user-visible; shared communication context between Patrick and the agent; supports comments and built-in browser tools.
+- **agent-browser CLI**: external automation/dev validation tool; Playwright/CDP-backed; used by agents while developing, validating UI, running local smoke checks, or doing repeatable browser automation.
 
 Long term, desktop browser tools should use the Workbench Browser session directly instead of launching an unrelated `agent-browser` session.
 

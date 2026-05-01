@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWorkbenchBrowserAgentExtension, setWorkbenchBrowserToolHost } from './workbenchBrowserAgentExtension.js';
 
 function collectExtension() {
-  const tools: Array<{ name: string; execute: (...args: never[]) => Promise<unknown> }> = [];
+  const tools: Array<{ name: string; promptSnippet?: string; promptGuidelines?: string[]; execute: (...args: never[]) => Promise<unknown> }> = [];
   const handlers = new Map<string, Array<(...args: never[]) => Promise<void>>>();
   const pi = {
     registerTool: (tool: never) => tools.push(tool),
@@ -32,6 +32,18 @@ describe('workbench browser agent extension', () => {
       'browser_cdp',
       'browser_screenshot',
     ]);
+  });
+
+  it('makes the workbench-vs-agent-browser distinction explicit in tool prompts', () => {
+    const promptText = collectTools()
+      .map((tool) => [tool.promptSnippet, ...(tool.promptGuidelines ?? [])].join('\n'))
+      .join('\n\n');
+
+    expect(promptText).toContain('shared Workbench Browser');
+    expect(promptText).toContain('communication');
+    expect(promptText).toContain('development validation');
+    expect(promptText).toContain('agent-browser skill');
+    expect(promptText).toContain('through bash');
   });
 
   it('routes tools through the desktop host', async () => {
