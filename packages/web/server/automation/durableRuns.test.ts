@@ -172,6 +172,41 @@ describe('durable run reads', () => {
     });
   });
 
+  it('falls back to filesystem scan when daemon connection times out', async () => {
+    const stateRoot = createTempDir('pa-web-durable-runs-timeout-state-');
+    const daemonSocketDir = createTempDir('pa-web-durable-runs-timeout-sock-');
+    const socketPath = join(daemonSocketDir, 'personal-agentd.sock');
+
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: stateRoot,
+      PERSONAL_AGENT_DAEMON_SOCKET_PATH: socketPath,
+    };
+
+    clearDurableRunsListCache();
+    // No daemon running — client should time out and fall back to scan
+    const result = await listDurableRunsWithTelemetry();
+    expect(result.telemetry.source).toBe('scan');
+    expect(result.result.runs).toEqual([]);
+  });
+
+  it('falls back to filesystem scan when daemon socket is missing', async () => {
+    const stateRoot = createTempDir('pa-web-durable-runs-nodaemon-state-');
+    const daemonSocketDir = createTempDir('pa-web-durable-runs-nodaemon-sock-');
+    const socketPath = join(daemonSocketDir, 'missing.sock');
+
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: stateRoot,
+      PERSONAL_AGENT_DAEMON_SOCKET_PATH: socketPath,
+    };
+
+    clearDurableRunsListCache();
+    const result = await listDurableRunsWithTelemetry();
+    expect(result.telemetry.source).toBe('scan');
+    expect(result.result.runs).toEqual([]);
+  });
+
   it('returns undefined instead of throwing when daemon reports a missing run', async () => {
     const stateRoot = createTempDir('pa-web-durable-runs-state-');
     const daemonSocketDir = createTempDir('pa-web-durable-runs-sock-');

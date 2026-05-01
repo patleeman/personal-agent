@@ -592,6 +592,31 @@ describe('daemon IPC integration', () => {
     });
   });
 
+  it('returns quickly from runs.startTask even when the event bus is slow', async () => {
+    // The tasks module is disabled in the default config, so the event is published
+    // but no handler picks it up.  The key assertion is that the IPC handler
+    // returns within the client-side socket timeout (5 s) — it must not block
+    // on `bus.waitForIdle()` while event handlers run.
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const startedAt = Date.now();
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startTask',
+      taskId: 'slow-task',
+    });
+    const elapsed = Date.now() - startedAt;
+
+    expect(response.ok).toBe(true);
+    expect(elapsed).toBeLessThan(2000);
+    expect(response.result).toMatchObject({
+      accepted: false,
+      runId: expect.any(String),
+      reason: 'task run was not started',
+    });
+  });
+
   it('returns an error when a durable run is missing', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();

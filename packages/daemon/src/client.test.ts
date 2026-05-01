@@ -284,6 +284,53 @@ describe('client daemon in-process transport override', () => {
   });
 });
 
+describe('client socket timeout', () => {
+  it('returns false when daemon socket immediately closes the connection', async () => {
+    // Server accepts the connection but immediately closes it.
+    // The client should handle this gracefully.
+    const socketPath = join(createTempDir('personal-agent-daemon-timeout-'), 'daemon.sock');
+    const server = createServer((socket) => {
+      socket.on('data', () => {
+        socket.destroy();
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(socketPath, () => resolve());
+    });
+    servers.push(server);
+
+    const config = getDefaultDaemonConfig();
+    config.ipc.socketPath = socketPath;
+
+    // pingDaemon catches all errors and returns false
+    const result = await pingDaemon(config);
+    expect(result).toBe(false);
+  });
+
+  it('surfaces the closed-without-response error for non-ping requests', async () => {
+    // Server accepts the connection but immediately closes it.
+    const socketPath = join(createTempDir('personal-agent-daemon-timeout-'), 'daemon.sock');
+    const server = createServer((socket) => {
+      socket.on('data', () => {
+        socket.destroy();
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(socketPath, () => resolve());
+    });
+    servers.push(server);
+
+    const config = getDefaultDaemonConfig();
+    config.ipc.socketPath = socketPath;
+
+    await expect(getDaemonStatus(config)).rejects.toThrow('Daemon connection closed without response');
+  });
+});
+
 describe('emitDaemonEventNonFatal', () => {
   it('prints actionable warning when daemon socket is missing', async () => {
     process.env = { ...originalEnv };

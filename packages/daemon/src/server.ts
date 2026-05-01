@@ -779,7 +779,13 @@ export class PersonalAgentDaemon {
       };
     }
 
-    await this.bus.waitForIdle();
+    // Fire-and-forget: do not block the IPC handler on event processing.
+    // `waitForIdle` would hold the socket open until every queued event
+    // handler finishes — easily exceeding the client-side 5 s socket
+    // timeout when handlers are slow or the queue is deep.  Instead,
+    // give the event bus a short grace period to pick up the request
+    // and then check whether the task module created the durable run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     if (!scanDurableRun(this.runsRoot, runId)) {
       return {
