@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
-import { readStoredPanelWidth, readStoredWorkbenchExplorerOpen, resolveActiveWorkspaceCwd, shouldShowConversationRunsTab } from './Layout';
+import { readStoredPanelWidth, readStoredWorkbenchExplorerOpen, resolveActiveWorkspaceCwd, shouldResetWorkbenchRunsOnConversationChange, shouldShowConversationRunsTab } from './Layout';
 
 function createSession(overrides: Partial<SessionMeta>): SessionMeta {
   return {
@@ -55,6 +55,33 @@ describe('Layout workbench rail state', () => {
     expect(shouldShowConversationRunsTab({ runCount: 1 })).toBe(true);
     expect(shouldShowConversationRunsTab({ runCount: 0, activeRunId: 'run-1', activeRunConnected: false, runsLoaded: false })).toBe(true);
     expect(shouldShowConversationRunsTab({ runCount: 0, activeRunId: 'run-1', activeRunConnected: false, runsLoaded: true })).toBe(false);
+  });
+
+  it('resets runs mode when switching conversations', () => {
+    expect(shouldResetWorkbenchRunsOnConversationChange({
+      previousConversationId: 'conv-a',
+      activeConversationId: 'conv-b',
+      activeTool: 'runs',
+      activeRunId: null,
+    })).toBe(true);
+    expect(shouldResetWorkbenchRunsOnConversationChange({
+      previousConversationId: 'conv-a',
+      activeConversationId: 'conv-a',
+      activeTool: 'runs',
+      activeRunId: 'run-1',
+    })).toBe(false);
+    expect(shouldResetWorkbenchRunsOnConversationChange({
+      previousConversationId: 'conv-a',
+      activeConversationId: 'conv-b',
+      activeTool: 'knowledge',
+      activeRunId: null,
+    })).toBe(false);
+    expect(shouldResetWorkbenchRunsOnConversationChange({
+      previousConversationId: 'conv-a',
+      activeConversationId: 'conv-b',
+      activeTool: 'knowledge',
+      activeRunId: 'run-1',
+    })).toBe(true);
   });
 });
 

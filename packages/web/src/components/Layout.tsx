@@ -149,6 +149,19 @@ export function shouldShowConversationRunsTab(input: { runCount: number; activeR
   return input.runsLoaded === false || input.activeRunConnected === true;
 }
 
+export function shouldResetWorkbenchRunsOnConversationChange(input: {
+  previousConversationId: string | null;
+  activeConversationId: string | null;
+  activeTool: WorkbenchRailMode;
+  activeRunId: string | null;
+}): boolean {
+  if (input.previousConversationId === input.activeConversationId) {
+    return false;
+  }
+
+  return input.activeTool === 'runs' || input.activeRunId !== null;
+}
+
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
   const [desiredWidth, setDesiredWidth] = useState(() => readStoredPanelWidth(storageKey, initial, min));
 
@@ -1303,6 +1316,7 @@ export function Layout() {
     ? activeWorkbenchCheckpointFromSearch ?? selectedCheckpointByConversation[activeConversationId] ?? null
     : null;
   const activeWorkbenchRunId = activeConversationId ? activeWorkbenchRunFromSearch : null;
+  const previousActiveConversationIdRef = useRef<string | null>(activeConversationId);
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
   const setActiveConversationCheckpoint = useCallback((checkpointId: string | null) => {
@@ -1334,6 +1348,25 @@ export function Layout() {
       current && current.cwd === activeWorkspaceCwd ? current : null
     ));
   }, [activeWorkspaceCwd]);
+
+  useEffect(() => {
+    const previousConversationId = previousActiveConversationIdRef.current;
+    previousActiveConversationIdRef.current = activeConversationId;
+
+    if (shouldResetWorkbenchRunsOnConversationChange({
+      previousConversationId,
+      activeConversationId,
+      activeTool: activeWorkbenchTool,
+      activeRunId: activeWorkbenchRunFromSearch,
+    })) {
+      setActiveWorkbenchTool('knowledge');
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete('run');
+        return next;
+      }, { replace: true });
+    }
+  }, [activeConversationId, activeWorkbenchRunFromSearch, activeWorkbenchTool, setSearchParams]);
 
   useEffect(() => {
     if (!activeConversationId || !activeWorkbenchCheckpointFromSearch) {
