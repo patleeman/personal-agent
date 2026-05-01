@@ -93,6 +93,7 @@ const electronBuilderConfig = {
     entitlementsInherit: 'build/entitlements.mac.inherit.plist',
     extendInfo: {
       LSUIElement: true,
+      NSMicrophoneUsageDescription: 'Personal Agent uses the microphone to capture composer dictation.',
     },
     target: [
       {
