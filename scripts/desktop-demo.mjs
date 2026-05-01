@@ -40,6 +40,10 @@ const sessionsRoot = getDurableSessionsDir(stateRoot);
 const tasksRoot = getDurableTasksDir(configRoot);
 const daemonRoot = join(stateRoot, 'daemon');
 const runsRoot = resolveDurableRunsRoot(daemonRoot);
+const runtimeSettingsFile = join(stateRoot, 'pi-agent-runtime', 'settings.json');
+const localSettingsFile = join(configRoot, 'local', 'settings.json');
+const desktopUserDataDir = join(stateRoot, 'desktop', 'user-data');
+const initialRoute = '/conversations/demo-rich';
 
 process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 process.env.PERSONAL_AGENT_CONFIG_ROOT = configRoot;
@@ -587,6 +591,18 @@ setActivityConversationLinks({
   updatedAt: '2026-04-30T12:44:00.000Z',
 });
 
+const demoUiPreferences = {
+  ui: {
+    openConversationIds: ['demo-rich', 'demo-reminder', 'demo-parallel-parent'],
+    pinnedConversationIds: ['demo-remote'],
+    archivedConversationIds: ['demo-empty'],
+    workspacePaths: [repoRoot],
+  },
+};
+write(runtimeSettingsFile, JSON.stringify(demoUiPreferences, null, 2) + '\n');
+write(localSettingsFile, JSON.stringify(demoUiPreferences, null, 2) + '\n');
+mkdirp(desktopUserDataDir);
+
 const envFile = join(stateRoot, 'desktop-demo-env.sh');
 write(envFile, [
   `export PERSONAL_AGENT_STATE_ROOT=${JSON.stringify(stateRoot)}`,
@@ -594,12 +610,15 @@ write(envFile, [
   `export PERSONAL_AGENT_VAULT_ROOT=${JSON.stringify(vaultRoot)}`,
   `export PERSONAL_AGENT_PROFILE=${JSON.stringify(demoProfile)}`,
   `export PERSONAL_AGENT_ACTIVE_PROFILE=${JSON.stringify(demoProfile)}`,
+  `export PERSONAL_AGENT_DESKTOP_INITIAL_ROUTE=${JSON.stringify(initialRoute)}`,
+  `export PERSONAL_AGENT_DESKTOP_USER_DATA_DIR=${JSON.stringify(desktopUserDataDir)}`,
 ].join('\n') + '\n');
 
 console.log(`Desktop demo state created at ${stateRoot}`);
 console.log(`Env file: ${envFile}`);
 console.log('Launch with:');
 console.log(`  source ${envFile} && npm run desktop:start -- --no-quit-confirmation`);
+console.log(`Initial route: ${initialRoute}`);
 console.log('Seeded conversations: demo-empty, demo-normal, demo-tools, demo-running, demo-rich, demo-reminder, demo-auto-review, demo-parent, demo-subagent-child, demo-parallel-parent, demo-attention, demo-remote, demo-related-context');
 console.log('Seeded automations: demo-daily-summary, demo-follow-up-thread, demo-failed-automation');
 console.log('Seeded runs: run-demo-review, run-demo-tests, run-demo-failed');

@@ -11,7 +11,9 @@ npm run desktop:demo
 That command:
 
 - creates an isolated temporary state root
+- creates isolated desktop browser storage so stale tabs/localStorage do not leak into the demo
 - seeds curated desktop conversations
+- seeds a stable initial tab layout and opens `demo-rich`
 - seeds automations visible in the Automations UI
 - seeds durable runs visible in the Runs UI
 - seeds conversation artifacts, checkpoints, and an attachment

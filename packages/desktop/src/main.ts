@@ -122,6 +122,20 @@ async function updateDesktopAppPreferencesState(input: {
 
 app.setName(resolveDesktopLaunchPresentation().appName);
 
+const desktopUserDataDir = process.env.PERSONAL_AGENT_DESKTOP_USER_DATA_DIR?.trim();
+if (desktopUserDataDir) {
+  app.setPath('userData', resolve(desktopUserDataDir));
+}
+
+function readInitialDesktopRoute(): string {
+  const route = process.env.PERSONAL_AGENT_DESKTOP_INITIAL_ROUTE?.trim();
+  if (!route || !route.startsWith('/') || route.startsWith('//')) {
+    return '/';
+  }
+
+  return route;
+}
+
 function renderDesktopErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
@@ -493,7 +507,7 @@ async function bootstrapDesktopApp(): Promise<void> {
 
   const ready = await ensureDesktopBackendAvailable();
   if (ready && hostManager.getConfig().openWindowOnLaunch) {
-    await openMainRoute('/');
+    await openMainRoute(readInitialDesktopRoute());
   }
 }
 
