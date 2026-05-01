@@ -8,6 +8,7 @@ import {
   scrollConversationTailIntoView,
   shouldAutoScrollToStreamingTail,
   shouldContinueConversationBottomSettle,
+  shouldPreservePinnedBottomDuringAutoScroll,
   shouldRunConversationInitialScroll,
 } from '../conversation/conversationScroll';
 import type { MessageBlock } from '../shared/types';
@@ -253,6 +254,20 @@ export function useConversationScroll({
         scrollTop: el.scrollTop,
         clientHeight: el.clientHeight,
       });
+
+    // Opening large/windowed transcripts can fire scroll events while the DOM is
+    // still replacing estimated spacer heights with measured ones. Those are
+    // not user intent; if we treat them as detachments, the settle loop gets
+    // cancelled and the viewport can strand itself in the middle of the page.
+    if (shouldPreservePinnedBottomDuringAutoScroll({
+      wasPinnedToBottom: scrollPinnedToBottomRef.current,
+      isAutoScrollActive: bottomScrollAnimationFrameRef.current !== 0 || pinnedBottomWatchFrameRef.current !== 0,
+      nextAtBottom,
+    })) {
+      setAtBottom(true);
+      return;
+    }
+
     if (!nextAtBottom) {
       cancelBottomScrollSettle();
       cancelPinnedBottomWatch();

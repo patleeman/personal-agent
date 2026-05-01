@@ -9,6 +9,7 @@ import {
   scrollConversationTailIntoView,
   shouldAutoScrollToStreamingTail,
   shouldContinueConversationBottomSettle,
+  shouldPreservePinnedBottomDuringAutoScroll,
   shouldRunConversationInitialScroll,
   shouldShowScrollToBottomControl,
 } from './conversationScroll.js';
@@ -220,6 +221,32 @@ describe('conversation scroll helpers', () => {
       initialScrollKey: null,
       hasMessages: true,
       sessionLoading: false,
+    })).toBe(false);
+  });
+
+  it('preserves bottom pinning during transient auto-scroll layout churn', () => {
+    expect(shouldPreservePinnedBottomDuringAutoScroll({
+      wasPinnedToBottom: true,
+      isAutoScrollActive: true,
+      nextAtBottom: false,
+    })).toBe(true);
+
+    expect(shouldPreservePinnedBottomDuringAutoScroll({
+      wasPinnedToBottom: false,
+      isAutoScrollActive: true,
+      nextAtBottom: false,
+    })).toBe(false);
+
+    expect(shouldPreservePinnedBottomDuringAutoScroll({
+      wasPinnedToBottom: true,
+      isAutoScrollActive: false,
+      nextAtBottom: false,
+    })).toBe(false);
+
+    expect(shouldPreservePinnedBottomDuringAutoScroll({
+      wasPinnedToBottom: true,
+      isAutoScrollActive: true,
+      nextAtBottom: true,
     })).toBe(false);
   });
 

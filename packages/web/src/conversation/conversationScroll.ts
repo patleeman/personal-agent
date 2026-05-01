@@ -140,6 +140,14 @@ export function shouldRunConversationInitialScroll(input: {
   return Boolean(input.initialScrollKey) && input.hasMessages;
 }
 
+export function shouldPreservePinnedBottomDuringAutoScroll(input: {
+  wasPinnedToBottom: boolean;
+  isAutoScrollActive: boolean;
+  nextAtBottom: boolean;
+}): boolean {
+  return input.wasPinnedToBottom && input.isAutoScrollActive && !input.nextAtBottom;
+}
+
 export function shouldContinueConversationBottomSettle(
   state: {
     frameCount: number;
