@@ -1,6 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pipeline } from '@xenova/transformers';
 import type { AutomaticSpeechRecognitionPipelineType } from '@xenova/transformers/types/pipelines.js';
 import type { TranscriptionFileInput, TranscriptionInstallResult, TranscriptionModelStatus, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
 
@@ -29,7 +28,7 @@ const MODEL_REPOS: Record<string, string> = {
   'medium.en': 'Xenova/whisper-medium.en',
 };
 
-type AsrPipelineFactory = typeof pipeline;
+type AsrPipelineFactory = typeof import('@xenova/transformers').pipeline;
 
 interface LocalWhisperTranscriptionProviderOptions {
   model?: string;
@@ -71,7 +70,7 @@ function pcm16ToFloat32(data: Buffer): Float32Array {
 async function getAsrPipeline(input: {
   model: string;
   modelRootPath: string;
-  pipelineFactory: AsrPipelineFactory;
+  pipelineFactory?: AsrPipelineFactory;
 }): Promise<AutomaticSpeechRecognitionPipelineType> {
   const repo = resolveLocalWhisperModelRepo(input.model);
   const key = `${input.modelRootPath}:${repo}`;
@@ -80,12 +79,18 @@ async function getAsrPipeline(input: {
     return cached;
   }
 
-  const created = input.pipelineFactory('automatic-speech-recognition', repo, {
+  const pipelineFactory = input.pipelineFactory ?? (await loadDefaultPipelineFactory());
+  const created = pipelineFactory('automatic-speech-recognition', repo, {
     cache_dir: input.modelRootPath,
     quantized: true,
   }) as Promise<AutomaticSpeechRecognitionPipelineType>;
   pipelineCache.set(key, created);
   return created;
+}
+
+async function loadDefaultPipelineFactory(): Promise<AsrPipelineFactory> {
+  const transformers = await import('@xenova/transformers');
+  return transformers.pipeline;
 }
 
 async function readDirectorySize(path: string): Promise<number | null> {
@@ -126,12 +131,12 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
   readonly transports: Array<'file'> = ['file'];
   private readonly model: string;
   private readonly modelRootPath: string;
-  private readonly pipelineFactory: AsrPipelineFactory;
+  private readonly pipelineFactory?: AsrPipelineFactory;
 
   constructor(options: LocalWhisperTranscriptionProviderOptions) {
     this.model = normalizeLocalWhisperModel(options.model);
     this.modelRootPath = options.modelRootPath;
-    this.pipelineFactory = options.pipelineFactory ?? pipeline;
+    this.pipelineFactory = options.pipelineFactory;
   }
 
   async isAvailable(): Promise<boolean> {
