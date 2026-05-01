@@ -19,6 +19,7 @@ import type { PersonalAgentDaemon } from './server.js';
 export interface DaemonClientTransport {
   ping(config?: DaemonConfig): Promise<boolean>;
   getStatus(config?: DaemonConfig): Promise<DaemonStatus>;
+  setPowerKeepAwake(keepAwake: boolean, config?: DaemonConfig): Promise<DaemonStatus>;
   getCompanionUrl?(config?: DaemonConfig): Promise<string | null>;
   stop(config?: DaemonConfig): Promise<void>;
   listDurableRuns(config?: DaemonConfig): Promise<ListDurableRunsResult>;
@@ -61,6 +62,7 @@ export function createInProcessDaemonClient(daemon: PersonalAgentDaemon): Daemon
   return {
     ping: async () => daemon.isRunning(),
     getStatus: async () => daemon.getStatus(),
+    setPowerKeepAwake: async (keepAwake) => daemon.updatePowerConfig({ keepAwake }),
     getCompanionUrl: async () => daemon.getCompanionUrl(),
     stop: async () => {
       await daemon.requestStop();

@@ -36,6 +36,12 @@ export interface PingRequest {
   type: 'ping';
 }
 
+export interface SetDaemonPowerKeepAwakeRequest {
+  id: string;
+  type: 'power.setKeepAwake';
+  keepAwake: boolean;
+}
+
 export interface ListDurableRunsRequest {
   id: string;
   type: 'runs.list';
@@ -94,6 +100,7 @@ export type DaemonRequest =
   | StatusRequest
   | StopRequest
   | PingRequest
+  | SetDaemonPowerKeepAwakeRequest
   | ListDurableRunsRequest
   | GetDurableRunRequest
   | StartScheduledTaskRunRequest
@@ -364,6 +371,18 @@ export function parseRequest(raw: string): DaemonRequest {
     return {
       id: parsed.id,
       type: 'conversations.recoverable',
+    };
+  }
+
+  if (parsed.type === 'power.setKeepAwake') {
+    if (typeof parsed.keepAwake !== 'boolean') {
+      throw new Error('power.setKeepAwake keepAwake must be a boolean');
+    }
+
+    return {
+      id: parsed.id,
+      type: 'power.setKeepAwake',
+      keepAwake: parsed.keepAwake,
     };
   }
 

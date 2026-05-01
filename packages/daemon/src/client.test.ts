@@ -16,6 +16,7 @@ import {
   listRecoverableWebLiveConversationRunsFromDaemon,
   pingDaemon,
   rerunDurableRun,
+  setDaemonPowerKeepAwake,
   startBackgroundRun,
   startScheduledTaskRun,
   stopDaemon,
@@ -113,6 +114,8 @@ describe('client daemon ipc helpers', () => {
           return { ok: true, result: status };
         case 'stop':
           return { ok: true, result: { stopping: true } };
+        case 'power.setKeepAwake':
+          return { ok: true, result: { ...status, power: { keepAwake: request.keepAwake, supported: true, active: request.keepAwake } } };
         case 'runs.list':
           return { ok: true, result: runsList };
         case 'runs.get':
@@ -140,6 +143,7 @@ describe('client daemon ipc helpers', () => {
 
     await expect(pingDaemon(config)).resolves.toBe(true);
     await expect(getDaemonStatus(config)).resolves.toEqual(status);
+    await expect(setDaemonPowerKeepAwake(true, config)).resolves.toEqual({ ...status, power: { keepAwake: true, supported: true, active: true } });
     await expect(stopDaemon(config)).resolves.toBeUndefined();
     await expect(listDurableRuns(config)).resolves.toEqual(runsList);
     await expect(getDurableRun('run-1', config)).resolves.toEqual(durableRun);
@@ -184,6 +188,7 @@ describe('client daemon ipc helpers', () => {
     expect(requests.map((request) => request.type)).toEqual([
       'ping',
       'status',
+      'power.setKeepAwake',
       'stop',
       'runs.list',
       'runs.get',
@@ -197,10 +202,10 @@ describe('client daemon ipc helpers', () => {
       'conversations.recoverable',
       'emit',
     ]);
-    expect(requests[9]).toMatchObject({ type: 'runs.followUp', runId: 'run-1', prompt: 'continue this run' });
-    expect(requests[10]).toMatchObject({ type: 'runs.followUp', runId: 'run-2' });
-    expect(requests[10]).not.toHaveProperty('prompt');
-    expect(requests[13]).toMatchObject({
+    expect(requests[10]).toMatchObject({ type: 'runs.followUp', runId: 'run-1', prompt: 'continue this run' });
+    expect(requests[11]).toMatchObject({ type: 'runs.followUp', runId: 'run-2' });
+    expect(requests[11]).not.toHaveProperty('prompt');
+    expect(requests[14]).toMatchObject({
       type: 'emit',
       event: expect.objectContaining({ type: 'pi.run.completed', source: 'cli' }),
     });
@@ -240,6 +245,7 @@ describe('client daemon in-process transport override', () => {
     const transport = {
       ping: vi.fn().mockResolvedValue(true),
       getStatus: vi.fn().mockResolvedValue({ running: true, pid: 9, startedAt: '2026-04-17T00:00:00.000Z', socketPath: 'in-process', queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 }, modules: [] }),
+      setPowerKeepAwake: vi.fn().mockResolvedValue({ running: true, pid: 9, startedAt: '2026-04-17T00:00:00.000Z', socketPath: 'in-process', power: { keepAwake: true, supported: true, active: true }, queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 }, modules: [] }),
       stop: vi.fn().mockResolvedValue(undefined),
       listDurableRuns: vi.fn().mockResolvedValue({ scannedAt: '2026-04-17T00:00:00.000Z', runs: [], summary: { total: 0 } }),
       getDurableRun: vi.fn().mockResolvedValue({ scannedAt: '2026-04-17T00:00:00.000Z', run: { id: 'run-1' } }),
@@ -256,6 +262,7 @@ describe('client daemon in-process transport override', () => {
 
     await expect(pingDaemon()).resolves.toBe(true);
     await expect(getDaemonStatus()).resolves.toMatchObject({ pid: 9, running: true });
+    await expect(setDaemonPowerKeepAwake(true)).resolves.toMatchObject({ power: { keepAwake: true, active: true } });
     await expect(stopDaemon()).resolves.toBeUndefined();
     await expect(listDurableRuns()).resolves.toEqual({ scannedAt: '2026-04-17T00:00:00.000Z', runs: [], summary: { total: 0 } });
     await expect(getDurableRun('run-1')).resolves.toEqual({ scannedAt: '2026-04-17T00:00:00.000Z', run: { id: 'run-1' } });
@@ -270,6 +277,7 @@ describe('client daemon in-process transport override', () => {
 
     expect(transport.ping).toHaveBeenCalledTimes(1);
     expect(transport.getStatus).toHaveBeenCalledTimes(1);
+    expect(transport.setPowerKeepAwake).toHaveBeenCalledWith(true, undefined);
     expect(transport.stop).toHaveBeenCalledTimes(1);
     expect(transport.followUpDurableRun).toHaveBeenCalledWith('run-1', 'keep going', undefined);
     expect(transport.emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'pi.run.completed', source: 'desktop' }), undefined);

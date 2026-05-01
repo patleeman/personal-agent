@@ -16,6 +16,7 @@ import {
   restartManagedDaemonServiceIfInstalled,
   startManagedDaemonService,
   stopManagedDaemonService,
+  setDaemonPowerKeepAwake,
   uninstallManagedDaemonService,
 } from '@personal-agent/daemon';
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
@@ -77,10 +78,18 @@ interface DaemonRuntimeSummary {
   maxQueueDepth?: number;
 }
 
+interface DaemonPowerSummary {
+  keepAwake: boolean;
+  supported: boolean;
+  active: boolean;
+  error?: string;
+}
+
 export interface DaemonStateSnapshot {
   warnings: string[];
   service: DaemonServiceSummary;
   runtime: DaemonRuntimeSummary;
+  power: DaemonPowerSummary;
   log: LogTail;
 }
 
@@ -208,6 +217,11 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
     socketPath: paths.socketPath,
     moduleCount: 0,
   };
+  let power: DaemonPowerSummary = {
+    keepAwake: config.power?.keepAwake === true,
+    supported: process.platform === 'darwin',
+    active: false,
+  };
 
   let runtimeInspectionError: string | undefined;
 
@@ -221,6 +235,7 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
       runtime.moduleCount = status.modules.length;
       runtime.queueDepth = status.queue.currentDepth;
       runtime.maxQueueDepth = status.queue.maxDepth;
+      power = status.power;
     }
   } catch (error) {
     runtimeInspectionError = error instanceof Error ? error.message : String(error);
@@ -246,17 +261,34 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
     warnings.push('Daemon runtime is not responding on the local socket.');
   }
 
+  if (power.keepAwake && !power.supported) {
+    warnings.push('Keeping the daemon awake is only supported on macOS.');
+  } else if (power.keepAwake && power.error) {
+    warnings.push(`Could not keep the daemon awake: ${power.error}`);
+  }
+
   const logPath = service.logFile ?? paths.logFile;
 
   return {
     warnings,
     service,
     runtime,
+    power,
     log: {
       path: logPath,
       lines: readTailLines(logPath),
     },
   };
+}
+
+export async function updateDaemonPowerAndReadState(input: { keepAwake: boolean }): Promise<DaemonStateSnapshot> {
+  const config = loadDaemonConfig();
+  if (!(await pingDaemon(config))) {
+    throw new Error('Daemon runtime is not responding on the local socket. Start the daemon and try again.');
+  }
+
+  await setDaemonPowerKeepAwake(input.keepAwake, config);
+  return readDaemonState();
 }
 
 export async function installDaemonServiceAndReadState(): Promise<DaemonStateSnapshot> {

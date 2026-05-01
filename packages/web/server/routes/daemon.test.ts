@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   logErrorMock,
   readDaemonStateMock,
+  updateDaemonPowerAndReadStateMock,
 } = vi.hoisted(() => ({
   logErrorMock: vi.fn(),
   readDaemonStateMock: vi.fn(),
+  updateDaemonPowerAndReadStateMock: vi.fn(),
 }));
 
 vi.mock('../automation/daemon.js', () => ({
   readDaemonState: readDaemonStateMock,
+  updateDaemonPowerAndReadState: updateDaemonPowerAndReadStateMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -29,6 +32,7 @@ describe('registerDaemonRoutes', () => {
   beforeEach(() => {
     logErrorMock.mockReset();
     readDaemonStateMock.mockReset();
+    updateDaemonPowerAndReadStateMock.mockReset();
   });
 
   function createHarness() {
@@ -40,12 +44,16 @@ describe('registerDaemonRoutes', () => {
       post: vi.fn((path: string, next: TestHandler) => {
         handlers[`POST ${path}`] = next;
       }),
+      patch: vi.fn((path: string, next: TestHandler) => {
+        handlers[`PATCH ${path}`] = next;
+      }),
     };
 
     registerDaemonRoutes(router as never);
 
     return {
       stateHandler: handlers['GET /api/daemon']!,
+      powerHandler: handlers['PATCH /api/daemon/power']!,
     };
   }
 
@@ -73,5 +81,21 @@ describe('registerDaemonRoutes', () => {
     expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
       message: 'state failed',
     }));
+  });
+
+  it('updates daemon power state and validates the request body', async () => {
+    const { powerHandler } = createHarness();
+
+    updateDaemonPowerAndReadStateMock.mockResolvedValue({ power: { keepAwake: true, active: true, supported: true } });
+
+    const res = createResponse();
+    await powerHandler({ body: { keepAwake: true } } as never, res);
+    expect(updateDaemonPowerAndReadStateMock).toHaveBeenCalledWith({ keepAwake: true });
+    expect(res.json).toHaveBeenCalledWith({ power: { keepAwake: true, active: true, supported: true } });
+
+    const failingRes = createResponse();
+    await powerHandler({ body: { keepAwake: 'yes' } } as never, failingRes);
+    expect(failingRes.status).toHaveBeenCalledWith(500);
+    expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: keepAwake must be a boolean.' });
   });
 });

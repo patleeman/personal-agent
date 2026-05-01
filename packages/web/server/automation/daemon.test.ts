@@ -12,6 +12,7 @@ const {
   pingDaemonMock,
   resolveDaemonPathsMock,
   restartManagedDaemonServiceIfInstalledMock,
+  setDaemonPowerKeepAwakeMock,
   startManagedDaemonServiceMock,
   stopManagedDaemonServiceMock,
   uninstallManagedDaemonServiceMock,
@@ -23,6 +24,7 @@ const {
   pingDaemonMock: vi.fn(),
   resolveDaemonPathsMock: vi.fn(),
   restartManagedDaemonServiceIfInstalledMock: vi.fn(),
+  setDaemonPowerKeepAwakeMock: vi.fn(),
   startManagedDaemonServiceMock: vi.fn(),
   stopManagedDaemonServiceMock: vi.fn(),
   uninstallManagedDaemonServiceMock: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock('@personal-agent/daemon', () => ({
   pingDaemon: pingDaemonMock,
   resolveDaemonPaths: resolveDaemonPathsMock,
   restartManagedDaemonServiceIfInstalled: restartManagedDaemonServiceIfInstalledMock,
+  setDaemonPowerKeepAwake: setDaemonPowerKeepAwakeMock,
   startManagedDaemonService: startManagedDaemonServiceMock,
   stopManagedDaemonService: stopManagedDaemonServiceMock,
   uninstallManagedDaemonService: uninstallManagedDaemonServiceMock,
@@ -48,6 +51,7 @@ import {
   startDaemonServiceAndReadState,
   stopDaemonServiceAndReadState,
   uninstallDaemonServiceAndReadState,
+  updateDaemonPowerAndReadState,
 } from './daemon.js';
 
 const tempDirs: string[] = [];
@@ -89,6 +93,7 @@ describe('automation daemon', () => {
     pingDaemonMock.mockReset();
     resolveDaemonPathsMock.mockReset();
     restartManagedDaemonServiceIfInstalledMock.mockReset();
+    setDaemonPowerKeepAwakeMock.mockReset();
     startManagedDaemonServiceMock.mockReset();
     stopManagedDaemonServiceMock.mockReset();
     uninstallManagedDaemonServiceMock.mockReset();
@@ -99,7 +104,7 @@ describe('automation daemon', () => {
     const logFile = join(dir, 'personal-agentd.log');
     writeFileSync(logFile, 'line one\n[module:sync] hidden\nline two\n', 'utf-8');
 
-    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
     getManagedDaemonServiceStatusMock.mockReturnValue({
       identifier: 'personal-agent-daemon',
@@ -115,6 +120,7 @@ describe('automation daemon', () => {
       startedAt: '2026-04-10T00:00:00.000Z',
       modules: [{ id: 'tasks' }, { id: 'runs' }],
       queue: { currentDepth: 2, maxDepth: 5 },
+      power: { keepAwake: false, supported: true, active: false },
     });
 
     await expect(readDaemonState()).resolves.toEqual({
@@ -136,6 +142,7 @@ describe('automation daemon', () => {
         queueDepth: 2,
         maxQueueDepth: 5,
       },
+      power: { keepAwake: false, supported: true, active: false },
       log: {
         path: logFile,
         lines: ['line one', 'line two'],
@@ -147,7 +154,7 @@ describe('automation daemon', () => {
     const dir = createTempDir();
     const logFile = join(dir, 'personal-agentd.log');
 
-    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
     getManagedDaemonServiceStatusMock.mockReturnValue({
       identifier: 'personal-agent-daemon',
@@ -175,6 +182,7 @@ describe('automation daemon', () => {
         socketPath: '/tmp/runtime.sock',
         moduleCount: 0,
       },
+      power: { keepAwake: false, supported: process.platform === 'darwin', active: false },
       log: {
         path: logFile,
         lines: [],
@@ -182,12 +190,42 @@ describe('automation daemon', () => {
     });
   });
 
+  it('updates daemon power through the running daemon and returns refreshed state', async () => {
+    const dir = createTempDir();
+    const logFile = join(dir, 'personal-agentd.log');
+
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
+    resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
+    getManagedDaemonServiceStatusMock.mockReturnValue({
+      identifier: 'personal-agent-daemon',
+      manifestPath: '/tmp/personal-agent-daemon.plist',
+      installed: true,
+      running: true,
+      logFile,
+    });
+    pingDaemonMock.mockResolvedValue(true);
+    setDaemonPowerKeepAwakeMock.mockResolvedValue({});
+    getDaemonStatusMock.mockResolvedValue({
+      socketPath: '/tmp/runtime.sock',
+      pid: 42,
+      startedAt: '2026-04-10T00:00:00.000Z',
+      modules: [],
+      queue: { currentDepth: 0, maxDepth: 5 },
+      power: { keepAwake: true, supported: true, active: true },
+    });
+
+    await expect(updateDaemonPowerAndReadState({ keepAwake: true })).resolves.toMatchObject({
+      power: { keepAwake: true, supported: true, active: true },
+    });
+    expect(setDaemonPowerKeepAwakeMock).toHaveBeenCalledWith(true, { power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
+  });
+
   it('reports inspection failures and tolerates unreadable log files', async () => {
     const dir = createTempDir();
     const unreadableLogPath = join(dir, 'logs');
     mkdirSync(unreadableLogPath);
 
-    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile: unreadableLogPath });
     getManagedDaemonServiceStatusMock.mockImplementation(() => {
       throw new Error('service failed');
@@ -213,6 +251,7 @@ describe('automation daemon', () => {
         socketPath: '/tmp/runtime.sock',
         moduleCount: 0,
       },
+      power: { keepAwake: false, supported: process.platform === 'darwin', active: false },
       log: {
         path: unreadableLogPath,
         lines: [],
@@ -225,7 +264,7 @@ describe('automation daemon', () => {
     process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
     process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE = join(dir, 'desktop-daemon.log');
 
-    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile: join(dir, 'ignored.log') });
     pingDaemonMock.mockResolvedValue(false);
 
@@ -244,6 +283,7 @@ describe('automation daemon', () => {
         socketPath: '/tmp/runtime.sock',
         moduleCount: 0,
       },
+      power: { keepAwake: false, supported: process.platform === 'darwin', active: false },
       log: {
         path: join(dir, 'desktop-daemon.log'),
         lines: [],
@@ -259,7 +299,7 @@ describe('automation daemon', () => {
     process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
     process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP = 'external';
 
-    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
     getManagedDaemonServiceStatusMock.mockReturnValue({
       identifier: 'io.personal-agent.daemon',
@@ -275,6 +315,7 @@ describe('automation daemon', () => {
       startedAt: '2026-04-17T19:13:36.254Z',
       modules: [{ id: 'tasks' }],
       queue: { currentDepth: 0, maxDepth: 5 },
+      power: { keepAwake: false, supported: true, active: false },
     });
 
     await expect(readDaemonState()).resolves.toEqual({
@@ -296,6 +337,7 @@ describe('automation daemon', () => {
         queueDepth: 0,
         maxQueueDepth: 5,
       },
+      power: { keepAwake: false, supported: true, active: false },
       log: {
         path: logFile,
         lines: ['daemon ready'],
@@ -334,7 +376,7 @@ describe('automation daemon', () => {
     const logFile = join(dir, 'personal-agentd.log');
     writeFileSync(logFile, 'daemon ready\n', 'utf-8');
 
-    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
     getManagedDaemonServiceStatusMock.mockReturnValue({
       identifier: 'personal-agent-daemon',
@@ -350,6 +392,7 @@ describe('automation daemon', () => {
       startedAt: '2026-04-10T00:00:00.000Z',
       modules: [{ id: 'tasks' }],
       queue: { currentDepth: 1, maxDepth: 3 },
+      power: { keepAwake: false, supported: true, active: false },
     });
     restartManagedDaemonServiceIfInstalledMock.mockReturnValueOnce(true).mockReturnValueOnce(false);
 

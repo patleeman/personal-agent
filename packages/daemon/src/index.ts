@@ -10,7 +10,8 @@ export {
   type DaemonStopRequestBehavior,
 } from './server.js';
 export { createDaemonEvent, isDaemonEvent, DAEMON_EVENT_VERSION } from './events.js';
-export { loadDaemonConfig, getDefaultDaemonConfig, getDaemonConfigFilePath, type DaemonConfig } from './config.js';
+export { loadDaemonConfig, getDefaultDaemonConfig, getDaemonConfigFilePath, writeDaemonPowerConfig, type DaemonConfig } from './config.js';
+export { DaemonPowerController } from './power.js';
 export { resolveDaemonPaths } from './paths.js';
 export {
   bindInProcessDaemonClient,
@@ -46,6 +47,7 @@ export {
 } from './companion/server.js';
 export {
   getDaemonStatus,
+  setDaemonPowerKeepAwake,
   pingDaemon,
   stopDaemon,
   listDurableRuns,
@@ -204,6 +206,7 @@ export type {
   DaemonEvent,
   DaemonEventInput,
   DaemonStatus,
+  DaemonPowerStatus,
   DaemonModuleStatus,
   ListDurableRunsResult,
   GetDurableRunResult,
