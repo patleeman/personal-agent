@@ -158,7 +158,17 @@ export function ChatRenderItemView({
           />
         );
       case 'context':
-        return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? onSelectionGesture : undefined} />;
+        return (
+          <ContextMessage
+            block={block}
+            messageIndex={absoluteIndex}
+            onOpenFilePath={onOpenFilePath}
+            onOpenCheckpoint={onOpenCheckpoint}
+            onSelectionGesture={onReplyToSelection ? onSelectionGesture : undefined}
+            isInlineRunExpanded={isInlineRunExpanded}
+            onToggleInlineRun={onToggleInlineRun}
+          />
+        );
       case 'summary':
         return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? onSelectionGesture : undefined} />;
       case 'thinking':

@@ -241,4 +241,37 @@ describe('ChatView inline run cards', () => {
     expect(apiMocks.durableRunLog).toHaveBeenCalledWith(RUN_ID, 240);
     expect(container.textContent).toContain('Polling live log');
   });
+
+  it('collapses raw run callback context blocks into a clickable run card', async () => {
+    const { container } = renderChatView([{
+      type: 'context',
+      ts: '2026-03-11T18:00:00.000Z',
+      customType: 'referenced_context',
+      text: [
+        `Background task ${RUN_ID} has finished.`,
+        'taskSlug=ui-preview-check',
+        'status=failed',
+        `log=/tmp/runs/${RUN_ID}/output.log`,
+        'command=npm test',
+        '',
+        'Recent log tail:',
+        'very noisy callback output',
+      ].join('\n'),
+    }]);
+
+    expect(container.textContent).toContain('Background work finished.');
+    expect(container.textContent).toContain('ui-preview-check');
+    expect(container.textContent).not.toContain('very noisy callback output');
+
+    const runButtons = findInlineRunButtons(container);
+    expect(runButtons).toHaveLength(1);
+
+    await act(async () => {
+      runButtons[0]?.click();
+      await flushAsyncWork();
+    });
+
+    expect(apiMocks.durableRun).toHaveBeenCalledWith(RUN_ID);
+    expect(apiMocks.durableRunLog).toHaveBeenCalledWith(RUN_ID, 240);
+  });
 });

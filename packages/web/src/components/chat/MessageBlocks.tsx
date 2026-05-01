@@ -199,11 +199,17 @@ function readRawRunCallbackLinkedRuns(text: string) {
     return [];
   }
 
-  return readMentionedLinkedRunsFromText(text);
+  const mentionedRuns = readMentionedLinkedRunsFromText(text);
+  if (mentionedRuns.length > 0) {
+    return mentionedRuns;
+  }
+
+  const directRunId = text.match(/\b(?:Durable run|Background task)\s+([^\s]+)\s+has finished\./)?.[1]?.trim();
+  return directRunId ? readMentionedLinkedRunsFromText(`runId=${directRunId}`) : [];
 }
 
 function looksLikeRawRunCallback(text: string): boolean {
-  return /^(?:Durable run|Background task)\s+\S+\s+has finished\./.test(text.trim())
+  return /\b(?:Durable run|Background task)\s+\S+\s+has finished\./.test(text.trim())
     && /\btaskSlug=/.test(text)
     && /\bstatus=/.test(text)
     && /\blog=/.test(text)
@@ -250,16 +256,22 @@ export const ContextMessage = memo(function ContextMessage({
   onOpenFilePath,
   onOpenCheckpoint,
   onSelectionGesture,
+  isInlineRunExpanded,
+  onToggleInlineRun,
 }: {
   block: Extract<MessageBlock, { type: 'context' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
   onOpenCheckpoint?: (checkpointId: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
+  isInlineRunExpanded?: (inlineRunKey: string) => boolean;
+  onToggleInlineRun?: (inlineRunKey: string) => void;
 }) {
   const label = formatInjectedContextLabel(block.customType);
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
+  const rawRunCallbackRuns = useMemo(() => readRawRunCallbackLinkedRuns(block.text), [block.text]);
+  const showRawRunCallbackCard = rawRunCallbackRuns.length > 0;
 
   return (
     <div className="group">
@@ -273,7 +285,16 @@ export const ContextMessage = memo(function ContextMessage({
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
         </div>
         <div {...replySelectionScopeProps} className="pt-2 text-primary">
-          {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
+          {showRawRunCallbackCard ? (
+            <RawRunCallbackCard
+              runs={rawRunCallbackRuns}
+              messageIndex={messageIndex}
+              isInlineRunExpanded={isInlineRunExpanded}
+              onToggleInlineRun={onToggleInlineRun}
+            />
+          ) : (
+            renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
+          )}
         </div>
       </div>
     </div>
