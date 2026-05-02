@@ -10,18 +10,6 @@ import { ToolBlock } from './ToolBlock.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import type { ReplySelectionGestureHandler } from './replySelection.js';
 
-export function getConversationRailKind(block: MessageBlock): 'user' | 'assistant' | undefined {
-  if (block.type === 'user') {
-    return 'user';
-  }
-
-  if (block.type === 'text' || (block.type === 'tool_use' && block.tool === 'ask_user_question')) {
-    return 'assistant';
-  }
-
-  return undefined;
-}
-
 export function ChatRenderItemView({
   item,
   itemIndex,
@@ -220,7 +208,6 @@ export function ChatRenderItemView({
       id={`msg-${absoluteIndex}`}
       data-message-index={absoluteIndex}
       data-chat-tail={isTailItem ? '1' : undefined}
-      data-conversation-rail-kind={getConversationRailKind(block)}
       style={contentVisibilityStyle}
     >
       {el}

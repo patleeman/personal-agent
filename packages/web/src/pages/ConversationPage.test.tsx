@@ -15,7 +15,7 @@ import {
   shouldLoadConversationModels,
   shouldUseHealthyDesktopConversationState,
   shouldFetchConversationAttachments,
-  shouldRenderConversationRail,
+
   replaceConversationMetaInSessionList,
   resolveConversationExecutionOverride,
 } from './ConversationPage.js';
@@ -197,19 +197,7 @@ describe('conversation rendering mode', () => {
     expect(resolveConversationPerformanceMode({ messageCount: 240 })).toBe('aggressive');
   });
 
-  it('turns off the conversation rail when aggressive rendering is active', () => {
-    expect(shouldRenderConversationRail({
-      hasRenderableMessages: true,
-      realMessages: [{ type: 'text', ts: '2026-04-23T12:00:00.000Z', text: 'hello' }],
-      performanceMode: 'default',
-    })).toBe(true);
 
-    expect(shouldRenderConversationRail({
-      hasRenderableMessages: true,
-      realMessages: [{ type: 'text', ts: '2026-04-23T12:00:00.000Z', text: 'hello' }],
-      performanceMode: 'aggressive',
-    })).toBe(false);
-  });
 });
 
 describe('conversation model loading', () => {

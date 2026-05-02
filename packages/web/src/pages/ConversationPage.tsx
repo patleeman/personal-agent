@@ -2,7 +2,6 @@ import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallba
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
-import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationActivityShelf } from '../components/conversation/ConversationActivityShelf';
 import {
   resolveConversationComposerShellStateClassName,
@@ -77,7 +76,6 @@ import {
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
-  shouldRenderConversationRail,
   shouldShowConversationBootstrapLoadingState,
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowConversationInlineLoadingState,
@@ -268,7 +266,6 @@ export {
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
-  shouldRenderConversationRail,
   shouldShowMissingConversationState,
   shouldUseHealthyDesktopConversationState,
 } from '../conversation/conversationPageState';
@@ -5618,14 +5615,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const conversationPerformanceMode = resolveConversationPerformanceMode({
     messageCount: realMessages?.length ?? 0,
   });
-  // Keep the rail off once transcripts are large enough to trigger aggressive
-  // transcript rendering. The rail continuously re-measures mounted message
-  // markers, which makes composer-driven layout work scale with transcript size.
-  const showConversationRail = shouldRenderConversationRail({
-    hasRenderableMessages,
-    realMessages,
-    performanceMode: conversationPerformanceMode,
-  });
   const editingDrawingAttachment = useMemo(() => {
     if (!editingDrawingLocalId || editingDrawingLocalId === '__new__') {
       return null;
@@ -5863,14 +5852,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           />
         </div>
       )}
-      {!showConversationLoadingState && showConversationRail && realMessages && (
-        <ConversationRail
-          messages={realMessages}
-          messageIndexOffset={messageIndexOffset}
-          scrollContainerRef={scrollRef}
-          onJumpToMessage={jumpToMessage}
-        />
-      )}
     </div>
   ), [
     conversationResumeState.actionLabel,
@@ -5902,7 +5883,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     selectedArtifactId,
     selectedCheckpointId,
     sessionLoading,
-    showConversationRail,
     showConversationLoadingState,
     showInlineConversationLoadingState,
     showScrollToBottomControl,

@@ -1344,15 +1344,9 @@ body {
 ::-webkit-scrollbar-thumb  { background: rgb(var(--color-border-default)); border-radius: 2px; }
 
 .conversation-scroll-shell {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  overflow-anchor: none;
-}
-
-.conversation-scroll-shell::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  /* Use default browser scrollbar. The custom ConversationRail overlay that
+     previously replaced it caused persistent scroll-position jumps. */
+  overflow-anchor: auto;
 }
 
 /* ── Knowledge Base Editor ────────────────────────────────────────────────── */

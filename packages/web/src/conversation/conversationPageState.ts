@@ -5,7 +5,7 @@ import { formatContextUsageLabel } from './conversationHeader';
 import { getRunHeadline, isRunActive, listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
 import { listRecentConversationBackgroundRuns } from '../automation/runPresentation';
 
-const MAX_CONVERSATION_RAIL_BLOCKS = 240;
+
 const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
 
 export function shouldEnableConversationLiveStream(
@@ -538,17 +538,6 @@ export function resolveConversationPerformanceMode(input: {
   return input.messageCount >= AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD
     ? 'aggressive'
     : 'default';
-}
-
-export function shouldRenderConversationRail(input: {
-  hasRenderableMessages: boolean;
-  realMessages: MessageBlock[] | undefined;
-  performanceMode: 'default' | 'aggressive';
-}): boolean {
-  return input.hasRenderableMessages
-    && Boolean(input.realMessages)
-    && input.performanceMode === 'default'
-    && (input.realMessages?.length ?? 0) <= MAX_CONVERSATION_RAIL_BLOCKS;
 }
 
 export function shouldLoadConversationModels(input: {

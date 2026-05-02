@@ -18,7 +18,7 @@ import {
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
-  shouldRenderConversationRail,
+
   shouldShowConversationBootstrapLoadingState,
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowMissingConversationState,
@@ -215,11 +215,7 @@ describe('conversation page state helpers', () => {
     })).toBe(true);
 
     expect(resolveConversationPerformanceMode({ messageCount: 96 })).toBe('aggressive');
-    expect(shouldRenderConversationRail({
-      hasRenderableMessages: true,
-      realMessages: [{ type: 'text', ts: '2026-01-01T00:00:00.000Z', text: 'hello' }],
-      performanceMode: 'default',
-    })).toBe(true);
+
   });
 
   it('keeps live-stream and transcript loading decisions explicit', () => {
