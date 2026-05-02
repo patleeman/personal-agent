@@ -19,6 +19,8 @@ const {
   createRunAgentExtensionMock,
   createScheduledTaskAgentExtensionMock,
   createWorkbenchBrowserAgentExtensionMock,
+  createImageAgentExtensionMock,
+  createMcpAgentExtensionMock,
   renameSessionMock,
   requestConversationWorkingDirectoryChangeMock,
 } = vi.hoisted(() => ({
@@ -39,6 +41,8 @@ const {
   createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
   createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
   createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
+  createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
+  createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
   renameSessionMock: vi.fn(),
   requestConversationWorkingDirectoryChangeMock: vi.fn(),
 }));
@@ -97,6 +101,14 @@ vi.mock('../extensions/scheduledTaskAgentExtension.js', () => ({
 
 vi.mock('../extensions/workbenchBrowserAgentExtension.js', () => ({
   createWorkbenchBrowserAgentExtension: createWorkbenchBrowserAgentExtensionMock,
+}));
+
+vi.mock('../extensions/imageAgentExtension.js', () => ({
+  createImageAgentExtension: createImageAgentExtensionMock,
+}));
+
+vi.mock('../extensions/mcpAgentExtension.js', () => ({
+  createMcpAgentExtension: createMcpAgentExtensionMock,
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({
@@ -171,9 +183,10 @@ describe('createProfileState', () => {
       'run-extension',
       'conversation-inspect-extension',
       'conversation-title-extension',
-      expect.any(Function),
+      'image-extension',
       'artifact-extension',
       'checkpoint-extension',
+      'mcp-extension',
       'workbench-browser-extension',
       'conversation-auto-mode-extension',
       'conversation-queue-extension',

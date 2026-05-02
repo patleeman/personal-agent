@@ -322,12 +322,12 @@ describe('deferredResumes', () => {
       sessionFile: '/tmp/sessions/current.jsonl',
       at: '9999',
       now: new Date('2026-03-12T13:00:00.000Z'),
-    })).rejects.toThrow('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+    })).rejects.toThrow('Invalid time expression. Use forms like now+1d, now+1d@20:00, tomorrow 8pm, or an ISO-8601 timestamp.');
 
     await expect(scheduleDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/current.jsonl',
       at: '2026-02-31T13:00:00.000Z',
       now: new Date('2026-03-12T13:00:00.000Z'),
-    })).rejects.toThrow('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+    })).rejects.toThrow('Invalid time expression. Use forms like now+1d, now+1d@20:00, tomorrow 8pm, or an ISO-8601 timestamp.');
   });
 });

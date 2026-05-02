@@ -149,6 +149,7 @@ vi.mock('../conversations/sessions.js', () => ({
   buildAppendOnlySessionDetailResponse: buildAppendOnlySessionDetailResponseMock,
   readSessionBlocks: readSessionBlocksMock,
   renameStoredSession: renameStoredSessionMock,
+  appendConversationWorkspaceMetadata: vi.fn(),
 }));
 
 vi.mock('../models/modelPreferences.js', () => ({
@@ -871,18 +872,18 @@ describe('registerConversationStateRoutes', () => {
       session: { sessionFile: '/sessions/conversation-6.json', isStreaming: false },
     });
     resolveRequestedCwdMock.mockReturnValueOnce('/next');
-    createSessionFromExistingMock.mockResolvedValueOnce({ id: 'conversation-7', sessionFile: '/sessions/conversation-7.json' });
+    resumeLocalSessionMock.mockResolvedValueOnce({});
     const changedRes = createResponse();
     await handler({ params: { id: 'conversation-6' }, body: { cwd: '/next' } }, changedRes);
-    expect(createSessionFromExistingMock).toHaveBeenCalledWith('/sessions/conversation-6.json', '/next', {
-      additionalExtensionPaths: ['extensions'],
+    expect(destroySessionMock).toHaveBeenCalledWith('conversation-6');
+    expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/conversation-6.json', {
+      cwdOverride: '/next',
       extensionFactories: ['factory'],
     });
-    expect(destroySessionMock).toHaveBeenCalledWith('conversation-6');
-    expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-6', 'conversation-7');
+    expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-6');
     expect(changedRes.json).toHaveBeenCalledWith({
-      id: 'conversation-7',
-      sessionFile: '/sessions/conversation-7.json',
+      id: 'conversation-6',
+      sessionFile: '/sessions/conversation-6.json',
       cwd: '/next',
       changed: true,
     });
@@ -898,12 +899,12 @@ describe('registerConversationStateRoutes', () => {
       session: { sessionFile: '/sessions/conversation-1.json', isStreaming: false },
     });
     resolveRequestedCwdMock.mockReturnValueOnce('/next');
-    createSessionFromExistingMock.mockRejectedValueOnce(new Error('cwd clone failed'));
+    resumeLocalSessionMock.mockRejectedValueOnce(new Error('cwd resume failed'));
 
     await handler({ params: { id: 'conversation-1' }, body: { cwd: '/next' } }, res);
 
     expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'cwd clone failed',
+      message: 'cwd resume failed',
     }));
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: cwd clone failed' });

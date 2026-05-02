@@ -1326,7 +1326,7 @@ Run hourly task
       {
         enabled: true,
         taskDir,
-        tickIntervalSeconds: 30,
+        tickIntervalSeconds: 1,
         maxRetries: 3,
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
@@ -1388,7 +1388,7 @@ Run hourly task
       {
         enabled: true,
         taskDir,
-        tickIntervalSeconds: 30,
+        tickIntervalSeconds: 1,
         maxRetries: 3,
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,

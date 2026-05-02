@@ -60,21 +60,6 @@ describe('api desktop reads', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('window', {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-        }),
-        readAppStatus: vi.fn(),
-        readSessions: vi.fn(),
-        readConversationBootstrap: vi.fn(),
-        readConversationAttachments: vi.fn(),
-        readLiveSessionContext: vi.fn(),
-        readOpenConversationTabs: vi.fn(),
-      },
       location: { pathname: '/' },
       sessionStorage: { getItem: () => null },
     } as unknown as Window & typeof globalThis);
@@ -115,17 +100,6 @@ describe('api desktop reads', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('window', {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-        }),
-        readSessionSearchIndex: vi.fn(),
-        readLiveSessionForkEntries: vi.fn(),
-      },
       location: { pathname: '/' },
       sessionStorage: { getItem: () => null },
     } as unknown as Window & typeof globalThis);
