@@ -34,10 +34,6 @@ function createTempDir(): string {
   return dir;
 }
 
-function expectedLogFile(dir: string): string {
-  return join(dir, 'desktop/logs/daemon.log');
-}
-
 describe('automation daemon', () => {
   afterEach(async () => {
     process.env = originalEnv;

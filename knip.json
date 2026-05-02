@@ -17,5 +17,9 @@
       "entry": ["src/main.ts", "ui/src/app/main.tsx", "ui/vite.config.ts"],
       "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts"]
     }
-  }
+  },
+  "ignore": [
+    "packages/desktop/server/**/*.ts",
+    "electron-builder.config.mjs"
+  ]
 }

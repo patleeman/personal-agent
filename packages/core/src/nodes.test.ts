@@ -5,15 +5,20 @@ import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  collectDuplicateUnifiedNodeIds,
+  collectUnifiedNodeReferenceErrors,
   createUnifiedNode,
   deleteUnifiedNode,
+  findUnifiedNodeById,
   findUnifiedNodes,
   lintUnifiedNodes,
   listUnifiedSkillNodeDirs,
   loadUnifiedNodes,
+  matchesUnifiedNodeQuery,
   migrateLegacyNodes,
   tagUnifiedNode,
   updateUnifiedNode,
+  validateUnifiedNodeId,
 } from './nodes.js';
 
 const originalEnv = process.env;
@@ -336,5 +341,103 @@ Tracks graph relationships.
       { type: 'implements', targetId: 'downstream-node' },
     ]);
     expect(loaded.nodes[0]?.links.related).toEqual(['upstream-node', 'downstream-node']);
+  });
+});
+
+describe('matchesUnifiedNodeQuery', () => {
+  function makeNode(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'test',
+      title: 'Test',
+      summary: '',
+      description: '',
+      status: 'active',
+      type: 'note',
+      kinds: [],
+      tags: [],
+      profiles: [],
+      links: { related: [], conversations: [], relationships: [] },
+      body: '',
+      filePath: '',
+      dirPath: '',
+      searchText: 'test',
+      ...overrides,
+    } as any;
+  }
+
+  it('matches by id', () => {
+    expect(matchesUnifiedNodeQuery(makeNode({ id: 'my-project', searchText: 'my-project' }), 'my-project')).toBe(true);
+  });
+
+  it('matches by title', () => {
+    expect(matchesUnifiedNodeQuery(makeNode({ title: 'My Cool Project', searchText: 'My Cool Project' }), 'Cool')).toBe(true);
+  });
+
+  it('returns true for undefined query', () => {
+    expect(matchesUnifiedNodeQuery(makeNode(), undefined)).toBe(true);
+  });
+
+  it('returns true for empty query', () => {
+    expect(matchesUnifiedNodeQuery(makeNode(), '')).toBe(true);
+  });
+
+  it('is case-insensitive', () => {
+    expect(matchesUnifiedNodeQuery(makeNode({ id: 'MY-PROJECT', searchText: 'MY-PROJECT' }), 'my-project')).toBe(true);
+  });
+});
+
+describe('findUnifiedNodeById', () => {
+  it('finds a node by id', () => {
+    const nodes = [{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }] as any;
+    expect(findUnifiedNodeById(nodes, 'b').title).toBe('B');
+  });
+
+  it('returns undefined for missing id', () => {
+    expect(findUnifiedNodeById([], 'missing')).toBeUndefined();
+  });
+});
+
+describe('collectDuplicateUnifiedNodeIds', () => {
+  it('finds duplicate ids', () => {
+    const nodes = [
+      { id: 'dup' }, { id: 'unique' }, { id: 'dup' }, { id: 'dup' },
+    ] as any;
+    const dups = collectDuplicateUnifiedNodeIds(nodes);
+    expect(dups).toHaveLength(1);
+    expect(dups[0].id).toBe('dup');
+    expect(dups[0].count).toBe(3);
+  });
+
+  it('returns empty for unique nodes', () => {
+    expect(collectDuplicateUnifiedNodeIds([{ id: 'a' }, { id: 'b' }] as any)).toEqual([]);
+  });
+});
+
+describe('collectUnifiedNodeReferenceErrors', () => {
+  it('finds references to non-existent nodes', () => {
+    const nodes = [{ id: 'a', title: 'A', links: { related: ['b', 'c'] }, tags: [] }] as any;
+    const errors = collectUnifiedNodeReferenceErrors(nodes);
+    expect(errors).toHaveLength(2);
+    expect(errors[0].targetId).toBe('b');
+    expect(errors[1].targetId).toBe('c');
+  });
+
+  it('returns empty when all references are valid', () => {
+    const nodes = [
+      { id: 'a', title: 'A', links: { related: ['b'] }, tags: [] },
+      { id: 'b', title: 'B', links: { related: [] }, tags: [] },
+    ] as any;
+    expect(collectUnifiedNodeReferenceErrors(nodes)).toEqual([]);
+  });
+});
+
+describe('validateUnifiedNodeId', () => {
+  it('accepts valid ids', () => {
+    expect(() => validateUnifiedNodeId('my-node')).not.toThrow();
+    expect(() => validateUnifiedNodeId('test-123')).not.toThrow();
+  });
+
+  it('throws for empty id', () => {
+    expect(() => validateUnifiedNodeId('')).toThrow();
   });
 });

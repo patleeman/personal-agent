@@ -5,7 +5,7 @@
  * Extracted from index.ts so route modules can use them.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
 
 import {
@@ -33,13 +33,12 @@ export function normalizeMemoryPath(value: unknown): string {
   }
 }
 
-export function isEditableMemoryFilePath(filePath: string, profile: string): boolean {
+export function isEditableMemoryFilePath(filePath: string, _profile: string): boolean {
   if (!filePath || typeof filePath !== 'string') return false;
   const normalized = normalizeMemoryPath(filePath);
   if (!normalized) return false;
 
   const vaultRoot = getVaultRoot();
-  const profilesRoot = getProfilesRoot();
   const noteDir = normalizeMemoryPath(getDurableNotesDir(vaultRoot));
   const baseAgentFile = normalizeMemoryPath(getDurableAgentFilePath(vaultRoot));
   const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(vaultRoot));

@@ -56,26 +56,6 @@ function validateMcpString(value: string | undefined, label: string): string {
   return value.trim();
 }
 
-interface McpToolActionHandler {
-  (
-    params: typeof McpToolParams.static,
-    log: (message: string) => void,
-  ): Promise<{
-    content: Array<{ type: 'text'; text: string }>;
-    isError?: boolean;
-    details?: Record<string, unknown>;
-  }>;
-}
-
-type McpToolHandler = (
-  params: typeof McpToolParams.static,
-  log: (message: string) => void,
-) => Promise<{
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-  details?: Record<string, unknown>;
-}>;
-
 export function createMcpAgentExtension(): ExtensionAPI {
   return (api: ExtensionAPI) => {
     api.registerTool({

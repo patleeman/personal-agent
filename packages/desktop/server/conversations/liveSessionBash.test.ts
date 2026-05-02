@@ -49,8 +49,6 @@ describe('executeLiveSessionBash', () => {
       const executeBash = vi.fn().mockResolvedValue({ output: 'file1.txt\nfile2.txt', exitCode: 0 });
       const host = createMockHost({ session: { isBashRunning: false, executeBash } });
       const broadcast = createBroadcastMock();
-      const streamCallback = vi.fn();
-
       executeBash.mockImplementation(async (_cmd: string, onChunk: (chunk: string) => void) => {
         onChunk('file1.txt\n');
         onChunk('file2.txt\n');

@@ -4,7 +4,7 @@
  * Shared helpers for task routes, extracted from index.ts.
  */
 
-import { resolveScheduledTaskForProfile, type TaskRuntimeEntry } from './scheduledTasks.js';
+import { resolveScheduledTaskForProfile } from './scheduledTasks.js';
 
 export function readRequiredTaskId(value: unknown): string {
   const normalized = typeof value === 'string' ? value.trim() : '';

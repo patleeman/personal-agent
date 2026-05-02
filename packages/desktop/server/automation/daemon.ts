@@ -1,7 +1,5 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 
-import { getStateRoot } from '@personal-agent/core';
 import { getDaemonStatus, loadDaemonConfig, pingDaemon, resolveDaemonPaths, setDaemonPowerKeepAwake } from '@personal-agent/daemon';
 
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';

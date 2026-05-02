@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import { api } from '../client/api';
@@ -29,7 +29,6 @@ import {
   LiveTitlesContext,
   SseConnectionContext,
   SystemStatusContext,
-  useAppData,
 } from './contexts';
 
 function ConversationsRouteRedirect() {

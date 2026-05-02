@@ -3,17 +3,13 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
-import { AgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { AgentSession } from '@mariozechner/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { publishAppEvent } from '../shared/appEvents.js';
-import {
-  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-  type ConversationAutoModeState,
-  type ConversationAutoModeStateInput,
-} from './conversationAutoMode.js';
+import { type ConversationAutoModeState, type ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
@@ -41,7 +37,7 @@ import {
 import { destroyLiveSession } from './liveSessionDestroy.js';
 import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
 import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
-import { type LiveContextUsage, type LiveContextUsageSegment, type SseEvent, toSse } from './liveSessionEvents.js';
+import { type LiveContextUsage, type SseEvent } from './liveSessionEvents.js';
 import { makeAuth as makeFactoryAuth, makeRegistry } from './liveSessionFactory.js';
 import {
   createLiveSessionHiddenTurnState,
@@ -49,7 +45,7 @@ import {
   hasQueuedOrActiveHiddenTurn,
   type LiveSessionHiddenTurnState,
 } from './liveSessionHiddenTurns.js';
-import { clearPrewarmedLiveSessionLoaders, type LiveSessionLoaderOptions, prewarmLiveSessionLoader } from './liveSessionLoader.js';
+import { type LiveSessionLoaderOptions } from './liveSessionLoader.js';
 import {
   compactLiveSession,
   renameLiveSession,
@@ -73,10 +69,9 @@ import {
 } from './liveSessionParallelImportOps.js';
 import { type ParallelPromptJob, writePersistedParallelJobs } from './liveSessionParallelJobs.js';
 import { loadPersistedParallelJobs, type ResolveParallelChildSession } from './liveSessionParallelReconciliation.js';
-import { ensureSessionFileExists, patchSessionManagerPersistence, resolveLiveSessionFile } from './liveSessionPersistence.js';
+import { resolveLiveSessionFile } from './liveSessionPersistence.js';
 import {
   createLiveSessionPresenceHost,
-  LiveSessionControlError,
   type LiveSessionPresenceHost,
   type LiveSessionPresenceState,
   type LiveSessionSurfaceType,
@@ -100,7 +95,7 @@ import {
   getLiveSessionStats as readLiveSessionStats,
   listLiveSessions as listLiveSessionEntries,
 } from './liveSessionReadApi.js';
-import { repairDanglingToolCallContext, type TranscriptTailRecoveryReason } from './liveSessionRecovery.js';
+import { type TranscriptTailRecoveryReason } from './liveSessionRecovery.js';
 import {
   refreshAllLiveSessionModelRegistries as refreshLiveSessionModelRegistries,
   reloadAllLiveSessionAuth as reloadLiveSessionAuth,
@@ -123,7 +118,7 @@ import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
 import { resolveStableSessionTitle } from './liveSessionTitle.js';
 import { type BeforeAgentStartProbeMessage, inspectAvailableLiveSessionTools } from './liveSessionToolInspection.js';
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
-import { appendConversationWorkspaceMetadata, readSessionBlocksByFile, readSessionMetaByFile } from './sessions.js';
+import { appendConversationWorkspaceMetadata, readSessionMetaByFile } from './sessions.js';
 export {
   type LiveSessionLifecycleEvent,
   type LiveSessionLifecycleHandler,

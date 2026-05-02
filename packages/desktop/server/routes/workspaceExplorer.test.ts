@@ -17,6 +17,7 @@ vi.mock('../workspace/workspaceExplorer.js', () => ({
   readWorkspaceRootSnapshot: vi.fn(),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import * as logging from '../shared/logging.js';
 import * as workspace from '../workspace/workspaceExplorer.js';
 import { registerWorkspaceExplorerRoutes } from './workspaceExplorer.js';
