@@ -171,7 +171,7 @@ export function loadTaskState(
   }
 }
 
-export function saveTaskState(path: string, state: TaskStateFile): void {
+function saveTaskState(path: string, state: TaskStateFile): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   writeFileSync(path, JSON.stringify(state, null, 2));
 }

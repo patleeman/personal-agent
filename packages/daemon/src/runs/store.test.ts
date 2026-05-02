@@ -6,7 +6,6 @@ import { openSqliteDatabase } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   appendDurableRunEvent,
-  closeDurableRunStoreConnections,
   createDurableRunManifest,
   createInitialDurableRunStatus,
   listDurableRunIds,
@@ -37,7 +36,6 @@ function createTempDir(prefix: string): string {
 describe('durable run store', () => {
   afterEach(async () => {
     vi.useRealTimers();
-    closeDurableRunStoreConnections();
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 

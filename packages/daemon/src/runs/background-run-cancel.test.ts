@@ -7,7 +7,6 @@ import type { DaemonConfig } from '../config.js';
 import { PersonalAgentDaemon } from '../server.js';
 import { createBackgroundRunRecord } from './background-runs.js';
 import {
-  closeDurableRunStoreConnections,
   loadDurableRunStatus,
   resolveDurableRunsRoot,
 } from './store.js';
@@ -44,7 +43,6 @@ function createTestConfig(socketPath: string): DaemonConfig {
 }
 
 afterEach(async () => {
-  closeDurableRunStoreConnections();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 

@@ -337,7 +337,7 @@ async function waitForConversationCompletion(input: {
   };
 }
 
-export async function runTaskInConversationRuntime(request: TaskRunRequest): Promise<TaskRunResult> {
+export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<TaskRunResult> {
   const startedAt = new Date().toISOString();
   const logDir = join(request.runsRoot, sanitizePathSegment(request.task.id));
   const logPath = join(logDir, `${toTimestampKey(startedAt)}-attempt-${request.attempt}.log`);
@@ -455,4 +455,4 @@ export async function runTaskInConversationRuntime(request: TaskRunRequest): Pro
   }
 }
 
-export const runTaskInIsolatedPi = runTaskInConversationRuntime;
+

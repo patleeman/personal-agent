@@ -5,7 +5,6 @@ import { tmpdir } from 'os';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPiResourceArgs,
-  getExtensionDependencyDirs,
   installPackageSource,
   listProfiles,
   materializeProfileToAgentDir,

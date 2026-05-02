@@ -1,4 +1,4 @@
-const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'user/personal-agent-releases';
+const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent';
 
 function resolveDesktopReleaseRepoSlug(value = process.env.PERSONAL_AGENT_RELEASE_REPO) {
   const normalizedValue = value?.trim() || DEFAULT_DESKTOP_RELEASE_REPO_SLUG;

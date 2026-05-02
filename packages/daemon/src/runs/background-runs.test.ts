@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  closeDurableRunStoreConnections,
   loadDurableRunCheckpoint,
   loadDurableRunManifest,
   loadDurableRunStatus,
@@ -29,7 +28,6 @@ function createTempDir(prefix: string): string {
 }
 
 afterEach(async () => {
-  closeDurableRunStoreConnections();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 

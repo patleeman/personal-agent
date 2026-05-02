@@ -167,7 +167,7 @@ function buildCommonInput(run: ScannedDurableRun): Omit<StartBackgroundRunInput,
   };
 }
 
-export function canReplayBackgroundRun(run: ScannedDurableRun): boolean {
+function canReplayBackgroundRun(run: ScannedDurableRun): boolean {
   return run.manifest?.kind === 'background-run' || run.manifest?.kind === 'raw-shell';
 }
 

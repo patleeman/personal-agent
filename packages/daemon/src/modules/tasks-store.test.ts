@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createEmptyTaskState,
   loadTaskState,
-  saveTaskState,
-  type TaskStateFile,
 } from './tasks-store.js';
 
 const tempDirs: string[] = [];
@@ -181,29 +179,6 @@ describe('tasks-store', () => {
         },
       },
     });
-  });
-
-  it('saves state files and creates parent directories', () => {
-    const dir = createTempDir('tasks-store-save-');
-    const path = join(dir, 'nested', 'state', 'task-state.json');
-
-    const state: TaskStateFile = {
-      version: 1,
-      tasks: {
-        daily: {
-          id: 'daily',
-          filePath: '/tmp/daily.task.md',
-          scheduleType: 'cron',
-          running: false,
-          lastStatus: 'success',
-        },
-      },
-    };
-
-    saveTaskState(path, state);
-
-    expect(existsSync(path)).toBe(true);
-    expect(JSON.parse(readFileSync(path, 'utf-8'))).toEqual(state);
   });
 
   it('returns empty state for structurally invalid files', () => {

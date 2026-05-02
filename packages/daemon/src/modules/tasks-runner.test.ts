@@ -19,7 +19,7 @@ vi.mock('../config.js', () => ({
   loadDaemonConfig: mocks.loadDaemonConfig,
 }));
 
-import { runTaskInConversationRuntime, runTaskInIsolatedPi } from './tasks-runner.js';
+import { runTaskInIsolatedPi } from './tasks-runner.js';
 
 const tempDirs: string[] = [];
 
@@ -149,17 +149,13 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe('runTaskInConversationRuntime', () => {
-  it('keeps the old export wired to the conversation runtime implementation', () => {
-    expect(runTaskInIsolatedPi).toBe(runTaskInConversationRuntime);
-  });
-
+describe('runTaskInIsolatedPi', () => {
   it('resumes the automation thread, prompts through the conversation runtime, and succeeds on turn_end', async () => {
     const runsRoot = createTempDir('tasks-runner-runs-');
     const runtime = createRuntime();
     mocks.resolveCompanionRuntime.mockResolvedValue(runtime);
 
-    const result = await runTaskInConversationRuntime({
+    const result = await runTaskInIsolatedPi({
       task: createTask({ modelRef: 'provider/model-a', thinkingLevel: 'high', cwd: '/repo' }),
       attempt: 2,
       runsRoot,
@@ -197,7 +193,7 @@ describe('runTaskInConversationRuntime', () => {
     const runtime = createRuntime();
     mocks.resolveCompanionRuntime.mockResolvedValue(runtime);
 
-    const result = await runTaskInConversationRuntime({
+    const result = await runTaskInIsolatedPi({
       task: createTask({
         targetType: 'background-agent',
         threadMode: 'none',
@@ -221,7 +217,7 @@ describe('runTaskInConversationRuntime', () => {
     const runsRoot = createTempDir('tasks-runner-runs-');
     mocks.resolveCompanionRuntime.mockResolvedValue(null);
 
-    const result = await runTaskInConversationRuntime({
+    const result = await runTaskInIsolatedPi({
       task: createTask(),
       attempt: 1,
       runsRoot,
@@ -241,7 +237,7 @@ describe('runTaskInConversationRuntime', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const result = await runTaskInConversationRuntime({
+    const result = await runTaskInIsolatedPi({
       task: createTask(),
       attempt: 1,
       runsRoot,
@@ -270,7 +266,7 @@ describe('runTaskInConversationRuntime', () => {
     });
     mocks.resolveCompanionRuntime.mockResolvedValue(runtime);
 
-    const promise = runTaskInConversationRuntime({
+    const promise = runTaskInIsolatedPi({
       task: createTask(),
       attempt: 1,
       runsRoot,
@@ -308,7 +304,7 @@ describe('runTaskInConversationRuntime', () => {
     });
     mocks.resolveCompanionRuntime.mockResolvedValue(runtime);
 
-    const result = await runTaskInConversationRuntime({
+    const result = await runTaskInIsolatedPi({
       task: createTask(),
       attempt: 1,
       runsRoot,
@@ -333,7 +329,7 @@ describe('runTaskInConversationRuntime', () => {
     });
     mocks.resolveCompanionRuntime.mockResolvedValue(runtime);
 
-    const promise = runTaskInConversationRuntime({
+    const promise = runTaskInIsolatedPi({
       task: createTask({ timeoutSeconds: 1 }),
       attempt: 1,
       runsRoot,
@@ -370,7 +366,7 @@ describe('runTaskInConversationRuntime', () => {
     });
     mocks.resolveCompanionRuntime.mockResolvedValue(runtime);
 
-    const result = await runTaskInConversationRuntime({
+    const result = await runTaskInIsolatedPi({
       task: createTask(),
       attempt: 1,
       runsRoot,

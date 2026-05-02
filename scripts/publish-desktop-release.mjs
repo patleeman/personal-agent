@@ -11,7 +11,7 @@ const repoRoot = process.cwd();
 const packageJsonPath = resolve(repoRoot, 'package.json');
 const repoEnvPath = resolve(repoRoot, '.env');
 const defaultEnvPath = undefined;
-const defaultReleaseRepo = 'user/personal-agent-releases';
+const defaultReleaseRepo = 'patleeman/personal-agent';
 
 function fail(message) {
   console.error(message);
@@ -239,7 +239,7 @@ function ensureReleaseRepoExists(releaseRepo) {
 
   const details = JSON.parse(repoView.stdout || '{}');
   if (details.visibility !== 'PUBLIC') {
-    fail(`Release repo ${releaseRepo} must be public for desktop auto-updates to work.`);
+    console.warn(`Warning: ${releaseRepo} is ${details.visibility}. Auto-updates will require a public repo or auth tokens.`);
   }
 }
 
@@ -607,8 +607,7 @@ pushReleaseRef(tag);
 const releaseNotes = [
   `Signed desktop release artifacts for Personal Agent ${version}.`,
   '',
-  'This repo intentionally only hosts release assets and update metadata.',
-  'Source history stays in the private development repo.',
+  'Release assets and update metadata are hosted alongside the source repo.',
 ].join('\n');
 
 const releaseView = tryCapture('gh', ['release', 'view', tag, '--repo', releaseRepo, '--json', 'url']);

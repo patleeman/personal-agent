@@ -170,7 +170,7 @@ function buildWakeupId(runId: string): string {
   return `background-run-${sanitizeIdSegment(runId)}`;
 }
 
-export function getBackgroundRunCallbackBinding(run: ScannedDurableRun): BackgroundRunCallbackBinding | undefined {
+function getBackgroundRunCallbackBinding(run: ScannedDurableRun): BackgroundRunCallbackBinding | undefined {
   if (run.manifest?.kind !== 'background-run' && run.manifest?.kind !== 'raw-shell') {
     return undefined;
   }

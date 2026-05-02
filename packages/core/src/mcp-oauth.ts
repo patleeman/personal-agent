@@ -170,7 +170,7 @@ async function discoverProtectedResourceMetadata(
   return undefined;
 }
 
-export async function discoverOAuthServerInfo(
+async function discoverOAuthServerInfo(
   serverUrl: string,
   headers: Record<string, string> = {},
 ): Promise<McpRemoteDiscoveryResult> {
@@ -596,7 +596,7 @@ async function connectToRemoteServer(options: {
   }
 }
 
-export class PersonalAgentOAuthClientProvider implements OAuthClientProvider {
+class PersonalAgentOAuthClientProvider implements OAuthClientProvider {
   private readonly stateId = randomUUID();
   private cachedClientInfo: OAuthClientInformationMixed | undefined;
 

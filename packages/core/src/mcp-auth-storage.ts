@@ -30,7 +30,7 @@ function getPersonalAgentMcpBaseDir(): string {
   return join(resolveStatePaths().auth, 'mcp');
 }
 
-export function getMcpAuthConfigDir(): string {
+function getMcpAuthConfigDir(): string {
   return join(getPersonalAgentMcpBaseDir(), MCP_AUTH_SCHEMA_VERSION);
 }
 
@@ -51,7 +51,7 @@ async function ensureConfigDir(): Promise<void> {
   await fs.mkdir(getMcpAuthConfigDir(), { recursive: true });
 }
 
-export function getMcpAuthFilePath(serverUrlHash: string, filename: string): string {
+function getMcpAuthFilePath(serverUrlHash: string, filename: string): string {
   return join(getMcpAuthConfigDir(), `${serverUrlHash}_${filename}`);
 }
 

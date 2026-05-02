@@ -125,7 +125,7 @@ export interface ScheduleRunInput {
 /**
  * Derive run kind from target type.
  */
-export function deriveRunKind(target: Target): DurableRunKind {
+function deriveRunKind(target: Target): DurableRunKind {
   switch (target.type) {
     case 'conversation':
       return 'conversation';
@@ -139,7 +139,7 @@ export function deriveRunKind(target: Target): DurableRunKind {
 /**
  * Derive resume policy from trigger, target, and loop options.
  */
-export function deriveResumePolicy(
+function deriveResumePolicy(
   trigger: Trigger,
   target: Target,
   loop?: LoopOptions,
@@ -161,7 +161,7 @@ export function deriveResumePolicy(
 /**
  * Default callback options.
  */
-export const DEFAULT_CALLBACK: Required<CallbackOptions> = {
+const DEFAULT_CALLBACK: Required<CallbackOptions> = {
   alertLevel: 'passive',
   autoResumeIfOpen: true,
   requireAck: false,
@@ -170,7 +170,7 @@ export const DEFAULT_CALLBACK: Required<CallbackOptions> = {
 /**
  * Merge user-provided callback with defaults.
  */
-export function resolveCallback(input?: CallbackOptions): Required<CallbackOptions> {
+function resolveCallback(input?: CallbackOptions): Required<CallbackOptions> {
   return {
     ...DEFAULT_CALLBACK,
     ...input,
@@ -181,7 +181,7 @@ export function resolveCallback(input?: CallbackOptions): Required<CallbackOptio
 // Default loop retry
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_LOOP_RETRY = {
+const DEFAULT_LOOP_RETRY = {
   attempts: 3,
   backoff: 'exponential' as const,
   maxDelay: '10m',
@@ -193,7 +193,7 @@ const MAX_LOOP_RETRY_ATTEMPTS = 100;
 /**
  * Merge user-provided loop options with defaults.
  */
-export function resolveLoopOptions(input?: LoopOptions): LoopOptions | undefined {
+function resolveLoopOptions(input?: LoopOptions): LoopOptions | undefined {
   if (!input || !input.enabled) {
     return undefined;
   }
@@ -223,7 +223,7 @@ export function resolveLoopOptions(input?: LoopOptions): LoopOptions | undefined
 /**
  * Build the spec object stored in the manifest.
  */
-export function buildRunSpec(input: ScheduleRunInput): Record<string, unknown> {
+function buildRunSpec(input: ScheduleRunInput): Record<string, unknown> {
   const spec: Record<string, unknown> = {
     target: {
       type: input.target.type,
@@ -269,23 +269,6 @@ export function buildRunSpec(input: ScheduleRunInput): Record<string, unknown> {
  * Compute when this run should fire (for scheduling).
  * Returns undefined for 'now' triggers (fire immediately).
  */
-export function computeDueAt(trigger: Trigger): Date | undefined {
-  switch (trigger.type) {
-    case 'now':
-      return undefined;
-    case 'at':
-      return trigger.at;
-    case 'defer': {
-      const delayMs = parseDelayToMs(trigger.delay);
-      return delayMs !== undefined ? new Date(Date.now() + delayMs) : undefined;
-    }
-    case 'cron':
-      // Cron scheduling requires external cron library; return undefined
-      // and let the scheduler handle cron expression matching
-      return undefined;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Delay parsing
 // ---------------------------------------------------------------------------
@@ -302,7 +285,7 @@ const DELAY_MULTIPLIERS: Record<string, number> = {
 /**
  * Parse a delay string like "30s", "10m", "2h", "1d" to milliseconds.
  */
-export function parseDelayToMs(delay: string): number | undefined {
+function parseDelayToMs(delay: string): number | undefined {
   const match = delay.match(DELAY_REGEX);
   if (!match) {
     return undefined;
@@ -320,52 +303,6 @@ export function parseDelayToMs(delay: string): number | undefined {
   return Number.isSafeInteger(delayMs) && delayMs > 0 ? delayMs : undefined;
 }
 
-/**
- * Format milliseconds to a human-readable delay string.
- */
-export function formatDelay(ms: number): string {
-  if (ms < 60 * 1000) {
-    return `${ms / 1000}s`;
-  }
-
-  if (ms < 60 * 60 * 1000) {
-    return `${ms / (60 * 1000)}m`;
-  }
-
-  if (ms < 24 * 60 * 60 * 1000) {
-    return `${ms / (60 * 60 * 1000)}h`;
-  }
-
-  return `${ms / (24 * 60 * 60 * 1000)}d`;
-}
-
-// ---------------------------------------------------------------------------
-// Run hierarchy helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Check if a run status is terminal (no further action possible).
- */
-export function isTerminalStatus(status: string): boolean {
-  return status === 'completed' || status === 'failed' || status === 'cancelled';
-}
-
-/**
- * Check if a run status indicates it's waiting to fire.
- */
-export function isWaitingStatus(status: string): boolean {
-  return status === 'queued' || status === 'waiting';
-}
-
-/**
- * Check if a run is currently active (executing).
- */
-export function isActiveStatus(status: string): boolean {
-  return status === 'running' || status === 'recovering';
-}
-
-
-
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -378,7 +315,7 @@ export interface ValidationError {
 /**
  * Validate a ScheduleRunInput.
  */
-export function validateScheduleRunInput(input: unknown): ValidationError[] {
+function validateScheduleRunInput(input: unknown): ValidationError[] {
   const errors: ValidationError[] = [];
 
   if (!input || typeof input !== 'object') {
@@ -496,7 +433,7 @@ function toTimestampKey(value: string): string {
 /**
  * Create a run ID from a task slug and timestamp.
  */
-export function createRunId(taskSlug: string): string {
+function createRunId(taskSlug: string): string {
   const now = new Date().toISOString();
   const nonce = Math.random().toString(16).slice(2, 10);
 
@@ -607,33 +544,4 @@ export async function scheduleRun(
   };
 }
 
-/**
- * Cancel a run by ID.
- * Uses cascade cancel to ensure all descendants are also cancelled.
- */
-export async function cancelRun(
-  daemonRoot: string,
-  runId: string,
-): Promise<string[]> {
-  const runsRoot = resolveDurableRunsRoot(daemonRoot);
-  const { cascadeCancelRun } = await import('./store.js');
 
-  return cascadeCancelRun(runsRoot, runId);
-}
-
-/**
- * Get run info by ID.
- */
-export function getRun(
-  daemonRoot: string,
-  runId: string,
-): { runId: string; paths: DurableRunPaths } | undefined {
-  const runsRoot = resolveDurableRunsRoot(daemonRoot);
-  const paths = resolveDurableRunPaths(runsRoot, runId);
-
-  if (!resolveDurableRunPaths(runsRoot, runId).manifestPath) {
-    return undefined;
-  }
-
-  return { runId, paths };
-}

@@ -23,7 +23,7 @@ Those commands:
 5. notarize the artifacts
 6. require a smoke test of the built `.app` binary
 7. push the commit and tag
-8. create or update the matching GitHub release in `user/personal-agent-releases`
+8. create or update the matching GitHub release in the source repo's GitHub Releases
 
 Pi is now updated automatically by the `npm version` step used by the desktop release commands. If Pi is already current, the step is a no-op.
 
@@ -102,13 +102,13 @@ Expected public release assets:
 - `.zip.blockmap`
 - optionally `.dmg` and `.dmg.blockmap`
 
-Artifacts are uploaded to the public release-only repo, not to the private source repo.
+Artifacts are uploaded to the source repo's GitHub Releases so the auto-updater can fetch them from the same repo.
 
 ## Current scope
 
 - signed macOS desktop build
 - local notarization
-- GitHub release publish to `user/personal-agent-releases`
+- GitHub release publish in the source repo's GitHub Releases
 
 ## Practical rule
 
