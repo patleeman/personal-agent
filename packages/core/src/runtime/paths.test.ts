@@ -163,7 +163,7 @@ describe('profile and config path helpers', () => {
   it('prefers the managed knowledge base root when a knowledge base repo is configured', () => {
     const configDir = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
     const stateRoot = mkdtempSync(join(tmpdir(), 'personal-agent-state-'));
-    writeFileSync(join(configDir, 'config.json'), JSON.stringify({ knowledgeBaseRepoUrl: 'https://github.com/patleeman/kb.git' }));
+    writeFileSync(join(configDir, 'config.json'), JSON.stringify({ knowledgeBaseRepoUrl: 'https://github.com/user/kb.git' }));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 

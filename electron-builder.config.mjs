@@ -1,4 +1,4 @@
-const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent-releases';
+const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'user/personal-agent-releases';
 
 function resolveDesktopReleaseRepoSlug(value = process.env.PERSONAL_AGENT_RELEASE_REPO) {
   const normalizedValue = value?.trim() || DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
@@ -21,7 +21,7 @@ export const desktopReleasePublishConfig = {
 };
 
 const electronBuilderConfig = {
-  appId: 'nyc.patricklee.personal-agent',
+  appId: 'com.personal-agent.desktop',
   productName: 'Personal Agent',
   directories: {
     app: 'packages/desktop',

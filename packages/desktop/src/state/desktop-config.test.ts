@@ -42,14 +42,14 @@ describe('desktop-config', () => {
       hosts: [
         { id: 'local', label: 'Local', kind: 'local' },
         { id: 'tailnet', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex' },
-        { id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'patrick@gpu' },
+        { id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'user@gpu' },
       ],
     }, null, 2)}\n`, 'utf-8');
 
     const config = loadDesktopConfig();
     expect(config).toEqual(expect.objectContaining({
       version: 2,
-      hosts: [{ id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'patrick@gpu' }],
+      hosts: [{ id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'user@gpu' }],
     }));
   });
 

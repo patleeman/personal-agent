@@ -212,7 +212,7 @@ describe('SettingsPage', () => {
 
       if (fetcher === api.knowledgeBase) {
         return buildUseApiResult({
-          repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+          repoUrl: 'https://github.com/user/knowledge-base.git',
           branch: 'main',
           configured: true,
           effectiveRoot: '/Users/patrick/Documents/personal-agent',

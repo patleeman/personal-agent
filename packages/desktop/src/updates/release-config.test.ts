@@ -12,8 +12,8 @@ import {
 
 describe('desktop release config', () => {
   it('uses the public release-only repository', () => {
-    expect(DESKTOP_RELEASE_REPO_SLUG).toBe('patleeman/personal-agent-releases');
-    expect(buildDesktopReleasePageUrl('0.1.14')).toBe('https://github.com/patleeman/personal-agent-releases/releases/tag/v0.1.14');
+    expect(DESKTOP_RELEASE_REPO_SLUG).toBe('user/personal-agent-releases');
+    expect(buildDesktopReleasePageUrl('0.1.14')).toBe('https://github.com/user/personal-agent-releases/releases/tag/v0.1.14');
   });
 
   it('keeps the packaged updater feed pointed at the same release repo', () => {

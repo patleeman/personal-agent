@@ -61,13 +61,13 @@ describe('machine config', () => {
   it('reads and writes the managed knowledge base repo in config.json', () => {
     const configDir = createTempDir('pa-machine-config-');
 
-    writeMachineKnowledgeBase({ repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' }, { configRoot: configDir });
+    writeMachineKnowledgeBase({ repoUrl: 'https://github.com/user/kb.git', branch: 'trunk' }, { configRoot: configDir });
     expect(readMachineKnowledgeBase({ configRoot: configDir })).toEqual({
-      repoUrl: 'https://github.com/patleeman/kb.git',
+      repoUrl: 'https://github.com/user/kb.git',
       branch: 'trunk',
     });
     expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({
-      knowledgeBaseRepoUrl: 'https://github.com/patleeman/kb.git',
+      knowledgeBaseRepoUrl: 'https://github.com/user/kb.git',
       knowledgeBaseBranch: 'trunk',
     });
 

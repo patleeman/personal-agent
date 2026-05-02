@@ -1554,7 +1554,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                 id: "conv-1",
                 file: "/tmp/conv-1.jsonl",
                 timestamp: now,
-                cwd: "/Users/patrick/workingdir/personal-agent",
+                cwd: "/home/user/project",
                 cwdSlug: "personal-agent",
                 model: "gpt-5.4",
                 title: "iOS companion app",
@@ -1580,7 +1580,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                 id: "conv-2",
                 file: "/tmp/conv-2.jsonl",
                 timestamp: now,
-                cwd: "/Users/patrick/workingdir/familiar",
+                cwd: "/home/user/other-project",
                 cwdSlug: "familiar",
                 model: "gpt-5.4",
                 title: "Release notes",
@@ -1610,7 +1610,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                 sessionIds: ["conv-1", "conv-2"],
                 pinnedSessionIds: ["conv-1"],
                 archivedSessionIds: [],
-                workspacePaths: ["/Users/patrick/workingdir/personal-agent"]
+                workspacePaths: ["/home/user/project"]
             ),
             executionTargets: [
                 ExecutionTargetSummary(id: "local", label: "Local", kind: "local"),
@@ -1660,7 +1660,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                         blocks: [
                             DisplayBlock(type: "summary", id: "s1", ts: now, text: "Release checklist is nearly finished.", title: "Summary", kind: "related"),
                             DisplayBlock(type: "thinking", id: "t2", ts: now, text: "Confirm the macOS assets are notarized, then double-check the public release repo before announcing it."),
-                            DisplayBlock(type: "tool_use", id: "tool-3", ts: now, title: "release log", tool: "bash", input: .object(["command": .string("npm run release:desktop:patch")]), output: "Published v0.4.2 to patleeman/personal-agent-releases and stapled the DMG.", durationMs: 6910),
+                            DisplayBlock(type: "tool_use", id: "tool-3", ts: now, title: "release log", tool: "bash", input: .object(["command": .string("npm run release:desktop:patch")]), output: "Published v0.4.2 to user/personal-agent-releases and stapled the DMG.", durationMs: 6910),
                             DisplayBlock(type: "text", id: "a2", ts: now, text: "Sign the build, upload the blockmaps, and update the GitHub release body."),
                         ],
                         blockOffset: 0,
@@ -1707,13 +1707,13 @@ final class MockCompanionClient: CompanionClientProtocol {
                     id: "abc1234",
                     conversationId: "conv-1",
                     title: "Ship companion parity",
-                    cwd: "/Users/patrick/workingdir/personal-agent",
+                    cwd: "/home/user/project",
                     commitSha: "abc1234def567890",
                     shortSha: "abc1234",
                     subject: "Add iOS companion parity",
                     body: "Implements richer conversation controls and companion admin screens.",
                     authorName: "Test User",
-                    authorEmail: "patrick@example.com",
+                    authorEmail: "user@example.com",
                     committedAt: now,
                     createdAt: now,
                     updatedAt: now,
@@ -1750,7 +1750,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         self.autoModeByConversation = Dictionary(uniqueKeysWithValues: self.conversations.keys.map {
             ($0, ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil))
         })
-        self.knowledgeRootPath = "/Users/patrick/Documents/personal-agent"
+        self.knowledgeRootPath = "/home/user/Documents/vault"
         self.knowledgeFiles = Self.defaultKnowledgeFiles()
         self.knowledgeFolders = Self.buildKnowledgeFolderSet(from: self.knowledgeFiles.keys)
         self.tasks = [
@@ -1766,7 +1766,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                 at: nil,
                 model: "gpt-5.4",
                 thinkingLevel: "medium",
-                cwd: "/Users/patrick/workingdir/personal-agent",
+                cwd: "/home/user/project",
                 timeoutSeconds: 900,
                 prompt: "Review outstanding work and summarize priorities.",
                 conversationBehavior: nil,
@@ -1846,7 +1846,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             ]
         )
         self.sshTargetState = CompanionSshTargetState(hosts: [
-            CompanionSshTargetRecord(id: "ssh-1", label: "Buildbox", kind: "ssh", sshTarget: "patrick@buildbox")
+            CompanionSshTargetRecord(id: "ssh-1", label: "Buildbox", kind: "ssh", sshTarget: "user@buildbox")
         ])
     }
 
@@ -2422,22 +2422,22 @@ final class MockCompanionClient: CompanionClientProtocol {
         if !testSshTargetFailureQueueMessages.isEmpty {
             throw CompanionClientError.requestFailed(testSshTargetFailureQueueMessages.removeFirst())
         }
-        return CompanionSshTargetTestResult(ok: true, sshTarget: sshTarget, os: "linux", arch: "arm64", platformKey: "linux-arm64", homeDirectory: "/home/patrick", tempDirectory: "/tmp", cacheDirectory: "/home/patrick/.cache", message: "SSH target reachable.")
+        return CompanionSshTargetTestResult(ok: true, sshTarget: sshTarget, os: "linux", arch: "arm64", platformKey: "linux-arm64", homeDirectory: "/home/user", tempDirectory: "/tmp", cacheDirectory: "/home/user/.cache", message: "SSH target reachable.")
     }
 
     func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {
         if !readRemoteDirectoryFailureQueueMessages.isEmpty {
             throw CompanionClientError.requestFailed(readRemoteDirectoryFailureQueueMessages.removeFirst())
         }
-        let currentPath = path?.trimmed.nilIfBlank ?? "/Users/patrick/workingdir"
+        let currentPath = path?.trimmed.nilIfBlank ?? "/home/user/workspace"
         switch currentPath {
-        case "/Users/patrick/workingdir":
-            return CompanionRemoteDirectoryListing(path: currentPath, parent: "/Users/patrick", entries: [
-                CompanionRemoteDirectoryEntry(name: "personal-agent", path: "/Users/patrick/workingdir/personal-agent", isDir: true, isHidden: false),
-                CompanionRemoteDirectoryEntry(name: "familiar", path: "/Users/patrick/workingdir/familiar", isDir: true, isHidden: false),
+        case "/home/user/workspace":
+            return CompanionRemoteDirectoryListing(path: currentPath, parent: "/home/user", entries: [
+                CompanionRemoteDirectoryEntry(name: "personal-agent", path: "/home/user/project", isDir: true, isHidden: false),
+                CompanionRemoteDirectoryEntry(name: "familiar", path: "/home/user/other-project", isDir: true, isHidden: false),
             ])
-        case "/Users/patrick/workingdir/personal-agent":
-            return CompanionRemoteDirectoryListing(path: currentPath, parent: "/Users/patrick/workingdir", entries: [
+        case "/home/user/project":
+            return CompanionRemoteDirectoryListing(path: currentPath, parent: "/home/user/workspace", entries: [
                 CompanionRemoteDirectoryEntry(name: "apps", path: "\(currentPath)/apps", isDir: true, isHidden: false),
                 CompanionRemoteDirectoryEntry(name: "packages", path: "\(currentPath)/packages", isDir: true, isHidden: false),
                 CompanionRemoteDirectoryEntry(name: "docs", path: "\(currentPath)/docs", isDir: true, isHidden: false),
@@ -2490,8 +2490,8 @@ final class MockCompanionClient: CompanionClientProtocol {
             id: conversationId,
             file: "/tmp/\(conversationId).jsonl",
             timestamp: now,
-            cwd: input.cwd.nilIfBlank ?? "/Users/patrick/workingdir/personal-agent",
-            cwdSlug: URL(fileURLWithPath: input.cwd.nilIfBlank ?? "/Users/patrick/workingdir/personal-agent").lastPathComponent,
+            cwd: input.cwd.nilIfBlank ?? "/home/user/project",
+            cwdSlug: URL(fileURLWithPath: input.cwd.nilIfBlank ?? "/home/user/project").lastPathComponent,
             model: input.model.nilIfBlank ?? "gpt-5.4",
             title: input.promptText.nilIfBlank ?? "New conversation",
             messageCount: input.promptText.nilIfBlank == nil ? 0 : 1,
@@ -3154,13 +3154,13 @@ final class MockCompanionClient: CompanionClientProtocol {
             id: UUID().uuidString.lowercased(),
             conversationId: conversationId,
             title: message,
-            cwd: conversations[conversationId]?.sessionMeta?.cwd ?? "/Users/patrick/workingdir/personal-agent",
+            cwd: conversations[conversationId]?.sessionMeta?.cwd ?? "/home/user/project",
             commitSha: UUID().uuidString.replacingOccurrences(of: "-", with: ""),
             shortSha: String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(7)),
             subject: message,
             body: nil,
             authorName: "Test User",
-            authorEmail: "patrick@example.com",
+            authorEmail: "user@example.com",
             committedAt: now,
             createdAt: now,
             updatedAt: now,

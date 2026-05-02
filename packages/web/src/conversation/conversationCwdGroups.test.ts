@@ -18,11 +18,11 @@ describe('conversationCwdGroups', () => {
 
   it('disambiguates workspaces that share the same basename', () => {
     const labelsByCwd = buildConversationGroupLabels([
-      '/Users/patrickc.lee/personal/personal-agent',
-      '/Users/patrickc.lee/Documents/personal-agent',
+      '/home/user/project',
+      '/home/user/documents/personal-agent',
     ]);
 
-    expect(getConversationGroupLabel('/Users/patrickc.lee/personal/personal-agent', { labelsByCwd })).toBe('personal/personal-agent');
-    expect(getConversationGroupLabel('/Users/patrickc.lee/Documents/personal-agent', { labelsByCwd })).toBe('Documents/personal-agent');
+    expect(getConversationGroupLabel('/home/user/project', { labelsByCwd })).toBe('personal/personal-agent');
+    expect(getConversationGroupLabel('/home/user/documents/personal-agent', { labelsByCwd })).toBe('Documents/personal-agent');
   });
 });

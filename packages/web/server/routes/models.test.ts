@@ -468,17 +468,17 @@ describe('model routes', () => {
     expect(invalidRepoUrlRes.json).toHaveBeenCalledWith({ error: 'repoUrl must be a string or null' });
 
     const invalidBranchRes = createResponse();
-    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/patleeman/kb.git', branch: 123 } }), invalidBranchRes);
+    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/user/kb.git', branch: 123 } }), invalidBranchRes);
     expect(invalidBranchRes.status).toHaveBeenCalledWith(400);
     expect(invalidBranchRes.json).toHaveBeenCalledWith({ error: 'branch must be a string or null' });
 
     const saveRes = createResponse();
-    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' } }), saveRes);
-    expect(updateKnowledgeBaseMock).toHaveBeenCalledWith({ repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' });
+    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/user/kb.git', branch: 'trunk' } }), saveRes);
+    expect(updateKnowledgeBaseMock).toHaveBeenCalledWith({ repoUrl: 'https://github.com/user/kb.git', branch: 'trunk' });
     expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
     expect(saveRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      repoUrl: 'https://github.com/patleeman/kb.git',
+      repoUrl: 'https://github.com/user/kb.git',
       branch: 'trunk',
       configured: true,
     }));
@@ -488,7 +488,7 @@ describe('model routes', () => {
     expect(syncKnowledgeBaseNowMock).toHaveBeenCalledTimes(1);
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
     expect(syncRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      repoUrl: 'https://github.com/patleeman/kb.git',
+      repoUrl: 'https://github.com/user/kb.git',
       branch: 'trunk',
     }));
   });

@@ -107,7 +107,7 @@ describe('window desktop navigation helpers', () => {
 
   it('opens target-blank web links in the system browser instead of a new desktop window', () => {
     expect(shouldOpenWindowExternally('https://example.com/docs')).toBe(true);
-    expect(shouldOpenWindowExternally('mailto:patrick@example.com')).toBe(true);
+    expect(shouldOpenWindowExternally('mailto:user@example.com')).toBe(true);
     expect(shouldOpenWindowExternally('personal-agent://app/conversations/new')).toBe(false);
   });
 
@@ -127,7 +127,7 @@ describe('window desktop navigation helpers', () => {
     electronApp.name = 'Personal Agent Testing';
 
     expect(buildWindowTitle({ id: 'local', label: 'Local', kind: 'local' })).toBe('Personal Agent Testing');
-    expect(buildWindowTitle({ id: 'ssh-1', label: 'Bender', kind: 'ssh', sshTarget: 'patrick@bender' })).toBe(
+    expect(buildWindowTitle({ id: 'ssh-1', label: 'Bender', kind: 'ssh', sshTarget: 'user@bender' })).toBe(
       'Personal Agent Testing — Bender (SSH remote)',
     );
 

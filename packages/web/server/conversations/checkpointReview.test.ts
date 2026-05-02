@@ -71,7 +71,7 @@ function runGit(cwd: string, args: string[]): string {
 function createCommittedRepo() {
   const repoRoot = createTempRepoRoot();
   runGit(repoRoot, ['init', '-q']);
-  runGit(repoRoot, ['config', 'user.email', 'patrick@example.com']);
+  runGit(repoRoot, ['config', 'user.email', 'user@example.com']);
   runGit(repoRoot, ['config', 'user.name', 'Test User']);
 
   writeFileSync(join(repoRoot, 'README.md'), 'hello\n', 'utf-8');
@@ -94,16 +94,16 @@ function createCommittedRepo() {
 
 describe('checkpointReview', () => {
   it('parses common GitHub remote URL formats', () => {
-    expect(parseGitHubRemoteUrl('git@github.com:patleeman/personal-agent.git')).toEqual({
-      owner: 'patleeman',
+    expect(parseGitHubRemoteUrl('git@github.com:user/personal-agent.git')).toEqual({
+      owner: 'user',
       repo: 'personal-agent',
-      repoUrl: 'https://github.com/patleeman/personal-agent',
+      repoUrl: 'https://github.com/user/personal-agent',
     });
 
-    expect(parseGitHubRemoteUrl('https://github.com/patleeman/personal-agent')).toEqual({
-      owner: 'patleeman',
+    expect(parseGitHubRemoteUrl('https://github.com/user/personal-agent')).toEqual({
+      owner: 'user',
       repo: 'personal-agent',
-      repoUrl: 'https://github.com/patleeman/personal-agent',
+      repoUrl: 'https://github.com/user/personal-agent',
     });
   });
 

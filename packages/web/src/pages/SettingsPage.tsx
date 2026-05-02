@@ -1598,7 +1598,7 @@ export function DesktopConnectionsSettingsPanel() {
                     className={`${INPUT_CLASS} font-mono text-[13px]`}
                     autoComplete="off"
                     spellCheck={false}
-                    placeholder="patrick@desktop-gpu"
+                    placeholder="user@desktop"
                   />
                   <p className="text-[11px] text-dim">Use a host alias or any target that works with your normal <span className="font-mono">ssh</span> command.</p>
                 </div>

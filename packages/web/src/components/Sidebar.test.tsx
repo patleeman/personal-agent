@@ -43,7 +43,7 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     id: 'conv-123',
     file: '/tmp/conv-123.jsonl',
     timestamp: '2026-03-16T09:30:00.000Z',
-    cwd: '/Users/patrickc.lee/personal/personal-agent',
+    cwd: '/home/user/project',
     cwdSlug: 'personal-agent',
     model: 'openai/gpt-5.4',
     title: 'Clarify background run link',
@@ -325,7 +325,7 @@ describe('Sidebar', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(
       buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups'),
-      JSON.stringify(['/Users/patrickc.lee/personal/personal-agent']),
+      JSON.stringify(['/home/user/project']),
     );
 
     const html = renderSidebar('/conversations/new');
@@ -352,8 +352,8 @@ describe('Sidebar', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([
-      '/Users/patrickc.lee/personal/personal-agent',
-      '/Users/patrickc.lee/Documents/personal-agent',
+      '/home/user/project',
+      '/home/user/documents/personal-agent',
     ]));
 
     const html = renderSidebar('/conversations/new', { sessions: [] });
@@ -476,7 +476,7 @@ describe('Sidebar', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(
       buildSidebarNavSectionStorageKey('threads-cwd-group-label-overrides'),
-      JSON.stringify({ '/Users/patrickc.lee/personal/personal-agent': 'Desktop' }),
+      JSON.stringify({ '/home/user/project': 'Desktop' }),
     );
 
     const html = renderSidebar('/conversations/new');

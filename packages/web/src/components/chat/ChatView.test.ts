@@ -209,9 +209,9 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('does not turn email addresses into mention pills', () => {
-    const html = renderAssistantText('Email patrick@example.com and ping @desktop-ui for follow-up.');
+    const html = renderAssistantText('Email user@example.com and ping @desktop-ui for follow-up.');
 
-    expect(html).toContain('patrick@example.com');
+    expect(html).toContain('user@example.com');
     expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
   });
 

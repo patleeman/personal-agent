@@ -3192,7 +3192,7 @@ private struct SshTargetEditorView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 TextField("Label", text: $label)
-                TextField("patrick@buildbox", text: $sshTarget)
+                TextField("user@buildbox", text: $sshTarget)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }

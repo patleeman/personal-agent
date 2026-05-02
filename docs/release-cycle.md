@@ -23,7 +23,7 @@ Those commands:
 5. notarize the artifacts
 6. require a smoke test of the built `.app` binary
 7. push the commit and tag
-8. create or update the matching GitHub release in `patleeman/personal-agent-releases`
+8. create or update the matching GitHub release in `user/personal-agent-releases`
 
 Pi is now updated automatically by the `npm version` step used by the desktop release commands. If Pi is already current, the step is a no-op.
 
@@ -82,7 +82,7 @@ Credential lookup order:
 1. already-exported shell environment
 2. file pointed to by `PERSONAL_AGENT_RELEASE_ENV`
 3. `.env` in the repo root
-4. `~/workingdir/familiar/.env`
+4. `~/.config/personal-agent/release-env`
 
 The publish script accepts:
 
@@ -108,7 +108,7 @@ Artifacts are uploaded to the public release-only repo, not to the private sourc
 
 - signed macOS desktop build
 - local notarization
-- GitHub release publish to `patleeman/personal-agent-releases`
+- GitHub release publish to `user/personal-agent-releases`
 
 ## Practical rule
 

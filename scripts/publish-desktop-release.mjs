@@ -10,8 +10,8 @@ const require = createRequire(import.meta.url);
 const repoRoot = process.cwd();
 const packageJsonPath = resolve(repoRoot, 'package.json');
 const repoEnvPath = resolve(repoRoot, '.env');
-const defaultEnvPath = resolve(homedir(), 'workingdir', 'familiar', '.env');
-const defaultReleaseRepo = 'patleeman/personal-agent-releases';
+const defaultEnvPath = undefined;
+const defaultReleaseRepo = 'user/personal-agent-releases';
 
 function fail(message) {
   console.error(message);

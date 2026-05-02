@@ -22,7 +22,7 @@ describe('api.knowledgeBase', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     resolveFetch?.(new Response(JSON.stringify({
-      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      repoUrl: 'https://github.com/user/knowledge-base.git',
       branch: 'main',
       configured: true,
       effectiveRoot: '/vault',
@@ -44,7 +44,7 @@ describe('api.knowledgeBase', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-24T00:00:00.000Z'));
     const createResponse = () => new Response(JSON.stringify({
-      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      repoUrl: 'https://github.com/user/knowledge-base.git',
       branch: 'main',
       configured: true,
       effectiveRoot: '/vault',

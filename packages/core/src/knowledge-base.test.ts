@@ -38,7 +38,7 @@ function initBareRepo(): string {
 function seedRemoteRepo(remoteRepo: string, files: Record<string, string>, timestamp: string): void {
   const worktree = createTempDir('pa-kb-seed-');
   runGit(['clone', remoteRepo, worktree], dirname(worktree));
-  runGit(['config', 'user.email', 'patrick@example.com'], worktree);
+  runGit(['config', 'user.email', 'user@example.com'], worktree);
   runGit(['config', 'user.name', 'Test User'], worktree);
 
   for (const [relativePath, content] of Object.entries(files)) {
@@ -220,7 +220,7 @@ describe('KnowledgeBaseManager', () => {
 
     const remoteEditor = createTempDir('pa-kb-editor-');
     runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
-    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.email', 'user@example.com'], remoteEditor);
     runGit(['config', 'user.name', 'Test User'], remoteEditor);
     rmSync(join(remoteEditor, 'notes', '.gitkeep'), { force: true });
     writeFileSync(join(remoteEditor, 'notes', 'remote.md'), '# Remote\n');
@@ -304,7 +304,7 @@ describe('KnowledgeBaseManager', () => {
     expect(dirtyState.gitStatus?.aheadCount).toBe(0);
     expect(dirtyState.gitStatus?.behindCount).toBe(0);
 
-    runGit(['config', 'user.email', 'patrick@example.com'], managedRoot);
+    runGit(['config', 'user.email', 'user@example.com'], managedRoot);
     runGit(['config', 'user.name', 'Test User'], managedRoot);
     runGit(['add', 'notes/daily.md'], managedRoot);
     runGit(['commit', '-m', 'local edit'], managedRoot, {
@@ -319,7 +319,7 @@ describe('KnowledgeBaseManager', () => {
 
     const remoteEditor = createTempDir('pa-kb-editor-');
     runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
-    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.email', 'user@example.com'], remoteEditor);
     runGit(['config', 'user.name', 'Test User'], remoteEditor);
     writeFileSync(join(remoteEditor, 'notes', 'remote.md'), '# Remote\n');
     runGit(['add', 'notes/remote.md'], remoteEditor);
@@ -395,7 +395,7 @@ describe('KnowledgeBaseManager', () => {
 
     const remoteEditor = createTempDir('pa-kb-editor-');
     runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
-    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.email', 'user@example.com'], remoteEditor);
     runGit(['config', 'user.name', 'Test User'], remoteEditor);
     writeFileSync(join(remoteEditor, 'notes', 'daily.md'), '# Remote\nnewer\n');
     runGit(['add', 'notes/daily.md'], remoteEditor);
@@ -433,7 +433,7 @@ describe('KnowledgeBaseManager', () => {
 
     const remoteEditor = createTempDir('pa-kb-editor-');
     runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
-    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.email', 'user@example.com'], remoteEditor);
     runGit(['config', 'user.name', 'Test User'], remoteEditor);
     writeFileSync(join(remoteEditor, 'notes', 'remote.md'), '# Remote\n');
     runGit(['add', 'notes/remote.md'], remoteEditor);
@@ -470,7 +470,7 @@ describe('KnowledgeBaseManager', () => {
 
     const remoteEditor = createTempDir('pa-kb-editor-');
     runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
-    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.email', 'user@example.com'], remoteEditor);
     runGit(['config', 'user.name', 'Test User'], remoteEditor);
     writeFileSync(join(remoteEditor, 'notes', 'stale-lock.md'), '# Remote\n');
     runGit(['add', 'notes/stale-lock.md'], remoteEditor);

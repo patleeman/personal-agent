@@ -117,7 +117,7 @@ describe('DesktopConnectionsSettingsPanel', () => {
       activeHostSummary: 'Local runtime is healthy.',
     });
     mocks.getConnections.mockResolvedValue({
-      hosts: [{ id: 'bender', label: 'Bender', kind: 'ssh', sshTarget: 'patrick@bender' }],
+      hosts: [{ id: 'bender', label: 'Bender', kind: 'ssh', sshTarget: 'user@bender' }],
     });
     mocks.readDesktopAppPreferences.mockResolvedValue({
       available: true,
@@ -144,19 +144,19 @@ describe('DesktopConnectionsSettingsPanel', () => {
       },
     });
     mocks.saveHost.mockResolvedValue({
-      hosts: [{ id: 'bender', label: 'Bender', kind: 'ssh', sshTarget: 'patrick@bender' }],
+      hosts: [{ id: 'bender', label: 'Bender', kind: 'ssh', sshTarget: 'user@bender' }],
     });
     mocks.deleteHost.mockResolvedValue({ hosts: [] });
     mocks.testSshConnection.mockResolvedValue({
       ok: true,
-      sshTarget: 'patrick@bender',
+      sshTarget: 'user@bender',
       os: 'darwin',
       arch: 'arm64',
       platformKey: 'darwin-arm64',
       homeDirectory: '/Users/patrick',
       tempDirectory: '/var/folders/example/T/',
       cacheDirectory: '/Users/patrick/.cache/personal-agent/ssh-runtime',
-      message: 'patrick@bender is reachable · macOS arm64',
+      message: 'user@bender is reachable · macOS arm64',
     });
   });
 
@@ -176,11 +176,11 @@ describe('DesktopConnectionsSettingsPanel', () => {
     await flushAsyncWork();
 
     const sshTargetInput = queryInput(container, '#desktop-host-ssh-target');
-    updateInputValue(sshTargetInput, 'patrick@bender   ');
+    updateInputValue(sshTargetInput, 'user@bender   ');
     click(queryButton(container, 'Test SSH'));
     await flushAsyncWork();
 
-    expect(mocks.testSshConnection).toHaveBeenCalledWith({ sshTarget: 'patrick@bender' });
+    expect(mocks.testSshConnection).toHaveBeenCalledWith({ sshTarget: 'user@bender' });
     expect(container.textContent).toContain('SSH connection works.');
     expect(container.textContent).toContain('macOS arm64');
     expect(container.textContent).toContain('cache /Users/patrick/.cache/personal-agent/ssh-runtime');

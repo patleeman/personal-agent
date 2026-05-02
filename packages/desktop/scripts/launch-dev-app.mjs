@@ -164,7 +164,7 @@ function ensureMacDevAppBundle() {
   replacePlistString(infoPlistPath, 'CFBundleName', productName);
   replacePlistString(infoPlistPath, 'CFBundleExecutable', productName);
   replacePlistString(infoPlistPath, 'CFBundleIconFile', 'icon.icns');
-  replacePlistString(infoPlistPath, 'CFBundleIdentifier', 'nyc.patricklee.personal-agent.dev');
+  replacePlistString(infoPlistPath, 'CFBundleIdentifier', 'com.personal-agent.desktop.dev');
   replacePlistString(infoPlistPath, 'CFBundleShortVersionString', appVersion);
   replacePlistString(infoPlistPath, 'CFBundleVersion', appVersion);
 

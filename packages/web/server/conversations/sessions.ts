@@ -1325,7 +1325,7 @@ function buildSessionInfoRecord(name: string): string {
 }
 
 function slugToCwd(slug: string): string {
-  // slug: --Users-patrickc.lee-personal-personal-agent-- → /Users/patrickc.lee/personal/personal-agent
+  // slug: --Users-user-personal-personal-agent-- → /Users/user/personal/personal-agent
   return slug
     .replace(/^--/, '')
     .replace(/--$/, '')

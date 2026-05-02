@@ -189,7 +189,7 @@ describe('VaultFileTree', () => {
     vi.stubGlobal('localStorage', createStorage());
     apiMocks.knowledgeBase.mockReset();
     apiMocks.knowledgeBase.mockResolvedValue({
-      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      repoUrl: 'https://github.com/user/knowledge-base.git',
       branch: 'main',
       configured: true,
       effectiveRoot: '/vault',
@@ -209,7 +209,7 @@ describe('VaultFileTree', () => {
     apiMocks.vaultFiles.mockResolvedValue(TREE);
     apiMocks.syncKnowledgeBase.mockReset();
     apiMocks.syncKnowledgeBase.mockResolvedValue({
-      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      repoUrl: 'https://github.com/user/knowledge-base.git',
       branch: 'main',
       configured: true,
       effectiveRoot: '/vault',
@@ -238,7 +238,7 @@ describe('VaultFileTree', () => {
 
   it('shows the managed sync status in the knowledge header', async () => {
     apiMocks.knowledgeBase.mockResolvedValueOnce({
-      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      repoUrl: 'https://github.com/user/knowledge-base.git',
       branch: 'main',
       configured: true,
       effectiveRoot: '/vault',

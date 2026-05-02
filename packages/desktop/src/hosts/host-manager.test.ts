@@ -60,7 +60,7 @@ describe('HostManager', () => {
       openWindowOnLaunch: true,
       windowState: { width: 1440, height: 960 },
       hosts: [
-        { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' },
+        { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'user@gpu-box' },
       ],
     };
     mocks.loadDesktopConfig.mockImplementation(() => config);
@@ -101,7 +101,7 @@ describe('HostManager', () => {
   it('returns only saved SSH remotes in connections state', () => {
     const manager = new HostManager();
     expect(manager.getConnectionsState()).toEqual({
-      hosts: [{ id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' }],
+      hosts: [{ id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'user@gpu-box' }],
     });
   });
 
@@ -112,13 +112,13 @@ describe('HostManager', () => {
       id: 'ssh-2',
       label: 'Bender',
       kind: 'ssh',
-      sshTarget: 'patrick@bender',
+      sshTarget: 'user@bender',
     });
 
     expect(mocks.saveDesktopConfig).toHaveBeenCalledWith(expect.objectContaining({
       hosts: expect.arrayContaining([
         expect.objectContaining({ id: 'ssh-1' }),
-        expect.objectContaining({ id: 'ssh-2', sshTarget: 'patrick@bender' }),
+        expect.objectContaining({ id: 'ssh-2', sshTarget: 'user@bender' }),
       ]),
     }));
 
@@ -137,12 +137,12 @@ describe('HostManager', () => {
   it('probes SSH targets without saving them first', async () => {
     const manager = new HostManager();
 
-    await expect(manager.testSshConnection({ sshTarget: 'patrick@bender' })).resolves.toMatchObject({
+    await expect(manager.testSshConnection({ sshTarget: 'user@bender' })).resolves.toMatchObject({
       ok: true,
-      sshTarget: 'patrick@bender',
+      sshTarget: 'user@bender',
       platformKey: 'linux-x64',
     });
 
-    expect(mocks.testSshConnection).toHaveBeenCalledWith({ sshTarget: 'patrick@bender' });
+    expect(mocks.testSshConnection).toHaveBeenCalledWith({ sshTarget: 'user@bender' });
   });
 });

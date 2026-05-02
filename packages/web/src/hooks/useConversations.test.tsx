@@ -41,7 +41,7 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     id: 'conv-auto',
     file: '/tmp/conv-auto.jsonl',
     timestamp: '2026-03-16T09:30:00.000Z',
-    cwd: '/Users/patrickc.lee/personal/personal-agent',
+    cwd: '/home/user/project',
     cwdSlug: 'personal-agent',
     model: 'openai/gpt-5.4',
     title: 'Automation: Morning Briefing',

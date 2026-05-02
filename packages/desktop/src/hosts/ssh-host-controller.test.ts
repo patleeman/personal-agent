@@ -33,24 +33,24 @@ describe('testSshConnection', () => {
       '/Users/patrick/.cache/personal-agent/ssh-runtime',
     ].join('\n'));
 
-    expect(testSshConnection({ sshTarget: ' patrick@bender ' })).toEqual({
+    expect(testSshConnection({ sshTarget: ' user@bender ' })).toEqual({
       ok: true,
-      sshTarget: 'patrick@bender',
+      sshTarget: 'user@bender',
       os: 'darwin',
       arch: 'arm64',
       platformKey: 'darwin-arm64',
       homeDirectory: '/Users/patrick',
       tempDirectory: '/var/folders/example/T/',
       cacheDirectory: '/Users/patrick/.cache/personal-agent/ssh-runtime',
-      message: 'patrick@bender is reachable · macOS arm64',
+      message: 'user@bender is reachable · macOS arm64',
     });
 
     expect(mocks.runSshCommand).toHaveBeenCalledWith(
-      'patrick@bender',
+      'user@bender',
       expect.stringContaining('cache="$home/.cache/personal-agent/ssh-runtime"'),
     );
     expect(mocks.runSshCommand).toHaveBeenCalledWith(
-      'patrick@bender',
+      'user@bender',
       expect.stringContaining('mktemp -d "${tmp%/}/personal-agent-ssh-test.XXXXXX"'),
     );
   });

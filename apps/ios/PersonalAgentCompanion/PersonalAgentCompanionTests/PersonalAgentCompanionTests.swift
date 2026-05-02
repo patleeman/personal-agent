@@ -274,7 +274,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
                 id: "local-demo-1",
                 file: "/tmp/local-demo-1.jsonl",
                 timestamp: ISO8601DateFormatter.flexible.string(from: .now),
-                cwd: "/Users/patrick/workingdir/personal-agent",
+                cwd: "/home/user/project",
                 cwdSlug: "personal-agent",
                 model: "gpt-5.4",
                 title: "Real transcript demo",
@@ -681,7 +681,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
             id: "conversation-1",
             file: "/tmp/conversation-1.jsonl",
             timestamp: ISO8601DateFormatter.flexible.string(from: .now),
-            cwd: "/Users/patrick/workingdir/personal-agent",
+            cwd: "/home/user/project",
             cwdSlug: "--Users-patrick-working--",
             model: "gpt-5.4",
             title: "Unread running thread",
@@ -716,7 +716,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
             id: "conversation-1",
             file: "/tmp/conversation-1.jsonl",
             timestamp: ISO8601DateFormatter.flexible.string(from: .now),
-            cwd: "/Users/patrick/workingdir/personal-agent",
+            cwd: "/home/user/project",
             cwdSlug: "personal-agent",
             model: "gpt-5.4",
             title: "Remote thread",
@@ -1571,11 +1571,11 @@ final class PersonalAgentCompanionTests: XCTestCase {
             initialModelState: nil
         )
 
-        let failedListing = await model.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        let failedListing = await model.readRemoteDirectory(targetId: "local", path: "/home/user/workspace")
         XCTAssertNil(failedListing)
         XCTAssertNotNil(model.errorMessage)
 
-        let listing = await model.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        let listing = await model.readRemoteDirectory(targetId: "local", path: "/home/user/workspace")
         XCTAssertEqual(listing?.entries.first?.name, "personal-agent")
         XCTAssertNil(model.errorMessage)
     }
@@ -1985,12 +1985,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
         client.testSshTargetFailureQueueMessages = ["SSH probe temporarily unavailable."]
         let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
 
-        let failedResult = await session.testSshTarget("patrick@buildbox")
+        let failedResult = await session.testSshTarget("user@buildbox")
         XCTAssertNil(failedResult)
         XCTAssertNotNil(session.errorMessage)
 
-        let result = await session.testSshTarget("patrick@buildbox")
-        XCTAssertEqual(result?.sshTarget, "patrick@buildbox")
+        let result = await session.testSshTarget("user@buildbox")
+        XCTAssertEqual(result?.sshTarget, "user@buildbox")
         XCTAssertNil(session.errorMessage)
     }
 
@@ -1999,11 +1999,11 @@ final class PersonalAgentCompanionTests: XCTestCase {
         client.readRemoteDirectoryFailureQueueMessages = ["Remote directory temporarily unavailable."]
         let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
 
-        let failedListing = await session.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        let failedListing = await session.readRemoteDirectory(targetId: "local", path: "/home/user/workspace")
         XCTAssertNil(failedListing)
         XCTAssertNotNil(session.errorMessage)
 
-        let listing = await session.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        let listing = await session.readRemoteDirectory(targetId: "local", path: "/home/user/workspace")
         XCTAssertEqual(listing?.entries.first?.name, "personal-agent")
         XCTAssertNil(session.errorMessage)
     }

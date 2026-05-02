@@ -13,7 +13,7 @@ function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-checkpoint-tool-'));
   tempDirs.push(dir);
   spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf-8' });
-  spawnSync('git', ['config', 'user.email', 'patrick@example.com'], { cwd: dir, encoding: 'utf-8' });
+  spawnSync('git', ['config', 'user.email', 'user@example.com'], { cwd: dir, encoding: 'utf-8' });
   spawnSync('git', ['config', 'user.name', 'Test User'], { cwd: dir, encoding: 'utf-8' });
   writeFileSync(join(dir, 'README.md'), '# demo\n');
   spawnSync('git', ['add', 'README.md'], { cwd: dir, encoding: 'utf-8' });
