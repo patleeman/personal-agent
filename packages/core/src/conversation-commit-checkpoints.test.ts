@@ -61,11 +61,11 @@ describe('conversation commit checkpoint storage', () => {
       ],
       files: [
         {
-          path: 'packages/web/src/pages/ConversationPage.tsx',
+          path: 'packages/desktop/ui/src/pages/ConversationPage.tsx',
           status: 'modified',
           additions: 12,
           deletions: 3,
-          patch: 'diff --git a/packages/web/src/pages/ConversationPage.tsx b/packages/web/src/pages/ConversationPage.tsx\n@@ -1 +1 @@\n-old\n+new\n',
+          patch: 'diff --git a/packages/desktop/ui/src/pages/ConversationPage.tsx b/packages/desktop/ui/src/pages/ConversationPage.tsx\n@@ -1 +1 @@\n-old\n+new\n',
         },
       ],
     });
