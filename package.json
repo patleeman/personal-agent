@@ -40,7 +40,6 @@
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
     "daemon": "node packages/daemon/dist/index.js",
-    "validate:projects": "node scripts/validate-projects.mjs",
     "ab:run": "node scripts/agent-browser-session.mjs run",
     "ab:cleanup": "node scripts/agent-browser-session.mjs cleanup"
   },
