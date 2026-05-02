@@ -29,6 +29,9 @@ tools/*/.build/
 # Logs
 *.log
 
+# Test coverage output
+coverage/
+
 # Local iOS demo transcript snapshots
 apps/ios/PersonalAgentCompanion/demo-data/
 
