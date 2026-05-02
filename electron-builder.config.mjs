@@ -96,8 +96,8 @@ const electronBuilderConfig = {
     icon: 'packages/desktop/assets/icon.icns',
     hardenedRuntime: true,
     notarize: false,
-    entitlements: 'build/entitlements.mac.plist',
-    entitlementsInherit: 'build/entitlements.mac.inherit.plist',
+    entitlements: 'apps/mac/entitlements.mac.plist',
+    entitlementsInherit: 'apps/mac/entitlements.mac.inherit.plist',
     extendInfo: {
       LSUIElement: true,
       NSMicrophoneUsageDescription: 'Personal Agent uses the microphone to capture composer dictation.',
