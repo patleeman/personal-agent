@@ -7,8 +7,15 @@ set -euo pipefail
 
 # Check if gitleaks is installed
 if ! command -v gitleaks &>/dev/null; then
-  echo "WARNING: gitleaks not found. Install with: brew install gitleaks"
-  echo "Skipping secret scan."
+  echo ""
+  echo "============================================"
+  echo "  ⚠️  SECRET SCAN SKIPPED"
+  echo "  gitleaks is not installed."
+  echo ""
+  echo "  Install: brew install gitleaks"
+  echo "  Or bypass permanently: git config --unset core.hooksPath"
+  echo "============================================"
+  echo ""
   exit 0
 fi
 
