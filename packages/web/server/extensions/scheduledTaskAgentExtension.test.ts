@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTaskCallbackBinding } from '@personal-agent/core';
 import { closeAutomationDbs, saveAutomationRuntimeStateMap } from '@personal-agent/daemon';
 import * as daemon from '@personal-agent/daemon';
-import * as daemonToolUtils from '../automation/daemonToolUtils.js';
+
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 
@@ -62,6 +62,7 @@ beforeEach(() => {
   process.env = { ...originalEnv, PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-web-task-state-') };
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
+  vi.spyOn(daemon, 'pingDaemon').mockResolvedValue(true);
 });
 
 afterEach(async () => {
@@ -278,7 +279,7 @@ describe('scheduled task agent extension', () => {
     expect(validated.isError).not.toBe(true);
     expect(validated.content[0]?.text).toContain('Task @daily-status is valid.');
 
-    vi.spyOn(daemonToolUtils, 'ensureDaemonAvailable').mockResolvedValue(undefined);
+    
     const startScheduledTaskRunSpy = vi.spyOn(daemon, 'startScheduledTaskRun').mockResolvedValue({
       accepted: true,
       runId: 'run-task-123',
@@ -332,7 +333,7 @@ describe('scheduled task agent extension', () => {
       prompt: 'Run me.',
     });
 
-    vi.spyOn(daemonToolUtils, 'ensureDaemonAvailable').mockResolvedValue(undefined);
+    
     vi.spyOn(daemon, 'startScheduledTaskRun').mockResolvedValue({
       accepted: false,
       reason: 'daemon busy',

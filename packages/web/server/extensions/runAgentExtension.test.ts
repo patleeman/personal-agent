@@ -8,7 +8,7 @@ const {
   cancelDurableRunMock,
   rerunDurableRunMock,
   followUpDurableRunMock,
-  ensureDaemonAvailableMock,
+  pingDaemonMock,
   startBackgroundRunMock,
   createStoredAutomationMock,
   applyScheduledTaskThreadBindingMock,
@@ -21,7 +21,7 @@ const {
   cancelDurableRunMock: vi.fn(),
   rerunDurableRunMock: vi.fn(),
   followUpDurableRunMock: vi.fn(),
-  ensureDaemonAvailableMock: vi.fn(),
+  pingDaemonMock: vi.fn(),
   startBackgroundRunMock: vi.fn(),
   createStoredAutomationMock: vi.fn(),
   applyScheduledTaskThreadBindingMock: vi.fn(),
@@ -38,11 +38,8 @@ vi.mock('../automation/durableRuns.js', () => ({
   followUpDurableRun: followUpDurableRunMock,
 }));
 
-vi.mock('../automation/daemonToolUtils.js', () => ({
-  ensureDaemonAvailable: ensureDaemonAvailableMock,
-}));
-
 vi.mock('@personal-agent/daemon', () => ({
+  pingDaemon: pingDaemonMock,
   startBackgroundRun: startBackgroundRunMock,
   createStoredAutomation: createStoredAutomationMock,
 }));
@@ -106,7 +103,7 @@ beforeEach(() => {
   getDurableRunMock.mockReset();
   getDurableRunLogMock.mockReset();
   cancelDurableRunMock.mockReset();
-  ensureDaemonAvailableMock.mockReset();
+  pingDaemonMock.mockReset();
   startBackgroundRunMock.mockReset();
   createStoredAutomationMock.mockReset();
   applyScheduledTaskThreadBindingMock.mockReset();
@@ -192,7 +189,7 @@ describe('run agent extension', () => {
   });
 
   it('starts a background run through the daemon without conversation callbacks by default', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     startBackgroundRunMock.mockResolvedValue({
       accepted: true,
       runId: 'run-456',
@@ -231,7 +228,7 @@ describe('run agent extension', () => {
   });
 
   it('starts a durable agent run through the daemon without conversation callbacks by default', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     startBackgroundRunMock.mockResolvedValue({
       accepted: true,
       runId: 'run-agent-123',
@@ -279,7 +276,7 @@ describe('run agent extension', () => {
   it('creates a saved automation for scheduled agent prompts', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T08:30:00Z'));
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     createStoredAutomationMock.mockReturnValue({
       id: 'monitor-build',
       title: 'monitor-build',
@@ -337,7 +334,7 @@ describe('run agent extension', () => {
   });
 
   it('rejects malformed scheduled agent at timestamps', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
 
     const runTool = registerRunTool();
     const result = await runTool.execute(
@@ -360,7 +357,7 @@ describe('run agent extension', () => {
   });
 
   it('rejects overflowed scheduled agent at timestamps', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
 
     const runTool = registerRunTool();
     const result = await runTool.execute(
@@ -385,7 +382,7 @@ describe('run agent extension', () => {
   it('binds scheduled automations back to the current conversation when requested', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T08:00:00Z'));
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     createStoredAutomationMock.mockReturnValue({
       id: 'deploy-watch',
       title: 'deploy-watch',
@@ -437,7 +434,7 @@ describe('run agent extension', () => {
   });
 
   it('can opt into delivering run results back to the current conversation', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     startBackgroundRunMock.mockResolvedValue({
       accepted: true,
       runId: 'run-agent-callback',
@@ -488,7 +485,7 @@ describe('run agent extension', () => {
   });
 
   it('rejects unsafe loop iteration limits before starting durable agent runs', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
 
     const runTool = registerRunTool();
     const fractional = await runTool.execute(
@@ -526,7 +523,7 @@ describe('run agent extension', () => {
   });
 
   it('requires a persisted conversation when opting into result delivery', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
 
     const runTool = registerRunTool();
     const result = await runTool.execute(
@@ -548,7 +545,7 @@ describe('run agent extension', () => {
   });
 
   it('reruns a stopped durable run through the daemon', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     rerunDurableRunMock.mockResolvedValue({
       accepted: true,
       runId: 'run-rerun-123',
@@ -575,7 +572,7 @@ describe('run agent extension', () => {
   });
 
   it('continues a stopped background agent run through the daemon', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     followUpDurableRunMock.mockResolvedValue({
       accepted: true,
       runId: 'run-followup-123',
@@ -603,7 +600,7 @@ describe('run agent extension', () => {
   });
 
   it('uses the default follow-up prompt and returns tool errors when continuation fails', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     followUpDurableRunMock.mockResolvedValue({
       accepted: false,
       reason: 'cannot continue',
@@ -627,7 +624,7 @@ describe('run agent extension', () => {
   });
 
   it('cancels a durable run and invalidates run snapshots', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     cancelDurableRunMock.mockResolvedValue({
       cancelled: true,
       runId: 'run-original-123',
@@ -653,7 +650,7 @@ describe('run agent extension', () => {
 
   it('returns tool errors for missing runs and rejected cancellations', async () => {
     getDurableRunMock.mockResolvedValue(null);
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    pingDaemonMock.mockResolvedValue(true);
     cancelDurableRunMock.mockResolvedValue({
       cancelled: false,
       reason: 'cancel denied',
