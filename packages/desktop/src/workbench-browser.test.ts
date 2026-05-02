@@ -19,7 +19,7 @@ describe('workbench browser validation', () => {
     const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
 
     expect(source).not.toContain('executeJavaScript(');
-    expect(source).toContain('cdpEvaluate(view.webContents');
+    expect(source).toContain('function cdpEvaluate(webContents');
   });
 
   it('keeps closed browser views deactivated across late load events', () => {

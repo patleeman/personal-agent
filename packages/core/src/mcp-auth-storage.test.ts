@@ -4,8 +4,6 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// Point auth dir to a temp directory for all tests
-import { resolveStatePaths } from './runtime/paths.js';
 
 const DIRS: string[] = [];
 const origAuth = process.env.PERSONAL_AGENT_MCP_AUTH_DIR;
