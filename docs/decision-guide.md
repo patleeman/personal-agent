@@ -22,11 +22,12 @@ Use this doc when you need to decide where something should live.
 
 Use this rule:
 
-- behavior and standing policy → selected instruction file
-- reusable facts and reference material → doc
-- reusable procedure → skill
-- durable structured ongoing work → project
-- execution right now → conversation
+- **instruction file** — standing behavior and policy
+- **doc** — reusable facts and reference material
+- **skill** — reusable procedure (lives at `<vault-root>/skills/<skill>/SKILL.md`)
+- **extension** — runtime behavior implemented in code
+- **project** — durable structured ongoing work
+- **conversation** — execution right now
 
 ## Async split
 
@@ -45,12 +46,19 @@ Use this rule:
 4. If the work needs milestones, blockers, or durable status, make it a project.
 5. If work should happen later, choose queue, reminder, run, or automation based on who needs to remember.
 
+## Extensions
+
+Extensions change what the runtime can do. Reach for an extension only when you need new tools, UI, event handling, runtime hooks, or permission behavior. If markdown is enough, do not start with an extension.
+
+Examples from this repo: `note-policy`, `web-tools`, `daemon-run-orchestration-prompt`, `openai-native-compaction`, `gpt-apply-patch`.
+
 ## Things not to confuse
 
 - a **project task** inside `state.yaml` is not a daemon scheduled task
 - a **reminder** is not the same thing as a saved automation
 - a **conversation artifact** is not the same thing as a durable project file
 - a **doc** is not the same thing as an instruction file just because both are markdown
+- a **skill** is not the same thing as an extension — skills are markdown workflows, extensions are code
 - a **run** is the internal durable record; UI should say shell command, agent task, automation execution, wakeup, or conversation session
 
 ## Related docs
