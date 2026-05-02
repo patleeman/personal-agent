@@ -38,7 +38,7 @@ Extensions change what the runtime can do.
 
 Examples in this repo:
 
-- `note-policy`
+- `knowledge-base`
 - `web-tools`
 - `daemon-run-orchestration-prompt`
 - `openai-native-compaction`

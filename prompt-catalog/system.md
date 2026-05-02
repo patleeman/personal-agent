@@ -90,18 +90,7 @@ Built-in runtime guides for personal-agent features. Read the matching one when 
 Read the matching SKILL.md when the user refers to that workflow or the task clearly matches it.
 {% endif %}
 
-{% if notes_available %}
-## Shared Notes & Available Nodes
-- Shared notes dir: {{ notes_dir }}
+## Knowledge Vault
+Freeform markdown files live anywhere under the vault root — read them when the user refers to an area. The only structured directory is `{{ skills_dir }}` (agent workflow skill definitions).
 
-{% if available_notes %}
-<available_notes>
-{% for note in available_notes %}
-  <note id="{{ note.name }}" location="{{ note.path }}">
-    {{ note.description }}
-  </note>
-{% endfor %}
-</available_notes>
-Read the matching INDEX.md when the user refers to an area, then follow relative references.
-{% endif %}
-{% endif %}
+- vault_root: {{ vault_root }}

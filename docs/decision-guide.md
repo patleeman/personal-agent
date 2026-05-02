@@ -50,7 +50,7 @@ Use this rule:
 
 Extensions change what the runtime can do. Reach for an extension only when you need new tools, UI, event handling, runtime hooks, or permission behavior. If markdown is enough, do not start with an extension.
 
-Examples from this repo: `note-policy`, `web-tools`, `daemon-run-orchestration-prompt`, `openai-native-compaction`, `gpt-apply-patch`.
+Examples from this repo: `knowledge-base`, `web-tools`, `daemon-run-orchestration-prompt`, `openai-native-compaction`, `gpt-apply-patch`.
 
 ## Things not to confuse
 
