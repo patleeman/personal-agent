@@ -438,6 +438,13 @@ export function useConversationScroll({
 
     if (!isStreaming) {
       streamingTailAutoScrollKeyRef.current = tailKey;
+      // When streaming just ended, the last block's content finalizes and
+      // the streaming-status indicator is removed — both change the scroll
+      // container's layout. Do a final settle to re-anchor the viewport to
+      // the tail before the pinned-bottom watch expires.
+      if (tailKey !== null && scrollPinnedToBottomRef.current && scrollRef.current) {
+        scrollToBottom();
+      }
       return;
     }
 
