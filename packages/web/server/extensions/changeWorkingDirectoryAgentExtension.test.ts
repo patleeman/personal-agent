@@ -41,7 +41,7 @@ function registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryC
     throw new Error('Change working directory tool was not registered.');
   }
 
-  return registeredTool;
+  return { tool: registeredTool };
 }
 
 function createToolContext(conversationId = 'conv-123', cwd = '/tmp/workspace') {
@@ -73,7 +73,7 @@ describe('change working directory agent extension', () => {
       cwd: targetDir,
       queued: true,
     }));
-    const tool = registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange);
+    const { tool } = registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange);
     const ctx = createToolContext('conv-123', repoRoot);
 
     writeFileSync(join(repoRoot, 'README.md'), '# root\n');
@@ -114,7 +114,7 @@ describe('change working directory agent extension', () => {
       queued: false,
       unchanged: true,
     }));
-    const tool = registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange);
+    const { tool } = registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange);
     const ctx = createToolContext('conv-123', repoRoot);
 
     const result = await tool.execute('tool-1', { cwd: '.' }, undefined, undefined, ctx);
@@ -139,7 +139,7 @@ describe('change working directory agent extension', () => {
       cwd: filePath,
       queued: true,
     }));
-    const tool = registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange);
+    const { tool } = registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange);
     const ctx = createToolContext('conv-123', repoRoot);
 
     await expect(tool.execute('tool-1', { cwd: './notes.txt' }, undefined, undefined, ctx)).rejects.toThrow(`Not a directory: ${filePath}`);
