@@ -72,9 +72,9 @@ When `pa` launches Pi or the desktop app creates a live session, the runtime is 
 
 ## Supported operator surfaces
 
-- `pa tui` launches Pi in the terminal with the materialized Personal Agent runtime.
-- The Electron desktop app is the supported local operator UI and serves routes through `personal-agent://app/`.
-- The iOS companion app talks to the daemon companion API under `/companion/v1` after pairing.
+- - The **Electron desktop app** is the primary operator UI and serves routes through `personal-agent://app/`.
+- `pa tui` launches Pi in the terminal for quick command-line sessions.
+- The **iOS companion app** talks to the daemon companion API under `/companion/v1` after pairing.
 
 There is no supported standalone browser UI server for day-to-day operation.
 

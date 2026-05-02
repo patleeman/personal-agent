@@ -1,26 +1,26 @@
 # personal-agent
 
-`personal-agent` is a durable runtime around Pi for running a personal agent with real state.
+`personal-agent` is an **Electron desktop app** for running a personal AI agent with durable state, conversations, knowledge management, and automations. It also ships an **iOS companion app** for phone access.
 
-It separates three things cleanly:
+Core design: separate shipped code from durable knowledge from machine-local state cleanly.
 
 - **repo-managed defaults** live in git
 - **durable knowledge** lives in a vault
 - **machine-local runtime state** lives under `~/.local/state/personal-agent`
 
-Conversations are for live execution. Reusable knowledge, workflows, reminders, runs, and automations should live in explicit durable surfaces instead of getting buried in chat history.
+Conversations are for live execution. Reusable knowledge, workflows, reminders, runs, and automations live in explicit durable surfaces instead of getting buried in chat history.
 
 ## What this repo contains
 
-`personal-agent` currently ships:
+`personal-agent` ships:
 
-- a **CLI** (`pa`) for launching Pi and managing the local runtime
-- a **desktop app** for conversations, knowledge, automations, and settings
-- a **daemon** for runs, scheduled tasks, wakeups, and reminders
-- a **knowledge system** built around docs, instruction files, skills, and projects
-- **MCP integration** for external tool servers
+- an **Electron desktop app** — the primary operator UI for conversations, knowledge, automations, and settings
+- an **iOS companion app** — native phone client for host APIs (chat, knowledge, automations, and more)
+- a **CLI** (`pa`) — launching the agent, managing the daemon, inspecting MCP, health checks
+- a **daemon** — runs, scheduled tasks, wakeups, reminders, companion pairing
+- a **knowledge system** — docs, instruction files, skills, and projects
+- **MCP integration** — external tool server support
 - built-in **extensions**, **internal skills**, and a **prompt catalog**
-- an **iOS companion app** under `apps/ios/`
 
 ## Quick start
 
@@ -28,6 +28,7 @@ Conversations are for live execution. Reusable knowledge, workflows, reminders, 
 
 - Node.js **20+**
 - npm **11+** recommended
+- macOS (the desktop app is macOS-only; the iOS companion requires Xcode for simulator builds)
 
 ### Install from source
 
@@ -50,14 +51,21 @@ pa doctor
 pa status
 ```
 
-### Start an interface
+### Start the desktop app
 
 ```bash
-pa tui
 npm run desktop:start
 ```
 
-`npm run desktop:start` builds the Electron shell and opens the app. `npm run desktop:dev` is currently the same dev launcher. Electron serves the renderer through `personal-agent://app/`; there is no general-purpose local web UI server to open in a browser.
+This builds the Electron shell and opens the app. Electron serves the renderer through `personal-agent://app/`; there is no general-purpose local web UI server to open in a browser.
+
+### Start the TUI (terminal)
+
+```bash
+pa tui
+```
+
+The TUI is useful for quick terminal-based sessions. For the full experience, use the desktop app.
 
 ## Core mental model
 
@@ -75,17 +83,42 @@ The durable rule is simple:
 
 If something should still matter next week, do not leave the only copy in a conversation.
 
+## The desktop-first experience
+
+The Electron desktop app is the primary way to use personal-agent. It serves the React UI through a custom `personal-agent://app/` protocol and provides:
+
+- **Conversations** — live AI agent sessions with streaming, tools, artifacts, and checkpoints
+- **Knowledge** — browse and edit the durable knowledge vault, import URLs, manage docs
+- **Automations** — scheduled tasks and durable runs
+- **Settings** — model config, instruction files, MCP servers, companion pairing
+
+The desktop app runs the daemon in-process by default, so background behavior (runs, automations, reminders) stays active as long as the app is open.
+
+## The iOS companion
+
+The iOS companion app (under `apps/ios/PersonalAgentCompanion/`) is a native phone client that pairs with a running daemon companion API. It provides:
+
+- conversation browsing, prompt sending, and live transcript streaming
+- knowledge vault browsing and editing with markdown tools
+- automation inspection
+- share extension for saving URLs and images into the vault
+- native drawing with PencilKit and Excalidraw-compatible export
+
+See [iOS Companion](docs/ios-companion.md) for build and test instructions.
+
 ## Common commands
 
 ```bash
+# start the desktop app (the primary UI)
+npm run desktop:start
+
 # health / setup
 pa doctor
 pa status
 pa help
 
-# interfaces
+# terminal interface
 pa tui
-npm run desktop:start
 
 # background runtime
 pa daemon status
@@ -104,20 +137,20 @@ There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa no
 
 ### Workspace packages
 
-- `packages/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
-- `packages/daemon` — runs, automations, wakeups, daemon runtime
-- `packages/cli` — `pa`
+- `packages/desktop` — **Electron app shell** (the primary UI surface)
 - `packages/web` — React renderer and local API modules used by Electron
-- `packages/desktop` — Electron app shell
+- `packages/daemon` — runs, automations, wakeups, daemon runtime
+- `packages/cli` — `pa` command-line tool
+- `packages/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
 
 ### Shipped resources and clients
 
+- `apps/ios/PersonalAgentCompanion/` — **native iOS companion app**
 - `defaults/agent/` — repo-managed Pi defaults
 - `extensions/` — built-in runtime extensions
 - `internal-skills/` — built-in feature behavior docs
 - `prompt-catalog/` — prompt text owned by this repo
 - `docs/` — product semantics and current behavior
-- `apps/ios/PersonalAgentCompanion/` — native iOS companion app
 
 ## Development
 
@@ -131,13 +164,16 @@ npm run lint
 Useful dev entry points:
 
 ```bash
-npm run desktop:start
+npm run desktop:start     # launch the Electron app
+npm run desktop:dev       # same dev launcher
+npm run ios:dev           # iOS companion against local dev host
 npm run ab:run -- --session smoke-check --command "ab open personal-agent://app/ && ab wait 1000 && ab snapshot -i"
 ```
 
 Notes:
 
 - Use the repo `agent-browser` wrapper via `npm run ab:run` instead of raw `agent-browser`.
+- The iOS companion app requires Xcode and can be tested in the simulator.
 - If you change product behavior, update the relevant docs in `docs/` or `internal-skills/`.
 - Exact tool arguments come from runtime tool schemas, not from README prose.
 

@@ -85,7 +85,7 @@ Folder names can be useful, but they should not carry more product meaning than 
 3. legacy `vaultRoot` from `<config-root>/config.json`
 4. default `~/Documents/personal-agent`
 
-In Patrick's active setup, assume the managed KB mirror unless you know otherwise.
+When managed KB sync is enabled, assume the managed KB mirror unless you know otherwise.
 
 If you still have content in an old unmanaged local vault, copy it into the managed repo yourself before switching over. PA no longer auto-imports legacy vault content.
 

@@ -42,9 +42,9 @@ In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror 
 
 ### Interfaces
 
+- [Desktop App](./desktop-app.md) — the primary operator UI
+- [iOS Companion](./ios-companion.md) — native phone client
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Desktop App](./desktop-app.md)
-- [iOS Companion](./ios-companion.md)
 - [Daemon](./daemon.md)
 - [Configuration](./configuration.md)
 - [MCP](./mcp.md)
@@ -78,7 +78,7 @@ These live under `internal-skills/` because they describe runtime features rathe
 | How does dictation transcription plug in? | [Dictation transcription](./dictation-transcription.md) | [Configuration](./configuration.md) |
 | Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
 | How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
-| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Desktop App](./desktop-app.md), [Agent Browser in this repo](./agent-browser.md) |
+| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Desktop App](./desktop-app.md), [Command-Line Guide (`pa`)](./command-line.md), [Agent Browser in this repo](./agent-browser.md) |
 | How does the phone app connect? | [iOS Companion](./ios-companion.md) | [Daemon](./daemon.md), [Configuration](./configuration.md) |
 | How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md), [Auto Mode](../internal-skills/auto-mode/INDEX.md) |
 | Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |

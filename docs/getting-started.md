@@ -39,19 +39,21 @@ pa status
 
 ## Start an interface
 
-### TUI
-
-```bash
-pa tui
-```
-
 ### Desktop app
 
 ```bash
 npm run desktop:start
 ```
 
-`npm run desktop:dev` uses the same Electron dev launcher today. Prefer `desktop:start` in setup docs and smoke checks because it is the stable repo-level entry point.
+This builds the Electron shell and opens the app. `npm run desktop:dev` uses the same Electron dev launcher today. Prefer `desktop:start` in setup docs and smoke checks because it is the stable repo-level entry point.
+
+### TUI (terminal)
+
+```bash
+pa tui
+```
+
+The TUI is useful for quick terminal-based sessions. For the full experience, use the desktop app.
 
 ### Browser validation in this repo
 
@@ -97,16 +99,16 @@ Create a reusable workflow skill at:
 ## First useful commands
 
 ```bash
-pa tui
 npm run desktop:start
+pa tui
 pa daemon status
 pa mcp list --probe
 ```
 
 ## First useful UI flows
 
-- open **Conversations** for live work
-- open **Knowledge** to edit files under `<vault-root>`
+- open **Conversations** for live agent sessions
+- open **Knowledge** to browse and edit the durable vault
 - open **Automations** to inspect scheduled background work
 - open **Settings** to set defaults, instruction files, skill folders, provider auth, Knowledge base sync, companion pairing, transcription, and title-generation settings
 

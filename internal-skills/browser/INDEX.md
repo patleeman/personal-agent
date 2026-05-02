@@ -23,13 +23,13 @@ The Workbench Browser is an Electron-owned `WebContentsView` embedded in the des
 
 It is for:
 
-- letting Patrick browse a page beside a conversation
-- letting Patrick right-click page elements and attach comments to the next prompt
-- giving agents and Patrick a shared, visible page context for communication
+- letting the user browse a page beside a conversation
+- letting the user right-click page elements and attach comments to the next prompt
+- giving agents and the user a shared, visible page context for communication
 
 It is not a general-purpose replacement for Chrome, and it should not expose agent/debug controls directly to normal users.
 
-This distinction matters in prompts: the built-in browser tools are a **communication tool**. Use them when Patrick is showing the agent a page, asking about the visible Workbench Browser, or wants the agent to act on the same page he can see. Do not treat them as the default development automation harness.
+This distinction matters in prompts: the built-in browser tools are a **communication tool**. Use them when the user is showing the agent a page, asking about the visible Workbench Browser, or wants the agent to act on the same page they can see. Do not treat them as the default development automation harness.
 
 ## User-facing behavior
 
@@ -81,7 +81,7 @@ The product model:
 - switching conversations preserves each conversation's embedded webview instead of reusing one global browser
 - Electron main owns navigation, state, snapshots, actions, and comments
 - agent browser tools target that same session when running inside desktop conversations
-- if an agent uses a built-in browser tool and the Browser tab is closed, the transcript shows an inline Browser widget; Patrick chooses when to open Workbench → Browser
+- if an agent uses a built-in browser tool and the Browser tab is closed, the transcript shows an inline Browser widget; the user chooses when to open Workbench → Browser
 
 Avoid creating two unrelated browsers for the same task. A Playwright/`agent-browser` session and the built-in Electron Browser tab drifting apart is bad UX.
 
@@ -156,7 +156,7 @@ Default to `browser_snapshot`. Snapshot is preferred for normal browsing because
 
 Good screenshot cases:
 
-- Patrick explicitly asks for a screenshot or visual check
+- the user explicitly asks for a screenshot or visual check
 - CSS/layout/visual rendering matters
 - canvas/image-heavy content is important
 - `browser_snapshot` is missing information needed to answer correctly
@@ -187,7 +187,7 @@ Do not show raw script/debug panels in the user Browser tab. The transcript is w
 
 Do not confuse that with the built-in Workbench Browser:
 
-- **Workbench Browser**: product UI surface in Electron; user-visible; shared communication context between Patrick and the agent; supports comments and built-in browser tools.
+- **Workbench Browser**: product UI surface in Electron; user-visible; shared communication context between user and agent; supports comments and built-in browser tools.
 - **agent-browser CLI**: external automation/dev validation tool; Playwright/CDP-backed; used by agents while developing, validating UI, running local smoke checks, or doing repeatable browser automation.
 
 Long term, desktop browser tools should use the Workbench Browser session directly instead of launching an unrelated `agent-browser` session.
@@ -212,4 +212,4 @@ Keep changes scoped. The Browser tab is part of Workbench layout, not a new stan
 - Do not add boxes-inside-boxes around the browser controls.
 - Use text/icons with light hover treatment for navigation controls.
 - Keep the URL field editable; browser state sync must not fight user typing.
-- Default to a neutral normal start page unless Patrick specifies otherwise.
+- Default to a neutral normal start page unless the user specifies otherwise.
