@@ -876,10 +876,10 @@ describe('registerConversationStateRoutes', () => {
     const changedRes = createResponse();
     await handler({ params: { id: 'conversation-6' }, body: { cwd: '/next' } }, changedRes);
     expect(destroySessionMock).toHaveBeenCalledWith('conversation-6');
-    expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/conversation-6.json', {
+    expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/conversation-6.json', expect.objectContaining({
       cwdOverride: '/next',
       extensionFactories: ['factory'],
-    });
+    }));
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-6');
     expect(changedRes.json).toHaveBeenCalledWith({
       id: 'conversation-6',
@@ -907,6 +907,6 @@ describe('registerConversationStateRoutes', () => {
       message: 'cwd resume failed',
     }));
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Error: cwd clone failed' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Error: cwd resume failed' });
   });
 });

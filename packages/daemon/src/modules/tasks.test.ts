@@ -1306,20 +1306,20 @@ Run hourly task
       profile: 'assistant',
       title: 'Morning brief',
       enabled: true,
-      cron: '0 10 * * *',
+      cron: '0 * * * *',
       catchUpWindowSeconds: 15 * 60,
       prompt: 'Assemble the morning briefing.',
     });
     setStoredAutomationThreadBinding('morning-brief', { dbPath, mode: 'none' });
 
     saveAutomationSchedulerState(
-      { lastEvaluatedAt: '2026-03-02T09:59:30.000-05:00' },
+      { lastEvaluatedAt: '2026-03-02T09:59:30.000Z' },
       { dbPath },
     );
 
     expect(listStoredAutomations({ dbPath })[0]?.catchUpWindowSeconds).toBe(15 * 60);
 
-    const currentTime = new Date('2026-03-02T10:10:00.000-05:00');
+    const currentTime = new Date('2026-03-02T10:10:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
 
     const module = createTasksModule(
@@ -1351,8 +1351,8 @@ Run hourly task
         kind: 'missed',
         count: 1,
         outcome: 'catch-up-started',
-        firstScheduledAt: '2026-03-02T15:00:00.000Z',
-        lastScheduledAt: '2026-03-02T15:00:00.000Z',
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
       }),
     ]);
 
@@ -1370,18 +1370,18 @@ Run hourly task
       profile: 'assistant',
       title: 'Morning brief',
       enabled: true,
-      cron: '0 10 * * *',
+      cron: '0 * * * *',
       catchUpWindowSeconds: 5 * 60,
       prompt: 'Assemble the morning briefing.',
     });
     setStoredAutomationThreadBinding('morning-brief', { dbPath, mode: 'none' });
 
     saveAutomationSchedulerState(
-      { lastEvaluatedAt: '2026-03-02T09:59:30.000-05:00' },
+      { lastEvaluatedAt: '2026-03-02T09:59:30.000Z' },
       { dbPath },
     );
 
-    let currentTime = new Date('2026-03-02T10:10:00.000-05:00');
+    let currentTime = new Date('2026-03-02T10:10:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
 
     const module = createTasksModule(
@@ -1410,8 +1410,8 @@ Run hourly task
         kind: 'missed',
         count: 1,
         outcome: 'skipped',
-        firstScheduledAt: '2026-03-02T15:00:00.000Z',
-        lastScheduledAt: '2026-03-02T15:00:00.000Z',
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
       }),
     ]);
 

@@ -11,6 +11,11 @@ vi.mock('@mariozechner/pi-ai', () => ({
   completeSimple: completeSimpleMock,
 }));
 
+vi.mock('@personal-agent/core', async (importOriginal) => ({
+  ...(await importOriginal()),
+  requirePromptCatalogEntry: () => 'Write a short, scan-friendly title for this conversation. Return only the title.',
+}));
+
 import {
   buildConversationTitleTranscript,
   generateConversationTitle,
@@ -251,7 +256,7 @@ describe('generateConversationTitle', () => {
     expect(completeSimpleMock).toHaveBeenCalledWith(
       model,
       expect.objectContaining({
-        systemPrompt: expect.stringContaining('scan-friendly titles'),
+        systemPrompt: expect.stringContaining('scan-friendly title'),
         messages: [
           expect.objectContaining({
             role: 'user',
