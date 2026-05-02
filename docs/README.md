@@ -31,6 +31,8 @@ In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror 
 
 ## Doc map
 
+Start with [Features](./features.md) for a complete feature catalog organized by surface.
+
 ### Product model
 
 - [Decision Guide](./decision-guide.md) — fastest way to pick the right durable surface
