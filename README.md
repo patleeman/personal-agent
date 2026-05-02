@@ -131,7 +131,7 @@ There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa no
 ### Workspace packages
 
 - `packages/desktop` — **Electron app shell** (the primary UI surface)
-- `packages/web` — React renderer and local API modules used by Electron
+- `packages/desktop` — Electron desktop app (main process + UI renderer + local API server)
 - `packages/daemon` — runs, automations, wakeups, daemon runtime
 - `packages/cli` — `pa` command-line tool
 - `packages/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading

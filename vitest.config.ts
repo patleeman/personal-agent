@@ -15,14 +15,14 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      '**/dist-server/**',
       '**/.taskfactory/**',
     ],
     coverage: {
       include: [
         'packages/*/src/**/*.ts',
-        'packages/web/src/**/*.tsx',
-        'packages/web/server/**/*.ts',
+        'packages/desktop/ui/src/**/*.tsx',
+        'packages/desktop/ui/src/**/*.ts',
+        'packages/desktop/server/**/*.ts',
         'extensions/**/*.ts',
       ],
       exclude: [

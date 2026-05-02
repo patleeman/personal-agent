@@ -5,26 +5,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { importLocalApiModuleWithFallback, resolveLocalApiModuleUrl } from './local-api-module.js';
 
 describe('resolveLocalApiModuleUrl', () => {
-  it('resolves the dev local API module from the web package build output', () => {
+  it('resolves the dev local API module from the desktop server build output', () => {
     expect(resolveLocalApiModuleUrl({
       currentDir: '/repo/packages/desktop/dist',
       isPackaged: false,
-    })).toBe(pathToFileURL(resolve('/repo/packages/desktop/dist', '..', '..', 'web', 'dist-server', 'app', 'localApi.js')).href);
+    })).toBe(pathToFileURL(resolve('/repo/packages/desktop/dist', '..', 'server', 'dist', 'app', 'localApi.js')).href);
   });
 
-  it('resolves the packaged local API module from the bundled web package', () => {
+  it('resolves the packaged local API module from the bundled server directory', () => {
     expect(resolveLocalApiModuleUrl({
       currentDir: '/Applications/Personal Agent.app/Contents/Resources/app.asar/dist',
       isPackaged: true,
       appPath: '/Applications/Personal Agent.app/Contents/Resources/app.asar',
-    })).toBe(pathToFileURL(resolve('/Applications/Personal Agent.app/Contents/Resources/app.asar', 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js')).href);
+    })).toBe(pathToFileURL(resolve('/Applications/Personal Agent.app/Contents/Resources/app.asar', 'server', 'dist', 'app', 'localApi.js')).href);
   });
 
   it('can auto-resolve the packaged bundle path without importing electron', () => {
     expect(resolveLocalApiModuleUrl({
       currentDir: '/Applications/Personal Agent.app/Contents/Resources/app.asar/dist',
       appPath: '/Applications/Personal Agent.app/Contents/Resources/app.asar',
-    })).toBe(pathToFileURL(resolve('/Applications/Personal Agent.app/Contents/Resources/app.asar', 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js')).href);
+    })).toBe(pathToFileURL(resolve('/Applications/Personal Agent.app/Contents/Resources/app.asar', 'server', 'dist', 'app', 'localApi.js')).href);
   });
 });
 

@@ -199,9 +199,9 @@ Current relevant files:
 - `packages/desktop/src/workbench-browser.ts` — Electron browser view controller, validation, snapshots, screenshots, comments
 - `packages/desktop/src/window.ts` — owns the browser controller and routes window-scoped operations
 - `packages/desktop/src/ipc.ts` and `packages/desktop/src/preload.ts` — bridge browser operations/events
-- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot`, `browser_cdp`, and `browser_screenshot`
-- `packages/web/src/components/Layout.tsx` — Workbench Browser UI and comment overlay
-- `packages/web/src/pages/ConversationPage.tsx` — pending browser comments in the composer and prompt context injection
+- `packages/desktop/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot`, `browser_cdp`, and `browser_screenshot`
+- `packages/desktop/ui/src/components/Layout.tsx` — Workbench Browser UI and comment overlay
+- `packages/desktop/ui/src/pages/ConversationPage.tsx` — pending browser comments in the composer and prompt context injection
 
 Keep changes scoped. The Browser tab is part of Workbench layout, not a new standalone app shell.
 

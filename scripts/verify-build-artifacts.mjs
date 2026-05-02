@@ -14,7 +14,7 @@ const requiredArtifacts = [
   'packages/core/dist/prompt-catalog.js',
   'packages/daemon/dist/index.js',
   'packages/daemon/dist/service.js',
-  'packages/web/dist-server/app/localApi.js',
+  'packages/desktop/server/dist/app/localApi.js',
 ];
 
 const missingArtifacts = requiredArtifacts.filter((relativePath) => !existsSync(join(repoRoot, relativePath)));

@@ -103,8 +103,8 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
     ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
     : [resolve(repoRoot, 'packages', 'daemon', 'dist', 'index.js')]);
   const webDistDir = resolveExistingFile('desktop renderer dist directory', isPackaged
-    ? [resolve(appRoot, 'node_modules', '@personal-agent', 'web', 'dist')]
-    : [resolve(repoRoot, 'packages', 'web', 'dist')]);
+    ? [resolve(appRoot, 'ui', 'dist')]
+    : [resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist')]);
   const trayTemplateIconFile = resolveExistingFile('desktop tray icon', isPackaged
     ? [resolve(appRoot, 'assets', 'iconTemplate.png')]
     : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png')]);

@@ -1,55 +1,49 @@
 # Repo Layout
 
-This monorepo intentionally keeps package boundaries small.
+This monorepo keeps package boundaries small.
 
 ## Workspace packages
 
-- `packages/core` — shared path resolution, durable state helpers, resource loading, knowledge/project helpers, MCP helpers
-- `packages/daemon` — daemon runtime, runs, automations, wakeups, companion plumbing
-- `packages/web` — browser UI plus server routes
-- `packages/desktop` — Electron shell
-- `apps/ios/PersonalAgentCompanion` — native iOS companion app outside the npm workspace graph
+Monorepo packages live under `packages/` and are managed with npm workspaces.
 
-Default rule: add a folder before adding a package.
+- `packages/core` — shared utilities: path resolution, durable state helpers, resource loading, prompt catalog, knowledge/project helpers, MCP helpers, alerts, activity, checkpoints, conversation artifacts
+- `packages/daemon` — daemon runtime, runs, automations, wakeups, companion plumbing, event bus
+- `packages/desktop` — Electron shell + React renderer UI (merged from the former `packages/web`) + local API server routes
 
-## Repo runtime resources
+There are only three packages. The old `packages/web` (standalone browser UI + server) was merged into `packages/desktop` — the desktop package now owns the renderer UI (`ui/`), the server routes (`server/`), and the Electron main process (`src/`).
 
-These are shipped runtime inputs, not workspace packages:
+Other shipped directories at the repo root:
 
-- `extensions/`
-- `internal-skills/`
-- `prompt-catalog/`
-- `docs/`
+- `extensions/` — built-in extensions
+- `internal-skills/` — built-in runtime feature docs
+- `prompt-catalog/` — system prompt templates
+- `docs/` — product semantics for agents
 
 ## Where new code should live
 
-### General rule
-
 - reusable app logic shared across surfaces → `packages/core`
 - long-lived unattended runtime behavior → `packages/daemon`
-- CLI-only behavior → `packages/cli`
-- desktop app and local API behavior → `packages/web`
-- Electron-only shell behavior → `packages/desktop`
+- renderer UI, server routes, Electron shell → `packages/desktop`
 
-### `packages/web` rule of thumb
+### `packages/desktop` rule of thumb
 
-- route components → `packages/web/src/pages/`
-- reusable UI → `packages/web/src/components/`
-- conversation-specific client logic → `packages/web/src/conversation/`
-- knowledge/vault UI logic → `packages/web/src/knowledge/`
-- automation/run UI logic → `packages/web/src/automation/`
-- browser transport and API helpers → `packages/web/src/client/`
-- server routes and backend wiring → `packages/web/server/`
+- Electron main process code → `packages/desktop/src/`
+- server routes and backend wiring → `packages/desktop/server/`
+- React renderer UI → `packages/desktop/ui/`
+  - route components → `ui/src/pages/`
+  - reusable UI → `ui/src/components/`
+  - conversation-specific client logic → `ui/src/conversation/`
+  - knowledge/vault UI logic → `ui/src/knowledge/`
+  - automation/run UI logic → `ui/src/automation/`
+  - browser transport and API helpers → `ui/src/client/`
 
-Current renderer routes are owned in `packages/web/src/app/App.tsx`: conversations, Knowledge, Automations, and Settings.
+Current renderer routes are owned in `ui/src/app/App.tsx`: conversations, Knowledge, Automations, and Settings.
 
 Do not drop new feature files at the root of `src/` if they already have an obvious home.
 
-## Built-in extensions
+## Other shipped clients
 
-Built-in extensions live under `extensions/` and resolve dependencies from the repo root install.
-
-Only give an extension its own `package.json` when it genuinely needs dependency isolation.
+- `apps/ios/PersonalAgentCompanion/` — native iOS companion app. Its detailed README is the source for Xcode, simulator, mock-mode, and live-host workflows.
 
 ## Docs and skills
 
@@ -58,10 +52,6 @@ Only give an extension its own `package.json` when it genuinely needs dependency
 - repo `AGENTS.md` holds repo-specific engineering instructions
 
 If you change product behavior, update the relevant docs.
-
-## Other shipped clients
-
-- `apps/ios/PersonalAgentCompanion/` — native iOS companion app. Its detailed README is the source for Xcode, simulator, mock-mode, and live-host workflows.
 
 ## Related docs
 

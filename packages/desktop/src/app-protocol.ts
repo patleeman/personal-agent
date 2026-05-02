@@ -65,7 +65,7 @@ function getMimeType(filePath: string): string {
 
 function resolveDesktopWebDistDir(): string {
   if (app.isPackaged) {
-    const packagedDistDir = resolve(app.getAppPath(), 'node_modules', '@personal-agent', 'web', 'dist');
+    const packagedDistDir = resolve(app.getAppPath(), 'ui', 'dist');
     if (existsSync(packagedDistDir)) {
       return packagedDistDir;
     }
@@ -74,7 +74,7 @@ function resolveDesktopWebDistDir(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim()
     || resolve(currentDir, '..', '..', '..');
-  return resolve(repoRoot, 'packages', 'web', 'dist');
+  return resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist');
 }
 
 function resolveStaticFilePath(requestPath: string): string {

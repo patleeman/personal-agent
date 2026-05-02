@@ -10,27 +10,27 @@ function createTempDir(prefix: string): string {
 
 function seedDevRepo(repoRoot: string): void {
   mkdirSync(join(repoRoot, 'packages', 'daemon', 'dist'), { recursive: true });
-  mkdirSync(join(repoRoot, 'packages', 'web', 'dist-server'), { recursive: true });
-  mkdirSync(join(repoRoot, 'packages', 'web', 'dist'), { recursive: true });
+  mkdirSync(join(repoRoot, 'packages', 'desktop', 'server', 'dist'), { recursive: true });
+  mkdirSync(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'), { recursive: true });
   mkdirSync(join(repoRoot, 'packages', 'desktop', 'assets'), { recursive: true });
   writeFileSync(join(repoRoot, 'package.json'), '{"name":"personal-agent"}\n');
   writeFileSync(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
-  writeFileSync(join(repoRoot, 'packages', 'web', 'dist-server', 'index.js'), 'console.log("web");\n');
+  writeFileSync(join(repoRoot, 'packages', 'desktop', 'server', 'dist', 'index.js'), 'console.log("web");\n');
   writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'), 'png\n');
   writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'), 'png\n');
 }
 
 function seedPackagedApp(appRoot: string, resourcesPath: string): void {
   mkdirSync(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist'), { recursive: true });
-  mkdirSync(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist-server'), { recursive: true });
-  mkdirSync(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist'), { recursive: true });
+  mkdirSync(join(appRoot, 'server', 'dist'), { recursive: true });
+  mkdirSync(join(appRoot, 'ui', 'dist'), { recursive: true });
   mkdirSync(join(appRoot, 'assets'), { recursive: true });
   mkdirSync(join(resourcesPath, 'defaults'), { recursive: true });
   mkdirSync(join(resourcesPath, 'extensions'), { recursive: true });
   mkdirSync(join(resourcesPath, 'internal-skills'), { recursive: true });
   mkdirSync(join(resourcesPath, 'prompt-catalog'), { recursive: true });
   writeFileSync(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
-  writeFileSync(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist-server', 'index.js'), 'console.log("web");\n');
+  writeFileSync(join(appRoot, 'server', 'dist', 'index.js'), 'console.log("web");\n');
   writeFileSync(join(appRoot, 'assets', 'iconTemplate.png'), 'png\n');
   writeFileSync(join(appRoot, 'assets', 'icon.png'), 'png\n');
 }
@@ -69,7 +69,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.nodeCommand).toBe('/custom/node');
     expect(result.useElectronRunAsNode).toBe(false);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'));
     expect(result.desktopConfigFile).toBe(join(stateRoot, 'desktop', 'config.json'));
@@ -96,7 +96,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.useElectronRunAsNode).toBe(true);
     expect(result.desktopNativeModulesDir).toBe(join(resourcesPath, 'app.asar.unpacked'));
     expect(result.daemonEntryFile).toBe(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist'));
+    expect(result.webDistDir).toBe(join(appRoot, 'ui', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(appRoot, 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(appRoot, 'assets', 'icon.png'));
   });
@@ -123,7 +123,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.nodeCommand).toBe('node');
     expect(result.useElectronRunAsNode).toBe(false);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
   });
 
   it('can recover the repo root from a dev app bundle appRoot when cwd is elsewhere', () => {
@@ -146,6 +146,6 @@ describe('resolveDesktopRuntimePathsForContext', () => {
 
     expect(result.repoRoot).toBe(repoRoot);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
   });
 });

@@ -343,16 +343,16 @@ export type LocalApiModuleLoader = () => Promise<LocalApiModule>;
 let localApiModulePromise: Promise<LocalApiModule> | null = null;
 
 function resolveDevLocalApiModuleFilePath(currentDir: string): string {
-  return resolve(currentDir, '..', '..', 'web', 'dist-server', 'app', 'localApi.js');
+  return resolve(currentDir, '..', 'server', 'dist', 'app', 'localApi.js');
 }
 
 function resolvePackagedLocalApiModuleFilePath(currentDir: string, appPath?: string | null): string {
   const resolvedAppPath = appPath?.trim();
   if (resolvedAppPath) {
-    return resolve(resolvedAppPath, 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js');
+    return resolve(resolvedAppPath, 'server', 'dist', 'app', 'localApi.js');
   }
 
-  return resolve(currentDir, '..', 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js');
+  return resolve(currentDir, '..', 'server', 'dist', 'app', 'localApi.js');
 }
 
 function resolveRepoLocalApiModuleFilePath(repoRoot?: string | null): string | null {
@@ -361,7 +361,7 @@ function resolveRepoLocalApiModuleFilePath(repoRoot?: string | null): string | n
     return null;
   }
 
-  return resolve(resolvedRepoRoot, 'packages', 'web', 'dist-server', 'app', 'localApi.js');
+  return resolve(resolvedRepoRoot, 'packages', 'desktop', 'server', 'dist', 'app', 'localApi.js');
 }
 
 export function resolveLocalApiModuleUrl(input: {

@@ -905,7 +905,8 @@ async function prepareCommand() {
   loadDevEnvDefaults();
   runChecked('npm', ['--prefix', 'packages/core', 'run', 'build']);
   runChecked('npm', ['--prefix', 'packages/daemon', 'run', 'build']);
-  runChecked('npm', ['--prefix', 'packages/web', 'run', 'build']);
+  runChecked('npm', ['--prefix', 'packages/desktop', 'run', 'build:ui']);
+  runChecked('npm', ['--prefix', 'packages/desktop', 'run', 'build:server']);
 }
 
 async function devCommand() {

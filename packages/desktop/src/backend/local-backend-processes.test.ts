@@ -75,7 +75,7 @@ describe('LocalBackendProcesses', () => {
       nodeCommand: 'node',
       useElectronRunAsNode: false,
       daemonEntryFile: '/repo/packages/daemon/dist/index.js',
-      webDistDir: '/repo/packages/web/dist',
+      webDistDir: '/repo/packages/desktop/ui/dist',
       desktopStateDir: '/state/desktop',
       desktopLogsDir: '/state/desktop/logs',
       desktopConfigFile: '/state/desktop/config.json',
