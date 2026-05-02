@@ -123,9 +123,9 @@ function getOrCreateContext(
   return ctx;
 }
 
-function formatWhisperSegments(segments: Array<[string, string, string]>): string {
+function formatWhisperSegments(segments: Array<{ start: string; end: string; text: string }>): string {
   return segments
-    .map(([, , text]) => text.trim())
+    .map((segment) => segment.text.trim())
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')

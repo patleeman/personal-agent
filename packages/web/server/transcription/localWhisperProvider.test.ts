@@ -29,8 +29,8 @@ describe('Local Whisper transcription provider', () => {
 
   it('formats whisper.cpp segments into flat text', () => {
     expect(testExports.formatWhisperSegments([
-      ['00:00:00,000', '00:00:01,500', ' hello world '],
-      ['00:00:01,500', '00:00:03,000', '  from whisper '],
+      { start: '00:00:00,000', end: '00:00:01,500', text: ' hello world ' },
+      { start: '00:00:01,500', end: '00:00:03,000', text: '  from whisper ' },
     ])).toBe('hello world from whisper');
   });
 
