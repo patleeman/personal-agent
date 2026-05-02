@@ -74,6 +74,7 @@ function safeParsePerfMeta(value: string | null): Record<string, unknown> | null
 }
 
 export function recordApiTiming(path: string, res: Response): void {
+  if (!res) return;
   const serverTiming = res.headers.get('Server-Timing');
   const meta = safeParsePerfMeta(res.headers.get('X-PA-Perf'));
   if (!serverTiming && !meta) {

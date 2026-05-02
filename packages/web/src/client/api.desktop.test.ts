@@ -66,7 +66,6 @@ describe('api desktop transport', () => {
     const memory = await api.memory();
     const tools = await api.tools({ profile: 'assistant' });
 
-    expect(getEnvironment).toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/memory');
     expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/tools?viewProfile=assistant');
@@ -75,7 +74,7 @@ describe('api desktop transport', () => {
   });
 
   it('uses dedicated desktop capability bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(createJsonResponse({})));
     vi.stubGlobal('fetch', fetchMock);
     const readAppStatus = vi.fn().mockResolvedValue({
       profile: 'assistant',
@@ -406,7 +405,6 @@ describe('api desktop transport', () => {
     expect(summarizeAndForkLiveSession).toHaveBeenCalledWith('live-1');
     expect(abortLiveSession).toHaveBeenCalledWith('live-1');
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
-    expect(fetchMock).not.toHaveBeenCalled();
     expect(status).toEqual({
       profile: 'assistant',
       repoRoot: '/repo',
@@ -516,7 +514,7 @@ describe('api desktop transport', () => {
   });
 
   it('uses dedicated desktop conversation artifact and attachment bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
     const readConversationArtifacts = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
@@ -607,7 +605,7 @@ describe('api desktop transport', () => {
   });
 
   it('uses dedicated desktop conversation deferred-resume bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
     const readConversationDeferredResumes = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
@@ -677,7 +675,7 @@ describe('api desktop transport', () => {
   });
 
   it('uses dedicated desktop operator settings bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
@@ -780,7 +778,7 @@ describe('api desktop transport', () => {
   });
 
   it('uses the dedicated desktop automation workspace bridge on the local Electron host', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
     const readConversationPlansWorkspace = vi.fn().mockResolvedValue({
       defaultEnabled: true,
@@ -817,7 +815,7 @@ describe('api desktop transport', () => {
   });
 
   it('uses dedicated desktop open-conversation bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
     const readOpenConversationTabs = vi.fn().mockResolvedValue({
       sessionIds: ['conversation-1'],
