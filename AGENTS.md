@@ -69,6 +69,14 @@ npm run fix      # prettier --write + eslint --fix
 - **`fmt`** — `prettier --check`. Config: single quotes, trailing commas, 140 width.
 - **`check:dead`** — `knip`. Catches unused exports, files, and dependencies. Config in `knip.json`.
 
+### Coverage
+
+```bash
+npm run check:coverage  # ~30s, shows statement/branch/function/line coverage
+```
+
+Not part of `npm run check` (too slow). Run periodically to spot uncovered areas. Warns on issues, doesn't block.
+
 ### What to do before committing
 
 Run `npm run fix` to auto-format and fix import ordering, then `npm run check` to verify everything passes. If the pre-commit hook blocks on pre-existing lint issues (there are ~80 baseline errors in untouched files), that's fine — just ensure your new code doesn't add more.

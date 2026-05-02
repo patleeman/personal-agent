@@ -45,6 +45,7 @@
     "fmt:fix": "prettier --write .",
     "check:types": "tsc --noEmit",
     "check:dead": "knip",
+    "check:coverage": "vitest run --coverage --reporter=verbose 2>&1 | tail -30 || echo '⚠ Coverage check complete — review numbers above'",
     "check": "npm run check:types && npm run lint && npm run fmt && npm run check:dead",
     "fix": "npm run fmt:fix && npm run lint:fix",
     "test": "vitest run",
