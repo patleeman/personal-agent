@@ -1,7 +1,7 @@
 {
   "name": "@personal-agent/desktop",
   "version": "0.5.35",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "description": "Personal Agent Electron desktop shell",
   "repository": "github:user/personal-agent",
   "bugs": "https://github.com/user/personal-agent/issues",
