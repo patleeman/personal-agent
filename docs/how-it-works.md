@@ -10,7 +10,6 @@ The core idea is simple: keep shipped defaults in the repo, keep durable knowled
 
 These ship in git and are shared by the repo itself:
 
-- `defaults/agent/`
 - `extensions/`
 - `internal-skills/`
 - `prompt-catalog/`

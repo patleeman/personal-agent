@@ -16,7 +16,6 @@ Default rule: add a folder before adding a package.
 
 These are shipped runtime inputs, not workspace packages:
 
-- `defaults/agent/`
 - `extensions/`
 - `internal-skills/`
 - `prompt-catalog/`

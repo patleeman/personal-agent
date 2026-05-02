@@ -62,7 +62,6 @@ describe('resources profile loader', () => {
     tempDirs.push(local);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
     writeFile(join(repo, 'extensions/index.ts'), 'export default {}\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
@@ -85,7 +84,6 @@ describe('resources profile loader', () => {
       join(local, 'agent', 'AGENTS.md'),
     ]);
     expect(resolved.settingsFiles).toEqual([
-      join(repo, 'defaults/agent/settings.json'),
       join(profilesRoot, 'shared', 'settings.json'),
       join(local, 'agent', 'settings.json'),
     ]);
@@ -200,7 +198,6 @@ describe('resources profile loader', () => {
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'defaults/agent/APPEND_SYSTEM.md'), 'shared append\n');
-    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
@@ -243,7 +240,6 @@ description: Commit and push the agent's current work.
     tempDirs.push(runtime);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
     writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');

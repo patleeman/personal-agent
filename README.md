@@ -139,7 +139,6 @@ There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa no
 ### Shipped resources and clients
 
 - `apps/ios/PersonalAgentCompanion/` — **native iOS companion app**
-- `defaults/agent/` — repo-managed Pi defaults
 - `extensions/` — built-in runtime extensions
 - `internal-skills/` — built-in feature behavior docs
 - `prompt-catalog/` — prompt text owned by this repo

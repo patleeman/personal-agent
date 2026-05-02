@@ -778,8 +778,18 @@ function readRuntimeLastChangelogVersion(settingsPath: string): string | undefin
   }
 }
 
+const DEFAULT_SETTINGS: Record<string, unknown> = {
+  defaultProvider: 'openai-codex',
+  defaultModel: 'gpt-5.4',
+  defaultThinkingLevel: 'xhigh',
+  theme: 'cobalt2',
+  themeDark: 'cobalt2',
+  themeLight: 'cobalt2-light',
+  themeMode: 'system',
+};
+
 function mergeMaterializedSettings(profileSettingsFiles: string[], targetSettingsPath: string): Record<string, unknown> {
-  let merged: Record<string, unknown> = {};
+  let merged: Record<string, unknown> = { ...DEFAULT_SETTINGS };
 
   for (const path of profileSettingsFiles) {
     const layerSettings = readJsonFile(path);
