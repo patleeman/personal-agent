@@ -17,6 +17,7 @@ import { createConversationInspectAgentExtension } from '../extensions/conversat
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
+import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
@@ -118,6 +119,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         stateRoot: getStateRoot(),
         getCurrentProfile,
       }),
+      createMcpAgentExtension(),
       createWorkbenchBrowserAgentExtension(),
       createConversationAutoModeAgentExtension(),
       createConversationQueueAgentExtension({ getCurrentProfile }),

@@ -20,7 +20,6 @@ import { installDesktopApplicationMenu, setDesktopApplicationMenuKeyboardShortcu
 import { validateDesktopKeyboardShortcuts, type DesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
-import { readDesktopDaemonOwnership } from './backend/daemon-ownership.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
 import { importClipboardUrlToKnowledge } from './url-clipper.js';
 
@@ -548,7 +547,7 @@ async function requestAppQuit(): Promise<void> {
         dialog,
         app.name,
         resolveDesktopRuntimePaths().colorIconFile,
-        { keepsExternalDaemonRunning: readDesktopDaemonOwnership() === 'external' },
+        { keepsExternalDaemonRunning: false },
       );
       if (!confirmed) {
         return;

@@ -1,16 +1,10 @@
 import { appendFileSync } from 'node:fs';
 import { updateMachineConfigSection } from '@personal-agent/core';
-import { PersonalAgentDaemon, bindInProcessDaemonClient, loadDaemonConfig, pingDaemon, syncCompanionTailscaleServe } from '@personal-agent/daemon';
+import { PersonalAgentDaemon, bindInProcessDaemonClient, loadDaemonConfig, syncCompanionTailscaleServe } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
-import { clearDesktopDaemonOwnership, writeDesktopDaemonOwnership, type DesktopDaemonOwnership } from './daemon-ownership.js';
-
-const EXTERNAL_DAEMON_CONFLICT_MESSAGE = 'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.';
-const EXTERNAL_DAEMON_RESTART_MESSAGE = 'The desktop app does not own the running daemon. Restart it with `pa daemon restart` or stop the external daemon service first.';
 
 interface LocalBackendStatus {
   daemonHealthy: boolean;
-  daemonOwnership?: DesktopDaemonOwnership;
-  blockedReason?: string;
 }
 
 function isLoopbackHost(value: string | undefined): boolean {
@@ -48,38 +42,19 @@ export class LocalBackendProcesses {
     }
 
     if (this.hasOwnedRuntime()) {
-      writeDesktopDaemonOwnership('owned');
       return;
     }
 
-    if (await pingDaemon()) {
-      writeDesktopDaemonOwnership('external');
-      throw new Error(EXTERNAL_DAEMON_CONFLICT_MESSAGE);
-    }
-
-    clearDesktopDaemonOwnership();
     await this.start();
   }
 
   async getStatus(): Promise<LocalBackendStatus> {
     if (this.hasOwnedRuntime()) {
-      writeDesktopDaemonOwnership('owned');
       return {
         daemonHealthy: true,
-        daemonOwnership: 'owned',
       };
     }
 
-    if (await pingDaemon()) {
-      writeDesktopDaemonOwnership('external');
-      return {
-        daemonHealthy: false,
-        daemonOwnership: 'external',
-        blockedReason: EXTERNAL_DAEMON_CONFLICT_MESSAGE,
-      };
-    }
-
-    clearDesktopDaemonOwnership();
     return {
       daemonHealthy: false,
     };
@@ -90,9 +65,9 @@ export class LocalBackendProcesses {
       await this.startPromise;
     }
 
-    if (!this.hasOwnedRuntime() && await pingDaemon()) {
-      writeDesktopDaemonOwnership('external');
-      throw new Error(EXTERNAL_DAEMON_RESTART_MESSAGE);
+    if (!this.hasOwnedRuntime()) {
+      await this.start();
+      return;
     }
 
     await this.stop();
@@ -107,8 +82,6 @@ export class LocalBackendProcesses {
       await this.daemon.stop();
       this.daemon = undefined;
     }
-
-    clearDesktopDaemonOwnership();
   }
 
   async ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }> {
@@ -182,11 +155,6 @@ export class LocalBackendProcesses {
   }
 
   private async startInternal(): Promise<void> {
-    if (await pingDaemon()) {
-      writeDesktopDaemonOwnership('external');
-      throw new Error(EXTERNAL_DAEMON_CONFLICT_MESSAGE);
-    }
-
     const runtime = resolveDesktopRuntimePaths();
     const logPath = `${runtime.desktopLogsDir}/daemon.log`;
     const daemon = new PersonalAgentDaemon({
@@ -199,7 +167,6 @@ export class LocalBackendProcesses {
     try {
       await daemon.start();
     } catch (error) {
-      clearDesktopDaemonOwnership();
       await daemon.stop().catch(() => undefined);
       throw error;
     }
@@ -207,6 +174,5 @@ export class LocalBackendProcesses {
     this.clearInProcessClientBinding?.();
     this.clearInProcessClientBinding = bindInProcessDaemonClient(daemon);
     this.daemon = daemon;
-    writeDesktopDaemonOwnership('owned');
   }
 }

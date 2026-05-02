@@ -12,7 +12,6 @@ const requiredArtifacts = [
   'packages/core/dist/runtime/index.js',
   'packages/core/dist/resources.js',
   'packages/core/dist/prompt-catalog.js',
-  'packages/cli/dist/index.js',
   'packages/daemon/dist/index.js',
   'packages/daemon/dist/service.js',
   'packages/web/dist-server/app/localApi.js',
@@ -31,8 +30,6 @@ if (missingArtifacts.length > 0) {
   process.exit(1);
 }
 
-for (const relativePath of ['packages/cli/dist/index.js', 'packages/daemon/dist/index.js']) {
-  chmodSync(join(repoRoot, relativePath), 0o755);
-}
+chmodSync(join(repoRoot, 'packages/daemon/dist/index.js'), 0o755);
 
-console.log(`Verified ${requiredArtifacts.length} build artifacts and normalized CLI/daemon executable bits.`);
+console.log(`Verified ${requiredArtifacts.length} build artifacts and normalized daemon executable bits.`);

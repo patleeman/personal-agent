@@ -1,10 +1,9 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { parseDeferredResumeDelayMs, setTaskCallbackBinding } from '@personal-agent/core';
-import { createStoredAutomation, startBackgroundRun } from '@personal-agent/daemon';
+import { createStoredAutomation, pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
 import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
-import { ensureDaemonAvailable } from '../automation/daemonToolUtils.js';
 import { cancelDurableRun, followUpDurableRun, getDurableRun, getDurableRunLog, listDurableRuns, rerunDurableRun } from '../automation/durableRuns.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
@@ -253,7 +252,7 @@ export function createRunAgentExtension(options: {
                   }
                 : undefined;
 
-              await ensureDaemonAvailable();
+              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
               const result = await startBackgroundRun({
                 taskSlug,
                 cwd,
@@ -333,7 +332,7 @@ export function createRunAgentExtension(options: {
                 }
 
                 const scheduledAt = resolveScheduledAt({ defer, at });
-                await ensureDaemonAvailable();
+                if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
                 const automation = createStoredAutomation({
                   id: taskSlug,
                   profile,
@@ -402,7 +401,7 @@ export function createRunAgentExtension(options: {
                 };
               }
 
-              await ensureDaemonAvailable();
+              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
               const result = await startBackgroundRun({
                 taskSlug,
                 cwd,
@@ -458,7 +457,7 @@ export function createRunAgentExtension(options: {
 
             case 'rerun': {
               const runId = readRequiredString(params.runId, 'runId');
-              await ensureDaemonAvailable();
+              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
               const result = await rerunDurableRun(runId);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not rerun ${runId}.`);
@@ -479,7 +478,7 @@ export function createRunAgentExtension(options: {
             case 'follow_up': {
               const runId = readRequiredString(params.runId, 'runId');
               const prompt = params.prompt?.trim() || 'Continue from where you left off.';
-              await ensureDaemonAvailable();
+              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
               const result = await followUpDurableRun(runId, prompt);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not continue ${runId}.`);
@@ -500,7 +499,7 @@ export function createRunAgentExtension(options: {
 
             case 'cancel': {
               const runId = readRequiredString(params.runId, 'runId');
-              await ensureDaemonAvailable();
+              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
               const result = await cancelDurableRun(runId);
               if (!result.cancelled) {
                 throw new Error(result.reason ?? `Could not cancel run ${runId}.`);

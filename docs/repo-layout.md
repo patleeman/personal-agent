@@ -6,7 +6,6 @@ This monorepo intentionally keeps package boundaries small.
 
 - `packages/core` — shared path resolution, durable state helpers, resource loading, knowledge/project helpers, MCP helpers
 - `packages/daemon` — daemon runtime, runs, automations, wakeups, companion plumbing
-- `packages/cli` — `pa`
 - `packages/web` — browser UI plus server routes
 - `packages/desktop` — Electron shell
 - `apps/ios/PersonalAgentCompanion` — native iOS companion app outside the npm workspace graph

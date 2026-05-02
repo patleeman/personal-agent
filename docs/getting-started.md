@@ -9,25 +9,12 @@ From the repo root:
 ```bash
 npm install
 npm run build
-npm link --workspace @personal-agent/cli
-```
-
-If you do not want a global `pa` symlink:
-
-```bash
-node packages/cli/dist/index.js --help
+npm run build
 ```
 
 ## Verify the install
 
-Run:
-
-```bash
-pa doctor
-pa status
-```
-
-`pa doctor` should confirm that Pi, built artifacts, and the local runtime paths are usable.
+The desktop app manages the local daemon runtime automatically. Start the Personal Agent desktop app from the build output or from the installed `.app` bundle.
 
 ## Know the three important roots
 

@@ -62,18 +62,7 @@ export {
   emitDaemonEvent,
   emitDaemonEventNonFatal,
 } from './client.js';
-export { startDaemonDetached, stopDaemonGracefully, daemonStatusJson, readDaemonPid } from './manage.js';
-export {
-  getManagedDaemonServiceStatus,
-  installManagedDaemonService,
-  restartManagedDaemonServiceIfInstalled,
-  startManagedDaemonService,
-  stopManagedDaemonService,
-  uninstallManagedDaemonService,
-  type ManagedDaemonServiceInfo,
-  type ManagedDaemonServiceStatus,
-  type ManagedServicePlatform,
-} from './service.js';
+
 export {
   readTailscaleServeProxyState,
   resolveCompanionTailscaleUrl,

@@ -33,7 +33,6 @@ export default defineConfig({
         '**/node_modules/**',
         '**/dist/**',
         'packages/**/src/**/types.ts',
-        'packages/cli/src/index.ts',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
     },

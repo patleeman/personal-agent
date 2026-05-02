@@ -64,18 +64,15 @@ export class LocalHostController implements HostController {
 
   async getStatus(): Promise<HostStatus> {
     const status = await this.backend.getStatus();
-    const reachable = status.daemonHealthy && !status.blockedReason;
-    const summary = status.blockedReason
-      ?? (!status.daemonHealthy
-        ? 'Local desktop runtime is starting or unavailable.'
-        : 'Local desktop runtime is healthy.');
 
     return {
-      reachable,
+      reachable: status.daemonHealthy,
       mode: 'local-app-runtime',
-      summary,
+      summary: status.daemonHealthy
+        ? 'Local desktop runtime is healthy.'
+        : 'Local desktop runtime is starting or unavailable.',
       webUrl: getDesktopAppBaseUrl(),
-      daemonHealthy: reachable,
+      daemonHealthy: status.daemonHealthy,
     };
   }
 

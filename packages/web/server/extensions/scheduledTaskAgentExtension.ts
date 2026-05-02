@@ -10,12 +10,12 @@ import {
   createStoredAutomation,
   deleteStoredAutomation,
   normalizeAutomationTargetTypeForSelection,
+  pingDaemon,
   startScheduledTaskRun,
   updateStoredAutomation,
   type StoredAutomation,
 } from '@personal-agent/daemon';
 import { invalidateAppTopics } from '../shared/appEvents.js';
-import { ensureDaemonAvailable } from '../automation/daemonToolUtils.js';
 import {
   loadScheduledTasksForProfile,
   resolveScheduledTaskForProfile,
@@ -497,7 +497,7 @@ export function createScheduledTaskAgentExtension(options: {
             case 'run': {
               const taskId = readRequiredString(params.taskId, 'taskId');
               const { task } = resolveScheduledTaskForProfile(profile, taskId);
-              await ensureDaemonAvailable();
+              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
               const result = await startScheduledTaskRun(task.id);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not start scheduled task @${taskId}.`);
