@@ -35,21 +35,12 @@ Conversations are for live execution. Reusable knowledge, workflows, reminders, 
 ```bash
 npm install
 npm run build
-npm link --workspace @personal-agent/cli
-```
-
-If you do not want a global `pa` symlink:
-
-```bash
-node packages/cli/dist/index.js --help
+npm run build
 ```
 
 ### Verify the install
 
-```bash
-pa doctor
-pa status
-```
+The desktop app manages the local daemon runtime automatically. Start the Personal Agent desktop app from the build output or from the installed `.app` bundle.
 
 ### Start the desktop app
 
@@ -194,6 +185,12 @@ npm run release:publish
 ```
 
 See [`docs/release-cycle.md`](docs/release-cycle.md) for the real details.
+
+## License
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See the [LICENSE](LICENSE) file for details.
+
+If you need a commercial license for proprietary use, contact Patrick Lee.
 
 ## Documentation map
 

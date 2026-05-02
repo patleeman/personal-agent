@@ -1,6 +1,7 @@
 {
   "name": "@personal-agent/core",
   "version": "0.5.35",
+  "license": "AGPL-3.0-only",
   "description": "Core personal agent library",
   "type": "module",
   "exports": {

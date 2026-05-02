@@ -2,6 +2,7 @@
   "name": "personal-agent",
   "version": "0.5.35",
   "private": true,
+  "license": "AGPL-3.0-only",
   "description": "Personal agent monorepo",
   "workspaces": [
     "packages/*"
@@ -38,8 +39,6 @@
     "lint": "eslint packages extensions --ext .ts,.tsx",
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
-    "run": "node packages/cli/dist/index.js run",
-    "doctor": "node packages/cli/dist/index.js doctor",
     "daemon": "node packages/daemon/dist/index.js",
     "validate:projects": "node scripts/validate-projects.mjs",
     "ab:run": "node scripts/agent-browser-session.mjs run",

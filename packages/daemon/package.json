@@ -1,6 +1,7 @@
 {
   "name": "@personal-agent/daemon",
   "version": "0.5.35",
+  "license": "AGPL-3.0-only",
   "description": "personal-agent background daemon",
   "type": "module",
   "exports": {

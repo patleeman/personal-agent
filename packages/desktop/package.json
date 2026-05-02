@@ -1,6 +1,7 @@
 {
   "name": "@personal-agent/desktop",
   "version": "0.5.35",
+  "license": "AGPL-3.0-only",
   "description": "Personal Agent Electron desktop shell",
   "productName": "Personal Agent",
   "type": "module",
