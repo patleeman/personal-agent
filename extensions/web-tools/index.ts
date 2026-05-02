@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import {
 	truncateHead,
@@ -6,121 +6,22 @@ import {
 	DEFAULT_MAX_LINES,
 	formatSize,
 } from "@mariozechner/pi-coding-agent";
-import { execFileSync } from "child_process";
-import { readFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
 
-const ONE_PASSWORD_REFERENCE_PREFIX = "op://";
-const DEFAULT_OP_READ_TIMEOUT_MS = 5000;
-
-let resolvedExaApiKey: string | undefined;
-let attemptedExaResolution = false;
-
-function isOnePasswordReference(value: string): boolean {
-	return value.trim().startsWith(ONE_PASSWORD_REFERENCE_PREFIX);
-}
-
-function resolveOnePasswordReference(reference: string): string | undefined {
-	const opCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || "op";
-	const configuredTimeout = Number.parseInt(process.env.PERSONAL_AGENT_OP_READ_TIMEOUT_MS || "", 10);
-	const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
-		? configuredTimeout
-		: DEFAULT_OP_READ_TIMEOUT_MS;
-
-	try {
-		const output = execFileSync(opCommand, ["--cache=false", "read", reference], {
-			encoding: "utf-8",
-			stdio: ["ignore", "pipe", "pipe"],
-			env: {
-				...process.env,
-				OP_CACHE: "false",
-			},
-			timeout: timeoutMs,
-		}).trim();
-
-		return output.length > 0 ? output : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-function resolveConfiguredSecret(value: unknown): string | undefined {
-	if (typeof value !== "string") {
-		return undefined;
-	}
-
-	const trimmed = value.trim();
-	if (trimmed.length === 0) {
-		return undefined;
-	}
-
-	if (isOnePasswordReference(trimmed)) {
-		return resolveOnePasswordReference(trimmed);
-	}
-
-	return trimmed;
-}
-
-function getAuthFileCandidates(): string[] {
-	const stateRoot = process.env.PERSONAL_AGENT_STATE_ROOT
-		|| (process.env.XDG_STATE_HOME
-			? join(process.env.XDG_STATE_HOME, "personal-agent")
-			: join(homedir(), ".local", "state", "personal-agent"));
-
-	return [
-		join(stateRoot, "pi-agent-runtime", "auth.json"),
-		join(stateRoot, "pi-agent", "auth.json"),
-		join(homedir(), ".pi", "agent", "auth.json"),
-	];
-}
-
-// Read Exa API key from env/auth.json/1Password reference.
-function getExaApiKey(): string | undefined {
-	if (attemptedExaResolution) {
-		return resolvedExaApiKey;
-	}
-
-	attemptedExaResolution = true;
-
-	const fromEnv = resolveConfiguredSecret(process.env.EXA_API_KEY);
+// Read Exa API key: env var first, then auth.json (via context).
+function getExaApiKey(ctx?: ExtensionContext): string | undefined {
+	const fromEnv = process.env.EXA_API_KEY?.trim();
 	if (fromEnv) {
-		resolvedExaApiKey = fromEnv;
-		return resolvedExaApiKey;
+		return fromEnv;
 	}
 
-	const fromEnvReference = resolveConfiguredSecret(process.env.PERSONAL_AGENT_EXA_API_KEY_REF);
-	if (fromEnvReference) {
-		resolvedExaApiKey = fromEnvReference;
-		return resolvedExaApiKey;
-	}
-
-	for (const authPath of getAuthFileCandidates()) {
-		try {
-			const authData = JSON.parse(readFileSync(authPath, "utf-8"));
-			if (authData.exa?.type === "api_key") {
-				const resolved = resolveConfiguredSecret(authData.exa.key);
-				if (resolved) {
-					resolvedExaApiKey = resolved;
-					return resolvedExaApiKey;
-				}
-			}
-		} catch {
-			// Continue to next candidate source.
+	if (ctx?.modelRegistry?.authStorage) {
+		const credential = ctx.modelRegistry.authStorage.get("exa");
+		if (credential?.type === "api_key" && credential.key) {
+			return credential.key.trim();
 		}
 	}
 
-	const configuredDefaultReference = process.env.PERSONAL_AGENT_EXA_API_KEY_DEFAULT_REF;
-	if (configuredDefaultReference) {
-		const resolvedDefaultReference = resolveConfiguredSecret(configuredDefaultReference);
-		if (resolvedDefaultReference) {
-			resolvedExaApiKey = resolvedDefaultReference;
-			return resolvedExaApiKey;
-		}
-	}
-
-	resolvedExaApiKey = undefined;
-	return resolvedExaApiKey;
+	return undefined;
 }
 
 interface ExaSearchResult {
@@ -295,7 +196,7 @@ export default function (pi: ExtensionAPI) {
 		name: "web_search",
 		label: "Web Search",
 		description:
-			"Search the web using Exa API when EXA_API_KEY (or Exa auth.json entry) is available; key values may be plain strings or op:// 1Password references. Falls back to DuckDuckGo when Exa is unavailable. Returns titles, URLs, and snippets for each result. Use web_fetch to read full page content from the returned URLs. Use page parameter to paginate through results.",
+			"Search the web using Exa API when EXA_API_KEY env var or an 'exa' credential in auth.json is configured. Falls back to DuckDuckGo when Exa is unavailable. Returns titles, URLs, and snippets for each result. Use web_fetch to read full page content from the returned URLs. Use page parameter to paginate through results.",
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
 			count: Type.Optional(
@@ -310,13 +211,13 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 
-		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const { query, count = 5, page = 1 } = params;
 			const maxResults = Math.min(count, 20);
 			const offset = (Math.max(page, 1) - 1) * 20;
 
 			// Try Exa API first if API key is available
-			const exaApiKey = getExaApiKey();
+			const exaApiKey = getExaApiKey(ctx);
 			if (exaApiKey) {
 				try {
 					const requestedResults = Math.min(offset + maxResults, 100);

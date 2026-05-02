@@ -41,6 +41,15 @@ describe('readProviderAuthState', () => {
 
     expect(state.providers.some((entry) => entry.id === 'anthropic')).toBe(true);
     expect(state.providers.some((entry) => entry.id === 'openrouter')).toBe(true);
+    expect(state.providers.some((entry) => entry.id === 'exa')).toBe(true);
+
+    const exa = state.providers.find((entry) => entry.id === 'exa');
+    expect(exa).toMatchObject({
+      id: 'exa',
+      authType: 'none',
+      hasStoredCredential: false,
+      apiKeySupported: true,
+    });
   });
 });
 

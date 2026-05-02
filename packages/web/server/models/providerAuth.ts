@@ -1,5 +1,5 @@
 import { AuthStorage, type OAuthCredential } from '@mariozechner/pi-coding-agent';
-import type { KnownProvider, OAuthPrompt } from '@mariozechner/pi-ai';
+import type { OAuthPrompt } from '@mariozechner/pi-ai';
 import { createModelRegistryForAuthFile } from './modelRegistry.js';
 
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
@@ -54,7 +54,7 @@ interface ProviderOAuthLoginRun extends ProviderOAuthLoginState {
   pendingInput: PendingOAuthInput | null;
 }
 
-const BUILT_IN_API_KEY_PROVIDERS: KnownProvider[] = [
+const BUILT_IN_API_KEY_PROVIDERS: string[] = [
   'anthropic',
   'azure-openai-responses',
   'openai',
@@ -72,6 +72,8 @@ const BUILT_IN_API_KEY_PROVIDERS: KnownProvider[] = [
   'kimi-coding',
   'minimax',
   'minimax-cn',
+  // Tool API providers (non-model)
+  'exa',
 ];
 
 const BUILT_IN_API_KEY_PROVIDER_SET = new Set<string>(BUILT_IN_API_KEY_PROVIDERS);
