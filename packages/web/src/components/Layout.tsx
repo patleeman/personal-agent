@@ -528,6 +528,8 @@ function WorkbenchDocumentPane({
   activeTool,
   onActiveToolChange,
   onMissingCheckpoint,
+  scrollToCheckpointFile,
+  workspaceCwd,
 }: {
   conversationId: string | null;
   artifactId: string | null;
@@ -537,6 +539,8 @@ function WorkbenchDocumentPane({
   activeTool: WorkbenchRailMode;
   onActiveToolChange: (mode: WorkbenchRailMode) => void;
   onMissingCheckpoint: () => void;
+  scrollToCheckpointFile?: string | null;
+  workspaceCwd?: string | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { sessions, tasks } = useAppData();
@@ -560,7 +564,7 @@ function WorkbenchDocumentPane({
   }
 
   if (activeTool === 'diffs' && conversationId) {
-    return <ConversationCheckpointWorkbenchPane conversationId={conversationId} checkpointId={checkpointId} onMissingCheckpoint={onMissingCheckpoint} />;
+    return <ConversationCheckpointWorkbenchPane conversationId={conversationId} checkpointId={checkpointId} onMissingCheckpoint={onMissingCheckpoint} scrollToFile={scrollToCheckpointFile} workspaceCwd={workspaceCwd} />;
   }
 
   if (activeTool === 'runs') {
@@ -870,6 +874,7 @@ function WorkbenchKnowledgeRail({
   onRunSelect,
   onWorkspaceFileSelect,
   onWorkspaceFileClear,
+  onScrollToCheckpointFile,
 }: {
   conversationId: string | null;
   workspaceCwd: string | null;
@@ -883,6 +888,7 @@ function WorkbenchKnowledgeRail({
   onRunSelect: (runId: string | null) => void;
   onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
   onWorkspaceFileClear: () => void;
+  onScrollToCheckpointFile?: (filePath: string) => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
@@ -1195,6 +1201,8 @@ function WorkbenchKnowledgeRail({
             loading={checkpointsLoading}
             error={checkpointsError}
             onOpenCheckpoint={handleCheckpointSelect}
+            onScrollToFile={onScrollToCheckpointFile}
+            workspaceCwd={workspaceCwd}
           />
         </div>
       ) : activeTool === 'runs' ? (
@@ -1268,6 +1276,10 @@ export function Layout() {
   });
   const [railOpen, setRailOpen] = useState(true);
   const [workbenchExplorerOpen, setWorkbenchExplorerOpen] = useState(() => readStoredWorkbenchExplorerOpen());
+  const [scrollToCheckpointFile, setScrollToCheckpointFile] = useState<string | null>(null);
+  const handleCheckpointFileScroll = useCallback((filePath: string) => {
+    setScrollToCheckpointFile(filePath);
+  }, []);
   const pageSearchRootRef = useRef<HTMLDivElement | null>(null);
   const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
@@ -1633,6 +1645,8 @@ export function Layout() {
                       activeTool={activeWorkbenchTool}
                       onActiveToolChange={setActiveWorkbenchTool}
                       onMissingCheckpoint={clearActiveConversationCheckpoint}
+                      scrollToCheckpointFile={scrollToCheckpointFile}
+                      workspaceCwd={activeWorkspaceCwd}
                     />
                   </section>
                   {workbenchExplorerOpen ? (
@@ -1656,6 +1670,7 @@ export function Layout() {
                           onRunSelect={setActiveConversationRun}
                           onWorkspaceFileSelect={setActiveWorkspaceFile}
                           onWorkspaceFileClear={clearActiveWorkspaceFile}
+                          onScrollToCheckpointFile={handleCheckpointFileScroll}
                         />
                       </aside>
                     </>

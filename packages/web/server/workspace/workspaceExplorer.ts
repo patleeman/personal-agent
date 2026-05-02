@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { readGitRepoInfo, readGitStatusSummary, type GitStatusChangeKind } from './gitStatus.js';
+import { parseCheckpointDiffSections, type LocalCheckpointCommitFile } from '../conversations/conversationCheckpointCommit.js';
 
 export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
 
@@ -55,6 +56,8 @@ export interface WorkspaceDiffOverlay extends WorkspaceRootSnapshot {
 
 const MAX_FILE_BYTES = 1024 * 512;
 const MAX_DIFF_FILE_BYTES = 1024 * 1024;
+const UNCOMMITTED_DIFF_MAX_FILES = 200;
+const UNCOMMITTED_DIFF_TIMEOUT_MS = 5_000;
 
 function runGit(args: string[], cwd: string): string {
   return execFileSync('git', args, {
@@ -401,6 +404,165 @@ export function readWorkspaceDiffOverlay(cwd: string, relativePath: string): Wor
   }
   const overlay = parseDiffOverlay(diff);
   return { ...file, gitStatus: status, binary: file.binary, tooLarge: file.tooLarge, ...overlay };
+}
+
+// ── Uncommitted (working tree) diff ──────────────────────────────────────────
+
+export interface UncommittedDiffResult {
+  branch: string | null;
+  changeCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+  files: LocalCheckpointCommitFile[];
+}
+
+function runGitAllowFailure(args: string[], cwd: string): { stdout: string; exitCode: number } {
+  try {
+    return {
+      stdout: execFileSync('git', args, {
+        cwd,
+        stdio: ['ignore', 'pipe', 'ignore'],
+        encoding: 'utf-8',
+        timeout: UNCOMMITTED_DIFF_TIMEOUT_MS,
+        maxBuffer: 8 * 1024 * 1024,
+      }),
+      exitCode: 0,
+    };
+  } catch (error: unknown) {
+    const childError = error as { stdout?: string | Buffer; status?: number | null; code?: string };
+    const stdout = typeof childError.stdout === 'string'
+      ? childError.stdout
+      : Buffer.isBuffer(childError.stdout)
+        ? childError.stdout.toString('utf-8')
+        : '';
+    return {
+      stdout,
+      exitCode: typeof childError.status === 'number' ? childError.status : 1,
+    };
+  }
+}
+
+function buildUntrackedPatch(root: string, relativePath: string): string {
+  const absolutePath = resolve(root, relativePath);
+  let content: string;
+  try {
+    content = readFileSync(absolutePath, 'utf-8');
+  } catch {
+    content = '';
+  }
+  const lines = content.split('\n');
+  const actualLines = lines.length > 0 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
+  const lineCount = actualLines.length;
+  if (lineCount === 0) {
+    return `diff --git a/dev/null b/${relativePath}\nnew file mode 100644\n--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +0,0 @@\n`;
+  }
+  return [
+    `diff --git a/dev/null b/${relativePath}`,
+    'new file mode 100644',
+    '--- /dev/null',
+    `+++ b/${relativePath}`,
+    `@@ -0,0 +1,${lineCount} @@`,
+    ...actualLines.map((line) => `+${line}`),
+  ].join('\n');
+}
+
+export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
+  const repo = readGitRepoInfo(cwd);
+  if (!repo) {
+    return null;
+  }
+
+  const status = readGitStatusSummary(repo.root);
+  if (!status) {
+    return null;
+  }
+
+  if (status.changes.length === 0) {
+    return {
+      branch: status.branch,
+      changeCount: 0,
+      linesAdded: 0,
+      linesDeleted: 0,
+      files: [],
+    };
+  }
+
+  const files: LocalCheckpointCommitFile[] = [];
+  const trackedChanges = status.changes.filter((c) => c.change !== 'untracked');
+  const untrackedChanges = status.changes.filter((c) => c.change === 'untracked');
+
+  // Get tracked diffs in one shot so rename detection works
+  if (trackedChanges.length > 0) {
+    const fileArgs = trackedChanges.flatMap((c) => ['--', c.relativePath]);
+    const result = runGitAllowFailure(
+      ['diff', 'HEAD', '--unified=3', '--find-renames', ...fileArgs],
+      repo.root,
+    );
+    if (result.exitCode === 0 || result.exitCode === 1) {
+      try {
+        const parsed = parseCheckpointDiffSections(result.stdout);
+        files.push(...parsed);
+      } catch {
+        // Fall back to per-file diffing
+        for (const change of trackedChanges) {
+          const fileResult = runGitAllowFailure(
+            ['diff', 'HEAD', '--unified=3', '--', change.relativePath],
+            repo.root,
+          );
+          if (fileResult.exitCode === 0 || fileResult.exitCode === 1) {
+            try {
+              const fileParsed = parseCheckpointDiffSections(fileResult.stdout);
+              if (fileParsed.length > 0) {
+                files.push(fileParsed[0]!);
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Untracked files — construct patches manually
+  if (untrackedChanges.length > 0 && files.length < UNCOMMITTED_DIFF_MAX_FILES) {
+    for (const change of untrackedChanges) {
+      if (files.length >= UNCOMMITTED_DIFF_MAX_FILES) {
+        break;
+      }
+      const patch = buildUntrackedPatch(repo.root, change.relativePath);
+      try {
+        const parsed = parseCheckpointDiffSections(patch);
+        if (parsed.length > 0) {
+          files.push(parsed[0]!);
+        } else {
+          files.push({
+            path: change.relativePath,
+            status: 'added',
+            additions: 0,
+            deletions: 0,
+            patch: '',
+          });
+        }
+      } catch {
+        files.push({
+          path: change.relativePath,
+          status: 'added',
+          additions: 0,
+          deletions: 0,
+          patch: '',
+        });
+      }
+    }
+  }
+
+  return {
+    branch: status.branch,
+    changeCount: files.length,
+    linesAdded: files.reduce((sum, f) => sum + f.additions, 0),
+    linesDeleted: files.reduce((sum, f) => sum + f.deletions, 0),
+    files,
+  };
 }
 
 export const __workspaceExplorerInternals = { parseDiffOverlay, normalizeRelativePath };

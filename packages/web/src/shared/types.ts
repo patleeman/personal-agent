@@ -1322,6 +1322,14 @@ export interface WorkspaceDiffOverlay extends WorkspaceRootSnapshot {
   deletedBlocks: Array<{ afterLine: number; lines: string[] }>;
 }
 
+export interface UncommittedDiffResult {
+  branch: string | null;
+  changeCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+  files: ConversationCommitCheckpointFile[];
+}
+
 // ── Transcription / dictation ───────────────────────────────────────────────
 
 export type TranscriptionProviderId = 'local-whisper';

@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import { watch } from 'node:fs';
 import type { ServerRouteContext } from './context.js';
-import { createWorkspaceFolder, deleteWorkspacePath, listWorkspaceDirectory, moveWorkspacePath, readWorkspaceDiffOverlay, readWorkspaceFile, readWorkspaceRootSnapshot, renameWorkspacePath, writeWorkspaceFile } from '../workspace/workspaceExplorer.js';
+import { createWorkspaceFolder, deleteWorkspacePath, listWorkspaceDirectory, moveWorkspacePath, readUncommittedDiff, readWorkspaceDiffOverlay, readWorkspaceFile, readWorkspaceRootSnapshot, renameWorkspacePath, writeWorkspaceFile } from '../workspace/workspaceExplorer.js';
 import { logError } from '../shared/logging.js';
 
 function resolveRequestCwd(context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>, cwd: unknown): string {
@@ -141,6 +141,21 @@ export function registerWorkspaceExplorerRoutes(
       res.json(readWorkspaceDiffOverlay(cwd, path));
     } catch (error) {
       logError('workspace diff request failed', { message: error instanceof Error ? error.message : String(error) });
+      writeWorkspaceError(res, error);
+    }
+  });
+
+  router.get('/api/workspace/uncommitted-diff', (req, res) => {
+    try {
+      const cwd = resolveRequestCwd(context, req.query.cwd);
+      const result = readUncommittedDiff(cwd);
+      if (!result) {
+        res.json({ branch: null, changeCount: 0, linesAdded: 0, linesDeleted: 0, files: [] });
+        return;
+      }
+      res.json(result);
+    } catch (error) {
+      logError('workspace uncommitted diff request failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
     }
   });
