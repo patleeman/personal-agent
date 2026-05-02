@@ -21,6 +21,11 @@ import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
+import webToolsExtension from '../extensions/web-tools/index.js';
+import gptApplyPatchExtension from '../extensions/gpt-apply-patch/index.js';
+import knowledgeBaseExtension from '../extensions/knowledge-base/index.js';
+import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
+import daemonRunOrchestrationPromptExtension from '../extensions/daemon-run-orchestration-prompt/index.js';
 import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 
@@ -124,6 +129,11 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       createConversationAutoModeAgentExtension(),
       createConversationQueueAgentExtension({ getCurrentProfile }),
       createReminderAgentExtension(),
+      webToolsExtension,
+      gptApplyPatchExtension,
+      knowledgeBaseExtension,
+      openaiNativeCompactionExtension,
+      daemonRunOrchestrationPromptExtension,
     ];
   }
 

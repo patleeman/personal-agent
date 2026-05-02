@@ -20,7 +20,7 @@ Conversations are for live execution. Reusable knowledge, workflows, reminders, 
 - a **daemon** — runs, scheduled tasks, wakeups, reminders, companion pairing
 - a **knowledge system** — docs, instruction files, skills, and projects
 - **MCP integration** — external tool server support
-- built-in **extensions**, **internal skills**, and a **prompt catalog**
+- built-in **internal skills**, and a **prompt catalog**
 
 ## Quick start
 
@@ -138,7 +138,6 @@ There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa no
 ### Shipped resources and clients
 
 - `apps/ios/PersonalAgentCompanion/` — **native iOS companion app**
-- `extensions/` — built-in runtime extensions
 - `internal-skills/` — built-in feature behavior docs
 - `prompt-catalog/` — prompt text owned by this repo
 - `docs/` — product semantics and current behavior

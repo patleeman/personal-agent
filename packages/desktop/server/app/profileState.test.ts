@@ -21,6 +21,11 @@ const {
   createWorkbenchBrowserAgentExtensionMock,
   createImageAgentExtensionMock,
   createMcpAgentExtensionMock,
+  webToolsExtensionMock,
+  gptApplyPatchExtensionMock,
+  knowledgeBaseExtensionMock,
+  openaiNativeCompactionExtensionMock,
+  daemonRunOrchestrationPromptExtensionMock,
   renameSessionMock,
   requestConversationWorkingDirectoryChangeMock,
 } = vi.hoisted(() => ({
@@ -43,6 +48,11 @@ const {
   createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
   createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
   createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
+  webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
+  gptApplyPatchExtensionMock: vi.fn(() => 'gpt-apply-patch-extension'),
+  knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
+  openaiNativeCompactionExtensionMock: vi.fn(() => 'openai-native-compaction-extension'),
+  daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
   renameSessionMock: vi.fn(),
   requestConversationWorkingDirectoryChangeMock: vi.fn(),
 }));
@@ -109,6 +119,26 @@ vi.mock('../extensions/imageAgentExtension.js', () => ({
 
 vi.mock('../extensions/mcpAgentExtension.js', () => ({
   createMcpAgentExtension: createMcpAgentExtensionMock,
+}));
+
+vi.mock('../extensions/web-tools/index.js', () => ({
+  default: webToolsExtensionMock,
+}));
+
+vi.mock('../extensions/gpt-apply-patch/index.js', () => ({
+  default: gptApplyPatchExtensionMock,
+}));
+
+vi.mock('../extensions/knowledge-base/index.js', () => ({
+  default: knowledgeBaseExtensionMock,
+}));
+
+vi.mock('../extensions/openai-native-compaction/index.js', () => ({
+  default: openaiNativeCompactionExtensionMock,
+}));
+
+vi.mock('../extensions/daemon-run-orchestration-prompt/index.js', () => ({
+  default: daemonRunOrchestrationPromptExtensionMock,
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({
@@ -191,6 +221,11 @@ describe('createProfileState', () => {
       'conversation-auto-mode-extension',
       'conversation-queue-extension',
       'reminder-extension',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
     ]);
     expect(createScheduledTaskAgentExtensionMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),

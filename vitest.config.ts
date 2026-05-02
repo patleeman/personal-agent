@@ -23,7 +23,6 @@ export default defineConfig({
         'packages/desktop/ui/src/**/*.tsx',
         'packages/desktop/ui/src/**/*.ts',
         'packages/desktop/server/**/*.ts',
-        'extensions/**/*.ts',
       ],
       exclude: [
         '**/*.test.ts',

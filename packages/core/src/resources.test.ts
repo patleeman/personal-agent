@@ -62,7 +62,6 @@ describe('resources profile loader', () => {
     tempDirs.push(local);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'extensions/index.ts'), 'export default {}\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
@@ -90,29 +89,7 @@ describe('resources profile loader', () => {
     expect(resolved.skillDirs).toEqual([
       join(syncRoot, 'skills', 'shared-skill'),
     ]);
-    expect(resolved.extensionEntries).toEqual([join(repo, 'extensions', 'index.ts')]);
-  });
-
-  it('includes repo-provided internal extensions and themes', () => {
-    const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-
-    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
-    writeFile(join(repo, 'extensions/basic/package.json'), JSON.stringify({ name: 'basic', version: '1.0.0' }));
-    writeFile(join(repo, 'themes/cobalt2.json'), '{}\n');
-
-    const resolved = resolveResourceProfile('shared', {
-      repoRoot: repo,
-      profilesRoot,
-      localProfileDir: join(repo, '.local-profile'),
-    });
-
-    expect(resolved.extensionDirs).toEqual([join(repo, 'extensions')]);
-    expect(resolved.extensionEntries).toEqual([join(repo, 'extensions/basic/index.ts')]);
-    expect(resolved.themeDirs).toEqual([join(repo, 'themes')]);
-    expect(resolved.themeEntries).toEqual([join(repo, 'themes/cobalt2.json')]);
-    expect(getExtensionDependencyDirs(resolved)).toEqual([join(repo, 'extensions/basic')]);
+    expect(resolved.extensionEntries).toEqual([]);
   });
 
   it('includes configured machine instruction files in the materialized AGENTS stack', () => {
@@ -277,9 +254,7 @@ description: Commit and push the agent's current work.
     const profilesRoot = createTempProfilesRoot();
     const syncRoot = join(profilesRoot, '..');
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
     writeFile(join(syncRoot, 'skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n# Test\n');
-    writeFile(join(repo, 'themes/theme.json'), '{}\n');
 
     const resolved = resolveResourceProfile('shared', {
       repoRoot: repo,
@@ -289,12 +264,8 @@ description: Commit and push the agent's current work.
     const args = buildPiResourceArgs(resolved);
 
     expect(args).toContain('--no-extensions');
-    expect(args).toContain('-e');
-    expect(args).toContain(join(repo, 'extensions/basic/index.ts'));
     expect(args).toContain('--skill');
     expect(args).toContain(join(syncRoot, 'skills', 'test'));
-    expect(args).toContain('--theme');
-    expect(args).toContain(join(repo, 'themes/theme.json'));
   });
 
   it('loads shared resources from canonical underscored durable directories', () => {

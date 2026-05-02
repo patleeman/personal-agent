@@ -467,16 +467,6 @@ function collectLayerDirs(layers: ProfileLayer[], relativePath: string): string[
   return dedupe(dirs);
 }
 
-function collectRepoInternalExtensionDirs(repoRoot: string): string[] {
-  const internalExtensionsDir = existingDir(join(repoRoot, 'extensions'));
-  return internalExtensionsDir ? [internalExtensionsDir] : [];
-}
-
-function collectRepoInternalThemeDirs(repoRoot: string): string[] {
-  const internalThemesDir = existingDir(join(repoRoot, 'themes'));
-  return internalThemesDir ? [internalThemesDir] : [];
-}
-
 function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string[] {
   const files = layers
     .map((layer) => existingFile(join(layer.agentDir, relativePath)))
@@ -688,7 +678,6 @@ export function resolveResourceProfile(
 
   const extensionDirs = dedupe([
     ...collectLayerDirs(localLayers, 'extensions'),
-    ...collectRepoInternalExtensionDirs(repoRoot),
   ]);
   const skillDirs = dedupe([
     ...durableSkillDirs,
@@ -698,7 +687,6 @@ export function resolveResourceProfile(
   const promptDirs = collectLayerDirs(localLayers, 'prompts');
   const themeDirs = dedupe([
     ...collectLayerDirs(localLayers, 'themes'),
-    ...collectRepoInternalThemeDirs(repoRoot),
   ]);
 
   const extensionEntries = dedupe(extensionDirs.flatMap((dir) => discoverExtensionEntries(dir)));

@@ -1,8 +1,8 @@
 # Extensions
 
-Built-in extensions live under `extensions/` and extend the Pi runtime with additional tools, capabilities, and system prompt injections.
+Built-in extensions live under `packages/desktop/server/extensions/` and extend the Pi runtime with additional tools, capabilities, and system prompt injections.
 
-Extensions are auto-discovered and loaded at runtime. They are always active unless disabled through the extension API.
+Extensions are loaded as `ExtensionFactory` functions and passed directly to Pi at session creation. They are always active unless disabled through the extension API.
 
 ## Built-in extensions
 
@@ -49,7 +49,7 @@ Extensions can:
 
 ## Extension authoring
 
-For extension authoring, see `extensions/README.md` in the repo root. The extension API is provided by `@mariozechner/pi-coding-agent`.
+The extension API is provided by `@mariozechner/pi-coding-agent`. Create an `ExtensionFactory` function `(pi: ExtensionAPI) => void` and add it to `buildLiveSessionExtensionFactories()` in `packages/desktop/server/app/profileState.ts`.
 
 ## Related docs
 

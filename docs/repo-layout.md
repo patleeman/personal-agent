@@ -14,7 +14,6 @@ There are only three packages. The old `packages/web` (standalone browser UI + s
 
 Other shipped directories at the repo root:
 
-- `extensions/` — built-in extensions
 - `internal-skills/` — built-in runtime feature docs
 - `prompt-catalog/` — system prompt templates
 - `docs/` — product semantics for agents
