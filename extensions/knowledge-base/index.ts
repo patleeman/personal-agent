@@ -10,10 +10,10 @@ import {
   loadUnifiedNodes,
 } from '@personal-agent/core';
 import {
+  getPromptCatalogRoot,
   renderPromptCatalogTemplate,
-  requirePromptCatalogEntryFromExtension,
-  resolveRepoRootFromExtension,
-} from '../_shared/prompt-catalog.js';
+  requirePromptCatalogEntry,
+} from '@personal-agent/core';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
@@ -50,7 +50,11 @@ function sanitizeProfileName(raw: string | undefined): string | undefined {
 }
 
 function resolveRepoRoot(): string {
-  return resolveRepoRootFromExtension(import.meta.url);
+  // The repo root is set at startup in PERSONAL_AGENT_REPO_ROOT.
+  // Fall back to deriving from prompt catalog root for safety.
+  const explicit = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
+  if (explicit) return explicit;
+  return join(getPromptCatalogRoot(), '..');
 }
 
 function resolveRequestedProfile(): string {
@@ -192,8 +196,9 @@ export default function knowledgeBaseExtension(pi: ExtensionAPI): void {
 
     const context = resolveKnowledgeContext(ctx.cwd);
     const variables = buildTemplateVariables(ctx.cwd, context);
-    const template = requirePromptCatalogEntryFromExtension(import.meta.url, 'system.md');
-    const rendered = renderPromptCatalogTemplate(template, variables, import.meta.url);
+    const template = requirePromptCatalogEntry('system.md');
+    const root = getPromptCatalogRoot();
+    const rendered = renderPromptCatalogTemplate(template, variables, { templateRoot: root });
 
     return { systemPrompt: rendered };
   });

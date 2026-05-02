@@ -1,8 +1,9 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
+  getPromptCatalogRoot,
   renderPromptCatalogTemplate,
-  requirePromptCatalogEntryFromExtension,
-} from "../_shared/prompt-catalog.js";
+  requirePromptCatalogEntry,
+} from "@personal-agent/core";
 
 function formatDate(date: Date): string {
   const year = date.getFullYear();
@@ -18,10 +19,10 @@ export default function daemonRunOrchestrationPromptExtension(pi: ExtensionAPI):
       return;
     }
 
-    const template = requirePromptCatalogEntryFromExtension(import.meta.url, 'system.md');
+    const template = requirePromptCatalogEntry('system.md');
     const rendered = renderPromptCatalogTemplate(template, {
       current_date: formatDate(new Date()),
-    }, import.meta.url);
+    }, { templateRoot: getPromptCatalogRoot() });
 
     return {
       systemPrompt: rendered,

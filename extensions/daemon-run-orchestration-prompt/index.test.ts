@@ -1,16 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  getPromptCatalogRootMock,
   renderPromptCatalogTemplateMock,
-  requirePromptCatalogEntryFromExtensionMock,
+  requirePromptCatalogEntryMock,
 } = vi.hoisted(() => ({
+  getPromptCatalogRootMock: vi.fn(),
   renderPromptCatalogTemplateMock: vi.fn(),
-  requirePromptCatalogEntryFromExtensionMock: vi.fn(),
+  requirePromptCatalogEntryMock: vi.fn(),
 }));
 
-vi.mock('../_shared/prompt-catalog.js', () => ({
+vi.mock('@personal-agent/core', () => ({
+  getPromptCatalogRoot: getPromptCatalogRootMock,
   renderPromptCatalogTemplate: renderPromptCatalogTemplateMock,
-  requirePromptCatalogEntryFromExtension: requirePromptCatalogEntryFromExtensionMock,
+  requirePromptCatalogEntry: requirePromptCatalogEntryMock,
 }));
 
 import daemonRunOrchestrationPromptExtension from './index';
@@ -18,8 +21,9 @@ import daemonRunOrchestrationPromptExtension from './index';
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  getPromptCatalogRootMock.mockReset();
   renderPromptCatalogTemplateMock.mockReset();
-  requirePromptCatalogEntryFromExtensionMock.mockReset();
+  requirePromptCatalogEntryMock.mockReset();
 });
 
 describe('daemon run orchestration prompt extension', () => {
@@ -27,7 +31,8 @@ describe('daemon run orchestration prompt extension', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T12:34:56.000Z'));
 
-    requirePromptCatalogEntryFromExtensionMock.mockReturnValue('template {{ current_date }}');
+    getPromptCatalogRootMock.mockReturnValue('/repo/prompt-catalog');
+    requirePromptCatalogEntryMock.mockReturnValue('template {{ current_date }}');
     renderPromptCatalogTemplateMock.mockImplementation((template, variables) => `rendered ${(variables as { current_date: string }).current_date}`);
 
     let beforeAgentStartHandler: ((event: { prompt?: string | null }) => unknown) | undefined;
@@ -43,11 +48,11 @@ describe('daemon run orchestration prompt extension', () => {
 
     const result = beforeAgentStartHandler?.({ prompt: ' investigate the failing run ' });
 
-    expect(requirePromptCatalogEntryFromExtensionMock).toHaveBeenCalledWith(expect.stringContaining('daemon-run-orchestration-prompt'), 'system.md');
+    expect(requirePromptCatalogEntryMock).toHaveBeenCalledWith('system.md');
     expect(renderPromptCatalogTemplateMock).toHaveBeenCalledWith(
       'template {{ current_date }}',
       { current_date: '2026-04-10' },
-      expect.stringContaining('daemon-run-orchestration-prompt'),
+      { templateRoot: '/repo/prompt-catalog' },
     );
     expect(result).toEqual({ systemPrompt: 'rendered 2026-04-10' });
   });
@@ -67,7 +72,7 @@ describe('daemon run orchestration prompt extension', () => {
     expect(beforeAgentStartHandler?.({ prompt: '   ' })).toBeUndefined();
     expect(beforeAgentStartHandler?.({ prompt: '/model gpt-5' })).toBeUndefined();
     expect(beforeAgentStartHandler?.({})).toBeUndefined();
-    expect(requirePromptCatalogEntryFromExtensionMock).not.toHaveBeenCalled();
+    expect(requirePromptCatalogEntryMock).not.toHaveBeenCalled();
     expect(renderPromptCatalogTemplateMock).not.toHaveBeenCalled();
   });
 });
