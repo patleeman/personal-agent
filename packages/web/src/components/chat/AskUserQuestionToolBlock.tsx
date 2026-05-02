@@ -446,7 +446,7 @@ export function AskUserQuestionToolBlock({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="text-[15px] font-medium text-primary">
+            <span className="text-[14px] font-medium text-primary">
               {presentation.questions.length === 1 ? 'Question for you' : 'Questions for you'}
             </span>
             <Pill tone={statusTone} className="px-2.5 py-0.5 text-[12px]">{statusLabel}</Pill>
@@ -461,24 +461,24 @@ export function AskUserQuestionToolBlock({
             mode === 'composer' ? (
               <>
                 {presentation.details && (
-                  <p className="mt-2 text-[14px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[13px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
                 <div className="mt-2.5 space-y-1.5">
                   {presentation.questions.map((question, index) => (
-                    <p key={question.id} className="flex items-start gap-2.5 text-[14px] leading-relaxed text-secondary">
+                    <p key={question.id} className="flex items-start gap-2.5 text-[13px] leading-relaxed text-secondary">
                       <span className="mt-px w-5 shrink-0 text-[13px] font-mono text-dim">{index + 1}.</span>
                       <span className="min-w-0 break-words">{question.label}</span>
                     </p>
                   ))}
                 </div>
-                <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
+                <p className="mt-2.5 text-[12px] leading-relaxed text-dim">
                   Answer using the composer below. Type 1-9 to select, or send a normal message to skip.
                 </p>
               </>
             ) : (
               <>
                 {presentation.details && (
-                  <p className="mt-2 text-[14px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[13px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
 
                 <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1.5" role="tablist" aria-label="Question navigation">
@@ -496,7 +496,7 @@ export function AskUserQuestionToolBlock({
                         onClick={() => activateQuestion(index)}
                         onKeyDown={(event) => handleQuestionTabKeyDown(index, event)}
                         className={cx(
-                          'ui-action-button min-w-0 px-2 py-1 text-[13px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                          'ui-action-button min-w-0 px-2 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                           active
                             ? 'text-primary hover:text-primary'
                             : answered
@@ -504,7 +504,7 @@ export function AskUserQuestionToolBlock({
                               : 'text-dim',
                         )}
                       >
-                        <span aria-hidden="true" className={cx('shrink-0 text-[13px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                        <span aria-hidden="true" className={cx('shrink-0 text-[12px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
                           {answered ? '✓' : active ? '•' : '○'}
                         </span>
                         <span className="truncate">{question.label}</span>
@@ -550,9 +550,9 @@ export function AskUserQuestionToolBlock({
                         Question {activeQuestionIndex + 1} of {presentation.questions.length}
                       </p>
                     )}
-                    <p className="mt-1.5 text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
+                    <p className="mt-1.5 text-[14px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
                     {activeQuestion.details && (
-                      <p className="mt-1.5 text-[14px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+                      <p className="mt-1.5 text-[13px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
                     )}
 
                     {activeQuestion.options.length > 0 ? (
@@ -584,13 +584,13 @@ export function AskUserQuestionToolBlock({
                                 submitting && 'cursor-default opacity-60',
                               )}
                             >
-                              <span className={cx('mt-0.5 w-5 shrink-0 text-[14px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                              <span className={cx('mt-0.5 w-5 shrink-0 text-[13px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
                                 {indicator}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="ui-row-title block break-words text-[15px] leading-snug">{option.label}</span>
+                                <span className="ui-row-title block break-words text-[14px] leading-snug">{option.label}</span>
                                 {option.details && (
-                                  <span className="ui-row-summary block break-words text-[13px] leading-relaxed">{option.details}</span>
+                                  <span className="ui-row-summary block break-words text-[12px] leading-relaxed">{option.details}</span>
                                 )}
                               </span>
                             </button>
@@ -598,14 +598,14 @@ export function AskUserQuestionToolBlock({
                         })}
                       </div>
                     ) : (
-                      <p className="mt-2 text-[15px] leading-relaxed text-secondary">
+                      <p className="mt-2 text-[14px] leading-relaxed text-secondary">
                         Send a normal message in the composer to answer this question.
                       </p>
                     )}
                   </div>
                 )}
 
-                <p className="mt-3 text-[13px] leading-relaxed text-dim">
+                <p className="mt-3 text-[12px] leading-relaxed text-dim">
                   1-9 selects · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip
                 </p>
               </>

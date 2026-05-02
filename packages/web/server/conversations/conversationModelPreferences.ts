@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
-import { supportsXhigh, type Model } from '@mariozechner/pi-ai';
+import { getSupportedThinkingLevels, type Model } from '@mariozechner/pi-ai';
 import {
   getSupportedServiceTiersForModel,
   modelSupportsServiceTier,
@@ -9,8 +9,6 @@ import {
 } from '../models/modelServiceTiers.js';
 
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'medium';
-const THINKING_LEVELS: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high'];
-const THINKING_LEVELS_WITH_XHIGH: ThinkingLevel[] = [...THINKING_LEVELS, 'xhigh'];
 type ServiceTier = ServiceTierValue;
 type ServiceTierOverride = ServiceTier | '' | null;
 const SERVICE_TIER_CUSTOM_TYPE = 'conversation-service-tier';
@@ -86,7 +84,7 @@ function getAvailableThinkingLevels(model: Model<any> | null | undefined): Think
     return ['off'];
   }
 
-  return supportsXhigh(model) ? THINKING_LEVELS_WITH_XHIGH : THINKING_LEVELS;
+  return getSupportedThinkingLevels(model) as ThinkingLevel[];
 }
 
 function clampThinkingLevel(level: ThinkingLevel | '', model: Model<any> | null | undefined): ThinkingLevel {

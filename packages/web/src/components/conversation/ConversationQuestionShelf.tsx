@@ -42,7 +42,7 @@ export function ConversationQuestionShelf({
                 type="button"
                 onClick={() => onActivateQuestion(index)}
                 className={cx(
-                  'ui-action-button min-w-0 px-2 py-1 text-[13px]',
+                  'ui-action-button min-w-0 px-2 py-1 text-[12px]',
                   active
                     ? 'text-primary'
                     : answered
@@ -50,7 +50,7 @@ export function ConversationQuestionShelf({
                       : 'text-dim',
                 )}
               >
-                <span aria-hidden="true" className={cx('shrink-0 text-[13px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                <span aria-hidden="true" className={cx('shrink-0 text-[12px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
                   {answered ? '✓' : active ? '•' : '○'}
                 </span>
                 <span className="truncate">{question.label}</span>
@@ -61,9 +61,9 @@ export function ConversationQuestionShelf({
       )}
 
       <div className="mt-2.5">
-        <p className="text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
+        <p className="text-[14px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
         {activeQuestion.details && (
-          <p className="mt-1.5 text-[14px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
         )}
       </div>
 
@@ -90,13 +90,13 @@ export function ConversationQuestionShelf({
                 checked || active ? 'ui-list-row-selected' : 'ui-list-row-hover',
               )}
             >
-              <span className={cx('mt-0.5 w-12 shrink-0 text-[14px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
+              <span className={cx('mt-0.5 w-12 shrink-0 text-[13px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
                 {optionIndex + 1}. {indicator}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="ui-row-title block break-words text-[15px] leading-snug">{option.label}</span>
+                <span className="ui-row-title block break-words text-[14px] leading-snug">{option.label}</span>
                 {option.details && (
-                  <span className="ui-row-summary block break-words text-[13px] leading-relaxed">{option.details}</span>
+                  <span className="ui-row-summary block break-words text-[12px] leading-relaxed">{option.details}</span>
                 )}
               </span>
             </button>
@@ -104,7 +104,7 @@ export function ConversationQuestionShelf({
         })}
       </div>
 
-      <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
+      <p className="mt-2.5 text-[12px] leading-relaxed text-dim">
         Type 1-9 to select · Tab/Shift+Tab or ←/→ switches questions · ↑/↓ moves · Enter selects or submits · type a normal message to skip
       </p>
     </div>
