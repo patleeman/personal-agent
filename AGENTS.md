@@ -48,6 +48,31 @@ Once you're done with your task, remember to /skill:checkpoint your work. In thi
 - I explicitly want targeted checkpoints for the code you modified.
 - If a file has unrelated work mixed in, stage only your hunks. If you cannot do that safely, stop and tell me instead of sweeping unrelated changes into the commit.
 
+## Code quality checks
+
+This repo has automated checks to keep the codebase clean.
+
+### Pre-commit hook (`.githooks/pre-commit`)
+
+Runs on every commit — gitleaks, typecheck, prettier, and eslint on staged files.
+Bypass with `git commit --no-verify` if needed.
+
+### npm scripts
+
+```bash
+npm run check    # tsc --noEmit → eslint → prettier --check → knip (dead code)
+npm run fix      # prettier --write + eslint --fix
+```
+
+- **`check:types`** — `tsc --noEmit` (0.3s). Catches type errors and unused imports.
+- **`lint`** — `eslint` with `simple-import-sort` for import ordering.
+- **`fmt`** — `prettier --check`. Config: single quotes, trailing commas, 140 width.
+- **`check:dead`** — `knip`. Catches unused exports, files, and dependencies. Config in `knip.json`.
+
+### What to do before committing
+
+Run `npm run fix` to auto-format and fix import ordering, then `npm run check` to verify everything passes. If the pre-commit hook blocks on pre-existing lint issues (there are ~80 baseline errors in untouched files), that's fine — just ensure your new code doesn't add more.
+
 ## Secret scanning
 
 This repo has a gitleaks pre-commit hook that scans staged changes for secrets before every commit.
