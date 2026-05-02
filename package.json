@@ -1,0 +1,55 @@
+{
+  "name": "personal-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal agent monorepo",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:ts && npm run build:web",
+    "build:ts": "tsc --build",
+    "build:web": "npm --prefix packages/web run build",
+    "lint": "eslint packages --ext .ts",
+    "test": "vitest run",
+    "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
+    "run": "node packages/cli/dist/index.js run",
+    "doctor": "node packages/cli/dist/index.js doctor",
+    "profile:list": "node packages/cli/dist/index.js profile list",
+    "daemon": "node packages/daemon/dist/index.js",
+    "validate:projects": "node scripts/validate-projects.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^8.57.0",
+    "typescript": "^5.3.0",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.58.1"
+  },
+  "overrides": {
+    "form-data": "^2.5.5",
+    "qs": "^6.15.0",
+    "tough-cookie": "^4.1.4",
+    "request": {
+      "form-data": "^2.5.5",
+      "qs": "^6.15.0",
+      "tough-cookie": "^4.1.4"
+    },
+    "node-telegram-bot-api": {
+      "request": {
+        "form-data": "^2.5.5",
+        "qs": "^6.15.0",
+        "tough-cookie": "^4.1.4"
+      }
+    }
+  }
+}

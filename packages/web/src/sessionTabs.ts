@@ -1,0 +1,306 @@
+import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from './localSettings';
+
+export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
+export const OPEN_SESSIONS_CHANGED_EVENT = CONVERSATION_LAYOUT_CHANGED_EVENT;
+
+export type OpenConversationDropPosition = 'before' | 'after';
+export type ConversationShelf = 'open' | 'pinned';
+
+export interface ConversationLayout {
+  sessionIds: string[];
+  pinnedSessionIds: string[];
+}
+
+function normalizeSessionId(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeSessionIds(values: Iterable<unknown>): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const normalized = normalizeSessionId(value);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    ids.push(normalized);
+  }
+
+  return ids;
+}
+
+function normalizeConversationLayout(input: ConversationLayout): ConversationLayout {
+  const pinnedSessionIds = normalizeSessionIds(input.pinnedSessionIds);
+  const pinnedIdSet = new Set(pinnedSessionIds);
+  const sessionIds = normalizeSessionIds(input.sessionIds).filter((id) => !pinnedIdSet.has(id));
+
+  return {
+    sessionIds,
+    pinnedSessionIds,
+  };
+}
+
+function sameSessionIds(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((id, index) => id === right[index]);
+}
+
+function sameConversationLayout(left: ConversationLayout, right: ConversationLayout): boolean {
+  return sameSessionIds(left.sessionIds, right.sessionIds)
+    && sameSessionIds(left.pinnedSessionIds, right.pinnedSessionIds);
+}
+
+function persistConversationLayoutToServer(layout: ConversationLayout): void {
+  if (typeof fetch !== 'function') {
+    return;
+  }
+
+  void fetch('/api/web-ui/open-conversations', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(layout),
+  }).catch(() => {
+    // Ignore best-effort sync failures.
+  });
+}
+
+export function syncOpenConversationTabsToServer(
+  sessionIds: Iterable<unknown>,
+  pinnedSessionIds: Iterable<unknown> = readPinnedSessionIds(),
+): void {
+  persistConversationLayoutToServer(normalizeConversationLayout({
+    sessionIds: normalizeSessionIds(sessionIds),
+    pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
+  }));
+}
+
+function readStoredSessionIds(storageKey: string): string[] {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return normalizeSessionIds(parsed);
+      }
+    }
+  } catch {
+    // Ignore malformed storage.
+  }
+
+  return [];
+}
+
+export function readConversationLayout(): ConversationLayout {
+  return normalizeConversationLayout({
+    sessionIds: readStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY),
+    pinnedSessionIds: readStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY),
+  });
+}
+
+export function readOpenSessionIds(): string[] {
+  return readConversationLayout().sessionIds;
+}
+
+export function readPinnedSessionIds(): string[] {
+  return readConversationLayout().pinnedSessionIds;
+}
+
+function writeStoredSessionIds(storageKey: string, sessionIds: readonly string[]): void {
+  try {
+    if (sessionIds.length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(sessionIds));
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function writeConversationLayout(layout: ConversationLayout): ConversationLayout {
+  const normalizedLayout = normalizeConversationLayout(layout);
+
+  writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, normalizedLayout.sessionIds);
+  writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, normalizedLayout.pinnedSessionIds);
+  persistConversationLayoutToServer(normalizedLayout);
+  window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, {
+    detail: normalizedLayout,
+  }));
+
+  return normalizedLayout;
+}
+
+export function replaceConversationLayout(layout: ConversationLayout): ConversationLayout {
+  const next = normalizeConversationLayout(layout);
+  const current = readConversationLayout();
+  if (sameConversationLayout(current, next)) {
+    return current;
+  }
+
+  return writeConversationLayout(next);
+}
+
+export function replaceOpenConversationTabs(sessionIds: Iterable<unknown>): string[] {
+  return replaceConversationLayout({
+    sessionIds: normalizeSessionIds(sessionIds),
+    pinnedSessionIds: readPinnedSessionIds(),
+  }).sessionIds;
+}
+
+export function replacePinnedConversationTabs(pinnedSessionIds: Iterable<unknown>): string[] {
+  return replaceConversationLayout({
+    sessionIds: readOpenSessionIds(),
+    pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
+  }).pinnedSessionIds;
+}
+
+export function ensureConversationTabOpen(sessionId: string | null | undefined): string[] {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const layout = readConversationLayout();
+  if (!normalizedSessionId || layout.pinnedSessionIds.includes(normalizedSessionId) || layout.sessionIds.includes(normalizedSessionId)) {
+    return layout.sessionIds;
+  }
+
+  return writeConversationLayout({
+    ...layout,
+    sessionIds: [...layout.sessionIds, normalizedSessionId],
+  }).sessionIds;
+}
+
+export function openConversationTab(sessionId: string): string[] {
+  return ensureConversationTabOpen(sessionId);
+}
+
+export function closeConversationTab(sessionId: string): string[] {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const current = readConversationLayout();
+  const nextSessionIds = current.sessionIds.filter((id) => id !== normalizedSessionId);
+  if (nextSessionIds.length === current.sessionIds.length) {
+    return current.sessionIds;
+  }
+
+  return writeConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: current.pinnedSessionIds,
+  }).sessionIds;
+}
+
+export function pinConversationTab(sessionId: string): ConversationLayout {
+  return moveConversationTab(sessionId, 'pinned');
+}
+
+export function unpinConversationTab(
+  sessionId: string,
+  options: { open?: boolean } = {},
+): ConversationLayout {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const current = readConversationLayout();
+  const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
+
+  if (nextPinnedSessionIds.length === current.pinnedSessionIds.length) {
+    return current;
+  }
+
+  const nextSessionIds = options.open === false || current.sessionIds.includes(normalizedSessionId)
+    ? current.sessionIds
+    : [...current.sessionIds, normalizedSessionId];
+
+  return replaceConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: nextPinnedSessionIds,
+  });
+}
+
+export function reorderOpenSessionIds(
+  sessionIds: readonly string[],
+  draggedSessionId: string,
+  targetSessionId: string,
+  position: OpenConversationDropPosition,
+): string[] {
+  const normalizedSessionIds = normalizeSessionIds(sessionIds);
+  const draggedId = normalizeSessionId(draggedSessionId);
+  const targetId = normalizeSessionId(targetSessionId);
+
+  if (!draggedId || !targetId || draggedId === targetId) {
+    return normalizedSessionIds;
+  }
+
+  if (!normalizedSessionIds.includes(draggedId) || !normalizedSessionIds.includes(targetId)) {
+    return normalizedSessionIds;
+  }
+
+  const reordered = normalizedSessionIds.filter((id) => id !== draggedId);
+  const targetIndex = reordered.indexOf(targetId);
+  if (targetIndex === -1) {
+    return normalizedSessionIds;
+  }
+
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+  reordered.splice(insertIndex, 0, draggedId);
+  return reordered;
+}
+
+export function moveConversationToSection(
+  layout: ConversationLayout,
+  draggedSessionId: string,
+  targetSection: ConversationShelf,
+  targetSessionId?: string | null,
+  position: OpenConversationDropPosition = 'after',
+): ConversationLayout {
+  const normalizedLayout = normalizeConversationLayout(layout);
+  const draggedId = normalizeSessionId(draggedSessionId);
+
+  if (!draggedId) {
+    return normalizedLayout;
+  }
+
+  const nextSessionIds = normalizedLayout.sessionIds.filter((id) => id !== draggedId);
+  const nextPinnedSessionIds = normalizedLayout.pinnedSessionIds.filter((id) => id !== draggedId);
+  const targetIds = targetSection === 'open' ? nextSessionIds : nextPinnedSessionIds;
+  const normalizedTargetId = normalizeSessionId(targetSessionId);
+
+  if (!normalizedTargetId) {
+    targetIds.push(draggedId);
+    return normalizeConversationLayout({
+      sessionIds: nextSessionIds,
+      pinnedSessionIds: nextPinnedSessionIds,
+    });
+  }
+
+  const targetIndex = targetIds.indexOf(normalizedTargetId);
+  if (targetIndex === -1) {
+    targetIds.push(draggedId);
+    return normalizeConversationLayout({
+      sessionIds: nextSessionIds,
+      pinnedSessionIds: nextPinnedSessionIds,
+    });
+  }
+
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+  targetIds.splice(insertIndex, 0, draggedId);
+  return normalizeConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: nextPinnedSessionIds,
+  });
+}
+
+export function moveConversationTab(
+  sessionId: string,
+  targetSection: ConversationShelf,
+  targetSessionId?: string | null,
+  position: OpenConversationDropPosition = 'after',
+): ConversationLayout {
+  const current = readConversationLayout();
+  const next = moveConversationToSection(current, sessionId, targetSection, targetSessionId, position);
+  if (sameConversationLayout(current, next)) {
+    return current;
+  }
+
+  return writeConversationLayout(next);
+}

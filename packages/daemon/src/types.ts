@@ -1,0 +1,151 @@
+import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
+import type { BackgroundRunNotificationSpec } from './runs/background-runs.js';
+import type { RecoverableWebLiveConversationRun, WebLiveConversationPendingOperation, WebLiveConversationRunState } from './runs/web-live-conversations.js';
+
+export type EventPayload = Record<string, unknown>;
+
+export interface DaemonEvent {
+  id: string;
+  version: number;
+  type: string;
+  source: string;
+  timestamp: string;
+  payload: EventPayload;
+}
+
+export interface DaemonEventInput {
+  type: string;
+  source: string;
+  payload?: EventPayload;
+  id?: string;
+  timestamp?: string;
+}
+
+export interface DaemonPaths {
+  root: string;
+  socketPath: string;
+  pidFile: string;
+  logDir: string;
+  logFile: string;
+}
+
+export interface TimerDefinition {
+  name: string;
+  eventType: string;
+  intervalMs: number;
+  payload?: EventPayload;
+}
+
+export interface DaemonQueueStatus {
+  maxDepth: number;
+  currentDepth: number;
+  droppedEvents: number;
+  processedEvents: number;
+  lastEventAt?: string;
+}
+
+export interface DaemonModuleStatus {
+  name: string;
+  enabled: boolean;
+  subscriptions: string[];
+  handledEvents: number;
+  lastEventAt?: string;
+  lastError?: string;
+  detail?: Record<string, unknown>;
+}
+
+export interface DaemonStatus {
+  running: boolean;
+  pid: number;
+  startedAt: string;
+  socketPath: string;
+  queue: DaemonQueueStatus;
+  modules: DaemonModuleStatus[];
+}
+
+export interface EmitResult {
+  accepted: boolean;
+  reason?: string;
+}
+
+export type GatewayNotificationProvider = 'telegram';
+
+export interface GatewayNotification {
+  id: string;
+  createdAt: string;
+  source: string;
+  gateway: GatewayNotificationProvider;
+  destinationId: string;
+  messageThreadId?: number;
+  message: string;
+  taskId?: string;
+  status?: 'success' | 'failed';
+  logPath?: string;
+}
+
+export interface PullGatewayNotificationsResult {
+  notifications: GatewayNotification[];
+}
+
+export interface ListDurableRunsResult {
+  scannedAt: string;
+  runs: ScannedDurableRun[];
+  summary: ScannedDurableRunsSummary;
+}
+
+export interface GetDurableRunResult {
+  scannedAt: string;
+  run: ScannedDurableRun;
+}
+
+export interface StartScheduledTaskRunResult {
+  accepted: boolean;
+  runId: string;
+  reason?: string;
+}
+
+export interface StartBackgroundRunRequestInput {
+  taskSlug: string;
+  cwd: string;
+  argv?: string[];
+  shellCommand?: string;
+  source?: {
+    type: string;
+    id?: string;
+  };
+  notification?: BackgroundRunNotificationSpec;
+}
+
+export interface StartBackgroundRunResult {
+  accepted: boolean;
+  runId: string;
+  logPath?: string;
+  reason?: string;
+}
+
+export interface CancelDurableRunResult {
+  cancelled: boolean;
+  runId: string;
+  reason?: string;
+}
+
+export interface SyncWebLiveConversationRunRequestInput {
+  conversationId: string;
+  sessionFile: string;
+  cwd: string;
+  title?: string;
+  profile?: string;
+  state: WebLiveConversationRunState;
+  updatedAt?: string;
+  lastError?: string;
+  pendingOperation?: WebLiveConversationPendingOperation | null;
+}
+
+export interface SyncWebLiveConversationRunResult {
+  runId: string;
+}
+
+export interface ListRecoverableWebLiveConversationRunsResult {
+  runs: RecoverableWebLiveConversationRun[];
+}
+

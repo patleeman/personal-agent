@@ -1,0 +1,27 @@
+# Profiles / local state accidentally created inside the repo
+profiles/
+
+# Dependencies
+node_modules
+node_modules/
+profiles/**/node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+packages/*/dist/
+profiles/**/dist/
+profiles/**/build/
+
+# Local runtime / temp
+.taskfactory/
+.pi/
+
+# OS/editor
+.DS_Store
+
+# Logs
+*.log
+
+# Legacy in-repo conversation-maintenance state
+profiles/*/agent/state/conversation-maintenance/processed-conversations.json

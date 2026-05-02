@@ -1,0 +1,8 @@
+{
+  "name": "pi-agent-extensions",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.48"
+  }
+}

@@ -1,0 +1,292 @@
+import { describe, expect, it } from 'vitest';
+import {
+  getRunCategory,
+  getRunConnections,
+  getRunHeadline,
+  getRunMoment,
+  getRunPrimaryActionLabel,
+  getRunPrimaryConnection,
+  getRunSortTimestamp,
+  getRunTimeline,
+} from './runPresentation';
+import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from './types';
+
+function createRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
+  return {
+    runId: 'run-123',
+    paths: {
+      root: '/tmp/run-123',
+      manifestPath: '/tmp/run-123/manifest.json',
+      statusPath: '/tmp/run-123/status.json',
+      checkpointPath: '/tmp/run-123/checkpoint.json',
+      eventsPath: '/tmp/run-123/events.jsonl',
+      outputLogPath: '/tmp/run-123/output.log',
+      resultPath: '/tmp/run-123/result.json',
+    },
+    manifest: {
+      version: 1,
+      id: 'run-123',
+      kind: 'scheduled-task',
+      resumePolicy: 'rerun',
+      createdAt: '2026-03-12T20:30:00.000Z',
+      spec: {},
+      source: {
+        type: 'scheduled-task',
+        id: 'daily-report',
+        filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+      },
+    },
+    status: {
+      version: 1,
+      runId: 'run-123',
+      status: 'completed',
+      createdAt: '2026-03-12T20:30:00.000Z',
+      updatedAt: '2026-03-12T20:35:00.000Z',
+      activeAttempt: 1,
+      startedAt: '2026-03-12T20:31:00.000Z',
+      completedAt: '2026-03-12T20:35:00.000Z',
+    },
+    checkpoint: {
+      version: 1,
+      runId: 'run-123',
+      updatedAt: '2026-03-12T20:35:00.000Z',
+      step: 'completed',
+      payload: {},
+    },
+    problems: [],
+    recoveryAction: 'none',
+    ...overrides,
+  };
+}
+
+describe('runPresentation', () => {
+  it('builds a human headline for scheduled task runs', () => {
+    const tasks: ScheduledTaskSummary[] = [{
+      id: 'daily-report',
+      filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+      scheduleType: 'cron',
+      running: false,
+      enabled: true,
+      cron: '0 9 * * *',
+      prompt: 'Summarize yesterday and today.\nInclude blockers.',
+    }];
+
+    expect(getRunHeadline(createRun(), { tasks })).toEqual({
+      title: 'Summarize yesterday and today.',
+      summary: 'Scheduled task · daily-report',
+    });
+
+    expect(getRunConnections(createRun(), { tasks })).toEqual([
+      {
+        key: 'task:daily-report',
+        label: 'Scheduled task',
+        value: 'daily-report',
+        to: '/scheduled/daily-report',
+        detail: 'Summarize yesterday and today.',
+      },
+      {
+        key: 'file:/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+        label: 'Source file',
+        value: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+      },
+    ]);
+  });
+
+  it('resolves live conversation titles and routes', () => {
+    const sessions: SessionMeta[] = [{
+      id: 'conv-123',
+      file: '/tmp/sessions/conv-123.jsonl',
+      timestamp: '2026-03-12T20:00:00.000Z',
+      cwd: '/repo',
+      cwdSlug: 'repo',
+      model: 'openai/gpt-5',
+      title: 'Fix runs navigation',
+      messageCount: 8,
+    }];
+
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'conversation-live-conv-123',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          conversationId: 'conv-123',
+        },
+        source: {
+          type: 'web-live-session',
+          id: 'conv-123',
+          filePath: '/tmp/sessions/conv-123.jsonl',
+        },
+      },
+      checkpoint: {
+        version: 1,
+        runId: 'conversation-live-conv-123',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        step: 'web-live-session.running',
+        payload: {
+          conversationId: 'conv-123',
+        },
+      },
+    });
+
+    expect(getRunHeadline(run, { sessions })).toEqual({
+      title: 'Fix runs navigation',
+      summary: 'Live conversation · conv-123',
+    });
+
+    expect(getRunConnections(run, { sessions })).toEqual([
+      {
+        key: 'conversation:conv-123',
+        label: 'Conversation',
+        value: 'Fix runs navigation',
+        to: '/conversations/conv-123',
+        detail: 'conv-123',
+      },
+      {
+        key: 'file:/tmp/sessions/conv-123.jsonl',
+        label: 'Source file',
+        value: '/tmp/sessions/conv-123.jsonl',
+      },
+    ]);
+  });
+
+  it('surfaces deferred resume prompt and conversation target', () => {
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'conversation-deferred-resume-resume-123',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          conversationId: 'conv-123',
+          prompt: 'Check back in after the build finishes.',
+        },
+        source: {
+          type: 'deferred-resume',
+          id: 'resume-123',
+          filePath: '/tmp/sessions/conv-123.jsonl',
+        },
+      },
+      checkpoint: {
+        version: 1,
+        runId: 'conversation-deferred-resume-resume-123',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        step: 'deferred-resume.ready',
+        payload: {
+          conversationId: 'conv-123',
+          prompt: 'Check back in after the build finishes.',
+        },
+      },
+    });
+
+    expect(getRunHeadline(run)).toEqual({
+      title: 'Check back in after the build finishes.',
+      summary: 'Deferred resume · conv-123',
+    });
+
+    expect(getRunConnections(run)).toEqual([
+      {
+        key: 'conversation:conv-123',
+        label: 'Conversation to reopen',
+        value: 'conv-123',
+        to: '/conversations/conv-123',
+        detail: undefined,
+      },
+      {
+        key: 'deferred-resume:resume-123',
+        label: 'Deferred resume',
+        value: 'resume-123',
+        detail: 'Check back in after the build finishes.',
+      },
+      {
+        key: 'file:/tmp/sessions/conv-123.jsonl',
+        label: 'Source file',
+        value: '/tmp/sessions/conv-123.jsonl',
+      },
+    ]);
+  });
+
+  it('classifies run categories and primary links', () => {
+    const scheduledRun = createRun();
+    expect(getRunCategory(scheduledRun)).toBe('scheduled');
+    expect(getRunPrimaryConnection(scheduledRun, {
+      tasks: [{
+        id: 'daily-report',
+        filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        prompt: 'Summarize yesterday and today.',
+      }],
+    })).toMatchObject({
+      label: 'Scheduled task',
+      to: '/scheduled/daily-report',
+    });
+    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(scheduledRun))).toBe('Open task');
+
+    const deferredRun = createRun({
+      manifest: {
+        version: 1,
+        id: 'conversation-deferred-resume-resume-123',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          conversationId: 'conv-123',
+        },
+        source: {
+          type: 'deferred-resume',
+          id: 'resume-123',
+        },
+      },
+      checkpoint: {
+        version: 1,
+        runId: 'conversation-deferred-resume-resume-123',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        step: 'deferred-resume.ready',
+        payload: {
+          conversationId: 'conv-123',
+        },
+      },
+    });
+    expect(getRunCategory(deferredRun)).toBe('deferred');
+    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(deferredRun))).toBe('Open conversation');
+
+    const backgroundRun = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-shell-123',
+        kind: 'raw-shell',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          shellCommand: 'npm test -- --run smoke',
+        },
+        source: {
+          type: 'background-run',
+          id: 'smoke-check',
+        },
+      },
+    });
+    expect(getRunCategory(backgroundRun)).toBe('background');
+  });
+
+  it('prefers completion time for run timing and timeline', () => {
+    const run = createRun();
+
+    expect(getRunMoment(run)).toEqual({
+      label: 'completed',
+      at: '2026-03-12T20:35:00.000Z',
+    });
+    expect(getRunSortTimestamp(run)).toBe('2026-03-12T20:35:00.000Z');
+    expect(getRunTimeline(run)).toEqual([
+      { label: 'Created', at: '2026-03-12T20:30:00.000Z' },
+      { label: 'Started', at: '2026-03-12T20:31:00.000Z' },
+      { label: 'Updated', at: '2026-03-12T20:35:00.000Z' },
+      { label: 'Completed', at: '2026-03-12T20:35:00.000Z' },
+    ]);
+  });
+});

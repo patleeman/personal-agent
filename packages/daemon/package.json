@@ -1,0 +1,31 @@
+{
+  "name": "@personal-agent/daemon",
+  "version": "0.1.0",
+  "description": "personal-agent background daemon",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "personal-agentd": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@personal-agent/core": "*",
+    "@personal-agent/resources": "*",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "vitest": "4.0.18"
+  }
+}

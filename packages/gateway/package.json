@@ -1,0 +1,32 @@
+{
+  "name": "@personal-agent/gateway",
+  "version": "0.1.0",
+  "description": "Telegram gateway for personal agent",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.56.3",
+    "@personal-agent/core": "*",
+    "@personal-agent/daemon": "*",
+    "@personal-agent/resources": "*",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-telegram-bot-api": "^0.64.14",
+    "vitest": "4.0.18"
+  }
+}

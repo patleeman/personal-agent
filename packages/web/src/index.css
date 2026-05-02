@@ -1,0 +1,517 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .ui-page-header {
+    @apply sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between gap-4;
+  }
+
+  .ui-page-title {
+    @apply text-base font-semibold text-primary;
+  }
+
+  .ui-page-meta {
+    @apply text-xs text-secondary mt-0.5 font-mono;
+  }
+
+  .ui-toolbar-button {
+    @apply text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface disabled:opacity-40;
+  }
+
+  .ui-icon-button {
+    @apply inline-flex items-center justify-center rounded-md p-1.5 text-secondary transition-colors hover:bg-surface hover:text-primary disabled:opacity-40 disabled:hover:bg-transparent;
+  }
+
+  .ui-icon-button-compact {
+    @apply p-1;
+  }
+
+  .ui-pill {
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium;
+  }
+
+  .ui-pill-muted {
+    @apply border-border-subtle bg-elevated text-secondary;
+  }
+
+  .ui-pill-accent {
+    @apply border-accent/20 bg-accent/10 text-accent;
+  }
+
+  .ui-pill-success {
+    @apply border-success/20 bg-success/10 text-success;
+  }
+
+  .ui-pill-warning {
+    @apply border-warning/20 bg-warning/10 text-warning;
+  }
+
+  .ui-pill-danger {
+    @apply border-danger/20 bg-danger/10 text-danger;
+  }
+
+  .ui-pill-steel {
+    @apply border-steel/20 bg-steel/10 text-steel;
+  }
+
+  .ui-pill-teal {
+    @apply border-teal/20 bg-teal/10 text-teal;
+  }
+
+  .ui-pill-solid-accent {
+    @apply border-transparent bg-accent text-white shadow-sm;
+  }
+
+  .ui-panel {
+    @apply rounded-xl border border-border-subtle bg-elevated;
+  }
+
+  .ui-panel-muted {
+    @apply rounded-xl border border-border-subtle bg-elevated/60;
+  }
+
+  .ui-menu-shell {
+    @apply absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-border-default bg-surface shadow-xl overflow-hidden z-50;
+  }
+
+  .ui-menu-header {
+    @apply px-3 pt-2.5 pb-1.5 border-b border-border-subtle flex items-center justify-between gap-2;
+  }
+
+  .ui-overlay-backdrop {
+    @apply fixed inset-0 z-50 flex items-start justify-center pt-12;
+  }
+
+  .ui-dialog-shell {
+    @apply w-full mx-6 rounded-2xl shadow-2xl overflow-hidden flex flex-col bg-surface border border-border-default;
+  }
+
+  .ui-input-shell {
+    @apply rounded-xl border border-border-subtle bg-elevated transition-all;
+  }
+
+  .excalidraw-embed-lite .main-menu-trigger,
+  .excalidraw-embed-lite .default-sidebar-trigger,
+  .excalidraw-embed-lite .layer-ui__wrapper__top-right,
+  .excalidraw-embed-lite .layer-ui__wrapper__footer,
+  .excalidraw-embed-lite .sidebar-tabs-root,
+  .excalidraw-embed-lite .sidebar-triggers,
+  .excalidraw-embed-lite .selected-shape-actions {
+    display: none !important;
+  }
+
+  .ui-chat-avatar {
+    @apply w-6 h-6 rounded-md bg-accent/20 flex items-center justify-center shrink-0;
+  }
+
+  .ui-chat-avatar-mark {
+    @apply text-accent text-[9px] font-bold font-mono select-none;
+  }
+
+  .ui-message-card-user {
+    @apply rounded-2xl rounded-br-sm border border-accent/15 bg-accent/10 p-2.5;
+  }
+
+  .ui-message-card-assistant {
+    @apply rounded-2xl border border-border-subtle bg-surface/60 px-3.5 py-3;
+  }
+
+  .ui-message-meta {
+    @apply text-[10px] text-dim;
+  }
+
+  .ui-action-button {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-dim transition-colors hover:bg-elevated hover:text-secondary;
+  }
+
+  .ui-kbd {
+    @apply text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight;
+  }
+
+  .ui-brand-mark {
+    @apply w-6 h-6 rounded bg-accent/20 flex items-center justify-center shrink-0;
+  }
+
+  .ui-brand-mark-text {
+    @apply text-accent text-[10px] font-bold font-mono;
+  }
+
+  .ui-sidebar-nav-item {
+    @apply flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+  }
+
+  .ui-sidebar-nav-item-active {
+    @apply bg-elevated text-primary;
+  }
+
+  .ui-sidebar-nav-badge {
+    @apply ml-auto min-w-[18px] rounded-full bg-accent/15 px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums text-accent;
+  }
+
+  .ui-sidebar-session-row {
+    @apply relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+  }
+
+  .ui-sidebar-session-row-active {
+    @apply bg-elevated text-primary;
+  }
+
+  .ui-sidebar-session-meta {
+    @apply text-[11px] text-dim mt-0.5 truncate;
+  }
+
+  .ui-sidebar-shelf-row {
+    @apply w-full flex items-center gap-2.5 px-3 py-1.5 mx-1 rounded-lg text-left text-dim transition-colors hover:bg-elevated/50 hover:text-secondary;
+  }
+
+  .ui-loading-state {
+    @apply flex items-center gap-2 text-sm text-dim py-8;
+  }
+
+  .ui-error-state {
+    @apply py-8 text-sm text-danger/80;
+  }
+
+  .ui-empty-state {
+    @apply py-16 text-center;
+  }
+
+  .ui-empty-icon {
+    @apply text-2xl mb-3;
+  }
+
+  .ui-empty-title {
+    @apply text-sm text-primary;
+  }
+
+  .ui-empty-body {
+    @apply text-xs text-secondary mt-1;
+  }
+
+  .ui-section-label {
+    @apply text-[10px] font-semibold uppercase tracking-wider text-dim;
+  }
+
+  .ui-section-count {
+    @apply text-[10px] tabular-nums text-dim/50;
+  }
+
+  .ui-segmented-control {
+    @apply flex items-center gap-px bg-elevated rounded-lg p-0.5;
+  }
+
+  .ui-segmented-button {
+    @apply px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors text-dim hover:text-secondary;
+  }
+
+  .ui-segmented-button-active {
+    @apply bg-surface text-primary shadow-sm;
+  }
+
+  .ui-list-row {
+    @apply flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg transition-colors;
+  }
+
+  .ui-list-row-selected {
+    @apply bg-surface;
+  }
+
+  .ui-list-row-hover {
+    @apply hover:bg-surface;
+  }
+
+  .ui-row-title {
+    @apply text-[13px] text-primary leading-snug;
+  }
+
+  .ui-row-title-mono {
+    @apply text-[13px] font-mono text-primary;
+  }
+
+  .ui-row-summary {
+    @apply text-[12px] text-secondary mt-0.5 leading-snug;
+  }
+
+  .ui-row-meta {
+    @apply text-[11px] text-dim mt-0.5 font-mono;
+  }
+
+  .ui-card-title {
+    @apply text-[13px] font-medium text-primary leading-snug;
+  }
+
+  .ui-card-body {
+    @apply text-[12px] text-secondary leading-relaxed;
+  }
+
+  .ui-card-meta {
+    @apply text-[11px] text-dim;
+  }
+
+  .ui-detail-list {
+    @apply space-y-2;
+  }
+
+  .ui-detail-row {
+    @apply flex items-start gap-3;
+  }
+
+  .ui-detail-label {
+    @apply w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-dim;
+  }
+
+  .ui-detail-value {
+    @apply text-[12px] text-secondary leading-relaxed min-w-0;
+  }
+
+  .ui-markdown {
+    @apply text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown h1 {
+    @apply mt-1 mb-3 text-[18px] font-semibold tracking-tight text-primary;
+  }
+
+  .ui-markdown h2 {
+    @apply mt-5 mb-2 text-[15px] font-semibold text-primary;
+  }
+
+  .ui-markdown h3 {
+    @apply mt-4 mb-2 text-[14px] font-semibold text-primary;
+  }
+
+  .ui-markdown h4,
+  .ui-markdown h5,
+  .ui-markdown h6 {
+    @apply mt-3 mb-1.5 text-[13px] font-semibold text-primary;
+  }
+
+  .ui-markdown p {
+    @apply my-2 text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown ul,
+  .ui-markdown ol {
+    @apply my-2 space-y-1 pl-5;
+  }
+
+  .ui-markdown ul {
+    list-style: disc;
+  }
+
+  .ui-markdown ul ul {
+    list-style: circle;
+  }
+
+  .ui-markdown ul ul ul {
+    list-style: square;
+  }
+
+  .ui-markdown ol {
+    list-style: decimal;
+  }
+
+  .ui-markdown li {
+    @apply text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown li > p {
+    @apply my-0;
+  }
+
+  .ui-markdown blockquote {
+    @apply my-3 border-l-2 border-border-default pl-4 text-secondary;
+  }
+
+  .ui-markdown hr {
+    @apply my-4 border-0 border-t border-border-subtle;
+  }
+
+  .ui-markdown pre {
+    @apply my-3 overflow-x-auto rounded-xl bg-elevated px-3 py-2.5;
+  }
+
+  .ui-markdown-code-block {
+    @apply relative my-3;
+  }
+
+  .ui-markdown-code-block pre {
+    @apply my-0 pr-20;
+  }
+
+  .ui-markdown-code-copy {
+    @apply absolute right-3 top-3 z-20 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-border-subtle bg-surface/95 p-0 text-[15px] leading-none text-secondary shadow-sm backdrop-blur pointer-events-auto select-none hover:bg-surface hover:text-primary;
+  }
+
+  .ui-markdown pre code {
+    @apply block bg-transparent p-0 text-[12px] leading-relaxed text-secondary;
+  }
+
+  .ui-markdown :not(pre) > code {
+    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent;
+  }
+
+  .ui-markdown table {
+    @apply w-full border-collapse text-left;
+  }
+
+  .ui-markdown thead tr {
+    @apply border-b border-border-default;
+  }
+
+  .ui-markdown tbody tr {
+    @apply border-b border-border-subtle last:border-b-0;
+  }
+
+  .ui-markdown th {
+    @apply px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-dim;
+  }
+
+  .ui-markdown td {
+    @apply px-2 py-1.5 align-top text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown a {
+    @apply text-accent underline decoration-accent/40 underline-offset-2;
+  }
+
+  .ui-markdown img {
+    @apply my-3 max-w-full rounded-xl border border-border-subtle;
+  }
+
+  .ui-markdown .contains-task-list,
+  .ui-markdown .task-list-item {
+    list-style: none;
+  }
+
+  .ui-markdown .contains-task-list {
+    @apply pl-0;
+  }
+
+  .ui-markdown .task-list-item input {
+    @apply mr-2;
+  }
+
+  .ui-markdown .footnotes {
+    @apply mt-4 border-t border-border-subtle pt-3;
+  }
+
+  .ui-markdown sup {
+    @apply text-[10px];
+  }
+
+  .ui-markdown-mention {
+    @apply inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 font-mono text-[0.82em] text-accent;
+  }
+
+  .ui-skill-invocation {
+    @apply rounded-xl bg-elevated/80 px-3 py-2;
+  }
+
+  .ui-skill-invocation summary {
+    @apply flex cursor-pointer list-none items-center gap-2 text-sm leading-relaxed text-primary;
+  }
+
+  .ui-skill-invocation summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ui-skill-invocation-summary::before {
+    content: '▸';
+    @apply text-[10px] text-dim transition-transform;
+  }
+
+  .ui-skill-invocation[open] .ui-skill-invocation-summary::before {
+    content: '▾';
+  }
+
+  .ui-skill-invocation-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-dim;
+  }
+
+  .ui-skill-invocation-name {
+    @apply font-mono text-[13px] text-primary;
+  }
+
+  .ui-skill-invocation-body {
+    @apply mt-3 space-y-3 border-t border-border-subtle pt-3;
+  }
+
+  .ui-skill-invocation-meta {
+    @apply m-0 text-[12px] text-secondary;
+  }
+}
+
+/* ─── Light theme (default) ───────────────────────────────────────────────── */
+:root {
+  --color-base:           245 241 235;
+  --color-surface:        237 233 226;
+  --color-elevated:       229 224 216;
+  --color-panel:          240 236 229;
+  --color-border-subtle:  216 210 200;
+  --color-border-default: 200 194 182;
+  --color-primary:        28  26  20;
+  --color-secondary:      90  84  72;
+  --color-dim:            110 100 86;
+  --color-accent:         149 90  16;
+  --color-accent-bg:      254 243 224;
+  --color-success:        22  110 72;
+  --color-warning:        179 78  20;
+  --color-danger:         196 48  48;
+  --color-teal:           26  120 120;
+  --color-steel:          30  90  150;
+}
+
+/* ─── Dark theme ──────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  /* Backgrounds — warm dark grey, not near-black */
+  --color-base:           52  49  43;
+  --color-surface:        60  57  51;
+  --color-elevated:       70  67  60;
+  --color-panel:          46  44  38;
+  /* Borders */
+  --color-border-subtle:  78  75  66;
+  --color-border-default: 96  92  82;
+  /* Text — warm grey, not blue-grey */
+  --color-primary:        242 239 232;
+  --color-secondary:      182 176 162;
+  --color-dim:            142 136 122;
+  /* Accent */
+  --color-accent:         224 152 48;
+  --color-accent-bg:      72  54  18;
+  /* Semantic */
+  --color-success:        61  186 130;
+  --color-warning:        224 122 72;
+  --color-danger:         224 89  89;
+  --color-teal:           61  168 168;
+  --color-steel:          91  144 204;
+}
+
+/* ─── Base ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans Variable', 'DM Sans', system-ui, sans-serif;
+  background-color: rgb(var(--color-base));
+  color: rgb(var(--color-primary));
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar        { width: 3px; height: 3px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: rgb(var(--color-border-default)); border-radius: 2px; }
+
+.conversation-scroll-shell {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.conversation-scroll-shell::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

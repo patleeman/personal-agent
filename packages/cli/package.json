@@ -1,0 +1,33 @@
+{
+  "name": "@personal-agent/cli",
+  "version": "0.1.0",
+  "description": "Personal agent CLI",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "pa": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@personal-agent/core": "*",
+    "@personal-agent/daemon": "*",
+    "@personal-agent/gateway": "*",
+    "@personal-agent/resources": "*",
+    "chalk": "^5.3.0",
+    "commander": "^13.1.0",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {}
+}
