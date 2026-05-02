@@ -13,7 +13,7 @@ import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-con
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { composePromptCatalogDirectory } from './prompt-catalog.js';
+import { renderSystemPromptTemplate } from './system-prompt-template.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -866,7 +866,7 @@ export function materializeProfileToAgentDir(
     writeOrRemove('SYSTEM.md', undefined);
   }
 
-  const generatedAppendContent = composePromptCatalogDirectory('system', { repoRoot: profile.repoRoot, separator: '\n\n' });
+  const generatedAppendContent = renderSystemPromptTemplate();
   const fileAppendContent = profile.appendSystemFiles.length > 0
     ? combineMarkdownFiles(profile.appendSystemFiles)
     : undefined;
@@ -948,10 +948,7 @@ export function buildPiResourceArgs(
 }
 
 export {
-  composePromptCatalogDirectory,
-  composePromptCatalogEntries,
   getPromptCatalogRoot,
-  listPromptCatalogEntries,
   readPromptCatalogEntry,
   renderPromptCatalogTemplate,
   requirePromptCatalogEntry,

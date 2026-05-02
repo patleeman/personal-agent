@@ -3,64 +3,22 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  renderSystemPromptTemplateMock,
+} = vi.hoisted(() => ({
+  renderSystemPromptTemplateMock: vi.fn(),
+}));
+
+vi.mock('@personal-agent/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@personal-agent/core')>();
+  return {
+    ...actual,
+    renderSystemPromptTemplate: renderSystemPromptTemplateMock,
+  };
+});
+
 import knowledgeBaseExtension, { resolveKnowledgeContext } from './index';
-
-const PROMPT_CATALOG_TEMPLATE = `# Identity & Goal
-
-You are Patrick Lee's personal AI agent.
-
-# Technical Context
-
-## Profile Context
-- active_profile: {{ active_profile }}
-- active_profile_dir: {{ active_profile_dir }}
-- repo_root: {{ repo_root }}
-- vault_root: {{ vault_root }}
-{% if requested_profile and requested_profile != active_profile %}
-- requested_profile: {{ requested_profile }}
-- note: requested profile was missing; using "{{ active_profile }}"
-{% endif %}
-
-## Write Targets
-- AGENTS.md: {{ agents_edit_target }}
-- Skills dir: {{ skills_dir }}
-- Scheduled tasks dir: {{ tasks_dir }} (Note: Scheduled tasks belong here, not in shared notes).
-
-## Documentation
-- Docs folder: {{ docs_dir }}
-- Docs index: {{ docs_index }}
-- Internal skills folder: {{ feature_docs_dir }}
-- Internal skills index: {{ feature_docs_index }}
-
-{% if available_internal_skills %}
-## Internal personal-agent feature skills
-Built-in runtime guides for personal-agent features.
-
-<available_internal_skills>
-{% for skill in available_internal_skills %}
-  <internal_skill id="{{ skill.name }}" title="{{ skill.title or skill.name }}" location="{{ skill.path }}">
-    {{ skill.description }}
-  </internal_skill>
-{% endfor %}
-</available_internal_skills>
-{% endif %}
-
-{% if available_skills %}
-## Available Skills
-<available_skills>
-{% for skill in available_skills %}
-  <skill id="{{ skill.name }}" location="{{ skill.path }}">
-    {{ skill.description }}
-  </skill>
-{% endfor %}
-</available_skills>
-{% endif %}
-
-## Knowledge Vault
-Freeform markdown files live anywhere under the vault root.
-
-- vault_root: {{ vault_root }}
-`;
 
 const tempDirs: string[] = [];
 
@@ -89,11 +47,6 @@ ${profilesBlock}metadata:
 `);
 }
 
-function writePromptCatalog(repoRoot: string): void {
-  mkdirSync(join(repoRoot, 'prompt-catalog'), { recursive: true });
-  writeFileSync(join(repoRoot, 'prompt-catalog', 'system.md'), PROMPT_CATALOG_TEMPLATE);
-}
-
 function writeProfileDirs(stateRoot: string, ...profiles: string[]): void {
   for (const profile of profiles) {
     mkdirSync(join(stateRoot, 'config', 'profiles', profile), { recursive: true });
@@ -103,6 +56,7 @@ function writeProfileDirs(stateRoot: string, ...profiles: string[]): void {
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
+  renderSystemPromptTemplateMock.mockReset();
   delete process.env.PERSONAL_AGENT_REPO_ROOT;
   delete process.env.PERSONAL_AGENT_ACTIVE_PROFILE;
   delete process.env.PERSONAL_AGENT_PROFILE;
@@ -132,10 +86,62 @@ summary: How built-in rendered outputs behave.
 
 # Artifacts
 `);
-    writePromptCatalog(repoRoot);
     writeSkillNode(join(stateRoot, 'vault', '_skills'), 'shared-skill', 'Shared skill available to every profile.', ['shared']);
     writeSkillNode(join(stateRoot, 'vault', '_skills'), 'datadog-skill', 'Datadog-only skill available in the datadog profile.', ['datadog']);
     writeSkillNode(join(stateRoot, 'vault', '_skills'), 'default-skill', 'Default-only skill that should not appear for datadog.', ['default']);
+
+    renderSystemPromptTemplateMock.mockReturnValue(`# Identity & Goal
+
+You are Patrick Lee's personal AI agent.
+
+## Technical Context
+
+## Profile Context
+- active_profile: datadog
+- active_profile_dir: ${join(stateRoot, 'config/profiles/datadog')}
+- repo_root: ${repoRoot}
+- vault_root: ${join(stateRoot, 'vault')}
+
+## Write Targets
+- AGENTS.md: vault/AGENTS.md
+- Skills dir: ${join(stateRoot, 'vault/skills')}
+- Scheduled tasks dir: ${join(stateRoot, 'sync/tasks')} (Note: Scheduled tasks belong here, not in shared notes).
+
+## Documentation
+- Docs folder: docs
+- Docs index: docs/README.md
+- Internal skills folder: ${join(repoRoot, 'internal-skills')}
+- Internal skills index: internal-skills/README.md
+
+## Internal personal-agent feature skills
+Built-in runtime guides for personal-agent features.
+
+<available_internal_skills>
+
+  <internal_skill id="artifacts" title="Artifacts" location="internal-skills/artifacts/INDEX.md">
+    How built-in rendered outputs behave.
+  </internal_skill>
+
+</available_internal_skills>
+
+## Available Skills
+<available_skills>
+
+  <skill id="shared-skill" location="${join(stateRoot, 'vault/_skills/shared-skill/SKILL.md')}">
+    Shared skill available to every profile.
+  </skill>
+
+  <skill id="datadog-skill" location="${join(stateRoot, 'vault/_skills/datadog-skill/SKILL.md')}">
+    Datadog-only skill available in the datadog profile.
+  </skill>
+
+</available_skills>
+
+## Knowledge Vault
+Freeform markdown files live anywhere under the vault root.
+
+- vault_root: vault
+`);
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -196,7 +202,40 @@ summary: How built-in rendered outputs behave.
 
 # Artifacts
 `);
-    writePromptCatalog(repoRoot);
+
+    renderSystemPromptTemplateMock.mockReturnValue(`# Identity & Goal
+
+## Profile Context
+- active_profile: shared
+- active_profile_dir: ${join(stateRoot, 'config/profiles/shared')}
+- repo_root: ${repoRoot}
+- vault_root: ${join(stateRoot, 'vault')}
+
+## Write Targets
+- AGENTS.md: ${join(stateRoot, 'vault', 'AGENTS.md')}
+- Skills dir: ${join(stateRoot, 'vault', 'skills')}
+- Scheduled tasks dir: ${join(stateRoot, 'sync', 'tasks')} (Note: Scheduled tasks belong here, not in shared notes).
+
+## Documentation
+- Internal skills folder: internal-skills
+- Internal skills index: internal-skills/README.md
+
+## Internal personal-agent feature skills
+Built-in runtime guides for personal-agent features.
+
+<available_internal_skills>
+
+  <internal_skill id="artifacts" title="Artifacts" location="internal-skills/artifacts/INDEX.md">
+    How built-in rendered outputs behave.
+  </internal_skill>
+
+</available_internal_skills>
+
+## Knowledge Vault
+Freeform markdown files live anywhere under the vault root.
+
+- vault_root: vault
+`);
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -220,14 +259,13 @@ summary: How built-in rendered outputs behave.
     expect(prompt).toContain('- Internal skills folder: internal-skills');
     expect(prompt).toContain('## Internal personal-agent feature skills');
     expect(prompt).toContain(`- vault_root: ${join(stateRoot, 'vault')}`);
-    expect(prompt).toContain('- requested_profile: missing-profile');
-    expect(prompt).toContain('requested profile was missing');
+    expect(prompt).not.toContain('- requested_profile: missing-profile');
+    expect(prompt).not.toContain('requested profile was missing');
     expect(prompt).toContain(`- AGENTS.md: ${join(stateRoot, 'vault', 'AGENTS.md')}`);
     expect(prompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'sync', 'tasks')} (Note: Scheduled tasks belong here, not in shared notes).`);
 
-    // Should still show knowledge vault section (without notes enumeration)
+    // Should still show knowledge vault section
     expect(prompt).toContain('## Knowledge Vault');
-    expect(prompt).not.toContain('## Shared Notes & Available Nodes');
   });
 
   it('does not inject for slash commands or empty prompts', async () => {
@@ -261,6 +299,7 @@ summary: How built-in rendered outputs behave.
 
     expect(slashResult).toBeUndefined();
     expect(emptyResult).toBeUndefined();
+    expect(renderSystemPromptTemplateMock).not.toHaveBeenCalled();
   });
 
   it('renders NODE_POLICY for generic prompts', async () => {
@@ -272,7 +311,11 @@ summary: How built-in rendered outputs behave.
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
     writeProfileDirs(stateRoot, 'shared', 'datadog');
-    writePromptCatalog(repoRoot);
+
+    renderSystemPromptTemplateMock.mockReturnValue(`# Identity & Goal
+
+You are Patrick Lee's personal AI agent.
+`);
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -303,7 +346,6 @@ summary: How built-in rendered outputs behave.
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
     writeProfileDirs(stateRoot, 'shared', 'datadog');
-    writePromptCatalog(repoRoot);
 
     const context = resolveKnowledgeContext(repoRoot);
     expect(context.activeProfile).toBe('datadog');

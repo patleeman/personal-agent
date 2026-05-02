@@ -90,6 +90,7 @@ export * from './nodes.js';
 // Profile/resource resolution helpers
 export * from './resources.js';
 export * from './prompt-catalog.js';
+export * from './system-prompt-template.js';
 
 // Codex compatibility transport helpers
 export * from './codex-compat.js';

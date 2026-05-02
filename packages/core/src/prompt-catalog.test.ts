@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  composePromptCatalogDirectory,
-  composePromptCatalogEntries,
   getPromptCatalogRoot,
-  listPromptCatalogEntries,
   readPromptCatalogEntry,
   renderPromptCatalogTemplate,
   requirePromptCatalogEntry,
@@ -60,52 +57,6 @@ describe('prompt catalog helpers', () => {
     });
 
     expect(rendered).toBe('Header\nFooter');
-  });
-
-  it('composes multiple entries in order', () => {
-    const repo = createTempRepo('pa-prompt-catalog-');
-    mkdirSync(join(repo, 'prompt-catalog', 'runtime'), { recursive: true });
-    writeFileSync(join(repo, 'prompt-catalog', 'runtime', 'base.md'), 'Base block\n');
-    writeFileSync(join(repo, 'prompt-catalog', 'runtime', 'extra.md'), 'Extra block\n');
-
-    expect(composePromptCatalogEntries(['runtime/base.md', 'runtime/extra.md'], { repoRoot: repo })).toBe([
-      'Base block',
-      '',
-      'Extra block',
-    ].join('\n'));
-  });
-
-  it('lists and composes directory entries in sorted order', () => {
-    const repo = createTempRepo('pa-prompt-catalog-');
-    mkdirSync(join(repo, 'prompt-catalog', 'system'), { recursive: true });
-    writeFileSync(join(repo, 'prompt-catalog', 'system', '20-task.md'), 'Task block\n');
-    writeFileSync(join(repo, 'prompt-catalog', 'system', '10-tools.md'), 'Tools block\n');
-
-    expect(listPromptCatalogEntries('system', { repoRoot: repo })).toEqual([
-      'system/10-tools.md',
-      'system/20-task.md',
-    ]);
-    expect(composePromptCatalogDirectory('system', { repoRoot: repo })).toBe([
-      'Tools block',
-      '',
-      'Task block',
-    ].join('\n'));
-  });
-
-  it('prefers system.md for the system directory when present', () => {
-    const repo = createTempRepo('pa-prompt-catalog-');
-    mkdirSync(join(repo, 'prompt-catalog'), { recursive: true });
-    mkdirSync(join(repo, 'prompt-catalog', 'system'), { recursive: true });
-    writeFileSync(join(repo, 'prompt-catalog', 'system.md'), [
-      'System block',
-      '{% include "system/20-task.md" %}',
-    ].join('\n'));
-    writeFileSync(join(repo, 'prompt-catalog', 'system', '20-task.md'), 'Task block\n');
-
-    expect(composePromptCatalogDirectory('system', {
-      repoRoot: repo,
-      separator: '\n\n',
-    })).toBe('System block\nTask block');
   });
 
   it('returns undefined for missing optional entries and throws for required ones', () => {

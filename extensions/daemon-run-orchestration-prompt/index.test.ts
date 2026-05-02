@@ -1,19 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  getPromptCatalogRootMock,
-  renderPromptCatalogTemplateMock,
-  requirePromptCatalogEntryMock,
+  renderSystemPromptTemplateMock,
 } = vi.hoisted(() => ({
-  getPromptCatalogRootMock: vi.fn(),
-  renderPromptCatalogTemplateMock: vi.fn(),
-  requirePromptCatalogEntryMock: vi.fn(),
+  renderSystemPromptTemplateMock: vi.fn(),
 }));
 
 vi.mock('@personal-agent/core', () => ({
-  getPromptCatalogRoot: getPromptCatalogRootMock,
-  renderPromptCatalogTemplate: renderPromptCatalogTemplateMock,
-  requirePromptCatalogEntry: requirePromptCatalogEntryMock,
+  renderSystemPromptTemplate: renderSystemPromptTemplateMock,
 }));
 
 import daemonRunOrchestrationPromptExtension from './index';
@@ -21,9 +15,7 @@ import daemonRunOrchestrationPromptExtension from './index';
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  getPromptCatalogRootMock.mockReset();
-  renderPromptCatalogTemplateMock.mockReset();
-  requirePromptCatalogEntryMock.mockReset();
+  renderSystemPromptTemplateMock.mockReset();
 });
 
 describe('daemon run orchestration prompt extension', () => {
@@ -31,9 +23,7 @@ describe('daemon run orchestration prompt extension', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T12:34:56.000Z'));
 
-    getPromptCatalogRootMock.mockReturnValue('/repo/prompt-catalog');
-    requirePromptCatalogEntryMock.mockReturnValue('template {{ current_date }}');
-    renderPromptCatalogTemplateMock.mockImplementation((template, variables) => `rendered ${(variables as { current_date: string }).current_date}`);
+    renderSystemPromptTemplateMock.mockReturnValue('rendered system prompt');
 
     let beforeAgentStartHandler: ((event: { prompt?: string | null }) => unknown) | undefined;
     const pi = {
@@ -48,13 +38,10 @@ describe('daemon run orchestration prompt extension', () => {
 
     const result = beforeAgentStartHandler?.({ prompt: ' investigate the failing run ' });
 
-    expect(requirePromptCatalogEntryMock).toHaveBeenCalledWith('system.md');
-    expect(renderPromptCatalogTemplateMock).toHaveBeenCalledWith(
-      'template {{ current_date }}',
-      { current_date: '2026-04-10' },
-      { templateRoot: '/repo/prompt-catalog' },
-    );
-    expect(result).toEqual({ systemPrompt: 'rendered 2026-04-10' });
+    expect(renderSystemPromptTemplateMock).toHaveBeenCalledWith({
+      current_date: '2026-04-10',
+    });
+    expect(result).toEqual({ systemPrompt: 'rendered system prompt' });
   });
 
   it('skips injection for empty, missing, and slash-command prompts', () => {
@@ -72,7 +59,6 @@ describe('daemon run orchestration prompt extension', () => {
     expect(beforeAgentStartHandler?.({ prompt: '   ' })).toBeUndefined();
     expect(beforeAgentStartHandler?.({ prompt: '/model gpt-5' })).toBeUndefined();
     expect(beforeAgentStartHandler?.({})).toBeUndefined();
-    expect(requirePromptCatalogEntryMock).not.toHaveBeenCalled();
-    expect(renderPromptCatalogTemplateMock).not.toHaveBeenCalled();
+    expect(renderSystemPromptTemplateMock).not.toHaveBeenCalled();
   });
 });

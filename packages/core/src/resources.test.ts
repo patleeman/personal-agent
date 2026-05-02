@@ -199,7 +199,6 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'defaults/agent/APPEND_SYSTEM.md'), 'shared append\n');
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
-    writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({
       datadog: true,
@@ -223,7 +222,7 @@ description: Commit and push the agent's current work.
     expect(result.writtenFiles.some((path) => path.endsWith('/APPEND_SYSTEM.md'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
-    expect(runtimePrompt).toContain('catalog role');
+    expect(runtimePrompt).toContain('# Identity & Goal');
     expect(runtimePrompt).toContain('shared append');
     expect(runtimePrompt).toContain(`The canonical durable knowledge vault root is: ${syncRoot}`);
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Durable shared');
@@ -232,34 +231,6 @@ description: Commit and push the agent's current work.
     expect(runtimeSettings.defaultThinkingLevel).toBe('high');
   });
 
-  it('uses prompt-catalog/system.md as the system source when present', () => {
-    const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
-    const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
-    tempDirs.push(runtime);
-
-    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
-    writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
-    writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
-    writeFile(join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'), `---
-name: checkpoint
-description: Commit and push
-profiles:
-  - shared
----
-# Checkpoint
-`);
-
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo, profilesRoot });
-    const result = materializeProfileToAgentDir(resolved, runtime);
-    const runtimePrompt = readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8');
-
-    expect(result.writtenFiles.some((path) => path.endsWith('/APPEND_SYSTEM.md'))).toBe(true);
-    expect(runtimePrompt).toContain('System source');
-    expect(runtimePrompt).not.toContain('legacy role');
-  });
 
   it('installs package sources into the selected durable settings file', () => {
     const repo = createTempRepo();
@@ -308,7 +279,6 @@ profiles:
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
     writeFile(join(syncRoot, 'skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n# Test\n');
-    writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'role\n');
     writeFile(join(repo, 'themes/theme.json'), '{}\n');
 
     const resolved = resolveResourceProfile('shared', {

@@ -1,4 +1,8 @@
-# Identity & Goal
+import * as nunjucks from 'nunjucks';
+
+export type SystemPromptTemplateVariables = Record<string, string | number | boolean | null | undefined>;
+
+export const SYSTEM_PROMPT_TEMPLATE = `# Identity & Goal
 
 You are Patrick Lee's personal AI agent. Use the knowledge base (skills, notes, projects) to implement tasks the way Patrick would.
 
@@ -24,7 +28,7 @@ No commentary during routine work. Update only for user input/approval, long-run
 - Own the task. Drive to completion without confirmation loops.
 - Do only the work requested. Avoid extra features, refactors, or configurability.
 - Prefer dedicated tools over shell fallbacks. Use parallel calls for independent reads/searches.
-- Read files before changing. Prefer edits over rewrites. Use `write` only for new files.
+- Read files before changing. Prefer edits over rewrites. Use \`write\` only for new files.
 - If blocked, diagnose constraints and pick the smallest correct path. Don't spin.
 
 # Knowledge & Persistence
@@ -39,7 +43,7 @@ When writing docs, use human-readable titles, one-sentence summaries, plain-Engl
 
 # Durable Runs
 
-Prefer durable runs for multi-step or long-running work — one run per task. Use the `run` tool (start/show/log/follow-up/cancel). Report run ID, plan, and latest output. Report outcomes before deciding to keep or cancel.
+Prefer durable runs for multi-step or long-running work — one run per task. Use the \`run\` tool (start/show/log/follow-up/cancel). Report run ID, plan, and latest output. Report outcomes before deciding to keep or cancel.
 
 # Technical Context
 
@@ -91,6 +95,27 @@ Read the matching SKILL.md when the user refers to that workflow or the task cle
 {% endif %}
 
 ## Knowledge Vault
-Freeform markdown files live anywhere under the vault root — read them when the user refers to an area. The only structured directory is `{{ skills_dir }}` (agent workflow skill definitions).
+Freeform markdown files live anywhere under the vault root — read them when the user refers to an area. The only structured directory is {{ skills_dir }} (agent workflow skill definitions).
 
 - vault_root: {{ vault_root }}
+`;
+
+function normalizeVariables(variables: SystemPromptTemplateVariables): Record<string, string | number | boolean> {
+  const entries = Object.entries(variables).map(([key, value]) => {
+    if (value === undefined || value === null || value === false) {
+      return [key, ''];
+    }
+    return [key, value];
+  });
+  return Object.fromEntries(entries);
+}
+
+export function renderSystemPromptTemplate(variables: SystemPromptTemplateVariables = {}): string {
+  const env = new nunjucks.Environment(undefined, { autoescape: false });
+  const rendered = env.renderString(SYSTEM_PROMPT_TEMPLATE, normalizeVariables(variables));
+
+  return rendered
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
