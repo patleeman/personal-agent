@@ -81,8 +81,8 @@ describe('conversation composer editing helpers', () => {
       selection: { start: 6, end: 11 },
       text: '  User  ',
     })).toEqual({
-      nextInput: 'hello there',
-      nextCaret: 13,
+      nextInput: 'hello User',
+      nextCaret: 10,
     });
 
     expect(insertTextAtComposerSelection({

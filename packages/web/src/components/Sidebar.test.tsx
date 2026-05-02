@@ -330,7 +330,7 @@ describe('Sidebar', () => {
 
     const html = renderSidebar('/conversations/new');
 
-    expect(html).toContain('aria-label="Expand personal-agent"');
+    expect(html).toContain('aria-label="Expand project"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('Clarify background run link');
   });
@@ -352,14 +352,14 @@ describe('Sidebar', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([
-      '/home/user/project',
+      '/home/user/personal/personal-agent',
       '/home/user/documents/personal-agent',
     ]));
 
     const html = renderSidebar('/conversations/new', { sessions: [] });
 
     expect(html).toContain('personal/personal-agent');
-    expect(html).toContain('Documents/personal-agent');
+    expect(html).toContain('documents/personal-agent');
     expect(html).not.toContain('aria-label="Collapse personal-agent"');
   });
 

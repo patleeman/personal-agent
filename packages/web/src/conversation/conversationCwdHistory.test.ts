@@ -3,13 +3,13 @@ import { summarizeConversationCwd, truncateConversationCwdFromFront } from './co
 
 describe('conversation cwd history helpers', () => {
   it('summarizes cwd labels using the trailing path segment', () => {
-    expect(summarizeConversationCwd('/home/user/project')).toBe('personal-agent');
+    expect(summarizeConversationCwd('/home/user/project')).toBe('project');
     expect(summarizeConversationCwd('~/worktrees/dd-source/')).toBe('dd-source');
     expect(summarizeConversationCwd('/')).toBe('/');
   });
 
   it('truncates cwd paths from the front while keeping the tail visible', () => {
-    expect(truncateConversationCwdFromFront('/home/user/project', 24)).toBe('…personal/personal-agent');
+    expect(truncateConversationCwdFromFront('/home/user/project', 24)).toBe('/home/user/project');
     expect(truncateConversationCwdFromFront('~/workingdir/dd-source', 64)).toBe('~/workingdir/dd-source');
     expect(truncateConversationCwdFromFront('/tmp/project', 1)).toBe('…');
   });
