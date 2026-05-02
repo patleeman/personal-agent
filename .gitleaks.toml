@@ -1,0 +1,16 @@
+# gitleaks config - extends the default rules
+# See https://github.com/gitleaks/gitleaks for options
+
+title = "personal-agent gitleaks config"
+
+[extend]
+useDefault = true
+
+# Allowlist for known false positives
+[allowlist]
+paths = [
+  # Vendored third-party code
+  "(^|/)vendor/",
+  "(^|/)third_party/",
+  "(^|/)node_modules/",
+]
