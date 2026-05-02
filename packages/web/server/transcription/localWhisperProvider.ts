@@ -1,6 +1,8 @@
-import { readdir, stat } from 'node:fs/promises';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import type { AutomaticSpeechRecognitionPipelineType } from '@xenova/transformers/types/pipelines.js';
+import { fileURLToPath } from 'node:url';
 import type { TranscriptionFileInput, TranscriptionInstallResult, TranscriptionModelStatus, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
 
 const DEFAULT_LOCAL_WHISPER_MODEL = 'base.en';
@@ -17,34 +19,48 @@ const MODEL_ALIASES: Record<string, string> = {
   'openai_whisper-medium.en': 'medium.en',
 };
 
-const MODEL_REPOS: Record<string, string> = {
-  tiny: 'Xenova/whisper-tiny',
-  'tiny.en': 'Xenova/whisper-tiny.en',
-  base: 'Xenova/whisper-base',
-  'base.en': 'Xenova/whisper-base.en',
-  small: 'Xenova/whisper-small',
-  'small.en': 'Xenova/whisper-small.en',
-  medium: 'Xenova/whisper-medium',
-  'medium.en': 'Xenova/whisper-medium.en',
+const MODEL_FILE_NAMES: Record<string, string> = {
+  tiny: 'ggml-tiny.bin',
+  'tiny.en': 'ggml-tiny.en.bin',
+  base: 'ggml-base.bin',
+  'base.en': 'ggml-base.en.bin',
+  small: 'ggml-small.bin',
+  'small.en': 'ggml-small.en.bin',
+  medium: 'ggml-medium.bin',
+  'medium.en': 'ggml-medium.en.bin',
 };
 
-type AsrPipelineFactory = typeof import('@xenova/transformers').pipeline;
+const MODEL_DOWNLOAD_BASE_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
 
-interface LocalWhisperTranscriptionProviderOptions {
-  model?: string;
-  modelRootPath: string;
-  pipelineFactory?: AsrPipelineFactory;
+type WhisperContext = Awaited<ReturnType<typeof import('whisper-cpp-node').createWhisperContext>>;
+
+interface WhisperCppNodeModule {
+  createWhisperContext(options: { model: string; use_gpu?: boolean; no_prints?: boolean }): WhisperContext;
+  transcribeAsync(ctx: WhisperContext, options: { pcmf32: Float32Array; language?: string; no_timestamps?: boolean; no_prints?: boolean }): Promise<{ segments: Array<[string, string, string]> }>;
 }
 
-const pipelineCache = new Map<string, Promise<AutomaticSpeechRecognitionPipelineType>>();
+interface WhisperCppTranscriptionProviderOptions {
+  model?: string;
+  modelRootPath: string;
+}
+
+const contextCache = new Map<string, { ctx: WhisperContext; module: WhisperCppNodeModule }>();
 
 function normalizeLocalWhisperModel(value: string | undefined): string {
   const model = value?.trim() || DEFAULT_LOCAL_WHISPER_MODEL;
   return MODEL_ALIASES[model] ?? model;
 }
 
-function resolveLocalWhisperModelRepo(model: string): string {
-  return MODEL_REPOS[normalizeLocalWhisperModel(model)] ?? model;
+function resolveModelFileName(model: string): string {
+  return MODEL_FILE_NAMES[normalizeLocalWhisperModel(model)] ?? `ggml-${model}.bin`;
+}
+
+function resolveModelFilePath(modelRootPath: string, model: string): string {
+  return join(modelRootPath, resolveModelFileName(model));
+}
+
+function resolveModelDownloadUrl(model: string): string {
+  return `${MODEL_DOWNLOAD_BASE_URL}/${resolveModelFileName(model)}`;
 }
 
 function isPcm16Input(input: TranscriptionFileInput): boolean {
@@ -67,62 +83,85 @@ function pcm16ToFloat32(data: Buffer): Float32Array {
   return output;
 }
 
-async function getAsrPipeline(input: {
-  model: string;
-  modelRootPath: string;
-  pipelineFactory?: AsrPipelineFactory;
-}): Promise<AutomaticSpeechRecognitionPipelineType> {
-  const repo = resolveLocalWhisperModelRepo(input.model);
-  const key = `${input.modelRootPath}:${repo}`;
-  const cached = pipelineCache.get(key);
-  if (cached) {
-    return cached;
+const _require = createRequire(fileURLToPath(import.meta.url));
+
+let whisperCppModule: WhisperCppNodeModule | undefined;
+
+function loadWhisperCpp(): WhisperCppNodeModule {
+  if (!whisperCppModule) {
+    whisperCppModule = _require('whisper-cpp-node') as WhisperCppNodeModule;
+  }
+  return whisperCppModule;
+}
+
+function getOrCreateContext(
+  modelRootPath: string,
+  model: string,
+  module_: WhisperCppNodeModule,
+): WhisperContext {
+  const normalizedModel = normalizeLocalWhisperModel(model);
+  const modelPath = resolveModelFilePath(modelRootPath, normalizedModel);
+  const cacheKey = modelPath;
+  const cached = contextCache.get(cacheKey);
+  if (cached && cached.module === module_) {
+    return cached.ctx;
   }
 
-  const pipelineFactory = input.pipelineFactory ?? (await loadDefaultPipelineFactory());
-  const created = pipelineFactory('automatic-speech-recognition', repo, {
-    cache_dir: input.modelRootPath,
-    quantized: true,
-  }) as Promise<AutomaticSpeechRecognitionPipelineType>;
-  pipelineCache.set(key, created);
-  return created;
+  if (!existsSync(modelPath)) {
+    throw new Error(
+      `Whisper model not found at ${modelPath}. Download it first via the Settings page or manually:\n`
+      + `curl -L -o "${modelPath}" "${resolveModelDownloadUrl(normalizedModel)}"`,
+    );
+  }
+
+  const ctx = module_.createWhisperContext({
+    model: modelPath,
+    use_gpu: true,
+    no_prints: true,
+  });
+  contextCache.set(cacheKey, { ctx, module: module_ });
+  return ctx;
 }
 
-async function loadDefaultPipelineFactory(): Promise<AsrPipelineFactory> {
-  const transformers = await import('@xenova/transformers');
-  return transformers.pipeline;
+function formatWhisperSegments(segments: Array<[string, string, string]>): string {
+  return segments
+    .map(([, , text]) => text.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-async function readDirectorySize(path: string): Promise<number | null> {
+async function downloadModel(modelRootPath: string, model: string): Promise<void> {
+  const normalizedModel = normalizeLocalWhisperModel(model);
+  const modelPath = resolveModelFilePath(modelRootPath, normalizedModel);
+
+  if (existsSync(modelPath)) {
+    return;
+  }
+
+  mkdirSync(modelRootPath, { recursive: true });
+
+  const url = resolveModelDownloadUrl(normalizedModel);
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download whisper model: ${response.status} ${response.statusText}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await writeFile(modelPath, buffer);
+}
+
+async function getModelFileSize(modelRootPath: string, model: string): Promise<number | null> {
+  const modelPath = resolveModelFilePath(modelRootPath, normalizeLocalWhisperModel(model));
+
   try {
-    const entries = await readdir(path, { withFileTypes: true });
-    let total = 0;
-    for (const entry of entries) {
-      const entryPath = join(path, entry.name);
-      if (entry.isDirectory()) {
-        total += (await readDirectorySize(entryPath)) ?? 0;
-      } else if (entry.isFile()) {
-        total += (await stat(entryPath)).size;
-      }
-    }
-    return total;
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      return null;
-    }
-    throw error;
+    const stats = statSync(modelPath);
+    return stats.isFile() ? stats.size : null;
+  } catch {
+    return null;
   }
-}
-
-function getLocalModelCachePath(modelRootPath: string, model: string): string {
-  return join(modelRootPath, ...resolveLocalWhisperModelRepo(model).split('/'));
-}
-
-function readAsrText(output: Awaited<ReturnType<AutomaticSpeechRecognitionPipelineType>>): string {
-  if (Array.isArray(output)) {
-    return output.map((entry) => entry.text).join(' ').replace(/\s+/g, ' ').trim();
-  }
-  return output.text.replace(/\s+/g, ' ').trim();
 }
 
 export class LocalWhisperTranscriptionProvider implements TranscriptionProvider {
@@ -131,12 +170,10 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
   readonly transports: Array<'file'> = ['file'];
   private readonly model: string;
   private readonly modelRootPath: string;
-  private readonly pipelineFactory?: AsrPipelineFactory;
 
-  constructor(options: LocalWhisperTranscriptionProviderOptions) {
+  constructor(options: WhisperCppTranscriptionProviderOptions) {
     this.model = normalizeLocalWhisperModel(options.model);
     this.modelRootPath = options.modelRootPath;
-    this.pipelineFactory = options.pipelineFactory;
   }
 
   async isAvailable(): Promise<boolean> {
@@ -144,11 +181,7 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
   }
 
   async installModel(): Promise<TranscriptionInstallResult> {
-    await getAsrPipeline({
-      model: this.model,
-      modelRootPath: this.modelRootPath,
-      pipelineFactory: this.pipelineFactory,
-    });
+    await downloadModel(this.modelRootPath, this.model);
     return {
       provider: this.id,
       model: this.model,
@@ -157,7 +190,7 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
   }
 
   async getModelStatus(): Promise<TranscriptionModelStatus> {
-    const sizeBytes = await readDirectorySize(getLocalModelCachePath(this.modelRootPath, this.model));
+    const sizeBytes = await getModelFileSize(this.modelRootPath, this.model);
     return {
       provider: this.id,
       model: this.model,
@@ -177,16 +210,17 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
       throw new Error('Local Whisper requires non-empty audio.');
     }
 
-    const transcriber = await getAsrPipeline({
-      model: this.model,
-      modelRootPath: this.modelRootPath,
-      pipelineFactory: this.pipelineFactory,
+    const whisperModule = loadWhisperCpp();
+    const ctx = getOrCreateContext(this.modelRootPath, this.model, whisperModule);
+
+    const result = await whisperModule.transcribeAsync(ctx, {
+      pcmf32: audio,
+      language: options.language === 'auto' ? undefined : options.language,
+      no_timestamps: true,
+      no_prints: true,
     });
-    const raw = await transcriber(audio, {
-      ...(options.language ? { language: options.language } : {}),
-      task: 'transcribe',
-    });
-    const text = readAsrText(raw);
+
+    const text = formatWhisperSegments(result.segments);
     if (!text) {
       throw new Error('Local Whisper returned an empty transcript. Try speaking longer or check microphone input.');
     }
@@ -203,8 +237,9 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
 
 export const testExports = {
   normalizeLocalWhisperModel,
-  resolveLocalWhisperModelRepo,
+  resolveModelFileName,
+  resolveModelDownloadUrl,
   pcm16ToFloat32,
-  readAsrText,
-  getLocalModelCachePath,
+  resolveModelFilePath,
+  formatWhisperSegments,
 };

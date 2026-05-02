@@ -71,7 +71,6 @@
     "@sinclair/typebox": "^0.34.48",
     "jsdom": "^24.0.0",
     "nunjucks": "^3.2.4",
-    "sharp": "file:stubs/sharp",
     "turndown": "^7.1.2"
   },
   "overrides": {

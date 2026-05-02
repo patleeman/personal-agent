@@ -1,8 +1,0 @@
-{
-  "name": "sharp",
-  "version": "0.32.6",
-  "description": "Personal Agent stub for the optional Transformers.js image-processing dependency.",
-  "main": "index.cjs",
-  "license": "UNLICENSED",
-  "private": true
-}

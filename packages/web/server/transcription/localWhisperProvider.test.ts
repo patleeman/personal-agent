@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,11 +5,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocalWhisperTranscriptionProvider, testExports } from './localWhisperProvider.js';
 
 describe('Local Whisper transcription provider', () => {
-  it('normalizes legacy WhisperKit model ids to Transformers.js model repos', () => {
+  it('normalizes legacy WhisperKit model ids to whisper.cpp model names', () => {
     expect(testExports.normalizeLocalWhisperModel('openai_whisper-base')).toBe('base');
     expect(testExports.normalizeLocalWhisperModel('openai_whisper-small.en')).toBe('small.en');
     expect(testExports.normalizeLocalWhisperModel(undefined)).toBe('base.en');
-    expect(testExports.resolveLocalWhisperModelRepo('base.en')).toBe('Xenova/whisper-base.en');
+    expect(testExports.resolveModelFileName('base.en')).toBe('ggml-base.en.bin');
+    expect(testExports.resolveModelDownloadUrl('base.en')).toBe(
+      'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin',
+    );
+  });
+
+  it('resolves model file paths relative to the model root', () => {
+    expect(testExports.resolveModelFilePath('/cache', 'tiny.en')).toBe('/cache/ggml-tiny.en.bin');
+    expect(testExports.resolveModelFilePath('/cache', 'base')).toBe('/cache/ggml-base.bin');
   });
 
   it('decodes 16-bit PCM into normalized float audio', () => {
@@ -20,56 +27,18 @@ describe('Local Whisper transcription provider', () => {
     expect(audio[1]).toBe(-0.5);
   });
 
-  it('transcribes PCM through a cached local ASR pipeline', async () => {
-    const transcriber = vi.fn(async () => ({ text: ' local words ' }));
-    const pipelineFactory = vi.fn(async () => transcriber);
-    const provider = new LocalWhisperTranscriptionProvider({
-      model: 'small.en',
-      modelRootPath: '/tmp/pa-models',
-      pipelineFactory: pipelineFactory as never,
-    });
-
-    const result = await provider.transcribeFile({
-      data: Buffer.from([0x00, 0x40, 0x00, 0xc0]),
-      mimeType: 'audio/pcm;rate=16000;channels=1',
-      fileName: 'dictation.pcm',
-    });
-
-    expect(result).toMatchObject({ provider: 'local-whisper', model: 'small.en', text: 'local words', durationMs: 0 });
-    expect(pipelineFactory).toHaveBeenCalledWith('automatic-speech-recognition', 'Xenova/whisper-small.en', {
-      cache_dir: '/tmp/pa-models',
-      quantized: true,
-    });
-    expect(transcriber).toHaveBeenCalledWith(expect.any(Float32Array), { task: 'transcribe' });
-  });
-
-  it('installs the selected model into the local model cache', async () => {
-    const transcriber = vi.fn(async () => ({ text: 'unused' }));
-    const pipelineFactory = vi.fn(async () => transcriber);
-    const provider = new LocalWhisperTranscriptionProvider({
-      model: 'tiny.en',
-      modelRootPath: '/tmp/pa-models',
-      pipelineFactory: pipelineFactory as never,
-    });
-
-    await expect(provider.installModel()).resolves.toEqual({
-      provider: 'local-whisper',
-      model: 'tiny.en',
-      cacheDir: '/tmp/pa-models',
-    });
-    expect(pipelineFactory).toHaveBeenCalledWith('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
-      cache_dir: '/tmp/pa-models',
-      quantized: true,
-    });
+  it('formats whisper.cpp segments into flat text', () => {
+    expect(testExports.formatWhisperSegments([
+      ['00:00:00,000', '00:00:01,500', ' hello world '],
+      ['00:00:01,500', '00:00:03,000', '  from whisper '],
+    ])).toBe('hello world from whisper');
   });
 
   it('reports whether the selected model is installed in the local cache', async () => {
     const modelRootPath = join(tmpdir(), `pa-model-status-${Date.now()}`);
-    const modelPath = join(modelRootPath, 'Xenova', 'whisper-tiny.en');
     const provider = new LocalWhisperTranscriptionProvider({
       model: 'tiny.en',
       modelRootPath,
-      pipelineFactory: vi.fn() as never,
     });
 
     await expect(provider.getModelStatus()).resolves.toMatchObject({
@@ -79,12 +48,12 @@ describe('Local Whisper transcription provider', () => {
       installed: false,
     });
 
-    await mkdir(modelPath, { recursive: true });
-    await writeFile(join(modelPath, 'config.json'), '{}');
+    await mkdir(modelRootPath, { recursive: true });
+    await writeFile(join(modelRootPath, 'ggml-tiny.en.bin'), 'fake model data');
 
     await expect(provider.getModelStatus()).resolves.toMatchObject({
       installed: true,
-      sizeBytes: 2,
+      sizeBytes: 15,
     });
   });
 });
