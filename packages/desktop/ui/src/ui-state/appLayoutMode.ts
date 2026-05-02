@@ -3,7 +3,7 @@ export const APP_LAYOUT_MODE_CHANGED_EVENT = 'pa:app-layout-mode-changed';
 
 export type AppLayoutMode = 'compact' | 'workbench';
 
-export function isAppLayoutMode(value: unknown): value is AppLayoutMode {
+function isAppLayoutMode(value: unknown): value is AppLayoutMode {
   return value === 'compact' || value === 'workbench';
 }
 

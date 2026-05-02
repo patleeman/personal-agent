@@ -27,7 +27,7 @@ const checkpointDiffStyle = {
   '--diffs-bg-deletion-emphasis-override': 'rgb(var(--color-danger) / 0.24)',
 } as CSSProperties;
 
-export function statusLabel(file: ConversationCommitCheckpointFile): string {
+function statusLabel(file: ConversationCommitCheckpointFile): string {
   switch (file.status) {
     case 'added':
       return 'Added';

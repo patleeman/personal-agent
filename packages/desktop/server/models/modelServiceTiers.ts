@@ -1,6 +1,6 @@
 import type { Model } from '@mariozechner/pi-ai';
 
-export const SERVICE_TIER_VALUES = ['auto', 'default', 'flex', 'priority', 'scale'] as const;
+const SERVICE_TIER_VALUES = ['auto', 'default', 'flex', 'priority', 'scale'] as const;
 export type ServiceTierValue = typeof SERVICE_TIER_VALUES[number];
 
 // Single source of truth for model-level service tier support.

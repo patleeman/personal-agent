@@ -31,22 +31,4 @@ export class StaticTranscriptionProviderRegistry implements TranscriptionProvide
   }
 }
 
-export class PlannedTranscriptionProvider implements TranscriptionProvider {
-  constructor(
-    readonly id: TranscriptionProviderId,
-    readonly label: string,
-    readonly transports: Array<'stream' | 'file'>,
-  ) {}
 
-  async isAvailable(): Promise<boolean> {
-    return false;
-  }
-
-  async transcribeFile(): Promise<never> {
-    throw new Error(`${this.label} transcription is planned but not implemented.`);
-  }
-
-  stream(): AsyncIterable<never> {
-    throw new Error(`${this.label} transcription is planned but not implemented.`);
-  }
-}

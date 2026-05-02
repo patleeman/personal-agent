@@ -40,7 +40,7 @@ export function getConversationCheckpointIdFromSearch(search: string): string | 
   return value ? value : null;
 }
 
-export function getConversationCheckpointFileFromSearch(search: string): string | null {
+function getConversationCheckpointFileFromSearch(search: string): string | null {
   const value = new URLSearchParams(search).get(CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM)?.trim();
   return value ? value : null;
 }
@@ -58,7 +58,7 @@ export function setConversationCheckpointIdInSearch(search: string, checkpointId
   return next.length > 0 ? `?${next}` : '';
 }
 
-export function setConversationCheckpointFileInSearch(search: string, filePath: string | null): string {
+function setConversationCheckpointFileInSearch(search: string, filePath: string | null): string {
   const params = new URLSearchParams(search);
   if (filePath?.trim()) {
     params.set(CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM, filePath.trim());

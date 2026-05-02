@@ -44,7 +44,7 @@ export function resolveConversationExecutionTargetOptions(input: {
   return baseOptions;
 }
 
-export function buildRemoteConversationExecutionTargetId(remoteConversationId: string): string {
+function buildRemoteConversationExecutionTargetId(remoteConversationId: string): string {
   return `remote-conversation:${remoteConversationId}`;
 }
 

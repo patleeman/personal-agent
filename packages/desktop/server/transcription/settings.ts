@@ -2,12 +2,12 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { TranscriptionProviderId, TranscriptionSettings } from './types.js';
 
-export const TRANSCRIPTION_PROVIDER_IDS: TranscriptionProviderId[] = [
+const TRANSCRIPTION_PROVIDER_IDS: TranscriptionProviderId[] = [
   'local-whisper',
 ];
 
-export const DEFAULT_TRANSCRIPTION_MODEL = 'base.en';
-export const DEFAULT_TRANSCRIPTION_PROVIDER: TranscriptionProviderId = 'local-whisper';
+const DEFAULT_TRANSCRIPTION_MODEL = 'base.en';
+const DEFAULT_TRANSCRIPTION_PROVIDER: TranscriptionProviderId = 'local-whisper';
 
 const CLOUD_TRANSCRIPTION_MODEL_PATTERN = /^(?:gpt-4o(?:-mini)?-transcribe|whisper-1)$/i;
 
@@ -30,7 +30,7 @@ export function isTranscriptionProviderId(value: unknown): value is Transcriptio
   return typeof value === 'string' && TRANSCRIPTION_PROVIDER_IDS.includes(value as TranscriptionProviderId);
 }
 
-export function normalizeTranscriptionModelForProvider(
+function normalizeTranscriptionModelForProvider(
   provider: TranscriptionProviderId | null,
   value: unknown,
 ): string {
@@ -45,7 +45,7 @@ export function normalizeTranscriptionModelForProvider(
   return model;
 }
 
-export function normalizeTranscriptionSettings(value: unknown): TranscriptionSettings {
+function normalizeTranscriptionSettings(value: unknown): TranscriptionSettings {
   const input = isRecord(value) ? value : {};
   const provider = 'provider' in input
     ? isTranscriptionProviderId(input.provider)

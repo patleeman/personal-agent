@@ -47,9 +47,9 @@ function DiffViewToggle({
   );
 }
 
-export const UNCOMMITTED_SENTINEL = '__uncommitted__';
+const UNCOMMITTED_SENTINEL = '__uncommitted__';
 
-export function useUncommittedDiff(cwd: string | null | undefined) {
+function useUncommittedDiff(cwd: string | null | undefined) {
   const { versions } = useAppEvents();
   const [result, setResult] = useState<UncommittedDiffResult | null>(null);
   const [loading, setLoading] = useState(false);

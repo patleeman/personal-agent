@@ -1,6 +1,6 @@
 import type { VaultEntry } from '../../shared/types';
 
-export const VAULT_ENTRY_DRAG_TYPE = 'application/x-personal-agent-vault-entry';
+const VAULT_ENTRY_DRAG_TYPE = 'application/x-personal-agent-vault-entry';
 
 export function normalizeVaultDir(dir: string): string {
   const trimmed = dir.trim().replace(/\\/g, '/').replace(/^\/+/, '');

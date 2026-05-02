@@ -431,7 +431,7 @@ export function SkillInvocationCard({
   );
 }
 
-export function renderSkillAwareText(
+function renderSkillAwareText(
   text: string,
   options?: {
     onOpenFilePath?: (path: string) => void;

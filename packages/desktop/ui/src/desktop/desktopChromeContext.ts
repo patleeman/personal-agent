@@ -13,6 +13,6 @@ export const DesktopChromeContext = createContext<DesktopChromeContextValue>({
   setRightRailControl: () => {},
 });
 
-export function useDesktopChrome() {
+function useDesktopChrome() {
   return useContext(DesktopChromeContext);
 }

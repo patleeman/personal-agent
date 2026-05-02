@@ -24,7 +24,7 @@ export interface ProviderDesktopCapabilityContext {
   getAuthFile: () => string;
 }
 
-export class ProviderDesktopCapabilityInputError extends Error {}
+class ProviderDesktopCapabilityInputError extends Error {}
 
 function currentProfile(context: ProviderDesktopCapabilityContext): string {
   return context.getCurrentProfile();

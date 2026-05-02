@@ -9,7 +9,7 @@ import {
 
 export type ComposerDrawingAttachment = DraftConversationDrawingAttachment;
 
-export const MAX_PROMPT_IMAGE_DIMENSION = 2000;
+const MAX_PROMPT_IMAGE_DIMENSION = 2000;
 const MAX_COMPOSER_DRAWING_REVISION = 1_000_000;
 
 function readBlobAsDataUrl(blob: Blob, label: string): Promise<string> {
@@ -377,7 +377,7 @@ export function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachme
   };
 }
 
-export async function buildComposerDrawingFromFile(file: File): Promise<ComposerDrawingAttachment> {
+async function buildComposerDrawingFromFile(file: File): Promise<ComposerDrawingAttachment> {
   const scene = await loadExcalidrawSceneFromBlob(file);
   const serialized = await serializeExcalidrawScene(scene);
   const title = inferDrawingTitleFromFileName(file.name);

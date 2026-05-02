@@ -99,7 +99,7 @@ export function modelKey(model: ModelLike): string {
   return `${String(model.provider)}:${String(model.api)}:${String(model.id)}`;
 }
 
-export function isDirectOpenAIResponsesModel(model: unknown): model is ModelLike {
+function isDirectOpenAIResponsesModel(model: unknown): model is ModelLike {
   if (!isRecord(model)) return false;
   if (model.api !== 'openai-responses') return false;
   if (model.provider !== 'openai') return false;
@@ -107,7 +107,7 @@ export function isDirectOpenAIResponsesModel(model: unknown): model is ModelLike
   return host === undefined || host === 'api.openai.com';
 }
 
-export function isCodexResponsesModel(model: unknown): model is ModelLike {
+function isCodexResponsesModel(model: unknown): model is ModelLike {
   if (!isRecord(model)) return false;
   if (model.api !== 'openai-codex-responses') return false;
   if (model.provider === 'openai-codex') return true;
@@ -196,7 +196,7 @@ function isPromptEnvelopeItem(item: unknown): boolean {
   return isRecord(item) && (item.role === 'developer' || item.role === 'system');
 }
 
-export function splitPromptEnvelope(input: unknown[]): { leading: unknown[]; trailing: unknown[] } | undefined {
+function splitPromptEnvelope(input: unknown[]): { leading: unknown[]; trailing: unknown[] } | undefined {
   let start = 0;
   while (start < input.length && isPromptEnvelopeItem(input[start])) start += 1;
 

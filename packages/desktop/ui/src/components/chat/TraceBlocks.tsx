@@ -81,7 +81,7 @@ export const SubagentBlock = memo(function SubagentBlock({ block }: { block: Ext
   );
 });
 
-export function traceSummaryTone(category: TraceClusterSummaryCategory) {
+function traceSummaryTone(category: TraceClusterSummaryCategory) {
   switch (category.kind) {
     case 'thinking':
       return 'muted';
@@ -301,7 +301,7 @@ export function TraceClusterBlock({
 
 // ── ImageBlock ────────────────────────────────────────────────────────────────
 
-export function ResumeConversationAction({
+function ResumeConversationAction({
   onResume,
   busy = false,
   title,

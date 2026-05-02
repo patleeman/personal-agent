@@ -263,12 +263,4 @@ export function requestApplicationRestart(input: {
   });
 }
 
-export function requestApplicationUpdate(input: {
-  repoRoot: string;
-  profile: string;
-}): ApplicationCommandRequestResult {
-  return requestApplicationCommand({
-    ...input,
-    action: 'update',
-  });
-}
+

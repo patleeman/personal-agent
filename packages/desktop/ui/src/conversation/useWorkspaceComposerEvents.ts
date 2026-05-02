@@ -1,8 +1,8 @@
 import { useEffect, type RefObject, type MutableRefObject } from 'react';
 import { insertFileReplyQuoteIntoComposer } from './conversationReplyQuote';
 
-export const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
-export const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';
+const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
+const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';
 
 interface UseWorkspaceComposerEventsOptions {
   input: string;
