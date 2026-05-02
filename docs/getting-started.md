@@ -42,15 +42,6 @@ pa tui
 
 The TUI is useful for quick terminal-based sessions. For the full experience, use the desktop app.
 
-### Browser validation in this repo
-
-When you validate the local desktop app with `agent-browser`, use the repo wrapper so Playwright sessions do not pile up:
-
-```bash
-npm run ab:run -- --session smoke-check --command "ab open personal-agent://app/ && ab wait 1000 && ab snapshot -i"
-```
-
-See [Agent Browser in this repo](./agent-browser.md).
 
 ## Create the first durable inputs
 
@@ -115,4 +106,3 @@ The environment variable wins. New setups should use the built-in Knowledge base
 2. [How personal-agent works](./how-it-works.md)
 3. [Knowledge System](./knowledge-system.md)
 4. [Desktop App](./desktop-app.md)
-5. [Agent Browser in this repo](./agent-browser.md)

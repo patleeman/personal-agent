@@ -36,8 +36,10 @@ In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror 
 - [Decision Guide](./decision-guide.md) — fastest way to pick the right durable surface
 - [How personal-agent works](./how-it-works.md) — repo defaults, vault, machine-local state, and runtime layering
 - [Knowledge System](./knowledge-system.md) — instruction files, docs, skills, projects, and old-term mappings
+- [Knowledge Base Sync](./knowledge-base-sync.md) — git-backed sync for multi-machine vaults
 - [Conversation Context](./conversation-context.md) — one-shot mentions vs attached docs vs binary attachments
 - [Conversations](./conversations.md) — live thread behavior, auto mode, and async follow-through
+- [Checkpoints](./checkpoints.md) — conversation-scoped code snapshots and diffs
 - [Projects](./projects.md) — optional structured durable work packages
 
 ### Interfaces
@@ -46,13 +48,14 @@ In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror 
 - [iOS Companion](./ios-companion.md) — native phone client
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Daemon](./daemon.md)
-- [Configuration](./configuration.md)
+- [Configuration](./configuration.md) — file-based config, env vars, and the Settings UI
+- [Models and Providers](./models-and-providers.md) — provider API types, auth, and model schema
 - [MCP](./mcp.md)
 
 ### Development and operations
 
 - [Repo Layout](./repo-layout.md)
-- [Agent Browser in this repo](./agent-browser.md)
+- [Extensions](./extensions.md) — built-in extensions and how they affect behavior
 - [Release Cycle](./release-cycle.md)
 - [Troubleshooting](./troubleshooting.md)
 
@@ -78,11 +81,15 @@ These live under `internal-skills/` because they describe runtime features rathe
 | How does dictation transcription plug in? | [Dictation transcription](./dictation-transcription.md) | [Configuration](./configuration.md) |
 | Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
 | How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
-| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Desktop App](./desktop-app.md), [Command-Line Guide (`pa`)](./command-line.md), [Agent Browser in this repo](./agent-browser.md) |
+| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Desktop App](./desktop-app.md), [Command-Line Guide (`pa`)](./command-line.md) |
 | How does the phone app connect? | [iOS Companion](./ios-companion.md) | [Daemon](./daemon.md), [Configuration](./configuration.md) |
 | How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md), [Auto Mode](../internal-skills/auto-mode/INDEX.md) |
 | Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |
 | How do MCP servers fit in? | [MCP](./mcp.md) | `pa mcp help` for exact CLI flags |
+| How do checkpoints and diffs work? | [Checkpoints](./checkpoints.md) | [Conversations](./conversations.md), [Desktop App](./desktop-app.md) |
+| How does knowledge base sync work? | [Knowledge Base Sync](./knowledge-base-sync.md) | [Configuration](./configuration.md) |
+| How do models and providers work? | [Models and Providers](./models-and-providers.md) | [Configuration](./configuration.md) |
+| What extensions are loaded? | [Extensions](./extensions.md) | [Configuration](./configuration.md) |
 | How do I ship the desktop app? | [Release Cycle](./release-cycle.md) | repo `AGENTS.md` release notes |
 
 ## Rules for agents

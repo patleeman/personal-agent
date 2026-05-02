@@ -63,5 +63,4 @@ npm run ab:run -- --session desktop-check --command "ab open personal-agent://ap
 
 - [Daemon](./daemon.md)
 - [Command-Line Guide](./command-line.md)
-- [Agent Browser](./agent-browser.md)
 - [iOS Companion](./ios-companion.md)
