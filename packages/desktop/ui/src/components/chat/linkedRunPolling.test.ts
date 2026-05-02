@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { INLINE_RUN_LOG_TAIL_LINES, INLINE_RUN_POLL_INTERVAL_MS, normalizeInlineRunPollingOptions } from './linkedRunPolling';
+import { INLINE_RUN_LOG_TAIL_LINES, normalizeInlineRunPollingOptions } from './linkedRunPolling';
+
+const INLINE_RUN_POLL_INTERVAL_MS = 2200;
 
 describe('normalizeInlineRunPollingOptions', () => {
   it('defaults malformed inline run polling options and caps expensive log tails', () => {
