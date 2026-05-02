@@ -31,7 +31,7 @@ describe('companion auth store', () => {
     expect(pairing.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
     const paired = pairCompanionDevice(stateRoot, pairing.code, {
-      deviceLabel: 'Patrick iPhone',
+      deviceLabel: 'User iPhone',
       now: new Date('2026-04-18T10:01:00.000Z'),
     });
 
@@ -40,7 +40,7 @@ describe('companion auth store', () => {
       now: new Date('2026-04-18T10:02:00.000Z'),
     })).toEqual(expect.objectContaining({
       id: paired.device.id,
-      deviceLabel: 'Patrick iPhone',
+      deviceLabel: 'User iPhone',
     }));
   });
 

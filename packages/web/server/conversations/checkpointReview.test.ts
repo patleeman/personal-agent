@@ -72,7 +72,7 @@ function createCommittedRepo() {
   const repoRoot = createTempRepoRoot();
   runGit(repoRoot, ['init', '-q']);
   runGit(repoRoot, ['config', 'user.email', 'patrick@example.com']);
-  runGit(repoRoot, ['config', 'user.name', 'Patrick Lee']);
+  runGit(repoRoot, ['config', 'user.name', 'Test User']);
 
   writeFileSync(join(repoRoot, 'README.md'), 'hello\n', 'utf-8');
   runGit(repoRoot, ['add', 'README.md']);
@@ -116,7 +116,7 @@ describe('checkpointReview', () => {
       commitSha: 'abc1234def567890abc1234def567890abc12345',
       shortSha: 'abc1234',
       subject: 'feat: saved checkpoint',
-      authorName: 'Patrick Lee',
+      authorName: 'Test User',
       committedAt: '2026-04-14T12:00:00.000Z',
       createdAt: '2026-04-14T12:00:00.000Z',
       updatedAt: '2026-04-14T12:00:00.000Z',

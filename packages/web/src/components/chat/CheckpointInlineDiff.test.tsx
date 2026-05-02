@@ -42,7 +42,7 @@ describe('CheckpointInlineDiff', () => {
           commitSha: 'abc1234def567890abc1234def567890abc12345',
           shortSha: 'abc1234',
           subject: 'feat: add inline diff preview',
-          authorName: 'Patrick Lee',
+          authorName: 'Test User',
           committedAt: '2026-04-17T12:00:00.000Z',
           createdAt: '2026-04-17T12:00:01.000Z',
           updatedAt: '2026-04-17T12:00:01.000Z',

@@ -111,7 +111,7 @@ describe('daemon companion server', () => {
       updateConversationAutoMode: async ({ enabled }) => ({ enabled, stopReason: null, updatedAt: '2026-04-19T00:00:00.000Z' }),
       readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
       updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
-      createConversationCheckpoint: async (input) => ({ id: 'checkpoint-1', conversationId: input.conversationId, title: input.message, shortSha: 'abc1234', commitSha: 'abc1234def', subject: input.message, fileCount: input.paths.length, linesAdded: 1, linesDeleted: 0, cwd: '/repo', authorName: 'Patrick', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
+      createConversationCheckpoint: async (input) => ({ id: 'checkpoint-1', conversationId: input.conversationId, title: input.message, shortSha: 'abc1234', commitSha: 'abc1234def', subject: input.message, fileCount: input.paths.length, linesAdded: 1, linesDeleted: 0, cwd: '/repo', authorName: 'Test User', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
       listConversationArtifacts: async (conversationId) => ({ conversationId, artifacts: [] }),
       readConversationArtifact: async ({ conversationId, artifactId }) => ({ conversationId, artifact: { id: artifactId } }),
       listConversationCheckpoints: async (conversationId) => ({ conversationId, checkpoints: [] }),
@@ -205,11 +205,11 @@ describe('daemon companion server', () => {
     const pairResponse = await fetch(`${baseUrl}/v1/auth/pair`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: pairing.code, deviceLabel: 'Patrick iPhone' }),
+      body: JSON.stringify({ code: pairing.code, deviceLabel: 'User iPhone' }),
     });
     expect(pairResponse.status).toBe(201);
     const paired = await readJson(pairResponse) as { bearerToken: string; device: { id: string; deviceLabel: string } };
-    expect(paired.device.deviceLabel).toBe('Patrick iPhone');
+    expect(paired.device.deviceLabel).toBe('User iPhone');
 
     const devicesResponse = await fetch(`${baseUrl}/companion/v1/admin/devices`);
     const devices = await readJson(devicesResponse) as { devices: Array<{ id: string; deviceLabel: string }> };
@@ -484,7 +484,7 @@ describe('daemon companion server', () => {
     const ready = firstMessage as { type: string; device: { deviceLabel: string } };
     expect(ready).toEqual(expect.objectContaining({
       type: 'ready',
-      device: expect.objectContaining({ deviceLabel: 'Patrick iPhone' }),
+      device: expect.objectContaining({ deviceLabel: 'User iPhone' }),
     }));
 
     socket.send(JSON.stringify({ id: '1', type: 'command', name: 'conversations.list' }));
@@ -594,7 +594,7 @@ describe('daemon companion server', () => {
       changeConversationCwd: async (input: any) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
       readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
       updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
-      createConversationCheckpoint: async () => ({ id: 'checkpoint-1', conversationId: 'conversation-1', title: 'Checkpoint', shortSha: 'abc1234', commitSha: 'abc1234def', subject: 'Checkpoint', fileCount: 0, linesAdded: 0, linesDeleted: 0, cwd: '/repo', authorName: 'Patrick', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
+      createConversationCheckpoint: async () => ({ id: 'checkpoint-1', conversationId: 'conversation-1', title: 'Checkpoint', shortSha: 'abc1234', commitSha: 'abc1234def', subject: 'Checkpoint', fileCount: 0, linesAdded: 0, linesDeleted: 0, cwd: '/repo', authorName: 'Test User', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
       listConversationArtifacts: async () => ({ conversationId: 'conversation-1', artifacts: [] }),
       readConversationArtifact: async () => ({ conversationId: 'conversation-1', artifact: { id: 'artifact-1' } }),
       listConversationCheckpoints: async () => ({ conversationId: 'conversation-1', checkpoints: [] }),

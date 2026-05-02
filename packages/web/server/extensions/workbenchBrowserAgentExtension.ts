@@ -138,8 +138,8 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       description: 'Observe the current built-in Workbench Browser state and interactive elements.',
       promptSnippet: 'Use browser_snapshot to understand the shared Workbench Browser, which is a user/agent communication surface. For development validation, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
-        'Targets Patrick\'s visible built-in Workbench Browser for this conversation, not agent-browser, Chrome, or an independent automation session.',
-        'Treat the Workbench Browser as shared conversation context: use it when Patrick is showing you a page, commenting on page elements, or wants you to inspect/control the same visible page.',
+        'Targets the user\'s visible built-in Workbench Browser for this conversation, not agent-browser, Chrome, or an independent automation session.',
+        'Treat the Workbench Browser as shared conversation context: use it when the user is showing you a page, commenting on page elements, or wants you to inspect/control the same visible page.',
         'Do not use Workbench Browser tools for autonomous app-development validation, CI-style checks, or black-box UI testing; load the agent-browser skill and use its CLI/wrapper from bash for that.',
         'Prefer browser_snapshot before navigating or acting because it is efficient, structured, and gives refs/selectors.',
         'Refs are snapshot-scoped; refresh the snapshot after navigation or major page changes.',
@@ -161,8 +161,8 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       description: 'Send one or more Chrome DevTools Protocol commands to the built-in Workbench Browser.',
       promptSnippet: 'Use browser_cdp only to act on the shared Workbench Browser conversation surface. For dev automation/testing, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
-        'Targets Patrick\'s visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.',
-        'Treat this as operating on shared user/agent context; avoid changing Patrick\'s visible page for unrelated development validation.',
+        'Targets the user\'s visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.',
+        'Treat this as operating on shared user/agent context; avoid changing the user\'s visible page for unrelated development validation.',
         'For autonomous UI testing, local app validation, screenshots of the product under test, or repeatable browser automation, load the agent-browser skill and use its CLI/wrapper from bash.',
         'This is a thin CDP command surface; provide raw command objects exactly as Chrome DevTools Protocol expects, for example: {"method":"Runtime.evaluate","params":{"expression":"document.title","returnByValue":true}}.',
         'When doing more than one action, send one browser_cdp call with command set to an array of command objects instead of multiple tool calls.',
@@ -190,8 +190,8 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       description: 'Capture a PNG screenshot of the built-in Workbench Browser.',
       promptSnippet: 'Use browser_screenshot for the shared Workbench Browser when visual communication matters. For dev validation screenshots, use the agent-browser skill/CLI through bash.',
       promptGuidelines: [
-        'Targets Patrick\'s visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.',
-        'Treat screenshots as shared conversation context: use them when Patrick wants visual inspection of the page currently open in the Workbench Browser.',
+        'Targets the user\'s visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.',
+        'Treat screenshots as shared conversation context: use them when the user wants visual inspection of the page currently open in the Workbench Browser.',
         'For autonomous visual checks of the app you are developing, load the agent-browser skill and use its CLI/wrapper from bash.',
         'browser_screenshot is useful for visual appearance and image-heavy content.',
         'Prefer browser_snapshot when navigating or when you need efficient text, selectors, refs, or page state.',

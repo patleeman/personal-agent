@@ -360,7 +360,7 @@ export function createTasksModule(
       lines.push('', `Log: ${details.logPath}`);
     }
 
-    lines.push('', 'Review this result, surface the important outcome to Patrick, and decide whether any follow-up is needed.');
+    lines.push('', 'Review this result, surface the important outcome to the user, and decide whether any follow-up is needed.');
     return lines.join('\n');
   };
 

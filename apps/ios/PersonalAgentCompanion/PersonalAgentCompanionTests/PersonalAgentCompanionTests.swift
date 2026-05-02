@@ -94,12 +94,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
     }
 
     func testCompanionSetupLinkParsesCustomPairURL() {
-        let raw = "pa-companion://pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL&label=Patrick%20Mac&hostInstanceId=host_123"
+        let raw = "pa-companion://pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL&label=Desktop%20Mac&hostInstanceId=host_123"
         let setupLink = CompanionSetupLink(rawString: raw)
 
         XCTAssertEqual(setupLink?.baseURL, "http://192.168.1.23:3845")
         XCTAssertEqual(setupLink?.code, "ABCD-EFGH-IJKL")
-        XCTAssertEqual(setupLink?.hostLabel, "Patrick Mac")
+        XCTAssertEqual(setupLink?.hostLabel, "Desktop Mac")
         XCTAssertEqual(setupLink?.hostInstanceId, "host_123")
     }
 
@@ -303,7 +303,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
             ],
             toolUseCount: 1
         )
-        let snapshot = MockCompanionSnapshotFixtureFile(hostLabel: "Patrick Demo", generatedAt: ISO8601DateFormatter.flexible.string(from: .now), conversations: [conversation])
+        let snapshot = MockCompanionSnapshotFixtureFile(hostLabel: "Desktop Demo", generatedAt: ISO8601DateFormatter.flexible.string(from: .now), conversations: [conversation])
         let data = try JSONEncoder().encode(snapshot)
         try data.write(to: snapshotURL)
 
@@ -314,7 +314,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let listState = try await client.listConversations()
         let bootstrap = try await client.conversationBootstrap(conversationId: "local-demo-1")
 
-        XCTAssertEqual(client.host.hostLabel, "Patrick Demo")
+        XCTAssertEqual(client.host.hostLabel, "Desktop Demo")
         XCTAssertEqual(listState.sessions.first?.id, "local-demo-1")
         XCTAssertTrue(bootstrap.bootstrap.sessionDetail?.blocks.contains(where: { $0.type == "tool_use" }) == true)
     }
@@ -3297,11 +3297,11 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let initialState = try XCTUnwrap(state)
         let deviceId = try XCTUnwrap(initialState.devices.first?.id)
 
-        async let first = session.updatePairedDevice(deviceId, label: "Patrick’s phone")
-        async let second = session.updatePairedDevice(deviceId, label: "Patrick’s phone")
+        async let first = session.updatePairedDevice(deviceId, label: "User’s phone")
+        async let second = session.updatePairedDevice(deviceId, label: "User’s phone")
         let states = await [first, second].compactMap { $0 }
 
-        XCTAssertEqual(states.filter { $0.devices.contains { $0.id == deviceId && $0.deviceLabel == "Patrick’s phone" } }.count, 1)
+        XCTAssertEqual(states.filter { $0.devices.contains { $0.id == deviceId && $0.deviceLabel == "User’s phone" } }.count, 1)
         XCTAssertEqual(client.updatePairedDeviceCount, 1)
         XCTAssertNil(session.errorMessage)
     }
@@ -3314,12 +3314,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let initialState = try XCTUnwrap(state)
         let deviceId = try XCTUnwrap(initialState.devices.first?.id)
 
-        let failedState = await session.updatePairedDevice(deviceId, label: "Patrick’s phone")
+        let failedState = await session.updatePairedDevice(deviceId, label: "User’s phone")
         XCTAssertNil(failedState)
         XCTAssertNotNil(session.errorMessage)
 
-        let updatedState = await session.updatePairedDevice(deviceId, label: "Patrick’s phone")
-        XCTAssertEqual(updatedState?.devices.first?.deviceLabel, "Patrick’s phone")
+        let updatedState = await session.updatePairedDevice(deviceId, label: "User’s phone")
+        XCTAssertEqual(updatedState?.devices.first?.deviceLabel, "User’s phone")
         XCTAssertNil(session.errorMessage)
     }
 

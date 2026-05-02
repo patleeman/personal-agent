@@ -548,7 +548,7 @@ deferredState.resumes['resume-demo-reminder'] = {
 deferredState.resumes['resume-demo-callback'] = {
   id: 'resume-demo-callback',
   sessionFile: convReminder,
-  prompt: 'Background task information-architecture-eval completed. Tell Patrick the background task finished in one short sentence.',
+  prompt: 'Background task information-architecture-eval completed. Tell the user the background task finished in one short sentence.',
   dueAt: '2026-04-30T12:35:00.000Z',
   createdAt: now,
   attempts: 1,

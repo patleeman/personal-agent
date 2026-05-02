@@ -64,7 +64,7 @@ describe('DesktopCompanionSettingsPanel', () => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
       if (url === '/companion/v1/hello') {
         return new Response(JSON.stringify({
-          hostLabel: 'Patrick Mac',
+          hostLabel: 'Desktop Mac',
           hostInstanceId: 'host_123',
           protocolVersion: 'v1',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });

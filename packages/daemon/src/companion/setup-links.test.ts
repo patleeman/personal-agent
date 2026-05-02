@@ -34,7 +34,7 @@ describe('buildCompanionSetupState', () => {
     const state = buildCompanionSetupState({
       config: createTestConfig('127.0.0.1'),
       pairing,
-      hostLabel: 'Patrick Mac',
+      hostLabel: 'Desktop Mac',
       hostInstanceId: 'host-1',
       resolveTailnetUrl: () => undefined,
     });
@@ -47,7 +47,7 @@ describe('buildCompanionSetupState', () => {
     const state = buildCompanionSetupState({
       config: createTestConfig('0.0.0.0', 3845),
       pairing,
-      hostLabel: 'Patrick Mac',
+      hostLabel: 'Desktop Mac',
       hostInstanceId: 'host-1',
       resolveTailnetUrl: () => 'https://my-host.tailnet.ts.net',
       readNetworkInterfaces: () => ({
@@ -72,7 +72,7 @@ describe('buildCompanionSetupState', () => {
     const state = buildCompanionSetupState({
       config: createTestConfig('127.0.0.1'),
       pairing,
-      hostLabel: 'Patrick Mac',
+      hostLabel: 'Desktop Mac',
       hostInstanceId: 'host-1',
       resolveTailnetUrl: () => 'https://my-host.tailnet.ts.net',
     });
@@ -85,7 +85,7 @@ describe('buildCompanionSetupState', () => {
     const state = buildCompanionSetupState({
       config: createTestConfig('mini.home', 4444),
       pairing,
-      hostLabel: 'Patrick Mini',
+      hostLabel: 'Desktop Mini',
       hostInstanceId: 'host-2',
     });
 

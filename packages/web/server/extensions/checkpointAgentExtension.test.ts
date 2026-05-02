@@ -14,7 +14,7 @@ function createTempRepo(): string {
   tempDirs.push(dir);
   spawnSync('git', ['init', '-q'], { cwd: dir, encoding: 'utf-8' });
   spawnSync('git', ['config', 'user.email', 'patrick@example.com'], { cwd: dir, encoding: 'utf-8' });
-  spawnSync('git', ['config', 'user.name', 'Patrick Lee'], { cwd: dir, encoding: 'utf-8' });
+  spawnSync('git', ['config', 'user.name', 'Test User'], { cwd: dir, encoding: 'utf-8' });
   writeFileSync(join(dir, 'README.md'), '# demo\n');
   spawnSync('git', ['add', 'README.md'], { cwd: dir, encoding: 'utf-8' });
   spawnSync('git', ['commit', '-qm', 'init'], { cwd: dir, encoding: 'utf-8' });

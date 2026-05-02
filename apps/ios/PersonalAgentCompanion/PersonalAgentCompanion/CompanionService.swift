@@ -1712,7 +1712,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                     shortSha: "abc1234",
                     subject: "Add iOS companion parity",
                     body: "Implements richer conversation controls and companion admin screens.",
-                    authorName: "Patrick Lee",
+                    authorName: "Test User",
                     authorEmail: "patrick@example.com",
                     committedAt: now,
                     createdAt: now,
@@ -1734,7 +1734,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                     comments: [
                         ConversationCommitCheckpointComment(
                             id: "comment-1",
-                            authorName: "Patrick Lee",
+                            authorName: "Test User",
                             authorProfile: "assistant",
                             body: "Looks good.",
                             filePath: nil,
@@ -3159,7 +3159,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             shortSha: String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(7)),
             subject: message,
             body: nil,
-            authorName: "Patrick Lee",
+            authorName: "Test User",
             authorEmail: "patrick@example.com",
             committedAt: now,
             createdAt: now,
