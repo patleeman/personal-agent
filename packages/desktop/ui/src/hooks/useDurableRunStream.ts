@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import type { DurableRunDetailResult, DurableRunSseEvent } from '../shared/types';
@@ -53,10 +54,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
 
     const connect = async () => {
       try {
-        const [detail, log] = await Promise.all([
-          api.durableRun(runId),
-          api.durableRunLog(runId, tail),
-        ]);
+        const [detail, log] = await Promise.all([api.durableRun(runId), api.durableRunLog(runId, tail)]);
 
         if (closed) {
           return;
@@ -110,9 +108,10 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
 
           setState((current) => ({
             ...current,
-            log: current.log?.path === payload.path
-              ? { path: current.log.path, log: `${current.log.log}${payload.delta}` }
-              : { path: payload.path, log: payload.delta },
+            log:
+              current.log?.path === payload.path
+                ? { path: current.log.path, log: `${current.log.log}${payload.delta}` }
+                : { path: payload.path, log: payload.delta },
             loading: false,
             error: null,
           }));
@@ -136,9 +135,9 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
         }
 
         if (stream?.readyState === EventSource.CLOSED) {
-          setState((current) => current.detail
-            ? current
-            : { ...current, loading: false, error: current.error ?? 'Live run updates are offline.' });
+          setState((current) =>
+            current.detail ? current : { ...current, loading: false, error: current.error ?? 'Live run updates are offline.' },
+          );
         }
       };
     };

@@ -1,35 +1,78 @@
 #!/bin/bash
-# gitleaks pre-commit hook
-# Scans staged changes for secrets before every commit.
+# pre-commit hook
+# Runs secret scanning, typechecking, linting, and formatting checks.
 # Bypass with: git commit --no-verify
 
 set -euo pipefail
 
-# Check if gitleaks is installed
-if ! command -v gitleaks &>/dev/null; then
-  echo ""
-  echo "============================================"
-  echo "  ⚠️  SECRET SCAN SKIPPED"
-  echo "  gitleaks is not installed."
-  echo ""
-  echo "  Install: brew install gitleaks"
-  echo "  Or bypass permanently: git config --unset core.hooksPath"
-  echo "============================================"
-  echo ""
-  exit 0
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+# ── Helpers ──────────────────────────────────────────────
+
+yellow() { printf "\033[33m%s\033[0m\n" "$*"; }
+green()  { printf "\033[32m%s\033[0m\n" "$*"; }
+red()    { printf "\033[31m%s\033[0m\n" "$*"; }
+
+# Collect staged files that match relevant extensions
+staged_files() {
+  git diff --cached --name-only --diff-filter=ACM "$@" 2>/dev/null || true
+}
+
+# ── 1. Secret scan ───────────────────────────────────────
+
+if command -v gitleaks &>/dev/null; then
+  gitleaks git --staged -v
+  green "✓ secret scan passed"
+else
+  yellow "⚠ gitleaks not installed — skipping secret scan"
 fi
 
-# Scan staged changes
-gitleaks git --staged -v
+# ── 2. Typecheck (fast — whole project) ──────────────────
 
-exit_code=$?
-
-if [ $exit_code -ne 0 ]; then
+if npx --no-install tsc --noEmit &>/dev/null; then
+  green "✓ typecheck passed"
+else
   echo ""
-  echo "============================================"
-  echo "  SECRET SCAN FAILED"
-  echo "  Commit aborted — review findings above."
-  echo "  To bypass: git commit --no-verify"
-  echo "============================================"
+  npx tsc --noEmit 2>&1
+  red "✗ typecheck failed — fix errors above"
   exit 1
 fi
+
+# ── 3. Formatting (staged files only) ────────────────────
+
+STAGED_FILES_STR=$(staged_files | grep -E '\.(ts|tsx|js|jsx|cjs|mjs|json|md|yml|yaml)$' | tr '\n' ' ' || true)
+if [ -n "$STAGED_FILES_STR" ]; then
+  if npx --no-install prettier --check $STAGED_FILES_STR &>/dev/null; then
+    green "✓ formatting passed"
+  else
+    echo ""
+    npx prettier --check $STAGED_FILES_STR 2>&1
+    red "✗ formatting failed — run 'npm run fmt:fix'"
+    exit 1
+  fi
+else
+  green "✓ formatting passed (no staged files)"
+fi
+
+# ── 4. Lint (staged TS/TSX files only) ───────────────────
+
+LINT_FILES=$(staged_files | grep -cE '\.(ts|tsx)$' || true)
+if [ "$LINT_FILES" -gt 0 ]; then
+  FILES=$(staged_files | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
+  if [ -n "$FILES" ]; then
+    if npx --no-install eslint $FILES &>/dev/null; then
+      green "✓ lint passed"
+    else
+      echo ""
+      npx eslint $FILES 2>&1
+      red "✗ lint failed — run 'npm run lint:fix'"
+      exit 1
+    fi
+  fi
+else
+  green "✓ lint passed (no staged TS/TSX files)"
+fi
+
+echo ""
+green "✓ all checks passed"

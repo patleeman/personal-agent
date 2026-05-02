@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { cronMatches, parseCronExpression, parseTaskDefinition } from './tasks-parser.js';
 
 describe('tasks parser', () => {
@@ -50,66 +51,77 @@ Prepare tax checklist.
   });
 
   it('rejects malformed one-time at task timestamps', () => {
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/malformed-reminder.task.md',
-      rawContent: `---
+    expect(() =>
+      parseTaskDefinition({
+        filePath: '/tmp/tasks/malformed-reminder.task.md',
+        rawContent: `---
 at: "9999"
 ---
 Prepare tax checklist.
 `,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('Invalid at timestamp: 9999');
+        defaultTimeoutSeconds: 1800,
+      }),
+    ).toThrow('Invalid at timestamp: 9999');
 
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/overflowed-reminder.task.md',
-      rawContent: `---
+    expect(() =>
+      parseTaskDefinition({
+        filePath: '/tmp/tasks/overflowed-reminder.task.md',
+        rawContent: `---
 at: "2026-02-31T09:00:00.000Z"
 ---
 Prepare tax checklist.
 `,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('Invalid at timestamp: 2026-02-31T09:00:00.000Z');
+        defaultTimeoutSeconds: 1800,
+      }),
+    ).toThrow('Invalid at timestamp: 2026-02-31T09:00:00.000Z');
   });
 
   it('rejects tasks without cron or at schedule', () => {
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/no-schedule.task.md',
-      rawContent: `---
+    expect(() =>
+      parseTaskDefinition({
+        filePath: '/tmp/tasks/no-schedule.task.md',
+        rawContent: `---
 id: no-schedule
 ---
 hello
 `,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('must define one schedule key');
+        defaultTimeoutSeconds: 1800,
+      }),
+    ).toThrow('must define one schedule key');
   });
 
   it('rejects unsafe timeoutSeconds values', () => {
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/unsafe-timeout.task.md',
-      rawContent: `---
+    expect(() =>
+      parseTaskDefinition({
+        filePath: '/tmp/tasks/unsafe-timeout.task.md',
+        rawContent: `---
 cron: "0 * * * *"
 timeoutSeconds: ${Number.MAX_SAFE_INTEGER + 1}
 ---
 hello
 `,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
+        defaultTimeoutSeconds: 1800,
+      }),
+    ).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
 
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/huge-timeout.task.md',
-      rawContent: `---
+    expect(() =>
+      parseTaskDefinition({
+        filePath: '/tmp/tasks/huge-timeout.task.md',
+        rawContent: `---
 cron: "0 * * * *"
 timeoutSeconds: ${Number.MAX_SAFE_INTEGER}
 ---
 hello
 `,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
+        defaultTimeoutSeconds: 1800,
+      }),
+    ).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
   });
 
   it('rejects unsafe cron step values', () => {
-    expect(() => parseCronExpression(`*/${Number.MAX_SAFE_INTEGER + 1} * * * *`))
-      .toThrow(`Invalid minute step value: ${Number.MAX_SAFE_INTEGER + 1}`);
+    expect(() => parseCronExpression(`*/${Number.MAX_SAFE_INTEGER + 1} * * * *`)).toThrow(
+      `Invalid minute step value: ${Number.MAX_SAFE_INTEGER + 1}`,
+    );
   });
 
   it('matches cron expressions using cron day-of-month/day-of-week semantics', () => {

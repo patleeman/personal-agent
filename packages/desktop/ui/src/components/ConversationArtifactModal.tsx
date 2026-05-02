@@ -1,20 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+
+import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
-import { useAppEvents } from '../app/contexts';
 import { useApi } from '../hooks/useApi';
 import { formatDate } from '../shared/utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';
-import { ErrorState, LoadingState, cx } from './ui';
+import { cx, ErrorState, LoadingState } from './ui';
 
-export function ConversationArtifactModal({
-  conversationId,
-  artifactId,
-}: {
-  conversationId: string;
-  artifactId: string;
-}) {
+export function ConversationArtifactModal({ conversationId, artifactId }: { conversationId: string; artifactId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { versions } = useAppEvents();
@@ -23,16 +18,8 @@ export function ConversationArtifactModal({
 
   const artifactFetcher = useCallback(() => api.conversationArtifact(conversationId, artifactId), [artifactId, conversationId]);
   const listFetcher = useCallback(() => api.conversationArtifacts(conversationId), [conversationId]);
-  const {
-    data: artifactData,
-    loading,
-    error,
-    refetch,
-  } = useApi(artifactFetcher, `${conversationId}:${artifactId}`);
-  const {
-    data: artifactListData,
-    refetch: refetchList,
-  } = useApi(listFetcher, `${conversationId}:artifacts`);
+  const { data: artifactData, loading, error, refetch } = useApi(artifactFetcher, `${conversationId}:${artifactId}`);
+  const { data: artifactListData, refetch: refetchList } = useApi(listFetcher, `${conversationId}:artifacts`);
 
   useEffect(() => {
     setShowSource(false);
@@ -54,12 +41,15 @@ export function ConversationArtifactModal({
     });
   }, [location.pathname, location.search, navigate]);
 
-  const openArtifact = useCallback((nextArtifactId: string) => {
-    navigate({
-      pathname: location.pathname,
-      search: setConversationArtifactIdInSearch(location.search, nextArtifactId),
-    });
-  }, [location.pathname, location.search, navigate]);
+  const openArtifact = useCallback(
+    (nextArtifactId: string) => {
+      navigate({
+        pathname: location.pathname,
+        search: setConversationArtifactIdInSearch(location.search, nextArtifactId),
+      });
+    },
+    [location.pathname, location.search, navigate],
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -112,37 +102,45 @@ export function ConversationArtifactModal({
         <div className="border-b border-border-subtle px-4 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0 flex flex-1 items-center gap-2.5">
-              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim/80">
-                {artifact?.kind ?? 'artifact'}
-              </span>
+              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim/80">{artifact?.kind ?? 'artifact'}</span>
               <h2
                 className="min-w-0 truncate text-[14px] font-medium text-primary"
-                title={artifact
-                  ? `${artifact.title} · ${artifact.id} · rev ${artifact.revision} · updated ${formatDate(artifact.updatedAt)}`
-                  : artifactId}
+                title={
+                  artifact
+                    ? `${artifact.title} · ${artifact.id} · rev ${artifact.revision} · updated ${formatDate(artifact.updatedAt)}`
+                    : artifactId
+                }
               >
                 {artifact?.title ?? artifactId}
               </h2>
-              {artifact ? (
-                <span className="hidden shrink-0 text-[11px] text-dim sm:inline">
-                  rev {artifact.revision}
-                </span>
-              ) : null}
+              {artifact ? <span className="hidden shrink-0 text-[11px] text-dim sm:inline">rev {artifact.revision}</span> : null}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {artifact ? (
                 <>
-                  <button type="button" onClick={() => { void copySource(); }} className="ui-toolbar-button px-2 py-1 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void copySource();
+                    }}
+                    className="ui-toolbar-button px-2 py-1 text-[10px]"
+                  >
                     {copied ? 'copied' : artifact.kind === 'latex' ? 'copy latex' : 'copy source'}
                   </button>
                   {artifact.kind !== 'latex' ? (
-                    <button type="button" onClick={() => setShowSource((current) => !current)} className="ui-toolbar-button px-2 py-1 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setShowSource((current) => !current)}
+                      className="ui-toolbar-button px-2 py-1 text-[10px]"
+                    >
                       {showSource ? 'hide source' : 'show source'}
                     </button>
                   ) : null}
                 </>
               ) : null}
-              <button type="button" onClick={closeArtifact} className="ui-toolbar-button px-2 py-1 text-[10px]">close</button>
+              <button type="button" onClick={closeArtifact} className="ui-toolbar-button px-2 py-1 text-[10px]">
+                close
+              </button>
             </div>
           </div>
         </div>

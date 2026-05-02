@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { type ChildProcess, spawn } from 'child_process';
 
 export interface DaemonPowerStatus {
   keepAwake: boolean;

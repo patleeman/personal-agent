@@ -1,4 +1,5 @@
 import { dirname, join } from 'node:path';
+
 import { LocalWhisperTranscriptionProvider } from './localWhisperProvider.js';
 import { StaticTranscriptionProviderRegistry } from './registry.js';
 import type { TranscriptionProviderRegistry, TranscriptionSettings } from './types.js';

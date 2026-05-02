@@ -76,10 +76,7 @@ function createResponse() {
   };
 }
 
-function createHarness(options?: {
-  profile?: string;
-  repoRoot?: string;
-}) {
+function createHarness(options?: { profile?: string; repoRoot?: string }) {
   const getHandlers = new Map<string, Handler>();
   const router = {
     get: vi.fn((path: string, handler: Handler) => {
@@ -129,28 +126,32 @@ describe('registerMemoryNotesRoutes', () => {
 
     listProfilesMock.mockReturnValueOnce(['assistant', 'other']);
     resolveResourceProfileMock.mockReturnValueOnce({
-      agentsFiles: [
-        '/profiles/other/AGENTS.md',
-        '/shared/skills/agent-browser/SKILL.md',
-        '/vault/AGENTS.md',
-      ],
+      agentsFiles: ['/profiles/other/AGENTS.md', '/shared/skills/agent-browser/SKILL.md', '/vault/AGENTS.md'],
     });
     existsSyncMock.mockImplementation((path: string) => path !== '/vault/AGENTS.md');
     readFileSyncMock.mockImplementation((path: string) => `content:${path}`);
     listSkillsForProfileMock.mockReturnValueOnce(skills);
     listMemoryDocsMock.mockReturnValueOnce(memoryDocs);
-    buildRecentReadUsageMock.mockReturnValueOnce(new Map([
-      ['/skills/agent-browser/SKILL.md', {
-        recentSessionCount: 3,
-        lastUsedAt: '2026-04-09T16:00:00.000Z',
-        usedInLastSession: true,
-      }],
-      ['/notes/Desktop GPU-Enabled Server Notes.md', {
-        recentSessionCount: 1,
-        lastUsedAt: '2026-04-08T10:00:00.000Z',
-        usedInLastSession: false,
-      }],
-    ]));
+    buildRecentReadUsageMock.mockReturnValueOnce(
+      new Map([
+        [
+          '/skills/agent-browser/SKILL.md',
+          {
+            recentSessionCount: 3,
+            lastUsedAt: '2026-04-09T16:00:00.000Z',
+            usedInLastSession: true,
+          },
+        ],
+        [
+          '/notes/Desktop GPU-Enabled Server Notes.md',
+          {
+            recentSessionCount: 1,
+            lastUsedAt: '2026-04-08T10:00:00.000Z',
+            usedInLastSession: false,
+          },
+        ],
+      ]),
+    );
 
     handler({ query: { viewProfile: 'other' } }, res);
 
@@ -234,9 +235,12 @@ describe('registerMemoryNotesRoutes', () => {
     });
     const failureRes = createResponse();
     handler({ query: {} }, failureRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'resolve failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'resolve failed',
+      }),
+    );
     expect(failureRes.status).toHaveBeenCalledWith(500);
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'resolve failed' });
   });
@@ -264,11 +268,13 @@ describe('registerMemoryNotesRoutes', () => {
     });
     const failureRes = createResponse();
     handler({}, failureRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'vault failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'vault failed',
+      }),
+    );
     expect(failureRes.status).toHaveBeenCalledWith(500);
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'vault failed' });
   });
-
 });

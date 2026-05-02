@@ -1,8 +1,9 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { MentionMenu, ModelPicker, SlashMenu } from './ConversationComposerMenus';
+
 import type { ModelInfo } from '../../shared/types';
+import { MentionMenu, ModelPicker, SlashMenu } from './ConversationComposerMenus';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -14,14 +15,7 @@ const models: ModelInfo[] = [
 describe('ConversationComposerMenus', () => {
   it('renders grouped model choices and focused/current affordances', () => {
     const html = renderToString(
-      <ModelPicker
-        models={models}
-        currentModel="model-a"
-        query="model"
-        idx={1}
-        onSelect={vi.fn()}
-        onClose={vi.fn()}
-      />,
+      <ModelPicker models={models} currentModel="model-a" query="model" idx={1} onSelect={vi.fn()} onClose={vi.fn()} />,
     );
 
     expect(html).toContain('Switch model');
@@ -34,16 +28,7 @@ describe('ConversationComposerMenus', () => {
   });
 
   it('renders an empty model state with the query', () => {
-    const html = renderToString(
-      <ModelPicker
-        models={[]}
-        currentModel=""
-        query="missing"
-        idx={0}
-        onSelect={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    const html = renderToString(<ModelPicker models={[]} currentModel="" query="missing" idx={0} onSelect={vi.fn()} onClose={vi.fn()} />);
 
     expect(html).toContain('No models match');
     expect(html).toContain('missing');

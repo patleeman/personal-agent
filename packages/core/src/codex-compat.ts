@@ -11,8 +11,30 @@ export type CompatDisplayBlock =
   | { type: 'context'; id: string; ts: string; text: string; customType?: string }
   | { type: 'summary'; id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string; detail?: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
-  | { type: 'image'; id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
+  | {
+      type: 'tool_use';
+      id: string;
+      ts: string;
+      tool: string;
+      input: Record<string, unknown>;
+      output: string;
+      durationMs?: number;
+      toolCallId: string;
+      details?: unknown;
+      outputDeferred?: boolean;
+    }
+  | {
+      type: 'image';
+      id: string;
+      ts: string;
+      alt: string;
+      src?: string;
+      mimeType?: string;
+      width?: number;
+      height?: number;
+      caption?: string;
+      deferred?: boolean;
+    }
   | { type: 'error'; id: string; ts: string; tool?: string; message: string };
 
 export interface CompatSessionMeta {
@@ -58,7 +80,16 @@ export type CodexThreadItem =
   | { type: 'userMessage'; id: string; content: CodexUserInput[] }
   | { type: 'agentMessage'; id: string; text: string; phase: string | null; memoryCitation: unknown }
   | { type: 'reasoning'; id: string; summary: string[]; content: string[] }
-  | { type: 'dynamicToolCall'; id: string; tool: string; arguments: unknown; status: 'inProgress' | 'completed' | 'failed'; contentItems: Array<{ type: 'inputText'; text: string } | { type: 'inputImage'; imageUrl: string }> | null; success: boolean | null; durationMs: number | null };
+  | {
+      type: 'dynamicToolCall';
+      id: string;
+      tool: string;
+      arguments: unknown;
+      status: 'inProgress' | 'completed' | 'failed';
+      contentItems: Array<{ type: 'inputText'; text: string } | { type: 'inputImage'; imageUrl: string }> | null;
+      success: boolean | null;
+      durationMs: number | null;
+    };
 
 export interface CodexTurnError {
   message: string;
@@ -243,9 +274,7 @@ function finalizeTurn(turnId: string, blocks: CompatDisplayBlock[]): CodexTurn |
   const startedAt = toUnixSeconds(blocks[0]?.ts);
   const completedAt = toUnixSeconds(blocks[blocks.length - 1]?.ts);
   const errorBlock = blocks.find((block): block is Extract<CompatDisplayBlock, { type: 'error' }> => block.type === 'error') ?? null;
-  const items = blocks
-    .map((block) => blockToThreadItem(block))
-    .filter((item): item is CodexThreadItem => item !== null);
+  const items = blocks.map((block) => blockToThreadItem(block)).filter((item): item is CodexThreadItem => item !== null);
 
   return {
     id: turnId,
@@ -311,10 +340,7 @@ export function buildCodexThreadFromSessionDetail(input: {
   };
 }
 
-export function buildSessionMetaFromCodexThread(input: {
-  thread: CodexThread;
-  model: string;
-}): CompatSessionMeta {
+export function buildSessionMetaFromCodexThread(input: { thread: CodexThread; model: string }): CompatSessionMeta {
   const fallbackTimestamp = toIsoStringFromSeconds(input.thread.createdAt, new Date().toISOString());
   return {
     id: input.thread.id,
@@ -331,10 +357,7 @@ export function buildSessionMetaFromCodexThread(input: {
   };
 }
 
-export function buildSessionDetailFromCodexThread(input: {
-  thread: CodexThread;
-  model: string;
-}): CompatSessionDetail {
+export function buildSessionDetailFromCodexThread(input: { thread: CodexThread; model: string }): CompatSessionDetail {
   const blocks: CompatDisplayBlock[] = [];
   const meta = buildSessionMetaFromCodexThread(input);
 

@@ -1,10 +1,9 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+
 import type { TranscriptionProviderId, TranscriptionSettings } from './types.js';
 
-const TRANSCRIPTION_PROVIDER_IDS: TranscriptionProviderId[] = [
-  'local-whisper',
-];
+const TRANSCRIPTION_PROVIDER_IDS: TranscriptionProviderId[] = ['local-whisper'];
 
 const DEFAULT_TRANSCRIPTION_MODEL = 'base.en';
 const DEFAULT_TRANSCRIPTION_PROVIDER: TranscriptionProviderId = 'local-whisper';
@@ -30,13 +29,8 @@ export function isTranscriptionProviderId(value: unknown): value is Transcriptio
   return typeof value === 'string' && TRANSCRIPTION_PROVIDER_IDS.includes(value as TranscriptionProviderId);
 }
 
-function normalizeTranscriptionModelForProvider(
-  provider: TranscriptionProviderId | null,
-  value: unknown,
-): string {
-  const model = typeof value === 'string' && value.trim().length > 0
-    ? value.trim()
-    : DEFAULT_TRANSCRIPTION_MODEL;
+function normalizeTranscriptionModelForProvider(provider: TranscriptionProviderId | null, value: unknown): string {
+  const model = typeof value === 'string' && value.trim().length > 0 ? value.trim() : DEFAULT_TRANSCRIPTION_MODEL;
 
   if (CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model)) {
     return DEFAULT_TRANSCRIPTION_MODEL;
@@ -47,11 +41,8 @@ function normalizeTranscriptionModelForProvider(
 
 function normalizeTranscriptionSettings(value: unknown): TranscriptionSettings {
   const input = isRecord(value) ? value : {};
-  const provider = 'provider' in input
-    ? isTranscriptionProviderId(input.provider)
-      ? input.provider
-      : null
-    : DEFAULT_TRANSCRIPTION_PROVIDER;
+  const provider =
+    'provider' in input ? (isTranscriptionProviderId(input.provider) ? input.provider : null) : DEFAULT_TRANSCRIPTION_PROVIDER;
   const model = normalizeTranscriptionModelForProvider(provider, input.model);
 
   return { provider, model };
@@ -68,9 +59,7 @@ export function readTranscriptionSettings(settingsFile: string): TranscriptionSe
 }
 
 export function writeTranscriptionSettings(settingsFile: string, update: Partial<TranscriptionSettings>): TranscriptionSettings {
-  const root = existsSync(settingsFile)
-    ? JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown
-    : {};
+  const root = existsSync(settingsFile) ? (JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown) : {};
   const currentRoot = isRecord(root) ? root : {};
   const current = normalizeTranscriptionSettings(currentRoot.transcription);
 
@@ -80,10 +69,17 @@ export function writeTranscriptionSettings(settingsFile: string, update: Partial
   });
 
   mkdirSync(dirname(settingsFile), { recursive: true });
-  writeFileSync(settingsFile, JSON.stringify({
-    ...currentRoot,
-    transcription: next,
-  }, null, 2));
+  writeFileSync(
+    settingsFile,
+    JSON.stringify(
+      {
+        ...currentRoot,
+        transcription: next,
+      },
+      null,
+      2,
+    ),
+  );
 
   return next;
 }

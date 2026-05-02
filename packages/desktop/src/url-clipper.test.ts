@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { importClipboardUrlToKnowledge, normalizeClipboardUrl, type DesktopUrlClipperHost } from './url-clipper.js';
+
+import { type DesktopUrlClipperHost, importClipboardUrlToKnowledge, normalizeClipboardUrl } from './url-clipper.js';
 
 function jsonResponse(statusCode: number, body: unknown) {
   return {
@@ -34,11 +35,13 @@ describe('importClipboardUrlToKnowledge', () => {
   it('imports the clipboard URL into the Knowledge Inbox', async () => {
     const { host, dispatchApiRequest } = createHost();
 
-    await expect(importClipboardUrlToKnowledge({
-      host,
-      clipboardText: 'https://example.com/article',
-      createdAt: '2026-04-25T12:00:00.000Z',
-    })).resolves.toEqual({ title: 'Example', note: { id: 'Inbox/example.md' } });
+    await expect(
+      importClipboardUrlToKnowledge({
+        host,
+        clipboardText: 'https://example.com/article',
+        createdAt: '2026-04-25T12:00:00.000Z',
+      }),
+    ).resolves.toEqual({ title: 'Example', note: { id: 'Inbox/example.md' } });
 
     expect(host.ensureActiveHostRunning).toHaveBeenCalledOnce();
     expect(dispatchApiRequest).toHaveBeenCalledWith({
@@ -57,9 +60,11 @@ describe('importClipboardUrlToKnowledge', () => {
   it('surfaces API errors', async () => {
     const { host } = createHost(jsonResponse(500, { error: 'boom' }));
 
-    await expect(importClipboardUrlToKnowledge({
-      host,
-      clipboardText: 'https://example.com/article',
-    })).rejects.toThrow('boom');
+    await expect(
+      importClipboardUrlToKnowledge({
+        host,
+        clipboardText: 'https://example.com/article',
+      }),
+    ).rejects.toThrow('boom');
   });
 });

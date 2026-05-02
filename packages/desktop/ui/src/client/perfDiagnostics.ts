@@ -65,9 +65,7 @@ function safeParsePerfMeta(value: string | null): Record<string, unknown> | null
 
   try {
     const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
   }
@@ -117,11 +115,7 @@ export function ensureConversationOpenStart(conversationId: string, source = 'ro
   markConversationOpenStart(normalizedConversationId, source);
 }
 
-export function completeConversationOpenPhase(
-  conversationId: string,
-  phase: 'content' | 'rail',
-  meta?: Record<string, unknown>,
-): void {
+export function completeConversationOpenPhase(conversationId: string, phase: 'content' | 'rail', meta?: Record<string, unknown>): void {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) {
     return;

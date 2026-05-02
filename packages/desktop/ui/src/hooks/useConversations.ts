@@ -10,14 +10,18 @@
  * Pinning removes a conversation from openIds and keeps it in the pinned shelf instead.
  */
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../client/api';
+
 import { LiveTitlesContext, useAppData, useSseConnection } from '../app/contexts';
+import { api } from '../client/api';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { fetchSessionsSnapshot } from '../session/sessionSnapshot';
 import {
   closeConversationTab,
-  moveConversationTab,
   CONVERSATION_LAYOUT_CHANGED_EVENT,
+  type ConversationLayout,
+  type ConversationShelf,
+  moveConversationTab,
+  type OpenConversationDropPosition,
   openConversationTab,
   pinConversationTab,
   readArchivedSessionIds,
@@ -28,9 +32,6 @@ import {
   replaceConversationLayout,
   setConversationArchivedState,
   shiftConversationTab,
-  type ConversationLayout,
-  type ConversationShelf,
-  type OpenConversationDropPosition,
   unpinConversationTab,
 } from '../session/sessionTabs';
 import type { SessionMeta } from '../shared/types';
@@ -39,11 +40,14 @@ function compareSessionsByRecentActivity(left: SessionMeta, right: SessionMeta):
   return (right.lastActivityAt ?? right.timestamp).localeCompare(left.lastActivityAt ?? left.timestamp);
 }
 
-function applyLayoutState(layout: ConversationLayout, setters: {
-  setOpenIds: (ids: string[]) => void;
-  setPinnedIds: (ids: string[]) => void;
-  setArchivedConversationIds: (ids: string[]) => void;
-}) {
+function applyLayoutState(
+  layout: ConversationLayout,
+  setters: {
+    setOpenIds: (ids: string[]) => void;
+    setPinnedIds: (ids: string[]) => void;
+    setArchivedConversationIds: (ids: string[]) => void;
+  },
+) {
   setters.setOpenIds(layout.sessionIds);
   setters.setPinnedIds(layout.pinnedSessionIds);
   setters.setArchivedConversationIds(layout.archivedSessionIds);
@@ -90,14 +94,19 @@ export function useConversations() {
       return;
     }
 
-    void api.openConversationTabs()
+    void api
+      .openConversationTabs()
       .then(({ sessionIds, pinnedSessionIds, archivedSessionIds }) => {
         if (cancelled || (sessionIds.length === 0 && pinnedSessionIds.length === 0 && archivedSessionIds.length === 0)) {
           return;
         }
 
         const currentLayout = readConversationLayout();
-        if (currentLayout.sessionIds.length > 0 || currentLayout.pinnedSessionIds.length > 0 || currentLayout.archivedSessionIds.length > 0) {
+        if (
+          currentLayout.sessionIds.length > 0 ||
+          currentLayout.pinnedSessionIds.length > 0 ||
+          currentLayout.archivedSessionIds.length > 0
+        ) {
           return;
         }
 
@@ -126,13 +135,9 @@ export function useConversations() {
 
     const nextRunningAutomationIds = new Set(tasks.filter((task) => task.running).map((task) => task.id));
     const newlyRunningThreadIds = new Set(
-      tasks.flatMap((task) => (
-        task.running
-          && task.threadConversationId
-          && !seenRunningAutomationIdsRef.current.has(task.id)
-          ? [task.threadConversationId]
-          : []
-      )),
+      tasks.flatMap((task) =>
+        task.running && task.threadConversationId && !seenRunningAutomationIdsRef.current.has(task.id) ? [task.threadConversationId] : [],
+      ),
     );
 
     if (newlyRunningThreadIds.size > 0) {
@@ -200,15 +205,13 @@ export function useConversations() {
     return reopenedSessionId;
   }, []);
 
-  const moveSession = useCallback((
-    sessionId: string,
-    targetSection: ConversationShelf,
-    targetSessionId?: string | null,
-    position?: OpenConversationDropPosition,
-  ) => {
-    const nextLayout = moveConversationTab(sessionId, targetSection, targetSessionId, position);
-    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
-  }, []);
+  const moveSession = useCallback(
+    (sessionId: string, targetSection: ConversationShelf, targetSessionId?: string | null, position?: OpenConversationDropPosition) => {
+      const nextLayout = moveConversationTab(sessionId, targetSection, targetSessionId, position);
+      applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+    },
+    [],
+  );
 
   const shiftSession = useCallback((sessionId: string, direction: -1 | 1) => {
     const nextLayout = shiftConversationTab(sessionId, direction);
@@ -216,17 +219,28 @@ export function useConversations() {
   }, []);
 
   const automationThreadTitleBySessionId = useMemo(
-    () => new Map((tasks ?? []).flatMap((task) => task.threadConversationId ? [[task.threadConversationId, task.threadTitle ?? task.title ?? `Automation: ${task.id}`] as const] : [])),
+    () =>
+      new Map(
+        (tasks ?? []).flatMap((task) =>
+          task.threadConversationId
+            ? [[task.threadConversationId, task.threadTitle ?? task.title ?? `Automation: ${task.id}`] as const]
+            : [],
+        ),
+      ),
     [tasks],
   );
 
-  const withTitles = useMemo(() => (sessions ?? []).map((session) => {
-    const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
-    const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
-    const title = liveTitle ?? sessionTitle;
+  const withTitles = useMemo(
+    () =>
+      (sessions ?? []).map((session) => {
+        const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
+        const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
+        const title = liveTitle ?? sessionTitle;
 
-    return title === session.title ? session : { ...session, title };
-  }), [liveTitles, sessions]);
+        return title === session.title ? session : { ...session, title };
+      }),
+    [liveTitles, sessions],
+  );
   const openIdSet = useMemo(() => new Set(openIds), [openIds]);
   const pinnedIdSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
   const sessionsById = useMemo(
@@ -234,31 +248,37 @@ export function useConversations() {
     [withTitles],
   );
   const pinnedSessions = useMemo(
-    () => pinnedIds.map((id) => {
-      const session = sessionsById.get(id);
-      if (session) {
-        return session;
-      }
+    () =>
+      pinnedIds.map((id) => {
+        const session = sessionsById.get(id);
+        if (session) {
+          return session;
+        }
 
-      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? automationThreadTitleBySessionId.get(id) ?? 'Connecting…');
-    }),
+        return buildPlaceholderSessionMeta(
+          id,
+          normalizeConversationTitle(liveTitles.get(id)) ?? automationThreadTitleBySessionId.get(id) ?? 'Connecting…',
+        );
+      }),
     [automationThreadTitleBySessionId, liveTitles, pinnedIds, sessionsById],
   );
   const tabs = useMemo(
-    () => openIds.map((id) => {
-      const session = sessionsById.get(id);
-      if (session) {
-        return session;
-      }
+    () =>
+      openIds.map((id) => {
+        const session = sessionsById.get(id);
+        if (session) {
+          return session;
+        }
 
-      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? automationThreadTitleBySessionId.get(id) ?? 'Connecting…');
-    }),
+        return buildPlaceholderSessionMeta(
+          id,
+          normalizeConversationTitle(liveTitles.get(id)) ?? automationThreadTitleBySessionId.get(id) ?? 'Connecting…',
+        );
+      }),
     [automationThreadTitleBySessionId, liveTitles, openIds, sessionsById],
   );
   const archivedSessions = useMemo(
-    () => withTitles
-      .filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id))
-      .sort(compareSessionsByRecentActivity),
+    () => withTitles.filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id)).sort(compareSessionsByRecentActivity),
     [openIdSet, pinnedIdSet, withTitles],
   );
   const loading = sessions === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');

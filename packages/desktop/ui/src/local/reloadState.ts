@@ -107,22 +107,26 @@ export function useReloadState<T>({
   deserialize,
   shouldPersist,
 }: UseReloadStateOptions<T>) {
-  const [state, setState] = useState<T>(() => readStoredState({
-    key: storageKey,
-    fallback: initialValue,
-    storage,
-    deserialize,
-  }));
-  const hydratedKeyRef = useRef(storageKey);
-
-  useLayoutEffect(() => {
-    hydratedKeyRef.current = storageKey;
-    setState(readStoredState({
+  const [state, setState] = useState<T>(() =>
+    readStoredState({
       key: storageKey,
       fallback: initialValue,
       storage,
       deserialize,
-    }));
+    }),
+  );
+  const hydratedKeyRef = useRef(storageKey);
+
+  useLayoutEffect(() => {
+    hydratedKeyRef.current = storageKey;
+    setState(
+      readStoredState({
+        key: storageKey,
+        fallback: initialValue,
+        storage,
+        deserialize,
+      }),
+    );
   }, [storageKey, initialValue, storage, deserialize]);
 
   useEffect(() => {

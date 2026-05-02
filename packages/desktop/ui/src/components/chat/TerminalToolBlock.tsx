@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
+
 import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
-import { Pill, cx } from '../ui';
+import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
+import { cx, Pill } from '../ui';
 import { MessageActions } from './MessageActions.js';
 
 const TerminalToolBlock = memo(function TerminalToolBlock({
@@ -46,10 +47,7 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
 
   return (
     <div className="group space-y-1.5">
-      <div className={cx(
-        'ui-terminal-block',
-        isError ? 'border-danger/35' : null,
-      )}>
+      <div className={cx('ui-terminal-block', isError ? 'border-danger/35' : null)}>
         <div className="ui-terminal-block__chrome flex items-center gap-2 border-b px-3 py-2 text-[11px]">
           {isRunning ? (
             <span className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
@@ -57,13 +55,19 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
             <span className={cx('w-3 shrink-0 text-center', isError ? 'text-danger' : 'text-accent')}>$</span>
           )}
           <span className="min-w-0 flex-1 break-all text-primary">{presentation.command}</span>
-          {presentation.excludeFromContext && <Pill tone="warning" mono>no context</Pill>}
+          {presentation.excludeFromContext && (
+            <Pill tone="warning" mono>
+              no context
+            </Pill>
+          )}
         </div>
 
         {hasBody && (
           <div className="px-3 py-2.5">
             {block.output ? (
-              <pre className={cx('whitespace-pre-wrap break-all text-[11px] leading-relaxed', isError ? 'text-danger/85' : 'text-secondary')}>
+              <pre
+                className={cx('whitespace-pre-wrap break-all text-[11px] leading-relaxed', isError ? 'text-danger/85' : 'text-secondary')}
+              >
                 {block.output}
               </pre>
             ) : isRunning ? (
@@ -78,13 +82,13 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
           {footerBits.map((bit) => (
             <span key={bit}>{bit}</span>
           ))}
-          {presentation.fullOutputPath && (
-            <span className="min-w-0 break-all text-dim/80">{presentation.fullOutputPath}</span>
-          )}
+          {presentation.fullOutputPath && <span className="min-w-0 break-all text-dim/80">{presentation.fullOutputPath}</span>}
           {outputDeferred && blockId && (
             <button
               type="button"
-              onClick={() => { void onHydrateMessage?.(blockId); }}
+              onClick={() => {
+                void onHydrateMessage?.(blockId);
+              }}
               disabled={hydratingDeferredOutput}
               className="ui-action-button text-[10px]"
             >
@@ -102,6 +106,5 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
     </div>
   );
 });
-
 
 export { TerminalToolBlock };

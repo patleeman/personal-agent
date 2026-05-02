@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
+
 import { validateActivityId } from './activity.js';
 import { validateConversationId } from './conversation-project-links.js';
 import { getStateRoot } from './runtime/paths.js';
@@ -27,9 +28,7 @@ function getActivityConversationLinkStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -52,13 +51,7 @@ function normalizeRelatedConversationIds(conversationIds: string[]): string[] {
 
 export function resolveProfileActivityConversationLinksDir(options: ResolveActivityConversationLinkOptions): string {
   validateProfileName(options.profile);
-  return join(
-    getActivityConversationLinkStateRoot(options.stateRoot),
-    'pi-agent',
-    'state',
-    'activity-conversation-links',
-    options.profile,
-  );
+  return join(getActivityConversationLinkStateRoot(options.stateRoot), 'pi-agent', 'state', 'activity-conversation-links', options.profile);
 }
 
 export function resolveActivityConversationLinkPath(options: ResolveActivityConversationLinkPathOptions): string {
@@ -116,7 +109,9 @@ export function writeActivityConversationLink(options: {
     relatedConversationIds: normalizeRelatedConversationIds(options.document.relatedConversationIds),
   };
 
-  mkdirSync(resolveProfileActivityConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile }), { recursive: true });
+  mkdirSync(resolveProfileActivityConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile }), {
+    recursive: true,
+  });
   writeFileSync(path, JSON.stringify(normalized, null, 2) + '\n');
   return path;
 }
@@ -149,11 +144,7 @@ export function setActivityConversationLinks(options: {
   return document;
 }
 
-export function clearActivityConversationLinks(options: {
-  stateRoot?: string;
-  profile: string;
-  activityId: string;
-}): void {
+export function clearActivityConversationLinks(options: { stateRoot?: string; profile: string; activityId: string }): void {
   const path = resolveActivityConversationLinkPath(options);
   rmSync(path, { force: true });
 }

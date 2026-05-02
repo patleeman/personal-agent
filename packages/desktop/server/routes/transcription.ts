@@ -1,5 +1,5 @@
 import type { Express } from 'express';
-import type { ServerRouteContext } from './context.js';
+
 import {
   buildTranscriptionSettingsState,
   createTranscriptionProviderRegistry,
@@ -8,6 +8,7 @@ import {
   writeTranscriptionSettings,
 } from '../transcription/index.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
+import type { ServerRouteContext } from './context.js';
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -29,17 +30,21 @@ export function readRequiredBase64(value: unknown, label: string): Buffer {
 }
 
 function isTranscriptionClientInputError(message: string): boolean {
-  return message.endsWith(' is required.')
-    || message.endsWith(' must contain valid base64 data.')
-    || message.endsWith(' must decode to non-empty data.');
+  return (
+    message.endsWith(' is required.') ||
+    message.endsWith(' must contain valid base64 data.') ||
+    message.endsWith(' must decode to non-empty data.')
+  );
 }
 
 function isTranscriptionProviderClientError(message: string): boolean {
-  return message.includes('Choose a transcription provider')
-    || message.includes('Unsupported transcription provider')
-    || message.endsWith(' does not support model installation.')
-    || message.endsWith(' does not expose model status.')
-    || message.endsWith(' is not implemented yet.');
+  return (
+    message.includes('Choose a transcription provider') ||
+    message.includes('Unsupported transcription provider') ||
+    message.endsWith(' does not support model installation.') ||
+    message.endsWith(' does not expose model status.') ||
+    message.endsWith(' is not implemented yet.')
+  );
 }
 
 export function registerTranscriptionRoutes(
@@ -76,10 +81,9 @@ export function registerTranscriptionRoutes(
         update.model = model;
       }
 
-      persistSettingsWrite(
-        (settingsFile) => writeTranscriptionSettings(settingsFile, update),
-        { runtimeSettingsFile: context.getSettingsFile() },
-      );
+      persistSettingsWrite((settingsFile) => writeTranscriptionSettings(settingsFile, update), {
+        runtimeSettingsFile: context.getSettingsFile(),
+      });
       res.json(buildTranscriptionSettingsState(context.getSettingsFile()));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -97,17 +101,21 @@ export function registerTranscriptionRoutes(
       }
 
       const body = req.body as { dataBase64?: unknown; mimeType?: unknown; fileName?: unknown; language?: unknown };
-      const result = await provider.transcribeFile({
-        data: readRequiredBase64(body.dataBase64, 'dataBase64'),
-        mimeType: readOptionalString(body.mimeType) ?? 'audio/pcm',
-        fileName: readOptionalString(body.fileName),
-      }, {
-        language: readOptionalString(body.language),
-      });
+      const result = await provider.transcribeFile(
+        {
+          data: readRequiredBase64(body.dataBase64, 'dataBase64'),
+          mimeType: readOptionalString(body.mimeType) ?? 'audio/pcm',
+          fileName: readOptionalString(body.fileName),
+        },
+        {
+          language: readOptionalString(body.language),
+        },
+      );
       res.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      res.status(message.includes('Choose a transcription provider') || isTranscriptionClientInputError(message) ? 400 : 500)
+      res
+        .status(message.includes('Choose a transcription provider') || isTranscriptionClientInputError(message) ? 400 : 500)
         .json({ error: message });
     }
   });

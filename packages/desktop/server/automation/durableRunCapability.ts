@@ -1,16 +1,8 @@
-import {
-  markDurableRunAttentionRead,
-  markDurableRunAttentionUnread,
-} from '@personal-agent/core';
-import {
-  cancelDurableRun,
-  clearDurableRunsListCache,
-  getDurableRun,
-  getDurableRunLog,
-  listDurableRuns,
-} from './durableRuns.js';
-import { getDurableRunAttentionSignature } from './durableRunAttention.js';
+import { markDurableRunAttentionRead, markDurableRunAttentionUnread } from '@personal-agent/core';
+
 import { invalidateAppTopics } from '../shared/appEvents.js';
+import { getDurableRunAttentionSignature } from './durableRunAttention.js';
+import { cancelDurableRun, clearDurableRunsListCache, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 
 export class DurableRunCapabilityInputError extends Error {}
 
@@ -32,18 +24,14 @@ export async function readDurableRunCapability(runId: string) {
   return result;
 }
 
-export async function readDurableRunLogCapability(input: {
-  runId: string;
-  tail?: number;
-}) {
+export async function readDurableRunLogCapability(input: { runId: string; tail?: number }) {
   const normalizedRunId = input.runId.trim();
   if (!normalizedRunId) {
     throw new DurableRunCapabilityInputError('runId required');
   }
 
-  const tail = typeof input.tail === 'number' && Number.isSafeInteger(input.tail) && input.tail > 0
-    ? Math.min(1000, input.tail as number)
-    : 120;
+  const tail =
+    typeof input.tail === 'number' && Number.isSafeInteger(input.tail) && input.tail > 0 ? Math.min(1000, input.tail as number) : 120;
   const result = await getDurableRunLog(normalizedRunId, tail);
   if (!result) {
     throw new Error('Run not found');
@@ -61,10 +49,7 @@ export async function cancelDurableRunCapability(runId: string) {
   return cancelDurableRun(normalizedRunId);
 }
 
-export async function markDurableRunAttentionCapability(input: {
-  runId: string;
-  read?: boolean;
-}) {
+export async function markDurableRunAttentionCapability(input: { runId: string; read?: boolean }) {
   const normalizedRunId = input.runId.trim();
   if (!normalizedRunId) {
     throw new DurableRunCapabilityInputError('runId required');

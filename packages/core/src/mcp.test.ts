@@ -2,7 +2,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   callMcpTool,
   inspectMcpServer,
@@ -23,26 +25,33 @@ function makeTempDir(prefix: string): string {
 describe('mcp config helpers', () => {
   it('reads configured servers from mcp_servers.json', () => {
     const cwd = makeTempDir('pa-mcp-config');
-    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
-      mcpServers: {
-        atlassian: {
-          command: 'npx',
-          args: ['-y', 'mcp-remote@latest', 'https://mcp.atlassian.com/v1/mcp', '--resource', 'https://datadoghq.atlassian.net/'],
+    writeFileSync(
+      join(cwd, 'mcp_servers.json'),
+      JSON.stringify(
+        {
+          mcpServers: {
+            atlassian: {
+              command: 'npx',
+              args: ['-y', 'mcp-remote@latest', 'https://mcp.atlassian.com/v1/mcp', '--resource', 'https://datadoghq.atlassian.net/'],
+            },
+            slack: {
+              type: 'remote',
+              url: 'https://mcp.slack.com/mcp',
+              callback: { host: 'localhost', port: 3118, path: '/callback' },
+              oauth: { clientId: 'client-123' },
+            },
+            local: {
+              command: 'node',
+              args: ['server.mjs'],
+              cwd: '/tmp/mcp',
+              env: { TOKEN: 'secret', NUMBER: 1 },
+            },
+          },
         },
-        slack: {
-          type: 'remote',
-          url: 'https://mcp.slack.com/mcp',
-          callback: { host: 'localhost', port: 3118, path: '/callback' },
-          oauth: { clientId: 'client-123' },
-        },
-        local: {
-          command: 'node',
-          args: ['server.mjs'],
-          cwd: '/tmp/mcp',
-          env: { TOKEN: 'secret', NUMBER: 1 },
-        },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     const result = readMcpConfig({ cwd });
     expect(result.exists).toBe(true);
@@ -84,14 +93,21 @@ describe('mcp config helpers', () => {
 
   it('lists configured servers without probing by default', async () => {
     const cwd = makeTempDir('pa-mcp-list');
-    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
-      mcpServers: {
-        broken: {
-          command: '/definitely/not/a/real/command',
-          args: [],
+    writeFileSync(
+      join(cwd, 'mcp_servers.json'),
+      JSON.stringify(
+        {
+          mcpServers: {
+            broken: {
+              command: '/definitely/not/a/real/command',
+              args: [],
+            },
+          },
         },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     const catalog = await listMcpCatalog({ cwd });
     expect(catalog.probed).toBe(false);
@@ -103,26 +119,40 @@ describe('mcp config helpers', () => {
     const skillDir = join(cwd, 'skills', 'jira-helper');
     mkdirSync(skillDir, { recursive: true });
 
-    writeFileSync(join(skillDir, 'mcp.json'), JSON.stringify({
-      mcpServers: {
-        atlassian: {
-          command: 'pa',
-          args: ['mcp', 'serve', 'atlassian'],
+    writeFileSync(
+      join(skillDir, 'mcp.json'),
+      JSON.stringify(
+        {
+          mcpServers: {
+            atlassian: {
+              command: 'pa',
+              args: ['mcp', 'serve', 'atlassian'],
+            },
+          },
         },
-      },
-    }, null, 2));
-    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
-      mcpServers: {
-        github: {
-          command: 'gh',
-          args: ['mcp', 'serve'],
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      join(cwd, 'mcp_servers.json'),
+      JSON.stringify(
+        {
+          mcpServers: {
+            github: {
+              command: 'gh',
+              args: ['mcp', 'serve'],
+            },
+            atlassian: {
+              command: 'override',
+              args: ['explicit'],
+            },
+          },
         },
-        atlassian: {
-          command: 'override',
-          args: ['explicit'],
-        },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     const manifests = readBundledSkillMcpManifests([skillDir]);
     expect(manifests).toEqual([
@@ -173,7 +203,9 @@ describe('native MCP client', () => {
     const zodUrl = pathToFileURL(join(process.cwd(), 'node_modules', 'zod', 'v4', 'index.js')).href;
     const serverPath = join(cwd, 'server.mjs');
 
-    writeFileSync(serverPath, `
+    writeFileSync(
+      serverPath,
+      `
 import { McpServer } from '${sdkRoot}/server/mcp.js';
 import { StdioServerTransport } from '${sdkRoot}/server/stdio.js';
 import * as z from '${zodUrl}';
@@ -187,16 +219,25 @@ server.registerTool('echo', {
 }));
 
 await server.connect(new StdioServerTransport());
-`, 'utf-8');
+`,
+      'utf-8',
+    );
 
-    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
-      mcpServers: {
-        fixture: {
-          command: process.execPath,
-          args: [serverPath],
+    writeFileSync(
+      join(cwd, 'mcp_servers.json'),
+      JSON.stringify(
+        {
+          mcpServers: {
+            fixture: {
+              command: process.execPath,
+              args: [serverPath],
+            },
+          },
         },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     const serverInfo = await inspectMcpServer('fixture', { cwd, withDescriptions: true });
     expect(serverInfo.exitCode).toBe(0);

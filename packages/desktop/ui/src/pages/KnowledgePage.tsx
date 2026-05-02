@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+
 import { api } from '../client/api';
 import { VaultEditor } from '../components/knowledge/VaultEditor';
 import { AppPageEmptyState, AppPageIntro, AppPageLayout } from '../components/ui';
@@ -9,34 +10,31 @@ import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 export function KnowledgePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
-  const {
-    data: knowledgeBaseState,
-    loading: knowledgeBaseLoading,
-  } = useApi(api.knowledgeBase, 'knowledge-page-knowledge-base');
-  const handleFileNavigate = useCallback((id: string) => {
-    navigateKnowledgeFile(setSearchParams, id);
-  }, [setSearchParams]);
+  const { data: knowledgeBaseState, loading: knowledgeBaseLoading } = useApi(api.knowledgeBase, 'knowledge-page-knowledge-base');
+  const handleFileNavigate = useCallback(
+    (id: string) => {
+      navigateKnowledgeFile(setSearchParams, id);
+    },
+    [setSearchParams],
+  );
 
-  const handleFileRenamed = useCallback((oldId: string, newId: string) => {
-    if (activeFileId === oldId) {
-      navigateKnowledgeFile(setSearchParams, newId, { replace: true });
-    }
-  }, [activeFileId, setSearchParams]);
+  const handleFileRenamed = useCallback(
+    (oldId: string, newId: string) => {
+      if (activeFileId === oldId) {
+        navigateKnowledgeFile(setSearchParams, newId, { replace: true });
+      }
+    },
+    [activeFileId, setSearchParams],
+  );
 
-  const fileName = activeFileId
-    ? activeFileId.split('/').filter(Boolean).pop()
-    : undefined;
+  const fileName = activeFileId ? activeFileId.split('/').filter(Boolean).pop() : undefined;
 
   if (knowledgeBaseLoading && !knowledgeBaseState) {
     return (
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
           <AppPageIntro title="Knowledge" />
-          <AppPageEmptyState
-            align="start"
-            title="Loading knowledge base…"
-            body="Checking whether managed sync is enabled."
-          />
+          <AppPageEmptyState align="start" title="Loading knowledge base…" body="Checking whether managed sync is enabled." />
         </AppPageLayout>
       </div>
     );
@@ -51,7 +49,11 @@ export function KnowledgePage() {
             align="start"
             title="Sync a repo to enable Knowledge"
             body="The Knowledge UI stays empty until a managed repo is configured."
-            action={<Link to="/settings#settings-general" className="ui-toolbar-button">Open Settings</Link>}
+            action={
+              <Link to="/settings#settings-general" className="ui-toolbar-button">
+                Open Settings
+              </Link>
+            }
           />
         </AppPageLayout>
       </div>

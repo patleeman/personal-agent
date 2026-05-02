@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
-import { getStateRoot } from './runtime/paths.js';
+
 import { validateConversationId } from './conversation-project-links.js';
+import { getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ARTIFACT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -39,17 +40,13 @@ function getConversationArtifactStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
 export function validateConversationArtifactId(artifactId: string): void {
   if (!ARTIFACT_ID_PATTERN.test(artifactId)) {
-    throw new Error(
-      `Invalid artifact id "${artifactId}". Artifact ids may only include letters, numbers, dots, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid artifact id "${artifactId}". Artifact ids may only include letters, numbers, dots, dashes, and underscores.`);
   }
 }
 
@@ -99,12 +96,16 @@ function createUniqueArtifactId(options: ResolveConversationArtifactOptions & { 
   let nextId = baseId;
   let suffix = 2;
 
-  while (existsSync(resolveConversationArtifactPath({
-    stateRoot: options.stateRoot,
-    profile: options.profile,
-    conversationId: options.conversationId,
-    artifactId: nextId,
-  }))) {
+  while (
+    existsSync(
+      resolveConversationArtifactPath({
+        stateRoot: options.stateRoot,
+        profile: options.profile,
+        conversationId: options.conversationId,
+        artifactId: nextId,
+      }),
+    )
+  ) {
     nextId = `${baseId}-${suffix}`;
     suffix += 1;
   }
@@ -114,13 +115,7 @@ function createUniqueArtifactId(options: ResolveConversationArtifactOptions & { 
 
 export function resolveProfileConversationArtifactsDir(options: { profile: string; stateRoot?: string }): string {
   validateProfileName(options.profile);
-  return join(
-    getConversationArtifactStateRoot(options.stateRoot),
-    'pi-agent',
-    'state',
-    'conversation-artifacts',
-    options.profile,
-  );
+  return join(getConversationArtifactStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-artifacts', options.profile);
 }
 
 export function resolveConversationArtifactsDir(options: ResolveConversationArtifactOptions): string {
@@ -226,8 +221,7 @@ export function saveConversationArtifact(options: {
     artifactId,
   });
 
-  const createdAt = existing?.createdAt
-    ?? normalizeIsoTimestamp(options.createdAt ?? new Date().toISOString(), 'artifact createdAt');
+  const createdAt = existing?.createdAt ?? normalizeIsoTimestamp(options.createdAt ?? new Date().toISOString(), 'artifact createdAt');
   const updatedAt = normalizeIsoTimestamp(options.updatedAt ?? new Date().toISOString(), 'artifact updatedAt');
   const revision = (existing?.revision ?? 0) + 1;
 
@@ -249,11 +243,14 @@ export function saveConversationArtifact(options: {
     artifactId,
   });
 
-  mkdirSync(resolveConversationArtifactsDir({
-    stateRoot: options.stateRoot,
-    profile: options.profile,
-    conversationId: options.conversationId,
-  }), { recursive: true });
+  mkdirSync(
+    resolveConversationArtifactsDir({
+      stateRoot: options.stateRoot,
+      profile: options.profile,
+      conversationId: options.conversationId,
+    }),
+    { recursive: true },
+  );
   writeFileSync(path, JSON.stringify(record, null, 2) + '\n');
 
   return record;

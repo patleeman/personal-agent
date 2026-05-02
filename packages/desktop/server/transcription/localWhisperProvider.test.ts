@@ -1,7 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
+
 import { LocalWhisperTranscriptionProvider, testExports } from './localWhisperProvider.js';
 
 describe('Local Whisper transcription provider', () => {
@@ -28,10 +30,12 @@ describe('Local Whisper transcription provider', () => {
   });
 
   it('formats whisper.cpp segments into flat text', () => {
-    expect(testExports.formatWhisperSegments([
-      { start: '00:00:00,000', end: '00:00:01,500', text: ' hello world ' },
-      { start: '00:00:01,500', end: '00:00:03,000', text: '  from whisper ' },
-    ])).toBe('hello world from whisper');
+    expect(
+      testExports.formatWhisperSegments([
+        { start: '00:00:00,000', end: '00:00:01,500', text: ' hello world ' },
+        { start: '00:00:01,500', end: '00:00:03,000', text: '  from whisper ' },
+      ]),
+    ).toBe('hello world from whisper');
   });
 
   it('reports whether the selected model is installed in the local cache', async () => {

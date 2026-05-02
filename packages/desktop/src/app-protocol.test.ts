@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { LocalApiModule } from './local-api-module.js';
 
 const electronMocks = vi.hoisted(() => ({
@@ -139,9 +140,11 @@ describe('createDesktopProtocolHandler', () => {
       body: Uint8Array.from([1, 2, 3, 4]),
     });
     const handler = createDesktopProtocolHandler({
-      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock({
-        dispatchDesktopLocalApiRequest,
-      })),
+      loadLocalApiModule: vi.fn().mockResolvedValue(
+        createLocalApiModuleMock({
+          dispatchDesktopLocalApiRequest,
+        }),
+      ),
     });
 
     const response = await handler(new Request('personal-agent://app/api/sessions/conversation-1/blocks/block-1/image'));
@@ -162,13 +165,16 @@ describe('createDesktopProtocolHandler', () => {
     const localDispatch = vi.fn().mockResolvedValue({
       statusCode: 200,
       headers: { 'content-type': 'application/json; charset=utf-8' },
-      body: Buffer.from(JSON.stringify({
-        id: 'conversation-1',
-        file: '/tmp/conversation-1.jsonl',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-        remoteConversationId: 'remote-thread-1',
-      }), 'utf-8'),
+      body: Buffer.from(
+        JSON.stringify({
+          id: 'conversation-1',
+          file: '/tmp/conversation-1.jsonl',
+          remoteHostId: 'bender',
+          remoteHostLabel: 'Bender',
+          remoteConversationId: 'remote-thread-1',
+        }),
+        'utf-8',
+      ),
     });
     const remoteDispatch = vi.fn().mockResolvedValue({
       statusCode: 200,
@@ -201,20 +207,24 @@ describe('createDesktopProtocolHandler', () => {
       hostId: 'local',
     });
 
-    const response = await handler(new Request('personal-agent://app/api/live-sessions/conversation-1/prompt', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text: 'continue remotely' }),
-    }));
+    const response = await handler(
+      new Request('personal-agent://app/api/live-sessions/conversation-1/prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: 'continue remotely' }),
+      }),
+    );
 
     expect(localDispatch).not.toHaveBeenCalledWith(expect.objectContaining({ path: '/api/live-sessions/conversation-1/prompt' }));
-    expect(remoteDispatch).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'POST',
-      path: '/api/live-sessions/remote-thread-1/prompt',
-      body: { text: 'continue remotely' },
-    }));
+    expect(remoteDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/live-sessions/remote-thread-1/prompt',
+        body: { text: 'continue remotely' },
+      }),
+    );
     expect(await response.json()).toEqual({ ok: true, accepted: true, delivery: 'started' });
   });
 
@@ -227,18 +237,22 @@ describe('createDesktopProtocolHandler', () => {
       body: Buffer.from(JSON.stringify({ ok: true }), 'utf-8'),
     });
     const handler = createDesktopProtocolHandler({
-      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock({
-        dispatchDesktopLocalApiRequest,
-      })),
+      loadLocalApiModule: vi.fn().mockResolvedValue(
+        createLocalApiModuleMock({
+          dispatchDesktopLocalApiRequest,
+        }),
+      ),
     });
 
-    const response = await handler(new Request('personal-agent://app/api/live-sessions/live-1', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ surfaceId: 'surface-1' }),
-    }));
+    const response = await handler(
+      new Request('personal-agent://app/api/live-sessions/live-1', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ surfaceId: 'surface-1' }),
+      }),
+    );
 
     expect(dispatchDesktopLocalApiRequest).toHaveBeenCalledWith({
       method: 'DELETE',
@@ -292,18 +306,22 @@ describe('createDesktopProtocolHandler', () => {
       body: Buffer.from(JSON.stringify({ ok: true }), 'utf-8'),
     });
     const handler = createDesktopProtocolHandler({
-      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock({
-        dispatchDesktopLocalApiRequest,
-      })),
+      loadLocalApiModule: vi.fn().mockResolvedValue(
+        createLocalApiModuleMock({
+          dispatchDesktopLocalApiRequest,
+        }),
+      ),
     });
 
-    const response = await handler(new Request('personal-agent://app/api/vault/file', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ id: 'notes/test.md', content: '# test' }),
-    }));
+    const response = await handler(
+      new Request('personal-agent://app/api/vault/file', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: 'notes/test.md', content: '# test' }),
+      }),
+    );
 
     expect(dispatchDesktopLocalApiRequest).toHaveBeenCalledWith({
       method: 'PUT',
@@ -323,12 +341,14 @@ describe('createDesktopProtocolHandler', () => {
         port: 3845,
       },
     });
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-      },
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+        },
+      }),
+    );
     const originalFetch = globalThis.fetch;
     globalThis.fetch = fetchMock as typeof fetch;
     const handler = createDesktopProtocolHandler({
@@ -358,15 +378,20 @@ describe('createDesktopProtocolHandler', () => {
         port: 3843,
       },
     });
-    daemonMocks.getDaemonClientTransportOverride.mockImplementation(() => ({
-      getCompanionUrl: vi.fn().mockResolvedValue('http://0.0.0.0:4123'),
-    }) as never);
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-      },
-    }));
+    daemonMocks.getDaemonClientTransportOverride.mockImplementation(
+      () =>
+        ({
+          getCompanionUrl: vi.fn().mockResolvedValue('http://0.0.0.0:4123'),
+        }) as never,
+    );
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+        },
+      }),
+    );
     const originalFetch = globalThis.fetch;
     globalThis.fetch = fetchMock as typeof fetch;
     const handler = createDesktopProtocolHandler({

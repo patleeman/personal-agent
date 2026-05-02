@@ -21,9 +21,7 @@ export function resolveForkEntryForMessage(
     return null;
   }
 
-  const userMessageCount = messages
-    .slice(0, messageIndex + 1)
-    .reduce((count, message) => count + (message.type === 'user' ? 1 : 0), 0);
+  const userMessageCount = messages.slice(0, messageIndex + 1).reduce((count, message) => count + (message.type === 'user' ? 1 : 0), 0);
 
   if (userMessageCount === 0) {
     return null;
@@ -150,10 +148,7 @@ export function buildConversationComposerStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:composer`;
 }
 
-export function clearConversationComposerDraft(
-  sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearConversationComposerDraft(sessionId: string, storage: StorageLike | null = getSessionStorage()): void {
   if (!sessionId || !storage) {
     return;
   }
@@ -165,11 +160,7 @@ export function clearConversationComposerDraft(
   }
 }
 
-export function persistForkPromptDraft(
-  sessionId: string,
-  prompt: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function persistForkPromptDraft(sessionId: string, prompt: string, storage: StorageLike | null = getSessionStorage()): void {
   if (!sessionId || !storage) {
     return;
   }
@@ -187,4 +178,3 @@ export function persistForkPromptDraft(
     // Ignore storage failures.
   }
 }
-

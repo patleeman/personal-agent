@@ -41,9 +41,7 @@ export function createLiveSessionPresenceHost(): Required<LiveSessionPresenceHos
   };
 }
 
-export function ensureLiveSessionPresenceMap(
-  host: LiveSessionPresenceHost,
-): Map<string, LiveSurfacePresenceRecord> {
+export function ensureLiveSessionPresenceMap(host: LiveSessionPresenceHost): Map<string, LiveSurfacePresenceRecord> {
   host.presenceBySurfaceId ??= new Map<string, LiveSurfacePresenceRecord>();
   host.controllerSurfaceId ??= null;
   host.controllerAcquiredAt ??= null;
@@ -62,13 +60,13 @@ export function buildLiveSessionPresenceState(host: LiveSessionPresenceHost): Li
       surfaceType: surface.surfaceType,
       connectedAt: surface.connectedAt,
     }));
-  const controller = host.controllerSurfaceId ? presenceBySurfaceId.get(host.controllerSurfaceId) ?? null : null;
+  const controller = host.controllerSurfaceId ? (presenceBySurfaceId.get(host.controllerSurfaceId) ?? null) : null;
 
   return {
     surfaces,
     controllerSurfaceId: controller?.surfaceId ?? null,
     controllerSurfaceType: controller?.surfaceType ?? null,
-    controllerAcquiredAt: controller ? host.controllerAcquiredAt ?? null : null,
+    controllerAcquiredAt: controller ? (host.controllerAcquiredAt ?? null) : null,
   };
 }
 
@@ -102,9 +100,7 @@ export function registerLiveSessionSurface(
     connections: 1,
   });
 
-  const currentController = host.controllerSurfaceId
-    ? presenceBySurfaceId.get(host.controllerSurfaceId) ?? null
-    : null;
+  const currentController = host.controllerSurfaceId ? (presenceBySurfaceId.get(host.controllerSurfaceId) ?? null) : null;
   const shouldAdoptController = !currentController || currentController.surfaceType === input.surfaceType;
 
   if (shouldAdoptController && host.controllerSurfaceId !== surfaceId) {
@@ -142,10 +138,7 @@ export function removeLiveSessionSurface(host: LiveSessionPresenceHost, surfaceI
   return true;
 }
 
-export function assertLiveSessionSurfaceCanControl(
-  host: LiveSessionPresenceHost,
-  surfaceId?: string,
-): void {
+export function assertLiveSessionSurfaceCanControl(host: LiveSessionPresenceHost, surfaceId?: string): void {
   if (!surfaceId) {
     return;
   }

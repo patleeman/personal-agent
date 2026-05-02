@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  insertFileReplyQuoteIntoComposer,
-  insertReplyQuoteIntoComposer,
-  normalizeReplyQuoteSelection,
-} from './conversationReplyQuote';
+
+import { insertFileReplyQuoteIntoComposer, insertReplyQuoteIntoComposer, normalizeReplyQuoteSelection } from './conversationReplyQuote';
 
 describe('normalizeReplyQuoteSelection', () => {
   it('trims the selection and normalizes newlines and nbsp characters', () => {

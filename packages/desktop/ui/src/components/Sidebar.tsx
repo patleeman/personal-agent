@@ -1,12 +1,31 @@
-import { Suspense, lazy, type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  type DragEvent,
+  lazy,
+  type MouseEvent as ReactMouseEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { emitKBEvent } from './knowledge/knowledgeEvents';
-import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
-import { ConversationStatusText } from './ConversationStatusText';
-import { api } from '../client/api';
+
 import { useAppData, useAppEvents } from '../app/contexts';
-import { useConversations } from '../hooks/useConversations';
-import { sessionNeedsAttention } from '../session/sessionIndicators';
+import { api } from '../client/api';
+import {
+  buildConversationGroupLabels,
+  getConversationGroupLabel,
+  groupConversationItemsByCwd,
+  normalizeConversationGroupCwd,
+} from '../conversation/conversationCwdGroups';
+import {
+  buildConversationDeeplink,
+  buildConversationSurfacePath,
+  resolveConversationAdjacentPath,
+  resolveConversationCloseRedirect,
+} from '../conversation/conversationRoutes';
 import {
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
@@ -19,38 +38,40 @@ import {
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
-import { timeAgoCompact } from '../shared/utils';
-import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../session/sessionTabs';
 import {
-  buildConversationGroupLabels,
-  getConversationGroupLabel,
-  groupConversationItemsByCwd,
-  normalizeConversationGroupCwd,
-} from '../conversation/conversationCwdGroups';
-import {
-  getDesktopBridge,
-  shouldUseNativeAppContextMenus,
   type DesktopConversationContextMenuAction,
   type DesktopConversationCwdGroupContextMenuAction,
+  getDesktopBridge,
+  shouldUseNativeAppContextMenus,
 } from '../desktop/desktopBridge';
-import {
-  buildConversationDeeplink,
-  buildConversationSurfacePath,
-  resolveConversationAdjacentPath,
-  resolveConversationCloseRedirect,
-} from '../conversation/conversationRoutes';
-import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
-import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
+import { useConversations } from '../hooks/useConversations';
+import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
+import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
+import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
+import { sessionNeedsAttention } from '../session/sessionIndicators';
+import { type ConversationShelf, type OpenConversationDropPosition, replaceConversationLayout } from '../session/sessionTabs';
 import type { SessionMeta } from '../shared/types';
+import { timeAgoCompact } from '../shared/utils';
+import { ConversationStatusText } from './ConversationStatusText';
+import { emitKBEvent } from './knowledge/knowledgeEvents';
 
 const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d={d} />
     </svg>
   );
@@ -67,14 +88,19 @@ function MoreActionsIcon({ size = 12 }: { size?: number }) {
 }
 
 const PATH = {
-  conversations: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z',
+  conversations:
+    'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z',
   nodes: 'M6 6.75h4.5v4.5H6v-4.5Zm7.5 0H18v4.5h-4.5v-4.5Zm-3.75 7.5h4.5v4.5h-4.5v-4.5Z',
-  notes: 'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
+  notes:
+    'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
   skills: 'M12 3.75l7.5 4.125v8.25L12 20.25 4.5 16.125v-8.25L12 3.75Zm0 0v16.5M4.5 7.875 12 12l7.5-4.125',
-  workspace: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
-  workspaceAdd: 'M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z M3.75 9.75h16.5 M15.75 11.25v4.5 M13.5 13.5h4.5',
+  workspace:
+    'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
+  workspaceAdd:
+    'M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z M3.75 9.75h16.5 M15.75 11.25v4.5 M13.5 13.5h4.5',
   automations: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  settings: 'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
+  settings:
+    'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close: 'M6 18 18 6M6 6l12 12',
   chevronDown: 'm6 9 6 6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
@@ -83,8 +109,10 @@ const PATH = {
   list: 'M8.25 6.75h9m-9 5.25h9m-9 5.25h9M5.25 6.75h.01M5.25 12h.01M5.25 17.25h.01',
   grip: 'M9 6.75h.01M9 12h.01M9 17.25h.01M15 6.75h.01M15 12h.01M15 17.25h.01',
   clock: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  sparkles: 'M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z',
-  chatBubble: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6.75a2.25 2.25 0 0 1-2.25 2.25H12l-4.5 3v-3H6.75A2.25 2.25 0 0 1 4.5 13.5V6.75Z',
+  sparkles:
+    'M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z',
+  chatBubble:
+    'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6.75a2.25 2.25 0 0 1-2.25 2.25H12l-4.5 3v-3H6.75A2.25 2.25 0 0 1 4.5 13.5V6.75Z',
   check: 'm5 12.75 4.5 4.5L19 7.75',
   pin: 'm15.75 3.75 4.5 4.5-3 3v3l-2.25 2.25-7.5-7.5L9.75 6.75h3l3-3ZM9.75 14.25 4.5 19.5',
 };
@@ -229,13 +257,7 @@ function getKnowledgeFallbackFileLabel(fileId: string): string {
   return normalized.split('/').filter(Boolean).pop() ?? normalized;
 }
 
-function VaultFileTreeFallback({
-  activeFileId,
-  onFileSelect,
-}: {
-  activeFileId: string | null;
-  onFileSelect: (id: string) => void;
-}) {
+function VaultFileTreeFallback({ activeFileId, onFileSelect }: { activeFileId: string | null; onFileSelect: (id: string) => void }) {
   const fileId = activeFileId?.trim() || null;
   const fileLabel = fileId ? getKnowledgeFallbackFileLabel(fileId) : null;
 
@@ -253,12 +275,7 @@ function VaultFileTreeFallback({
             >
               {fileLabel}
             </button>
-            <button
-              type="button"
-              className="text-dim/70"
-              aria-label={`Close file ${fileLabel}`}
-              disabled
-            >
+            <button type="button" className="text-dim/70" aria-label={`Close file ${fileLabel}`} disabled>
               ×
             </button>
           </div>
@@ -330,7 +347,13 @@ function WorkspaceQuickSelectModal({
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
+      style={{
+        background: 'rgb(0 0 0 / 0.52)',
+        backdropFilter: 'blur(8px)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.75rem',
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -383,7 +406,9 @@ function WorkspaceQuickSelectModal({
                   ].join(' ')}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium">{getConversationGroupLabel(workspacePath, { labelsByCwd: workspaceLabels })}</p>
+                    <p className="truncate text-[13px] font-medium">
+                      {getConversationGroupLabel(workspacePath, { labelsByCwd: workspaceLabels })}
+                    </p>
                     <p className="truncate text-[11px] text-dim">{workspacePath}</p>
                   </div>
                 </button>
@@ -398,9 +423,7 @@ function WorkspaceQuickSelectModal({
             onClick={onChooseNewFolder}
             className={[
               'mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
-              cursor === workspacePaths.length
-                ? 'bg-elevated text-primary'
-                : 'text-secondary hover:bg-elevated/70 hover:text-primary',
+              cursor === workspacePaths.length ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/70 hover:text-primary',
             ].join(' ')}
             disabled={choosingNewFolder}
           >
@@ -414,9 +437,7 @@ function WorkspaceQuickSelectModal({
           </button>
         </div>
 
-        <div className="border-t border-border-subtle px-4 py-2 text-[10px] text-dim/80">
-          ↑↓ move · ↵ select · esc close
-        </div>
+        <div className="border-t border-border-subtle px-4 py-2 text-[10px] text-dim/80">↑↓ move · ↵ select · esc close</div>
       </div>
     </div>
   );
@@ -598,9 +619,7 @@ function writeManualConversationGroupOrder(groupKeys: readonly string[]): void {
 }
 
 function getConversationItemSortTimestamp(session: SessionMeta, sortMode: ThreadsSortMode): number {
-  const source = sortMode === 'created'
-    ? session.timestamp
-    : session.lastActivityAt ?? session.attentionUpdatedAt ?? session.timestamp;
+  const source = sortMode === 'created' ? session.timestamp : (session.lastActivityAt ?? session.attentionUpdatedAt ?? session.timestamp);
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(source)) {
     return Number.NEGATIVE_INFINITY;
   }
@@ -610,7 +629,8 @@ function getConversationItemSortTimestamp(session: SessionMeta, sortMode: Thread
 }
 
 function compareConversationItems(left: SidebarConversationItem, right: SidebarConversationItem, sortMode: ThreadsSortMode): number {
-  const timestampDelta = getConversationItemSortTimestamp(right.session, sortMode) - getConversationItemSortTimestamp(left.session, sortMode);
+  const timestampDelta =
+    getConversationItemSortTimestamp(right.session, sortMode) - getConversationItemSortTimestamp(left.session, sortMode);
   if (timestampDelta !== 0) {
     return timestampDelta;
   }
@@ -644,7 +664,7 @@ function resolveConversationNumberHotkey(event: KeyboardEvent): number {
   return /^[1-9]$/.test(key) ? Number(key) - 1 : -1;
 }
 
-function resolveSidebarConversationHotkeyOrder<T,>(input: {
+function resolveSidebarConversationHotkeyOrder<T>(input: {
   organizeMode: 'project' | 'chronological';
   orderedItems: readonly T[];
   groupedRows: ReadonlyArray<{ key: string; items: readonly T[] }>;
@@ -654,9 +674,7 @@ function resolveSidebarConversationHotkeyOrder<T,>(input: {
     return [...input.orderedItems];
   }
 
-  return input.groupedRows.flatMap((group) => (
-    input.collapsedGroupKeys?.has(group.key) ? [] : [...group.items]
-  ));
+  return input.groupedRows.flatMap((group) => (input.collapsedGroupKeys?.has(group.key) ? [] : [...group.items]));
 }
 
 export function isRemoteConversationSession(session: Pick<SessionMeta, 'remoteHostId' | 'remoteConversationId'>): boolean {
@@ -687,14 +705,14 @@ export function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remote
 }
 
 function getSessionWorkspaceCwd(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd'>): string | null {
-  return Object.prototype.hasOwnProperty.call(session, 'workspaceCwd')
-    ? (session.workspaceCwd ?? null)
-    : (session.cwd ?? null);
+  return Object.prototype.hasOwnProperty.call(session, 'workspaceCwd') ? (session.workspaceCwd ?? null) : (session.cwd ?? null);
 }
 
-export function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd' | 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'>): string {
+export function getLocalSessionWorkspacePath(
+  session: Pick<SessionMeta, 'cwd' | 'workspaceCwd' | 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'>,
+): string {
   const workspaceCwd = getSessionWorkspaceCwd(session);
-  return resolveSessionExecutionTarget(session).isLocal ? workspaceCwd ?? '' : '';
+  return resolveSessionExecutionTarget(session).isLocal ? (workspaceCwd ?? '') : '';
 }
 
 function buildScopedConversationGroupKey(input: {
@@ -743,12 +761,14 @@ function getNewConversationHotkeyLabel(): string {
 }
 
 function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
-  return value === 'close-conversation'
-    || value === 'reopen-closed-conversation'
-    || value === 'previous-conversation'
-    || value === 'next-conversation'
-    || value === 'toggle-conversation-pin'
-    || value === 'toggle-conversation-archive';
+  return (
+    value === 'close-conversation' ||
+    value === 'reopen-closed-conversation' ||
+    value === 'previous-conversation' ||
+    value === 'next-conversation' ||
+    value === 'toggle-conversation-pin' ||
+    value === 'toggle-conversation-archive'
+  );
 }
 
 function TopNavItem({
@@ -767,18 +787,25 @@ function TopNavItem({
   return (
     <NavLink
       to={to}
-      className={({ isActive }) => [
-        'ui-sidebar-nav-item',
-        (forceActive || isActive) && 'ui-sidebar-nav-item-active',
-      ].filter(Boolean).join(' ')}
+      className={({ isActive }) =>
+        ['ui-sidebar-nav-item', (forceActive || isActive) && 'ui-sidebar-nav-item-active'].filter(Boolean).join(' ')
+      }
     >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="shrink-0 opacity-70"
+      >
         <path d={icon} />
       </svg>
       <span className="flex-1">{label}</span>
-      {badge != null && badge > 0 && (
-        <span className="ui-sidebar-nav-badge">{badge > 99 ? '99+' : badge}</span>
-      )}
+      {badge != null && badge > 0 && <span className="ui-sidebar-nav-badge">{badge > 99 ? '99+' : badge}</span>}
     </NavLink>
   );
 }
@@ -869,17 +896,7 @@ function ThreadsFilterButton({
     openMenu();
   }
 
-  function renderMenuItem({
-    label,
-    icon,
-    checked,
-    onClick,
-  }: {
-    label: string;
-    icon: string;
-    checked: boolean;
-    onClick: () => void;
-  }) {
+  function renderMenuItem({ label, icon, checked, onClick }: { label: string; icon: string; checked: boolean; onClick: () => void }) {
     return (
       <button
         type="button"
@@ -1049,27 +1066,21 @@ function ConversationCwdGroupHeader({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const hoverTitle = cwd ?? label;
-  const newConversationTitle = cwd
-    ? `New conversation in ${cwd}`
-    : 'New conversation';
-  const workspaceActionsTitle = cwd
-    ? `Workspace actions for ${cwd}`
-    : `Chat actions for ${label}`;
+  const newConversationTitle = cwd ? `New conversation in ${cwd}` : 'New conversation';
+  const workspaceActionsTitle = cwd ? `Workspace actions for ${cwd}` : `Chat actions for ${label}`;
   const toggleTitle = `${collapsed ? 'Expand' : 'Collapse'} ${label}`;
-  const iconPath = hovered
-    ? (collapsed ? PATH.chevronRight : PATH.chevronDown)
-    : (cwd ? PATH.workspace : PATH.chatBubble);
+  const iconPath = hovered ? (collapsed ? PATH.chevronRight : PATH.chevronDown) : cwd ? PATH.workspace : PATH.chatBubble;
   const hasMenuActions = Boolean(onOpenInFinder || onEditName || onArchiveThreads || onRemove);
-  const menuActionCount = Number(Boolean(onOpenInFinder))
-    + Number(Boolean(onEditName))
-    + Number(Boolean(onArchiveThreads))
-    + Number(Boolean(onRemove));
+  const menuActionCount =
+    Number(Boolean(onOpenInFinder)) + Number(Boolean(onEditName)) + Number(Boolean(onArchiveThreads)) + Number(Boolean(onRemove));
   const showMenuDivider = Boolean((onOpenInFinder || onEditName) && (onArchiveThreads || onRemove));
   const menuItemClass = 'ui-context-menu-item';
   const toggleButtonClassName = [
     'flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-primary transition-colors hover:bg-white/5',
     canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   useEffect(() => {
     if (!menuOpen || typeof document === 'undefined') {
@@ -1141,14 +1152,15 @@ function ConversationCwdGroupHeader({
     if (desktopBridge?.showConversationCwdGroupContextMenu) {
       setMenuOpen(false);
       setMenuPosition(null);
-      void desktopBridge.showConversationCwdGroupContextMenu({
-        x,
-        y,
-        canOpenInFinder: Boolean(onOpenInFinder),
-        canEditName: Boolean(onEditName),
-        canArchiveThreads: Boolean(onArchiveThreads),
-        canRemove: Boolean(onRemove),
-      })
+      void desktopBridge
+        .showConversationCwdGroupContextMenu({
+          x,
+          y,
+          canOpenInFinder: Boolean(onOpenInFinder),
+          canEditName: Boolean(onEditName),
+          canArchiveThreads: Boolean(onArchiveThreads),
+          canRemove: Boolean(onRemove),
+        })
         .then(({ action }) => runNativeContextMenuAction(action))
         .catch(() => {
           openDomContextMenu(x, y);
@@ -1176,10 +1188,7 @@ function ConversationCwdGroupHeader({
 
   return (
     <div
-      className={[
-        'relative px-4 pt-1 pb-0.5 transition-colors',
-        isConversationDropTarget && 'bg-accent/10',
-      ].filter(Boolean).join(' ')}
+      className={['relative px-4 pt-1 pb-0.5 transition-colors', isConversationDropTarget && 'bg-accent/10'].filter(Boolean).join(' ')}
       onContextMenu={handleContextMenu}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
@@ -1257,7 +1266,9 @@ function ConversationCwdGroupHeader({
                 type="button"
                 onPointerDown={stopMenuEvent}
                 onMouseDown={stopMenuEvent}
-                onClick={() => { void runMenuHandler(onOpenInFinder); }}
+                onClick={() => {
+                  void runMenuHandler(onOpenInFinder);
+                }}
                 className={menuItemClass}
                 role="menuitem"
               >
@@ -1269,7 +1280,9 @@ function ConversationCwdGroupHeader({
                 type="button"
                 onPointerDown={stopMenuEvent}
                 onMouseDown={stopMenuEvent}
-                onClick={() => { void runMenuHandler(onEditName); }}
+                onClick={() => {
+                  void runMenuHandler(onEditName);
+                }}
                 className={menuItemClass}
                 role="menuitem"
               >
@@ -1282,7 +1295,9 @@ function ConversationCwdGroupHeader({
                 type="button"
                 onPointerDown={stopMenuEvent}
                 onMouseDown={stopMenuEvent}
-                onClick={() => { void runMenuHandler(onArchiveThreads); }}
+                onClick={() => {
+                  void runMenuHandler(onArchiveThreads);
+                }}
                 className={menuItemClass}
                 role="menuitem"
               >
@@ -1294,7 +1309,9 @@ function ConversationCwdGroupHeader({
                 type="button"
                 onPointerDown={stopMenuEvent}
                 onMouseDown={stopMenuEvent}
-                onClick={() => { void runMenuHandler(onRemove); }}
+                onClick={() => {
+                  void runMenuHandler(onRemove);
+                }}
                 className={`${menuItemClass} text-danger`}
                 role="menuitem"
               >
@@ -1373,24 +1390,25 @@ function OpenConversationRow({
   const [busyAction, setBusyAction] = useState<'duplicate' | 'summarize' | null>(null);
   const [copyState, setCopyState] = useState<ConversationCopyMenuState | null>(null);
   const hasContextMenuActions = Boolean(
-    onPin
-      || onUnpin
-      || onArchive
-      || onOpenInNewWindow
-      || onDuplicate
-      || onSummarizeAndNew
-      || onCopyWorkingDirectory
-      || onCopyId
-      || onCopyDeeplink,
+    onPin ||
+    onUnpin ||
+    onArchive ||
+    onOpenInNewWindow ||
+    onDuplicate ||
+    onSummarizeAndNew ||
+    onCopyWorkingDirectory ||
+    onCopyId ||
+    onCopyDeeplink,
   );
-  const contextMenuItemCount = (pinned && onUnpin ? 1 : !pinned && onPin ? 1 : 0)
-    + Number(Boolean(onArchive))
-    + Number(Boolean(onOpenInNewWindow))
-    + Number(Boolean(onDuplicate))
-    + Number(Boolean(onSummarizeAndNew))
-    + Number(Boolean(onCopyWorkingDirectory))
-    + Number(Boolean(onCopyId))
-    + Number(Boolean(onCopyDeeplink));
+  const contextMenuItemCount =
+    (pinned && onUnpin ? 1 : !pinned && onPin ? 1 : 0) +
+    Number(Boolean(onArchive)) +
+    Number(Boolean(onOpenInNewWindow)) +
+    Number(Boolean(onDuplicate)) +
+    Number(Boolean(onSummarizeAndNew)) +
+    Number(Boolean(onCopyWorkingDirectory)) +
+    Number(Boolean(onCopyId)) +
+    Number(Boolean(onCopyDeeplink));
 
   useEffect(() => {
     if (!menuOpen || typeof document === 'undefined') {
@@ -1410,11 +1428,14 @@ function OpenConversationRow({
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [menuOpen]);
 
-  useEffect(() => () => {
-    if (copyResetTimeoutRef.current !== null) {
-      window.clearTimeout(copyResetTimeoutRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!menuOpen) {
@@ -1458,10 +1479,7 @@ function OpenConversationRow({
     event.stopPropagation();
   }
 
-  async function runMenuAction(
-    action: 'duplicate' | 'summarize',
-    handler: () => boolean | Promise<boolean>,
-  ) {
+  async function runMenuAction(action: 'duplicate' | 'summarize', handler: () => boolean | Promise<boolean>) {
     if (busyAction) {
       return;
     }
@@ -1503,10 +1521,7 @@ function OpenConversationRow({
     }
   }
 
-  async function handleCopyClick(
-    action: ConversationCopyMenuAction,
-    handler?: () => boolean | Promise<boolean>,
-  ) {
+  async function handleCopyClick(action: ConversationCopyMenuAction, handler?: () => boolean | Promise<boolean>) {
     if (!handler || busyAction) {
       return;
     }
@@ -1586,19 +1601,20 @@ function OpenConversationRow({
     if (desktopBridge?.showConversationContextMenu) {
       setMenuOpen(false);
       setMenuPosition(null);
-      void desktopBridge.showConversationContextMenu({
-        x,
-        y,
-        pinAction: pinned && onUnpin ? 'unpin' : !pinned && onPin ? 'pin' : null,
-        canArchive: Boolean(onArchive),
-        canOpenInNewWindow: Boolean(onOpenInNewWindow),
-        canDuplicate: Boolean(onDuplicate),
-        canSummarizeAndNew: Boolean(onSummarizeAndNew),
-        canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
-        canCopyId: Boolean(onCopyId),
-        canCopyDeeplink: Boolean(onCopyDeeplink),
-        busyAction,
-      })
+      void desktopBridge
+        .showConversationContextMenu({
+          x,
+          y,
+          pinAction: pinned && onUnpin ? 'unpin' : !pinned && onPin ? 'pin' : null,
+          canArchive: Boolean(onArchive),
+          canOpenInNewWindow: Boolean(onOpenInNewWindow),
+          canDuplicate: Boolean(onDuplicate),
+          canSummarizeAndNew: Boolean(onSummarizeAndNew),
+          canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
+          canCopyId: Boolean(onCopyId),
+          canCopyDeeplink: Boolean(onCopyDeeplink),
+          busyAction,
+        })
         .then(({ action }) => runNativeContextMenuAction(action))
         .catch(() => {
           openDomContextMenu(x, y);
@@ -1642,16 +1658,14 @@ function OpenConversationRow({
           'ui-sidebar-session-row select-none',
           active && 'ui-sidebar-session-row-active',
           canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
-        ].filter(Boolean).join(' ')}
+        ]
+          .filter(Boolean)
+          .join(' ')}
         title={rowTitle}
       >
         <div className="flex w-3 shrink-0 items-center justify-center self-stretch">
-          {(session.isRunning || needsAttention) ? (
-            <ConversationStatusText
-              isRunning={session.isRunning}
-              needsAttention={needsAttention}
-              className="shrink-0"
-            />
+          {session.isRunning || needsAttention ? (
+            <ConversationStatusText isRunning={session.isRunning} needsAttention={needsAttention} className="shrink-0" />
           ) : isRemoteConversationSession(session) ? (
             <span
               className="shrink-0 text-accent/80"
@@ -1670,16 +1684,15 @@ function OpenConversationRow({
         <div className="min-w-0 flex-1 pr-[4.5rem]">
           <div className="flex min-w-0 items-center gap-1.5">
             {isAutomation ? (
-              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent/75" title={automationTitle ? `Automation thread: ${automationTitle}` : 'Automation thread'}>
+              <span
+                className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent/75"
+                title={automationTitle ? `Automation thread: ${automationTitle}` : 'Automation thread'}
+              >
                 auto
               </span>
             ) : null}
             {pinned ? (
-              <span
-                className="ui-sidebar-pinned-icon shrink-0"
-                title="Pinned chat"
-                aria-label="Pinned chat"
-              >
+              <span className="ui-sidebar-pinned-icon shrink-0" title="Pinned chat" aria-label="Pinned chat">
                 <Ico d={PATH.pin} size={11} />
               </span>
             ) : null}
@@ -1958,16 +1971,16 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }, durationMs);
   }, []);
 
-  useEffect(() => () => {
-    if (sidebarNoticeTimeoutRef.current !== null) {
-      window.clearTimeout(sidebarNoticeTimeoutRef.current);
-    }
-  }, []);
-
-  const visibleConversationTabs = useMemo(
-    () => tabs,
-    [tabs],
+  useEffect(
+    () => () => {
+      if (sidebarNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(sidebarNoticeTimeoutRef.current);
+      }
+    },
+    [],
   );
+
+  const visibleConversationTabs = useMemo(() => tabs, [tabs]);
   const workspaceConversationTabs = useMemo(
     () => [...pinnedSessions, ...visibleConversationTabs],
     [pinnedSessions, visibleConversationTabs],
@@ -1977,11 +1990,12 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     [pinnedSessions],
   );
   const openWorkspacePaths = useMemo(
-    () => normalizeWorkspacePaths([
-      draftCwd,
-      ...pinnedSessions.map((session) => getLocalSessionWorkspacePath(session)),
-      ...visibleConversationTabs.map((session) => getLocalSessionWorkspacePath(session)),
-    ]),
+    () =>
+      normalizeWorkspacePaths([
+        draftCwd,
+        ...pinnedSessions.map((session) => getLocalSessionWorkspacePath(session)),
+        ...visibleConversationTabs.map((session) => getLocalSessionWorkspacePath(session)),
+      ]),
     [draftCwd, pinnedSessions, visibleConversationTabs],
   );
 
@@ -2034,7 +2048,15 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     if (hasLocalWorkspaceState || !workspaceBootstrapHasOpenConversations) {
       setWorkspaceSyncReady(true);
     }
-  }, [draftCwd, openIds.length, pinnedIds.length, savedWorkspacePathsLoaded, sessions, workspaceBootstrapHasOpenConversations, workspaceSyncReady]);
+  }, [
+    draftCwd,
+    openIds.length,
+    pinnedIds.length,
+    savedWorkspacePathsLoaded,
+    sessions,
+    workspaceBootstrapHasOpenConversations,
+    workspaceSyncReady,
+  ]);
 
   useEffect(() => {
     if (!workspaceSyncReady || sessions === null) {
@@ -2070,13 +2092,13 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
       return [...pinnedItems, ...openItems];
     }
 
-    return [
-      ...pinnedItems,
-      ...[...openItems].sort((left, right) => compareConversationItems(left, right, threadsSortMode)),
-    ];
+    return [...pinnedItems, ...[...openItems].sort((left, right) => compareConversationItems(left, right, threadsSortMode))];
   }, [pinnedSessions, threadsSortMode, visibleConversationTabs]);
   const automationThreadTitleByConversationId = useMemo(
-    () => new Map((tasks ?? []).flatMap((task) => task.threadConversationId ? [[task.threadConversationId, task.title ?? task.id] as const] : [])),
+    () =>
+      new Map(
+        (tasks ?? []).flatMap((task) => (task.threadConversationId ? [[task.threadConversationId, task.title ?? task.id] as const] : [])),
+      ),
     [tasks],
   );
   const automationConversationIdSet = useMemo(
@@ -2084,28 +2106,30 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     [automationThreadTitleByConversationId],
   );
   const runningAutomationConversationIdSet = useMemo(
-    () => new Set((tasks ?? []).flatMap((task) => task.running && task.threadConversationId ? [task.threadConversationId] : [])),
+    () => new Set((tasks ?? []).flatMap((task) => (task.running && task.threadConversationId ? [task.threadConversationId] : []))),
     [tasks],
   );
-  const filteredConversationItems = useMemo(() => orderedConversationItems.filter((item) => {
-    const isAutomation = automationConversationIdSet.has(item.session.id);
-    if (threadsFilterMode === 'automation') {
-      return isAutomation;
-    }
-    if (threadsFilterMode === 'human') {
-      return !isAutomation;
-    }
-    return true;
-  }), [automationConversationIdSet, orderedConversationItems, threadsFilterMode]);
+  const filteredConversationItems = useMemo(
+    () =>
+      orderedConversationItems.filter((item) => {
+        const isAutomation = automationConversationIdSet.has(item.session.id);
+        if (threadsFilterMode === 'automation') {
+          return isAutomation;
+        }
+        if (threadsFilterMode === 'human') {
+          return !isAutomation;
+        }
+        return true;
+      }),
+    [automationConversationIdSet, orderedConversationItems, threadsFilterMode],
+  );
   const workspaceOrder = useMemo(
     () => normalizeWorkspacePaths([...pinnedWorkspacePaths, ...savedWorkspacePaths, ...openWorkspacePaths]),
     [openWorkspacePaths, pinnedWorkspacePaths, savedWorkspacePaths],
   );
   const conversationGroupLabels = useMemo(
-    () => buildConversationGroupLabels([
-      ...workspaceOrder,
-      ...filteredConversationItems.map((item) => getSessionWorkspaceCwd(item.session)),
-    ]),
+    () =>
+      buildConversationGroupLabels([...workspaceOrder, ...filteredConversationItems.map((item) => getSessionWorkspaceCwd(item.session))]),
     [filteredConversationItems, workspaceOrder],
   );
   const manualConversationGroupOrderIndex = useMemo(
@@ -2121,22 +2145,29 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
-  const conversationBootstrapVersionKey = useMemo(() => buildConversationBootstrapVersionKey({
-    sessionsVersion: versions.sessions,
-    sessionFilesVersion: versions.sessionFiles,
-  }), [versions.sessionFiles, versions.sessions]);
-  const prefetchConversation = useCallback((conversationId: string) => {
-    const normalizedConversationId = conversationId.trim();
-    if (!normalizedConversationId || normalizedConversationId === activeConversationId) {
-      return;
-    }
+  const conversationBootstrapVersionKey = useMemo(
+    () =>
+      buildConversationBootstrapVersionKey({
+        sessionsVersion: versions.sessions,
+        sessionFilesVersion: versions.sessionFiles,
+      }),
+    [versions.sessionFiles, versions.sessions],
+  );
+  const prefetchConversation = useCallback(
+    (conversationId: string) => {
+      const normalizedConversationId = conversationId.trim();
+      if (!normalizedConversationId || normalizedConversationId === activeConversationId) {
+        return;
+      }
 
-    void fetchConversationBootstrapCached(
-      normalizedConversationId,
-      { tailBlocks: SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS },
-      conversationBootstrapVersionKey,
-    ).catch(() => undefined);
-  }, [activeConversationId, conversationBootstrapVersionKey]);
+      void fetchConversationBootstrapCached(
+        normalizedConversationId,
+        { tailBlocks: SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS },
+        conversationBootstrapVersionKey,
+      ).catch(() => undefined);
+    },
+    [activeConversationId, conversationBootstrapVersionKey],
+  );
   const activeConversationSurfaceId = useMemo(() => {
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
       return DRAFT_CONVERSATION_ID;
@@ -2144,22 +2175,29 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
     return activeConversationId;
   }, [activeConversationId, location.pathname]);
-  const resolveCloseRedirectPath = useCallback((closingId: string) => resolveConversationCloseRedirect({
-    orderedIds: workspaceConversationTabs.map((session) => session.id),
-    closingId,
-  }), [workspaceConversationTabs]);
+  const resolveCloseRedirectPath = useCallback(
+    (closingId: string) =>
+      resolveConversationCloseRedirect({
+        orderedIds: workspaceConversationTabs.map((session) => session.id),
+        closingId,
+      }),
+    [workspaceConversationTabs],
+  );
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
   const groupedConversationRows = useMemo(() => {
     if (threadsOrganizeMode !== 'project') {
       return [];
     }
 
-    const targetBuckets = new Map<string, {
-      executionTargetKey: string;
-      executionTargetLabel: string;
-      executionTargetIsLocal: boolean;
-      items: SidebarConversationItem[];
-    }>();
+    const targetBuckets = new Map<
+      string,
+      {
+        executionTargetKey: string;
+        executionTargetLabel: string;
+        executionTargetIsLocal: boolean;
+        items: SidebarConversationItem[];
+      }
+    >();
 
     for (const item of filteredConversationItems) {
       const executionTarget = resolveSessionExecutionTarget(item.session);
@@ -2190,10 +2228,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     const remoteTargetBuckets = [...targetBuckets.values()]
       .filter((bucket) => !bucket.executionTargetIsLocal)
       .sort((left, right) => left.executionTargetLabel.localeCompare(right.executionTargetLabel, undefined, { sensitivity: 'base' }));
-    const orderedTargetBuckets = [
-      ...(localTargetBucket ? [localTargetBucket] : []),
-      ...remoteTargetBuckets,
-    ];
+    const orderedTargetBuckets = [...(localTargetBucket ? [localTargetBucket] : []), ...remoteTargetBuckets];
 
     const rows: SidebarConversationGroup[] = [];
 
@@ -2201,17 +2236,20 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
       const groupsByCwdKey = new Map(
         groupConversationItemsByCwd(targetBucket.items, (item) => getSessionWorkspaceCwd(item.session), {
           labelsByCwd: conversationGroupLabels,
-        })
-          .map((group) => [group.key, group] as const),
+        }).map((group) => [group.key, group] as const),
       );
-      const baseGroups = targetBucket.executionTargetIsLocal && threadsFilterMode === 'all'
-        ? workspaceOrder.map((workspacePath) => groupsByCwdKey.get(workspacePath) ?? {
-            key: workspacePath,
-            cwd: workspacePath,
-            label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
-            items: [],
-          })
-        : [];
+      const baseGroups =
+        targetBucket.executionTargetIsLocal && threadsFilterMode === 'all'
+          ? workspaceOrder.map(
+              (workspacePath) =>
+                groupsByCwdKey.get(workspacePath) ?? {
+                  key: workspacePath,
+                  cwd: workspacePath,
+                  label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
+                  items: [],
+                },
+            )
+          : [];
       const groups = [...baseGroups];
       const seenGroupKeys = new Set(groups.map((group) => group.key));
 
@@ -2270,7 +2308,16 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
 
     return rows;
-  }, [conversationGroupLabelOverrides, conversationGroupLabels, filteredConversationItems, manualConversationGroupOrderIndex, threadsFilterMode, threadsOrganizeMode, threadsSortMode, workspaceOrder]);
+  }, [
+    conversationGroupLabelOverrides,
+    conversationGroupLabels,
+    filteredConversationItems,
+    manualConversationGroupOrderIndex,
+    threadsFilterMode,
+    threadsOrganizeMode,
+    threadsSortMode,
+    workspaceOrder,
+  ]);
   const conversationGroupsByKey = useMemo(
     () => new Map(groupedConversationRows.map((group) => [group.key, group] as const)),
     [groupedConversationRows],
@@ -2279,25 +2326,21 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     () => new Map(groupedConversationRows.flatMap((group) => group.items.map(({ session }) => [session.id, group.key] as const))),
     [groupedConversationRows],
   );
-  const collapsedConversationGroupKeySet = useMemo(
-    () => new Set(collapsedConversationGroupKeys),
-    [collapsedConversationGroupKeys],
-  );
+  const collapsedConversationGroupKeySet = useMemo(() => new Set(collapsedConversationGroupKeys), [collapsedConversationGroupKeys]);
   const renderedConversationItems = useMemo(
-    () => (threadsOrganizeMode === 'project'
-      ? groupedConversationRows.flatMap((group) => group.items)
-      : filteredConversationItems),
+    () => (threadsOrganizeMode === 'project' ? groupedConversationRows.flatMap((group) => group.items) : filteredConversationItems),
     [filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
   const canReorderConversationRows = threadsFilterMode === 'all';
   const canReorderConversationGroups = canReorderConversationRows && threadsOrganizeMode === 'project';
   const hotkeyConversationItems = useMemo(
-    () => resolveSidebarConversationHotkeyOrder({
-      organizeMode: threadsOrganizeMode,
-      orderedItems: filteredConversationItems,
-      groupedRows: groupedConversationRows,
-      collapsedGroupKeys: collapsedConversationGroupKeySet,
-    }),
+    () =>
+      resolveSidebarConversationHotkeyOrder({
+        organizeMode: threadsOrganizeMode,
+        orderedItems: filteredConversationItems,
+        groupedRows: groupedConversationRows,
+        collapsedGroupKeys: collapsedConversationGroupKeySet,
+      }),
     [collapsedConversationGroupKeySet, filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
 
@@ -2394,11 +2437,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   function canDropConversationGroupOnGroup(draggedGroupKey: string, targetGroupKey: string): boolean {
     const draggedGroup = conversationGroupsByKey.get(draggedGroupKey);
     const targetGroup = conversationGroupsByKey.get(targetGroupKey);
-    return Boolean(
-      draggedGroup
-      && targetGroup
-      && draggedGroup.executionTargetKey === targetGroup.executionTargetKey,
-    );
+    return Boolean(draggedGroup && targetGroup && draggedGroup.executionTargetKey === targetGroup.executionTargetKey);
   }
 
   function canDropConversationOnGroup(draggedSessionId: string, targetGroupKey: string): boolean {
@@ -2464,15 +2503,18 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
 
     const position = getDropPosition(event);
-    setDropTarget((current) => (
+    setDropTarget((current) =>
       current?.section === section && current.sessionId === sessionId && current.position === position
         ? current
-        : { section, sessionId, position }
-    ));
+        : { section, sessionId, position },
+    );
   }
 
   function handleConversationGroupDragOver(groupKey: string, event: DragEvent<HTMLDivElement>) {
-    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    const draggedConversationId =
+      draggingSessionId ||
+      event.dataTransfer.getData('application/x-personal-agent-conversation') ||
+      event.dataTransfer.getData('text/plain');
     if (draggedConversationId) {
       if (!canDropConversationOnGroup(draggedConversationId, groupKey)) {
         setConversationCwdDropTargetGroupKey(null);
@@ -2505,17 +2547,16 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
 
     const position = getDropPosition(event);
-    setGroupDropTarget((current) => (
-      current?.groupKey === groupKey && current.position === position
-        ? current
-        : { groupKey, position }
-    ));
+    setGroupDropTarget((current) => (current?.groupKey === groupKey && current.position === position ? current : { groupKey, position }));
   }
 
   async function handleConversationCwdDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
 
-    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    const draggedConversationId =
+      draggingSessionId ||
+      event.dataTransfer.getData('application/x-personal-agent-conversation') ||
+      event.dataTransfer.getData('text/plain');
     const targetGroup = conversationGroupsByKey.get(targetGroupKey);
     if (!draggedConversationId || !targetGroup?.cwd || !canDropConversationOnGroup(draggedConversationId, targetGroupKey)) {
       clearDragState();
@@ -2539,16 +2580,18 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
       await refetch();
       showSidebarNotice(
         'accent',
-        result.changed === false
-          ? `Conversation is already in ${targetGroup.label}.`
-          : `Moved conversation to ${targetGroup.label}.`,
+        result.changed === false ? `Conversation is already in ${targetGroup.label}.` : `Moved conversation to ${targetGroup.label}.`,
       );
     } catch (error) {
       showSidebarNotice('danger', `Move failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
     }
   }
 
-  function handleConversationDrop(targetSection: ConversationShelf, targetSessionId: string | null, position: OpenConversationDropPosition) {
+  function handleConversationDrop(
+    targetSection: ConversationShelf,
+    targetSessionId: string | null,
+    position: OpenConversationDropPosition,
+  ) {
     if (!draggingSessionId || !draggingSection || draggingSection !== targetSection) {
       clearDragState();
       return;
@@ -2566,12 +2609,8 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
     if (threadsSortMode !== 'manual') {
       replaceConversationLayout({
-        sessionIds: renderedConversationItems
-          .filter((item) => item.section === 'open')
-          .map((item) => item.session.id),
-        pinnedSessionIds: renderedConversationItems
-          .filter((item) => item.section === 'pinned')
-          .map((item) => item.session.id),
+        sessionIds: renderedConversationItems.filter((item) => item.section === 'open').map((item) => item.session.id),
+        pinnedSessionIds: renderedConversationItems.filter((item) => item.section === 'pinned').map((item) => item.session.id),
         archivedSessionIds: archivedConversationIds,
       });
       setThreadsSortMode('manual');
@@ -2585,7 +2624,10 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   function handleConversationGroupDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
 
-    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    const draggedConversationId =
+      draggingSessionId ||
+      event.dataTransfer.getData('application/x-personal-agent-conversation') ||
+      event.dataTransfer.getData('text/plain');
     if (draggedConversationId) {
       void handleConversationCwdDrop(targetGroupKey, event);
       return;
@@ -2623,12 +2665,14 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     persistManualConversationGroupOrder(nextGroupedRows.map((group) => group.key));
     replaceConversationLayout({
       sessionIds: nextGroupedRows.flatMap((group) => group.items.filter((item) => item.section === 'open').map((item) => item.session.id)),
-      pinnedSessionIds: nextGroupedRows.flatMap((group) => group.items.filter((item) => item.section === 'pinned').map((item) => item.session.id)),
+      pinnedSessionIds: nextGroupedRows.flatMap((group) =>
+        group.items.filter((item) => item.section === 'pinned').map((item) => item.session.id),
+      ),
       archivedSessionIds: archivedConversationIds,
     });
 
     const nextLocalWorkspacePaths = normalizeWorkspacePaths(
-      nextGroupedRows.flatMap((group) => group.executionTargetIsLocal && group.cwd ? [group.cwd] : []),
+      nextGroupedRows.flatMap((group) => (group.executionTargetIsLocal && group.cwd ? [group.cwd] : [])),
     );
     if (!sameStringLists(savedWorkspacePaths, nextLocalWorkspacePaths)) {
       persistSavedWorkspacePathsState(nextLocalWorkspacePaths);
@@ -2648,8 +2692,16 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     const targetGroupKey = conversationGroupKeyBySessionId.get(sessionId);
-    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
-    if (draggedConversationId && targetGroupKey && !canDropConversationOnSession(draggedConversationId, sessionId) && canDropConversationOnGroup(draggedConversationId, targetGroupKey)) {
+    const draggedConversationId =
+      draggingSessionId ||
+      event.dataTransfer.getData('application/x-personal-agent-conversation') ||
+      event.dataTransfer.getData('text/plain');
+    if (
+      draggedConversationId &&
+      targetGroupKey &&
+      !canDropConversationOnSession(draggedConversationId, sessionId) &&
+      canDropConversationOnGroup(draggedConversationId, targetGroupKey)
+    ) {
       void handleConversationCwdDrop(targetGroupKey, event);
       return;
     }
@@ -2677,27 +2729,33 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     });
   }, [activeConversationId, archivedSessions, pinnedSessions, tabs]);
 
-  const handleNewConversation = useCallback((cwd?: string | null) => {
-    const explicitCwd = normalizeConversationGroupCwd(cwd);
-    if (explicitCwd) {
-      persistDraftConversationCwd(explicitCwd);
-      setDraftCwd(explicitCwd);
-    } else {
-      clearDraftConversationCwd();
-      setDraftCwd('');
-    }
+  const handleNewConversation = useCallback(
+    (cwd?: string | null) => {
+      const explicitCwd = normalizeConversationGroupCwd(cwd);
+      if (explicitCwd) {
+        persistDraftConversationCwd(explicitCwd);
+        setDraftCwd(explicitCwd);
+      } else {
+        clearDraftConversationCwd();
+        setDraftCwd('');
+      }
 
-    navigate('/conversations/new');
-  }, [navigate]);
+      navigate('/conversations/new');
+    },
+    [navigate],
+  );
 
   const handleAddWorkspace = useCallback(() => {
     setWorkspaceQuickSelectOpen(true);
   }, []);
 
-  const handleSelectSavedWorkspace = useCallback((workspacePath: string) => {
-    setWorkspaceQuickSelectOpen(false);
-    handleNewConversation(workspacePath);
-  }, [handleNewConversation]);
+  const handleSelectSavedWorkspace = useCallback(
+    (workspacePath: string) => {
+      setWorkspaceQuickSelectOpen(false);
+      handleNewConversation(workspacePath);
+    },
+    [handleNewConversation],
+  );
 
   const handleChooseNewWorkspaceFolder = useCallback(async () => {
     if (addWorkspaceBusy) {
@@ -2728,10 +2786,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
   }, [addWorkspaceBusy, draftCwd, handleNewConversation, persistSavedWorkspacePathsState, savedWorkspacePaths, showSidebarNotice]);
 
-  const resolveLiveConversationIdForAction = useCallback(async (
-    session: Pick<SessionMeta, 'id' | 'isLive'>,
-    actionDescription: string,
-  ) => {
+  const resolveLiveConversationIdForAction = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>, actionDescription: string) => {
     if (session.isLive) {
       return session.id;
     }
@@ -2744,259 +2799,315 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     return recovered.conversationId;
   }, []);
 
-  const openCreatedConversation = useCallback((sessionId: string, initialPromptText?: string) => {
-    if (initialPromptText) {
-      persistForkPromptDraft(sessionId, initialPromptText);
-    }
-
-    openSession(sessionId);
-    void refetch().catch(() => {});
-    navigate(buildConversationSurfacePath(sessionId));
-  }, [navigate, openSession, refetch]);
-
-  const handleDuplicateConversation = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
-    try {
-      const { newSessionId } = await api.duplicateConversation(session.id);
-      openCreatedConversation(newSessionId);
-      return true;
-    } catch (error) {
-      showSidebarNotice('danger', `Duplicate failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
-      return false;
-    }
-  }, [openCreatedConversation, showSidebarNotice]);
-
-  const handleSummarizeConversation = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
-    try {
-      const liveConversationId = await resolveLiveConversationIdForAction(session, 'be summarized into a new conversation');
-      const { newSessionId } = await retryLiveSessionActionAfterTakeover({
-        attemptAction: () => api.summarizeAndForkSession(liveConversationId, conversationSurfaceId),
-        takeOverSessionControl: () => api.takeoverLiveSession(liveConversationId, conversationSurfaceId),
-      });
-      openCreatedConversation(newSessionId);
-      return true;
-    } catch (error) {
-      showSidebarNotice('danger', `Summarize & New failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
-      return false;
-    }
-  }, [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice]);
-
-  const copyTextToClipboard = useCallback(async (value: string) => {
-    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
-      showSidebarNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
-      return false;
-    }
-
-    try {
-      await navigator.clipboard.writeText(value);
-      return true;
-    } catch {
-      showSidebarNotice('danger', 'Copy to clipboard failed.', 4000);
-      return false;
-    }
-  }, [showSidebarNotice]);
-
-  const handleCopyConversationId = useCallback(async (conversationId: string) => {
-    return copyTextToClipboard(conversationId);
-  }, [copyTextToClipboard]);
-
-  const handleCopyConversationWorkingDirectory = useCallback(async (cwd: string | null | undefined) => {
-    const normalizedCwd = cwd?.trim() ?? '';
-    if (!normalizedCwd) {
-      showSidebarNotice('danger', 'No working directory is saved for this conversation.', 4000);
-      return false;
-    }
-
-    return copyTextToClipboard(normalizedCwd);
-  }, [copyTextToClipboard, showSidebarNotice]);
-
-  const handleCopyConversationDeeplink = useCallback(async (conversationId: string) => {
-    if (typeof window === 'undefined') {
-      showSidebarNotice('danger', 'Could not build a deeplink for this conversation.', 4000);
-      return false;
-    }
-
-    try {
-      return copyTextToClipboard(buildConversationDeeplink(conversationId, window.location.href));
-    } catch {
-      showSidebarNotice('danger', 'Could not build a deeplink for this conversation.', 4000);
-      return false;
-    }
-  }, [copyTextToClipboard, showSidebarNotice]);
-
-  const handleOpenConversationInNewWindow = useCallback(async (conversationId: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (!desktopBridge?.openConversationPopout) {
-      showSidebarNotice('danger', 'Separate conversation windows are only available in the desktop app.', 4000);
-      return false;
-    }
-
-    try {
-      await desktopBridge.openConversationPopout({ conversationId });
-      return true;
-    } catch (error) {
-      showSidebarNotice('danger', `Could not open separate window: ${error instanceof Error ? error.message : String(error)}`, 4000);
-      return false;
-    }
-  }, [showSidebarNotice]);
-
-  const resolveConversationGroupRedirectPath = useCallback((closingIds: readonly string[]) => {
-    const closingIdSet = new Set(closingIds.map((value) => value.trim()).filter(Boolean));
-    const orderedIds = workspaceConversationTabs.map((session) => session.id);
-    const remainingIds = orderedIds.filter((id) => !closingIdSet.has(id));
-    if (remainingIds.length === 0) {
-      return DRAFT_CONVERSATION_ROUTE;
-    }
-
-    const activeIndex = activeConversationSurfaceId ? orderedIds.findIndex((id) => id === activeConversationSurfaceId) : -1;
-    const nextIndex = activeIndex >= 0
-      ? Math.min(activeIndex, remainingIds.length - 1)
-      : remainingIds.length - 1;
-    return buildConversationSurfacePath(remainingIds[nextIndex]);
-  }, [activeConversationSurfaceId, workspaceConversationTabs]);
-
-  const archiveConversationGroupSessions = useCallback((sessionIds: readonly string[]) => {
-    const normalizedSessionIds = sessionIds.map((value) => value.trim()).filter(Boolean);
-    if (normalizedSessionIds.length === 0) {
-      return 0;
-    }
-
-    const sessionIdSet = new Set(normalizedSessionIds);
-    if (activeConversationSurfaceId && sessionIdSet.has(activeConversationSurfaceId)) {
-      navigate(resolveConversationGroupRedirectPath(normalizedSessionIds));
-    }
-
-    replaceConversationLayout({
-      sessionIds: openIds.filter((id) => !sessionIdSet.has(id)),
-      pinnedSessionIds: pinnedIds.filter((id) => !sessionIdSet.has(id)),
-      archivedSessionIds: [...new Set([...archivedConversationIds, ...normalizedSessionIds])],
-    });
-
-    return normalizedSessionIds.length;
-  }, [activeConversationSurfaceId, archivedConversationIds, navigate, openIds, pinnedIds, resolveConversationGroupRedirectPath]);
-
-  const handleOpenConversationGroupInFinder = useCallback(async (cwd: string | null, label: string) => {
-    const normalizedCwd = normalizeConversationGroupCwd(cwd);
-    if (!normalizedCwd) {
-      showSidebarNotice('danger', `No working directory is saved for ${label}.`, 4000);
-      return;
-    }
-
-    const desktopBridge = getDesktopBridge();
-    if (!desktopBridge?.openPath) {
-      showSidebarNotice('danger', 'Open in Finder is only available in the desktop app.', 4000);
-      return;
-    }
-
-    const result = await desktopBridge.openPath(normalizedCwd);
-    if (!result.opened) {
-      showSidebarNotice('danger', result.error ? `Could not open ${label}: ${result.error}` : `Could not open ${label}.`, 4000);
-    }
-  }, [showSidebarNotice]);
-
-  const handleRenameConversationGroup = useCallback((groupKey: string, defaultLabel: string, currentLabel: string) => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const nextLabel = window.prompt('Edit workspace name', currentLabel);
-    if (nextLabel === null) {
-      return;
-    }
-
-    const normalizedLabel = nextLabel.trim();
-    updateConversationGroupLabelOverride(
-      groupKey,
-      normalizedLabel && normalizedLabel !== defaultLabel ? normalizedLabel : null,
-    );
-
-    if (normalizedLabel && normalizedLabel !== defaultLabel) {
-      showSidebarNotice('accent', `Workspace renamed to ${normalizedLabel}.`);
-      return;
-    }
-
-    showSidebarNotice('accent', `Workspace name reset to ${defaultLabel}.`);
-  }, [showSidebarNotice, updateConversationGroupLabelOverride]);
-
-  const handleArchiveConversationGroup = useCallback((label: string, sessionIds: readonly string[]) => {
-    const archivedCount = archiveConversationGroupSessions(sessionIds);
-    if (archivedCount === 0) {
-      showSidebarNotice('danger', `No threads to archive in ${label}.`, 4000);
-      return;
-    }
-
-    showSidebarNotice(
-      'accent',
-      archivedCount === 1
-        ? `Archived 1 thread from ${label}.`
-        : `Archived ${archivedCount} threads from ${label}.`,
-    );
-  }, [archiveConversationGroupSessions, showSidebarNotice]);
-
-  const handleRemoveConversationGroup = useCallback((
-    groupKey: string,
-    label: string,
-    cwd: string | null,
-    sessionIds: readonly string[],
-    includesDraft: boolean,
-    executionTargetIsLocal: boolean,
-  ) => {
-    const removedCount = archiveConversationGroupSessions(sessionIds);
-    updateConversationGroupLabelOverride(groupKey, null);
-    clearConversationGroupCollapsedState(groupKey);
-
-    const normalizedCwd = normalizeConversationGroupCwd(cwd);
-    if (executionTargetIsLocal && includesDraft && normalizedCwd && normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd) {
-      clearDraftConversationCwd();
-    }
-
-    if (executionTargetIsLocal && normalizedCwd) {
-      const nextWorkspacePaths = savedWorkspacePaths.filter((workspacePath) => workspacePath !== normalizedCwd);
-      if (!sameStringLists(savedWorkspacePaths, nextWorkspacePaths)) {
-        persistSavedWorkspacePathsState(nextWorkspacePaths);
-        void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
-          // Ignore best-effort sync failures.
-        });
+  const openCreatedConversation = useCallback(
+    (sessionId: string, initialPromptText?: string) => {
+      if (initialPromptText) {
+        persistForkPromptDraft(sessionId, initialPromptText);
       }
-    }
 
-    if (removedCount === 0 && !includesDraft && !normalizedCwd) {
-      showSidebarNotice('danger', `No threads to remove in ${label}.`, 4000);
-      return;
-    }
+      openSession(sessionId);
+      void refetch().catch(() => {});
+      navigate(buildConversationSurfacePath(sessionId));
+    },
+    [navigate, openSession, refetch],
+  );
 
-    showSidebarNotice('accent', `Removed ${label} from Threads.`);
-  }, [archiveConversationGroupSessions, clearConversationGroupCollapsedState, persistSavedWorkspacePathsState, savedWorkspacePaths, showSidebarNotice, updateConversationGroupLabelOverride]);
+  const handleDuplicateConversation = useCallback(
+    async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
+      try {
+        const { newSessionId } = await api.duplicateConversation(session.id);
+        openCreatedConversation(newSessionId);
+        return true;
+      } catch (error) {
+        showSidebarNotice('danger', `Duplicate failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+        return false;
+      }
+    },
+    [openCreatedConversation, showSidebarNotice],
+  );
 
-  const navigateConversation = useCallback((direction: -1 | 1) => {
-    const nextPath = resolveConversationAdjacentPath({
-      orderedIds: workspaceConversationTabs.map((session) => session.id),
-      activeId: activeConversationSurfaceId,
-      direction,
-    });
+  const handleSummarizeConversation = useCallback(
+    async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
+      try {
+        const liveConversationId = await resolveLiveConversationIdForAction(session, 'be summarized into a new conversation');
+        const { newSessionId } = await retryLiveSessionActionAfterTakeover({
+          attemptAction: () => api.summarizeAndForkSession(liveConversationId, conversationSurfaceId),
+          takeOverSessionControl: () => api.takeoverLiveSession(liveConversationId, conversationSurfaceId),
+        });
+        openCreatedConversation(newSessionId);
+        return true;
+      } catch (error) {
+        showSidebarNotice('danger', `Summarize & New failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+        return false;
+      }
+    },
+    [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice],
+  );
 
-    if (nextPath) {
-      navigate(nextPath);
-    }
-  }, [activeConversationSurfaceId, navigate, workspaceConversationTabs]);
+  const copyTextToClipboard = useCallback(
+    async (value: string) => {
+      if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+        showSidebarNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
+        return false;
+      }
 
-  const jumpToConversation = useCallback((index: number) => {
-    if (index < 0 || index >= hotkeyConversationItems.length) {
-      return;
-    }
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch {
+        showSidebarNotice('danger', 'Copy to clipboard failed.', 4000);
+        return false;
+      }
+    },
+    [showSidebarNotice],
+  );
 
-    navigate(buildConversationSurfacePath(hotkeyConversationItems[index].session.id));
-  }, [hotkeyConversationItems, navigate]);
+  const handleCopyConversationId = useCallback(
+    async (conversationId: string) => {
+      return copyTextToClipboard(conversationId);
+    },
+    [copyTextToClipboard],
+  );
 
-  const shiftActiveConversation = useCallback((direction: -1 | 1) => {
-    if (!activeConversationId) {
-      return;
-    }
+  const handleCopyConversationWorkingDirectory = useCallback(
+    async (cwd: string | null | undefined) => {
+      const normalizedCwd = cwd?.trim() ?? '';
+      if (!normalizedCwd) {
+        showSidebarNotice('danger', 'No working directory is saved for this conversation.', 4000);
+        return false;
+      }
 
-    shiftSession(activeConversationId, direction);
-    if (draggingSessionId === activeConversationId) {
-      clearDragState();
-    }
-  }, [activeConversationId, draggingSessionId, shiftSession]);
+      return copyTextToClipboard(normalizedCwd);
+    },
+    [copyTextToClipboard, showSidebarNotice],
+  );
+
+  const handleCopyConversationDeeplink = useCallback(
+    async (conversationId: string) => {
+      if (typeof window === 'undefined') {
+        showSidebarNotice('danger', 'Could not build a deeplink for this conversation.', 4000);
+        return false;
+      }
+
+      try {
+        return copyTextToClipboard(buildConversationDeeplink(conversationId, window.location.href));
+      } catch {
+        showSidebarNotice('danger', 'Could not build a deeplink for this conversation.', 4000);
+        return false;
+      }
+    },
+    [copyTextToClipboard, showSidebarNotice],
+  );
+
+  const handleOpenConversationInNewWindow = useCallback(
+    async (conversationId: string) => {
+      const desktopBridge = getDesktopBridge();
+      if (!desktopBridge?.openConversationPopout) {
+        showSidebarNotice('danger', 'Separate conversation windows are only available in the desktop app.', 4000);
+        return false;
+      }
+
+      try {
+        await desktopBridge.openConversationPopout({ conversationId });
+        return true;
+      } catch (error) {
+        showSidebarNotice('danger', `Could not open separate window: ${error instanceof Error ? error.message : String(error)}`, 4000);
+        return false;
+      }
+    },
+    [showSidebarNotice],
+  );
+
+  const resolveConversationGroupRedirectPath = useCallback(
+    (closingIds: readonly string[]) => {
+      const closingIdSet = new Set(closingIds.map((value) => value.trim()).filter(Boolean));
+      const orderedIds = workspaceConversationTabs.map((session) => session.id);
+      const remainingIds = orderedIds.filter((id) => !closingIdSet.has(id));
+      if (remainingIds.length === 0) {
+        return DRAFT_CONVERSATION_ROUTE;
+      }
+
+      const activeIndex = activeConversationSurfaceId ? orderedIds.findIndex((id) => id === activeConversationSurfaceId) : -1;
+      const nextIndex = activeIndex >= 0 ? Math.min(activeIndex, remainingIds.length - 1) : remainingIds.length - 1;
+      return buildConversationSurfacePath(remainingIds[nextIndex]);
+    },
+    [activeConversationSurfaceId, workspaceConversationTabs],
+  );
+
+  const archiveConversationGroupSessions = useCallback(
+    (sessionIds: readonly string[]) => {
+      const normalizedSessionIds = sessionIds.map((value) => value.trim()).filter(Boolean);
+      if (normalizedSessionIds.length === 0) {
+        return 0;
+      }
+
+      const sessionIdSet = new Set(normalizedSessionIds);
+      if (activeConversationSurfaceId && sessionIdSet.has(activeConversationSurfaceId)) {
+        navigate(resolveConversationGroupRedirectPath(normalizedSessionIds));
+      }
+
+      replaceConversationLayout({
+        sessionIds: openIds.filter((id) => !sessionIdSet.has(id)),
+        pinnedSessionIds: pinnedIds.filter((id) => !sessionIdSet.has(id)),
+        archivedSessionIds: [...new Set([...archivedConversationIds, ...normalizedSessionIds])],
+      });
+
+      return normalizedSessionIds.length;
+    },
+    [activeConversationSurfaceId, archivedConversationIds, navigate, openIds, pinnedIds, resolveConversationGroupRedirectPath],
+  );
+
+  const handleOpenConversationGroupInFinder = useCallback(
+    async (cwd: string | null, label: string) => {
+      const normalizedCwd = normalizeConversationGroupCwd(cwd);
+      if (!normalizedCwd) {
+        showSidebarNotice('danger', `No working directory is saved for ${label}.`, 4000);
+        return;
+      }
+
+      const desktopBridge = getDesktopBridge();
+      if (!desktopBridge?.openPath) {
+        showSidebarNotice('danger', 'Open in Finder is only available in the desktop app.', 4000);
+        return;
+      }
+
+      const result = await desktopBridge.openPath(normalizedCwd);
+      if (!result.opened) {
+        showSidebarNotice('danger', result.error ? `Could not open ${label}: ${result.error}` : `Could not open ${label}.`, 4000);
+      }
+    },
+    [showSidebarNotice],
+  );
+
+  const handleRenameConversationGroup = useCallback(
+    (groupKey: string, defaultLabel: string, currentLabel: string) => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const nextLabel = window.prompt('Edit workspace name', currentLabel);
+      if (nextLabel === null) {
+        return;
+      }
+
+      const normalizedLabel = nextLabel.trim();
+      updateConversationGroupLabelOverride(groupKey, normalizedLabel && normalizedLabel !== defaultLabel ? normalizedLabel : null);
+
+      if (normalizedLabel && normalizedLabel !== defaultLabel) {
+        showSidebarNotice('accent', `Workspace renamed to ${normalizedLabel}.`);
+        return;
+      }
+
+      showSidebarNotice('accent', `Workspace name reset to ${defaultLabel}.`);
+    },
+    [showSidebarNotice, updateConversationGroupLabelOverride],
+  );
+
+  const handleArchiveConversationGroup = useCallback(
+    (label: string, sessionIds: readonly string[]) => {
+      const archivedCount = archiveConversationGroupSessions(sessionIds);
+      if (archivedCount === 0) {
+        showSidebarNotice('danger', `No threads to archive in ${label}.`, 4000);
+        return;
+      }
+
+      showSidebarNotice(
+        'accent',
+        archivedCount === 1 ? `Archived 1 thread from ${label}.` : `Archived ${archivedCount} threads from ${label}.`,
+      );
+    },
+    [archiveConversationGroupSessions, showSidebarNotice],
+  );
+
+  const handleRemoveConversationGroup = useCallback(
+    (
+      groupKey: string,
+      label: string,
+      cwd: string | null,
+      sessionIds: readonly string[],
+      includesDraft: boolean,
+      executionTargetIsLocal: boolean,
+    ) => {
+      const removedCount = archiveConversationGroupSessions(sessionIds);
+      updateConversationGroupLabelOverride(groupKey, null);
+      clearConversationGroupCollapsedState(groupKey);
+
+      const normalizedCwd = normalizeConversationGroupCwd(cwd);
+      if (
+        executionTargetIsLocal &&
+        includesDraft &&
+        normalizedCwd &&
+        normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd
+      ) {
+        clearDraftConversationCwd();
+      }
+
+      if (executionTargetIsLocal && normalizedCwd) {
+        const nextWorkspacePaths = savedWorkspacePaths.filter((workspacePath) => workspacePath !== normalizedCwd);
+        if (!sameStringLists(savedWorkspacePaths, nextWorkspacePaths)) {
+          persistSavedWorkspacePathsState(nextWorkspacePaths);
+          void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
+            // Ignore best-effort sync failures.
+          });
+        }
+      }
+
+      if (removedCount === 0 && !includesDraft && !normalizedCwd) {
+        showSidebarNotice('danger', `No threads to remove in ${label}.`, 4000);
+        return;
+      }
+
+      showSidebarNotice('accent', `Removed ${label} from Threads.`);
+    },
+    [
+      archiveConversationGroupSessions,
+      clearConversationGroupCollapsedState,
+      persistSavedWorkspacePathsState,
+      savedWorkspacePaths,
+      showSidebarNotice,
+      updateConversationGroupLabelOverride,
+    ],
+  );
+
+  const navigateConversation = useCallback(
+    (direction: -1 | 1) => {
+      const nextPath = resolveConversationAdjacentPath({
+        orderedIds: workspaceConversationTabs.map((session) => session.id),
+        activeId: activeConversationSurfaceId,
+        direction,
+      });
+
+      if (nextPath) {
+        navigate(nextPath);
+      }
+    },
+    [activeConversationSurfaceId, navigate, workspaceConversationTabs],
+  );
+
+  const jumpToConversation = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= hotkeyConversationItems.length) {
+        return;
+      }
+
+      navigate(buildConversationSurfacePath(hotkeyConversationItems[index].session.id));
+    },
+    [hotkeyConversationItems, navigate],
+  );
+
+  const shiftActiveConversation = useCallback(
+    (direction: -1 | 1) => {
+      if (!activeConversationId) {
+        return;
+      }
+
+      shiftSession(activeConversationId, direction);
+      if (draggingSessionId === activeConversationId) {
+        clearDragState();
+      }
+    },
+    [activeConversationId, draggingSessionId, shiftSession],
+  );
 
   const handleReopenClosedConversation = useCallback(() => {
     const sessionId = reopenMostRecentlyClosedSession();
@@ -3079,11 +3190,12 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
 
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
-      const nextPath = resolveConversationAdjacentPath({
-        orderedIds: workspaceConversationTabs.map((session) => session.id),
-        activeId: null,
-        direction: 1,
-      }) ?? DRAFT_CONVERSATION_ROUTE;
+      const nextPath =
+        resolveConversationAdjacentPath({
+          orderedIds: workspaceConversationTabs.map((session) => session.id),
+          activeId: null,
+          direction: 1,
+        }) ?? DRAFT_CONVERSATION_ROUTE;
       navigate(nextPath);
       window.setTimeout(closeDraft, 0);
       return;
@@ -3267,7 +3379,13 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
     window.addEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
     return () => window.removeEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [handleCloseActiveConversation, handleReopenClosedConversation, handleToggleArchivedActiveConversation, handleTogglePinnedActiveConversation, navigateConversation]);
+  }, [
+    handleCloseActiveConversation,
+    handleReopenClosedConversation,
+    handleToggleArchivedActiveConversation,
+    handleTogglePinnedActiveConversation,
+    navigateConversation,
+  ]);
 
   function handlePinConversation(sessionId: string) {
     pinSession(sessionId);
@@ -3286,9 +3404,10 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   function renderConversationRow({ session, section, pinned }: SidebarConversationItem) {
     const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
     const canDrag = canReorderConversationRows && !isDraftTab;
-    const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
-      ? dropTarget.position
-      : null;
+    const dropPosition =
+      canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+        ? dropTarget.position
+        : null;
 
     const isAutomationRunning = runningAutomationConversationIdSet.has(session.id);
 
@@ -3305,11 +3424,15 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
         dropPosition={dropPosition}
         onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
         onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
-        onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
-        onArchive={!isDraftTab ? () => {
-          handleArchiveConversation(session.id);
-          return true;
-        } : undefined}
+        onClose={isDraftTab ? handleCloseDraftTab : !pinned ? () => handleCloseConversation(session.id) : undefined}
+        onArchive={
+          !isDraftTab
+            ? () => {
+                handleArchiveConversation(session.id);
+                return true;
+              }
+            : undefined
+        }
         onOpenInNewWindow={!isDraftTab ? () => handleOpenConversationInNewWindow(session.id) : undefined}
         onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
         onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
@@ -3330,9 +3453,12 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
   const [knowledgeSearchParams, setKnowledgeSearchParams] = useSearchParams();
   const knowledgeActiveFileId = isKnowledgeRoute ? (knowledgeSearchParams.get('file') ?? null) : null;
-  const handleKnowledgeFileSelect = useCallback((id: string) => {
-    navigateKnowledgeFile(setKnowledgeSearchParams, id);
-  }, [setKnowledgeSearchParams]);
+  const handleKnowledgeFileSelect = useCallback(
+    (id: string) => {
+      navigateKnowledgeFile(setKnowledgeSearchParams, id);
+    },
+    [setKnowledgeSearchParams],
+  );
 
   return (
     <>
@@ -3342,17 +3468,21 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
             <button
               type="button"
               onClick={() => handleNewConversation()}
-              className={[
-                'ui-sidebar-nav-item mx-0 flex w-full text-secondary',
-                chatButtonActive && 'ui-sidebar-nav-item-active',
-              ].filter(Boolean).join(' ')}
+              className={['ui-sidebar-nav-item mx-0 flex w-full text-secondary', chatButtonActive && 'ui-sidebar-nav-item-active']
+                .filter(Boolean)
+                .join(' ')}
               title={`Chat (${newConversationHotkeyLabel})`}
             >
               <Ico d={PATH.plus} size={15} />
               <span className="flex-1 text-left">Chat</span>
             </button>
           </div>
-          <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations')} />
+          <TopNavItem
+            to="/automations"
+            icon={PATH.automations}
+            label="Automations"
+            forceActive={location.pathname.startsWith('/automations')}
+          />
           {!hideKnowledgeNav ? (
             <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
           ) : null}
@@ -3385,78 +3515,101 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
         {isKnowledgeRoute ? (
           <div className="flex-1 overflow-hidden min-h-0">
             <Suspense fallback={<VaultFileTreeFallback activeFileId={knowledgeActiveFileId} onFileSelect={handleKnowledgeFileSelect} />}>
-              <VaultFileTree
-                activeFileId={knowledgeActiveFileId}
-                onFileSelect={handleKnowledgeFileSelect}
-              />
+              <VaultFileTree activeFileId={knowledgeActiveFileId} onFileSelect={handleKnowledgeFileSelect} />
             </Suspense>
           </div>
         ) : null}
 
         <div className="flex-1 overflow-y-auto min-h-0 pb-3" style={{ display: isKnowledgeRoute ? 'none' : '' }}>
           <div className="py-0.5 space-y-0.5">
-            {!loading && renderedConversationItems.length === 0 && !(threadsOrganizeMode === 'project' && groupedConversationRows.length > 0) ? (
-              <p className="px-4 py-2 text-[12px] text-dim">{threadsFilterMode === 'automation' ? 'No automation threads yet.' : threadsFilterMode === 'human' ? 'No human threads yet.' : 'No open conversations yet.'}</p>
+            {!loading &&
+            renderedConversationItems.length === 0 &&
+            !(threadsOrganizeMode === 'project' && groupedConversationRows.length > 0) ? (
+              <p className="px-4 py-2 text-[12px] text-dim">
+                {threadsFilterMode === 'automation'
+                  ? 'No automation threads yet.'
+                  : threadsFilterMode === 'human'
+                    ? 'No human threads yet.'
+                    : 'No open conversations yet.'}
+              </p>
             ) : null}
 
             {threadsOrganizeMode === 'project'
               ? groupedConversationRows.map((group, groupIndex) => {
-                const collapsed = collapsedConversationGroupKeySet.has(group.key);
-                const groupSessionIds = group.items
-                  .map(({ session }) => session.id)
-                  .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
-                const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
-                const previousGroup = groupIndex > 0 ? groupedConversationRows[groupIndex - 1] : null;
-                const showExecutionTargetHeader = !group.executionTargetIsLocal
-                  && (!previousGroup || previousGroup.executionTargetKey !== group.executionTargetKey);
+                  const collapsed = collapsedConversationGroupKeySet.has(group.key);
+                  const groupSessionIds = group.items
+                    .map(({ session }) => session.id)
+                    .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
+                  const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
+                  const previousGroup = groupIndex > 0 ? groupedConversationRows[groupIndex - 1] : null;
+                  const showExecutionTargetHeader =
+                    !group.executionTargetIsLocal && (!previousGroup || previousGroup.executionTargetKey !== group.executionTargetKey);
 
-                const groupDropPosition = canReorderConversationGroups && groupDropTarget?.groupKey === group.key && draggingGroupKey !== group.key
-                  ? groupDropTarget.position
-                  : null;
+                  const groupDropPosition =
+                    canReorderConversationGroups && groupDropTarget?.groupKey === group.key && draggingGroupKey !== group.key
+                      ? groupDropTarget.position
+                      : null;
 
-                return (
-                  <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
-                    {showExecutionTargetHeader ? (
-                      <ConversationExecutionTargetHeader label={group.executionTargetLabel} />
-                    ) : null}
-                    <ConversationCwdGroupHeader
-                      label={group.label}
-                      cwd={group.cwd}
-                      collapsed={collapsed}
-                      canDrag={canReorderConversationGroups}
-                      isDragging={canReorderConversationGroups && draggingGroupKey === group.key}
-                      isConversationDropTarget={conversationCwdDropTargetGroupKey === group.key}
-                      dropPosition={groupDropPosition}
-                      dragId={group.key}
-                      onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
-                      onNewConversation={() => handleNewConversation(group.cwd)}
-                      onOpenInFinder={group.executionTargetIsLocal && group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
-                      onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
-                      onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
-                      onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft, group.executionTargetIsLocal)}
-                      onDragStart={canReorderConversationGroups ? (event) => handleConversationGroupDragStart(group.key, event) : undefined}
-                      onDragOver={canReorderConversationGroups ? (event) => handleConversationGroupDragOver(group.key, event) : undefined}
-                      onDrop={canReorderConversationGroups ? (event) => handleConversationGroupDrop(group.key, event) : undefined}
-                      onDragEnd={canReorderConversationGroups ? () => clearDragState() : undefined}
-                    />
-                    {!collapsed ? (
-                      group.items.length > 0
-                        ? group.items.map(renderConversationRow)
-                        : <p className="px-4 pb-1 text-[12px] text-dim">No threads yet.</p>
-                    ) : null}
-                  </div>
-                );
-              })
+                  return (
+                    <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
+                      {showExecutionTargetHeader ? <ConversationExecutionTargetHeader label={group.executionTargetLabel} /> : null}
+                      <ConversationCwdGroupHeader
+                        label={group.label}
+                        cwd={group.cwd}
+                        collapsed={collapsed}
+                        canDrag={canReorderConversationGroups}
+                        isDragging={canReorderConversationGroups && draggingGroupKey === group.key}
+                        isConversationDropTarget={conversationCwdDropTargetGroupKey === group.key}
+                        dropPosition={groupDropPosition}
+                        dragId={group.key}
+                        onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
+                        onNewConversation={() => handleNewConversation(group.cwd)}
+                        onOpenInFinder={
+                          group.executionTargetIsLocal && group.cwd
+                            ? () => handleOpenConversationGroupInFinder(group.cwd, group.label)
+                            : undefined
+                        }
+                        onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
+                        onArchiveThreads={
+                          groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined
+                        }
+                        onRemove={() =>
+                          handleRemoveConversationGroup(
+                            group.key,
+                            group.label,
+                            group.cwd,
+                            groupSessionIds,
+                            groupIncludesDraft,
+                            group.executionTargetIsLocal,
+                          )
+                        }
+                        onDragStart={
+                          canReorderConversationGroups ? (event) => handleConversationGroupDragStart(group.key, event) : undefined
+                        }
+                        onDragOver={canReorderConversationGroups ? (event) => handleConversationGroupDragOver(group.key, event) : undefined}
+                        onDrop={canReorderConversationGroups ? (event) => handleConversationGroupDrop(group.key, event) : undefined}
+                        onDragEnd={canReorderConversationGroups ? () => clearDragState() : undefined}
+                      />
+                      {!collapsed ? (
+                        group.items.length > 0 ? (
+                          group.items.map(renderConversationRow)
+                        ) : (
+                          <p className="px-4 pb-1 text-[12px] text-dim">No threads yet.</p>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })
               : filteredConversationItems.map(renderConversationRow)}
           </div>
         </div>
 
         <div className="shrink-0">
           {sidebarNotice ? (
-            <div aria-live="polite" className={[
-              'px-4 pb-2 text-[11px]',
-              sidebarNotice.tone === 'danger' ? 'text-danger/90' : 'text-accent/80',
-            ].join(' ')}>
+            <div
+              aria-live="polite"
+              className={['px-4 pb-2 text-[11px]', sidebarNotice.tone === 'danger' ? 'text-danger/90' : 'text-accent/80'].join(' ')}
+            >
               {sidebarNotice.text}
             </div>
           ) : null}

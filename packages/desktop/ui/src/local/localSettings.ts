@@ -1,9 +1,9 @@
 import { isComposerHistoryStorageKey } from '../conversation/composerHistory';
+import { APP_LAYOUT_MODE_STORAGE_KEY } from '../ui-state/appLayoutMode';
+import { isRailWidthStorageKey } from '../ui-state/layoutSizing';
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from './knowledgeOpenFiles';
 import { KNOWLEDGE_RECENTLY_CLOSED_FILE_IDS_STORAGE_KEY } from './knowledgeRecentlyClosedFiles';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
-import { isRailWidthStorageKey } from '../ui-state/layoutSizing';
-import { APP_LAYOUT_MODE_STORAGE_KEY } from '../ui-state/appLayoutMode';
 
 export const THEME_STORAGE_KEY = 'pa-theme';
 export const OPEN_SESSION_IDS_STORAGE_KEY = 'pa:open-session-ids';

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildCodexThreadFromSessionDetail,
-  buildSessionDetailFromCodexThread,
-  type CompatSessionDetail,
-} from './codex-compat.js';
+
+import { buildCodexThreadFromSessionDetail, buildSessionDetailFromCodexThread, type CompatSessionDetail } from './codex-compat.js';
 
 describe('codex compatibility mappers', () => {
   it('builds codex turns from session detail blocks', () => {
@@ -25,7 +22,15 @@ describe('codex compatibility mappers', () => {
       blocks: [
         { type: 'user', id: 'u1', ts: '2026-04-14T10:00:00.000Z', text: 'Hello there' },
         { type: 'thinking', id: 't1', ts: '2026-04-14T10:00:01.000Z', text: 'Working through the request' },
-        { type: 'tool_use', id: 'tool1', ts: '2026-04-14T10:00:02.000Z', tool: 'bash', input: { command: 'pwd' }, output: '/repo\n', toolCallId: 'call-1' },
+        {
+          type: 'tool_use',
+          id: 'tool1',
+          ts: '2026-04-14T10:00:02.000Z',
+          tool: 'bash',
+          input: { command: 'pwd' },
+          output: '/repo\n',
+          toolCallId: 'call-1',
+        },
         { type: 'text', id: 'a1', ts: '2026-04-14T10:00:03.000Z', text: 'Done.' },
         { type: 'user', id: 'u2', ts: '2026-04-14T10:01:00.000Z', text: 'Again' },
         { type: 'error', id: 'e1', ts: '2026-04-14T10:01:05.000Z', message: 'Boom' },

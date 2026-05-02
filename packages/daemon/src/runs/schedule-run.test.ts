@@ -5,25 +5,25 @@ describe('scheduleRun', () => {
     const { mkdtempSync } = await import('fs');
     const { tmpdir } = await import('os');
     const { join } = await import('path');
-    
+
     const tempDir = mkdtempSync(join(tmpdir(), 'schedule-run-test-'));
-    
+
     const { scheduleRun } = await import('./schedule-run.js');
     const { loadDurableRunManifest, loadDurableRunStatus } = await import('./store.js');
-    
+
     const result = await scheduleRun(tempDir, {
       trigger: { type: 'now' },
       target: { type: 'agent', prompt: 'do stuff' },
     });
-    
+
     expect(result.runId).toMatch(/^run-run-/);
     expect(result.kind).toBe('background-run');
     expect(result.resumePolicy).toBe('manual');
-    
+
     const manifest = loadDurableRunManifest(result.paths.manifestPath);
     expect(manifest?.kind).toBe('background-run');
     expect(manifest?.resumePolicy).toBe('manual');
-    
+
     const status = loadDurableRunStatus(result.paths.statusPath);
     expect(status?.status).toBe('queued');
   });
@@ -32,21 +32,21 @@ describe('scheduleRun', () => {
     const { mkdtempSync } = await import('fs');
     const { tmpdir } = await import('os');
     const { join } = await import('path');
-    
+
     const tempDir = mkdtempSync(join(tmpdir(), 'schedule-run-test-'));
-    
+
     const { scheduleRun } = await import('./schedule-run.js');
     const { loadDurableRunManifest } = await import('./store.js');
-    
+
     const result = await scheduleRun(tempDir, {
       conversation: { id: 'conv-123', state: 'open' },
       trigger: { type: 'now' },
       target: { type: 'conversation', conversationId: 'conv-123', prompt: 'check status' },
     });
-    
+
     expect(result.kind).toBe('conversation');
     expect(result.resumePolicy).toBe('continue');
-    
+
     const manifest = loadDurableRunManifest(result.paths.manifestPath);
     expect(manifest?.kind).toBe('conversation');
     expect(manifest?.resumePolicy).toBe('continue');
@@ -57,20 +57,20 @@ describe('scheduleRun', () => {
     const { mkdtempSync } = await import('fs');
     const { tmpdir } = await import('os');
     const { join } = await import('path');
-    
+
     const tempDir = mkdtempSync(join(tmpdir(), 'schedule-run-test-'));
-    
+
     const { scheduleRun } = await import('./schedule-run.js');
     const { loadDurableRunManifest } = await import('./store.js');
-    
+
     const result = await scheduleRun(tempDir, {
       trigger: { type: 'now' },
       target: { type: 'shell', command: 'ls -la' },
     });
-    
+
     expect(result.kind).toBe('raw-shell');
     expect(result.resumePolicy).toBe('manual');
-    
+
     const manifest = loadDurableRunManifest(result.paths.manifestPath);
     expect(manifest?.kind).toBe('raw-shell');
   });
@@ -79,17 +79,17 @@ describe('scheduleRun', () => {
     const { mkdtempSync } = await import('fs');
     const { tmpdir } = await import('os');
     const { join } = await import('path');
-    
+
     const tempDir = mkdtempSync(join(tmpdir(), 'schedule-run-test-'));
-    
+
     const { scheduleRun } = await import('./schedule-run.js');
     const { loadDurableRunStatus } = await import('./store.js');
-    
+
     const result = await scheduleRun(tempDir, {
       trigger: { type: 'defer', delay: '1h' },
       target: { type: 'agent', prompt: 'do stuff later' },
     });
-    
+
     const status = loadDurableRunStatus(result.paths.statusPath);
     expect(status?.status).toBe('waiting');
   });
@@ -98,17 +98,17 @@ describe('scheduleRun', () => {
     const { mkdtempSync } = await import('fs');
     const { tmpdir } = await import('os');
     const { join } = await import('path');
-    
+
     const tempDir = mkdtempSync(join(tmpdir(), 'schedule-run-test-'));
-    
+
     const { scheduleRun } = await import('./schedule-run.js');
     const { loadDurableRunManifest } = await import('./store.js');
-    
+
     const result = await scheduleRun(tempDir, {
       trigger: { type: 'now' },
       target: { type: 'agent', prompt: 'do stuff' },
     });
-    
+
     const manifest = loadDurableRunManifest(result.paths.manifestPath);
     expect(manifest?.spec.callback).toEqual({
       alertLevel: 'passive',
@@ -121,12 +121,12 @@ describe('scheduleRun', () => {
     const { mkdtempSync } = await import('fs');
     const { tmpdir } = await import('os');
     const { join } = await import('path');
-    
+
     const tempDir = mkdtempSync(join(tmpdir(), 'schedule-run-test-'));
-    
+
     const { scheduleRun } = await import('./schedule-run.js');
     const { loadDurableRunManifest } = await import('./store.js');
-    
+
     const result = await scheduleRun(tempDir, {
       trigger: { type: 'now' },
       target: { type: 'agent', prompt: 'do stuff' },
@@ -136,7 +136,7 @@ describe('scheduleRun', () => {
         requireAck: true,
       },
     });
-    
+
     const manifest = loadDurableRunManifest(result.paths.manifestPath);
     expect(manifest?.spec.callback).toEqual({
       alertLevel: 'disruptive',

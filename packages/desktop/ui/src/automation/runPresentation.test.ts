@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import {
   getRunConnections,
   getRunHeadline,
@@ -7,11 +9,10 @@ import {
   getRunResultSummary,
   getRunTimeline,
   isRunActive,
-  listRecentConversationBackgroundRuns,
   listConnectedConversationBackgroundRuns,
+  listRecentConversationBackgroundRuns,
   runNeedsAttention,
 } from './runPresentation';
-import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 
 function createRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
   return {
@@ -63,15 +64,17 @@ function createRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord 
 
 describe('runPresentation', () => {
   it('builds a human headline for scheduled task runs', () => {
-    const tasks: ScheduledTaskSummary[] = [{
-      id: 'daily-report',
-      filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
-      scheduleType: 'cron',
-      running: false,
-      enabled: true,
-      cron: '0 9 * * *',
-      prompt: 'Summarize yesterday and today.\nInclude blockers.',
-    }];
+    const tasks: ScheduledTaskSummary[] = [
+      {
+        id: 'daily-report',
+        filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        cron: '0 9 * * *',
+        prompt: 'Summarize yesterday and today.\nInclude blockers.',
+      },
+    ];
 
     expect(getRunHeadline(createRun(), { tasks })).toEqual({
       title: 'Summarize yesterday and today.',
@@ -95,16 +98,18 @@ describe('runPresentation', () => {
   });
 
   it('resolves live conversation titles and routes', () => {
-    const sessions: SessionMeta[] = [{
-      id: 'conv-123',
-      file: '/tmp/sessions/conv-123.jsonl',
-      timestamp: '2026-03-12T20:00:00.000Z',
-      cwd: '/repo',
-      cwdSlug: 'repo',
-      model: 'openai/gpt-5',
-      title: 'Fix runs navigation',
-      messageCount: 8,
-    }];
+    const sessions: SessionMeta[] = [
+      {
+        id: 'conv-123',
+        file: '/tmp/sessions/conv-123.jsonl',
+        timestamp: '2026-03-12T20:00:00.000Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'openai/gpt-5',
+        title: 'Fix runs navigation',
+        messageCount: 8,
+      },
+    ];
 
     const run = createRun({
       manifest: {
@@ -213,16 +218,20 @@ describe('runPresentation', () => {
 
   it('resolves primary links for scheduled, deferred, and background runs', () => {
     const scheduledRun = createRun();
-    expect(getRunPrimaryConnection(scheduledRun, {
-      tasks: [{
-        id: 'daily-report',
-        filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
-        scheduleType: 'cron',
-        running: false,
-        enabled: true,
-        prompt: 'Summarize yesterday and today.',
-      }],
-    })).toMatchObject({
+    expect(
+      getRunPrimaryConnection(scheduledRun, {
+        tasks: [
+          {
+            id: 'daily-report',
+            filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
+            scheduleType: 'cron',
+            running: false,
+            enabled: true,
+            prompt: 'Summarize yesterday and today.',
+          },
+        ],
+      }),
+    ).toMatchObject({
       label: 'Automation',
       to: '/automations/daily-report',
     });
@@ -321,38 +330,43 @@ describe('runPresentation', () => {
     });
 
     expect(getRunResultSummary(completed)).toBe('Uploaded the dataset successfully.');
-    expect(listRecentConversationBackgroundRuns({
-      conversationId: 'conv-123',
-      runs: {
-        scannedAt: '2026-03-12T20:36:00.000Z',
-        runsRoot: '/tmp/runs',
-        summary: { total: 2, recoveryActions: {}, statuses: {} },
-        runs: [running, completed],
-      },
-    }).map((run) => run.runId)).toEqual(['run-completed']);
+    expect(
+      listRecentConversationBackgroundRuns({
+        conversationId: 'conv-123',
+        runs: {
+          scannedAt: '2026-03-12T20:36:00.000Z',
+          runsRoot: '/tmp/runs',
+          summary: { total: 2, recoveryActions: {}, statuses: {} },
+          runs: [running, completed],
+        },
+      }).map((run) => run.runId),
+    ).toEqual(['run-completed']);
   });
 
   it('prefers a run transcript conversation while still linking back to the originating conversation', () => {
-    const sessions: SessionMeta[] = [{
-      id: 'conv-123',
-      file: '/tmp/sessions/conv-123.jsonl',
-      timestamp: '2026-03-12T20:00:00.000Z',
-      cwd: '/repo',
-      cwdSlug: 'repo',
-      model: 'openai/gpt-5',
-      title: 'Watch subagent run',
-      messageCount: 12,
-    }, {
-      id: 'subagent-456',
-      file: '/tmp/sessions/__runs/run-subagent-2026-03-12T20-30-00-000Z-abcd1234/subagent-456.jsonl',
-      timestamp: '2026-03-12T20:31:00.000Z',
-      cwd: '/repo',
-      cwdSlug: 'repo',
-      model: 'openai/gpt-5',
-      title: 'Focused work transcript',
-      messageCount: 9,
-      sourceRunId: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
-    }];
+    const sessions: SessionMeta[] = [
+      {
+        id: 'conv-123',
+        file: '/tmp/sessions/conv-123.jsonl',
+        timestamp: '2026-03-12T20:00:00.000Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'openai/gpt-5',
+        title: 'Watch subagent run',
+        messageCount: 12,
+      },
+      {
+        id: 'subagent-456',
+        file: '/tmp/sessions/__runs/run-subagent-2026-03-12T20-30-00-000Z-abcd1234/subagent-456.jsonl',
+        timestamp: '2026-03-12T20:31:00.000Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'openai/gpt-5',
+        title: 'Focused work transcript',
+        messageCount: 9,
+        sourceRunId: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
+      },
+    ];
 
     const run = createRun({
       runId: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
@@ -380,22 +394,24 @@ describe('runPresentation', () => {
       },
     });
 
-    expect(getRunConnections(run, { sessions })).toEqual(expect.arrayContaining([
-      {
-        key: 'transcript:subagent-456',
-        label: 'Conversation transcript',
-        value: 'Focused work transcript',
-        to: '/conversations/subagent-456',
-        detail: 'subagent-456',
-      },
-      {
-        key: 'conversation:conv-123',
-        label: 'Conversation',
-        value: 'Watch subagent run',
-        to: '/conversations/conv-123',
-        detail: 'conv-123',
-      },
-    ]));
+    expect(getRunConnections(run, { sessions })).toEqual(
+      expect.arrayContaining([
+        {
+          key: 'transcript:subagent-456',
+          label: 'Conversation transcript',
+          value: 'Focused work transcript',
+          to: '/conversations/subagent-456',
+          detail: 'subagent-456',
+        },
+        {
+          key: 'conversation:conv-123',
+          label: 'Conversation',
+          value: 'Watch subagent run',
+          to: '/conversations/conv-123',
+          detail: 'conv-123',
+        },
+      ]),
+    );
 
     expect(getRunPrimaryConnection(run, { sessions })).toMatchObject({
       label: 'Conversation transcript',
@@ -481,10 +497,7 @@ describe('runPresentation', () => {
       excludeConversationRunId: 'conversation-live-conv-123',
     });
 
-    expect(connected.map((run) => run.runId)).toEqual([
-      'run-background-newer',
-      'run-background-older',
-    ]);
+    expect(connected.map((run) => run.runId)).toEqual(['run-background-newer', 'run-background-older']);
     expect(isRunActive(connected[0])).toBe(true);
     expect(isRunActive(connected[1])).toBe(false);
   });

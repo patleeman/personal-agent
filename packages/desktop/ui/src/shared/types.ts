@@ -166,15 +166,48 @@ export interface ConversationAttachmentAssetData {
 }
 
 export type MessageBlock =
-  | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
-  | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
-  | { type: 'context';   id?: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';   id?: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
-  | { type: 'thinking';  id?: string; ts: string; text: string }
-  | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown; outputDeferred?: boolean }
-  | { type: 'subagent';  id?: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
-  | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
-  | { type: 'error';     id?: string; ts: string; tool?: string; message: string };
+  | { type: 'user'; id?: string; ts: string; text: string; images?: MessageImage[] }
+  | { type: 'text'; id?: string; ts: string; text: string; streaming?: boolean }
+  | { type: 'context'; id?: string; ts: string; text: string; customType?: string }
+  | { type: 'summary'; id?: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
+  | { type: 'thinking'; id?: string; ts: string; text: string }
+  | {
+      type: 'tool_use';
+      id?: string;
+      ts: string;
+      tool: string;
+      input: Record<string, unknown>;
+      output: string;
+      durationMs?: number;
+      running?: boolean;
+      status?: 'running' | 'ok' | 'error';
+      error?: boolean;
+      _toolCallId?: string;
+      details?: unknown;
+      outputDeferred?: boolean;
+    }
+  | {
+      type: 'subagent';
+      id?: string;
+      ts: string;
+      name: string;
+      prompt: string;
+      status: 'running' | 'complete' | 'failed';
+      summary?: string;
+    }
+  | {
+      type: 'image';
+      id?: string;
+      ts: string;
+      alt: string;
+      src?: string;
+      mimeType?: string;
+      width?: number;
+      height?: number;
+      caption?: string;
+      deferred?: boolean;
+    }
+  | { type: 'error'; id?: string; ts: string; tool?: string; message: string };
 
 interface ProjectMilestone {
   id: string;
@@ -460,14 +493,36 @@ export interface ConversationSummaryRecord {
 }
 
 export type DisplayBlock =
-  | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
-  | { type: 'text';     id: string; ts: string; text: string }
-  | { type: 'context';  id: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
+  | { type: 'user'; id: string; ts: string; text: string; images?: MessageImage[] }
+  | { type: 'text'; id: string; ts: string; text: string }
+  | { type: 'context'; id: string; ts: string; text: string; customType?: string }
+  | { type: 'summary'; id: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
-  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
-  | { type: 'error';    id: string; ts: string; tool?: string; message: string };
+  | {
+      type: 'tool_use';
+      id: string;
+      ts: string;
+      tool: string;
+      input: Record<string, unknown>;
+      output: string;
+      durationMs?: number;
+      toolCallId: string;
+      details?: unknown;
+      outputDeferred?: boolean;
+    }
+  | {
+      type: 'image';
+      id: string;
+      ts: string;
+      alt: string;
+      src?: string;
+      mimeType?: string;
+      width?: number;
+      height?: number;
+      caption?: string;
+      deferred?: boolean;
+    }
+  | { type: 'error'; id: string; ts: string; tool?: string; message: string };
 
 type ContextUsageSegmentKey = 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
 
@@ -649,11 +704,11 @@ export interface FilePickerResult {
 }
 
 export interface LiveSessionMeta {
-  id:                   string;
-  cwd:                  string;
-  sessionFile:          string;
-  title?:               string;
-  isStreaming:          boolean;
+  id: string;
+  cwd: string;
+  sessionFile: string;
+  title?: string;
+  isStreaming: boolean;
   hasPendingHiddenTurn?: boolean;
 }
 
@@ -730,7 +785,19 @@ export interface DesktopRemoteOperationStatus {
   hostLabel: string;
   conversationId?: string;
   scope: 'runtime' | 'directory';
-  stage: 'connect' | 'detect-platform' | 'download-pi' | 'copy-pi' | 'copy-helper' | 'launch' | 'attach' | 'reconnect' | 'restart' | 'browse' | 'ready' | 'error';
+  stage:
+    | 'connect'
+    | 'detect-platform'
+    | 'download-pi'
+    | 'copy-pi'
+    | 'copy-helper'
+    | 'launch'
+    | 'attach'
+    | 'reconnect'
+    | 'restart'
+    | 'browse'
+    | 'ready'
+    | 'error';
   status: 'running' | 'success' | 'error';
   message: string;
   at: string;
@@ -854,26 +921,26 @@ export interface DesktopConversationState {
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =
-  | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
+  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
-  | { type: 'cwd_changed';     newConversationId: string; cwd: string; autoContinued: boolean }
-  | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
-  | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
-  | { type: 'parallel_state';  jobs: ParallelPromptPreview[] }
-  | { type: 'presence_state';  state: LiveSessionPresenceState }
+  | { type: 'cwd_changed'; newConversationId: string; cwd: string; autoContinued: boolean }
+  | { type: 'user_message'; block: Extract<DisplayBlock, { type: 'user' }> }
+  | { type: 'queue_state'; steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
+  | { type: 'parallel_state'; jobs: ParallelPromptPreview[] }
+  | { type: 'presence_state'; state: LiveSessionPresenceState }
   | { type: 'auto_mode_state'; state: ConversationAutoModeState }
-  | { type: 'text_delta';      delta: string }
-  | { type: 'thinking_delta';  delta: string }
-  | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, unknown> }
-  | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
-  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string; details?: unknown }
-  | { type: 'title_update';    title: string }
-  | { type: 'context_usage';   usage: SessionContextUsage | null }
-  | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
+  | { type: 'text_delta'; delta: string }
+  | { type: 'thinking_delta'; delta: string }
+  | { type: 'tool_start'; toolCallId: string; toolName: string; args: Record<string, unknown> }
+  | { type: 'tool_update'; toolCallId: string; partialResult: unknown }
+  | { type: 'tool_end'; toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string; details?: unknown }
+  | { type: 'title_update'; title: string }
+  | { type: 'context_usage'; usage: SessionContextUsage | null }
+  | { type: 'stats_update'; tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'compaction_start'; mode: 'manual' | 'auto' }
-  | { type: 'error';           message: string };
+  | { type: 'error'; message: string };
 
 export type DurableRunSseEvent =
   | { type: 'snapshot'; detail: DurableRunDetailResult; log: { path: string; log: string } }
@@ -1085,8 +1152,7 @@ export interface ProviderOAuthLoginState {
   updatedAt: string;
 }
 
-export type ProviderOAuthLoginStreamEvent =
-  | { type: 'snapshot'; data: ProviderOAuthLoginState };
+export type ProviderOAuthLoginStreamEvent = { type: 'snapshot'; data: ProviderOAuthLoginState };
 
 export interface ConversationTitleSettingsState {
   enabled: boolean;
@@ -1207,7 +1273,6 @@ export interface ToolsState {
   mcp: McpState;
   packageInstall: PackageInstallState;
 }
-
 
 // ── Vault editor ──────────────────────────────────────────────────────────────
 

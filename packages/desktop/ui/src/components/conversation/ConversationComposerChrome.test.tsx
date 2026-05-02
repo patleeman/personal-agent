@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   BrowsePathButton,
   ChatBubbleIcon,
@@ -29,28 +30,36 @@ describe('ConversationComposerChrome', () => {
   });
 
   it('prioritizes composer shell state classes', () => {
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: true,
-      hasInteractiveOverlay: true,
-      autoModeEnabled: true,
-    })).toContain('border-accent/50');
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: true,
+        hasInteractiveOverlay: true,
+        autoModeEnabled: true,
+      }),
+    ).toContain('border-accent/50');
 
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: false,
-      hasInteractiveOverlay: true,
-      autoModeEnabled: true,
-    })).toContain('border-accent/40');
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: true,
+        autoModeEnabled: true,
+      }),
+    ).toContain('border-accent/40');
 
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: false,
-      hasInteractiveOverlay: false,
-      autoModeEnabled: true,
-    })).toContain('ui-input-shell-auto-mode');
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: false,
+        autoModeEnabled: true,
+      }),
+    ).toContain('ui-input-shell-auto-mode');
 
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: false,
-      hasInteractiveOverlay: false,
-      autoModeEnabled: false,
-    })).toBe('border-border-subtle');
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: false,
+        autoModeEnabled: false,
+      }),
+    ).toBe('border-border-subtle');
   });
 });

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getMcpServerUrlHash,
-} from './mcp-oauth.js';
+
+import { getMcpServerUrlHash } from './mcp-oauth.js';
 
 describe('getMcpServerUrlHash', () => {
   it('produces consistent hashes from the same inputs', () => {

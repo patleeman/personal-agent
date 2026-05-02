@@ -3,8 +3,16 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import { countGitStatusEntries, parseGitNumstat, readGitRepoInfo, readGitStatusSummary, readGitStatusSummaryWithTelemetry } from './gitStatus.js';
+
+import {
+  countGitStatusEntries,
+  parseGitNumstat,
+  readGitRepoInfo,
+  readGitStatusSummary,
+  readGitStatusSummaryWithTelemetry,
+} from './gitStatus.js';
 
 const tempDirs: string[] = [];
 
@@ -28,22 +36,16 @@ afterEach(async () => {
 
 describe('parseGitNumstat', () => {
   it('sums added and deleted lines and ignores binary markers', () => {
-    expect(parseGitNumstat([
-      '2\t1\ttracked.txt',
-      '-\t-\tbinary.dat',
-      '5\t0\tnested/file.ts',
-    ].join('\n'))).toEqual({
+    expect(parseGitNumstat(['2\t1\ttracked.txt', '-\t-\tbinary.dat', '5\t0\tnested/file.ts'].join('\n'))).toEqual({
       linesAdded: 7,
       linesDeleted: 1,
     });
   });
 
   it('ignores malformed and unsafe numstat counts', () => {
-    expect(parseGitNumstat([
-      '2abc\t1\tpartial.txt',
-      `${Number.MAX_SAFE_INTEGER + 1}\t3\tunsafe.txt`,
-      '4\t5\tvalid.txt',
-    ].join('\n'))).toEqual({
+    expect(
+      parseGitNumstat(['2abc\t1\tpartial.txt', `${Number.MAX_SAFE_INTEGER + 1}\t3\tunsafe.txt`, '4\t5\tvalid.txt'].join('\n')),
+    ).toEqual({
       linesAdded: 4,
       linesDeleted: 9,
     });
@@ -77,10 +79,12 @@ describe('readGitStatusSummary', () => {
     runGit(['add', '.'], dir);
     runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'nested'], dir);
 
-    expect(readGitRepoInfo(nested)).toEqual(expect.objectContaining({
-      root: expect.stringContaining(`/pa-web-git-repo-info-`),
-      name: expect.stringContaining('pa-web-git-repo-info-'),
-    }));
+    expect(readGitRepoInfo(nested)).toEqual(
+      expect.objectContaining({
+        root: expect.stringContaining(`/pa-web-git-repo-info-`),
+        name: expect.stringContaining('pa-web-git-repo-info-'),
+      }),
+    );
   });
 
   it('reports cache telemetry for repeated git status reads', () => {
@@ -98,9 +102,7 @@ describe('readGitStatusSummary', () => {
       changeCount: 1,
       linesAdded: 1,
       linesDeleted: 0,
-      changes: [
-        { relativePath: 'tracked.txt', change: 'modified' },
-      ],
+      changes: [{ relativePath: 'tracked.txt', change: 'modified' }],
     });
     expect(firstRead.telemetry).toMatchObject({
       cache: 'miss',

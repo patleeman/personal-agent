@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   getMachineConfigFilePath,
   readMachineConfigSection,
@@ -82,12 +83,15 @@ describe('machine config', () => {
   it('reads and writes instruction files in config.json', () => {
     const configDir = createTempDir('pa-machine-config-');
 
-    writeMachineInstructionFiles([
-      '/Users/patrick/Documents/personal-agent/AGENTS.md',
-      '  /Users/patrick/Documents/personal-agent/skills/checkpoint/SKILL.md  ',
-      '/Users/patrick/Documents/personal-agent/AGENTS.md',
-      '',
-    ], { configRoot: configDir });
+    writeMachineInstructionFiles(
+      [
+        '/Users/patrick/Documents/personal-agent/AGENTS.md',
+        '  /Users/patrick/Documents/personal-agent/skills/checkpoint/SKILL.md  ',
+        '/Users/patrick/Documents/personal-agent/AGENTS.md',
+        '',
+      ],
+      { configRoot: configDir },
+    );
 
     expect(readMachineInstructionFiles({ configRoot: configDir })).toEqual([
       '/Users/patrick/Documents/personal-agent/AGENTS.md',
@@ -108,22 +112,22 @@ describe('machine config', () => {
   it('reads and writes skill directories in config.json', () => {
     const configDir = createTempDir('pa-machine-config-');
 
-    writeMachineSkillDirs([
-      '/Users/patrick/Documents/personal-agent/skills',
-      '  /Users/patrick/Documents/shared-skills  ',
-      '/Users/patrick/Documents/personal-agent/skills',
-      '',
-    ], { configRoot: configDir });
+    writeMachineSkillDirs(
+      [
+        '/Users/patrick/Documents/personal-agent/skills',
+        '  /Users/patrick/Documents/shared-skills  ',
+        '/Users/patrick/Documents/personal-agent/skills',
+        '',
+      ],
+      { configRoot: configDir },
+    );
 
     expect(readMachineSkillDirs({ configRoot: configDir })).toEqual([
       '/Users/patrick/Documents/personal-agent/skills',
       '/Users/patrick/Documents/shared-skills',
     ]);
     expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({
-      skillDirs: [
-        '/Users/patrick/Documents/personal-agent/skills',
-        '/Users/patrick/Documents/shared-skills',
-      ],
+      skillDirs: ['/Users/patrick/Documents/personal-agent/skills', '/Users/patrick/Documents/shared-skills'],
     });
 
     writeMachineSkillDirs([], { configRoot: configDir });

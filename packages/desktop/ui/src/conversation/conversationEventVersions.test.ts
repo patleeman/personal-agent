@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   bumpConversationScopedEventVersions,
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,

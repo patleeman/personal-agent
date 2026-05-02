@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { SessionMeta } from '../shared/types';
 import {
   buildRelatedThreadCandidateLookup,
@@ -42,16 +43,18 @@ describe('related thread selection helpers', () => {
       selectedRelatedThreadIds: ['selected'],
       query: '',
       searchResults: [],
-      recentResults: [{
-        sessionId: 'recent',
-        title: 'Recent',
-        cwd: '/repo',
-        timestamp: '2026-04-01T00:00:00.000Z',
-        snippet: 'recent snippet',
-        matchedTerms: [],
-        score: 10,
-        sameWorkspace: true,
-      }],
+      recentResults: [
+        {
+          sessionId: 'recent',
+          title: 'Recent',
+          cwd: '/repo',
+          timestamp: '2026-04-01T00:00:00.000Z',
+          snippet: 'recent snippet',
+          matchedTerms: [],
+          score: 10,
+          sameWorkspace: true,
+        },
+      ],
       candidateById: new Map([['selected', candidate]]),
       searchIndex: { selected: 'a longish selected transcript snippet' },
       summaries: {
@@ -141,66 +144,85 @@ describe('related thread selection helpers', () => {
   });
 
   it('toggles selections while enforcing the maximum', () => {
-    expect(toggleRelatedThreadSelectionIds({
-      current: ['a'],
-      sessionId: 'a',
-      maxSelections: 2,
-    })).toEqual({ next: [], rejected: false });
+    expect(
+      toggleRelatedThreadSelectionIds({
+        current: ['a'],
+        sessionId: 'a',
+        maxSelections: 2,
+      }),
+    ).toEqual({ next: [], rejected: false });
 
-    expect(toggleRelatedThreadSelectionIds({
-      current: ['a'],
-      sessionId: 'b',
-      maxSelections: 2,
-    })).toEqual({ next: ['a', 'b'], rejected: false });
+    expect(
+      toggleRelatedThreadSelectionIds({
+        current: ['a'],
+        sessionId: 'b',
+        maxSelections: 2,
+      }),
+    ).toEqual({ next: ['a', 'b'], rejected: false });
 
-    expect(toggleRelatedThreadSelectionIds({
-      current: ['a', 'b'],
-      sessionId: 'c',
-      maxSelections: 2,
-    })).toEqual({ next: ['a', 'b'], rejected: true });
+    expect(
+      toggleRelatedThreadSelectionIds({
+        current: ['a', 'b'],
+        sessionId: 'c',
+        maxSelections: 2,
+      }),
+    ).toEqual({ next: ['a', 'b'], rejected: true });
   });
 
   it('keeps selected related threads constrained to available candidates', () => {
-    expect(pruneRelatedThreadSelectionIds(
-      ['a', 'missing', 'b'],
-      new Map([['a', session('a')], ['b', session('b')]]),
-    )).toEqual(['a', 'b']);
+    expect(
+      pruneRelatedThreadSelectionIds(
+        ['a', 'missing', 'b'],
+        new Map([
+          ['a', session('a')],
+          ['b', session('b')],
+        ]),
+      ),
+    ).toEqual(['a', 'b']);
   });
 
   it('selects missing related-thread search and summary metadata ids', () => {
-    expect(selectMissingRelatedThreadSearchIndexIds({
-      draft: true,
-      inputText: 'find context',
-      selectedThreadIds: [],
-      candidateIds: ['a', 'b', 'c'],
-      searchIndex: { a: 'indexed', c: '' },
-    })).toEqual(['b']);
+    expect(
+      selectMissingRelatedThreadSearchIndexIds({
+        draft: true,
+        inputText: 'find context',
+        selectedThreadIds: [],
+        candidateIds: ['a', 'b', 'c'],
+        searchIndex: { a: 'indexed', c: '' },
+      }),
+    ).toEqual(['b']);
 
-    expect(selectMissingRelatedThreadSearchIndexIds({
-      draft: true,
-      inputText: ' ',
-      selectedThreadIds: [],
-      candidateIds: ['a'],
-      searchIndex: {},
-    })).toEqual([]);
+    expect(
+      selectMissingRelatedThreadSearchIndexIds({
+        draft: true,
+        inputText: ' ',
+        selectedThreadIds: [],
+        candidateIds: ['a'],
+        searchIndex: {},
+      }),
+    ).toEqual([]);
 
-    expect(selectMissingRelatedThreadSummaryIds({
-      draft: true,
-      candidateIds: ['a', 'b'],
-      summaries: {
-        a: {
-          sessionId: 'a',
-          displaySummary: 'A summary',
-          generatedAt: '2026-04-01T00:00:00.000Z',
+    expect(
+      selectMissingRelatedThreadSummaryIds({
+        draft: true,
+        candidateIds: ['a', 'b'],
+        summaries: {
+          a: {
+            sessionId: 'a',
+            displaySummary: 'A summary',
+            generatedAt: '2026-04-01T00:00:00.000Z',
+          },
         },
-      },
-    })).toEqual(['b']);
+      }),
+    ).toEqual(['b']);
 
-    expect(selectMissingRelatedThreadSummaryIds({
-      draft: false,
-      candidateIds: ['a'],
-      summaries: {},
-    })).toEqual([]);
+    expect(
+      selectMissingRelatedThreadSummaryIds({
+        draft: false,
+        candidateIds: ['a'],
+        summaries: {},
+      }),
+    ).toEqual([]);
   });
 
   it('auto-selects ranked results, preserves manual choices, and clears stale related-thread preselection', () => {
@@ -227,122 +249,140 @@ describe('related thread selection helpers', () => {
       score: 420,
     } as const;
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'matching prompt context',
-      selectedThreadIds: [],
-      autoSelectedThreadIds: [],
-      searchResults: [strongResult, secondResult],
-      maxAutoSelections: 5,
-    })).toEqual({
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'matching prompt context',
+        selectedThreadIds: [],
+        autoSelectedThreadIds: [],
+        searchResults: [strongResult, secondResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
       selectedThreadIds: ['strong', 'second'],
       autoSelectedThreadIds: ['strong', 'second'],
       changed: true,
     });
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'matching prompt context',
-      selectedThreadIds: ['manual'],
-      autoSelectedThreadIds: [],
-      searchResults: [strongResult],
-      maxAutoSelections: 5,
-    })).toEqual({
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'matching prompt context',
+        selectedThreadIds: ['manual'],
+        autoSelectedThreadIds: [],
+        searchResults: [strongResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
       selectedThreadIds: ['manual'],
       autoSelectedThreadIds: [],
       changed: false,
     });
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'hi',
-      selectedThreadIds: ['strong'],
-      autoSelectedThreadIds: ['strong'],
-      searchResults: [strongResult],
-      maxAutoSelections: 5,
-    })).toEqual({
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'hi',
+        selectedThreadIds: ['strong'],
+        autoSelectedThreadIds: ['strong'],
+        searchResults: [strongResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
       selectedThreadIds: [],
       autoSelectedThreadIds: [],
       changed: true,
     });
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'hi',
-      selectedThreadIds: ['strong', 'manual'],
-      autoSelectedThreadIds: ['strong'],
-      searchResults: [strongResult],
-      maxAutoSelections: 5,
-    })).toEqual({
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'hi',
+        selectedThreadIds: ['strong', 'manual'],
+        autoSelectedThreadIds: ['strong'],
+        searchResults: [strongResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
       selectedThreadIds: ['manual'],
       autoSelectedThreadIds: [],
       changed: true,
     });
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'hi',
-      selectedThreadIds: ['strong', 'manual'],
-      autoSelectedThreadIds: ['strong', 'missing'],
-      searchResults: [strongResult],
-      maxAutoSelections: 5,
-    })).toEqual({
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'hi',
+        selectedThreadIds: ['strong', 'manual'],
+        autoSelectedThreadIds: ['strong', 'missing'],
+        searchResults: [strongResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
       selectedThreadIds: ['manual'],
       autoSelectedThreadIds: [],
       changed: true,
     });
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'matching prompt context',
-      selectedThreadIds: [],
-      autoSelectedThreadIds: ['strong'],
-      searchResults: [strongResult],
-      maxAutoSelections: 5,
-    })).toEqual({
-      selectedThreadIds: [],
-      autoSelectedThreadIds: [],
-      changed: true,
-    });
-
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'matching prompt context',
-      selectedThreadIds: ['manual'],
-      autoSelectedThreadIds: ['strong'],
-      searchResults: [strongResult],
-      maxAutoSelections: 5,
-    })).toEqual({
-      selectedThreadIds: ['manual'],
-      autoSelectedThreadIds: [],
-      changed: true,
-    });
-
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'matching prompt context',
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'matching prompt context',
+        selectedThreadIds: [],
+        autoSelectedThreadIds: ['strong'],
+        searchResults: [strongResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
       selectedThreadIds: [],
       autoSelectedThreadIds: [],
-      searchResults: [strongResult, secondResult],
-      maxAutoSelections: 1.5,
-    })).toEqual({
+      changed: true,
+    });
+
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'matching prompt context',
+        selectedThreadIds: ['manual'],
+        autoSelectedThreadIds: ['strong'],
+        searchResults: [strongResult],
+        maxAutoSelections: 5,
+      }),
+    ).toEqual({
+      selectedThreadIds: ['manual'],
+      autoSelectedThreadIds: [],
+      changed: true,
+    });
+
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'matching prompt context',
+        selectedThreadIds: [],
+        autoSelectedThreadIds: [],
+        searchResults: [strongResult, secondResult],
+        maxAutoSelections: 1.5,
+      }),
+    ).toEqual({
       selectedThreadIds: [],
       autoSelectedThreadIds: [],
       changed: false,
     });
 
-    expect(resolveRelatedThreadPreselectionUpdate({
-      draft: true,
-      query: 'matching prompt context',
-      selectedThreadIds: [],
-      autoSelectedThreadIds: [],
-      searchResults: Array.from({ length: 12 }, (_, index) => ({
-        ...strongResult,
-        sessionId: `result-${index}`,
-        title: `Result ${index}`,
-      })),
-      maxAutoSelections: Number.MAX_SAFE_INTEGER,
-    })).toEqual({
+    expect(
+      resolveRelatedThreadPreselectionUpdate({
+        draft: true,
+        query: 'matching prompt context',
+        selectedThreadIds: [],
+        autoSelectedThreadIds: [],
+        searchResults: Array.from({ length: 12 }, (_, index) => ({
+          ...strongResult,
+          sessionId: `result-${index}`,
+          title: `Result ${index}`,
+        })),
+        maxAutoSelections: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toEqual({
       selectedThreadIds: ['result-0', 'result-1', 'result-2', 'result-3', 'result-4'],
       autoSelectedThreadIds: ['result-0', 'result-1', 'result-2', 'result-3', 'result-4'],
       changed: true,

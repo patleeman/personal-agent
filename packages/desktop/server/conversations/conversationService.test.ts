@@ -131,8 +131,8 @@ import {
   readSessionDetailForRoute,
   resolveConversationSessionFile,
   setConversationServiceContext,
-  toPublicLiveSessionMeta,
   toggleConversationAttention,
+  toPublicLiveSessionMeta,
 } from './conversationService.js';
 
 const defaultPreferences = {
@@ -189,18 +189,25 @@ describe('conversationService', () => {
       telemetry: { cache: 'miss', loader: 'disk', durationMs: 4 },
     });
     readSessionMetaMock.mockReturnValue(null);
-    resolveConversationModelPreferenceStateMock.mockReturnValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
+    resolveConversationModelPreferenceStateMock.mockReturnValue({
+      currentModel: 'gpt-5',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
     statSyncMock.mockImplementation(() => {
       throw new Error('stat unavailable');
     });
-    summarizeConversationAttentionMock.mockImplementation(({ conversations }: { conversations: Array<{ conversationId: string }> }) => conversations.map((conversation) => ({
-      conversationId: conversation.conversationId,
-      needsAttention: false,
-      attentionUpdatedAt: '2026-04-09T00:00:00.000Z',
-      unreadMessageCount: 0,
-      unreadActivityCount: 0,
-      unreadActivityIds: [],
-    })));
+    summarizeConversationAttentionMock.mockImplementation(({ conversations }: { conversations: Array<{ conversationId: string }> }) =>
+      conversations.map((conversation) => ({
+        conversationId: conversation.conversationId,
+        needsAttention: false,
+        attentionUpdatedAt: '2026-04-09T00:00:00.000Z',
+        unreadMessageCount: 0,
+        unreadActivityCount: 0,
+        unreadActivityIds: [],
+      })),
+    );
 
     setConversationServiceContext({
       getCurrentProfile: () => 'assistant',
@@ -435,48 +442,49 @@ describe('conversationService', () => {
         lastDurableRunState: 'running',
       },
     ]);
-    summarizeConversationAttentionMock.mockImplementation(({ conversations }: { conversations: Array<{ conversationId: string }> }) => conversations.map((conversation) => ({
-      conversationId: conversation.conversationId,
-      needsAttention: conversation.conversationId === 'review-1',
-      attentionUpdatedAt: '2026-04-09T12:00:00.000Z',
-      unreadMessageCount: conversation.conversationId === 'review-1' ? 2 : 0,
-      unreadActivityCount: 0,
-      unreadActivityIds: [],
-    })));
+    summarizeConversationAttentionMock.mockImplementation(({ conversations }: { conversations: Array<{ conversationId: string }> }) =>
+      conversations.map((conversation) => ({
+        conversationId: conversation.conversationId,
+        needsAttention: conversation.conversationId === 'review-1',
+        attentionUpdatedAt: '2026-04-09T12:00:00.000Z',
+        unreadMessageCount: conversation.conversationId === 'review-1' ? 2 : 0,
+        unreadActivityCount: 0,
+        unreadActivityIds: [],
+      })),
+    );
 
     const snapshot = listConversationSessionsSnapshot();
-    expect(snapshot).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'live-1',
-        title: 'New Conversation',
-        isLive: true,
-        isRunning: false,
-      }),
-      expect.objectContaining({
-        id: 'hidden-turn-1',
-        isLive: true,
-        isRunning: true,
-      }),
-      expect.objectContaining({
-        id: 'workspace-1',
-        title: 'Live workspace',
-        isLive: true,
-        isRunning: true,
-      }),
-      expect.objectContaining({
-        id: 'optimistic-running-1',
-        isLive: true,
-        isRunning: true,
-      }),
-      expect.objectContaining({
-        id: 'review-1',
-        needsAttention: true,
-        deferredResumes: [
-          expect.objectContaining({ id: 'resume-1', prompt: 'Resume the review' }),
-        ],
-      }),
-    ]));
-
+    expect(snapshot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'live-1',
+          title: 'New Conversation',
+          isLive: true,
+          isRunning: false,
+        }),
+        expect.objectContaining({
+          id: 'hidden-turn-1',
+          isLive: true,
+          isRunning: true,
+        }),
+        expect.objectContaining({
+          id: 'workspace-1',
+          title: 'Live workspace',
+          isLive: true,
+          isRunning: true,
+        }),
+        expect.objectContaining({
+          id: 'optimistic-running-1',
+          isLive: true,
+          isRunning: true,
+        }),
+        expect.objectContaining({
+          id: 'review-1',
+          needsAttention: true,
+          deferredResumes: [expect.objectContaining({ id: 'resume-1', prompt: 'Resume the review' })],
+        }),
+      ]),
+    );
 
     expect(toggleConversationAttention({ profile: 'assistant', conversationId: 'review-1', read: false })).toBe(true);
     expect(markConversationAttentionUnreadMock).toHaveBeenCalledWith({
@@ -519,14 +527,14 @@ describe('conversationService', () => {
       remoteHostId: 'bender',
     });
 
-    expect(listConversationSessionsSnapshot()).toEqual([
-      expect.objectContaining({ id: 'remote-partial', isLive: true, isRunning: false }),
-    ]);
-    expect(readConversationSessionMeta('remote-partial')).toEqual(expect.objectContaining({
-      id: 'remote-partial',
-      isLive: true,
-      isRunning: false,
-    }));
+    expect(listConversationSessionsSnapshot()).toEqual([expect.objectContaining({ id: 'remote-partial', isLive: true, isRunning: false })]);
+    expect(readConversationSessionMeta('remote-partial')).toEqual(
+      expect.objectContaining({
+        id: 'remote-partial',
+        isLive: true,
+        isRunning: false,
+      }),
+    );
   });
 
   it('reads route session detail and model preference state', async () => {
@@ -535,11 +543,13 @@ describe('conversationService', () => {
       telemetry: { cache: 'hit', loader: 'disk', durationMs: 2 },
     });
 
-    await expect(readSessionDetailForRoute({
-      conversationId: 'conversation-1',
-      profile: 'assistant',
-      tailBlocks: 5,
-    })).resolves.toEqual({
+    await expect(
+      readSessionDetailForRoute({
+        conversationId: 'conversation-1',
+        profile: 'assistant',
+        tailBlocks: 5,
+      }),
+    ).resolves.toEqual({
       sessionRead: {
         detail: { id: 'detail-1' },
         telemetry: { cache: 'hit', loader: 'disk', durationMs: 2 },
@@ -552,21 +562,25 @@ describe('conversationService', () => {
       detail: { id: 'detail-capped' },
       telemetry: { cache: 'hit', loader: 'disk', durationMs: 2 },
     });
-    await expect(readSessionDetailForRoute({
-      conversationId: 'conversation-capped',
-      profile: 'assistant',
-      tailBlocks: 5000,
-    })).resolves.toMatchObject({ sessionRead: { detail: { id: 'detail-capped' } } });
+    await expect(
+      readSessionDetailForRoute({
+        conversationId: 'conversation-capped',
+        profile: 'assistant',
+        tailBlocks: 5000,
+      }),
+    ).resolves.toMatchObject({ sessionRead: { detail: { id: 'detail-capped' } } });
     expect(readSessionBlocksWithTelemetryMock).toHaveBeenLastCalledWith('conversation-capped', { tailBlocks: 1000 });
 
     readSessionBlocksWithTelemetryMock.mockReturnValueOnce({
       detail: null,
       telemetry: { cache: 'miss', loader: 'disk', durationMs: 3 },
     });
-    await expect(readSessionDetailForRoute({
-      conversationId: 'conversation-2',
-      profile: 'assistant',
-    })).resolves.toEqual({
+    await expect(
+      readSessionDetailForRoute({
+        conversationId: 'conversation-2',
+        profile: 'assistant',
+      }),
+    ).resolves.toEqual({
       sessionRead: {
         detail: null,
         telemetry: { cache: 'miss', loader: 'disk', durationMs: 3 },

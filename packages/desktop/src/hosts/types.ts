@@ -41,7 +41,19 @@ export interface DesktopRemoteOperationStatus {
   hostLabel: string;
   conversationId?: string;
   scope: 'runtime' | 'directory';
-  stage: 'connect' | 'detect-platform' | 'download-pi' | 'copy-pi' | 'copy-helper' | 'launch' | 'attach' | 'reconnect' | 'restart' | 'browse' | 'ready' | 'error';
+  stage:
+    | 'connect'
+    | 'detect-platform'
+    | 'download-pi'
+    | 'copy-pi'
+    | 'copy-helper'
+    | 'launch'
+    | 'attach'
+    | 'reconnect'
+    | 'restart'
+    | 'browse'
+    | 'ready'
+    | 'error';
   status: 'running' | 'success' | 'error';
   message: string;
   at: string;
@@ -391,7 +403,12 @@ export interface HostController {
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;
   readOpenConversationTabs?(): Promise<unknown>;
-  updateOpenConversationTabs?(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[]; workspacePaths?: string[] }): Promise<unknown>;
+  updateOpenConversationTabs?(input: {
+    sessionIds?: string[];
+    pinnedSessionIds?: string[];
+    archivedSessionIds?: string[];
+    workspacePaths?: string[];
+  }): Promise<unknown>;
   readModelProviders?(): Promise<unknown>;
   saveModelProvider?(input: {
     provider: string;
@@ -486,7 +503,12 @@ export interface HostController {
     previewMimeType?: string;
     note?: string;
   }): Promise<unknown>;
-  readConversationAttachmentAsset?(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown>;
+  readConversationAttachmentAsset?(input: {
+    conversationId: string;
+    attachmentId: string;
+    asset: 'source' | 'preview';
+    revision?: number;
+  }): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
   readLiveSessionForkEntries?(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readLiveSessionContext?(conversationId: string): Promise<unknown>;

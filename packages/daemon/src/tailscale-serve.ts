@@ -107,9 +107,7 @@ function formatCommand(command: string, args: string[]): string {
 
 function renderTailscaleCommandFailure(execution: TailscaleCommandExecution): string {
   const status = execution.result.status ?? 1;
-  return (execution.result.stderr ?? '').trim()
-    || (execution.result.stdout ?? '').trim()
-    || `exit code ${status}`;
+  return (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
 }
 
 function resolveTailscaleCommandCandidates(): string[] {
@@ -255,14 +253,9 @@ function proxyTargetMatchesLoopbackPort(proxyTarget: string, port: number): bool
   try {
     const url = new URL(normalized);
     const hostname = url.hostname.replace(/^\[/, '').replace(/\]$/, '');
-    const resolvedPort = url.port
-      ? Number(url.port)
-      : url.protocol === 'https:'
-        ? 443
-        : 80;
+    const resolvedPort = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
 
-    return ['localhost', '127.0.0.1', '::1'].includes(hostname)
-      && resolvedPort === port;
+    return ['localhost', '127.0.0.1', '::1'].includes(hostname) && resolvedPort === port;
   } catch {
     return false;
   }
@@ -369,16 +362,20 @@ function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | und
 export function syncTailscaleServeProxy(input: SyncTailscaleServeProxyInput): void {
   const normalizedPort = normalizePort(input.port);
   const normalizedPath = normalizeServePath(input.path);
-  const execution = runTailscaleCommand(buildTailscaleServeArgs({
-    enabled: input.enabled,
-    port: normalizedPort,
-    path: normalizedPath,
-  }));
+  const execution = runTailscaleCommand(
+    buildTailscaleServeArgs({
+      enabled: input.enabled,
+      port: normalizedPort,
+      path: normalizedPath,
+    }),
+  );
   const status = execution.result.status ?? 1;
 
   if (status !== 0) {
     throw new Error(
-      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${normalizedPath} -> localhost:${normalizedPort}: ${renderTailscaleCommandFailure(execution)}`,
+      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${normalizedPath} -> localhost:${normalizedPort}: ${renderTailscaleCommandFailure(
+        execution,
+      )}`,
     );
   }
 

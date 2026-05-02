@@ -5,18 +5,19 @@
  */
 
 import { mkdirSync } from 'fs';
+
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  type DurableRunKind,
+  type DurableRunPaths,
+  type DurableRunResumePolicy,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
-  type DurableRunKind,
-  type DurableRunPaths,
-  type DurableRunResumePolicy,
 } from './store.js';
 
 // ---------------------------------------------------------------------------
@@ -139,11 +140,7 @@ function deriveRunKind(target: Target): DurableRunKind {
 /**
  * Derive resume policy from trigger, target, and loop options.
  */
-function deriveResumePolicy(
-  trigger: Trigger,
-  target: Target,
-  loop?: LoopOptions,
-): DurableRunResumePolicy {
+function deriveResumePolicy(trigger: Trigger, target: Target, loop?: LoopOptions): DurableRunResumePolicy {
   // Conversation runs always continue (resume)
   if (target.type === 'conversation' || loop?.enabled) {
     return 'continue';
@@ -197,12 +194,14 @@ function resolveLoopOptions(input?: LoopOptions): LoopOptions | undefined {
   if (!input || !input.enabled) {
     return undefined;
   }
-  const maxIterations = Number.isSafeInteger(input.maxIterations) && (input.maxIterations as number) > 0
-    ? Math.min(MAX_LOOP_ITERATIONS, input.maxIterations as number)
-    : undefined;
-  const retryAttempts = Number.isSafeInteger(input.retry?.attempts) && (input.retry?.attempts as number) > 0
-    ? Math.min(MAX_LOOP_RETRY_ATTEMPTS, input.retry?.attempts as number)
-    : DEFAULT_LOOP_RETRY.attempts;
+  const maxIterations =
+    Number.isSafeInteger(input.maxIterations) && (input.maxIterations as number) > 0
+      ? Math.min(MAX_LOOP_ITERATIONS, input.maxIterations as number)
+      : undefined;
+  const retryAttempts =
+    Number.isSafeInteger(input.retry?.attempts) && (input.retry?.attempts as number) > 0
+      ? Math.min(MAX_LOOP_RETRY_ATTEMPTS, input.retry?.attempts as number)
+      : DEFAULT_LOOP_RETRY.attempts;
 
   return {
     enabled: true,
@@ -392,13 +391,19 @@ function validateScheduleRunInput(input: unknown): ValidationError[] {
       errors.push({ field: 'loop.delay', message: 'Invalid loop.delay format' });
     }
 
-    if (loop.maxIterations !== undefined && (typeof loop.maxIterations !== 'number' || !Number.isSafeInteger(loop.maxIterations) || loop.maxIterations < 1)) {
+    if (
+      loop.maxIterations !== undefined &&
+      (typeof loop.maxIterations !== 'number' || !Number.isSafeInteger(loop.maxIterations) || loop.maxIterations < 1)
+    ) {
       errors.push({ field: 'loop.maxIterations', message: 'loop.maxIterations must be a positive integer' });
     }
 
     if (loop.retry && typeof loop.retry === 'object') {
       const retry = loop.retry as Record<string, unknown>;
-      if (retry.attempts !== undefined && (typeof retry.attempts !== 'number' || !Number.isSafeInteger(retry.attempts) || retry.attempts < 1)) {
+      if (
+        retry.attempts !== undefined &&
+        (typeof retry.attempts !== 'number' || !Number.isSafeInteger(retry.attempts) || retry.attempts < 1)
+      ) {
         errors.push({ field: 'loop.retry.attempts', message: 'loop.retry.attempts must be a positive integer' });
       }
       if (retry.maxDelay !== undefined && typeof retry.maxDelay === 'string' && parseDelayToMs(retry.maxDelay) === undefined) {
@@ -437,12 +442,7 @@ function createRunId(taskSlug: string): string {
   const now = new Date().toISOString();
   const nonce = Math.random().toString(16).slice(2, 10);
 
-  return [
-    'run',
-    sanitizeIdSegment(taskSlug, 'task'),
-    toTimestampKey(now),
-    nonce,
-  ].join('-');
+  return ['run', sanitizeIdSegment(taskSlug, 'task'), toTimestampKey(now), nonce].join('-');
 }
 
 export interface ScheduleRunResult {
@@ -461,10 +461,7 @@ export interface ScheduleRunResult {
  * @param input - The unified schedule input
  * @returns The created run record
  */
-export async function scheduleRun(
-  daemonRoot: string,
-  input: ScheduleRunInput,
-): Promise<ScheduleRunResult> {
+export async function scheduleRun(daemonRoot: string, input: ScheduleRunInput): Promise<ScheduleRunResult> {
   const errors = validateScheduleRunInput(input);
   if (errors.length > 0) {
     throw new Error(`Invalid ScheduleRunInput: ${errors.map((e) => `${e.field}: ${e.message}`).join(', ')}`);
@@ -486,30 +483,35 @@ export async function scheduleRun(
   const rootId = input.conversation?.id ?? runId; // Use conversation as root, or self if no conversation
 
   // Save manifest
-  saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
-    id: runId,
-    kind,
-    resumePolicy,
-    createdAt,
-    spec,
-    parentId,
-    rootId,
-    source: input.source,
-  }));
+  saveDurableRunManifest(
+    paths.manifestPath,
+    createDurableRunManifest({
+      id: runId,
+      kind,
+      resumePolicy,
+      createdAt,
+      spec,
+      parentId,
+      rootId,
+      source: input.source,
+    }),
+  );
 
   // Determine initial status based on trigger
-  const initialStatus: 'queued' | 'waiting' = 
-    input.trigger.type === 'now' ? 'queued' : 'waiting';
+  const initialStatus: 'queued' | 'waiting' = input.trigger.type === 'now' ? 'queued' : 'waiting';
 
   // Save initial status
-  saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
-    runId,
-    status: initialStatus,
-    createdAt,
-    updatedAt: createdAt,
-    activeAttempt: 0,
-    checkpointKey: initialStatus,
-  }));
+  saveDurableRunStatus(
+    paths.statusPath,
+    createInitialDurableRunStatus({
+      runId,
+      status: initialStatus,
+      createdAt,
+      updatedAt: createdAt,
+      activeAttempt: 0,
+      checkpointKey: initialStatus,
+    }),
+  );
 
   // Save initial checkpoint with full spec
   saveDurableRunCheckpoint(paths.checkpointPath, {
@@ -543,5 +545,3 @@ export async function scheduleRun(
     resumePolicy,
   };
 }
-
-

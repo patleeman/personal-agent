@@ -1,10 +1,12 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { afterEach, describe, expect, it } from 'vitest';
+
 import { getConversationCommitCheckpoint, listConversationCommitCheckpoints } from '@personal-agent/core';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { createCheckpointAgentExtension } from './checkpointAgentExtension.js';
 
 const tempDirs: string[] = [];
@@ -28,8 +30,8 @@ afterEach(async () => {
 function registerCheckpointTool(stateRoot: string) {
   let registeredTool:
     | {
-      execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
-    }
+        execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      }
     | undefined;
 
   createCheckpointAgentExtension({
@@ -81,11 +83,17 @@ describe('checkpoint agent extension', () => {
     writeFileSync(join(repoRoot, 'README.md'), '# demo\n\nAdded checkpoint review.\n');
     writeFileSync(join(repoRoot, 'notes.txt'), 'ignore me\n');
 
-    const created = await checkpointTool.execute('tool-1', {
-      action: 'save',
-      message: 'feat: checkpoint review',
-      paths: ['README.md'],
-    }, undefined, undefined, ctx);
+    const created = await checkpointTool.execute(
+      'tool-1',
+      {
+        action: 'save',
+        message: 'feat: checkpoint review',
+        paths: ['README.md'],
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
 
     expect(created.content[0]?.text).toContain('Saved checkpoint');
     expect(created.details).toMatchObject({
@@ -99,18 +107,18 @@ describe('checkpoint agent extension', () => {
     });
 
     const checkpointId = created.details?.checkpointId as string;
-    expect(getConversationCommitCheckpoint({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conv-123',
-      checkpointId,
-    })).toMatchObject({
+    expect(
+      getConversationCommitCheckpoint({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-123',
+        checkpointId,
+      }),
+    ).toMatchObject({
       commitSha: checkpointId,
       subject: 'feat: checkpoint review',
       fileCount: 1,
-      files: [
-        expect.objectContaining({ path: 'README.md', additions: 2, deletions: 0 }),
-      ],
+      files: [expect.objectContaining({ path: 'README.md', additions: 2, deletions: 0 })],
     });
 
     const status = spawnSync('git', ['status', '--short'], { cwd: repoRoot, encoding: 'utf-8' });
@@ -125,12 +133,18 @@ describe('checkpoint agent extension', () => {
     const ctx = createToolContext(repoRoot);
 
     writeFileSync(join(repoRoot, 'README.md'), '# demo\n\nOne more line.\n');
-    const created = await checkpointTool.execute('tool-1', {
-      action: 'save',
-      message: 'docs: extend readme',
-      paths: ['README.md'],
-      open: false,
-    }, undefined, undefined, ctx);
+    const created = await checkpointTool.execute(
+      'tool-1',
+      {
+        action: 'save',
+        message: 'docs: extend readme',
+        paths: ['README.md'],
+        open: false,
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
 
     const checkpointId = created.details?.checkpointId as string;
     const list = await checkpointTool.execute('tool-2', { action: 'list' }, undefined, undefined, ctx);

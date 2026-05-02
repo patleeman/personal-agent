@@ -14,10 +14,7 @@ const MAX_PERSISTED_CONVERSATION_BOOTSTRAPS = 24;
 
 let conversationBootstrapDbPromise: Promise<IDBDatabase | null> | null = null;
 
-function buildConversationBootstrapCacheKey(
-  conversationId: string,
-  options?: { tailBlocks?: number },
-): string {
+function buildConversationBootstrapCacheKey(conversationId: string, options?: { tailBlocks?: number }): string {
   return `${conversationId}::${options?.tailBlocks ?? 'all'}`;
 }
 
@@ -112,7 +109,7 @@ async function trimPersistedConversationBootstrapEntries(): Promise<void> {
   try {
     const tx = db.transaction(CONVERSATION_BOOTSTRAP_STORE, 'readwrite');
     const store = tx.objectStore(CONVERSATION_BOOTSTRAP_STORE);
-    const records = await requestToPromise(store.getAll()) as PersistedConversationBootstrapEntry[];
+    const records = (await requestToPromise(store.getAll())) as PersistedConversationBootstrapEntry[];
     if (records.length > MAX_PERSISTED_CONVERSATION_BOOTSTRAPS) {
       records
         .slice()

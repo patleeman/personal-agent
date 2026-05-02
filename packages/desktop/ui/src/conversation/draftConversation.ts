@@ -121,11 +121,7 @@ function normalizeDraftConversationImagePreviewUrl(value: unknown): string | nul
   }
   const commaIndex = previewUrl.indexOf(',');
   const base64 = commaIndex >= 0 ? previewUrl.slice(commaIndex + 1).trim() : '';
-  return base64
-    && base64.length % 4 !== 1
-    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)
-    ? previewUrl
-    : null;
+  return base64 && base64.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64) ? previewUrl : null;
 }
 
 function normalizeDraftConversationImage(value: unknown): PromptImageInput | null {
@@ -160,18 +156,18 @@ function normalizeDraftConversationDrawing(value: unknown): DraftConversationDra
 
   const drawing = value as Partial<DraftConversationDrawingAttachment>;
   if (
-    typeof drawing.localId !== 'string'
-    || typeof drawing.title !== 'string'
-    || typeof drawing.sourceData !== 'string'
-    || typeof drawing.sourceMimeType !== 'string'
-    || typeof drawing.sourceName !== 'string'
-    || typeof drawing.previewData !== 'string'
-    || typeof drawing.previewMimeType !== 'string'
-    || typeof drawing.previewName !== 'string'
-    || typeof drawing.previewUrl !== 'string'
-    || typeof drawing.dirty !== 'boolean'
-    || !drawing.scene
-    || typeof drawing.scene !== 'object'
+    typeof drawing.localId !== 'string' ||
+    typeof drawing.title !== 'string' ||
+    typeof drawing.sourceData !== 'string' ||
+    typeof drawing.sourceMimeType !== 'string' ||
+    typeof drawing.sourceName !== 'string' ||
+    typeof drawing.previewData !== 'string' ||
+    typeof drawing.previewMimeType !== 'string' ||
+    typeof drawing.previewName !== 'string' ||
+    typeof drawing.previewUrl !== 'string' ||
+    typeof drawing.dirty !== 'boolean' ||
+    !drawing.scene ||
+    typeof drawing.scene !== 'object'
   ) {
     return null;
   }
@@ -182,9 +178,7 @@ function normalizeDraftConversationDrawing(value: unknown): DraftConversationDra
     ...(typeof drawing.attachmentId === 'string' && drawing.attachmentId.trim().length > 0
       ? { attachmentId: drawing.attachmentId.trim() }
       : {}),
-    ...(Number.isSafeInteger(drawing.revision) && Number(drawing.revision) > 0
-      ? { revision: Number(drawing.revision) }
-      : {}),
+    ...(Number.isSafeInteger(drawing.revision) && Number(drawing.revision) > 0 ? { revision: Number(drawing.revision) } : {}),
     sourceData: drawing.sourceData,
     sourceMimeType: drawing.sourceMimeType,
     sourceName: drawing.sourceName,
@@ -204,14 +198,12 @@ function normalizeDraftConversationAttachments(value: unknown): DraftConversatio
 
   const attachments = value as Partial<DraftConversationAttachments>;
   const images = Array.isArray(attachments.images)
-    ? attachments.images
-      .map((image) => normalizeDraftConversationImage(image))
-      .filter((image): image is PromptImageInput => image !== null)
+    ? attachments.images.map((image) => normalizeDraftConversationImage(image)).filter((image): image is PromptImageInput => image !== null)
     : [];
   const drawings = Array.isArray(attachments.drawings)
     ? attachments.drawings
-      .map((drawing) => normalizeDraftConversationDrawing(drawing))
-      .filter((drawing): drawing is DraftConversationDrawingAttachment => drawing !== null)
+        .map((drawing) => normalizeDraftConversationDrawing(drawing))
+        .filter((drawing): drawing is DraftConversationDrawingAttachment => drawing !== null)
     : [];
 
   return { images, drawings };
@@ -233,15 +225,9 @@ function normalizeDraftConversationContextDoc(value: unknown): ConversationConte
     return null;
   }
 
-  const kind: ConversationContextDocRef['kind'] = doc.kind === 'doc' || doc.kind === 'file'
-    ? doc.kind
-    : 'file';
-  const mentionId = typeof doc.mentionId === 'string' && doc.mentionId.trim().length > 0
-    ? doc.mentionId.trim()
-    : undefined;
-  const summary = typeof doc.summary === 'string' && doc.summary.trim().length > 0
-    ? doc.summary.trim()
-    : undefined;
+  const kind: ConversationContextDocRef['kind'] = doc.kind === 'doc' || doc.kind === 'file' ? doc.kind : 'file';
+  const mentionId = typeof doc.mentionId === 'string' && doc.mentionId.trim().length > 0 ? doc.mentionId.trim() : undefined;
+  const summary = typeof doc.summary === 'string' && doc.summary.trim().length > 0 ? doc.summary.trim() : undefined;
 
   return {
     path,
@@ -254,9 +240,7 @@ function normalizeDraftConversationContextDoc(value: unknown): ConversationConte
 
 function normalizeDraftConversationContextDocs(value: unknown): ConversationContextDocRef[] {
   const docs = Array.isArray(value)
-    ? value
-      .map((doc) => normalizeDraftConversationContextDoc(doc))
-      .filter((doc): doc is ConversationContextDocRef => doc !== null)
+    ? value.map((doc) => normalizeDraftConversationContextDoc(doc)).filter((doc): doc is ConversationContextDocRef => doc !== null)
     : [];
 
   const deduped: ConversationContextDocRef[] = [];
@@ -281,9 +265,7 @@ function emitDraftConversationStateChanged(): void {
   window.dispatchEvent(new Event(DRAFT_CONVERSATION_STATE_CHANGED_EVENT));
 }
 
-export function readDraftConversationComposer(
-  storage: StorageLike | null = getSessionStorage(),
-): string {
+export function readDraftConversationComposer(storage: StorageLike | null = getSessionStorage()): string {
   return readStoredState<string>({
     key: buildDraftConversationComposerStorageKey(),
     fallback: '',
@@ -292,10 +274,7 @@ export function readDraftConversationComposer(
   });
 }
 
-export function persistDraftConversationComposer(
-  text: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function persistDraftConversationComposer(text: string, storage: StorageLike | null = getSessionStorage()): void {
   persistStoredState({
     key: buildDraftConversationComposerStorageKey(),
     value: text,
@@ -305,16 +284,12 @@ export function persistDraftConversationComposer(
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationComposer(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationComposer(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationComposerStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function readDraftConversationCwd(
-  storage: StorageLike | null = getSessionStorage(),
-): string {
+export function readDraftConversationCwd(storage: StorageLike | null = getSessionStorage()): string {
   return readStoredState<string>({
     key: buildDraftConversationCwdStorageKey(),
     fallback: '',
@@ -323,10 +298,7 @@ export function readDraftConversationCwd(
   });
 }
 
-export function persistDraftConversationCwd(
-  cwd: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function persistDraftConversationCwd(cwd: string, storage: StorageLike | null = getSessionStorage()): void {
   persistStoredState({
     key: buildDraftConversationCwdStorageKey(),
     value: cwd,
@@ -336,16 +308,12 @@ export function persistDraftConversationCwd(
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationCwd(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationCwd(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationCwdStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function readDraftConversationModel(
-  storage: StorageLike | null = getSessionStorage(),
-): string {
+export function readDraftConversationModel(storage: StorageLike | null = getSessionStorage()): string {
   return readStoredState<string>({
     key: buildDraftConversationModelStorageKey(),
     fallback: '',
@@ -354,10 +322,7 @@ export function readDraftConversationModel(
   });
 }
 
-export function persistDraftConversationModel(
-  model: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function persistDraftConversationModel(model: string, storage: StorageLike | null = getSessionStorage()): void {
   persistStoredState({
     key: buildDraftConversationModelStorageKey(),
     value: model,
@@ -367,16 +332,12 @@ export function persistDraftConversationModel(
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationModel(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationModel(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationModelStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function readDraftConversationThinkingLevel(
-  storage: StorageLike | null = getSessionStorage(),
-): string {
+export function readDraftConversationThinkingLevel(storage: StorageLike | null = getSessionStorage()): string {
   return readStoredState<string>({
     key: buildDraftConversationThinkingLevelStorageKey(),
     fallback: '',
@@ -385,10 +346,7 @@ export function readDraftConversationThinkingLevel(
   });
 }
 
-export function persistDraftConversationThinkingLevel(
-  thinkingLevel: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function persistDraftConversationThinkingLevel(thinkingLevel: string, storage: StorageLike | null = getSessionStorage()): void {
   persistStoredState({
     key: buildDraftConversationThinkingLevelStorageKey(),
     value: thinkingLevel,
@@ -398,16 +356,12 @@ export function persistDraftConversationThinkingLevel(
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationThinkingLevel(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationThinkingLevel(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationThinkingLevelStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function readDraftConversationServiceTier(
-  storage: StorageLike | null = getSessionStorage(),
-): string {
+export function readDraftConversationServiceTier(storage: StorageLike | null = getSessionStorage()): string {
   return readStoredState<string>({
     key: buildDraftConversationServiceTierStorageKey(),
     fallback: '',
@@ -416,10 +370,7 @@ export function readDraftConversationServiceTier(
   });
 }
 
-export function persistDraftConversationServiceTier(
-  serviceTier: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function persistDraftConversationServiceTier(serviceTier: string, storage: StorageLike | null = getSessionStorage()): void {
   persistStoredState({
     key: buildDraftConversationServiceTierStorageKey(),
     value: serviceTier,
@@ -429,25 +380,19 @@ export function persistDraftConversationServiceTier(
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationServiceTier(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationServiceTier(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationServiceTierStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationModelPreferences(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationModelPreferences(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationModelStorageKey());
   clearStoredState(storage, buildDraftConversationThinkingLevelStorageKey());
   clearStoredState(storage, buildDraftConversationServiceTierStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function readDraftConversationAttachments(
-  storage: StorageLike | null = getSessionStorage(),
-): DraftConversationAttachments {
+export function readDraftConversationAttachments(storage: StorageLike | null = getSessionStorage()): DraftConversationAttachments {
   return readStoredState<DraftConversationAttachments>({
     key: buildDraftConversationAttachmentsStorageKey(),
     fallback: { images: [], drawings: [] },
@@ -511,18 +456,13 @@ export function isDraftConversationAttachmentsMutationCurrent(version: number): 
   return version === draftConversationAttachmentsMutationVersion;
 }
 
-export function clearDraftConversationAttachments(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationAttachments(storage: StorageLike | null = getSessionStorage()): void {
   beginDraftConversationAttachmentsMutation();
   clearStoredState(storage, buildDraftConversationAttachmentsStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function clearConversationAttachments(
-  sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearConversationAttachments(sessionId: string, storage: StorageLike | null = getSessionStorage()): void {
   if (!sessionId.trim()) {
     return;
   }
@@ -531,24 +471,17 @@ export function clearConversationAttachments(
   clearStoredState(storage, buildConversationAttachmentsStorageKey(sessionId));
 }
 
-export function hasDraftConversationAttachments(
-  storage: StorageLike | null = getSessionStorage(),
-): boolean {
+export function hasDraftConversationAttachments(storage: StorageLike | null = getSessionStorage()): boolean {
   const attachments = readDraftConversationAttachments(storage);
   return attachments.images.length > 0 || attachments.drawings.length > 0;
 }
 
-export function hasConversationAttachments(
-  sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
-): boolean {
+export function hasConversationAttachments(sessionId: string, storage: StorageLike | null = getSessionStorage()): boolean {
   const attachments = readConversationAttachments(sessionId, storage);
   return attachments.images.length > 0 || attachments.drawings.length > 0;
 }
 
-export function readDraftConversationContextDocs(
-  storage: StorageLike | null = getSessionStorage(),
-): ConversationContextDocRef[] {
+export function readDraftConversationContextDocs(storage: StorageLike | null = getSessionStorage()): ConversationContextDocRef[] {
   return readStoredState<ConversationContextDocRef[]>({
     key: buildDraftConversationContextDocsStorageKey(),
     fallback: [],
@@ -570,17 +503,11 @@ export function persistDraftConversationContextDocs(
   emitDraftConversationStateChanged();
 }
 
-export function clearDraftConversationContextDocs(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearDraftConversationContextDocs(storage: StorageLike | null = getSessionStorage()): void {
   clearStoredState(storage, buildDraftConversationContextDocsStorageKey());
   emitDraftConversationStateChanged();
 }
 
-export function hasDraftConversationContextDocs(
-  storage: StorageLike | null = getSessionStorage(),
-): boolean {
+export function hasDraftConversationContextDocs(storage: StorageLike | null = getSessionStorage()): boolean {
   return readDraftConversationContextDocs(storage).length > 0;
 }
-
-

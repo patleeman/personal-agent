@@ -4,6 +4,7 @@ import {
   appendDurableRunEvent,
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  type DurableRunCheckpointFile,
   listDurableRunIds,
   loadDurableRunCheckpoint,
   loadDurableRunManifest,
@@ -14,7 +15,6 @@ import {
   saveDurableRunManifest,
   saveDurableRunStatus,
   scanDurableRun,
-  type DurableRunCheckpointFile,
 } from './store.js';
 
 export type WebLiveConversationRunState = 'waiting' | 'running' | 'interrupted' | 'failed';
@@ -78,9 +78,7 @@ export function parsePendingOperation(value: unknown): WebLiveConversationPendin
     return undefined;
   }
 
-  const behavior = value.behavior === 'steer' || value.behavior === 'followUp'
-    ? value.behavior
-    : undefined;
+  const behavior = value.behavior === 'steer' || value.behavior === 'followUp' ? value.behavior : undefined;
   const enqueuedAt = typeof value.enqueuedAt === 'string' ? normalizeTimestamp(value.enqueuedAt) : undefined;
   if (!enqueuedAt) {
     return undefined;
@@ -88,33 +86,35 @@ export function parsePendingOperation(value: unknown): WebLiveConversationPendin
 
   const images = Array.isArray(value.images)
     ? value.images.flatMap((image) => {
-      if (!isRecord(image) || image.type !== 'image' || typeof image.data !== 'string' || typeof image.mimeType !== 'string') {
-        return [];
-      }
+        if (!isRecord(image) || image.type !== 'image' || typeof image.data !== 'string' || typeof image.mimeType !== 'string') {
+          return [];
+        }
 
-      return [{
-        type: 'image' as const,
-        data: image.data,
-        mimeType: image.mimeType,
-        ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
-      }];
-    })
+        return [
+          {
+            type: 'image' as const,
+            data: image.data,
+            mimeType: image.mimeType,
+            ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
+          },
+        ];
+      })
     : undefined;
 
   const contextMessages = Array.isArray(value.contextMessages)
     ? value.contextMessages.flatMap((message) => {
-      if (!isRecord(message) || typeof message.customType !== 'string' || typeof message.content !== 'string') {
-        return [];
-      }
+        if (!isRecord(message) || typeof message.customType !== 'string' || typeof message.content !== 'string') {
+          return [];
+        }
 
-      const customType = message.customType.trim();
-      const content = message.content.trim();
-      if (!customType || !content) {
-        return [];
-      }
+        const customType = message.customType.trim();
+        const content = message.content.trim();
+        if (!customType || !content) {
+          return [];
+        }
 
-      return [{ customType, content }];
-    })
+        return [{ customType, content }];
+      })
     : undefined;
 
   return {
@@ -155,29 +155,35 @@ export async function saveWebLiveConversationRunState(input: {
   const existingPayload = readCheckpointPayload(existingCheckpoint);
   const updatedAt = normalizeTimestamp(input.updatedAt) ?? new Date().toISOString();
   const createdAt = existingManifest?.createdAt ?? existingStatus?.createdAt ?? updatedAt;
-  const pendingOperation = input.pendingOperation === undefined
-    ? (input.state === 'waiting' ? undefined : parsePendingOperation(existingPayload.pendingOperation))
-    : (input.pendingOperation ?? undefined);
+  const pendingOperation =
+    input.pendingOperation === undefined
+      ? input.state === 'waiting'
+        ? undefined
+        : parsePendingOperation(existingPayload.pendingOperation)
+      : (input.pendingOperation ?? undefined);
 
   if (!existingManifest) {
-    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
-      id: runId,
-      kind: 'conversation',
-      resumePolicy: 'continue',
-      createdAt,
-      spec: {
-        mode: 'web-live-session',
-        conversationId: input.conversationId,
-        sessionFile: input.sessionFile,
-        cwd: input.cwd,
-        ...(input.profile ? { profile: input.profile } : {}),
-      },
-      source: {
-        type: 'web-live-session',
-        id: input.conversationId,
-        filePath: input.sessionFile,
-      },
-    }));
+    saveDurableRunManifest(
+      runPaths.manifestPath,
+      createDurableRunManifest({
+        id: runId,
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt,
+        spec: {
+          mode: 'web-live-session',
+          conversationId: input.conversationId,
+          sessionFile: input.sessionFile,
+          cwd: input.cwd,
+          ...(input.profile ? { profile: input.profile } : {}),
+        },
+        source: {
+          type: 'web-live-session',
+          id: input.conversationId,
+          filePath: input.sessionFile,
+        },
+      }),
+    );
 
     await appendDurableRunEvent(runPaths.eventsPath, {
       version: 1,
@@ -192,20 +198,19 @@ export async function saveWebLiveConversationRunState(input: {
     });
   }
 
-  saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
-    runId,
-    status: input.state,
-    createdAt,
-    updatedAt,
-    activeAttempt: input.state === 'running'
-      ? Math.max(1, existingStatus?.activeAttempt ?? 0)
-      : (existingStatus?.activeAttempt ?? 0),
-    startedAt: input.state === 'running'
-      ? (existingStatus?.startedAt ?? updatedAt)
-      : undefined,
-    checkpointKey: `web-live-session.${input.state}`,
-    lastError: input.lastError,
-  }));
+  saveDurableRunStatus(
+    runPaths.statusPath,
+    createInitialDurableRunStatus({
+      runId,
+      status: input.state,
+      createdAt,
+      updatedAt,
+      activeAttempt: input.state === 'running' ? Math.max(1, existingStatus?.activeAttempt ?? 0) : (existingStatus?.activeAttempt ?? 0),
+      startedAt: input.state === 'running' ? (existingStatus?.startedAt ?? updatedAt) : undefined,
+      checkpointKey: `web-live-session.${input.state}`,
+      lastError: input.lastError,
+    }),
+  );
 
   saveDurableRunCheckpoint(runPaths.checkpointPath, {
     version: 1,
@@ -251,21 +256,27 @@ export function listRecoverableWebLiveConversationRuns(): RecoverableWebLiveConv
       }
 
       const payload = readCheckpointPayload(run.checkpoint);
-      const conversationId = typeof payload.conversationId === 'string' && payload.conversationId.trim().length > 0
-        ? payload.conversationId.trim()
-        : run.manifest.source.id?.trim();
-      const sessionFile = typeof payload.sessionFile === 'string' && payload.sessionFile.trim().length > 0
-        ? payload.sessionFile.trim()
-        : run.manifest.source.filePath?.trim();
-      const cwd = typeof payload.cwd === 'string' && payload.cwd.trim().length > 0
-        ? payload.cwd.trim()
-        : (typeof run.manifest.spec.cwd === 'string' ? run.manifest.spec.cwd : undefined);
-      const title = typeof payload.title === 'string' && payload.title.trim().length > 0
-        ? payload.title.trim()
-        : undefined;
-      const profile = typeof payload.profile === 'string' && payload.profile.trim().length > 0
-        ? payload.profile.trim()
-        : (typeof run.manifest.spec.profile === 'string' ? run.manifest.spec.profile : undefined);
+      const conversationId =
+        typeof payload.conversationId === 'string' && payload.conversationId.trim().length > 0
+          ? payload.conversationId.trim()
+          : run.manifest.source.id?.trim();
+      const sessionFile =
+        typeof payload.sessionFile === 'string' && payload.sessionFile.trim().length > 0
+          ? payload.sessionFile.trim()
+          : run.manifest.source.filePath?.trim();
+      const cwd =
+        typeof payload.cwd === 'string' && payload.cwd.trim().length > 0
+          ? payload.cwd.trim()
+          : typeof run.manifest.spec.cwd === 'string'
+            ? run.manifest.spec.cwd
+            : undefined;
+      const title = typeof payload.title === 'string' && payload.title.trim().length > 0 ? payload.title.trim() : undefined;
+      const profile =
+        typeof payload.profile === 'string' && payload.profile.trim().length > 0
+          ? payload.profile.trim()
+          : typeof run.manifest.spec.profile === 'string'
+            ? run.manifest.spec.profile
+            : undefined;
       const state = run.status?.status;
 
       if (!conversationId || !sessionFile || !cwd) {
@@ -281,15 +292,17 @@ export function listRecoverableWebLiveConversationRuns(): RecoverableWebLiveConv
         return [];
       }
 
-      return [{
-        runId: run.runId,
-        conversationId,
-        sessionFile,
-        cwd,
-        ...(title ? { title } : {}),
-        ...(profile ? { profile } : {}),
-        state,
-        ...(pendingOperation ? { pendingOperation } : {}),
-      } satisfies RecoverableWebLiveConversationRun];
+      return [
+        {
+          runId: run.runId,
+          conversationId,
+          sessionFile,
+          cwd,
+          ...(title ? { title } : {}),
+          ...(profile ? { profile } : {}),
+          state,
+          ...(pendingOperation ? { pendingOperation } : {}),
+        } satisfies RecoverableWebLiveConversationRun,
+      ];
     });
 }

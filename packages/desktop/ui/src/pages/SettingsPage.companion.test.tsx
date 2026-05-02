@@ -2,8 +2,9 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesktopCompanionSettingsPanel, formatCompanionTimestamp } from './SettingsPage';
+
 import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
+import { DesktopCompanionSettingsPanel, formatCompanionTimestamp } from './SettingsPage';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -63,33 +64,44 @@ describe('DesktopCompanionSettingsPanel', () => {
     mocks.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
       if (url === '/companion/v1/hello') {
-        return new Response(JSON.stringify({
-          hostLabel: 'Desktop Mac',
-          hostInstanceId: 'host_123',
-          protocolVersion: 'v1',
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(
+          JSON.stringify({
+            hostLabel: 'Desktop Mac',
+            hostInstanceId: 'host_123',
+            protocolVersion: 'v1',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
       }
 
       if (url === '/companion/v1/admin/devices') {
-        return new Response(JSON.stringify({ pendingPairings: [], devices: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ pendingPairings: [], devices: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
       if (url === '/companion/v1/admin/setup' && init?.method === 'POST') {
-        return new Response(JSON.stringify({
-          pairing: {
-            id: 'pair-1',
-            code: 'PAIR-TEST-0001',
-            createdAt: '2026-04-19T13:00:00.000Z',
-            expiresAt: '2026-04-19T13:10:00.000Z',
-          },
-          links: [{
-            id: '1',
-            label: 'en0 · 192.168.1.2',
-            baseUrl: 'http://192.168.1.2:3843',
-            setupUrl: 'pa-companion://pair?base=http%3A%2F%2F192.168.1.2%3A3843&code=PAIR-TEST-0001',
-          }],
-          warnings: [],
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(
+          JSON.stringify({
+            pairing: {
+              id: 'pair-1',
+              code: 'PAIR-TEST-0001',
+              createdAt: '2026-04-19T13:00:00.000Z',
+              expiresAt: '2026-04-19T13:10:00.000Z',
+            },
+            links: [
+              {
+                id: '1',
+                label: 'en0 · 192.168.1.2',
+                baseUrl: 'http://192.168.1.2:3843',
+                setupUrl: 'pa-companion://pair?base=http%3A%2F%2F192.168.1.2%3A3843&code=PAIR-TEST-0001',
+              },
+            ],
+            warnings: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
       }
 
       throw new Error(`Unexpected fetch ${String(init?.method ?? 'GET')} ${url}`);
@@ -118,10 +130,13 @@ describe('DesktopCompanionSettingsPanel', () => {
     await flushAsyncWork();
 
     expect(mocks.ensureCompanionNetworkReachable).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledWith('/companion/v1/admin/setup', expect.objectContaining({
-      method: 'POST',
-      cache: 'no-store',
-    }));
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      '/companion/v1/admin/setup',
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+      }),
+    );
     expect(container.textContent).toContain('Phone access enabled. Setup QR created.');
     expect(container.textContent).toContain('PAIR-TEST-0001');
     expect(container.textContent).toContain('http://192.168.1.2:3843');

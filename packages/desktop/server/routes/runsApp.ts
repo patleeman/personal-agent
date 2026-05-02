@@ -5,16 +5,17 @@
  */
 
 import type { Express } from 'express';
-import type { ServerRouteContext } from './context.js';
+
 import {
+  cancelDurableRun,
   getDurableRun,
   getDurableRunLog,
-  listDurableRuns,
-  cancelDurableRun,
   getDurableRunLogCursor,
+  listDurableRuns,
   readDurableRunLogDelta,
 } from '../automation/durableRuns.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
+import type { ServerRouteContext } from './context.js';
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
 const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
@@ -24,20 +25,13 @@ const IDLE_RUN_LOG_POLL_INTERVAL_MS = 2_000;
 function parseRunLogTail(raw: unknown): number {
   const normalized = typeof raw === 'string' ? raw.trim() : '';
   const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : undefined;
-  return Number.isSafeInteger(parsed) && (parsed as number) > 0
-    ? Math.min(1000, parsed as number)
-    : 120;
+  return Number.isSafeInteger(parsed) && (parsed as number) > 0 ? Math.min(1000, parsed as number) : 120;
 }
 
 function isRunStreamActive(snapshot: { detail: { run: { status?: { status?: string } | string } } }): boolean {
-  const runStatus = typeof snapshot.detail.run.status === 'string'
-    ? snapshot.detail.run.status
-    : snapshot.detail.run.status?.status;
+  const runStatus = typeof snapshot.detail.run.status === 'string' ? snapshot.detail.run.status : snapshot.detail.run.status?.status;
 
-  return runStatus === 'queued'
-    || runStatus === 'waiting'
-    || runStatus === 'running'
-    || runStatus === 'recovering';
+  return runStatus === 'queued' || runStatus === 'waiting' || runStatus === 'running' || runStatus === 'recovering';
 }
 
 function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
@@ -52,9 +46,7 @@ let getDurableRunSnapshotFn: (runId: string, tail: number) => Promise<unknown | 
   throw new Error('not initialized');
 };
 
-function initializeRunsAppRoutesContext(
-  context: Pick<ServerRouteContext, 'getDurableRunSnapshot'>,
-): void {
+function initializeRunsAppRoutesContext(context: Pick<ServerRouteContext, 'getDurableRunSnapshot'>): void {
   getDurableRunSnapshotFn = context.getDurableRunSnapshot;
 }
 
@@ -78,7 +70,10 @@ export function registerRunAppRoutes(
   router.get('/api/runs/:id', async (req, res) => {
     try {
       const result = await getDurableRun(req.params.id);
-      if (!result) { res.status(404).json({ error: 'Run not found' }); return; }
+      if (!result) {
+        res.status(404).json({ error: 'Run not found' });
+        return;
+      }
       res.json(result);
     } catch (err) {
       logError('request handler error', {
@@ -94,7 +89,10 @@ export function registerRunAppRoutes(
     const tail = parseRunLogTail(req.query.tail);
     try {
       const initial = await getDurableRunSnapshotFn(runId, tail);
-      if (!initial) { res.status(404).json({ error: 'Run not found' }); return; }
+      if (!initial) {
+        res.status(404).json({ error: 'Run not found' });
+        return;
+      }
 
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -206,7 +204,10 @@ export function registerRunAppRoutes(
               return;
             }
 
-            const typedNext = next as { detail: { run: { status?: { status?: string } | string } }; log: { path: string; log: string } };
+            const typedNext = next as {
+              detail: { run: { status?: { status?: string } | string } };
+              log: { path: string; log: string };
+            };
             runActive = isRunStreamActive(typedNext);
             logPath = typedNext.log.path;
             logCursor = getDurableRunLogCursor(logPath);
@@ -242,7 +243,10 @@ export function registerRunAppRoutes(
     try {
       const tail = parseRunLogTail(req.query.tail);
       const result = await getDurableRunLog(req.params.id, tail);
-      if (!result) { res.status(404).json({ error: 'Run not found' }); return; }
+      if (!result) {
+        res.status(404).json({ error: 'Run not found' });
+        return;
+      }
       res.json(result);
     } catch (err) {
       logError('request handler error', {
@@ -256,7 +260,10 @@ export function registerRunAppRoutes(
   router.post('/api/runs/:id/cancel', async (req, res) => {
     try {
       const result = await cancelDurableRun(req.params.id);
-      if (!result.cancelled) { res.status(409).json({ error: result.reason ?? 'Could not cancel run.' }); return; }
+      if (!result.cancelled) {
+        res.status(409).json({ error: result.reason ?? 'Could not cancel run.' });
+        return;
+      }
       invalidateAppTopics('runs');
       res.json(result);
     } catch (err) {
@@ -267,5 +274,4 @@ export function registerRunAppRoutes(
       res.status(500).json({ error: String(err) });
     }
   });
-
 }

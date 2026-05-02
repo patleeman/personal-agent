@@ -1,4 +1,5 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
+
 import type { SseEvent } from './liveSessionEvents.js';
 
 let syntheticBashExecutionCounter = 0;

@@ -1,4 +1,5 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
+
 import { buildDisplayBlocksFromEntries, type DisplayBlock } from './sessions.js';
 
 export function buildLiveStateBlocks(session: AgentSession, options: { omitStreamMessage?: boolean } = {}): DisplayBlock[] {
@@ -10,31 +11,33 @@ export function buildLiveStateBlocks(session: AgentSession, options: { omitStrea
     messages.push(streamMessage);
   }
 
-  return buildDisplayBlocksFromEntries(messages.map((message, index) => ({
-    id: `live-${index}`,
-    timestamp: (message as { timestamp?: string | number }).timestamp ?? index,
-    message: {
-      role: (message as { role?: string }).role ?? 'unknown',
-      content: (message as { content?: unknown }).content,
-      toolCallId: (message as { toolCallId?: string }).toolCallId,
-      toolName: (message as { toolName?: string }).toolName,
-      details: (message as { details?: unknown }).details,
-      stopReason: (message as { stopReason?: string }).stopReason,
-      errorMessage: (message as { errorMessage?: string }).errorMessage,
-      summary: (message as { summary?: string }).summary,
-      tokensBefore: (message as { tokensBefore?: number }).tokensBefore,
-      fromId: (message as { fromId?: string }).fromId,
-      customType: (message as { customType?: string }).customType,
-      display: (message as { display?: boolean }).display,
-      command: (message as { command?: string }).command,
-      output: (message as { output?: string }).output,
-      exitCode: (message as { exitCode?: number }).exitCode,
-      cancelled: (message as { cancelled?: boolean }).cancelled,
-      truncated: (message as { truncated?: boolean }).truncated,
-      fullOutputPath: (message as { fullOutputPath?: string }).fullOutputPath,
-      excludeFromContext: (message as { excludeFromContext?: boolean }).excludeFromContext,
-    },
-  })));
+  return buildDisplayBlocksFromEntries(
+    messages.map((message, index) => ({
+      id: `live-${index}`,
+      timestamp: (message as { timestamp?: string | number }).timestamp ?? index,
+      message: {
+        role: (message as { role?: string }).role ?? 'unknown',
+        content: (message as { content?: unknown }).content,
+        toolCallId: (message as { toolCallId?: string }).toolCallId,
+        toolName: (message as { toolName?: string }).toolName,
+        details: (message as { details?: unknown }).details,
+        stopReason: (message as { stopReason?: string }).stopReason,
+        errorMessage: (message as { errorMessage?: string }).errorMessage,
+        summary: (message as { summary?: string }).summary,
+        tokensBefore: (message as { tokensBefore?: number }).tokensBefore,
+        fromId: (message as { fromId?: string }).fromId,
+        customType: (message as { customType?: string }).customType,
+        display: (message as { display?: boolean }).display,
+        command: (message as { command?: string }).command,
+        output: (message as { output?: string }).output,
+        exitCode: (message as { exitCode?: number }).exitCode,
+        cancelled: (message as { cancelled?: boolean }).cancelled,
+        truncated: (message as { truncated?: boolean }).truncated,
+        fullOutputPath: (message as { fullOutputPath?: string }).fullOutputPath,
+        excludeFromContext: (message as { excludeFromContext?: boolean }).excludeFromContext,
+      },
+    })),
+  );
 }
 
 export function resolveCompactionSummaryTitle(input: {

@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PendingConversationPrompt } from './pendingConversationPrompt';
+
 import type { MessageBlock } from '../shared/types';
-import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems, resolveRestoredQueuedPromptComposerUpdate } from './pendingQueueMessages';
+import type { PendingConversationPrompt } from './pendingConversationPrompt';
+import {
+  appendPendingInitialPromptBlock,
+  buildConversationPendingQueueItems,
+  resolveRestoredQueuedPromptComposerUpdate,
+} from './pendingQueueMessages';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -54,9 +59,7 @@ describe('appendPendingInitialPromptBlock', () => {
   });
 
   it('does not duplicate a trailing user block that already matches the pending prompt', () => {
-    const messages: MessageBlock[] = [
-      { type: 'user', ts: '2026-03-24T00:00:00.000Z', text: 'first prompt still on the way' },
-    ];
+    const messages: MessageBlock[] = [{ type: 'user', ts: '2026-03-24T00:00:00.000Z', text: 'first prompt still on the way' }];
 
     expect(appendPendingInitialPromptBlock(messages, pendingPrompt, '2026-03-24T00:00:01.000Z')).toEqual(messages);
   });
@@ -169,14 +172,12 @@ describe('appendPendingInitialPromptBlock', () => {
   });
 
   it('builds typed conversation pending queue items from stream previews', () => {
-    expect(buildConversationPendingQueueItems({
-      steering: [
-        { id: 'steer-1', text: 'steer me', imageCount: 1 },
-      ],
-      followUp: [
-        { id: 'follow-1', text: 'later', imageCount: 0, restorable: false },
-      ],
-    })).toEqual([
+    expect(
+      buildConversationPendingQueueItems({
+        steering: [{ id: 'steer-1', text: 'steer me', imageCount: 1 }],
+        followUp: [{ id: 'follow-1', text: 'later', imageCount: 0, restorable: false }],
+      }),
+    ).toEqual([
       {
         id: 'steer-1',
         text: 'steer me',
@@ -197,49 +198,59 @@ describe('appendPendingInitialPromptBlock', () => {
   });
 
   it('resolves restored queued prompt composer updates and notices', () => {
-    expect(resolveRestoredQueuedPromptComposerUpdate({
-      restoredText: 'restored text',
-      currentInput: 'existing draft',
-      restoredFileCount: 2,
-    })).toEqual({
+    expect(
+      resolveRestoredQueuedPromptComposerUpdate({
+        restoredText: 'restored text',
+        currentInput: 'existing draft',
+        restoredFileCount: 2,
+      }),
+    ).toEqual({
       hasRestoredText: true,
       hasContent: true,
       nextInput: 'restored text\n\nexisting draft',
       noticeText: 'Restored queued text + 2 images to the composer.',
     });
 
-    expect(resolveRestoredQueuedPromptComposerUpdate({
-      restoredText: '   ',
-      currentInput: 'existing draft',
-      restoredFileCount: 1,
-    })).toEqual({
+    expect(
+      resolveRestoredQueuedPromptComposerUpdate({
+        restoredText: '   ',
+        currentInput: 'existing draft',
+        restoredFileCount: 1,
+      }),
+    ).toEqual({
       hasRestoredText: false,
       hasContent: true,
       nextInput: null,
       noticeText: 'Restored queued 1 image to the composer.',
     });
 
-    expect(resolveRestoredQueuedPromptComposerUpdate({
-      restoredText: '',
-      currentInput: '',
-      restoredFileCount: 0,
-    }).hasContent).toBe(false);
+    expect(
+      resolveRestoredQueuedPromptComposerUpdate({
+        restoredText: '',
+        currentInput: '',
+        restoredFileCount: 0,
+      }).hasContent,
+    ).toBe(false);
 
-    expect(resolveRestoredQueuedPromptComposerUpdate({
-      restoredText: 'restored text',
-      currentInput: '',
-      restoredFileCount: 1.5,
-    })).toEqual({
+    expect(
+      resolveRestoredQueuedPromptComposerUpdate({
+        restoredText: 'restored text',
+        currentInput: '',
+        restoredFileCount: 1.5,
+      }),
+    ).toEqual({
       hasRestoredText: true,
       hasContent: true,
       nextInput: 'restored text',
       noticeText: 'Restored queued text to the composer.',
     });
 
-    expect(resolveRestoredQueuedPromptComposerUpdate({
-      restoredText: 'restored text',
-      currentInput: '',
-      restoredFileCount: Number.MAX_SAFE_INTEGER,
-    }).noticeText).toBe('Restored queued text to the composer.');
+    expect(
+      resolveRestoredQueuedPromptComposerUpdate({
+        restoredText: 'restored text',
+        currentInput: '',
+        restoredFileCount: Number.MAX_SAFE_INTEGER,
+      }).noticeText,
+    ).toBe('Restored queued text to the composer.');
   });
 });

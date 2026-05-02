@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { getMemoryDocsDir, migrateLegacyProfileMemoryDirs } from './memory-docs.js';
 
 const tempDirs: string[] = [];

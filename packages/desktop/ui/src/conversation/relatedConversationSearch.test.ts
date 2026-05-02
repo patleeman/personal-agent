@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
-import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
+import {
+  listRecentConversationResults,
+  pickHighConfidenceRelatedConversation,
+  rankRelatedConversationSessions,
+  selectRecentConversationCandidates,
+} from './relatedConversationSearch';
 
 function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' | 'title' | 'cwd'>): SessionMeta {
   return {
@@ -18,7 +24,9 @@ function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' |
   };
 }
 
-function buildSummary(overrides: Partial<ConversationSummaryRecord> & Pick<ConversationSummaryRecord, 'sessionId'>): ConversationSummaryRecord {
+function buildSummary(
+  overrides: Partial<ConversationSummaryRecord> & Pick<ConversationSummaryRecord, 'sessionId'>,
+): ConversationSummaryRecord {
   return {
     sessionId: overrides.sessionId,
     fingerprint: overrides.fingerprint ?? '1:2:3',
@@ -62,12 +70,12 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
-    }).map((session) => session.id)).toEqual([
-      'recent-current',
-    ]);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      }).map((session) => session.id),
+    ).toEqual(['recent-current']);
   });
 
   it('can keep only closed conversations when requested', () => {
@@ -100,14 +108,14 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
-      recentWindowDays: null,
-      closedOnly: true,
-    }).map((session) => session.id)).toEqual([
-      'closed-current',
-    ]);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+        recentWindowDays: null,
+        closedOnly: true,
+      }).map((session) => session.id),
+    ).toEqual(['closed-current']);
   });
 
   it('honors a tighter recent window for related-thread candidates', () => {
@@ -126,11 +134,13 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
-      recentWindowDays: 3,
-    }).map((session) => session.id)).toEqual(['recent-current']);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+        recentWindowDays: 3,
+      }).map((session) => session.id),
+    ).toEqual(['recent-current']);
   });
 
   it('uses the default recent window for unsafe window day values', () => {
@@ -149,11 +159,13 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
-      recentWindowDays: Number.MAX_SAFE_INTEGER + 1,
-    }).map((session) => session.id)).toEqual(['recent-current']);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+        recentWindowDays: Number.MAX_SAFE_INTEGER + 1,
+      }).map((session) => session.id),
+    ).toEqual(['recent-current']);
   });
 
   it('caps huge recent window day values', () => {
@@ -172,11 +184,13 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
-      recentWindowDays: Number.MAX_SAFE_INTEGER,
-    }).map((session) => session.id)).toEqual(['recent-current']);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+        recentWindowDays: Number.MAX_SAFE_INTEGER,
+      }).map((session) => session.id),
+    ).toEqual(['recent-current']);
   });
 
   it('uses the current clock for unsafe current-time values', () => {
@@ -197,10 +211,12 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      nowMs: -Number.MAX_SAFE_INTEGER - 1,
-    }).map((session) => session.id)).toEqual(['recent-current']);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        nowMs: -Number.MAX_SAFE_INTEGER - 1,
+      }).map((session) => session.id),
+    ).toEqual(['recent-current']);
   });
 
   it('sorts malformed recent timestamps after valid recent conversations', () => {
@@ -219,10 +235,12 @@ describe('selectRecentConversationCandidates', () => {
       }),
     ];
 
-    expect(selectRecentConversationCandidates(sessions, {
-      workspaceCwd: '/repo/current',
-      recentWindowDays: null,
-    }).map((session) => session.id)).toEqual(['recent-current', 'malformed-current']);
+    expect(
+      selectRecentConversationCandidates(sessions, {
+        workspaceCwd: '/repo/current',
+        recentWindowDays: null,
+      }).map((session) => session.id),
+    ).toEqual(['recent-current', 'malformed-current']);
   });
 });
 
@@ -257,40 +275,46 @@ describe('listRecentConversationResults', () => {
       limit: 5,
     });
 
-    expect(results.map((result) => result.sessionId)).toEqual([
-      'recent-current',
-    ]);
+    expect(results.map((result) => result.sessionId)).toEqual(['recent-current']);
     expect(results[0]?.sameWorkspace).toBe(true);
     expect(results[0]?.matchedTerms).toEqual([]);
   });
 
   it('uses the default recent-result limit for malformed numeric limits', () => {
-    const sessions: SessionMeta[] = Array.from({ length: 3 }, (_, index) => buildSession({
-      id: `recent-${index}`,
-      title: `Recent ${index}`,
-      cwd: '/repo/current',
-      lastActivityAt: `2026-04-1${index}T09:00:00.000Z`,
-    }));
+    const sessions: SessionMeta[] = Array.from({ length: 3 }, (_, index) =>
+      buildSession({
+        id: `recent-${index}`,
+        title: `Recent ${index}`,
+        cwd: '/repo/current',
+        lastActivityAt: `2026-04-1${index}T09:00:00.000Z`,
+      }),
+    );
 
-    expect(listRecentConversationResults(sessions, {
-      workspaceCwd: '/repo/current',
-      limit: 1.5,
-    })).toHaveLength(3);
+    expect(
+      listRecentConversationResults(sessions, {
+        workspaceCwd: '/repo/current',
+        limit: 1.5,
+      }),
+    ).toHaveLength(3);
   });
 
   it('caps expensive recent-result limits', () => {
-    const sessions: SessionMeta[] = Array.from({ length: 150 }, (_, index) => buildSession({
-      id: `recent-${index}`,
-      title: `Recent ${index}`,
-      cwd: '/repo/current',
-      lastActivityAt: '2026-04-12T09:00:00.000Z',
-    }));
+    const sessions: SessionMeta[] = Array.from({ length: 150 }, (_, index) =>
+      buildSession({
+        id: `recent-${index}`,
+        title: `Recent ${index}`,
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+    );
 
-    expect(listRecentConversationResults(sessions, {
-      workspaceCwd: '/repo/current',
-      recentWindowDays: null,
-      limit: 5000,
-    })).toHaveLength(100);
+    expect(
+      listRecentConversationResults(sessions, {
+        workspaceCwd: '/repo/current',
+        recentWindowDays: null,
+        limit: 5000,
+      }),
+    ).toHaveLength(100);
   });
 });
 
@@ -340,7 +364,8 @@ describe('rankRelatedConversationSessions', () => {
     const [result] = rankRelatedConversationSessions({
       sessions,
       searchIndex: {
-        snippet: 'First we looked at logs. Then notarization failed unless APPLE_PASSWORD was mapped for the release flow. After that we retried.',
+        snippet:
+          'First we looked at logs. Then notarization failed unless APPLE_PASSWORD was mapped for the release flow. After that we retried.',
       },
       query: 'apple password',
       workspaceCwd: '/repo/current',
@@ -384,15 +409,17 @@ describe('rankRelatedConversationSessions', () => {
       }),
     ];
 
-    expect(rankRelatedConversationSessions({
-      sessions,
-      searchIndex: {
-        generic: 'Paused before rewriting our private repo history. The app looks good now.',
-      },
-      query: 'Why is our app bundle good now?',
-      workspaceCwd: '/repo/current',
-      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
-    })).toEqual([]);
+    expect(
+      rankRelatedConversationSessions({
+        sessions,
+        searchIndex: {
+          generic: 'Paused before rewriting our private repo history. The app looks good now.',
+        },
+        query: 'Why is our app bundle good now?',
+        workspaceCwd: '/repo/current',
+        nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      }),
+    ).toEqual([]);
   });
 
   it('keeps strong feature terms after aggressive stopword removal', () => {
@@ -421,41 +448,51 @@ describe('rankRelatedConversationSessions', () => {
   it('returns no matches for a blank query', () => {
     const sessions: SessionMeta[] = [buildSession({ id: 'one', title: 'Thread one', cwd: '/repo/current' })];
 
-    expect(rankRelatedConversationSessions({
-      sessions,
-      searchIndex: { one: 'Thread one details' },
-      query: '   ',
-    })).toEqual([]);
+    expect(
+      rankRelatedConversationSessions({
+        sessions,
+        searchIndex: { one: 'Thread one details' },
+        query: '   ',
+      }),
+    ).toEqual([]);
   });
 
   it('uses the default ranked-result limit for unsafe numeric limits', () => {
-    const sessions: SessionMeta[] = Array.from({ length: 12 }, (_, index) => buildSession({
-      id: `match-${index}`,
-      title: `Release signing ${index}`,
-      cwd: '/repo/current',
-    }));
+    const sessions: SessionMeta[] = Array.from({ length: 12 }, (_, index) =>
+      buildSession({
+        id: `match-${index}`,
+        title: `Release signing ${index}`,
+        cwd: '/repo/current',
+      }),
+    );
 
-    expect(rankRelatedConversationSessions({
-      sessions,
-      searchIndex: Object.fromEntries(sessions.map((session) => [session.id, 'release signing flow'])),
-      query: 'release signing',
-      limit: Number.MAX_SAFE_INTEGER + 1,
-    })).toHaveLength(9);
+    expect(
+      rankRelatedConversationSessions({
+        sessions,
+        searchIndex: Object.fromEntries(sessions.map((session) => [session.id, 'release signing flow'])),
+        query: 'release signing',
+        limit: Number.MAX_SAFE_INTEGER + 1,
+      }),
+    ).toHaveLength(9);
   });
 
   it('caps expensive ranked-result limits', () => {
-    const sessions: SessionMeta[] = Array.from({ length: 150 }, (_, index) => buildSession({
-      id: `match-${index}`,
-      title: `Release signing ${index}`,
-      cwd: '/repo/current',
-    }));
+    const sessions: SessionMeta[] = Array.from({ length: 150 }, (_, index) =>
+      buildSession({
+        id: `match-${index}`,
+        title: `Release signing ${index}`,
+        cwd: '/repo/current',
+      }),
+    );
 
-    expect(rankRelatedConversationSessions({
-      sessions,
-      searchIndex: Object.fromEntries(sessions.map((session) => [session.id, 'release signing flow'])),
-      query: 'release signing',
-      limit: 5000,
-    })).toHaveLength(100);
+    expect(
+      rankRelatedConversationSessions({
+        sessions,
+        searchIndex: Object.fromEntries(sessions.map((session) => [session.id, 'release signing flow'])),
+        query: 'release signing',
+        limit: 5000,
+      }),
+    ).toHaveLength(100);
   });
 
   it('uses generated summaries for ranking reasons and high-confidence preselection', () => {

@@ -2,11 +2,12 @@
  * Tests for runtime state bootstrap validation
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, lstatSync, readlinkSync, symlinkSync } from 'fs';
-import { mkdtemp, rm, mkdir, chmod, writeFile } from 'fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join, resolve } from 'path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   bootstrapState,
   bootstrapStateOrThrow,
@@ -234,7 +235,7 @@ describe('integration: path resolution with bootstrap', () => {
 
   it('should use environment variable overrides in bootstrap', async () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = join(tempDir, 'custom-state');
-    
+
     const { resolveStatePaths } = await import('./paths.js');
     const paths = resolveStatePaths();
 
@@ -287,8 +288,9 @@ describe('preparePiAgentDir', () => {
     expect(result.agentDir).toBe(join(statePaths.root, 'pi-agent-runtime'));
     expect(result.sessionsDir).toBe(join(statePaths.root, 'pi-agent-runtime', 'sessions'));
     expect(lstatSync(result.sessionsDir).isSymbolicLink()).toBe(true);
-    expect(resolve(dirname(result.sessionsDir), readlinkSync(result.sessionsDir)))
-      .toBe(join(statePaths.root, 'sync', 'pi-agent', 'sessions'));
+    expect(resolve(dirname(result.sessionsDir), readlinkSync(result.sessionsDir))).toBe(
+      join(statePaths.root, 'sync', 'pi-agent', 'sessions'),
+    );
   });
 
   it('moves machine-local runtime artifacts out of the durable synced pi-agent dir', async () => {

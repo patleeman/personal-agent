@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs", "*.config.mjs", "vitest.setup.ts"],
+      "project": ["scripts/*.mjs", "*.config.mjs"]
+    },
+    "packages/core": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/daemon": {
+      "entry": ["src/index.ts", "src/index-cli.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/desktop": {
+      "entry": ["src/main.ts", "ui/src/app/main.tsx", "ui/vite.config.ts"],
+      "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts"]
+    }
+  }
+}

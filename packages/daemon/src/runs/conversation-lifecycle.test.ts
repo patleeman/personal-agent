@@ -1,10 +1,12 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   canReopenConversation,
+  type ConversationRecord,
   deriveConversationState,
   getConversationCloseAction,
   listConversationRecords,
@@ -12,7 +14,6 @@ import {
   resolveConversationRecordPath,
   shouldAutoReopen,
   writeConversationRecord,
-  type ConversationRecord,
 } from './conversation-lifecycle.js';
 
 const tempDirs: string[] = [];
@@ -50,17 +51,25 @@ describe('conversation lifecycle helpers', () => {
     const stateRoot = createTempDir('conversation-lifecycle-');
     const path = resolveConversationRecordPath(stateRoot, 'assistant', 'fallback-id');
     mkdirSync(join(path, '..'), { recursive: true });
-    writeFileSync(path, JSON.stringify({
-      id: 'legacy-id',
-      state: 'dormant',
-      createdAt: '2026-04-09T10:00:00.000Z',
-      updatedAt: '2026-04-09T11:00:00.000Z',
-      latestConversationTitle: 'Legacy title',
-      latestAnchorPreview: 'Legacy summary',
-      relatedProjectIds: [123, 'project-2'],
-      childRunIds: [456, 'run-2'],
-      parentId: 'parent-1',
-    }, null, 2), 'utf-8');
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          id: 'legacy-id',
+          state: 'dormant',
+          createdAt: '2026-04-09T10:00:00.000Z',
+          updatedAt: '2026-04-09T11:00:00.000Z',
+          latestConversationTitle: 'Legacy title',
+          latestAnchorPreview: 'Legacy summary',
+          relatedProjectIds: [123, 'project-2'],
+          childRunIds: [456, 'run-2'],
+          parentId: 'parent-1',
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
 
     expect(readConversationRecord(stateRoot, 'assistant', 'fallback-id')).toEqual({
       id: 'legacy-id',
@@ -101,36 +110,48 @@ describe('conversation lifecycle helpers', () => {
     const stateRoot = createTempDir('conversation-lifecycle-');
     const path = resolveConversationRecordPath(stateRoot, 'assistant', 'conv-invalid-time');
     mkdirSync(join(path, '..'), { recursive: true });
-    writeFileSync(path, JSON.stringify({
-      createdAt: 'not-a-date',
-      updatedAt: 'also-not-a-date',
-    }), 'utf-8');
+    writeFileSync(
+      path,
+      JSON.stringify({
+        createdAt: 'not-a-date',
+        updatedAt: 'also-not-a-date',
+      }),
+      'utf-8',
+    );
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T12:34:56.000Z'));
 
-    expect(readConversationRecord(stateRoot, 'assistant', 'conv-invalid-time')).toEqual(expect.objectContaining({
-      createdAt: '2026-04-10T12:34:56.000Z',
-      updatedAt: '2026-04-10T12:34:56.000Z',
-    }));
+    expect(readConversationRecord(stateRoot, 'assistant', 'conv-invalid-time')).toEqual(
+      expect.objectContaining({
+        createdAt: '2026-04-10T12:34:56.000Z',
+        updatedAt: '2026-04-10T12:34:56.000Z',
+      }),
+    );
   });
 
   it('falls back to valid timestamps when record dates are non-ISO', () => {
     const stateRoot = createTempDir('conversation-lifecycle-');
     const path = resolveConversationRecordPath(stateRoot, 'assistant', 'conv-non-iso-time');
     mkdirSync(join(path, '..'), { recursive: true });
-    writeFileSync(path, JSON.stringify({
-      createdAt: '1',
-      updatedAt: '1',
-    }), 'utf-8');
+    writeFileSync(
+      path,
+      JSON.stringify({
+        createdAt: '1',
+        updatedAt: '1',
+      }),
+      'utf-8',
+    );
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T12:34:56.000Z'));
 
-    expect(readConversationRecord(stateRoot, 'assistant', 'conv-non-iso-time')).toEqual(expect.objectContaining({
-      createdAt: '2026-04-10T12:34:56.000Z',
-      updatedAt: '2026-04-10T12:34:56.000Z',
-    }));
+    expect(readConversationRecord(stateRoot, 'assistant', 'conv-non-iso-time')).toEqual(
+      expect.objectContaining({
+        createdAt: '2026-04-10T12:34:56.000Z',
+        updatedAt: '2026-04-10T12:34:56.000Z',
+      }),
+    );
   });
 
   it('writes records and preserves optional metadata fields', () => {
@@ -192,14 +213,18 @@ describe('conversation lifecycle helpers', () => {
     const profileDir = join(stateRoot, 'pi-agent', 'state', 'conversation-memory', 'assistant');
     mkdirSync(profileDir, { recursive: true });
 
-    writeFileSync(join(profileDir, 'good.json'), JSON.stringify({
-      conversationId: 'good',
-      state: 'open',
-      createdAt: '2026-04-09T10:00:00.000Z',
-      updatedAt: '2026-04-09T11:00:00.000Z',
-      relatedProjectIds: [],
-      childRunIds: ['run-1'],
-    }), 'utf-8');
+    writeFileSync(
+      join(profileDir, 'good.json'),
+      JSON.stringify({
+        conversationId: 'good',
+        state: 'open',
+        createdAt: '2026-04-09T10:00:00.000Z',
+        updatedAt: '2026-04-09T11:00:00.000Z',
+        relatedProjectIds: [],
+        childRunIds: ['run-1'],
+      }),
+      'utf-8',
+    );
     writeFileSync(join(profileDir, 'bad.json'), '{nope', 'utf-8');
     writeFileSync(join(profileDir, 'notes.txt'), 'ignore me', 'utf-8');
     mkdirSync(join(profileDir, 'nested'), { recursive: true });

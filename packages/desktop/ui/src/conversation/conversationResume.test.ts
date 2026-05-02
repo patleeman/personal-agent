@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import type { DurableRunRecord, MessageBlock } from '../shared/types';
 import { didConversationStopMidTurn, didConversationStopWithError, getConversationResumeState } from './conversationResume';
 
-function createRun(input: {
-  status?: string;
-  pendingOperation?: Record<string, unknown> | null;
-}): DurableRunRecord {
+function createRun(input: { status?: string; pendingOperation?: Record<string, unknown> | null }): DurableRunRecord {
   return {
     runId: 'conversation-live-conv-123',
     paths: {
@@ -42,11 +40,12 @@ function createRun(input: {
       version: 1,
       runId: 'conversation-live-conv-123',
       updatedAt: '2026-03-13T12:05:00.000Z',
-      payload: input.pendingOperation === undefined
-        ? {}
-        : input.pendingOperation === null
-          ? { pendingOperation: null }
-          : { pendingOperation: input.pendingOperation },
+      payload:
+        input.pendingOperation === undefined
+          ? {}
+          : input.pendingOperation === null
+            ? { pendingOperation: null }
+            : { pendingOperation: input.pendingOperation },
     },
     problems: [],
     recoveryAction: 'resume',
@@ -111,22 +110,26 @@ describe('conversation resume helpers', () => {
   });
 
   it('treats failed tool and subagent tails as recoverable error endings', () => {
-    expect(didConversationStopWithError({
-      type: 'tool_use',
-      ts: '2026-03-13T12:05:00.000Z',
-      tool: 'bash',
-      input: { command: 'exit 1' },
-      output: 'boom',
-      status: 'error',
-    })).toBe(true);
+    expect(
+      didConversationStopWithError({
+        type: 'tool_use',
+        ts: '2026-03-13T12:05:00.000Z',
+        tool: 'bash',
+        input: { command: 'exit 1' },
+        output: 'boom',
+        status: 'error',
+      }),
+    ).toBe(true);
 
-    expect(didConversationStopWithError({
-      type: 'subagent',
-      ts: '2026-03-13T12:05:00.000Z',
-      name: 'review',
-      prompt: 'check this',
-      status: 'failed',
-    })).toBe(true);
+    expect(
+      didConversationStopWithError({
+        type: 'subagent',
+        ts: '2026-03-13T12:05:00.000Z',
+        name: 'review',
+        prompt: 'check this',
+        status: 'failed',
+      }),
+    ).toBe(true);
   });
 
   it('ignores direct terminal bash output when deciding whether a conversation can resume', () => {

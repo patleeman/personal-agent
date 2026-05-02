@@ -46,21 +46,16 @@ export function getModelSelectableServiceTierOptions(
   return [{ value: '', label: options?.includeDefaultOption ? (options.defaultLabel ?? 'Default') : 'Unset' }, ...supportedOptions];
 }
 
-export function hasSelectableModelId<T extends Pick<ModelInfo, 'id'>>(
-  models: readonly T[],
-  modelId: string | null | undefined,
-): boolean {
+export function hasSelectableModelId<T extends Pick<ModelInfo, 'id'>>(models: readonly T[], modelId: string | null | undefined): boolean {
   const normalizedModelId = normalizeModelId(modelId);
   return normalizedModelId.length > 0 && models.some((model) => model.id === normalizedModelId);
 }
 
-export function resolveSelectableModelId<T extends Pick<ModelInfo, 'id'>>(
-  input: {
-    requestedModel?: string | null;
-    defaultModel?: string | null;
-    models: readonly T[];
-  },
-): string {
+export function resolveSelectableModelId<T extends Pick<ModelInfo, 'id'>>(input: {
+  requestedModel?: string | null;
+  defaultModel?: string | null;
+  models: readonly T[];
+}): string {
   if (hasSelectableModelId(input.models, input.requestedModel)) {
     return normalizeModelId(input.requestedModel);
   }

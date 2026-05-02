@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseDeferredResumeSlashCommand } from './deferredResumeSlashCommand';
 
 describe('parseDeferredResumeSlashCommand', () => {

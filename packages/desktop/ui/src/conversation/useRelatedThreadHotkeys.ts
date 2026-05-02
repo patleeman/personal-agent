@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 import type { RelatedConversationSearchResult } from './relatedConversationSearch';
 
 export const MAX_RELATED_THREAD_HOTKEYS = 9;
@@ -19,7 +20,7 @@ export function resolveRelatedThreadHotkeyIndex(event: RelatedThreadHotkeyEvent)
 }
 
 function normalizeRelatedThreadHotkeyLimit(value: number | undefined): number {
-  return Number.isSafeInteger(value) && (value as number) > 0 ? value as number : MAX_RELATED_THREAD_HOTKEYS;
+  return Number.isSafeInteger(value) && (value as number) > 0 ? (value as number) : MAX_RELATED_THREAD_HOTKEYS;
 }
 
 export function useRelatedThreadHotkeys(input: {

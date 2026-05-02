@@ -2,12 +2,13 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
 import {
+  buildSidebarNavSectionStorageKey,
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
-  buildSidebarNavSectionStorageKey,
 } from '../local/localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { getLocalSessionWorkspacePath, isRemoteConversationSession, resolveSessionExecutionTarget, Sidebar } from './Sidebar.js';
@@ -96,29 +97,33 @@ describe('Sidebar', () => {
     return renderToString(
       <MemoryRouter initialEntries={[pathname]}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            projects: [{
-              id: 'active-project',
-              title: 'Active project',
-              summary: 'In progress.',
-              description: 'Still being worked on.',
-              createdAt: '2026-03-16T10:00:00.000Z',
-              updatedAt: '2026-03-16T12:00:00.000Z',
-              requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
-              status: 'in_progress',
-              blockers: [],
-              recentProgress: [],
-              plan: { milestones: [], tasks: [] },
-              profile: 'assistant',
-            }],
-            sessions: options?.sessions ?? [createSession()],
-            tasks: options?.tasks ?? null,
-            runs: options?.runs ?? null,
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
+          <AppDataContext.Provider
+            value={{
+              projects: [
+                {
+                  id: 'active-project',
+                  title: 'Active project',
+                  summary: 'In progress.',
+                  description: 'Still being worked on.',
+                  createdAt: '2026-03-16T10:00:00.000Z',
+                  updatedAt: '2026-03-16T12:00:00.000Z',
+                  requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
+                  status: 'in_progress',
+                  blockers: [],
+                  recentProgress: [],
+                  plan: { milestones: [], tasks: [] },
+                  profile: 'assistant',
+                },
+              ],
+              sessions: options?.sessions ?? [createSession()],
+              tasks: options?.tasks ?? null,
+              runs: options?.runs ?? null,
+              setProjects: () => {},
+              setSessions: () => {},
+              setTasks: () => {},
+              setRuns: () => {},
+            }}
+          >
             <LiveTitlesContext.Provider value={{ titles: options?.liveTitles ?? new Map(), setTitle: () => {} }}>
               <Sidebar hideKnowledgeNav={options?.hideKnowledgeNav} />
             </LiveTitlesContext.Provider>
@@ -281,15 +286,17 @@ describe('Sidebar', () => {
 
     const html = renderSidebar('/conversations/new', {
       sessions: [createSession({ id: 'conv-auto', title: 'Morning briefing thread', isRunning: false })],
-      tasks: [{
-        id: 'morning-briefing',
-        title: 'Morning briefing',
-        scheduleType: 'cron',
-        running: true,
-        enabled: true,
-        prompt: 'Assemble the morning briefing.',
-        threadConversationId: 'conv-auto',
-      }],
+      tasks: [
+        {
+          id: 'morning-briefing',
+          title: 'Morning briefing',
+          scheduleType: 'cron',
+          running: true,
+          enabled: true,
+          prompt: 'Assemble the morning briefing.',
+          threadConversationId: 'conv-auto',
+        },
+      ],
     });
 
     expect(html).toContain('aria-label="Running conversation"');
@@ -303,8 +310,20 @@ describe('Sidebar', () => {
     const html = renderSidebar('/conversations/new', {
       sessions: [
         createSession({ id: 'conv-a1', title: 'First alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree' }),
-        createSession({ id: 'conv-b1', title: 'Only beta conversation', cwd: '/tmp/beta-worktree', cwdSlug: 'beta-worktree', file: '/tmp/conv-b1.jsonl' }),
-        createSession({ id: 'conv-a2', title: 'Second alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree', file: '/tmp/conv-a2.jsonl' }),
+        createSession({
+          id: 'conv-b1',
+          title: 'Only beta conversation',
+          cwd: '/tmp/beta-worktree',
+          cwdSlug: 'beta-worktree',
+          file: '/tmp/conv-b1.jsonl',
+        }),
+        createSession({
+          id: 'conv-a2',
+          title: 'Second alpha conversation',
+          cwd: '/tmp/alpha-worktree',
+          cwdSlug: 'alpha-worktree',
+          file: '/tmp/conv-a2.jsonl',
+        }),
       ],
     });
 
@@ -323,10 +342,7 @@ describe('Sidebar', () => {
 
   it('hides conversation rows for collapsed cwd groups', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
-    storage.setItem(
-      buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups'),
-      JSON.stringify(['/home/user/project']),
-    );
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups'), JSON.stringify(['/home/user/project']));
 
     const html = renderSidebar('/conversations/new');
 
@@ -351,10 +367,10 @@ describe('Sidebar', () => {
   it('disambiguates saved workspaces that share the same basename', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
-    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([
-      '/home/user/personal/personal-agent',
-      '/home/user/documents/personal-agent',
-    ]));
+    storage.setItem(
+      SAVED_WORKSPACE_PATHS_STORAGE_KEY,
+      JSON.stringify(['/home/user/personal/personal-agent', '/home/user/documents/personal-agent']),
+    );
 
     const html = renderSidebar('/conversations/new', { sessions: [] });
 

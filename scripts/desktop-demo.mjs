@@ -1,33 +1,33 @@
 /* eslint-env node */
 
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   createEmptyDeferredResumeState,
+  createProjectActivityEntry,
   getDurableSessionsDir,
   getDurableTasksDir,
   markConversationAttentionUnread,
-  createProjectActivityEntry,
   saveConversationArtifact,
   saveConversationAttachment,
   saveConversationCommitCheckpoint,
   saveDeferredResumeState,
   setActivityConversationLinks,
-  writeProfileActivityEntry,
   writeMachineConfig,
+  writeProfileActivityEntry,
 } from '@personal-agent/core';
 import {
-  createStoredAutomation,
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  createStoredAutomation,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
 } from '@personal-agent/daemon';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(currentDir, '..');
@@ -74,7 +74,9 @@ function writeSession({ id, fileName, cwd, title, timestamp = now, lines = [] })
     { type: 'model_change', modelId: 'gpt-5.4' },
     { type: 'message', id: `${id}-user-1`, parentId: null, timestamp, message: { role: 'user', content: title } },
     ...lines,
-  ].map(jsonLine).join('');
+  ]
+    .map(jsonLine)
+    .join('');
   write(file, body);
   return file;
 }
@@ -135,7 +137,10 @@ mkdirp(runsRoot);
 writeMachineConfig({ vaultRoot }, { configRoot });
 
 write(join(vaultRoot, 'AGENTS.md'), '# Demo vault\n\nThis is seeded demo data for the desktop app.\n');
-write(join(vaultRoot, 'notes', 'demo-plan.md'), '# Demo plan\n\n- Validate conversations\n- Validate automations\n- Validate runs\n- Validate reminders and queue states\n');
+write(
+  join(vaultRoot, 'notes', 'demo-plan.md'),
+  '# Demo plan\n\n- Validate conversations\n- Validate automations\n- Validate runs\n- Validate reminders and queue states\n',
+);
 write(join(vaultRoot, 'projects', 'desktop-demo.md'), '# Desktop demo\n\nCurated seeded workspace for QA and demos.\n');
 write(join(vaultRoot, 'notes', 'corrupt-note.md'), '{ this is intentionally malformed-ish content for UI resilience checks }\n');
 
@@ -151,7 +156,12 @@ writeSession({
   cwd: repoRoot,
   title: 'What shipped in the last desktop release?',
   lines: [
-    assistantText('demo-normal', 1, 'The last release tightened the Runs UI, browser tooling, and a pile of quality-of-life fixes.', 'demo-normal-user-1'),
+    assistantText(
+      'demo-normal',
+      1,
+      'The last release tightened the Runs UI, browser tooling, and a pile of quality-of-life fixes.',
+      'demo-normal-user-1',
+    ),
     {
       type: 'session_info',
       id: 'demo-normal-info',
@@ -170,8 +180,21 @@ writeSession({
     assistantMixed('demo-tools', 1, 'demo-tools-user-1', [
       { type: 'toolCall', id: 'call-demo-tools-1', name: 'bash', arguments: { command: 'rg -n "automation" packages/web/src' } },
     ]),
-    toolResult('demo-tools', 1, 'demo-tools-assistant-mixed-1', 'call-demo-tools-1', 'bash', 'packages/web/src/pages/TasksPage.tsx:12:export function TasksPage() {}', { action: 'read' }),
-    assistantText('demo-tools', 2, 'Found the Tasks page entrypoint and a few automation-related components worth checking.', 'demo-tools-tool-result-1'),
+    toolResult(
+      'demo-tools',
+      1,
+      'demo-tools-assistant-mixed-1',
+      'call-demo-tools-1',
+      'bash',
+      'packages/web/src/pages/TasksPage.tsx:12:export function TasksPage() {}',
+      { action: 'read' },
+    ),
+    assistantText(
+      'demo-tools',
+      2,
+      'Found the Tasks page entrypoint and a few automation-related components worth checking.',
+      'demo-tools-tool-result-1',
+    ),
   ],
 });
 
@@ -181,7 +204,17 @@ writeSession({
   title: 'Continue validating the workbench browser integration',
   lines: [
     assistantText('demo-running', 1, 'I am still checking the browser flows and live session hooks.', 'demo-running-user-1'),
-    customMessage('demo-running', 'auto-running', 'demo-running-assistant-1', 'conversation_auto_mode', 'Auto mode enabled', { enabled: true }, false),
+    customMessage(
+      'demo-running',
+      'auto-running',
+      'demo-running-assistant-1',
+      'conversation_auto_mode',
+      'Auto mode enabled',
+      {
+        enabled: true,
+      },
+      false,
+    ),
   ],
 });
 
@@ -190,7 +223,12 @@ writeSession({
   cwd: repoRoot,
   title: 'Build a demo environment for desktop QA',
   lines: [
-    assistantText('demo-rich', 1, 'I seeded a deterministic desktop dataset with conversations, automations, runs, and assets.', 'demo-rich-user-1'),
+    assistantText(
+      'demo-rich',
+      1,
+      'I seeded a deterministic desktop dataset with conversations, automations, runs, and assets.',
+      'demo-rich-user-1',
+    ),
   ],
 });
 
@@ -209,12 +247,41 @@ const convAutoReview = writeSession({
   title: 'Keep going until the QA pass is done',
   lines: [
     assistantText('demo-auto-review', 1, 'First visible assistant reply.', 'demo-auto-review-user-1', '2026-04-30T12:00:01.000Z'),
-    customMessage('demo-auto-review', 'hidden-review', 'demo-auto-review-assistant-1', 'conversation_automation_post_turn_review', [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], {}, false, '2026-04-30T12:00:02.000Z'),
-    assistantMixed('demo-auto-review', 2, 'demo-auto-review-hidden-review', [
-      { type: 'thinking', thinking: 'Reviewing whether auto mode should keep going.' },
-      { type: 'toolCall', id: 'call-demo-auto-review-1', name: 'conversation_auto_control', arguments: { action: 'stop', reason: 'done' } },
-    ], '2026-04-30T12:00:03.000Z'),
-    toolResult('demo-auto-review', 2, 'demo-auto-review-assistant-mixed-2', 'call-demo-auto-review-1', 'conversation_auto_control', 'Stopped auto mode: done.', {}, '2026-04-30T12:00:04.000Z'),
+    customMessage(
+      'demo-auto-review',
+      'hidden-review',
+      'demo-auto-review-assistant-1',
+      'conversation_automation_post_turn_review',
+      [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+      {},
+      false,
+      '2026-04-30T12:00:02.000Z',
+    ),
+    assistantMixed(
+      'demo-auto-review',
+      2,
+      'demo-auto-review-hidden-review',
+      [
+        { type: 'thinking', thinking: 'Reviewing whether auto mode should keep going.' },
+        {
+          type: 'toolCall',
+          id: 'call-demo-auto-review-1',
+          name: 'conversation_auto_control',
+          arguments: { action: 'stop', reason: 'done' },
+        },
+      ],
+      '2026-04-30T12:00:03.000Z',
+    ),
+    toolResult(
+      'demo-auto-review',
+      2,
+      'demo-auto-review-assistant-mixed-2',
+      'call-demo-auto-review-1',
+      'conversation_auto_control',
+      'Stopped auto mode: done.',
+      {},
+      '2026-04-30T12:00:04.000Z',
+    ),
     assistantText('demo-auto-review', 3, 'The autonomous pass is complete.', 'demo-auto-review-tool-result-2', '2026-04-30T12:00:05.000Z'),
   ],
 });
@@ -231,16 +298,39 @@ writeSession({
   cwd: repoRoot,
   fileName: '2026-04-30T12-40-00-000Z_demo-subagent-child.jsonl',
   title: 'Child conversation for docs audit',
-  lines: [assistantText('demo-subagent-child', 1, 'I checked the docs references and found two stale examples.', 'demo-subagent-child-user-1')],
+  lines: [
+    assistantText('demo-subagent-child', 1, 'I checked the docs references and found two stale examples.', 'demo-subagent-child-user-1'),
+  ],
 }).replace(/.*/, (file) => file);
 const subagentDir = join(sessionsRoot, '__runs', 'run-subagent-demo');
 mkdirp(subagentDir);
-write(join(subagentDir, '2026-04-30T12-40-00-000Z_demo-subagent-child.jsonl'), [
-  jsonLine({ type: 'session', id: 'demo-subagent-child', timestamp: '2026-04-30T12:40:00.000Z', cwd: repoRoot, parentSession: parentSessionFile }),
-  jsonLine({ type: 'model_change', modelId: 'gpt-5.4' }),
-  jsonLine({ type: 'message', id: 'demo-subagent-child-user-1', parentId: null, timestamp: '2026-04-30T12:40:00.000Z', message: { role: 'user', content: 'Audit the docs links.' } }),
-  jsonLine({ type: 'message', id: 'demo-subagent-child-assistant-1', parentId: 'demo-subagent-child-user-1', timestamp: '2026-04-30T12:40:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'I checked the docs references and found two stale examples.' }] } }),
-].join(''));
+write(
+  join(subagentDir, '2026-04-30T12-40-00-000Z_demo-subagent-child.jsonl'),
+  [
+    jsonLine({
+      type: 'session',
+      id: 'demo-subagent-child',
+      timestamp: '2026-04-30T12:40:00.000Z',
+      cwd: repoRoot,
+      parentSession: parentSessionFile,
+    }),
+    jsonLine({ type: 'model_change', modelId: 'gpt-5.4' }),
+    jsonLine({
+      type: 'message',
+      id: 'demo-subagent-child-user-1',
+      parentId: null,
+      timestamp: '2026-04-30T12:40:00.000Z',
+      message: { role: 'user', content: 'Audit the docs links.' },
+    }),
+    jsonLine({
+      type: 'message',
+      id: 'demo-subagent-child-assistant-1',
+      parentId: 'demo-subagent-child-user-1',
+      timestamp: '2026-04-30T12:40:01.000Z',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'I checked the docs references and found two stale examples.' }] },
+    }),
+  ].join(''),
+);
 
 const convParallel = writeSession({
   id: 'demo-parallel-parent',
@@ -249,41 +339,48 @@ const convParallel = writeSession({
   lines: [assistantText('demo-parallel-parent', 1, 'Two parallel checks are in flight.', 'demo-parallel-parent-user-1')],
 });
 
-write(`${convParallel}.parallel.json`, `${JSON.stringify([
-  {
-    id: 'parallel-running',
-    prompt: 'Keep scanning the layout regressions',
-    childConversationId: 'demo-parallel-child-running',
-    childSessionFile: join(dirname(convParallel), 'demo-parallel-child-running.jsonl'),
-    status: 'running',
-    createdAt: '2026-04-30T12:50:00.000Z',
-    updatedAt: '2026-04-30T12:50:05.000Z',
-    imageCount: 0,
-    attachmentRefs: [],
-    touchedFiles: ['packages/web/src/pages/ConversationPage.tsx'],
-    parentTouchedFiles: [],
-    overlapFiles: [],
-    sideEffects: [],
-    worktreeDirtyPathsAtStart: [],
-  },
-  {
-    id: 'parallel-ready',
-    prompt: 'Check the docs pass',
-    childConversationId: 'demo-parallel-child-ready',
-    childSessionFile: join(dirname(convParallel), 'demo-parallel-child-ready.jsonl'),
-    status: 'ready',
-    createdAt: '2026-04-30T12:50:10.000Z',
-    updatedAt: '2026-04-30T12:51:00.000Z',
-    imageCount: 1,
-    attachmentRefs: ['whiteboard (rev 1)'],
-    touchedFiles: ['docs/desktop-demo.md'],
-    parentTouchedFiles: ['docs/desktop-demo.md'],
-    overlapFiles: ['docs/desktop-demo.md'],
-    sideEffects: ['Saved checkpoint abc1234 Keep the docs fix.'],
-    worktreeDirtyPathsAtStart: [],
-    resultText: 'The docs already cover this case.',
-  },
-], null, 2)}\n`);
+write(
+  `${convParallel}.parallel.json`,
+  `${JSON.stringify(
+    [
+      {
+        id: 'parallel-running',
+        prompt: 'Keep scanning the layout regressions',
+        childConversationId: 'demo-parallel-child-running',
+        childSessionFile: join(dirname(convParallel), 'demo-parallel-child-running.jsonl'),
+        status: 'running',
+        createdAt: '2026-04-30T12:50:00.000Z',
+        updatedAt: '2026-04-30T12:50:05.000Z',
+        imageCount: 0,
+        attachmentRefs: [],
+        touchedFiles: ['packages/web/src/pages/ConversationPage.tsx'],
+        parentTouchedFiles: [],
+        overlapFiles: [],
+        sideEffects: [],
+        worktreeDirtyPathsAtStart: [],
+      },
+      {
+        id: 'parallel-ready',
+        prompt: 'Check the docs pass',
+        childConversationId: 'demo-parallel-child-ready',
+        childSessionFile: join(dirname(convParallel), 'demo-parallel-child-ready.jsonl'),
+        status: 'ready',
+        createdAt: '2026-04-30T12:50:10.000Z',
+        updatedAt: '2026-04-30T12:51:00.000Z',
+        imageCount: 1,
+        attachmentRefs: ['whiteboard (rev 1)'],
+        touchedFiles: ['docs/desktop-demo.md'],
+        parentTouchedFiles: ['docs/desktop-demo.md'],
+        overlapFiles: ['docs/desktop-demo.md'],
+        sideEffects: ['Saved checkpoint abc1234 Keep the docs fix.'],
+        worktreeDirtyPathsAtStart: [],
+        resultText: 'The docs already cover this case.',
+      },
+    ],
+    null,
+    2,
+  )}\n`,
+);
 
 writeSession({
   id: 'demo-attention',
@@ -299,21 +396,40 @@ writeSession({
   lines: [assistantText('demo-remote', 1, 'This conversation is linked to a remote host.', 'demo-remote-user-1')],
   fileName: '2026-04-30T13-10-00-000Z_demo-remote.jsonl',
 });
-const remoteFile = join(sessionsRoot, `--${repoRoot.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')}--`, '2026-04-30T13-10-00-000Z_demo-remote.jsonl');
-write(remoteFile, [
-  jsonLine({
-    type: 'session',
-    id: 'demo-remote',
-    timestamp: '2026-04-30T13:10:00.000Z',
-    cwd: repoRoot,
-    remoteHostId: 'bender',
-    remoteHostLabel: 'Bender',
-    remoteConversationId: 'remote-thread-1',
-  }),
-  jsonLine({ type: 'model_change', modelId: 'gpt-5.4' }),
-  jsonLine({ type: 'message', id: 'demo-remote-user-1', parentId: null, timestamp: '2026-04-30T13:10:00.000Z', message: { role: 'user', content: 'Inspect the remote deployment helper' } }),
-  jsonLine({ type: 'message', id: 'demo-remote-assistant-1', parentId: 'demo-remote-user-1', timestamp: '2026-04-30T13:10:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'This conversation is linked to a remote host.' }] } }),
-].join(''));
+const remoteFile = join(
+  sessionsRoot,
+  `--${repoRoot.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')}--`,
+  '2026-04-30T13-10-00-000Z_demo-remote.jsonl',
+);
+write(
+  remoteFile,
+  [
+    jsonLine({
+      type: 'session',
+      id: 'demo-remote',
+      timestamp: '2026-04-30T13:10:00.000Z',
+      cwd: repoRoot,
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-thread-1',
+    }),
+    jsonLine({ type: 'model_change', modelId: 'gpt-5.4' }),
+    jsonLine({
+      type: 'message',
+      id: 'demo-remote-user-1',
+      parentId: null,
+      timestamp: '2026-04-30T13:10:00.000Z',
+      message: { role: 'user', content: 'Inspect the remote deployment helper' },
+    }),
+    jsonLine({
+      type: 'message',
+      id: 'demo-remote-assistant-1',
+      parentId: 'demo-remote-user-1',
+      timestamp: '2026-04-30T13:10:01.000Z',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'This conversation is linked to a remote host.' }] },
+    }),
+  ].join(''),
+);
 
 writeSession({
   id: 'demo-related-context',
@@ -325,50 +441,65 @@ writeSession({
       'related',
       'demo-related-context-user-1',
       'related_threads_context',
-      [{ type: 'text', text: [
-        'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
-        '',
-        'Conversation 1 — Release signing',
-        'Workspace: /repo/a',
-        '',
-        'Keep the notarization mapping fix.',
-        '',
-        'Conversation 2 — Auto mode wakeups',
-        'Workspace: /repo/b',
-        '',
-        'Wakeups use durable run callbacks.',
-      ].join('\n') }],
+      [
+        {
+          type: 'text',
+          text: [
+            'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
+            '',
+            'Conversation 1 — Release signing',
+            'Workspace: /repo/a',
+            '',
+            'Keep the notarization mapping fix.',
+            '',
+            'Conversation 2 — Auto mode wakeups',
+            'Workspace: /repo/b',
+            '',
+            'Wakeups use durable run callbacks.',
+          ].join('\n'),
+        },
+      ],
       {},
       false,
       '2026-04-30T13:20:01.000Z',
     ),
-    assistantText('demo-related-context', 1, 'I reused the selected thread summaries before responding.', 'demo-related-context-related', '2026-04-30T13:20:02.000Z'),
+    assistantText(
+      'demo-related-context',
+      1,
+      'I reused the selected thread summaries before responding.',
+      'demo-related-context-related',
+      '2026-04-30T13:20:02.000Z',
+    ),
   ],
 });
 
-write(join(stateRoot, 'desktop', 'daemon-offline-demo.json'), JSON.stringify({
-  warnings: [
-    'Daemon service is installed but not running.',
-    'Daemon runtime is not responding on the local socket.',
-  ],
-  service: {
-    platform: 'darwin',
-    identifier: 'personal-agent-daemon',
-    manifestPath: '/tmp/personal-agent-daemon.plist',
-    installed: true,
-    running: false,
-    logFile: '/tmp/personal-agentd.log',
-  },
-  runtime: {
-    running: false,
-    socketPath: '/tmp/runtime.sock',
-    moduleCount: 0,
-  },
-  log: {
-    path: '/tmp/personal-agentd.log',
-    lines: [],
-  },
-}, null, 2) + '\n');
+write(
+  join(stateRoot, 'desktop', 'daemon-offline-demo.json'),
+  JSON.stringify(
+    {
+      warnings: ['Daemon service is installed but not running.', 'Daemon runtime is not responding on the local socket.'],
+      service: {
+        platform: 'darwin',
+        identifier: 'personal-agent-daemon',
+        manifestPath: '/tmp/personal-agent-daemon.plist',
+        installed: true,
+        running: false,
+        logFile: '/tmp/personal-agentd.log',
+      },
+      runtime: {
+        running: false,
+        socketPath: '/tmp/runtime.sock',
+        moduleCount: 0,
+      },
+      log: {
+        path: '/tmp/personal-agentd.log',
+        lines: [],
+      },
+    },
+    null,
+    2,
+  ) + '\n',
+);
 
 saveConversationArtifact({
   stateRoot,
@@ -467,22 +598,28 @@ createStoredAutomation({
 });
 
 const waitingRunPaths = resolveDurableRunPaths(runsRoot, 'run-demo-review');
-saveDurableRunManifest(waitingRunPaths.manifestPath, createDurableRunManifest({
-  id: 'run-demo-review',
-  kind: 'background-run',
-  resumePolicy: 'manual',
-  createdAt: now,
-  source: { type: 'background-run', id: 'demo-review' },
-  spec: { task: 'Review demo environment' },
-}));
-saveDurableRunStatus(waitingRunPaths.statusPath, createInitialDurableRunStatus({
-  runId: 'run-demo-review',
-  status: 'waiting',
-  createdAt: now,
-  updatedAt: '2026-04-30T12:10:00.000Z',
-  activeAttempt: 1,
-  startedAt: '2026-04-30T12:01:00.000Z',
-}));
+saveDurableRunManifest(
+  waitingRunPaths.manifestPath,
+  createDurableRunManifest({
+    id: 'run-demo-review',
+    kind: 'background-run',
+    resumePolicy: 'manual',
+    createdAt: now,
+    source: { type: 'background-run', id: 'demo-review' },
+    spec: { task: 'Review demo environment' },
+  }),
+);
+saveDurableRunStatus(
+  waitingRunPaths.statusPath,
+  createInitialDurableRunStatus({
+    runId: 'run-demo-review',
+    status: 'waiting',
+    createdAt: now,
+    updatedAt: '2026-04-30T12:10:00.000Z',
+    activeAttempt: 1,
+    startedAt: '2026-04-30T12:01:00.000Z',
+  }),
+);
 saveDurableRunCheckpoint(waitingRunPaths.checkpointPath, {
   version: 1,
   runId: 'run-demo-review',
@@ -493,43 +630,55 @@ saveDurableRunCheckpoint(waitingRunPaths.checkpointPath, {
 });
 
 const completedRunPaths = resolveDurableRunPaths(runsRoot, 'run-demo-tests');
-saveDurableRunManifest(completedRunPaths.manifestPath, createDurableRunManifest({
-  id: 'run-demo-tests',
-  kind: 'raw-shell',
-  resumePolicy: 'rerun',
-  createdAt: now,
-  source: { type: 'tool', id: 'run' },
-  spec: { command: 'npm test' },
-}));
-saveDurableRunStatus(completedRunPaths.statusPath, createInitialDurableRunStatus({
-  runId: 'run-demo-tests',
-  status: 'completed',
-  createdAt: now,
-  updatedAt: '2026-04-30T12:20:00.000Z',
-  activeAttempt: 1,
-  startedAt: '2026-04-30T12:02:00.000Z',
-  completedAt: '2026-04-30T12:20:00.000Z',
-}));
+saveDurableRunManifest(
+  completedRunPaths.manifestPath,
+  createDurableRunManifest({
+    id: 'run-demo-tests',
+    kind: 'raw-shell',
+    resumePolicy: 'rerun',
+    createdAt: now,
+    source: { type: 'tool', id: 'run' },
+    spec: { command: 'npm test' },
+  }),
+);
+saveDurableRunStatus(
+  completedRunPaths.statusPath,
+  createInitialDurableRunStatus({
+    runId: 'run-demo-tests',
+    status: 'completed',
+    createdAt: now,
+    updatedAt: '2026-04-30T12:20:00.000Z',
+    activeAttempt: 1,
+    startedAt: '2026-04-30T12:02:00.000Z',
+    completedAt: '2026-04-30T12:20:00.000Z',
+  }),
+);
 
 const failedRunPaths = resolveDurableRunPaths(runsRoot, 'run-demo-failed');
-saveDurableRunManifest(failedRunPaths.manifestPath, createDurableRunManifest({
-  id: 'run-demo-failed',
-  kind: 'scheduled-task',
-  resumePolicy: 'rerun',
-  createdAt: now,
-  source: { type: 'scheduled-task', id: 'demo-failed-automation' },
-  spec: { taskId: 'demo-failed-automation' },
-}));
-saveDurableRunStatus(failedRunPaths.statusPath, createInitialDurableRunStatus({
-  runId: 'run-demo-failed',
-  status: 'failed',
-  createdAt: now,
-  updatedAt: '2026-04-30T12:30:00.000Z',
-  activeAttempt: 1,
-  startedAt: '2026-04-30T12:25:00.000Z',
-  completedAt: '2026-04-30T12:30:00.000Z',
-  lastError: 'Command exited with status 1',
-}));
+saveDurableRunManifest(
+  failedRunPaths.manifestPath,
+  createDurableRunManifest({
+    id: 'run-demo-failed',
+    kind: 'scheduled-task',
+    resumePolicy: 'rerun',
+    createdAt: now,
+    source: { type: 'scheduled-task', id: 'demo-failed-automation' },
+    spec: { taskId: 'demo-failed-automation' },
+  }),
+);
+saveDurableRunStatus(
+  failedRunPaths.statusPath,
+  createInitialDurableRunStatus({
+    runId: 'run-demo-failed',
+    status: 'failed',
+    createdAt: now,
+    updatedAt: '2026-04-30T12:30:00.000Z',
+    activeAttempt: 1,
+    startedAt: '2026-04-30T12:25:00.000Z',
+    completedAt: '2026-04-30T12:30:00.000Z',
+    lastError: 'Command exited with status 1',
+  }),
+);
 
 const deferredState = createEmptyDeferredResumeState();
 deferredState.resumes['resume-demo-reminder'] = {
@@ -604,22 +753,27 @@ write(localSettingsFile, JSON.stringify(demoUiPreferences, null, 2) + '\n');
 mkdirp(desktopUserDataDir);
 
 const envFile = join(stateRoot, 'desktop-demo-env.sh');
-write(envFile, [
-  `export PERSONAL_AGENT_STATE_ROOT=${JSON.stringify(stateRoot)}`,
-  `export PERSONAL_AGENT_CONFIG_ROOT=${JSON.stringify(configRoot)}`,
-  `export PERSONAL_AGENT_VAULT_ROOT=${JSON.stringify(vaultRoot)}`,
-  `export PERSONAL_AGENT_PROFILE=${JSON.stringify(demoProfile)}`,
-  `export PERSONAL_AGENT_ACTIVE_PROFILE=${JSON.stringify(demoProfile)}`,
-  `export PERSONAL_AGENT_DESKTOP_INITIAL_ROUTE=${JSON.stringify(initialRoute)}`,
-  `export PERSONAL_AGENT_DESKTOP_USER_DATA_DIR=${JSON.stringify(desktopUserDataDir)}`,
-].join('\n') + '\n');
+write(
+  envFile,
+  [
+    `export PERSONAL_AGENT_STATE_ROOT=${JSON.stringify(stateRoot)}`,
+    `export PERSONAL_AGENT_CONFIG_ROOT=${JSON.stringify(configRoot)}`,
+    `export PERSONAL_AGENT_VAULT_ROOT=${JSON.stringify(vaultRoot)}`,
+    `export PERSONAL_AGENT_PROFILE=${JSON.stringify(demoProfile)}`,
+    `export PERSONAL_AGENT_ACTIVE_PROFILE=${JSON.stringify(demoProfile)}`,
+    `export PERSONAL_AGENT_DESKTOP_INITIAL_ROUTE=${JSON.stringify(initialRoute)}`,
+    `export PERSONAL_AGENT_DESKTOP_USER_DATA_DIR=${JSON.stringify(desktopUserDataDir)}`,
+  ].join('\n') + '\n',
+);
 
 console.log(`Desktop demo state created at ${stateRoot}`);
 console.log(`Env file: ${envFile}`);
 console.log('Launch with:');
 console.log(`  source ${envFile} && npm run desktop:start -- --no-quit-confirmation`);
 console.log(`Initial route: ${initialRoute}`);
-console.log('Seeded conversations: demo-empty, demo-normal, demo-tools, demo-running, demo-rich, demo-reminder, demo-auto-review, demo-parent, demo-subagent-child, demo-parallel-parent, demo-attention, demo-remote, demo-related-context');
+console.log(
+  'Seeded conversations: demo-empty, demo-normal, demo-tools, demo-running, demo-rich, demo-reminder, demo-auto-review, demo-parent, demo-subagent-child, demo-parallel-parent, demo-attention, demo-remote, demo-related-context',
+);
 console.log('Seeded automations: demo-daily-summary, demo-follow-up-thread, demo-failed-automation');
 console.log('Seeded runs: run-demo-review, run-demo-tests, run-demo-failed');
 console.log('Seeded deferred resumes: resume-demo-reminder, resume-demo-callback');

@@ -17,9 +17,7 @@ import {
 } from './tailscale-serve.js';
 
 function createServeStatusPayload(handlers: Record<string, string> = {}): string {
-  const normalizedHandlers = Object.fromEntries(
-    Object.entries(handlers).map(([path, proxy]) => [path, { Proxy: proxy }]),
-  );
+  const normalizedHandlers = Object.fromEntries(Object.entries(handlers).map(([path, proxy]) => [path, { Proxy: proxy }]));
 
   return JSON.stringify({
     Web: {
@@ -72,9 +70,7 @@ describe('readTailscaleServeProxyState', () => {
 
 describe('syncTailscaleServeProxy', () => {
   it('rejects fractional ports instead of flooring them', () => {
-    expect(() => syncTailscaleServeProxy({ enabled: true, port: 8390.5, path: '/codex' })).toThrow(
-      'Invalid Tailscale Serve port: 8390.5',
-    );
+    expect(() => syncTailscaleServeProxy({ enabled: true, port: 8390.5, path: '/codex' })).toThrow('Invalid Tailscale Serve port: 8390.5');
     expect(mocks.spawnSync).not.toHaveBeenCalled();
   });
 
@@ -85,18 +81,10 @@ describe('syncTailscaleServeProxy', () => {
 
     syncTailscaleServeProxy({ enabled: true, port: 8390, path: '/codex' });
 
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      1,
-      'tailscale',
-      ['serve', '--bg', '--set-path=/codex', 'localhost:8390'],
-      { encoding: 'utf-8' },
-    );
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      2,
-      'tailscale',
-      ['serve', 'status', '--json'],
-      { encoding: 'utf-8' },
-    );
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(1, 'tailscale', ['serve', '--bg', '--set-path=/codex', 'localhost:8390'], {
+      encoding: 'utf-8',
+    });
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(2, 'tailscale', ['serve', 'status', '--json'], { encoding: 'utf-8' });
   });
 
   it('fails when the expected path is still missing after enabling it', () => {
@@ -132,25 +120,20 @@ describe('syncTailscaleServeProxy', () => {
 
 describe('syncCompanionTailscaleServe', () => {
   it('enables tailscale serve for the companion path without clobbering sibling paths', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({
-        status: 0,
-        stdout: createServeStatusPayload({
-          '/': 'http://localhost:3741',
-          '/companion': 'http://localhost:3843',
-        }),
-        stderr: '',
-      });
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: '', stderr: '' }).mockReturnValueOnce({
+      status: 0,
+      stdout: createServeStatusPayload({
+        '/': 'http://localhost:3741',
+        '/companion': 'http://localhost:3843',
+      }),
+      stderr: '',
+    });
 
     syncCompanionTailscaleServe({ enabled: true, port: 3843 });
 
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      1,
-      'tailscale',
-      ['serve', '--bg', '--set-path=/companion', 'localhost:3843'],
-      { encoding: 'utf-8' },
-    );
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(1, 'tailscale', ['serve', '--bg', '--set-path=/companion', 'localhost:3843'], {
+      encoding: 'utf-8',
+    });
   });
 });
 
@@ -204,4 +187,3 @@ describe('resolveCompanionTailscaleUrl', () => {
     expect(resolveCompanionTailscaleUrl(3843)).toBeUndefined();
   });
 });
-

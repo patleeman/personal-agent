@@ -2,6 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { RelatedConversationSearchResult } from './relatedConversationSearch';
 import { resolveRelatedThreadHotkeyIndex, useRelatedThreadHotkeys } from './useRelatedThreadHotkeys';
 
@@ -33,15 +34,17 @@ describe('useRelatedThreadHotkeys', () => {
   });
 
   it('resolves ctrl+digit hotkeys from keyboard code before key', () => {
-    expect(resolveRelatedThreadHotkeyIndex({
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      key: 'Dead',
-      code: 'Digit3',
-      isComposing: false,
-    })).toBe(2);
+    expect(
+      resolveRelatedThreadHotkeyIndex({
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        key: 'Dead',
+        code: 'Digit3',
+        isComposing: false,
+      }),
+    ).toBe(2);
   });
 
   it('handles composer digit hotkeys before descendant handlers can mark them default-prevented', () => {
@@ -70,13 +73,15 @@ describe('useRelatedThreadHotkeys', () => {
     expect(composer).not.toBeNull();
 
     act(() => {
-      composer?.dispatchEvent(new KeyboardEvent('keydown', {
-        key: '2',
-        code: 'Digit2',
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      }));
+      composer?.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: '2',
+          code: 'Digit2',
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
     });
 
     expect(onToggle).toHaveBeenCalledWith('conv-2');
@@ -106,13 +111,15 @@ describe('useRelatedThreadHotkeys', () => {
     });
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', {
-        key: '2',
-        code: 'Digit2',
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      }));
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: '2',
+          code: 'Digit2',
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
     });
 
     expect(onToggle).toHaveBeenCalledWith('conv-2');

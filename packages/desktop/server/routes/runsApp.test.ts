@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -55,9 +56,7 @@ describe('registerRunAppRoutes', () => {
     readDurableRunLogDeltaMock.mockReturnValue(undefined);
   });
 
-  function createHarness(options?: {
-    getDurableRunSnapshot?: (runId: string, tail: number) => Promise<unknown | null>;
-  }) {
+  function createHarness(options?: { getDurableRunSnapshot?: (runId: string, tail: number) => Promise<unknown | null> }) {
     const handlers: Record<string, (req: unknown, res: unknown) => Promise<void> | void> = {};
     const router = {
       get: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
@@ -113,9 +112,12 @@ describe('registerRunAppRoutes', () => {
     const failingRes = createJsonResponse();
     await listHandler({}, failingRes);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'list failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'list failed',
+      }),
+    );
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: list failed' });
   });
@@ -145,9 +147,12 @@ describe('registerRunAppRoutes', () => {
 
     await detailHandler({ params: { id: 'run-1' } }, res);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'detail failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'detail failed',
+      }),
+    );
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: detail failed' });
   });
@@ -160,7 +165,8 @@ describe('registerRunAppRoutes', () => {
       nextCursor: 12,
       reset: false,
     });
-    const getDurableRunSnapshot = vi.fn()
+    const getDurableRunSnapshot = vi
+      .fn()
       .mockResolvedValueOnce({
         detail: { run: { runId: 'run-1', status: 'running' } },
         log: { path: '/tmp/run.log', log: 'initial' },
@@ -182,25 +188,31 @@ describe('registerRunAppRoutes', () => {
     expect(getDurableRunLogCursorMock).toHaveBeenCalledWith('/tmp/run.log');
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
     expect(res.flushHeaders).toHaveBeenCalledTimes(1);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
-      type: 'snapshot',
-      detail: { run: { runId: 'run-1', status: 'running' } },
-      log: { path: '/tmp/run.log', log: 'initial' },
-    })}\n\n`);
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({
+        type: 'snapshot',
+        detail: { run: { runId: 'run-1', status: 'running' } },
+        log: { path: '/tmp/run.log', log: 'initial' },
+      })}\n\n`,
+    );
 
     await vi.advanceTimersByTimeAsync(250);
     expect(readDurableRunLogDeltaMock).toHaveBeenCalledWith('/tmp/run.log', 0);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
-      type: 'log_delta',
-      path: '/tmp/run.log',
-      delta: '\nstream chunk',
-    })}\n\n`);
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({
+        type: 'log_delta',
+        path: '/tmp/run.log',
+        delta: '\nstream chunk',
+      })}\n\n`,
+    );
 
     await vi.advanceTimersByTimeAsync(750);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
-      type: 'detail',
-      detail: { run: { runId: 'run-1', status: 'running' } },
-    })}\n\n`);
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({
+        type: 'detail',
+        detail: { run: { runId: 'run-1', status: 'running' } },
+      })}\n\n`,
+    );
 
     await vi.advanceTimersByTimeAsync(14_000);
     expect(res.write).toHaveBeenCalledWith(': heartbeat\n\n');
@@ -214,7 +226,8 @@ describe('registerRunAppRoutes', () => {
   it('slows run detail and log polling after a terminal snapshot', async () => {
     vi.useFakeTimers();
     readDurableRunLogDeltaMock.mockReturnValue(undefined);
-    const getDurableRunSnapshot = vi.fn()
+    const getDurableRunSnapshot = vi
+      .fn()
       .mockResolvedValueOnce({
         detail: { run: { runId: 'run-1', status: 'running' } },
         log: { path: '/tmp/run.log', log: 'initial' },
@@ -232,10 +245,12 @@ describe('registerRunAppRoutes', () => {
 
     await eventsHandler(req, res);
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
-      type: 'detail',
-      detail: { run: { runId: 'run-1', status: 'cancelled' } },
-    })}\n\n`);
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({
+        type: 'detail',
+        detail: { run: { runId: 'run-1', status: 'cancelled' } },
+      })}\n\n`,
+    );
     expect(getDurableRunSnapshot).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(4_999);
@@ -263,16 +278,20 @@ describe('registerRunAppRoutes', () => {
 
     await failing.eventsHandler({ params: { id: 'run-1' }, query: {}, on: vi.fn() }, failingRes);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'snapshot failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'snapshot failed',
+      }),
+    );
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: snapshot failed' });
   });
 
   it('emits deleted events when a streamed run disappears during polling', async () => {
     vi.useFakeTimers();
-    const getDurableRunSnapshot = vi.fn()
+    const getDurableRunSnapshot = vi
+      .fn()
       .mockResolvedValueOnce({
         detail: { run: { runId: 'run-1', status: 'running' } },
         log: { path: '/tmp/run.log', log: 'initial' },
@@ -327,9 +346,12 @@ describe('registerRunAppRoutes', () => {
 
     await logHandler({ params: { id: 'run-1' }, query: {} }, res);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'log failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'log failed',
+      }),
+    );
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: log failed' });
   });
@@ -358,9 +380,12 @@ describe('registerRunAppRoutes', () => {
     const failingRes = createJsonResponse();
     await cancelHandler({ params: { id: 'run-1' } }, failingRes);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'cancel failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'cancel failed',
+      }),
+    );
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: cancel failed' });
   });

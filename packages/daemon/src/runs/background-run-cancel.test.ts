@@ -2,15 +2,14 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import type { DaemonConfig } from '../config.js';
+import { resolveDaemonPaths } from '../paths.js';
 import { PersonalAgentDaemon } from '../server.js';
 import { createBackgroundRunRecord } from './background-runs.js';
-import {
-  loadDurableRunStatus,
-  resolveDurableRunsRoot,
-} from './store.js';
-import { resolveDaemonPaths } from '../paths.js';
+import { loadDurableRunStatus, resolveDurableRunsRoot } from './store.js';
 
 const tempDirs: string[] = [];
 
@@ -64,9 +63,11 @@ describe('background run cancellation', () => {
       runId: record.runId,
     });
 
-    expect(loadDurableRunStatus(record.paths.statusPath)).toEqual(expect.objectContaining({
-      status: 'cancelled',
-      checkpointKey: 'cancelled',
-    }));
+    expect(loadDurableRunStatus(record.paths.statusPath)).toEqual(
+      expect.objectContaining({
+        status: 'cancelled',
+        checkpointKey: 'cancelled',
+      }),
+    );
   });
 });

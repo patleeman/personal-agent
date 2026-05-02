@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+
 import { getStateRoot } from '@personal-agent/core';
 
 export type ConversationContextDocKind = 'doc' | 'file';
@@ -55,12 +56,8 @@ function normalizeContextDocRef(value: unknown): ConversationContextDocRef | nul
     return null;
   }
 
-  const normalizedKind: ConversationContextDocKind = ref.kind === 'doc' || ref.kind === 'file'
-    ? ref.kind
-    : 'file';
-  const title = normalizeOptionalText(ref.title)
-    ?? basename(path)
-    ?? path;
+  const normalizedKind: ConversationContextDocKind = ref.kind === 'doc' || ref.kind === 'file' ? ref.kind : 'file';
+  const title = normalizeOptionalText(ref.title) ?? basename(path) ?? path;
 
   return {
     path,
@@ -73,9 +70,7 @@ function normalizeContextDocRef(value: unknown): ConversationContextDocRef | nul
 
 function normalizeContextDocRefs(values: unknown): ConversationContextDocRef[] {
   const refs = Array.isArray(values)
-    ? values
-      .map((value) => normalizeContextDocRef(value))
-      .filter((value): value is ConversationContextDocRef => value !== null)
+    ? values.map((value) => normalizeContextDocRef(value)).filter((value): value is ConversationContextDocRef => value !== null)
     : [];
 
   const deduped: ConversationContextDocRef[] = [];
@@ -155,13 +150,15 @@ export function buildAttachedConversationContextDocsContext(attachedContextDocs:
 
   return [
     'Attached conversation context docs:',
-    ...attachedContextDocs.map((doc) => [
-      `- ${doc.title}`,
-      `  kind: ${doc.kind}`,
-      `  path: ${doc.path}`,
-      ...(doc.summary ? [`  summary: ${doc.summary}`] : []),
-      ...(doc.mentionId ? [`  mention: ${doc.mentionId}`] : []),
-    ].join('\n')),
+    ...attachedContextDocs.map((doc) =>
+      [
+        `- ${doc.title}`,
+        `  kind: ${doc.kind}`,
+        `  path: ${doc.path}`,
+        ...(doc.summary ? [`  summary: ${doc.summary}`] : []),
+        ...(doc.mentionId ? [`  mention: ${doc.mentionId}`] : []),
+      ].join('\n'),
+    ),
     'These docs are persistently attached to this conversation. Treat them as stable background context even when the current prompt does not mention them. Read the exact file when you need more detail.',
   ].join('\n');
 }

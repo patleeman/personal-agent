@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getLatexArtifactDisplayMode,
-  looksLikeFullLatexDocument,
-  normalizeLatexMathSource,
-} from './latexArtifacts.js';
+
+import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from './latexArtifacts.js';
 
 describe('latex artifact helpers', () => {
   it('recognizes full latex documents', () => {
@@ -27,12 +24,16 @@ This is still latex source.`;
   });
 
   it('normalizes wrapped math snippets for preview', () => {
-    expect(normalizeLatexMathSource(String.raw`$$
+    expect(
+      normalizeLatexMathSource(String.raw`$$
 x = \frac{1}{2}
-$$`)).toBe(String.raw`x = \frac{1}{2}`);
-    expect(normalizeLatexMathSource(String.raw`\[
+$$`),
+    ).toBe(String.raw`x = \frac{1}{2}`);
+    expect(
+      normalizeLatexMathSource(String.raw`\[
 y = x^2
-\]`)).toBe(String.raw`y = x^2`);
+\]`),
+    ).toBe(String.raw`y = x^2`);
     expect(normalizeLatexMathSource(String.raw`$z$`)).toBe('z');
   });
 

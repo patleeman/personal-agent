@@ -12,10 +12,7 @@ export function buildContinueInExecutionTargetOptions(
     return [];
   }
 
-  return [
-    { value: 'local', label: 'Local' },
-    ...connections.hosts.map((host) => ({ value: host.id, label: host.label })),
-  ];
+  return [{ value: 'local', label: 'Local' }, ...connections.hosts.map((host) => ({ value: host.id, label: host.label }))];
 }
 
 export function resolveConversationExecutionTargetOptions(input: {
@@ -25,9 +22,8 @@ export function resolveConversationExecutionTargetOptions(input: {
   currentRemoteHostLabel?: string | null;
   currentRemoteConversationId?: string | null;
 }): ConversationExecutionTargetOption[] {
-  const baseOptions = input.continueInOptions.length > 0
-    ? [...input.continueInOptions]
-    : (input.hasDesktopBridge ? [{ value: 'local', label: 'Local' }] : []);
+  const baseOptions =
+    input.continueInOptions.length > 0 ? [...input.continueInOptions] : input.hasDesktopBridge ? [{ value: 'local', label: 'Local' }] : [];
   const currentRemoteHostId = input.currentRemoteHostId?.trim() || '';
   const currentRemoteHostLabel = input.currentRemoteHostLabel?.trim() || currentRemoteHostId;
   const currentRemoteConversationId = input.currentRemoteConversationId?.trim() || '';
@@ -64,16 +60,12 @@ export function resolveSelectedConversationExecutionTargetId(input: {
   }
 
   const currentRemoteConversationId = input.currentRemoteConversationId?.trim() || '';
-  return currentRemoteConversationId
-    ? buildRemoteConversationExecutionTargetId(currentRemoteConversationId)
-    : 'local';
+  return currentRemoteConversationId ? buildRemoteConversationExecutionTargetId(currentRemoteConversationId) : 'local';
 }
 
 export function findSelectedExecutionTargetHost(input: {
   selectedTargetId: string;
   connections: DesktopConnectionsState | null | undefined;
 }): Extract<DesktopHostRecord, { kind: 'ssh' }> | null {
-  return input.selectedTargetId === 'local'
-    ? null
-    : input.connections?.hosts.find((host) => host.id === input.selectedTargetId) ?? null;
+  return input.selectedTargetId === 'local' ? null : (input.connections?.hosts.find((host) => host.id === input.selectedTargetId) ?? null);
 }

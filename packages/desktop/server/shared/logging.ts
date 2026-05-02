@@ -124,12 +124,13 @@ export function installProcessLogging(): void {
 
   process.on('unhandledRejection', (reason) => {
     logError('unhandled rejection', {
-      reason: reason instanceof Error
-        ? {
-            message: reason.message,
-            stack: reason.stack,
-          }
-        : reason,
+      reason:
+        reason instanceof Error
+          ? {
+              message: reason.message,
+              stack: reason.stack,
+            }
+          : reason,
     });
   });
 

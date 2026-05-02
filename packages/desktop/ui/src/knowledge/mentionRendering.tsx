@@ -1,5 +1,6 @@
 import React, { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+
 import type { MentionItem } from '../conversation/conversationMentions';
 import { buildNodeMentionHref, type NodeMentionSurface } from './nodeMentionRoutes';
 
@@ -78,20 +79,23 @@ export function buildMentionLookup(items: MentionItem[] | null | undefined): Map
   return lookup;
 }
 
-function renderMentionFragment(
-  mention: string,
-  index: number,
-  lookup: Map<string, MentionItem[]>,
-  surface: NodeMentionSurface,
-): ReactNode {
+function renderMentionFragment(mention: string, index: number, lookup: Map<string, MentionItem[]>, surface: NodeMentionSurface): ReactNode {
   const matches = lookup.get(mention) ?? [];
   if (matches.length !== 1) {
-    return <span key={`${mention}-${index}`} className="ui-markdown-mention">{mention}</span>;
+    return (
+      <span key={`${mention}-${index}`} className="ui-markdown-mention">
+        {mention}
+      </span>
+    );
   }
 
   const href = buildNodeMentionHref(matches[0] as MentionItem, surface);
   if (!href) {
-    return <span key={`${mention}-${index}`} className="ui-markdown-mention">{mention}</span>;
+    return (
+      <span key={`${mention}-${index}`} className="ui-markdown-mention">
+        {mention}
+      </span>
+    );
   }
 
   return (
@@ -145,6 +149,10 @@ export function renderChildrenWithMentionLinks(
       return child;
     }
 
-    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithMentionLinks(props.children, options));
+    return cloneElement(
+      child as ReactElement<{ children?: ReactNode }>,
+      undefined,
+      renderChildrenWithMentionLinks(props.children, options),
+    );
   });
 }

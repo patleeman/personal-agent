@@ -54,20 +54,8 @@ function buildInsertedComposerBlock(
 
   const before = normalizedPrompt.slice(0, start);
   const after = normalizedPrompt.slice(end);
-  const beforeGap = before.length === 0
-    ? ''
-    : before.endsWith('\n\n')
-      ? ''
-      : before.endsWith('\n')
-        ? '\n'
-        : '\n\n';
-  const afterGap = after.length === 0
-    ? '\n\n'
-    : after.startsWith('\n\n')
-      ? ''
-      : after.startsWith('\n')
-        ? '\n'
-        : '\n\n';
+  const beforeGap = before.length === 0 ? '' : before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  const afterGap = after.length === 0 ? '\n\n' : after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
   const inserted = `${beforeGap}${block}${afterGap}`;
   const nextText = `${before}${inserted}${after}`;
   const caret = before.length + inserted.length;
@@ -96,9 +84,7 @@ export function insertFileReplyQuoteIntoComposer(
 ): ReplyQuoteInsertionResult {
   const normalizedPath = filePath.trim();
   const quote = formatReplyQuoteMarkdown(replyQuoteText ?? '');
-  const block = normalizedPath && quote
-    ? `From \`${normalizedPath}\`:\n${quote}`
-    : quote;
+  const block = normalizedPath && quote ? `From \`${normalizedPath}\`:\n${quote}` : quote;
 
   return buildInsertedComposerBlock(promptText, block, selection);
 }

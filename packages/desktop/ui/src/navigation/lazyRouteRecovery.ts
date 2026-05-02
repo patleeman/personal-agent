@@ -1,4 +1,4 @@
-import { lazy, type ComponentType } from 'react';
+import { type ComponentType, lazy } from 'react';
 
 const LAZY_ROUTE_RECOVERY_PREFIX = '__pa_lazy_route_recovery__:';
 
@@ -12,10 +12,12 @@ function getErrorMessage(error: unknown): string {
 
 function isRecoverableLazyRouteError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase();
-  return message.includes('failed to fetch dynamically imported module')
-    || message.includes('error loading dynamically imported module')
-    || message.includes('importing a module script failed')
-    || message.includes('failed to load module script');
+  return (
+    message.includes('failed to fetch dynamically imported module') ||
+    message.includes('error loading dynamically imported module') ||
+    message.includes('importing a module script failed') ||
+    message.includes('failed to load module script')
+  );
 }
 
 function getRecoveryStorageKey(routeId: string): string {
@@ -56,10 +58,7 @@ function attemptLazyRouteRecovery(routeId: string): boolean {
   return true;
 }
 
-export function lazyRouteWithRecovery<T extends ComponentType<unknown>>(
-  routeId: string,
-  loader: () => Promise<{ default: T }>,
-) {
+export function lazyRouteWithRecovery<T extends ComponentType<unknown>>(routeId: string, loader: () => Promise<{ default: T }>) {
   return lazy(async () => {
     try {
       const module = await loader();

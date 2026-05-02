@@ -2,7 +2,9 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   isDurableRunAttentionDismissed,
   loadDurableRunAttentionState,
@@ -41,16 +43,20 @@ describe('durable run attention state', () => {
     });
 
     expect(statePath).toContain('durable-run-attention.json');
-    expect(isDurableRunAttentionDismissed({
-      stateRoot,
-      runId: 'run-123',
-      attentionSignature: '{"status":"failed"}',
-    })).toBe(true);
-    expect(isDurableRunAttentionDismissed({
-      stateRoot,
-      runId: 'run-123',
-      attentionSignature: '{"status":"failed","attempt":2}',
-    })).toBe(false);
+    expect(
+      isDurableRunAttentionDismissed({
+        stateRoot,
+        runId: 'run-123',
+        attentionSignature: '{"status":"failed"}',
+      }),
+    ).toBe(true);
+    expect(
+      isDurableRunAttentionDismissed({
+        stateRoot,
+        runId: 'run-123',
+        attentionSignature: '{"status":"failed","attempt":2}',
+      }),
+    ).toBe(false);
   });
 
   it('can clear a reviewed run so the same signature surfaces again', () => {
@@ -68,10 +74,12 @@ describe('durable run attention state', () => {
       runId: 'run-123',
     });
 
-    expect(isDurableRunAttentionDismissed({
-      stateRoot,
-      runId: 'run-123',
-      attentionSignature: '{"status":"failed"}',
-    })).toBe(false);
+    expect(
+      isDurableRunAttentionDismissed({
+        stateRoot,
+        runId: 'run-123',
+        attentionSignature: '{"status":"failed"}',
+      }),
+    ).toBe(false);
   });
 });

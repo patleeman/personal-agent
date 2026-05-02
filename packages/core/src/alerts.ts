@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
+
 import { getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -218,7 +219,9 @@ export function saveAlertState(options: ResolveAlertOptions & { state: AlertStat
   return path;
 }
 
-export function listAlerts(options: ResolveAlertOptions & { includeDismissed?: boolean; includeAcknowledged?: boolean } = { profile: 'shared' }): AlertRecord[] {
+export function listAlerts(
+  options: ResolveAlertOptions & { includeDismissed?: boolean; includeAcknowledged?: boolean } = { profile: 'shared' },
+): AlertRecord[] {
   const state = loadAlertState(options);
   return Object.values(state.alerts)
     .filter((alert) => {
@@ -246,9 +249,11 @@ export function getAlert(options: ResolveAlertOptions & { alertId: string }): Al
   return loadAlertState(options).alerts[options.alertId];
 }
 
-export function upsertAlert(options: ResolveAlertOptions & {
-  alert: Omit<AlertRecord, 'updatedAt'> & { updatedAt?: string };
-}): AlertRecord {
+export function upsertAlert(
+  options: ResolveAlertOptions & {
+    alert: Omit<AlertRecord, 'updatedAt'> & { updatedAt?: string };
+  },
+): AlertRecord {
   const state = loadAlertState(options);
   const createdAt = normalizeIsoTimestamp(options.alert.createdAt);
   const updatedAt = normalizeIsoTimestamp(options.alert.updatedAt, createdAt);

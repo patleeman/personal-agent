@@ -1,6 +1,6 @@
 /**
  * Web server middleware re-exports
- * 
+ *
  * Re-exports middleware functions from their domain modules for use
  * in the main server and route modules.
  */
@@ -18,13 +18,7 @@ export {
 import { logInfo } from '../shared/logging.js';
 
 // Logging middleware
-export {
-  logError,
-  logInfo,
-  logWarn,
-  installProcessLogging,
-  webRequestLoggingMiddleware,
-} from '../shared/logging.js';
+export { installProcessLogging, logError, logInfo, logWarn, webRequestLoggingMiddleware } from '../shared/logging.js';
 
 export interface ServerTimingMetric {
   name: string;
@@ -33,9 +27,8 @@ export interface ServerTimingMetric {
 }
 
 function formatServerTimingMetric(metric: ServerTimingMetric): string {
-  const dur = Number.isFinite(metric.durationMs) && Math.abs(metric.durationMs) <= Number.MAX_SAFE_INTEGER
-    ? Math.max(0, metric.durationMs)
-    : 0;
+  const dur =
+    Number.isFinite(metric.durationMs) && Math.abs(metric.durationMs) <= Number.MAX_SAFE_INTEGER ? Math.max(0, metric.durationMs) : 0;
   const parts = [`${metric.name};dur=${dur.toFixed(1)}`];
   if (metric.description) {
     parts.push(`desc="${metric.description.replace(/"/g, '')}"`);
@@ -85,12 +78,8 @@ export function readCookieValue(req: Request, cookieName: string): string {
   return '';
 }
 
-
 // Session middleware
-export {
-  reloadAllLiveSessionAuth,
-  refreshAllLiveSessionModelRegistries,
-} from '../conversations/liveSessions.js';
+export { refreshAllLiveSessionModelRegistries, reloadAllLiveSessionAuth } from '../conversations/liveSessions.js';
 
 // Settings persistence
 export { persistSettingsWrite } from '../ui/settingsPersistence.js';

@@ -1,9 +1,11 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import type { Express } from 'express';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { createServerApps, mountStaticServerApps } from './bootstrap.js';
 
 function startServer(app: Express): Promise<{ baseUrl: string; close: () => Promise<void> }> {
@@ -17,15 +19,16 @@ function startServer(app: Express): Promise<{ baseUrl: string; close: () => Prom
 
       resolve({
         baseUrl: `http://127.0.0.1:${(address as AddressInfo).port}`,
-        close: () => new Promise<void>((resolveClose, rejectClose) => {
-          server.close((error) => {
-            if (error) {
-              rejectClose(error);
-              return;
-            }
-            resolveClose();
-          });
-        }),
+        close: () =>
+          new Promise<void>((resolveClose, rejectClose) => {
+            server.close((error) => {
+              if (error) {
+                rejectClose(error);
+                return;
+              }
+              resolveClose();
+            });
+          }),
       });
     });
   });
@@ -116,5 +119,4 @@ describe('mountStaticServerApps without built assets', () => {
     expect(await response.text()).toContain('personal-agent desktop renderer');
     expect(await fetch(`${appBaseUrl}/`).then((result) => result.text())).toContain('SPA not built yet.');
   });
-
 });

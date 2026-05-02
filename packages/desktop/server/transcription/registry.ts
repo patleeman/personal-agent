@@ -30,5 +30,3 @@ export class StaticTranscriptionProviderRegistry implements TranscriptionProvide
     return provider;
   }
 }
-
-

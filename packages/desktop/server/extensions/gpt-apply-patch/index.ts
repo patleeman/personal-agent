@@ -1,17 +1,15 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
+
 import {
-  applyPatch,
   APPLY_PATCH_DESCRIPTION,
   APPLY_PATCH_PROMPT_GUIDELINES,
   APPLY_PATCH_PROMPT_SNIPPET,
+  applyPatch,
   synchronizeActiveTools,
 } from './applyPatch';
 
-function syncToolSelection(
-  pi: Pick<ExtensionAPI, 'getActiveTools' | 'setActiveTools'>,
-  model: { id?: unknown } | null | undefined,
-): void {
+function syncToolSelection(pi: Pick<ExtensionAPI, 'getActiveTools' | 'setActiveTools'>, model: { id?: unknown } | null | undefined): void {
   const currentTools = pi.getActiveTools();
   const nextTools = synchronizeActiveTools(currentTools, model);
   if (nextTools.length !== currentTools.length || nextTools.some((toolName, index) => toolName !== currentTools[index])) {

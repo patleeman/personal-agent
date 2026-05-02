@@ -1,6 +1,9 @@
 import type { AgentSession, AgentSessionEvent } from '@mariozechner/pi-coding-agent';
+
 import { logWarn } from '../shared/logging.js';
-import { getAssistantErrorDisplayMessage } from './sessions.js';
+import { CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE } from './conversationAutoMode.js';
+import type { WebLiveConversationRunState } from './conversationRuns.js';
+import { type SseEvent, toSse } from './liveSessionEvents.js';
 import {
   activateNextHiddenTurn,
   clearActiveHiddenTurnAfterTerminalEvent,
@@ -8,9 +11,7 @@ import {
 } from './liveSessionHiddenTurns.js';
 import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
 import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
-import { toSse, type SseEvent } from './liveSessionEvents.js';
-import { CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE } from './conversationAutoMode.js';
-import type { WebLiveConversationRunState } from './conversationRuns.js';
+import { getAssistantErrorDisplayMessage } from './sessions.js';
 
 export interface LiveSessionEventHost {
   sessionId: string;
@@ -74,7 +75,13 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     void callbacks.applyPendingConversationWorkingDirectoryChange(entry);
   }
 
-  if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
+  if (
+    event.type === 'agent_start' ||
+    event.type === 'message_update' ||
+    event.type === 'tool_execution_start' ||
+    event.type === 'tool_execution_update' ||
+    event.type === 'tool_execution_end'
+  ) {
     callbacks.scheduleContextUsage(entry);
   }
 
@@ -117,7 +124,9 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     try {
       const stats = entry.session.getSessionStats();
       callbacks.broadcastStats(entry, stats.tokens, stats.cost);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     callbacks.clearContextUsageTimer(entry);
     callbacks.broadcastContextUsage(entry, true);
   }

@@ -1,9 +1,10 @@
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+
 import { getDesktopBridge, isDesktopShell } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../shared/types';
-import { ToolbarButton } from './ui';
 import type { AppLayoutMode } from '../ui-state/appLayoutMode';
+import { ToolbarButton } from './ui';
 
 function LeftSidebarToggleIcon({ open }: { open: boolean }) {
   return (
@@ -136,7 +137,8 @@ export function DesktopTopBar({
     }
 
     let cancelled = false;
-    bridge.getNavigationState()
+    bridge
+      .getNavigationState()
       .then((state) => {
         if (!cancelled) {
           setNavigation(state);
@@ -188,9 +190,7 @@ export function DesktopTopBar({
   }
 
   const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
-  const launchBadgeLabel = environment?.launchMode === 'testing'
-    ? environment.launchLabel?.trim() || 'Testing'
-    : null;
+  const launchBadgeLabel = environment?.launchMode === 'testing' ? environment.launchLabel?.trim() || 'Testing' : null;
 
   return (
     <div className="ui-desktop-top-bar border-b-0 bg-base/80">
@@ -208,10 +208,26 @@ export function DesktopTopBar({
               <LeftSidebarToggleIcon open={sidebarOpen} />
             </ToolbarButton>
           ) : null}
-          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
+          <ToolbarButton
+            className="ui-desktop-top-bar__icon-button"
+            onClick={() => {
+              void handleBack();
+            }}
+            disabled={!navigation.canGoBack}
+            aria-label="Go back"
+            title="Go back"
+          >
             ←
           </ToolbarButton>
-          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
+          <ToolbarButton
+            className="ui-desktop-top-bar__icon-button"
+            onClick={() => {
+              void handleForward();
+            }}
+            disabled={!navigation.canGoForward}
+            aria-label="Go forward"
+            title="Go forward"
+          >
             →
           </ToolbarButton>
         </div>

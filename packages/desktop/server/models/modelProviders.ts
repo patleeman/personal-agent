@@ -1,9 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import {
-  getDurableModelsDir,
-  getDurableProfilesDir,
-} from '@personal-agent/core';
+
+import { getDurableModelsDir, getDurableProfilesDir } from '@personal-agent/core';
 
 export type ModelProviderApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
 export type ModelProviderInputType = 'text' | 'image';
@@ -190,7 +188,9 @@ function readOptionalString(value: unknown): string | undefined {
 const MAX_MODEL_TOKEN_LIMIT = 10_000_000;
 
 function readOptionalNonNegativeNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER && value >= 0 ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER && value >= 0
+    ? value
+    : undefined;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | undefined {
@@ -227,8 +227,7 @@ function readModelInputs(value: unknown): ModelProviderInputType[] {
     return ['text'];
   }
 
-  const inputs = value
-    .filter((entry): entry is ModelProviderInputType => entry === 'text' || entry === 'image');
+  const inputs = value.filter((entry): entry is ModelProviderInputType => entry === 'text' || entry === 'image');
 
   if (inputs.length === 0) {
     return ['text'];
@@ -415,7 +414,7 @@ export function upsertModelProvider(
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
   const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
-  const provider = isRecord(providers[normalizedProviderId]) ? providers[normalizedProviderId] as JsonRecord : {};
+  const provider = isRecord(providers[normalizedProviderId]) ? (providers[normalizedProviderId] as JsonRecord) : {};
 
   applyProviderUpdate(provider, update);
   providers[normalizedProviderId] = provider;
@@ -459,10 +458,8 @@ export function upsertModelProviderModel(
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
   const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
-  const provider = isRecord(providers[normalizedProviderId]) ? providers[normalizedProviderId] as JsonRecord : {};
-  const models = Array.isArray(provider.models)
-    ? provider.models.filter((entry): entry is JsonRecord => isRecord(entry))
-    : [];
+  const provider = isRecord(providers[normalizedProviderId]) ? (providers[normalizedProviderId] as JsonRecord) : {};
+  const models = Array.isArray(provider.models) ? provider.models.filter((entry): entry is JsonRecord => isRecord(entry)) : [];
   const existingIndex = models.findIndex((entry) => readOptionalString(entry.id) === normalizedModelId);
   const model = existingIndex >= 0 ? models[existingIndex] : {};
 
@@ -493,7 +490,7 @@ export function removeModelProviderModel(
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
   const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
-  const provider = isRecord(providers[normalizedProviderId]) ? providers[normalizedProviderId] as JsonRecord : null;
+  const provider = isRecord(providers[normalizedProviderId]) ? (providers[normalizedProviderId] as JsonRecord) : null;
 
   if (!provider) {
     return {
@@ -502,9 +499,7 @@ export function removeModelProviderModel(
     };
   }
 
-  const models = Array.isArray(provider.models)
-    ? provider.models.filter((entry): entry is JsonRecord => isRecord(entry))
-    : [];
+  const models = Array.isArray(provider.models) ? provider.models.filter((entry): entry is JsonRecord => isRecord(entry)) : [];
   const remainingModels = models.filter((entry) => readOptionalString(entry.id) !== normalizedModelId);
   const removed = remainingModels.length !== models.length;
 

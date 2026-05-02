@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+
 import type { SessionMeta } from '../shared/types';
-import { readStoredPanelWidth, readStoredWorkbenchExplorerOpen, resolveActiveWorkspaceCwd, shouldResetWorkbenchRunsOnConversationChange, shouldShowConversationRunsTab } from './Layout';
+import {
+  readStoredPanelWidth,
+  readStoredWorkbenchExplorerOpen,
+  resolveActiveWorkspaceCwd,
+  shouldResetWorkbenchRunsOnConversationChange,
+  shouldShowConversationRunsTab,
+} from './Layout';
 
 function createSession(overrides: Partial<SessionMeta>): SessionMeta {
   return {
@@ -18,19 +25,30 @@ function createSession(overrides: Partial<SessionMeta>): SessionMeta {
 
 describe('Layout workspace selection', () => {
   it('uses only fully local conversations for the workbench workspace', () => {
-    expect(resolveActiveWorkspaceCwd([
-      createSession({ id: 'local', cwd: '/tmp/local' }),
-      createSession({ id: 'remote-host-only', cwd: '/tmp/remote-host', remoteHostId: 'bender' }),
-      createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' }),
-    ], 'local')).toBe('/tmp/local');
+    expect(
+      resolveActiveWorkspaceCwd(
+        [
+          createSession({ id: 'local', cwd: '/tmp/local' }),
+          createSession({ id: 'remote-host-only', cwd: '/tmp/remote-host', remoteHostId: 'bender' }),
+          createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' }),
+        ],
+        'local',
+      ),
+    ).toBe('/tmp/local');
 
-    expect(resolveActiveWorkspaceCwd([
-      createSession({ id: 'remote-host-only', cwd: '/tmp/remote-host', remoteHostId: 'bender' }),
-    ], 'remote-host-only')).toBeNull();
+    expect(
+      resolveActiveWorkspaceCwd(
+        [createSession({ id: 'remote-host-only', cwd: '/tmp/remote-host', remoteHostId: 'bender' })],
+        'remote-host-only',
+      ),
+    ).toBeNull();
 
-    expect(resolveActiveWorkspaceCwd([
-      createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' }),
-    ], 'remote-conversation-only')).toBeNull();
+    expect(
+      resolveActiveWorkspaceCwd(
+        [createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' })],
+        'remote-conversation-only',
+      ),
+    ).toBeNull();
   });
 });
 
@@ -58,30 +76,38 @@ describe('Layout workbench rail state', () => {
   });
 
   it('resets runs mode when switching conversations', () => {
-    expect(shouldResetWorkbenchRunsOnConversationChange({
-      previousConversationId: 'conv-a',
-      activeConversationId: 'conv-b',
-      activeTool: 'runs',
-      activeRunId: null,
-    })).toBe(true);
-    expect(shouldResetWorkbenchRunsOnConversationChange({
-      previousConversationId: 'conv-a',
-      activeConversationId: 'conv-a',
-      activeTool: 'runs',
-      activeRunId: 'run-1',
-    })).toBe(false);
-    expect(shouldResetWorkbenchRunsOnConversationChange({
-      previousConversationId: 'conv-a',
-      activeConversationId: 'conv-b',
-      activeTool: 'knowledge',
-      activeRunId: null,
-    })).toBe(false);
-    expect(shouldResetWorkbenchRunsOnConversationChange({
-      previousConversationId: 'conv-a',
-      activeConversationId: 'conv-b',
-      activeTool: 'knowledge',
-      activeRunId: 'run-1',
-    })).toBe(true);
+    expect(
+      shouldResetWorkbenchRunsOnConversationChange({
+        previousConversationId: 'conv-a',
+        activeConversationId: 'conv-b',
+        activeTool: 'runs',
+        activeRunId: null,
+      }),
+    ).toBe(true);
+    expect(
+      shouldResetWorkbenchRunsOnConversationChange({
+        previousConversationId: 'conv-a',
+        activeConversationId: 'conv-a',
+        activeTool: 'runs',
+        activeRunId: 'run-1',
+      }),
+    ).toBe(false);
+    expect(
+      shouldResetWorkbenchRunsOnConversationChange({
+        previousConversationId: 'conv-a',
+        activeConversationId: 'conv-b',
+        activeTool: 'knowledge',
+        activeRunId: null,
+      }),
+    ).toBe(false);
+    expect(
+      shouldResetWorkbenchRunsOnConversationChange({
+        previousConversationId: 'conv-a',
+        activeConversationId: 'conv-b',
+        activeTool: 'knowledge',
+        activeRunId: 'run-1',
+      }),
+    ).toBe(true);
   });
 });
 

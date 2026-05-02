@@ -1,4 +1,5 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
+
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 
 export interface LiveSessionDestroyHost {
@@ -12,7 +13,11 @@ export function destroyLiveSession<TEntry extends LiveSessionDestroyHost>(
     registry: Map<string, TEntry>;
     pendingConversationWorkingDirectoryChanges: Map<string, unknown>;
     clearContextUsageTimer: (entry: TEntry) => void;
-    syncDurableConversationRun: (entry: TEntry, state: WebLiveConversationRunState, input: { force?: boolean; lastError?: string }) => Promise<void>;
+    syncDurableConversationRun: (
+      entry: TEntry,
+      state: WebLiveConversationRunState,
+      input: { force?: boolean; lastError?: string },
+    ) => Promise<void>;
     publishSessionMetaChanged: (sessionId: string) => void;
   },
 ): void {

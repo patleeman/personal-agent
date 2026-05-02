@@ -16,10 +16,10 @@ vi.mock('../automation/durableRuns.js', () => ({
   listDurableRuns: vi.fn(),
 }));
 
-import { buildSnapshotEventsForTopic } from './system.js';
 import * as daemon from '../automation/daemon.js';
-import * as convoService from '../conversations/conversationService.js';
 import * as durableRuns from '../automation/durableRuns.js';
+import * as convoService from '../conversations/conversationService.js';
+import { buildSnapshotEventsForTopic } from './system.js';
 
 describe('buildSnapshotEventsForTopic', () => {
   it('builds sessions snapshot', async () => {

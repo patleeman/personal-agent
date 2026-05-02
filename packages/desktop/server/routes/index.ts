@@ -7,5 +7,4 @@ export type {
   ServerRouteContext,
   SkillSummary,
 } from './context.js';
-
 export { registerServerRoutes } from './registerAll.js';

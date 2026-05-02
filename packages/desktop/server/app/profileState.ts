@@ -1,32 +1,31 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
-import {
-  materializeProfileToAgentDir,
-  resolveResourceProfile,
-} from '@personal-agent/core';
+import { materializeProfileToAgentDir, resolveResourceProfile } from '@personal-agent/core';
+
+import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
-import { createCheckpointAgentExtension } from '../extensions/checkpointAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
+import { createCheckpointAgentExtension } from '../extensions/checkpointAgentExtension.js';
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
-import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
+import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
+import daemonRunOrchestrationPromptExtension from '../extensions/daemon-run-orchestration-prompt/index.js';
+import gptApplyPatchExtension from '../extensions/gpt-apply-patch/index.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
-import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
+import knowledgeBaseExtension from '../extensions/knowledge-base/index.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
-import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
+import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
+import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
 import webToolsExtension from '../extensions/web-tools/index.js';
-import gptApplyPatchExtension from '../extensions/gpt-apply-patch/index.js';
-import knowledgeBaseExtension from '../extensions/knowledge-base/index.js';
-import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
-import daemonRunOrchestrationPromptExtension from '../extensions/daemon-run-orchestration-prompt/index.js';
-import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
+import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 
 export interface ProfileStateLogger {
@@ -100,10 +99,11 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       }),
       createAskUserQuestionAgentExtension(),
       createChangeWorkingDirectoryAgentExtension({
-        requestConversationWorkingDirectoryChange: (input) => requestConversationWorkingDirectoryChange(input, {
-          ...buildLiveSessionResourceOptions(getCurrentProfile()),
-          extensionFactories: buildLiveSessionExtensionFactories(),
-        }),
+        requestConversationWorkingDirectoryChange: (input) =>
+          requestConversationWorkingDirectoryChange(input, {
+            ...buildLiveSessionResourceOptions(getCurrentProfile()),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+          }),
       }),
       createRunAgentExtension({
         getCurrentProfile,

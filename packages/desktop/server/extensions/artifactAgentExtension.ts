@@ -1,13 +1,15 @@
 import { join } from 'node:path';
-import { Type } from '@sinclair/typebox';
+
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
+  type ConversationArtifactKind,
   deleteConversationArtifact,
   getConversationArtifact,
   listConversationArtifacts,
   saveConversationArtifact,
-  type ConversationArtifactKind,
 } from '@personal-agent/core';
+import { Type } from '@sinclair/typebox';
+
 import { invalidateAppTopics } from '../shared/appEvents.js';
 
 const ARTIFACT_ACTION_VALUES = ['save', 'get', 'list', 'delete'] as const;
@@ -27,7 +29,12 @@ const ArtifactToolParams = Type.Object({
   artifactId: Type.Optional(Type.String({ description: 'Stable artifact id. Reuse this when updating an existing artifact.' })),
   kind: Type.Optional(Type.Union(ARTIFACT_KIND_VALUES.map((value) => Type.Literal(value)))),
   title: Type.Optional(Type.String({ description: 'Artifact title shown in the chat stub and artifact panel.' })),
-  content: Type.Optional(Type.String({ description: 'Artifact source content. HTML should be self-contained. Mermaid should be raw source. LaTeX should be raw source, including full LaTeX documents when needed.' })),
+  content: Type.Optional(
+    Type.String({
+      description:
+        'Artifact source content. HTML should be self-contained. Mermaid should be raw source. LaTeX should be raw source, including full LaTeX documents when needed.',
+    }),
+  ),
   open: Type.Optional(Type.Boolean({ description: 'Whether the artifact panel should open after saving. Defaults to true.' })),
 });
 
@@ -56,7 +63,9 @@ function formatArtifactList(conversationId: string, artifacts: ReturnType<typeof
 
   return [
     `Artifacts for conversation ${conversationId}:`,
-    ...artifacts.map((artifact) => `- ${artifact.id} [${artifact.kind}] ${artifact.title} (rev ${artifact.revision}, updated ${artifact.updatedAt})`),
+    ...artifacts.map(
+      (artifact) => `- ${artifact.id} [${artifact.kind}] ${artifact.title} (rev ${artifact.revision}, updated ${artifact.updatedAt})`,
+    ),
   ].join('\n');
 }
 
@@ -86,7 +95,9 @@ export function createArtifactAgentExtension(options: {
       promptGuidelines: [
         'Use this tool when the user asks for a rendered artifact in the desktop UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
         'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
-        `For report-style HTML artifacts, read the built-in artifacts internal skill at ${resolveArtifactInternalSkillPath(options.repoRoot)} and adapt the white-paper reference at ${resolveArtifactWhitePaperReferencePath(options.repoRoot)}.`,
+        `For report-style HTML artifacts, read the built-in artifacts internal skill at ${resolveArtifactInternalSkillPath(
+          options.repoRoot,
+        )} and adapt the white-paper reference at ${resolveArtifactWhitePaperReferencePath(options.repoRoot)}.`,
         'Default white-paper/report HTML to a self-contained single-column reading layout with calm typography; think internal memo or technical report, not dashboard or landing page chrome.',
         'Reuse the same artifactId when iterating on an existing artifact so the chat stub and artifact viewer stay linked.',
         'Keep HTML self-contained; do not rely on external network resources unless the user explicitly asks for that tradeoff.',
@@ -112,10 +123,12 @@ export function createArtifactAgentExtension(options: {
 
               invalidateAppTopics('artifacts');
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: `${record.revision === 1 ? 'Saved' : 'Updated'} artifact ${record.id} [${record.kind}] "${record.title}".`,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `${record.revision === 1 ? 'Saved' : 'Updated'} artifact ${record.id} [${record.kind}] "${record.title}".`,
+                  },
+                ],
                 details: {
                   action: 'save',
                   conversationId,
@@ -184,12 +197,12 @@ export function createArtifactAgentExtension(options: {
 
               invalidateAppTopics('artifacts');
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: removed
-                    ? `Deleted artifact ${artifactId}.`
-                    : `Artifact ${artifactId} did not exist.`,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: removed ? `Deleted artifact ${artifactId}.` : `Artifact ${artifactId} did not exist.`,
+                  },
+                ],
                 details: {
                   action: 'delete',
                   conversationId,

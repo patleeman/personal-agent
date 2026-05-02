@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizeCommandTimeoutMs, runCommand } from './command.js';
 
 describe('runCommand', () => {
@@ -22,10 +23,7 @@ describe('runCommand', () => {
   });
 
   it('returns non-zero exit code without throwing', async () => {
-    const result = await runCommand(process.execPath, [
-      '-e',
-      'process.stderr.write("boom"); process.exit(5);',
-    ]);
+    const result = await runCommand(process.execPath, ['-e', 'process.stderr.write("boom"); process.exit(5);']);
 
     expect(result.code).toBe(5);
     expect(result.stdout).toBe('');
@@ -33,14 +31,10 @@ describe('runCommand', () => {
   });
 
   it('rejects when the process cannot be spawned', async () => {
-    await expect(runCommand('personal-agent-command-that-does-not-exist', []))
-      .rejects
-      .toThrow();
+    await expect(runCommand('personal-agent-command-that-does-not-exist', [])).rejects.toThrow();
   });
 
   it('rejects with a timeout error when command exceeds timeout', async () => {
-    await expect(runCommand(process.execPath, ['-e', 'setInterval(() => {}, 1_000);'], 40))
-      .rejects
-      .toThrow('timed out after 40ms');
+    await expect(runCommand(process.execPath, ['-e', 'setInterval(() => {}, 1_000);'], 40)).rejects.toThrow('timed out after 40ms');
   });
 });

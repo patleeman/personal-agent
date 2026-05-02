@@ -1,5 +1,6 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { Type } from '@sinclair/typebox';
+
 import { normalizeGeneratedConversationTitle } from '../conversations/conversationAutoTitle.js';
 
 const ConversationTitleToolParams = Type.Object({

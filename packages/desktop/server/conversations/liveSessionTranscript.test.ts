@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { DisplayBlock } from './sessions.js';
+
 import {
   applyLatestCompactionSummaryTitle,
   mergeConversationHistoryBlocks,
   resolveCompactionSummaryTitle,
 } from './liveSessionTranscript.js';
+import type { DisplayBlock } from './sessions.js';
 
 function textBlock(id: string, text: string, ts = `2026-04-26T12:00:0${id}.000Z`): DisplayBlock {
   return { id, type: 'text', role: 'assistant', text, ts } as DisplayBlock;
@@ -118,10 +119,7 @@ describe('liveSessionTranscript', () => {
     const persisted = [textBlock('persisted', 'persisted', '9999')];
     const live = [textBlock('live', 'live', '2026-04-26T12:00:00.000Z')];
 
-    expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([
-      ...persisted,
-      ...live,
-    ]);
+    expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([...persisted, ...live]);
   });
 
   it('updates the latest compaction summary title without mutating the input array', () => {

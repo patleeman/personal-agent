@@ -4,10 +4,7 @@ import {
   listDeferredResumesForSessionFile,
   scheduleDeferredResumeForSessionFile,
 } from '../automation/deferredResumes.js';
-import {
-  publishConversationSessionMetaChanged,
-  resolveConversationSessionFile,
-} from './conversationService.js';
+import { publishConversationSessionMetaChanged, resolveConversationSessionFile } from './conversationService.js';
 
 export class ConversationDeferredResumeCapabilityNotFoundError extends Error {
   constructor(message = 'Conversation not found') {
@@ -65,10 +62,7 @@ export async function scheduleConversationDeferredResumeCapability(input: {
   };
 }
 
-export async function cancelConversationDeferredResumeCapability(input: {
-  conversationId: string;
-  resumeId: string;
-}) {
+export async function cancelConversationDeferredResumeCapability(input: { conversationId: string; resumeId: string }) {
   const { conversationId, sessionFile } = resolveRequiredConversationSessionFile(input.conversationId);
 
   await cancelDeferredResumeForSessionFile({

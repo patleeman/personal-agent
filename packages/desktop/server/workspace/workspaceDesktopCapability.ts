@@ -1,9 +1,10 @@
 import { getVaultRoot } from '@personal-agent/core';
+
+import { listVaultFiles } from '../knowledge/vaultFiles.js';
 import type { FilePickerResult } from './filePicker.js';
 import { pickFiles } from './filePicker.js';
 import type { FolderPickerResult } from './folderPicker.js';
 import { pickFolder } from './folderPicker.js';
-import { listVaultFiles } from '../knowledge/vaultFiles.js';
 
 export interface WorkspaceDesktopCapabilityContext {
   getDefaultWebCwd: () => string;
@@ -25,9 +26,7 @@ export function pickFolderCapability(
   const defaultWebCwd = context.getDefaultWebCwd();
   return pickFolder({
     initialDirectory: context.resolveRequestedCwd(input.cwd, defaultWebCwd) ?? defaultWebCwd,
-    prompt: typeof input.prompt === 'string' && input.prompt.trim().length > 0
-      ? input.prompt.trim()
-      : 'Choose working directory',
+    prompt: typeof input.prompt === 'string' && input.prompt.trim().length > 0 ? input.prompt.trim() : 'Choose working directory',
   });
 }
 
@@ -38,8 +37,6 @@ export function pickFilesCapability(
   const defaultWebCwd = context.getDefaultWebCwd();
   return pickFiles({
     initialDirectory: context.resolveRequestedCwd(input.cwd, defaultWebCwd) ?? defaultWebCwd,
-    prompt: typeof input.prompt === 'string' && input.prompt.trim().length > 0
-      ? input.prompt.trim()
-      : 'Choose instruction files',
+    prompt: typeof input.prompt === 'string' && input.prompt.trim().length > 0 ? input.prompt.trim() : 'Choose instruction files',
   });
 }

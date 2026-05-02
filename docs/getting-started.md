@@ -42,7 +42,6 @@ pa tui
 
 The TUI is useful for quick terminal-based sessions. For the full experience, use the desktop app.
 
-
 ## Create the first durable inputs
 
 ### 1. Instruction file

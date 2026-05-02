@@ -2,7 +2,9 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { normalizeSavedModelPreferences, readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 
 const tempDirs: string[] = [];
@@ -20,7 +22,12 @@ function createTempDir(): string {
 describe('readSavedModelPreferences', () => {
   it('returns empty values when the settings file is missing', () => {
     const dir = createTempDir();
-    expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({
+      currentModel: '',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      currentPresetId: '',
+    });
   });
 
   it('reads the default model, thinking level, and service tier from settings.json', () => {
@@ -28,7 +35,12 @@ describe('readSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4', defaultThinkingLevel: 'xhigh', defaultServiceTier: 'priority' }));
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'xhigh', currentServiceTier: 'priority', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'xhigh',
+      currentServiceTier: 'priority',
+      currentPresetId: '',
+    });
   });
 
   it('falls back safely on invalid JSON', () => {
@@ -36,7 +48,12 @@ describe('readSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, '{not json');
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({
+      currentModel: '',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      currentPresetId: '',
+    });
   });
 });
 
@@ -46,9 +63,7 @@ describe('normalizeSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({ defaultModel: 'anthropic/claude-sonnet-4-6' }));
 
-    expect(normalizeSavedModelPreferences(file, [
-      { id: 'claude-sonnet-4-6', provider: 'anthropic' },
-    ])).toEqual({
+    expect(normalizeSavedModelPreferences(file, [{ id: 'claude-sonnet-4-6', provider: 'anthropic' }])).toEqual({
       currentModel: 'claude-sonnet-4-6',
       currentThinkingLevel: '',
       currentServiceTier: '',
@@ -65,9 +80,7 @@ describe('normalizeSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4' }));
 
-    expect(normalizeSavedModelPreferences(file, [
-      { id: 'gpt-5.4', provider: 'openai-codex' },
-    ])).toEqual({
+    expect(normalizeSavedModelPreferences(file, [{ id: 'gpt-5.4', provider: 'openai-codex' }])).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: '',
       currentServiceTier: '',
@@ -84,10 +97,12 @@ describe('normalizeSavedModelPreferences', () => {
     const ambiguousFile = join(ambiguousDir, 'settings.json');
     writeFileSync(ambiguousFile, JSON.stringify({ defaultModel: 'gpt-5.4' }));
 
-    expect(normalizeSavedModelPreferences(ambiguousFile, [
-      { id: 'gpt-5.4', provider: 'openai-codex' },
-      { id: 'gpt-5.4', provider: 'openrouter' },
-    ])).toEqual({
+    expect(
+      normalizeSavedModelPreferences(ambiguousFile, [
+        { id: 'gpt-5.4', provider: 'openai-codex' },
+        { id: 'gpt-5.4', provider: 'openrouter' },
+      ]),
+    ).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: '',
       currentServiceTier: '',
@@ -97,15 +112,20 @@ describe('normalizeSavedModelPreferences', () => {
 
     const matchingDir = createTempDir();
     const matchingFile = join(matchingDir, 'settings.json');
-    writeFileSync(matchingFile, JSON.stringify({
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-    }));
+    writeFileSync(
+      matchingFile,
+      JSON.stringify({
+        defaultProvider: 'openai-codex',
+        defaultModel: 'gpt-5.4',
+      }),
+    );
 
-    expect(normalizeSavedModelPreferences(matchingFile, [
-      { id: 'gpt-5.4', provider: 'openai-codex' },
-      { id: 'gpt-5.4', provider: 'openrouter' },
-    ])).toEqual({
+    expect(
+      normalizeSavedModelPreferences(matchingFile, [
+        { id: 'gpt-5.4', provider: 'openai-codex' },
+        { id: 'gpt-5.4', provider: 'openrouter' },
+      ]),
+    ).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: '',
       currentServiceTier: '',
@@ -128,7 +148,12 @@ describe('writeSavedModelPreferences', () => {
       { id: 'gpt-5.4', provider: 'openai-codex' },
     ]);
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'priority', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: 'priority',
+      currentPresetId: '',
+    });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       theme: 'cobalt2',
       defaultProvider: 'openai-codex',
@@ -141,17 +166,25 @@ describe('writeSavedModelPreferences', () => {
   it('clears persisted preferences when given empty values', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-      defaultThinkingLevel: 'xhigh',
-      defaultServiceTier: 'priority',
-      theme: 'cobalt2',
-    }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultProvider: 'openai-codex',
+        defaultModel: 'gpt-5.4',
+        defaultThinkingLevel: 'xhigh',
+        defaultServiceTier: 'priority',
+        theme: 'cobalt2',
+      }),
+    );
 
     writeSavedModelPreferences({ model: '', thinkingLevel: '', serviceTier: '' }, file);
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({
+      currentModel: '',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      currentPresetId: '',
+    });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ theme: 'cobalt2' });
   });
 
@@ -171,9 +204,7 @@ describe('writeSavedModelPreferences', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
 
-    writeSavedModelPreferences({ model: 'openrouter/free' }, file, [
-      { id: 'openrouter/free', provider: 'openrouter' },
-    ]);
+    writeSavedModelPreferences({ model: 'openrouter/free' }, file, [{ id: 'openrouter/free', provider: 'openrouter' }]);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openrouter',
@@ -184,16 +215,17 @@ describe('writeSavedModelPreferences', () => {
   it('clears only thinking level and service tier when model is left untouched', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-      defaultThinkingLevel: 'high',
-      defaultServiceTier: 'priority',
-    }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultProvider: 'openai-codex',
+        defaultModel: 'gpt-5.4',
+        defaultThinkingLevel: 'high',
+        defaultServiceTier: 'priority',
+      }),
+    );
 
-    writeSavedModelPreferences({ thinkingLevel: null, serviceTier: null }, file, [
-      { id: 'gpt-5.4', provider: 'openai-codex' },
-    ]);
+    writeSavedModelPreferences({ thinkingLevel: null, serviceTier: null }, file, [{ id: 'gpt-5.4', provider: 'openai-codex' }]);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openai-codex',
@@ -206,7 +238,12 @@ describe('writeSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({ defaultServiceTier: 'turbo' }));
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({
+      currentModel: '',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      currentPresetId: '',
+    });
 
     writeSavedModelPreferences({ serviceTier: 'turbo' }, file);
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({});

@@ -1,7 +1,8 @@
-import { useEffect, useState, type PointerEventHandler } from 'react';
+import { type PointerEventHandler, useEffect, useState } from 'react';
+
+import { formatComposerActionLabel } from '../../conversation/conversationComposerPresentation';
 import { cx } from '../ui';
 import { ComposerActionIcon } from './ConversationComposerChrome';
-import { formatComposerActionLabel } from '../../conversation/conversationComposerPresentation';
 
 export type ConversationComposerSubmitLabel = 'Send' | 'Steer' | 'Follow up' | 'Parallel';
 
@@ -67,17 +68,29 @@ export function ConversationComposerActions({
               ? 'bg-elevated text-accent'
               : 'text-secondary hover:bg-elevated/60 hover:text-primary',
         )}
-        title={dictationState === 'recording'
-          ? 'Recording dictation — release after a hold to stop, or click again to toggle off'
-          : dictationState === 'transcribing'
-            ? 'Transcribing…'
-            : 'Dictate. Hold to record while held, or click to toggle.'}
+        title={
+          dictationState === 'recording'
+            ? 'Recording dictation — release after a hold to stop, or click again to toggle off'
+            : dictationState === 'transcribing'
+              ? 'Transcribing…'
+              : 'Dictate. Hold to record while held, or click to toggle.'
+        }
         aria-label={dictationState === 'recording' ? 'Stop dictation' : 'Start dictation'}
       >
         {dictationState === 'transcribing' ? (
           <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
         ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
             <path d="M19 11a7 7 0 0 1-14 0" />
             <path d="M12 18v3" />
@@ -91,10 +104,7 @@ export function ConversationComposerActions({
             <button
               type="button"
               onClick={(event) => {
-                onSubmitComposerActionForModifiers(
-                  composerAltHeld || event.altKey,
-                  composerParallelHeld || event.ctrlKey || event.metaKey,
-                );
+                onSubmitComposerActionForModifiers(composerAltHeld || event.altKey, composerParallelHeld || event.ctrlKey || event.metaKey);
               }}
               disabled={composerDisabled}
               className={cx(
@@ -136,33 +146,30 @@ export function ConversationComposerActions({
           disabled={composerDisabled || !composerQuestionCanSubmit || composerQuestionSubmitting}
           className={cx(
             'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default',
-            composerQuestionCanSubmit && !composerQuestionSubmitting
-              ? 'bg-accent text-white hover:bg-accent/90'
-              : 'bg-elevated text-dim',
+            composerQuestionCanSubmit && !composerQuestionSubmitting ? 'bg-accent text-white hover:bg-accent/90' : 'bg-elevated text-dim',
           )}
-          title={composerQuestionCanSubmit
-            ? 'Submit answers'
-            : `Answer ${composerQuestionRemainingCount} more ${composerQuestionRemainingCount === 1 ? 'question' : 'questions'} to submit`}
+          title={
+            composerQuestionCanSubmit
+              ? 'Submit answers'
+              : `Answer ${composerQuestionRemainingCount} more ${composerQuestionRemainingCount === 1 ? 'question' : 'questions'} to submit`
+          }
           aria-label="Submit answers"
         >
           <span aria-hidden="true">✓</span>
-          <span>{composerQuestionSubmitting ? 'Submitting…' : composerQuestionCanSubmit ? 'Submit' : `${composerQuestionRemainingCount} left`}</span>
+          <span>
+            {composerQuestionSubmitting ? 'Submitting…' : composerQuestionCanSubmit ? 'Submit' : `${composerQuestionRemainingCount} left`}
+          </span>
         </button>
       ) : composerHasContent ? (
         <button
           type="button"
           onClick={(event) => {
-            onSubmitComposerActionForModifiers(
-              composerAltHeld || event.altKey,
-              composerParallelHeld || event.ctrlKey || event.metaKey,
-            );
+            onSubmitComposerActionForModifiers(composerAltHeld || event.altKey, composerParallelHeld || event.ctrlKey || event.metaKey);
           }}
           disabled={composerDisabled}
           className={cx(
             'flex shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
-            composerSubmitLabel === 'Send'
-              ? 'h-8 w-8 bg-accent text-white hover:bg-accent/90'
-              : 'h-9 gap-1.5 px-3 text-[11px] font-medium',
+            composerSubmitLabel === 'Send' ? 'h-8 w-8 bg-accent text-white hover:bg-accent/90' : 'h-9 gap-1.5 px-3 text-[11px] font-medium',
             composerSubmitLabel === 'Steer'
               ? 'bg-warning/15 text-warning hover:bg-warning/25'
               : composerSubmitLabel === 'Follow up'
@@ -175,7 +182,16 @@ export function ConversationComposerActions({
           aria-label={composerSubmitLabel}
         >
           {composerSubmitLabel === 'Send' ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="m18 15-6-6-6 6" />
             </svg>
           ) : (
@@ -193,7 +209,16 @@ export function ConversationComposerActions({
           title="Send"
           aria-label="Send"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="m18 15-6-6-6 6" />
           </svg>
         </button>
@@ -218,8 +243,12 @@ function DictationWaveform({ samples, startedAt }: { samples: number[]; startedA
   const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 44 }, () => 0.04);
 
   useEffect(() => {
-    const interval = window.setInterval(() => { setNow(performance.now()); }, 250);
-    return () => { window.clearInterval(interval); };
+    const interval = window.setInterval(() => {
+      setNow(performance.now());
+    }, 250);
+    return () => {
+      window.clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -228,13 +257,7 @@ function DictationWaveform({ samples, startedAt }: { samples: number[]; startedA
         {visibleSamples.slice(-52).map((sample, index) => {
           const height = Math.max(2, Math.round(3 + sample * 22));
           const opacity = 0.28 + Math.min(0.72, sample * 1.4);
-          return (
-            <span
-              key={index}
-              className="w-[2px] shrink-0 rounded-full bg-current"
-              style={{ height: `${height}px`, opacity }}
-            />
-          );
+          return <span key={index} className="w-[2px] shrink-0 rounded-full bg-current" style={{ height: `${height}px`, opacity }} />;
         })}
       </div>
       <span className="shrink-0 font-mono text-[12px] text-secondary">{formatDictationElapsed(startedAt, now)}</span>

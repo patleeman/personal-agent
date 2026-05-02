@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   createModelEditorDraft,
   createProviderEditorDraft,
@@ -12,17 +13,19 @@ import {
 
 describe('modelProviderEditorDrafts', () => {
   it('creates editable provider drafts from persisted config', () => {
-    expect(createProviderEditorDraft({
-      id: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      api: 'openai-responses',
-      apiKey: 'env:OPENAI_API_KEY',
-      authHeader: true,
-      headers: { 'x-test': '1' },
-      compat: { foo: true },
-      modelOverrides: { 'gpt-5': { contextWindow: 400000 } },
-      models: [],
-    })).toMatchObject({
+    expect(
+      createProviderEditorDraft({
+        id: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        api: 'openai-responses',
+        apiKey: 'env:OPENAI_API_KEY',
+        authHeader: true,
+        headers: { 'x-test': '1' },
+        compat: { foo: true },
+        modelOverrides: { 'gpt-5': { contextWindow: 400000 } },
+        models: [],
+      }),
+    ).toMatchObject({
       id: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       api: 'openai-responses',
@@ -43,15 +46,17 @@ describe('modelProviderEditorDrafts', () => {
       acceptsImages: false,
     });
 
-    expect(createModelEditorDraft({
-      id: 'gpt-5',
-      name: 'GPT-5',
-      reasoning: true,
-      input: ['text', 'image'],
-      contextWindow: 400000,
-      maxTokens: 32000,
-      cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.5 },
-    })).toMatchObject({
+    expect(
+      createModelEditorDraft({
+        id: 'gpt-5',
+        name: 'GPT-5',
+        reasoning: true,
+        input: ['text', 'image'],
+        contextWindow: 400000,
+        maxTokens: 32000,
+        cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.5 },
+      }),
+    ).toMatchObject({
       id: 'gpt-5',
       name: 'GPT-5',
       reasoning: true,
@@ -79,9 +84,15 @@ describe('modelProviderEditorDrafts', () => {
     expect(() => parseOptionalFiniteNumber('nope', 'Context window')).toThrow('Context window must be a valid number.');
     expect(() => parseOptionalFiniteNumber('0x10', 'Context window')).toThrow('Context window must be a valid number.');
     expect(() => parseOptionalPositiveInteger('42.5', 'Context window')).toThrow('Context window must be a positive integer.');
-    expect(() => parseOptionalPositiveInteger(String(Number.MAX_SAFE_INTEGER), 'Context window')).toThrow('Context window must be a positive integer.');
-    expect(() => parseOptionalPositiveInteger(String(Number.MAX_SAFE_INTEGER + 1), 'Context window')).toThrow('Context window must be a positive integer.');
+    expect(() => parseOptionalPositiveInteger(String(Number.MAX_SAFE_INTEGER), 'Context window')).toThrow(
+      'Context window must be a positive integer.',
+    );
+    expect(() => parseOptionalPositiveInteger(String(Number.MAX_SAFE_INTEGER + 1), 'Context window')).toThrow(
+      'Context window must be a positive integer.',
+    );
     expect(() => parseOptionalNonNegativeNumber('-1', 'Input cost')).toThrow('Input cost must be a non-negative number.');
-    expect(() => parseOptionalNonNegativeNumber(String(Number.MAX_SAFE_INTEGER + 1), 'Input cost')).toThrow('Input cost must be a non-negative number.');
+    expect(() => parseOptionalNonNegativeNumber(String(Number.MAX_SAFE_INTEGER + 1), 'Input cost')).toThrow(
+      'Input cost must be a non-negative number.',
+    );
   });
 });

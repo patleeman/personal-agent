@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
-import { dirname, join } from 'path';
 import { tmpdir } from 'os';
+import { dirname, join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   buildPiResourceArgs,
   installPackageSource,
@@ -64,8 +65,14 @@ describe('resources profile loader', () => {
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
-    writeFile(join(syncRoot, 'skills', 'shared-skill', 'SKILL.md'), '---\nname: shared-skill\ndescription: Shared\nprofiles:\n  - shared\n---\n');
-    writeFile(join(syncRoot, 'skills', 'datadog-skill', 'SKILL.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
+    writeFile(
+      join(syncRoot, 'skills', 'shared-skill', 'SKILL.md'),
+      '---\nname: shared-skill\ndescription: Shared\nprofiles:\n  - shared\n---\n',
+    );
+    writeFile(
+      join(syncRoot, 'skills', 'datadog-skill', 'SKILL.md'),
+      '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n',
+    );
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
@@ -81,13 +88,8 @@ describe('resources profile loader', () => {
       join(syncRoot, 'AGENTS.md'),
       join(local, 'agent', 'AGENTS.md'),
     ]);
-    expect(resolved.settingsFiles).toEqual([
-      join(profilesRoot, 'shared', 'settings.json'),
-      join(local, 'agent', 'settings.json'),
-    ]);
-    expect(resolved.skillDirs).toEqual([
-      join(syncRoot, 'skills', 'shared-skill'),
-    ]);
+    expect(resolved.settingsFiles).toEqual([join(profilesRoot, 'shared', 'settings.json'), join(local, 'agent', 'settings.json')]);
+    expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'shared-skill')]);
     expect(resolved.extensionEntries).toEqual([]);
   });
 
@@ -101,9 +103,12 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Vault Root\n');
     writeFile(join(repo, 'custom-instructions.md'), '# Custom Instructions\n');
-    writeFile(join(configRoot, 'config.json'), JSON.stringify({
-      instructionFiles: [join(repo, 'custom-instructions.md')],
-    }));
+    writeFile(
+      join(configRoot, 'config.json'),
+      JSON.stringify({
+        instructionFiles: [join(repo, 'custom-instructions.md')],
+      }),
+    );
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configRoot, 'config.json');
 
     const resolved = resolveResourceProfile('shared', {
@@ -128,11 +133,20 @@ describe('resources profile loader', () => {
     tempDirs.push(configRoot, externalSkillsDir);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(syncRoot, 'skills', 'vault-skill', 'SKILL.md'), '---\nname: vault-skill\ndescription: Vault skill\n---\n# Vault Skill\n');
-    writeFile(join(externalSkillsDir, 'machine-skill', 'SKILL.md'), '---\nname: machine-skill\ndescription: Machine skill\n---\n# Machine Skill\n');
-    writeFile(join(configRoot, 'config.json'), JSON.stringify({
-      skillDirs: [externalSkillsDir],
-    }));
+    writeFile(
+      join(syncRoot, 'skills', 'vault-skill', 'SKILL.md'),
+      '---\nname: vault-skill\ndescription: Vault skill\n---\n# Vault Skill\n',
+    );
+    writeFile(
+      join(externalSkillsDir, 'machine-skill', 'SKILL.md'),
+      '---\nname: machine-skill\ndescription: Machine skill\n---\n# Machine Skill\n',
+    );
+    writeFile(
+      join(configRoot, 'config.json'),
+      JSON.stringify({
+        skillDirs: [externalSkillsDir],
+      }),
+    );
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configRoot, 'config.json');
 
     const resolved = resolveResourceProfile('shared', {
@@ -141,10 +155,7 @@ describe('resources profile loader', () => {
       localProfileDir: join(repo, '.local-profile'),
     });
 
-    expect(resolved.skillDirs).toEqual([
-      join(syncRoot, 'skills', 'vault-skill'),
-      join(externalSkillsDir, 'machine-skill'),
-    ]);
+    expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'vault-skill'), join(externalSkillsDir, 'machine-skill')]);
   });
 
   it('merges json files in layer order', () => {
@@ -176,18 +187,24 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/APPEND_SYSTEM.md'), 'shared append\n');
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
-    writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({
-      datadog: true,
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-      defaultThinkingLevel: 'high',
-    }));
-    writeFile(join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'), `---
+    writeFile(
+      join(profilesRoot, 'shared', 'settings.json'),
+      JSON.stringify({
+        datadog: true,
+        defaultProvider: 'openai-codex',
+        defaultModel: 'gpt-5.4',
+        defaultThinkingLevel: 'high',
+      }),
+    );
+    writeFile(
+      join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'),
+      `---
 name: checkpoint
 description: Commit and push the agent's current work.
 ---
 # Checkpoint
-`);
+`,
+    );
 
     const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);
@@ -206,7 +223,6 @@ description: Commit and push the agent's current work.
     expect(runtimeSettings.defaultProvider).toBe('openai-codex');
     expect(runtimeSettings.defaultThinkingLevel).toBe('high');
   });
-
 
   it('installs package sources into the selected durable settings file', () => {
     const repo = createTempRepo();
@@ -276,12 +292,15 @@ description: Commit and push the agent's current work.
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-5.4' }));
-    writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
+    writeFile(
+      join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'),
+      `---
 name: checkpoint
 description: Commit your work.
 ---
 # Checkpoint
-`);
+`,
+    );
 
     const profiles = listProfiles({ repoRoot: repo, profilesRoot });
     expect(profiles).toEqual(['shared']);
@@ -293,9 +312,7 @@ description: Commit your work.
       localProfileDir: join(repo, '.local-profile'),
     });
 
-    expect(resolved.agentsFiles).toEqual([
-      join(repo, 'defaults/agent/AGENTS.md'),
-    ]);
+    expect(resolved.agentsFiles).toEqual([join(repo, 'defaults/agent/AGENTS.md')]);
     expect(resolved.settingsFiles).toContain(join(profilesRoot, 'shared', 'settings.json'));
     expect(resolved.skillDirs).toEqual([join(syncRoot, '_skills', 'checkpoint')]);
   });

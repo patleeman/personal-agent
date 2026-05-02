@@ -1,21 +1,16 @@
 import { existsSync } from 'node:fs';
+
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import {
-  readSessionBlocksByFile,
-  type DisplayBlock,
-} from './sessions.js';
-import {
-  applyLatestCompactionSummaryTitle,
-  buildLiveStateBlocks,
-  mergeConversationHistoryBlocks,
-} from './liveSessionTranscript.js';
-import { readQueueState, type QueuedPromptPreview } from './liveSessionQueue.js';
-import { readParallelState, type ParallelPromptJob, type ParallelPromptPreview } from './liveSessionParallelJobs.js';
-import { buildLiveSessionPresenceState, type LiveSessionPresenceHost, type LiveSessionPresenceState } from './liveSessionPresence.js';
-import { hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
-import { readConversationAutoModeState, readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
+
 import type { ConversationAutoModeState } from './conversationAutoMode.js';
 import type { LiveContextUsage } from './liveSessionEvents.js';
+import { hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
+import { type ParallelPromptJob, type ParallelPromptPreview, readParallelState } from './liveSessionParallelJobs.js';
+import { buildLiveSessionPresenceState, type LiveSessionPresenceHost, type LiveSessionPresenceState } from './liveSessionPresence.js';
+import { type QueuedPromptPreview, readQueueState } from './liveSessionQueue.js';
+import { readConversationAutoModeState, readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
+import { applyLatestCompactionSummaryTitle, buildLiveStateBlocks, mergeConversationHistoryBlocks } from './liveSessionTranscript.js';
+import { type DisplayBlock, readSessionBlocksByFile } from './sessions.js';
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
 const MAX_LIVE_SNAPSHOT_TAIL_BLOCKS = 1000;

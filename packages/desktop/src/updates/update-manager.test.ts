@@ -110,10 +110,12 @@ describe('DesktopUpdateManager', () => {
     await flushAsyncWork();
 
     expect(mocks.showMessageBox).toHaveBeenCalledTimes(1);
-    expect(mocks.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
-      buttons: ['Later', 'Restart to Update'],
-      message: 'Personal Agent 1.1.0 is ready to install',
-    }));
+    expect(mocks.showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buttons: ['Later', 'Restart to Update'],
+        message: 'Personal Agent 1.1.0 is ready to install',
+      }),
+    );
     expect(onBeforeQuitForUpdate).toHaveBeenCalledTimes(1);
     expect(mocks.lastUpdater?.quitAndInstall).toHaveBeenCalledTimes(1);
     expect(manager.getState()).toMatchObject({

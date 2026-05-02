@@ -1,38 +1,61 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+
 import { runDaemonProcess } from './server.js';
 
+export type {
+  AutomationActivityEntry,
+  AutomationActivityKind,
+  AutomationActivityOutcome,
+  AutomationConversationBehavior,
+  AutomationMutationInput,
+  AutomationSchedulerState,
+  AutomationTargetType,
+  AutomationThreadMode,
+  LegacyAutomationImportIssue,
+  StoredAutomation,
+} from './automation-store.js';
 export {
-  PersonalAgentDaemon,
-  type PersonalAgentDaemonOptions,
-  type DaemonStopRequestBehavior,
-} from './server.js';
-export { createDaemonEvent, isDaemonEvent, DAEMON_EVENT_VERSION } from './events.js';
-export { loadDaemonConfig, getDefaultDaemonConfig, getDaemonConfigFilePath, writeDaemonPowerConfig, type DaemonConfig } from './config.js';
-export { DaemonPowerController } from './power.js';
-export { resolveDaemonPaths } from './paths.js';
+  appendAutomationActivityEntry,
+  closeAutomationDbs,
+  createStoredAutomation,
+  deleteStoredAutomation,
+  ensureLegacyTaskImports,
+  getAutomationDbPath,
+  getStoredAutomation,
+  listAutomationActivityEntries,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
+  loadAutomationSchedulerState,
+  saveAutomationRuntimeStateMap,
+  saveAutomationSchedulerState,
+  setStoredAutomationThreadBinding,
+  updateStoredAutomation,
+} from './automation-store.js';
+export { normalizeAutomationTargetTypeForSelection } from './automation-store.js';
+export { ensureAutomationThread, normalizeAutomationThreadModeForSelection, resolveAutomationThreadTitle } from './automation-threads.js';
+export { type BackgroundRunAgentSpec, buildBackgroundAgentArgv, looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 export {
-  bindInProcessDaemonClient,
-  clearDaemonClientTransportOverride,
-  createInProcessDaemonClient,
-  getDaemonClientTransportOverride,
-  setDaemonClientTransportOverride,
-  type DaemonClientTransport,
-} from './in-process-client.js';
+  cancelDurableRun,
+  emitDaemonEvent,
+  emitDaemonEventNonFatal,
+  followUpDurableRun,
+  getDaemonStatus,
+  getDurableRun,
+  listDurableRuns,
+  listRecoverableWebLiveConversationRunsFromDaemon,
+  pingDaemon,
+  rerunDurableRun,
+  setDaemonPowerKeepAwake,
+  startBackgroundRun,
+  startScheduledTaskRun,
+  stopDaemon,
+  syncWebLiveConversationRunState,
+} from './client.js';
 export {
-  getCompanionRuntimeProvider,
-  resolveCompanionRuntime,
-  setCompanionRuntimeProvider,
-} from './companion/runtime.js';
-export {
-  readCompanionHostState,
-  resolveCompanionHostStateFile,
-  updateCompanionHostLabel,
-  writeCompanionHostState,
-} from './companion/host-state.js';
-export {
+  type CompanionDeviceAdminState,
   createCompanionPairingCode,
   pairCompanionDevice,
   readCompanionDeviceAdminState,
@@ -40,180 +63,15 @@ export {
   resolveCompanionAuthStateFile,
   revokeCompanionDevice,
   updateCompanionDeviceLabel,
-  type CompanionDeviceAdminState,
 } from './companion/auth-store.js';
 export {
-  DaemonCompanionServer,
-} from './companion/server.js';
-export {
-  getDaemonStatus,
-  setDaemonPowerKeepAwake,
-  pingDaemon,
-  stopDaemon,
-  listDurableRuns,
-  getDurableRun,
-  startScheduledTaskRun,
-  startBackgroundRun,
-  cancelDurableRun,
-  rerunDurableRun,
-  followUpDurableRun,
-  syncWebLiveConversationRunState,
-  listRecoverableWebLiveConversationRunsFromDaemon,
-  emitDaemonEvent,
-  emitDaemonEventNonFatal,
-} from './client.js';
-
-export {
-  readTailscaleServeProxyState,
-  resolveCompanionTailscaleUrl,
-  resolveTailscaleServeBaseUrl,
-  syncCompanionTailscaleServe,
-  syncTailscaleServeProxy,
-  type SyncCompanionTailscaleServeInput,
-  type SyncTailscaleServeProxyInput,
-  type TailscaleServeProxyState,
-  type TailscaleServeProxyStatus,
-} from './tailscale-serve.js';
-export {
-  resolveDurableRunsRoot,
-  resolveDurableRunPaths,
-  createDurableRunManifest,
-  createInitialDurableRunStatus,
-  saveDurableRunManifest,
-  saveDurableRunStatus,
-  saveDurableRunCheckpoint,
-  appendDurableRunEvent,
-  loadDurableRunManifest,
-  loadDurableRunStatus,
-  loadDurableRunCheckpoint,
-  readDurableRunEvents,
-  listDurableRunIds,
-  scanDurableRun,
-  scanDurableRunsForRecovery,
-  summarizeScannedDurableRuns,
-} from './runs/store.js';
-export {
-  createDeferredResumeConversationRunId,
-  scheduleDeferredResumeConversationRun,
-  markDeferredResumeConversationRunReady,
-  markDeferredResumeConversationRunRetryScheduled,
-  markDeferredResumeConversationRunSnoozed,
-  completeDeferredResumeConversationRun,
-  cancelDeferredResumeConversationRun,
-} from './runs/deferred-resume-conversations.js';
-export {
-  createBackgroundRunId,
-  createBackgroundRunRecord,
-  markBackgroundRunStarted,
-  finalizeBackgroundRun,
-  markBackgroundRunInterrupted,
-  type StartBackgroundRunInput,
-  type StartBackgroundRunRecord,
-} from './runs/background-runs.js';
-export {
-  listPendingBackgroundRunResults,
-  markBackgroundRunResultsDelivered,
-  surfaceBackgroundRunResultsIfReady,
-  type BackgroundRunResultSummary,
-} from './runs/background-run-deferred-resumes.js';
-export {
-  buildBackgroundAgentArgv,
-  looksLikePersonalAgentCliEntryPath,
-  type BackgroundRunAgentSpec,
-} from './background-run-agent.js';
-export {
-  createWebLiveConversationRunId,
-  saveWebLiveConversationRunState,
-  listRecoverableWebLiveConversationRuns,
-  parsePendingOperation,
-} from './runs/web-live-conversations.js';
-export type {
-  RecoverableWebLiveConversationRun,
-  WebLiveConversationPendingOperation,
-  WebLiveConversationPreludeMessage,
-  WebLiveConversationPromptImage,
-  WebLiveConversationRunState,
-} from './runs/web-live-conversations.js';
-export type {
-  DurableRunKind,
-  DurableRunStatus,
-  DurableRunResumePolicy,
-  DurableRunRecoveryAction,
-  DurableRunManifest,
-  DurableRunStatusFile,
-  DurableRunCheckpointFile,
-  DurableRunEvent,
-  DurableRunPaths,
-  ScannedDurableRun,
-  ScannedDurableRunsSummary,
-} from './runs/store.js';
-export {
-  closeAutomationDbs,
-  getAutomationDbPath,
-  listStoredAutomations,
-  getStoredAutomation,
-  createStoredAutomation,
-  updateStoredAutomation,
-  setStoredAutomationThreadBinding,
-  deleteStoredAutomation,
-  loadAutomationRuntimeStateMap,
-  loadAutomationSchedulerState,
-  saveAutomationRuntimeStateMap,
-  saveAutomationSchedulerState,
-  listAutomationActivityEntries,
-  appendAutomationActivityEntry,
-  ensureLegacyTaskImports,
-} from './automation-store.js';
-export {
-  ensureAutomationThread,
-  resolveAutomationThreadTitle,
-  normalizeAutomationThreadModeForSelection,
-} from './automation-threads.js';
-export {
-  normalizeAutomationTargetTypeForSelection,
-} from './automation-store.js';
-export { parseTaskDefinition } from './modules/tasks-parser.js';
-export {
-  surfaceReadyDeferredResume,
-  buildDeferredResumeActivityId,
-  buildDeferredResumeAlertId,
-} from './conversation-wakeups.js';
-export type {
-  StoredAutomation,
-  AutomationThreadMode,
-  AutomationTargetType,
-  AutomationConversationBehavior,
-  LegacyAutomationImportIssue,
-  AutomationMutationInput,
-  AutomationSchedulerState,
-  AutomationActivityKind,
-  AutomationActivityOutcome,
-  AutomationActivityEntry,
-} from './automation-store.js';
-export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
-export type {
-  DaemonEvent,
-  DaemonEventInput,
-  DaemonStatus,
-  DaemonPowerStatus,
-  DaemonModuleStatus,
-  ListDurableRunsResult,
-  GetDurableRunResult,
-  StartScheduledTaskRunResult,
-  StartBackgroundRunRequestInput,
-  StartBackgroundRunResult,
-  CancelDurableRunResult,
-  ReplayDurableRunResult,
-  FollowUpDurableRunResult,
-  SyncWebLiveConversationRunRequestInput,
-  SyncWebLiveConversationRunResult,
-  ListRecoverableWebLiveConversationRunsResult,
-} from './types.js';
-export {
-  COMPANION_API_ROOT,
-  COMPANION_PROTOCOL_VERSION,
-  COMPANION_SOCKET_PATH,
-} from './companion/types.js';
+  readCompanionHostState,
+  resolveCompanionHostStateFile,
+  updateCompanionHostLabel,
+  writeCompanionHostState,
+} from './companion/host-state.js';
+export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from './companion/runtime.js';
+export { DaemonCompanionServer } from './companion/server.js';
 export type {
   CompanionAttachmentAssetInput,
   CompanionAttachmentCreateInput,
@@ -239,11 +97,12 @@ export type {
   CompanionConversationTabsUpdateInput,
   CompanionConversationTakeoverInput,
   CompanionDeviceTokenResult,
+  CompanionDurableRunLogInput,
+  CompanionHostHello,
   CompanionKnowledgeImageAssetInput,
   CompanionKnowledgeImportInput,
   CompanionKnowledgeRenameInput,
   CompanionKnowledgeSearchInput,
-  CompanionHostHello,
   CompanionPairedDeviceSummary,
   CompanionPairingCode,
   CompanionReadyEvent,
@@ -253,16 +112,129 @@ export type {
   CompanionScheduledTaskInput,
   CompanionScheduledTaskUpdateInput,
   CompanionServerSocketMessage,
+  CompanionSocketErrorResponse,
   CompanionSocketEventEnvelope,
   CompanionSocketSuccessResponse,
-  CompanionSocketErrorResponse,
   CompanionSshTargetSaveInput,
   CompanionSshTargetTestInput,
   CompanionSubscribeMessage,
   CompanionSurfaceType,
   CompanionUnsubscribeMessage,
-  CompanionDurableRunLogInput,
 } from './companion/types.js';
+export { COMPANION_API_ROOT, COMPANION_PROTOCOL_VERSION, COMPANION_SOCKET_PATH } from './companion/types.js';
+export { type DaemonConfig, getDaemonConfigFilePath, getDefaultDaemonConfig, loadDaemonConfig, writeDaemonPowerConfig } from './config.js';
+export { buildDeferredResumeActivityId, buildDeferredResumeAlertId, surfaceReadyDeferredResume } from './conversation-wakeups.js';
+export { createDaemonEvent, DAEMON_EVENT_VERSION, isDaemonEvent } from './events.js';
+export {
+  bindInProcessDaemonClient,
+  clearDaemonClientTransportOverride,
+  createInProcessDaemonClient,
+  type DaemonClientTransport,
+  getDaemonClientTransportOverride,
+  setDaemonClientTransportOverride,
+} from './in-process-client.js';
+export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
+export { parseTaskDefinition } from './modules/tasks-parser.js';
+export { resolveDaemonPaths } from './paths.js';
+export { DaemonPowerController } from './power.js';
+export {
+  type BackgroundRunResultSummary,
+  listPendingBackgroundRunResults,
+  markBackgroundRunResultsDelivered,
+  surfaceBackgroundRunResultsIfReady,
+} from './runs/background-run-deferred-resumes.js';
+export {
+  createBackgroundRunId,
+  createBackgroundRunRecord,
+  finalizeBackgroundRun,
+  markBackgroundRunInterrupted,
+  markBackgroundRunStarted,
+  type StartBackgroundRunInput,
+  type StartBackgroundRunRecord,
+} from './runs/background-runs.js';
+export {
+  cancelDeferredResumeConversationRun,
+  completeDeferredResumeConversationRun,
+  createDeferredResumeConversationRunId,
+  markDeferredResumeConversationRunReady,
+  markDeferredResumeConversationRunRetryScheduled,
+  markDeferredResumeConversationRunSnoozed,
+  scheduleDeferredResumeConversationRun,
+} from './runs/deferred-resume-conversations.js';
+export type {
+  DurableRunCheckpointFile,
+  DurableRunEvent,
+  DurableRunKind,
+  DurableRunManifest,
+  DurableRunPaths,
+  DurableRunRecoveryAction,
+  DurableRunResumePolicy,
+  DurableRunStatus,
+  DurableRunStatusFile,
+  ScannedDurableRun,
+  ScannedDurableRunsSummary,
+} from './runs/store.js';
+export {
+  appendDurableRunEvent,
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  listDurableRunIds,
+  loadDurableRunCheckpoint,
+  loadDurableRunManifest,
+  loadDurableRunStatus,
+  readDurableRunEvents,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  saveDurableRunCheckpoint,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+  scanDurableRun,
+  scanDurableRunsForRecovery,
+  summarizeScannedDurableRuns,
+} from './runs/store.js';
+export type {
+  RecoverableWebLiveConversationRun,
+  WebLiveConversationPendingOperation,
+  WebLiveConversationPreludeMessage,
+  WebLiveConversationPromptImage,
+  WebLiveConversationRunState,
+} from './runs/web-live-conversations.js';
+export {
+  createWebLiveConversationRunId,
+  listRecoverableWebLiveConversationRuns,
+  parsePendingOperation,
+  saveWebLiveConversationRunState,
+} from './runs/web-live-conversations.js';
+export { type DaemonStopRequestBehavior, PersonalAgentDaemon, type PersonalAgentDaemonOptions } from './server.js';
+export {
+  readTailscaleServeProxyState,
+  resolveCompanionTailscaleUrl,
+  resolveTailscaleServeBaseUrl,
+  syncCompanionTailscaleServe,
+  type SyncCompanionTailscaleServeInput,
+  syncTailscaleServeProxy,
+  type SyncTailscaleServeProxyInput,
+  type TailscaleServeProxyState,
+  type TailscaleServeProxyStatus,
+} from './tailscale-serve.js';
+export type {
+  CancelDurableRunResult,
+  DaemonEvent,
+  DaemonEventInput,
+  DaemonModuleStatus,
+  DaemonPowerStatus,
+  DaemonStatus,
+  FollowUpDurableRunResult,
+  GetDurableRunResult,
+  ListDurableRunsResult,
+  ListRecoverableWebLiveConversationRunsResult,
+  ReplayDurableRunResult,
+  StartBackgroundRunRequestInput,
+  StartBackgroundRunResult,
+  StartScheduledTaskRunResult,
+  SyncWebLiveConversationRunRequestInput,
+  SyncWebLiveConversationRunResult,
+} from './types.js';
 
 export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) {

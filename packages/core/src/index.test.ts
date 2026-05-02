@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { mergeProfiles, validateProfile, SCHEMA_VERSION } from './index.js';
+import { describe, expect, it } from 'vitest';
+
+import { mergeProfiles, SCHEMA_VERSION, validateProfile } from './index.js';
 
 describe('core exports', () => {
   it('should export mergeProfiles', () => {

@@ -1,4 +1,5 @@
 import { getProfilesRoot } from '@personal-agent/core';
+
 import type {
   CurrentProfileTaskSummary,
   MemoryDocSummary,
@@ -30,7 +31,6 @@ interface CreateServerRouteContextOptions {
 }
 
 export function createServerRouteContext(options: CreateServerRouteContextOptions): ServerRouteContext {
-
   return {
     getCurrentProfile: options.getCurrentProfile,
     getRepoRoot: () => options.repoRoot,

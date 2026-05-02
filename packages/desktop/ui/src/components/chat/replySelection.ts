@@ -1,4 +1,5 @@
 import type { SyntheticEvent } from 'react';
+
 import { normalizeReplyQuoteSelection } from '../../conversation/conversationReplyQuote';
 
 export type ReplySelectionGestureHandler = (scopeElement: HTMLElement) => void;
@@ -19,7 +20,10 @@ export function findSelectionReplyScopeElement(node: Node | null): HTMLElement |
   return getElementFromNode(node)?.closest('[data-selection-reply-scope="assistant-message"]') ?? null;
 }
 
-export function findSelectionReplyScopeElements(selection: Selection, range: Range): { startScope: HTMLElement | null; endScope: HTMLElement | null } {
+export function findSelectionReplyScopeElements(
+  selection: Selection,
+  range: Range,
+): { startScope: HTMLElement | null; endScope: HTMLElement | null } {
   const anchorScope = findSelectionReplyScopeElement(selection.anchorNode);
   const focusScope = findSelectionReplyScopeElement(selection.focusNode);
 
@@ -34,14 +38,16 @@ export function readSelectedTextWithinElement(element: HTMLElement | null, selec
     return '';
   }
 
-  const range = selectionRange ?? (() => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      return null;
-    }
+  const range =
+    selectionRange ??
+    (() => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return null;
+      }
 
-    return selection.getRangeAt(0);
-  })();
+      return selection.getRangeAt(0);
+    })();
 
   if (!range) {
     return '';
@@ -51,8 +57,8 @@ export function readSelectedTextWithinElement(element: HTMLElement | null, selec
   scopeRange.selectNodeContents(element);
 
   if (
-    range.compareBoundaryPoints(Range.START_TO_END, scopeRange) <= 0
-    || range.compareBoundaryPoints(Range.END_TO_START, scopeRange) >= 0
+    range.compareBoundaryPoints(Range.START_TO_END, scopeRange) <= 0 ||
+    range.compareBoundaryPoints(Range.END_TO_START, scopeRange) >= 0
   ) {
     return '';
   }

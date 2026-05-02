@@ -90,10 +90,7 @@ vi.mock('../middleware/index.js', () => ({
   logError: logErrorMock,
 }));
 
-import {
-  recoverConversationCapability,
-  type RecoverConversationCapabilityContext,
-} from './conversationRecovery.js';
+import { recoverConversationCapability, type RecoverConversationCapabilityContext } from './conversationRecovery.js';
 
 function createContext(): RecoverConversationCapabilityContext {
   return {
@@ -159,24 +156,21 @@ describe('recoverConversationCapability', () => {
     const result = await recoverConversationCapability('conversation-live', createContext());
 
     expect(repairLiveSessionTranscriptTailMock).toHaveBeenCalledWith('conversation-live');
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'conversation-live',
-      sessionFile: '/sessions/live.json',
-      cwd: '/repo/live',
-      title: 'Live title',
-      profile: 'assistant',
-      state: 'running',
-      pendingOperation: expect.objectContaining({
-        type: 'prompt',
-        text: 'Continue from where you left off.',
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-live',
+        sessionFile: '/sessions/live.json',
+        cwd: '/repo/live',
+        title: 'Live title',
+        profile: 'assistant',
+        state: 'running',
+        pendingOperation: expect.objectContaining({
+          type: 'prompt',
+          text: 'Continue from where you left off.',
+        }),
       }),
-    }));
-    expect(promptSessionMock).toHaveBeenCalledWith(
-      'conversation-live',
-      'Continue from where you left off.',
-      undefined,
-      undefined,
     );
+    expect(promptSessionMock).toHaveBeenCalledWith('conversation-live', 'Continue from where you left off.', undefined, undefined);
     expect(result).toEqual({
       conversationId: 'conversation-live',
       live: true,
@@ -191,9 +185,7 @@ describe('recoverConversationCapability', () => {
       type: 'prompt' as const,
       text: 'Continue the deployment review.',
       behavior: 'followUp' as const,
-      contextMessages: [
-        { customType: 'referenced_context', content: 'Remember the staging note.' },
-      ],
+      contextMessages: [{ customType: 'referenced_context', content: 'Remember the staging note.' }],
       enqueuedAt: '2026-04-21T12:05:00.000Z',
     };
 
@@ -253,17 +245,8 @@ describe('recoverConversationCapability', () => {
       state: 'running',
       pendingOperation,
     });
-    expect(queuePromptContextMock).toHaveBeenCalledWith(
-      'conversation-1-live',
-      'referenced_context',
-      'Remember the staging note.',
-    );
-    expect(promptSessionMock).toHaveBeenCalledWith(
-      'conversation-1-live',
-      'Continue the deployment review.',
-      'followUp',
-      undefined,
-    );
+    expect(queuePromptContextMock).toHaveBeenCalledWith('conversation-1-live', 'referenced_context', 'Remember the staging note.');
+    expect(promptSessionMock).toHaveBeenCalledWith('conversation-1-live', 'Continue the deployment review.', 'followUp', undefined);
     expect(result).toEqual({
       conversationId: 'conversation-1-live',
       live: true,

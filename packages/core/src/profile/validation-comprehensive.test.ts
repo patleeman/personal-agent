@@ -3,10 +3,11 @@
  * Tests all validation boundaries and edge cases
  */
 
-import { describe, it, expect } from 'vitest';
-import { validatePartialProfile, validateProfile } from './validation.js';
-import type { PartialProfile } from './types.js';
+import { describe, expect, it } from 'vitest';
+
 import { mergeProfiles } from './merge.js';
+import type { PartialProfile } from './types.js';
+import { validatePartialProfile, validateProfile } from './validation.js';
 
 const validUUID = '550e8400-e29b-41d4-a716-446655440000';
 const validSemver = '1.0.0';
@@ -243,121 +244,169 @@ describe('validatePartialProfile comprehensive', () => {
 
   describe('notifications validation', () => {
     it('accepts valid notifications object', () => {
-      const result = validatePartialProfile({
-        notifications: { email: true, push: false, digest: 'weekly' }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          notifications: { email: true, push: false, digest: 'weekly' },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(true);
     });
 
     it('rejects unknown keys in notifications', () => {
-      const result = validatePartialProfile({
-        notifications: { email: true, unknownField: 'value' }
-      } as PartialProfile, 'shared');
+      const result = validatePartialProfile(
+        {
+          notifications: { email: true, unknownField: 'value' },
+        } as PartialProfile,
+        'shared',
+      );
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.field === 'notifications.unknownField')).toBe(true);
+      expect(result.errors.some((e) => e.field === 'notifications.unknownField')).toBe(true);
     });
 
     it('rejects non-boolean email', () => {
-      const result = validatePartialProfile({
-        notifications: { email: 'yes' as unknown as boolean }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          notifications: { email: 'yes' as unknown as boolean },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('rejects invalid digest value', () => {
-      const result = validatePartialProfile({
-        notifications: { digest: 'monthly' as 'daily' }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          notifications: { digest: 'monthly' as 'daily' },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('rejects non-object notifications', () => {
-      const result = validatePartialProfile({
-        notifications: 'none' as unknown as { email: boolean }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          notifications: 'none' as unknown as { email: boolean },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
   });
 
   describe('privacy validation', () => {
     it('accepts valid privacy object', () => {
-      const result = validatePartialProfile({
-        privacy: { analytics: true, shareUsage: false }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          privacy: { analytics: true, shareUsage: false },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(true);
     });
 
     it('rejects unknown keys in privacy', () => {
-      const result = validatePartialProfile({
-        privacy: { analytics: true, unknownField: 'value' }
-      } as PartialProfile, 'shared');
+      const result = validatePartialProfile(
+        {
+          privacy: { analytics: true, unknownField: 'value' },
+        } as PartialProfile,
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('rejects non-boolean analytics', () => {
-      const result = validatePartialProfile({
-        privacy: { analytics: 'yes' as unknown as boolean }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          privacy: { analytics: 'yes' as unknown as boolean },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
   });
 
   describe('modelPreferences validation', () => {
     it('accepts valid modelPreferences', () => {
-      const result = validatePartialProfile({
-        modelPreferences: { default: 'model-a', coding: 'model-b', analysis: null, creative: null }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          modelPreferences: { default: 'model-a', coding: 'model-b', analysis: null, creative: null },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(true);
     });
 
     it('rejects unknown keys in modelPreferences', () => {
-      const result = validatePartialProfile({
-        modelPreferences: { default: 'model-a', unknownField: 'value' }
-      } as PartialProfile, 'shared');
+      const result = validatePartialProfile(
+        {
+          modelPreferences: { default: 'model-a', unknownField: 'value' },
+        } as PartialProfile,
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('rejects non-string default', () => {
-      const result = validatePartialProfile({
-        modelPreferences: { default: 123 as unknown as string }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          modelPreferences: { default: 123 as unknown as string },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('rejects invalid coding type', () => {
-      const result = validatePartialProfile({
-        modelPreferences: { coding: 123 as unknown as string }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          modelPreferences: { coding: 123 as unknown as string },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('accepts null for optional model fields', () => {
-      const result = validatePartialProfile({
-        modelPreferences: { default: 'model-a', coding: null, analysis: null, creative: null }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          modelPreferences: { default: 'model-a', coding: null, analysis: null, creative: null },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(true);
     });
   });
 
   describe('toolPermissions validation', () => {
     it('accepts valid toolPermissions', () => {
-      const result = validatePartialProfile({
-        toolPermissions: { webSearch: true, codeExecution: false, fileSystem: true, externalApis: false }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          toolPermissions: { webSearch: true, codeExecution: false, fileSystem: true, externalApis: false },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(true);
     });
 
     it('rejects unknown keys in toolPermissions', () => {
-      const result = validatePartialProfile({
-        toolPermissions: { webSearch: true, unknownTool: true }
-      } as PartialProfile, 'shared');
+      const result = validatePartialProfile(
+        {
+          toolPermissions: { webSearch: true, unknownTool: true },
+        } as PartialProfile,
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
 
     it('rejects non-boolean webSearch', () => {
-      const result = validatePartialProfile({
-        toolPermissions: { webSearch: 'yes' as unknown as boolean }
-      }, 'shared');
+      const result = validatePartialProfile(
+        {
+          toolPermissions: { webSearch: 'yes' as unknown as boolean },
+        },
+        'shared',
+      );
       expect(result.valid).toBe(false);
     });
   });
@@ -407,11 +456,14 @@ describe('validatePartialProfile comprehensive', () => {
     });
 
     it('allows explicit null for optional fields', () => {
-      const result = validatePartialProfile({
-        email: null,
-        customInstructions: null,
-      }, 'shared');
-      expect(result.errors.every(e => !e.field.startsWith('email') && !e.field.startsWith('customInstructions'))).toBe(true);
+      const result = validatePartialProfile(
+        {
+          email: null,
+          customInstructions: null,
+        },
+        'shared',
+      );
+      expect(result.errors.every((e) => !e.field.startsWith('email') && !e.field.startsWith('customInstructions'))).toBe(true);
     });
   });
 
@@ -454,7 +506,7 @@ describe('validateProfile comprehensive (merged profile)', () => {
     const invalidProfile = { ...profile, id: undefined };
     const result = validateProfile(invalidProfile);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'id')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'id')).toBe(true);
   });
 
   it('rejects profile with missing required version', () => {
@@ -462,7 +514,7 @@ describe('validateProfile comprehensive (merged profile)', () => {
     const invalidProfile = { ...profile, version: undefined };
     const result = validateProfile(invalidProfile);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'version')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'version')).toBe(true);
   });
 
   it('rejects profile with missing required timestamps', () => {
@@ -470,7 +522,7 @@ describe('validateProfile comprehensive (merged profile)', () => {
     const invalidProfile = { ...profile, createdAt: undefined, updatedAt: undefined };
     const result = validateProfile(invalidProfile);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'createdAt' || e.field === 'updatedAt')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'createdAt' || e.field === 'updatedAt')).toBe(true);
   });
 
   it('rejects profile with missing required name', () => {
@@ -478,13 +530,11 @@ describe('validateProfile comprehensive (merged profile)', () => {
     const invalidProfile = { ...profile, name: '' };
     const result = validateProfile(invalidProfile);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'name')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'name')).toBe(true);
   });
 
   it('rejects profile with invalid email', () => {
-    expect(() => mergeProfiles({ shared: { name: 'Test', email: 'invalid' } })).toThrow(
-      'Profile validation failed',
-    );
+    expect(() => mergeProfiles({ shared: { name: 'Test', email: 'invalid' } })).toThrow('Profile validation failed');
   });
 
   it('accepts profile with null email', () => {
@@ -518,14 +568,14 @@ describe('validateProfile comprehensive (merged profile)', () => {
     const invalidProfile = { ...profile, notifications: 'none' as unknown as typeof profile.notifications };
     const result = validateProfile(invalidProfile);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'notifications')).toBe(true);
+    expect(result.errors.some((e) => e.field === 'notifications')).toBe(true);
   });
 
   it('rejects profile with missing notifications fields', () => {
     const profile = mergeProfiles({ shared: { name: 'Test' } });
     const invalidProfile = {
       ...profile,
-      notifications: { email: true } as { email: boolean; push: boolean; digest: 'daily' | 'weekly' | 'never' }
+      notifications: { email: true } as { email: boolean; push: boolean; digest: 'daily' | 'weekly' | 'never' },
     };
     const result = validateProfile(invalidProfile);
     expect(result.valid).toBe(false);
@@ -553,9 +603,7 @@ describe('validateProfile comprehensive (merged profile)', () => {
   });
 
   it('validates customInstructions max length', () => {
-    expect(() => mergeProfiles({ shared: { name: 'Test', customInstructions: 'a'.repeat(4001) } })).toThrow(
-      'Profile validation failed',
-    );
+    expect(() => mergeProfiles({ shared: { name: 'Test', customInstructions: 'a'.repeat(4001) } })).toThrow('Profile validation failed');
   });
 
   it('accepts valid complete profile', () => {
@@ -566,7 +614,7 @@ describe('validateProfile comprehensive (merged profile)', () => {
         timezone: 'UTC',
         locale: 'en-US',
         theme: 'system',
-      }
+      },
     });
     const result = validateProfile(profile);
     expect(result.valid).toBe(true);

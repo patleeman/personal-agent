@@ -37,11 +37,13 @@ type ExcalidrawModule = Pick<typeof import('@excalidraw/excalidraw'), 'loadFromB
 let excalidrawModulePromise: Promise<ExcalidrawModule> | null = null;
 
 async function loadExcalidrawModule(): Promise<ExcalidrawModule> {
-  const modulePromise = excalidrawModulePromise ?? import('@excalidraw/excalidraw').then((module) => ({
-    loadFromBlob: module.loadFromBlob,
-    serializeAsJSON: module.serializeAsJSON,
-    exportToBlob: module.exportToBlob,
-  }));
+  const modulePromise =
+    excalidrawModulePromise ??
+    import('@excalidraw/excalidraw').then((module) => ({
+      loadFromBlob: module.loadFromBlob,
+      serializeAsJSON: module.serializeAsJSON,
+      exportToBlob: module.exportToBlob,
+    }));
 
   excalidrawModulePromise = modulePromise;
   return modulePromise;
@@ -60,12 +62,8 @@ function normalizeSceneData(value: unknown): ExcalidrawSceneData {
 
   return {
     elements: Array.isArray(parsed.elements) ? parsed.elements : [],
-    appState: parsed.appState && typeof parsed.appState === 'object' && !Array.isArray(parsed.appState)
-      ? parsed.appState
-      : {},
-    files: parsed.files && typeof parsed.files === 'object' && !Array.isArray(parsed.files)
-      ? parsed.files
-      : {},
+    appState: parsed.appState && typeof parsed.appState === 'object' && !Array.isArray(parsed.appState) ? parsed.appState : {},
+    files: parsed.files && typeof parsed.files === 'object' && !Array.isArray(parsed.files) ? parsed.files : {},
   } as ExcalidrawSceneData;
 }
 
@@ -108,9 +106,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function positiveFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_PERSISTED_CANVAS_DIMENSION
-    ? value
-    : null;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_PERSISTED_CANVAS_DIMENSION ? value : null;
 }
 
 function resolvePreviewBackgroundColor(appState: ExcalidrawAppState): string {
@@ -163,11 +159,12 @@ export function resolveExcalidrawPreviewFrameSize(appState: ExcalidrawAppState |
   }
 
   const longSide = Math.max(width, height);
-  const scale = longSide > MAX_PREVIEW_LONG_SIDE
-    ? MAX_PREVIEW_LONG_SIDE / longSide
-    : longSide < MIN_PREVIEW_LONG_SIDE
-      ? MIN_PREVIEW_LONG_SIDE / longSide
-      : 1;
+  const scale =
+    longSide > MAX_PREVIEW_LONG_SIDE
+      ? MAX_PREVIEW_LONG_SIDE / longSide
+      : longSide < MIN_PREVIEW_LONG_SIDE
+        ? MIN_PREVIEW_LONG_SIDE / longSide
+        : 1;
 
   return {
     width: Math.max(1, Math.round(width * scale)),
@@ -201,10 +198,7 @@ async function framePreviewBlob(blob: Blob, scene: ExcalidrawSceneData): Promise
   context.fillStyle = resolvePreviewBackgroundColor(scene.appState);
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  const inset = Math.max(
-    MIN_PREVIEW_FRAME_INSET,
-    Math.round(Math.min(canvas.width, canvas.height) * PREVIEW_FRAME_INSET_RATIO),
-  );
+  const inset = Math.max(MIN_PREVIEW_FRAME_INSET, Math.round(Math.min(canvas.width, canvas.height) * PREVIEW_FRAME_INSET_RATIO));
   const availableWidth = Math.max(1, canvas.width - inset * 2);
   const availableHeight = Math.max(1, canvas.height - inset * 2);
   const scale = Math.min(availableWidth / imageWidth, availableHeight / imageHeight);
@@ -220,7 +214,12 @@ async function framePreviewBlob(blob: Blob, scene: ExcalidrawSceneData): Promise
 }
 
 export function buildDrawingFileNames(title: string): { sourceName: string; previewName: string } {
-  const normalized = title.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  const normalized = title
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
   const base = normalized.length > 0 ? normalized : 'drawing';
 
   return {
@@ -270,12 +269,7 @@ export function parseExcalidrawSceneFromSourceData(sourceData: string): Excalidr
 export async function serializeExcalidrawScene(scene: ExcalidrawSceneData): Promise<SerializedExcalidrawScene> {
   const excalidraw = await loadExcalidrawModule();
 
-  const sourceJson = excalidraw.serializeAsJSON(
-    scene.elements,
-    scene.appState,
-    scene.files,
-    'local',
-  );
+  const sourceJson = excalidraw.serializeAsJSON(scene.elements, scene.appState, scene.files, 'local');
 
   const croppedPreviewBlob = await excalidraw.exportToBlob({
     elements: scene.elements,

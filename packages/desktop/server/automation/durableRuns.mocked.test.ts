@@ -125,10 +125,12 @@ describe('durableRuns', () => {
       ...run,
       decorated: true,
     }));
-    decorateDurableRunsAttentionMock.mockImplementation((runs: Array<Record<string, unknown>>) => runs.map((run) => ({
-      ...run,
-      decorated: true,
-    })));
+    decorateDurableRunsAttentionMock.mockImplementation((runs: Array<Record<string, unknown>>) =>
+      runs.map((run) => ({
+        ...run,
+        decorated: true,
+      })),
+    );
   });
 
   it('lists durable runs via the daemon, reports inflight and hit telemetry, and decorates results', async () => {

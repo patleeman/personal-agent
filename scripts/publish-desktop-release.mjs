@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -36,7 +36,11 @@ function run(command, args, options = {}) {
 }
 
 function isTruthyEnv(value) {
-  return ['1', 'true', 'yes'].includes(String(value ?? '').trim().toLowerCase());
+  return ['1', 'true', 'yes'].includes(
+    String(value ?? '')
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function capture(command, args, options = {}) {
@@ -112,9 +116,7 @@ function parseEnvFile(content) {
 
 function loadReleaseEnv() {
   const env = { ...process.env };
-  const envPaths = process.env.PERSONAL_AGENT_RELEASE_ENV
-    ? [process.env.PERSONAL_AGENT_RELEASE_ENV]
-    : [repoEnvPath, defaultEnvPath];
+  const envPaths = process.env.PERSONAL_AGENT_RELEASE_ENV ? [process.env.PERSONAL_AGENT_RELEASE_ENV] : [repoEnvPath, defaultEnvPath];
 
   for (const envPath of envPaths) {
     if (!envPath || !existsSync(envPath)) {
@@ -199,7 +201,9 @@ function ensureNotarizationCredentials(env) {
     return;
   }
 
-  fail('Missing notarization credentials. Provide APPLE_ID + APPLE_TEAM_ID + APPLE_APP_SPECIFIC_PASSWORD (APPLE_PASSWORD is also accepted as a fallback), APPLE_API_KEY + APPLE_API_KEY_ID, or APPLE_KEYCHAIN_PROFILE.');
+  fail(
+    'Missing notarization credentials. Provide APPLE_ID + APPLE_TEAM_ID + APPLE_APP_SPECIFIC_PASSWORD (APPLE_PASSWORD is also accepted as a fallback), APPLE_API_KEY + APPLE_API_KEY_ID, or APPLE_KEYCHAIN_PROFILE.',
+  );
 }
 
 function buildNotarytoolArgs(env) {
@@ -216,11 +220,7 @@ function buildNotarytoolArgs(env) {
   }
 
   if (env.APPLE_ID && env.APPLE_TEAM_ID && env.APPLE_APP_SPECIFIC_PASSWORD) {
-    return [
-      '--apple-id', env.APPLE_ID,
-      '--password', env.APPLE_APP_SPECIFIC_PASSWORD,
-      '--team-id', env.APPLE_TEAM_ID,
-    ];
+    return ['--apple-id', env.APPLE_ID, '--password', env.APPLE_APP_SPECIFIC_PASSWORD, '--team-id', env.APPLE_TEAM_ID];
   }
 
   fail('Unable to build notarytool arguments from the available notarization credentials.');
@@ -290,14 +290,11 @@ function collectReleaseFiles(releaseDir, version) {
   }
 
   const files = readdirSync(releaseDir)
-    .filter((name) => (
-      name === 'latest-mac.yml'
-      || (name.includes(`-${version}-`) && (
-        name.endsWith('.dmg')
-        || name.endsWith('.zip')
-        || name.endsWith('.blockmap')
-      ))
-    ))
+    .filter(
+      (name) =>
+        name === 'latest-mac.yml' ||
+        (name.includes(`-${version}-`) && (name.endsWith('.dmg') || name.endsWith('.zip') || name.endsWith('.blockmap'))),
+    )
     .sort()
     .map((name) => resolve(releaseDir, name));
 
@@ -316,8 +313,7 @@ function collectPackagedAppPath(releaseDir) {
     return null;
   }
 
-  const appName = readdirSync(macOutputDir)
-    .find((name) => name.endsWith('.app'));
+  const appName = readdirSync(macOutputDir).find((name) => name.endsWith('.app'));
 
   return appName ? resolve(macOutputDir, appName) : null;
 }
@@ -339,12 +335,14 @@ function validatePackagedAutoUpdateConfig(releaseDir, releaseRepo) {
   const [expectedOwner, expectedRepo] = releaseRepo.split('/', 2);
 
   if (owner !== expectedOwner || repo !== expectedRepo) {
-    fail([
-      'Packaged app-update.yml points at the wrong GitHub repo.',
-      `Expected: ${releaseRepo}`,
-      `Actual: ${owner}/${repo}`,
-      `Path: ${appUpdatePath}`,
-    ].join('\n'));
+    fail(
+      [
+        'Packaged app-update.yml points at the wrong GitHub repo.',
+        `Expected: ${releaseRepo}`,
+        `Actual: ${owner}/${repo}`,
+        `Path: ${appUpdatePath}`,
+      ].join('\n'),
+    );
   }
 }
 
@@ -463,8 +461,10 @@ function hasPackagedNodeModule(packageName, packageEntries, resourcesDir) {
   }
 
   const packagePathSegments = packageName.split('/');
-  return existsSync(resolve(resourcesDir, 'node_modules', ...packagePathSegments, 'package.json'))
-    || existsSync(resolve(resourcesDir, 'app.asar.unpacked', 'node_modules', ...packagePathSegments, 'package.json'));
+  return (
+    existsSync(resolve(resourcesDir, 'node_modules', ...packagePathSegments, 'package.json')) ||
+    existsSync(resolve(resourcesDir, 'app.asar.unpacked', 'node_modules', ...packagePathSegments, 'package.json'))
+  );
 }
 
 function validatePackagedRuntimeDependencies(buildRoot, releaseDir) {
@@ -486,12 +486,14 @@ function validatePackagedRuntimeDependencies(buildRoot, releaseDir) {
   const missingPackages = expectedPackages.filter((packageName) => !hasPackagedNodeModule(packageName, packageEntries, resourcesDir));
 
   if (missingPackages.length > 0) {
-    fail([
-      'Packaged desktop app is missing runtime dependencies.',
-      `App: ${appAsarPath}`,
-      'Missing packages:',
-      ...missingPackages.map((packageName) => `- ${packageName}`),
-    ].join('\n'));
+    fail(
+      [
+        'Packaged desktop app is missing runtime dependencies.',
+        `App: ${appAsarPath}`,
+        'Missing packages:',
+        ...missingPackages.map((packageName) => `- ${packageName}`),
+      ].join('\n'),
+    );
   }
 }
 
@@ -513,7 +515,11 @@ function stapleAndValidate(pathname, env, options = {}) {
     const rendered = `${staple.stderr ?? ''}${staple.stdout ?? ''}`.trim();
     const ticketPending = rendered.includes('Record not found') || rendered.includes('Could not find base64 encoded ticket');
     if (ticketPending && attempt < attempts) {
-      console.log(`Stapler ticket for ${pathname} is not visible yet (attempt ${attempt}/${attempts}). Retrying in ${Math.round(retryDelayMs / 1000)}s...`);
+      console.log(
+        `Stapler ticket for ${pathname} is not visible yet (attempt ${attempt}/${attempts}). Retrying in ${Math.round(
+          retryDelayMs / 1000,
+        )}s...`,
+      );
       sleepMs(retryDelayMs);
       continue;
     }
@@ -558,12 +564,14 @@ function requireSmokeTestApproval(env, releaseDir, buildRoot) {
   }
 
   if (!process.stdin.isTTY) {
-    fail([
-      'Release smoke test is required before pushing/uploading artifacts.',
-      `Test the built app at: ${appPath}`,
-      'Then rerun with PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1 once startup and core app flows pass.',
-      'Automated smoke was skipped by PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE=1.',
-    ].join('\n'));
+    fail(
+      [
+        'Release smoke test is required before pushing/uploading artifacts.',
+        `Test the built app at: ${appPath}`,
+        'Then rerun with PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1 once startup and core app flows pass.',
+        'Automated smoke was skipped by PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE=1.',
+      ].join('\n'),
+    );
   }
 
   console.log('');

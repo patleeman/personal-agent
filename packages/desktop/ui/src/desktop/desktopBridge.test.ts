@@ -35,7 +35,8 @@ describe('readDesktopEnvironment', () => {
   });
 
   it('clears the cached request after a bridge failure', async () => {
-    const getEnvironment = vi.fn()
+    const getEnvironment = vi
+      .fn()
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce({ activeHostKind: 'local', activeHostLabel: 'Local' });
     vi.stubGlobal('window', {

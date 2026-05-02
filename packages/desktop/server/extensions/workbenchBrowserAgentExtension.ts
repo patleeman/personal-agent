@@ -1,5 +1,5 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { Type } from '@sinclair/typebox';
 
 export interface WorkbenchBrowserToolHost {
   isActive(conversationId: string): Promise<boolean>;
@@ -8,11 +8,7 @@ export interface WorkbenchBrowserToolHost {
   cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
 }
 
-const BrowserToolNames = [
-  'browser_snapshot',
-  'browser_cdp',
-  'browser_screenshot',
-] as const;
+const BrowserToolNames = ['browser_snapshot', 'browser_cdp', 'browser_screenshot'] as const;
 
 const BrowserToolNameSet = new Set<string>(BrowserToolNames);
 
@@ -31,7 +27,7 @@ function requireHost(): WorkbenchBrowserToolHost {
 
 async function requireActiveWorkbenchBrowser(conversationId: string): Promise<WorkbenchBrowserToolHost> {
   const currentHost = requireHost();
-  if (!await currentHost.isActive(conversationId)) {
+  if (!(await currentHost.isActive(conversationId))) {
     throw new Error('Workbench Browser is not active for this conversation. Open the Browser workbench panel before using browser tools.');
   }
   return currentHost;
@@ -73,7 +69,15 @@ function formatSnapshot(value: unknown): string {
     lastChangeReason?: string;
     lastChangedAt?: string;
     text?: string;
-    elements?: Array<{ ref?: string; role?: string; name?: string; selector?: string; text?: string; enabled?: boolean; checked?: boolean }>;
+    elements?: Array<{
+      ref?: string;
+      role?: string;
+      name?: string;
+      selector?: string;
+      text?: string;
+      enabled?: boolean;
+      checked?: boolean;
+    }>;
   };
   const lines = [
     `URL: ${snapshot.url ?? ''}`,
@@ -83,7 +87,9 @@ function formatSnapshot(value: unknown): string {
     `Changed since last snapshot: ${snapshot.changedSinceLastSnapshot === true ? 'yes' : 'no'}`,
   ];
   if (snapshot.lastChangeReason || snapshot.lastChangedAt) {
-    lines.push(`Last browser change: ${snapshot.lastChangeReason ?? 'unknown'}${snapshot.lastChangedAt ? ` at ${snapshot.lastChangedAt}` : ''}`);
+    lines.push(
+      `Last browser change: ${snapshot.lastChangeReason ?? 'unknown'}${snapshot.lastChangedAt ? ` at ${snapshot.lastChangedAt}` : ''}`,
+    );
   }
 
   if (snapshot.elements?.length) {
@@ -92,8 +98,14 @@ function formatSnapshot(value: unknown): string {
       const state = [
         element.enabled === false ? 'disabled' : 'enabled',
         typeof element.checked === 'boolean' ? `checked=${element.checked}` : '',
-      ].filter(Boolean).join(' ');
-      lines.push(`${element.ref ?? ''} role=${element.role ?? ''} name=${JSON.stringify(element.name ?? '')} selector=${JSON.stringify(element.selector ?? '')} ${state}`.trim());
+      ]
+        .filter(Boolean)
+        .join(' ');
+      lines.push(
+        `${element.ref ?? ''} role=${element.role ?? ''} name=${JSON.stringify(element.name ?? '')} selector=${JSON.stringify(
+          element.selector ?? '',
+        )} ${state}`.trim(),
+      );
       if (element.text && element.text !== element.name) {
         lines.push(`  text=${JSON.stringify(element.text)}`);
       }
@@ -110,16 +122,20 @@ function formatSnapshot(value: unknown): string {
 const EmptyParams = Type.Object({});
 
 const CdpCommand = Type.Object({
-  method: Type.String({ description: 'Chrome DevTools Protocol method in Domain.command form, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.' }),
+  method: Type.String({
+    description: 'Chrome DevTools Protocol method in Domain.command form, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.',
+  }),
   params: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'CDP command params object.' })),
 });
 
 const CdpParams = Type.Object({
-  command: Type.Union([
-    CdpCommand,
-    Type.Array(CdpCommand, { minItems: 1, maxItems: 200, description: 'Multiple CDP commands to execute sequentially.' }),
-  ], { description: 'A single CDP command object { method, params? }, or an array of command objects.' }),
-  continueOnError: Type.Optional(Type.Boolean({ description: 'Continue executing later commands after a protocol command fails. Defaults to false.' })),
+  command: Type.Union(
+    [CdpCommand, Type.Array(CdpCommand, { minItems: 1, maxItems: 200, description: 'Multiple CDP commands to execute sequentially.' })],
+    { description: 'A single CDP command object { method, params? }, or an array of command objects.' },
+  ),
+  continueOnError: Type.Optional(
+    Type.Boolean({ description: 'Continue executing later commands after a protocol command fails. Defaults to false.' }),
+  ),
 });
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
@@ -136,9 +152,10 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       name: 'browser_snapshot',
       label: 'Browser Snapshot',
       description: 'Observe the current built-in Workbench Browser state and interactive elements.',
-      promptSnippet: 'Use browser_snapshot to understand the shared Workbench Browser, which is a user/agent communication surface. For development validation, use the agent-browser skill/CLI through bash instead.',
+      promptSnippet:
+        'Use browser_snapshot to understand the shared Workbench Browser, which is a user/agent communication surface. For development validation, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
-        'Targets the user\'s visible built-in Workbench Browser for this conversation, not agent-browser, Chrome, or an independent automation session.',
+        "Targets the user's visible built-in Workbench Browser for this conversation, not agent-browser, Chrome, or an independent automation session.",
         'Treat the Workbench Browser as shared conversation context: use it when the user is showing you a page, commenting on page elements, or wants you to inspect/control the same visible page.',
         'Do not use Workbench Browser tools for autonomous app-development validation, CI-style checks, or black-box UI testing; load the agent-browser skill and use its CLI/wrapper from bash for that.',
         'Prefer browser_snapshot before navigating or acting because it is efficient, structured, and gives refs/selectors.',
@@ -159,10 +176,11 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       name: 'browser_cdp',
       label: 'Browser CDP',
       description: 'Send one or more Chrome DevTools Protocol commands to the built-in Workbench Browser.',
-      promptSnippet: 'Use browser_cdp only to act on the shared Workbench Browser conversation surface. For dev automation/testing, use the agent-browser skill/CLI through bash instead.',
+      promptSnippet:
+        'Use browser_cdp only to act on the shared Workbench Browser conversation surface. For dev automation/testing, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
-        'Targets the user\'s visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.',
-        'Treat this as operating on shared user/agent context; avoid changing the user\'s visible page for unrelated development validation.',
+        "Targets the user's visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.",
+        "Treat this as operating on shared user/agent context; avoid changing the user's visible page for unrelated development validation.",
         'For autonomous UI testing, local app validation, screenshots of the product under test, or repeatable browser automation, load the agent-browser skill and use its CLI/wrapper from bash.',
         'This is a thin CDP command surface; provide raw command objects exactly as Chrome DevTools Protocol expects, for example: {"method":"Runtime.evaluate","params":{"expression":"document.title","returnByValue":true}}.',
         'When doing more than one action, send one browser_cdp call with command set to an array of command objects instead of multiple tool calls.',
@@ -172,7 +190,9 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: CdpParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const result = await (await requireActiveWorkbenchBrowser(conversationId)).cdp({
+        const result = await (
+          await requireActiveWorkbenchBrowser(conversationId)
+        ).cdp({
           conversationId,
           command: params.command,
           ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
@@ -188,9 +208,10 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       name: 'browser_screenshot',
       label: 'Browser Screenshot',
       description: 'Capture a PNG screenshot of the built-in Workbench Browser.',
-      promptSnippet: 'Use browser_screenshot for the shared Workbench Browser when visual communication matters. For dev validation screenshots, use the agent-browser skill/CLI through bash.',
+      promptSnippet:
+        'Use browser_screenshot for the shared Workbench Browser when visual communication matters. For dev validation screenshots, use the agent-browser skill/CLI through bash.',
       promptGuidelines: [
-        'Targets the user\'s visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.',
+        "Targets the user's visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.",
         'Treat screenshots as shared conversation context: use them when the user wants visual inspection of the page currently open in the Workbench Browser.',
         'For autonomous visual checks of the app you are developing, load the agent-browser skill and use its CLI/wrapper from bash.',
         'browser_screenshot is useful for visual appearance and image-heavy content.',
@@ -199,7 +220,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: EmptyParams,
       async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const screenshot = await (await requireActiveWorkbenchBrowser(conversationId)).screenshot(conversationId) as {
+        const screenshot = (await (await requireActiveWorkbenchBrowser(conversationId)).screenshot(conversationId)) as {
           dataBase64?: string;
           mimeType?: string;
           url?: string;

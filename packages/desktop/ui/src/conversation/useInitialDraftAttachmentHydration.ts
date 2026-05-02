@@ -1,9 +1,7 @@
 import { useEffect, useRef } from 'react';
-import {
-  clearDraftConversationAttachments,
-  readDraftConversationAttachments,
-} from './draftConversation';
-import { restoreComposerImageFiles, type ComposerDrawingAttachment } from './promptAttachments';
+
+import { clearDraftConversationAttachments, readDraftConversationAttachments } from './draftConversation';
+import { type ComposerDrawingAttachment, restoreComposerImageFiles } from './promptAttachments';
 
 interface UseInitialDraftAttachmentHydrationOptions {
   draft: boolean;

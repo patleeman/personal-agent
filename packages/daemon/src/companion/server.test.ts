@@ -2,8 +2,10 @@ import { mkdtempSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
+
 import type { DaemonConfig } from '../config.js';
 import { DaemonCompanionServer } from './server.js';
 import type { CompanionRuntime } from './types.js';
@@ -84,34 +86,100 @@ describe('daemon companion server', () => {
     const conversationSubscribers: Array<(event: unknown) => void> = [];
 
     const runtime: CompanionRuntime = {
-      listConversations: async () => ({ sessions: [{ id: 'conv-1', title: 'Conversation 1' }], ordering: { sessionIds: ['conv-1'], pinnedSessionIds: ['conv-1'], archivedSessionIds: [], workspacePaths: [] } }),
+      listConversations: async () => ({
+        sessions: [{ id: 'conv-1', title: 'Conversation 1' }],
+        ordering: { sessionIds: ['conv-1'], pinnedSessionIds: ['conv-1'], archivedSessionIds: [], workspacePaths: [] },
+      }),
       updateConversationTabs: async () => ({ ok: true }),
       duplicateConversation: async () => ({ ok: true, conversationId: 'duplicate-1' }),
       listExecutionTargets: async () => ({ executionTargets: [{ id: 'local', label: 'Local', kind: 'local' }] }),
       readModels: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] }),
       listSshTargets: async () => ({ hosts: [{ id: 'ssh-1', label: 'Buildbox', kind: 'ssh', sshTarget: 'user@buildbox' }] }),
-      saveSshTarget: async (input) => ({ hosts: [{ id: input.id ?? 'ssh-1', label: input.label, kind: 'ssh', sshTarget: input.sshTarget }] }),
+      saveSshTarget: async (input) => ({
+        hosts: [{ id: input.id ?? 'ssh-1', label: input.label, kind: 'ssh', sshTarget: input.sshTarget }],
+      }),
       deleteSshTarget: async (targetId) => ({ ok: true, deleted: true, targetId }),
-      testSshTarget: async (input) => ({ ok: true, sshTarget: input.sshTarget, os: 'linux', arch: 'arm64', platformKey: 'linux-arm64', homeDirectory: '/home/user', tempDirectory: '/tmp', cacheDirectory: '/tmp/.cache', message: 'reachable' }),
+      testSshTarget: async (input) => ({
+        ok: true,
+        sshTarget: input.sshTarget,
+        os: 'linux',
+        arch: 'arm64',
+        platformKey: 'linux-arm64',
+        homeDirectory: '/home/user',
+        tempDirectory: '/tmp',
+        cacheDirectory: '/tmp/.cache',
+        message: 'reachable',
+      }),
       readRemoteDirectory: async (input) => ({ path: input.path ?? '/repo', parent: '/', entries: [] }),
-      readConversationBootstrap: async (input) => ({ conversationId: input.conversationId, bootstrap: true, tailBlocks: input.tailBlocks }),
+      readConversationBootstrap: async (input) => ({
+        conversationId: input.conversationId,
+        bootstrap: true,
+        tailBlocks: input.tailBlocks,
+      }),
       createConversation: async () => ({ conversationId: 'created-1' }),
       resumeConversation: async () => ({ conversationId: 'resumed-1' }),
       promptConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       parallelPromptConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
-      restoreConversationQueuePrompt: async (input) => ({ ok: true, behavior: input.behavior, index: input.index, text: 'queued hello', images: [] }),
-      manageConversationParallelJob: async (input) => ({ ok: true, status: input.action === 'cancel' ? 'cancelled' : input.action === 'skip' ? 'skipped' : 'imported' }),
-      cancelConversationDeferredResume: async (input) => ({ ok: true, conversationId: input.conversationId, resumeId: input.resumeId, status: 'cancelled' }),
-      fireConversationDeferredResume: async (input) => ({ ok: true, conversationId: input.conversationId, resumeId: input.resumeId, status: 'fired' }),
+      restoreConversationQueuePrompt: async (input) => ({
+        ok: true,
+        behavior: input.behavior,
+        index: input.index,
+        text: 'queued hello',
+        images: [],
+      }),
+      manageConversationParallelJob: async (input) => ({
+        ok: true,
+        status: input.action === 'cancel' ? 'cancelled' : input.action === 'skip' ? 'skipped' : 'imported',
+      }),
+      cancelConversationDeferredResume: async (input) => ({
+        ok: true,
+        conversationId: input.conversationId,
+        resumeId: input.resumeId,
+        status: 'cancelled',
+      }),
+      fireConversationDeferredResume: async (input) => ({
+        ok: true,
+        conversationId: input.conversationId,
+        resumeId: input.resumeId,
+        status: 'fired',
+      }),
       abortConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       takeOverConversation: async (input) => ({ ok: true, surfaceId: input.surfaceId }),
       renameConversation: async (input) => ({ ok: true, title: input.name }),
       changeConversationCwd: async (input) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
       readConversationAutoMode: async () => ({ enabled: false, stopReason: null, updatedAt: '2026-04-19T00:00:00.000Z' }),
       updateConversationAutoMode: async ({ enabled }) => ({ enabled, stopReason: null, updatedAt: '2026-04-19T00:00:00.000Z' }),
-      readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
-      updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
-      createConversationCheckpoint: async (input) => ({ id: 'checkpoint-1', conversationId: input.conversationId, title: input.message, shortSha: 'abc1234', commitSha: 'abc1234def', subject: input.message, fileCount: input.paths.length, linesAdded: 1, linesDeleted: 0, cwd: '/repo', authorName: 'Test User', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
+      readConversationModelPreferences: async () => ({
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'default',
+        hasExplicitServiceTier: false,
+      }),
+      updateConversationModelPreferences: async () => ({
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'default',
+        hasExplicitServiceTier: false,
+      }),
+      createConversationCheckpoint: async (input) => ({
+        id: 'checkpoint-1',
+        conversationId: input.conversationId,
+        title: input.message,
+        shortSha: 'abc1234',
+        commitSha: 'abc1234def',
+        subject: input.message,
+        fileCount: input.paths.length,
+        linesAdded: 1,
+        linesDeleted: 0,
+        cwd: '/repo',
+        authorName: 'Test User',
+        committedAt: '2026-04-19T00:00:00.000Z',
+        createdAt: '2026-04-19T00:00:00.000Z',
+        updatedAt: '2026-04-19T00:00:00.000Z',
+        commentCount: 0,
+        files: [],
+        comments: [],
+      }),
       listConversationArtifacts: async (conversationId) => ({ conversationId, artifacts: [] }),
       readConversationArtifact: async ({ conversationId, artifactId }) => ({ conversationId, artifact: { id: artifactId } }),
       listConversationCheckpoints: async (conversationId) => ({ conversationId, checkpoints: [] }),
@@ -123,7 +191,10 @@ describe('daemon companion server', () => {
         disposition: 'inline',
       }),
       listConversationAttachments: async (conversationId) => ({ conversationId, attachments: [{ id: 'att-1', title: 'Sketch' }] }),
-      readConversationAttachment: async ({ conversationId, attachmentId }) => ({ conversationId, attachment: { id: attachmentId, title: 'Sketch' } }),
+      readConversationAttachment: async ({ conversationId, attachmentId }) => ({
+        conversationId,
+        attachment: { id: attachmentId, title: 'Sketch' },
+      }),
       createConversationAttachment: async (input) => ({ conversationId: input.conversationId, attachment: { id: 'att-new' } }),
       updateConversationAttachment: async (input) => ({ conversationId: input.conversationId, attachment: { id: input.attachmentId } }),
       readConversationAttachmentAsset: async () => ({
@@ -132,15 +203,64 @@ describe('daemon companion server', () => {
         fileName: 'preview.png',
         disposition: 'inline',
       }),
-      listKnowledgeEntries: async (directoryId) => ({ root: '/vault', entries: directoryId ? [{ id: 'notes/daily.md', kind: 'file', name: 'daily.md' }] : [{ id: 'notes/', kind: 'folder', name: 'notes' }] }),
-      searchKnowledge: async ({ query, limit }) => ({ results: [{ id: 'notes/release-checklist.md', name: 'release-checklist.md', title: query?.trim() || 'release-checklist', excerpt: 'Release checklist', limit }] }),
+      listKnowledgeEntries: async (directoryId) => ({
+        root: '/vault',
+        entries: directoryId
+          ? [{ id: 'notes/daily.md', kind: 'file', name: 'daily.md' }]
+          : [{ id: 'notes/', kind: 'folder', name: 'notes' }],
+      }),
+      searchKnowledge: async ({ query, limit }) => ({
+        results: [
+          {
+            id: 'notes/release-checklist.md',
+            name: 'release-checklist.md',
+            title: query?.trim() || 'release-checklist',
+            excerpt: 'Release checklist',
+            limit,
+          },
+        ],
+      }),
       readKnowledgeFile: async (fileId) => ({ id: fileId, content: '# Demo', updatedAt: '2026-04-19T00:00:00.000Z' }),
-      writeKnowledgeFile: async ({ fileId, content }) => ({ id: fileId, kind: 'file', name: fileId.split('/').pop(), sizeBytes: content.length, updatedAt: '2026-04-19T00:00:00.000Z' }),
-      createKnowledgeFolder: async (folderId) => ({ id: `${folderId}/`, kind: 'folder', name: folderId.split('/').pop(), sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
-      renameKnowledgeEntry: async ({ id, newName, parentId }) => ({ id: parentId !== undefined && parentId !== null ? `${parentId}${parentId ? '/' : ''}${newName}` : `${id.split('/').slice(0, -1).join('/')}${id.includes('/') ? '/' : ''}${newName}`, kind: id.endsWith('/') ? 'folder' : 'file', name: newName, sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      writeKnowledgeFile: async ({ fileId, content }) => ({
+        id: fileId,
+        kind: 'file',
+        name: fileId.split('/').pop(),
+        sizeBytes: content.length,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      }),
+      createKnowledgeFolder: async (folderId) => ({
+        id: `${folderId}/`,
+        kind: 'folder',
+        name: folderId.split('/').pop(),
+        sizeBytes: 0,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      }),
+      renameKnowledgeEntry: async ({ id, newName, parentId }) => ({
+        id:
+          parentId !== undefined && parentId !== null
+            ? `${parentId}${parentId ? '/' : ''}${newName}`
+            : `${id.split('/').slice(0, -1).join('/')}${id.includes('/') ? '/' : ''}${newName}`,
+        kind: id.endsWith('/') ? 'folder' : 'file',
+        name: newName,
+        sizeBytes: 0,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      }),
       deleteKnowledgeEntry: async () => ({ ok: true }),
-      createKnowledgeImageAsset: async ({ fileName }) => ({ id: `_attachments/${fileName ?? 'image.png'}`, url: '/api/vault/asset?id=_attachments%2Fimage.png' }),
-      importKnowledge: async (input) => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: JSON.stringify(input).length, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: input.kind, title: input.title ?? 'Shared link' }),
+      createKnowledgeImageAsset: async ({ fileName }) => ({
+        id: `_attachments/${fileName ?? 'image.png'}`,
+        url: '/api/vault/asset?id=_attachments%2Fimage.png',
+      }),
+      importKnowledge: async (input) => ({
+        note: {
+          id: 'Inbox/shared-link.md',
+          kind: 'file',
+          name: 'shared-link.md',
+          sizeBytes: JSON.stringify(input).length,
+          updatedAt: '2026-04-19T00:00:00.000Z',
+        },
+        sourceKind: input.kind,
+        title: input.title ?? 'Shared link',
+      }),
       listScheduledTasks: async () => ({ tasks: [] }),
       readScheduledTask: async (taskId) => ({ taskId, title: 'Task' }),
       readScheduledTaskLog: async (taskId) => ({ path: `/tmp/${taskId}.log`, log: '' }),
@@ -181,7 +301,7 @@ describe('daemon companion server', () => {
 
     const helloResponse = await fetch(`${baseUrl}/companion/v1/hello`);
     expect(helloResponse.status).toBe(200);
-    const hello = await readJson(helloResponse) as { hostInstanceId: string; hostLabel: string; protocolVersion: string };
+    const hello = (await readJson(helloResponse)) as { hostInstanceId: string; hostLabel: string; protocolVersion: string };
     expect(hello.hostInstanceId).toMatch(/^host_/);
     expect(hello.hostLabel.length).toBeGreaterThan(0);
     expect(hello.protocolVersion).toBe('v1');
@@ -192,14 +312,18 @@ describe('daemon companion server', () => {
 
     const setupResponse = await fetch(`${baseUrl}/companion/v1/admin/setup`, { method: 'POST' });
     expect(setupResponse.status).toBe(201);
-    const setup = await readJson(setupResponse) as { pairing: { code: string }; links: Array<{ baseUrl: string; setupUrl: string }>; warnings: string[] };
+    const setup = (await readJson(setupResponse)) as {
+      pairing: { code: string };
+      links: Array<{ baseUrl: string; setupUrl: string }>;
+      warnings: string[];
+    };
     expect(setup.pairing.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     expect(setup.links).toEqual([]);
     expect(setup.warnings[0]).toContain('loopback only');
 
     const pairingCodeResponse = await fetch(`${baseUrl}/companion/v1/admin/pairing-codes`, { method: 'POST' });
     expect(pairingCodeResponse.status).toBe(201);
-    const pairing = await readJson(pairingCodeResponse) as { code: string };
+    const pairing = (await readJson(pairingCodeResponse)) as { code: string };
     expect(pairing.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
     const pairResponse = await fetch(`${baseUrl}/v1/auth/pair`, {
@@ -208,11 +332,11 @@ describe('daemon companion server', () => {
       body: JSON.stringify({ code: pairing.code, deviceLabel: 'User iPhone' }),
     });
     expect(pairResponse.status).toBe(201);
-    const paired = await readJson(pairResponse) as { bearerToken: string; device: { id: string; deviceLabel: string } };
+    const paired = (await readJson(pairResponse)) as { bearerToken: string; device: { id: string; deviceLabel: string } };
     expect(paired.device.deviceLabel).toBe('User iPhone');
 
     const devicesResponse = await fetch(`${baseUrl}/companion/v1/admin/devices`);
-    const devices = await readJson(devicesResponse) as { devices: Array<{ id: string; deviceLabel: string }> };
+    const devices = (await readJson(devicesResponse)) as { devices: Array<{ id: string; deviceLabel: string }> };
     expect(devices.devices).toHaveLength(1);
 
     const conversationsResponse = await fetch(`${baseUrl}/companion/v1/conversations`, {
@@ -228,7 +352,7 @@ describe('daemon companion server', () => {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },
     });
     expect(attachmentsResponse.status).toBe(200);
-    const attachments = await readJson(attachmentsResponse) as { attachments: Array<{ id: string }> };
+    const attachments = (await readJson(attachmentsResponse)) as { attachments: Array<{ id: string }> };
     expect(attachments.attachments[0]?.id).toBe('att-1');
 
     const blockImageResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/blocks/block-1/image`, {
@@ -258,15 +382,21 @@ describe('daemon companion server', () => {
     expect(assetResponse.headers.get('content-type')).toBe('image/png');
     expect(await assetResponse.text()).toBe('preview-bytes');
 
-    const malformedAssetRevisionResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview?revision=2abc`, {
-      headers: { Authorization: `Bearer ${paired.bearerToken}` },
-    });
+    const malformedAssetRevisionResponse = await fetch(
+      `${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview?revision=2abc`,
+      {
+        headers: { Authorization: `Bearer ${paired.bearerToken}` },
+      },
+    );
     expect(malformedAssetRevisionResponse.status).toBe(400);
     expect(await readJson(malformedAssetRevisionResponse)).toEqual({ error: 'revision must be a positive integer when provided.' });
 
-    const unsafeAssetRevisionResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview?revision=9007199254740993`, {
-      headers: { Authorization: `Bearer ${paired.bearerToken}` },
-    });
+    const unsafeAssetRevisionResponse = await fetch(
+      `${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview?revision=9007199254740993`,
+      {
+        headers: { Authorization: `Bearer ${paired.bearerToken}` },
+      },
+    );
     expect(unsafeAssetRevisionResponse.status).toBe(400);
     expect(await readJson(unsafeAssetRevisionResponse)).toEqual({ error: 'revision must be a positive integer when provided.' });
 
@@ -321,13 +451,15 @@ describe('daemon companion server', () => {
     });
     expect(knowledgeSearchResponse.status).toBe(200);
     expect(await readJson(knowledgeSearchResponse)).toEqual({
-      results: [{
-        id: 'notes/release-checklist.md',
-        name: 'release-checklist.md',
-        title: 'release',
-        excerpt: 'Release checklist',
-        limit: 5,
-      }],
+      results: [
+        {
+          id: 'notes/release-checklist.md',
+          name: 'release-checklist.md',
+          title: 'release',
+          excerpt: 'Release checklist',
+          limit: 5,
+        },
+      ],
     });
 
     const malformedKnowledgeSearchResponse = await fetch(`${baseUrl}/companion/v1/knowledge/search?q=release&limit=5abc`, {
@@ -337,29 +469,36 @@ describe('daemon companion server', () => {
     });
     expect(malformedKnowledgeSearchResponse.status).toBe(200);
     expect(await readJson(malformedKnowledgeSearchResponse)).toEqual({
-      results: [{
-        id: 'notes/release-checklist.md',
-        name: 'release-checklist.md',
-        title: 'release',
-        excerpt: 'Release checklist',
-        limit: undefined,
-      }],
+      results: [
+        {
+          id: 'notes/release-checklist.md',
+          name: 'release-checklist.md',
+          title: 'release',
+          excerpt: 'Release checklist',
+          limit: undefined,
+        },
+      ],
     });
 
-    const cappedKnowledgeSearchResponse = await fetch(`${baseUrl}/companion/v1/knowledge/search?q=release&limit=${Number.MAX_SAFE_INTEGER}`, {
-      headers: {
-        Authorization: `Bearer ${paired.bearerToken}`,
+    const cappedKnowledgeSearchResponse = await fetch(
+      `${baseUrl}/companion/v1/knowledge/search?q=release&limit=${Number.MAX_SAFE_INTEGER}`,
+      {
+        headers: {
+          Authorization: `Bearer ${paired.bearerToken}`,
+        },
       },
-    });
+    );
     expect(cappedKnowledgeSearchResponse.status).toBe(200);
     expect(await readJson(cappedKnowledgeSearchResponse)).toEqual({
-      results: [{
-        id: 'notes/release-checklist.md',
-        name: 'release-checklist.md',
-        title: 'release',
-        excerpt: 'Release checklist',
-        limit: 50,
-      }],
+      results: [
+        {
+          id: 'notes/release-checklist.md',
+          name: 'release-checklist.md',
+          title: 'release',
+          excerpt: 'Release checklist',
+          limit: 50,
+        },
+      ],
     });
 
     const cappedRunLogResponse = await fetch(`${baseUrl}/companion/v1/runs/run-1/log?tail=5000`, {
@@ -436,12 +575,15 @@ describe('daemon companion server', () => {
       updatedAt: '2026-04-19T00:00:00.000Z',
     });
 
-    const knowledgeDeleteResponse = await fetch(`${baseUrl}/companion/v1/knowledge/entry?id=${encodeURIComponent('notes/renamed-note.md')}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${paired.bearerToken}`,
+    const knowledgeDeleteResponse = await fetch(
+      `${baseUrl}/companion/v1/knowledge/entry?id=${encodeURIComponent('notes/renamed-note.md')}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${paired.bearerToken}`,
+        },
       },
-    });
+    );
     expect(knowledgeDeleteResponse.status).toBe(200);
     expect(await readJson(knowledgeDeleteResponse)).toEqual({ ok: true });
 
@@ -451,7 +593,11 @@ describe('daemon companion server', () => {
         Authorization: `Bearer ${paired.bearerToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ fileName: 'capture.png', mimeType: 'image/png', dataBase64: Buffer.from('png-bytes', 'utf-8').toString('base64') }),
+      body: JSON.stringify({
+        fileName: 'capture.png',
+        mimeType: 'image/png',
+        dataBase64: Buffer.from('png-bytes', 'utf-8').toString('base64'),
+      }),
     });
     expect(knowledgeImageResponse.status).toBe(201);
     expect(await readJson(knowledgeImageResponse)).toEqual({
@@ -482,10 +628,12 @@ describe('daemon companion server', () => {
 
     const { socket, firstMessage } = await openSocket(`${baseUrl!.replace('http://', 'ws://')}/v1/socket`, paired.bearerToken);
     const ready = firstMessage as { type: string; device: { deviceLabel: string } };
-    expect(ready).toEqual(expect.objectContaining({
-      type: 'ready',
-      device: expect.objectContaining({ deviceLabel: 'User iPhone' }),
-    }));
+    expect(ready).toEqual(
+      expect.objectContaining({
+        type: 'ready',
+        device: expect.objectContaining({ deviceLabel: 'User iPhone' }),
+      }),
+    );
 
     socket.send(JSON.stringify({ id: '1', type: 'command', name: 'conversations.list' }));
     expect(await readSocketMessage(socket)).toEqual({
@@ -498,7 +646,14 @@ describe('daemon companion server', () => {
       },
     });
 
-    socket.send(JSON.stringify({ id: '1b', type: 'command', name: 'conversation.bootstrap', payload: { conversationId: 'conv-1', tailBlocks: 5000 } }));
+    socket.send(
+      JSON.stringify({
+        id: '1b',
+        type: 'command',
+        name: 'conversation.bootstrap',
+        payload: { conversationId: 'conv-1', tailBlocks: 5000 },
+      }),
+    );
     expect(await readSocketMessage(socket)).toEqual({
       id: '1b',
       type: 'response',
@@ -522,7 +677,15 @@ describe('daemon companion server', () => {
       event: { type: 'conversation_list_state', state: { sessions: [] } },
     });
 
-    socket.send(JSON.stringify({ id: '3', type: 'subscribe', topic: 'conversation', key: 'conv-1', payload: { surfaceId: 'ios-1', surfaceType: 'ios_native' } }));
+    socket.send(
+      JSON.stringify({
+        id: '3',
+        type: 'subscribe',
+        topic: 'conversation',
+        key: 'conv-1',
+        payload: { surfaceId: 'ios-1', surfaceType: 'ios_native' },
+      }),
+    );
     expect(await readSocketMessage(socket)).toEqual({
       id: '3',
       type: 'response',
@@ -570,7 +733,10 @@ describe('daemon companion server', () => {
     }
 
     const runtime = {
-      listConversations: async () => ({ sessions: [], ordering: { sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] } }),
+      listConversations: async () => ({
+        sessions: [],
+        ordering: { sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] },
+      }),
       updateConversationTabs: async () => ({ ok: true }),
       duplicateConversation: async () => ({ ok: true, conversationId: 'duplicate-1' }),
       listExecutionTargets: async () => ({ executionTargets: [] }),
@@ -578,10 +744,24 @@ describe('daemon companion server', () => {
       listSshTargets: async () => ({ hosts: [] }),
       saveSshTarget: async () => ({ hosts: [] }),
       deleteSshTarget: async () => ({ ok: true, deleted: true, targetId: 'ssh-1' }),
-      testSshTarget: async () => ({ ok: true, sshTarget: 'user@host', os: 'linux', arch: 'arm64', platformKey: 'linux-arm64', homeDirectory: '/home/user', tempDirectory: '/tmp', cacheDirectory: '/tmp/.cache', message: 'reachable' }),
+      testSshTarget: async () => ({
+        ok: true,
+        sshTarget: 'user@host',
+        os: 'linux',
+        arch: 'arm64',
+        platformKey: 'linux-arm64',
+        homeDirectory: '/home/user',
+        tempDirectory: '/tmp',
+        cacheDirectory: '/tmp/.cache',
+        message: 'reachable',
+      }),
       readRemoteDirectory: async () => ({ path: '/repo', entries: [] }),
       readConversationBootstrap: async (input: any) => ({ conversationId: input.conversationId, bootstrap: true }),
-      readConversationBlockImage: async () => ({ data: Buffer.from('image-block', 'utf-8'), mimeType: 'image/png', disposition: 'inline' }),
+      readConversationBlockImage: async () => ({
+        data: Buffer.from('image-block', 'utf-8'),
+        mimeType: 'image/png',
+        disposition: 'inline',
+      }),
       createConversation: async () => ({ conversationId: 'created-1' }),
       resumeConversation: async () => ({ conversationId: 'resumed-1' }),
       promptConversation: async (input: any) => ({ ok: true, conversationId: input.conversationId }),
@@ -592,9 +772,37 @@ describe('daemon companion server', () => {
       takeOverConversation: async () => ({ ok: true, surfaceId: 'surface-1' }),
       renameConversation: async () => ({ ok: true, title: 'Conversation' }),
       changeConversationCwd: async (input: any) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
-      readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
-      updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
-      createConversationCheckpoint: async () => ({ id: 'checkpoint-1', conversationId: 'conversation-1', title: 'Checkpoint', shortSha: 'abc1234', commitSha: 'abc1234def', subject: 'Checkpoint', fileCount: 0, linesAdded: 0, linesDeleted: 0, cwd: '/repo', authorName: 'Test User', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
+      readConversationModelPreferences: async () => ({
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'default',
+        hasExplicitServiceTier: false,
+      }),
+      updateConversationModelPreferences: async () => ({
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'default',
+        hasExplicitServiceTier: false,
+      }),
+      createConversationCheckpoint: async () => ({
+        id: 'checkpoint-1',
+        conversationId: 'conversation-1',
+        title: 'Checkpoint',
+        shortSha: 'abc1234',
+        commitSha: 'abc1234def',
+        subject: 'Checkpoint',
+        fileCount: 0,
+        linesAdded: 0,
+        linesDeleted: 0,
+        cwd: '/repo',
+        authorName: 'Test User',
+        committedAt: '2026-04-19T00:00:00.000Z',
+        createdAt: '2026-04-19T00:00:00.000Z',
+        updatedAt: '2026-04-19T00:00:00.000Z',
+        commentCount: 0,
+        files: [],
+        comments: [],
+      }),
       listConversationArtifacts: async () => ({ conversationId: 'conversation-1', artifacts: [] }),
       readConversationArtifact: async () => ({ conversationId: 'conversation-1', artifact: { id: 'artifact-1' } }),
       listConversationCheckpoints: async () => ({ conversationId: 'conversation-1', checkpoints: [] }),
@@ -608,12 +816,34 @@ describe('daemon companion server', () => {
       listKnowledgeEntries: async () => ({ root: '/vault', entries: [] }),
       searchKnowledge: async () => ({ results: [] }),
       readKnowledgeFile: async () => ({ id: 'notes/test.md', content: '# test', updatedAt: '2026-04-19T00:00:00.000Z' }),
-      writeKnowledgeFile: async () => ({ id: 'notes/test.md', kind: 'file', name: 'test.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
-      createKnowledgeFolder: async () => ({ id: 'notes/', kind: 'folder', name: 'notes', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
-      renameKnowledgeEntry: async () => ({ id: 'notes/renamed.md', kind: 'file', name: 'renamed.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      writeKnowledgeFile: async () => ({
+        id: 'notes/test.md',
+        kind: 'file',
+        name: 'test.md',
+        sizeBytes: 0,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      }),
+      createKnowledgeFolder: async () => ({
+        id: 'notes/',
+        kind: 'folder',
+        name: 'notes',
+        sizeBytes: 0,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      }),
+      renameKnowledgeEntry: async () => ({
+        id: 'notes/renamed.md',
+        kind: 'file',
+        name: 'renamed.md',
+        sizeBytes: 0,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      }),
       deleteKnowledgeEntry: async () => ({ ok: true }),
       createKnowledgeImageAsset: async () => ({ id: '_attachments/image.png', url: '/api/vault/asset?id=_attachments%2Fimage.png' }),
-      importKnowledge: async () => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: 'url', title: 'Shared link' }),
+      importKnowledge: async () => ({
+        note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' },
+        sourceKind: 'url',
+        title: 'Shared link',
+      }),
       listScheduledTasks: async () => ({ tasks: [] }),
       readScheduledTask: async () => ({ taskId: 'task-1', title: 'Task' }),
       readScheduledTaskLog: async () => ({ path: '/tmp/task-1.log', log: '' }),
@@ -643,7 +873,7 @@ describe('daemon companion server', () => {
 
       const helloResponse = await fetch(`${baseUrl}/companion/v1/hello`);
       expect(helloResponse.status).toBe(200);
-      const hello = await readJson(helloResponse) as { protocolVersion: string };
+      const hello = (await readJson(helloResponse)) as { protocolVersion: string };
       expect(hello.protocolVersion).toBe('v1');
     } finally {
       await new Promise<void>((resolve) => busyServer.close(() => resolve()));

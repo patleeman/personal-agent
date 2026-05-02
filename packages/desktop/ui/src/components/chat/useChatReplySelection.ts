@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react';
+import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
-import {
-  findSelectionReplyScopeElement,
-  findSelectionReplyScopeElements,
-  readSelectedTextWithinElement,
-} from './replySelection.js';
+import { findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement } from './replySelection.js';
 
 export interface ReplySelectionState {
   text: string;
@@ -131,103 +128,115 @@ export function useChatReplySelection({
     }, 140);
   }, [cancelReplySelectionClear, clearReplySelection]);
 
-  const resolveReplySelectionFromSelection = useCallback((scopeHint?: HTMLElement | null): { scopeElement: HTMLElement; selection: ReplySelectionState } | null => {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      return null;
-    }
-
-    const range = selection.getRangeAt(0);
-    const { startScope, endScope } = findSelectionReplyScopeElements(selection, range);
-    const commonScope = findSelectionReplyScopeElement(range.commonAncestorContainer);
-    const candidates = [scopeHint ?? null, startScope, endScope, commonScope, lastReplySelectionScopeRef.current]
-      .filter((scope): scope is HTMLElement => Boolean(scope))
-      .filter((scope, index, list) => list.indexOf(scope) === index);
-
-    const matches = candidates.filter((scope) => readSelectedTextWithinElement(scope, range).length > 0);
-    if (matches.length !== 1) {
-      return null;
-    }
-
-    const scopeElement = matches[0];
-    const text = readSelectedTextWithinElement(scopeElement, range);
-    if (!text) {
-      return null;
-    }
-
-    const messageIndex = parseReplySelectionMessageIndex(scopeElement.dataset.messageIndex);
-    if (messageIndex === null) {
-      return null;
-    }
-
-    return {
-      scopeElement,
-      selection: {
-        text,
-        messageIndex,
-        blockId: scopeElement.dataset.blockId?.trim() || undefined,
-      },
-    };
-  }, []);
-
-  const applyResolvedReplySelection = useCallback((resolvedSelection: { scopeElement: HTMLElement; selection: ReplySelectionState } | null) => {
-    if (!resolvedSelection) {
-      scheduleReplySelectionClear();
-      return;
-    }
-
-    cancelReplySelectionClear();
-    lastReplySelectionScopeRef.current = resolvedSelection.scopeElement;
-
-    setReplySelection((current) => {
-      if (
-        current
-        && current.text === resolvedSelection.selection.text
-        && current.messageIndex === resolvedSelection.selection.messageIndex
-        && current.blockId === resolvedSelection.selection.blockId
-      ) {
-        return current;
+  const resolveReplySelectionFromSelection = useCallback(
+    (scopeHint?: HTMLElement | null): { scopeElement: HTMLElement; selection: ReplySelectionState } | null => {
+      if (typeof window === 'undefined') {
+        return null;
       }
 
-      return resolvedSelection.selection;
-    });
-  }, [cancelReplySelectionClear, scheduleReplySelectionClear]);
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return null;
+      }
 
-  const syncReplySelectionFromSelection = useCallback((scopeHint?: HTMLElement | null) => {
-    applyResolvedReplySelection(resolveReplySelectionFromSelection(scopeHint));
-  }, [applyResolvedReplySelection, resolveReplySelectionFromSelection]);
+      const range = selection.getRangeAt(0);
+      const { startScope, endScope } = findSelectionReplyScopeElements(selection, range);
+      const commonScope = findSelectionReplyScopeElement(range.commonAncestorContainer);
+      const candidates = [scopeHint ?? null, startScope, endScope, commonScope, lastReplySelectionScopeRef.current]
+        .filter((scope): scope is HTMLElement => Boolean(scope))
+        .filter((scope, index, list) => list.indexOf(scope) === index);
 
-  const scheduleReplySelectionSync = useCallback((scopeElement?: HTMLElement | null) => {
-    if (typeof window === 'undefined' || !onReplyToSelection) {
-      clearScheduledReplySelectionSync();
+      const matches = candidates.filter((scope) => readSelectedTextWithinElement(scope, range).length > 0);
+      if (matches.length !== 1) {
+        return null;
+      }
+
+      const scopeElement = matches[0];
+      const text = readSelectedTextWithinElement(scopeElement, range);
+      if (!text) {
+        return null;
+      }
+
+      const messageIndex = parseReplySelectionMessageIndex(scopeElement.dataset.messageIndex);
+      if (messageIndex === null) {
+        return null;
+      }
+
+      return {
+        scopeElement,
+        selection: {
+          text,
+          messageIndex,
+          blockId: scopeElement.dataset.blockId?.trim() || undefined,
+        },
+      };
+    },
+    [],
+  );
+
+  const applyResolvedReplySelection = useCallback(
+    (resolvedSelection: { scopeElement: HTMLElement; selection: ReplySelectionState } | null) => {
+      if (!resolvedSelection) {
+        scheduleReplySelectionClear();
+        return;
+      }
+
       cancelReplySelectionClear();
-      clearReplySelection();
-      return;
-    }
+      lastReplySelectionScopeRef.current = resolvedSelection.scopeElement;
 
-    const sync = () => {
-      syncReplySelectionFromSelection(scopeElement);
-    };
+      setReplySelection((current) => {
+        if (
+          current &&
+          current.text === resolvedSelection.selection.text &&
+          current.messageIndex === resolvedSelection.selection.messageIndex &&
+          current.blockId === resolvedSelection.selection.blockId
+        ) {
+          return current;
+        }
 
-    clearScheduledReplySelectionSync();
+        return resolvedSelection.selection;
+      });
+    },
+    [cancelReplySelectionClear, scheduleReplySelectionClear],
+  );
 
-    replySelectionSyncFrameRef.current = window.requestAnimationFrame(() => {
-      replySelectionSyncFrameRef.current = null;
-      sync();
-    });
+  const syncReplySelectionFromSelection = useCallback(
+    (scopeHint?: HTMLElement | null) => {
+      applyResolvedReplySelection(resolveReplySelectionFromSelection(scopeHint));
+    },
+    [applyResolvedReplySelection, resolveReplySelectionFromSelection],
+  );
 
-    for (const delayMs of [40, 120, 240, 480]) {
-      const timeoutId = window.setTimeout(() => {
-        replySelectionSyncTimeoutRefs.current = replySelectionSyncTimeoutRefs.current.filter((currentId) => currentId !== timeoutId);
+  const scheduleReplySelectionSync = useCallback(
+    (scopeElement?: HTMLElement | null) => {
+      if (typeof window === 'undefined' || !onReplyToSelection) {
+        clearScheduledReplySelectionSync();
+        cancelReplySelectionClear();
+        clearReplySelection();
+        return;
+      }
+
+      const sync = () => {
+        syncReplySelectionFromSelection(scopeElement);
+      };
+
+      clearScheduledReplySelectionSync();
+
+      replySelectionSyncFrameRef.current = window.requestAnimationFrame(() => {
+        replySelectionSyncFrameRef.current = null;
         sync();
-      }, delayMs);
-      replySelectionSyncTimeoutRefs.current.push(timeoutId);
-    }
-  }, [cancelReplySelectionClear, clearReplySelection, clearScheduledReplySelectionSync, onReplyToSelection, syncReplySelectionFromSelection]);
+      });
+
+      for (const delayMs of [40, 120, 240, 480]) {
+        const timeoutId = window.setTimeout(() => {
+          replySelectionSyncTimeoutRefs.current = replySelectionSyncTimeoutRefs.current.filter((currentId) => currentId !== timeoutId);
+          sync();
+        }, delayMs);
+        replySelectionSyncTimeoutRefs.current.push(timeoutId);
+      }
+    },
+    [cancelReplySelectionClear, clearReplySelection, clearScheduledReplySelectionSync, onReplyToSelection, syncReplySelectionFromSelection],
+  );
 
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined' || !onReplyToSelection) {
@@ -285,8 +294,8 @@ export function useChatReplySelection({
 
       const element = target instanceof HTMLElement ? target : target.parentElement;
       if (
-        element?.closest('[data-selection-context-menu="true"]')
-        || element?.closest('[data-selection-reply-scope="assistant-message"]')
+        element?.closest('[data-selection-context-menu="true"]') ||
+        element?.closest('[data-selection-reply-scope="assistant-message"]')
       ) {
         return;
       }
@@ -366,39 +375,45 @@ export function useChatReplySelection({
     };
   }, [closeSelectionContextMenu, scrollContainerRef, selectionContextMenu]);
 
-  const handleReplySelection = useCallback(async (selectionOverride?: ReplySelectionState | null) => {
-    const activeSelection = selectionOverride ?? replySelection;
-    if (!activeSelection || !onReplyToSelection) {
-      return;
-    }
+  const handleReplySelection = useCallback(
+    async (selectionOverride?: ReplySelectionState | null) => {
+      const activeSelection = selectionOverride ?? replySelection;
+      if (!activeSelection || !onReplyToSelection) {
+        return;
+      }
 
-    closeSelectionContextMenu();
-    clearReplySelection();
-    clearWindowSelection();
-    await onReplyToSelection({
-      text: activeSelection.text,
-      messageIndex: activeSelection.messageIndex,
-      blockId: activeSelection.blockId,
-    });
-  }, [clearReplySelection, closeSelectionContextMenu, onReplyToSelection, replySelection]);
-
-  const copySelectedTranscriptText = useCallback(async (text: string | null | undefined) => {
-    const nextText = typeof text === 'string' ? text.trim() : '';
-
-    closeSelectionContextMenu();
-    if (!nextText || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      closeSelectionContextMenu();
       clearReplySelection();
       clearWindowSelection();
-      return;
-    }
+      await onReplyToSelection({
+        text: activeSelection.text,
+        messageIndex: activeSelection.messageIndex,
+        blockId: activeSelection.blockId,
+      });
+    },
+    [clearReplySelection, closeSelectionContextMenu, onReplyToSelection, replySelection],
+  );
 
-    try {
-      await navigator.clipboard.writeText(nextText);
-    } finally {
-      clearWindowSelection();
-      clearReplySelection();
-    }
-  }, [clearReplySelection, closeSelectionContextMenu]);
+  const copySelectedTranscriptText = useCallback(
+    async (text: string | null | undefined) => {
+      const nextText = typeof text === 'string' ? text.trim() : '';
+
+      closeSelectionContextMenu();
+      if (!nextText || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+        clearReplySelection();
+        clearWindowSelection();
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(nextText);
+      } finally {
+        clearWindowSelection();
+        clearReplySelection();
+      }
+    },
+    [clearReplySelection, closeSelectionContextMenu],
+  );
 
   const openDomSelectionContextMenu = useCallback((menuState: ReplySelectionContextMenuState) => {
     const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
@@ -406,69 +421,80 @@ export function useChatReplySelection({
     setSelectionContextMenu(constrainSelectionContextMenuPosition(menuState, { width: viewportWidth, height: viewportHeight }));
   }, []);
 
-  const runSelectionContextMenuAction = useCallback(async (
-    action: 'reply' | 'copy' | null,
-    menuState?: ReplySelectionContextMenuState | null,
-  ) => {
-    const activeMenuState = menuState ?? selectionContextMenu;
-    if (!action || !activeMenuState) {
-      closeSelectionContextMenu();
-      return;
-    }
-
-    switch (action) {
-      case 'reply':
-        await handleReplySelection(activeMenuState.replySelection);
+  const runSelectionContextMenuAction = useCallback(
+    async (action: 'reply' | 'copy' | null, menuState?: ReplySelectionContextMenuState | null) => {
+      const activeMenuState = menuState ?? selectionContextMenu;
+      if (!action || !activeMenuState) {
+        closeSelectionContextMenu();
         return;
-      case 'copy':
-        await copySelectedTranscriptText(activeMenuState.text);
+      }
+
+      switch (action) {
+        case 'reply':
+          await handleReplySelection(activeMenuState.replySelection);
+          return;
+        case 'copy':
+          await copySelectedTranscriptText(activeMenuState.text);
+          return;
+      }
+    },
+    [closeSelectionContextMenu, copySelectedTranscriptText, handleReplySelection, selectionContextMenu],
+  );
+
+  const handleTranscriptContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (typeof window === 'undefined') {
         return;
-    }
-  }, [closeSelectionContextMenu, copySelectedTranscriptText, handleReplySelection, selectionContextMenu]);
+      }
 
-  const handleTranscriptContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    if (typeof window === 'undefined') {
-      return;
-    }
+      const scopeHint = event.target instanceof Node ? findSelectionReplyScopeElement(event.target) : null;
+      const resolvedReplySelection = onReplyToSelection ? resolveReplySelectionFromSelection(scopeHint) : null;
+      if (onReplyToSelection) {
+        applyResolvedReplySelection(resolvedReplySelection);
+      }
 
-    const scopeHint = event.target instanceof Node ? findSelectionReplyScopeElement(event.target) : null;
-    const resolvedReplySelection = onReplyToSelection ? resolveReplySelectionFromSelection(scopeHint) : null;
-    if (onReplyToSelection) {
-      applyResolvedReplySelection(resolvedReplySelection);
-    }
+      const selectionText = resolvedReplySelection?.selection.text ?? window.getSelection()?.toString().trim() ?? '';
+      if (!selectionText) {
+        closeSelectionContextMenu();
+        return;
+      }
 
-    const selectionText = resolvedReplySelection?.selection.text ?? window.getSelection()?.toString().trim() ?? '';
-    if (!selectionText) {
-      closeSelectionContextMenu();
-      return;
-    }
+      event.preventDefault();
+      const menuState: ReplySelectionContextMenuState = {
+        x: event.clientX,
+        y: event.clientY,
+        text: selectionText,
+        replySelection: resolvedReplySelection?.selection ?? null,
+      };
+      const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
 
-    event.preventDefault();
-    const menuState: ReplySelectionContextMenuState = {
-      x: event.clientX,
-      y: event.clientY,
-      text: selectionText,
-      replySelection: resolvedReplySelection?.selection ?? null,
-    };
-    const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
+      if (desktopBridge?.showSelectionContextMenu) {
+        closeSelectionContextMenu();
+        void desktopBridge
+          .showSelectionContextMenu({
+            x: menuState.x,
+            y: menuState.y,
+            canReply: Boolean(menuState.replySelection),
+            canCopy: true,
+          })
+          .then(({ action }) => runSelectionContextMenuAction(action, menuState))
+          .catch(() => {
+            openDomSelectionContextMenu(menuState);
+          });
+        return;
+      }
 
-    if (desktopBridge?.showSelectionContextMenu) {
-      closeSelectionContextMenu();
-      void desktopBridge.showSelectionContextMenu({
-        x: menuState.x,
-        y: menuState.y,
-        canReply: Boolean(menuState.replySelection),
-        canCopy: true,
-      })
-        .then(({ action }) => runSelectionContextMenuAction(action, menuState))
-        .catch(() => {
-          openDomSelectionContextMenu(menuState);
-        });
-      return;
-    }
-
-    openDomSelectionContextMenu(menuState);
-  }, [applyResolvedReplySelection, closeSelectionContextMenu, onReplyToSelection, openDomSelectionContextMenu, resolveReplySelectionFromSelection, runSelectionContextMenuAction]);
+      openDomSelectionContextMenu(menuState);
+    },
+    [
+      applyResolvedReplySelection,
+      closeSelectionContextMenu,
+      onReplyToSelection,
+      openDomSelectionContextMenu,
+      resolveReplySelectionFromSelection,
+      runSelectionContextMenuAction,
+    ],
+  );
 
   return {
     replySelection,

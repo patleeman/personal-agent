@@ -69,4 +69,3 @@ export function clearWarmLiveSessionState(sessionId: string | null | undefined):
 
   emitWarmLiveSessionStateChanged(normalizedSessionId);
 }
-

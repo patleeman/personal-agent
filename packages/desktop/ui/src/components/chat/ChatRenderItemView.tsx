@@ -1,14 +1,15 @@
 import type { CSSProperties } from 'react';
-import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
+
 import type { MessageBlock } from '../../shared/types';
-import type { ChatRenderItem } from './transcriptItems.js';
-import { shouldAutoOpenConversationBlock } from './toolPresentation.js';
-import { ErrorBlock, SubagentBlock, ThinkingBlock, TraceClusterBlock } from './TraceBlocks.js';
+import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
+import type { ChatViewLayout } from './chatViewTypes.js';
 import { ImageBlock, type InspectableImage } from './ImageMessageBlocks.js';
 import { AssistantMessage, ContextMessage, SummaryMessage, UserMessage } from './MessageBlocks.js';
-import { ToolBlock } from './ToolBlock.js';
-import type { ChatViewLayout } from './chatViewTypes.js';
 import type { ReplySelectionGestureHandler } from './replySelection.js';
+import { ToolBlock } from './ToolBlock.js';
+import { shouldAutoOpenConversationBlock } from './toolPresentation.js';
+import { ErrorBlock, SubagentBlock, ThinkingBlock, TraceClusterBlock } from './TraceBlocks.js';
+import type { ChatRenderItem } from './transcriptItems.js';
 
 export function ChatRenderItemView({
   item,
@@ -158,7 +159,15 @@ export function ChatRenderItemView({
           />
         );
       case 'summary':
-        return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? onSelectionGesture : undefined} />;
+        return (
+          <SummaryMessage
+            block={block}
+            messageIndex={absoluteIndex}
+            onOpenFilePath={onOpenFilePath}
+            onOpenCheckpoint={onOpenCheckpoint}
+            onSelectionGesture={onReplyToSelection ? onSelectionGesture : undefined}
+          />
+        );
       case 'thinking':
         return <ThinkingBlock block={block} autoOpen={autoOpen} />;
       case 'tool_use':
@@ -183,7 +192,14 @@ export function ChatRenderItemView({
       case 'subagent':
         return <SubagentBlock block={block} />;
       case 'image':
-        return <ImageBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} onInspectImage={onInspectImage} />;
+        return (
+          <ImageBlock
+            block={block}
+            onHydrateMessage={onHydrateMessage}
+            hydratingMessageBlockIds={hydratingMessageBlockIds}
+            onInspectImage={onInspectImage}
+          />
+        );
       case 'error':
         return (
           <ErrorBlock

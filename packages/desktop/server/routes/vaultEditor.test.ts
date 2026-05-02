@@ -1,42 +1,40 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
+
 import { buildVaultImageUploadFileName, decodeVaultImageDataUrl, registerVaultEditorRoutes } from './vaultEditor.js';
 
 const vaultRootMock = vi.hoisted(() => ({ value: '' }));
 
 vi.mock('@personal-agent/core', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@personal-agent/core')>(),
+  ...(await importOriginal<typeof import('@personal-agent/core')>()),
   getVaultRoot: () => vaultRootMock.value,
 }));
 
 describe('vaultEditor image uploads', () => {
   it('rejects malformed image data urls before writing attachments', () => {
-    expect(() => decodeVaultImageDataUrl('data:image/png;base64,not-valid-base64!'))
-      .toThrow('dataUrl must contain valid base64 image data');
+    expect(() => decodeVaultImageDataUrl('data:image/png;base64,not-valid-base64!')).toThrow(
+      'dataUrl must contain valid base64 image data',
+    );
   });
 
   it('rejects non-base64 image data urls before writing attachments', () => {
-    expect(() => decodeVaultImageDataUrl('data:image/png,aGVsbG8='))
-      .toThrow('dataUrl must be a base64 data: URL');
+    expect(() => decodeVaultImageDataUrl('data:image/png,aGVsbG8=')).toThrow('dataUrl must be a base64 data: URL');
   });
 
   it('rejects non-image data urls before writing attachments', () => {
-    expect(() => decodeVaultImageDataUrl('data:text/plain;base64,aGVsbG8='))
-      .toThrow('dataUrl must be an image data: URL');
+    expect(() => decodeVaultImageDataUrl('data:text/plain;base64,aGVsbG8=')).toThrow('dataUrl must be an image data: URL');
   });
 
   it('uses the image data url extension when upload filenames have non-image extensions', () => {
-    expect(buildVaultImageUploadFileName('note.txt', 'data:image/png;base64,aGVsbG8=', 123))
-      .toBe('123-note.png');
+    expect(buildVaultImageUploadFileName('note.txt', 'data:image/png;base64,aGVsbG8=', 123)).toBe('123-note.png');
   });
 
   it('accepts image data urls with uppercase scheme and mime casing', () => {
-    expect(decodeVaultImageDataUrl('DATA:IMAGE/PNG;BASE64,aGVsbG8=').toString('utf-8'))
-      .toBe('hello');
-    expect(buildVaultImageUploadFileName('note.txt', 'DATA:IMAGE/PNG;BASE64,aGVsbG8=', 123))
-      .toBe('123-note.png');
+    expect(decodeVaultImageDataUrl('DATA:IMAGE/PNG;BASE64,aGVsbG8=').toString('utf-8')).toBe('hello');
+    expect(buildVaultImageUploadFileName('note.txt', 'DATA:IMAGE/PNG;BASE64,aGVsbG8=', 123)).toBe('123-note.png');
   });
 
   it('accepts uppercase data urls through the image upload route', () => {
@@ -53,14 +51,19 @@ describe('vaultEditor image uploads', () => {
     const json = vi.fn();
     const status = vi.fn(() => ({ json }));
 
-    postHandlers.get('/api/vault/image')?.({
-      body: { filename: 'note.txt', dataUrl: 'DATA:IMAGE/PNG;BASE64,aGVsbG8=' },
-    }, { json, status });
+    postHandlers.get('/api/vault/image')?.(
+      {
+        body: { filename: 'note.txt', dataUrl: 'DATA:IMAGE/PNG;BASE64,aGVsbG8=' },
+      },
+      { json, status },
+    );
 
     expect(status).not.toHaveBeenCalled();
-    expect(json).toHaveBeenCalledWith(expect.objectContaining({
-      id: expect.stringMatching(/^_attachments\/\d+-note\.png$/),
-    }));
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.stringMatching(/^_attachments\/\d+-note\.png$/),
+      }),
+    );
   });
 
   it('returns a client error for malformed image upload data urls', () => {
@@ -77,9 +80,12 @@ describe('vaultEditor image uploads', () => {
     const json = vi.fn();
     const status = vi.fn(() => ({ json }));
 
-    postHandlers.get('/api/vault/image')?.({
-      body: { filename: 'note.png', dataUrl: 'data:image/png;base64,not-valid-base64!' },
-    }, { json, status });
+    postHandlers.get('/api/vault/image')?.(
+      {
+        body: { filename: 'note.png', dataUrl: 'data:image/png;base64,not-valid-base64!' },
+      },
+      { json, status },
+    );
 
     expect(status).toHaveBeenCalledWith(400);
     expect(json).toHaveBeenCalledWith({ error: 'dataUrl must contain valid base64 image data' });
@@ -99,15 +105,18 @@ describe('vaultEditor image uploads', () => {
     const json = vi.fn();
     const status = vi.fn(() => ({ json }));
 
-    await postHandlers.get('/api/vault/share-import')?.({
-      body: {
-        kind: 'image',
-        title: 'Bad Screenshot',
-        mimeType: 'image/png',
-        fileName: 'screenshot.png',
-        dataBase64: 'not-valid-base64!',
+    await postHandlers.get('/api/vault/share-import')?.(
+      {
+        body: {
+          kind: 'image',
+          title: 'Bad Screenshot',
+          mimeType: 'image/png',
+          fileName: 'screenshot.png',
+          dataBase64: 'not-valid-base64!',
+        },
       },
-    }, { json, status });
+      { json, status },
+    );
 
     expect(status).toHaveBeenCalledWith(400);
     expect(json).toHaveBeenCalledWith({ error: 'Shared image data must be valid base64.' });
@@ -160,7 +169,13 @@ describe('vaultEditor search routes', () => {
     });
     const json = vi.fn();
 
-    getHandlers.get('/api/vault/note-search')?.({ query: { q: 'needle', limit: String(Number.MAX_SAFE_INTEGER + 1) } }, { json, status: vi.fn() });
+    getHandlers.get('/api/vault/note-search')?.(
+      { query: { q: 'needle', limit: String(Number.MAX_SAFE_INTEGER + 1) } },
+      {
+        json,
+        status: vi.fn(),
+      },
+    );
 
     expect(json.mock.calls[0]?.[0].results).toHaveLength(20);
   });

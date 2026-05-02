@@ -21,10 +21,7 @@ describe('api.memory', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { api } = await import('./api.js');
-    const [first, second] = await Promise.all([
-      api.memory(),
-      api.memory(),
-    ]);
+    const [first, second] = await Promise.all([api.memory(), api.memory()]);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(first).toEqual({ skills: [], memoryDocs: [] });
@@ -36,10 +33,7 @@ describe('api.memory', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { api } = await import('./api.js');
-    await Promise.all([
-      api.memory({ profile: 'assistant' }),
-      api.memory({ profile: 'shared' }),
-    ]);
+    await Promise.all([api.memory({ profile: 'assistant' }), api.memory({ profile: 'shared' })]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/memory?viewProfile=assistant');

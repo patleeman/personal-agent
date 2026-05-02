@@ -1,14 +1,16 @@
-import { Type } from '@sinclair/typebox';
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { isAbsolute, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { isAbsolute, relative, resolve } from 'node:path';
+
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
+  type ConversationCommitCheckpointFile,
+  type ConversationCommitCheckpointFileStatus,
   getConversationCommitCheckpoint,
   listConversationCommitCheckpoints,
   saveConversationCommitCheckpoint,
-  type ConversationCommitCheckpointFile,
-  type ConversationCommitCheckpointFileStatus,
 } from '@personal-agent/core';
+import { Type } from '@sinclair/typebox';
+
 import { invalidateAppTopics } from '../shared/appEvents.js';
 
 const CHECKPOINT_ACTION_VALUES = ['save', 'get', 'list'] as const;
@@ -18,7 +20,11 @@ const CheckpointToolParams = Type.Object({
   action: Type.Union(CHECKPOINT_ACTION_VALUES.map((value) => Type.Literal(value))),
   checkpointId: Type.Optional(Type.String({ description: 'Stable checkpoint id. Defaults to the created commit SHA.' })),
   message: Type.Optional(Type.String({ description: 'Commit message for the checkpoint. Required when action=save.' })),
-  paths: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { description: 'Targeted file or directory paths to include in the checkpoint commit. Required when action=save.' })),
+  paths: Type.Optional(
+    Type.Array(Type.String({ minLength: 1 }), {
+      description: 'Targeted file or directory paths to include in the checkpoint commit. Required when action=save.',
+    }),
+  ),
   open: Type.Optional(Type.Boolean({ description: 'Whether the review modal should open after saving. Defaults to true.' })),
 });
 
@@ -59,9 +65,7 @@ function readPathInputs(cwd: string, values: string[] | undefined): string[] {
       continue;
     }
 
-    const relativePath = isAbsolute(trimmed)
-      ? relative(cwd, resolve(trimmed))
-      : trimmed.replace(/^\.\//, '');
+    const relativePath = isAbsolute(trimmed) ? relative(cwd, resolve(trimmed)) : trimmed.replace(/^\.\//, '');
     const normalized = relativePath.replace(/\\/g, '/').trim();
 
     if (!normalized || normalized.startsWith('..')) {
@@ -178,11 +182,8 @@ function parseDiffSections(rawPatch: string): ConversationCommitCheckpointFile[]
     const nextPath = stripGitDiffPrefix(match[2] ?? '', 'b/');
     let path = nextPath === '/dev/null' ? originalPath : nextPath;
     let previousPath: string | undefined;
-    let status: ConversationCommitCheckpointFileStatus = originalPath === '/dev/null'
-      ? 'added'
-      : nextPath === '/dev/null'
-        ? 'deleted'
-        : 'modified';
+    let status: ConversationCommitCheckpointFileStatus =
+      originalPath === '/dev/null' ? 'added' : nextPath === '/dev/null' ? 'deleted' : 'modified';
     let additions = 0;
     let deletions = 0;
 
@@ -244,7 +245,10 @@ function formatCheckpointList(conversationId: string, checkpoints: ReturnType<ty
 
   return [
     `Commit checkpoints for conversation ${conversationId}:`,
-    ...checkpoints.map((checkpoint) => `- ${checkpoint.shortSha} ${checkpoint.subject} (${checkpoint.fileCount} files, +${checkpoint.linesAdded} -${checkpoint.linesDeleted})`),
+    ...checkpoints.map(
+      (checkpoint) =>
+        `- ${checkpoint.shortSha} ${checkpoint.subject} (${checkpoint.fileCount} files, +${checkpoint.linesAdded} -${checkpoint.linesDeleted})`,
+    ),
   ].join('\n');
 }
 
@@ -260,11 +264,7 @@ function formatCheckpoint(record: NonNullable<ReturnType<typeof getConversationC
   ].join('\n');
 }
 
-function createCheckpointCommit(options: {
-  cwd: string;
-  message: string;
-  paths: string[];
-}): {
+function createCheckpointCommit(options: { cwd: string; message: string; paths: string[] }): {
   metadata: ParsedCommitMetadata;
   files: ConversationCommitCheckpointFile[];
   rawPatch: string;
@@ -288,8 +288,14 @@ function createCheckpointCommit(options: {
 
   runGit(options.cwd, ['commit', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
   const commitSha = runGit(options.cwd, ['rev-parse', 'HEAD']).trim();
-  const metadata = parseCommitMetadata(runGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]));
-  const rawPatch = runGit(options.cwd, ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha], { allowEmptyStdout: true });
+  const metadata = parseCommitMetadata(
+    runGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]),
+  );
+  const rawPatch = runGit(
+    options.cwd,
+    ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha],
+    { allowEmptyStdout: true },
+  );
   const files = parseDiffSections(rawPatch);
 
   return {
@@ -397,10 +403,12 @@ export function createCheckpointAgentExtension(options: {
 
             invalidateAppTopics('checkpoints', 'sessions');
             return {
-              content: [{
-                type: 'text' as const,
-                text: `Saved checkpoint ${record.shortSha} ${record.subject} (${record.fileCount} files, +${record.linesAdded} -${record.linesDeleted}).`,
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Saved checkpoint ${record.shortSha} ${record.subject} (${record.fileCount} files, +${record.linesAdded} -${record.linesDeleted}).`,
+                },
+              ],
               details: {
                 action: 'save',
                 conversationId,

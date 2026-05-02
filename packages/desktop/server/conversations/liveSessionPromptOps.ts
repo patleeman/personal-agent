@@ -1,6 +1,7 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import { getAssistantErrorDisplayMessage } from './sessions.js';
+
 import type { PromptImageAttachment } from './liveSessionQueue.js';
+import { getAssistantErrorDisplayMessage } from './sessions.js';
 
 export interface LiveSessionPromptHost {
   sessionId: string;
@@ -13,17 +14,16 @@ export function isLikelyUnsupportedImageInputError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.toLowerCase();
 
-  const mentionsImageInput = normalized.includes('image')
-    || normalized.includes('vision')
-    || normalized.includes('multimodal');
+  const mentionsImageInput = normalized.includes('image') || normalized.includes('vision') || normalized.includes('multimodal');
 
-  const indicatesUnsupported = normalized.includes('not support')
-    || normalized.includes('unsupported')
-    || normalized.includes('not enabled')
-    || normalized.includes('text-only')
-    || normalized.includes('text only')
-    || normalized.includes('invalid image')
-    || normalized.includes('image input');
+  const indicatesUnsupported =
+    normalized.includes('not support') ||
+    normalized.includes('unsupported') ||
+    normalized.includes('not enabled') ||
+    normalized.includes('text-only') ||
+    normalized.includes('text only') ||
+    normalized.includes('invalid image') ||
+    normalized.includes('image input');
 
   return mentionsImageInput && indicatesUnsupported;
 }
@@ -78,7 +78,12 @@ export async function submitPromptOnLiveEntry<TEntry extends LiveSessionPromptHo
   behavior: LiveSessionPromptBehavior,
   images: PromptImageAttachment[] | undefined,
   callbacks: {
-    runPromptOnLiveEntry: (entry: TEntry, text: string, behavior: LiveSessionPromptBehavior, images?: PromptImageAttachment[]) => Promise<void>;
+    runPromptOnLiveEntry: (
+      entry: TEntry,
+      text: string,
+      behavior: LiveSessionPromptBehavior,
+      images?: PromptImageAttachment[],
+    ) => Promise<void>;
   },
 ): Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }> {
   if (behavior === 'steer' || behavior === 'followUp') {

@@ -1,18 +1,19 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { dirname, isAbsolute, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
+import { listUnifiedSkillNodeDirs } from './nodes.js';
 import {
   getDurableAgentFilePath,
-  getDurableProfilesDir as getCanonicalDurableProfilesDir,
   getDurableProfileDir,
   getDurableProfileModelsFilePath,
+  getDurableProfilesDir as getCanonicalDurableProfilesDir,
   getDurableProfileSettingsFilePath,
   getLocalProfileDir as getCanonicalLocalProfileDir,
   getVaultRoot,
 } from './runtime/paths.js';
-import { listUnifiedSkillNodeDirs } from './nodes.js';
-import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
-import { homedir } from 'os';
-import { dirname, isAbsolute, join, resolve } from 'path';
-import { fileURLToPath } from 'url';
 import { renderSystemPromptTemplate } from './system-prompt-template.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -170,12 +171,14 @@ function writeSettingsObject(settingsPath: string, settings: Record<string, unkn
 }
 
 function isRemotePackageSource(value: string): boolean {
-  return value.startsWith('npm:')
-    || value.startsWith('git:')
-    || value.startsWith('https://')
-    || value.startsWith('http://')
-    || value.startsWith('ssh://')
-    || value.startsWith('git://');
+  return (
+    value.startsWith('npm:') ||
+    value.startsWith('git:') ||
+    value.startsWith('https://') ||
+    value.startsWith('http://') ||
+    value.startsWith('ssh://') ||
+    value.startsWith('git://')
+  );
 }
 
 function expandHomePath(value: string): string {
@@ -191,13 +194,15 @@ function expandHomePath(value: string): string {
 }
 
 function looksLikeExplicitLocalPath(value: string): boolean {
-  return value === '.'
-    || value === '..'
-    || value.startsWith('./')
-    || value.startsWith('../')
-    || value.startsWith('~/')
-    || value === '~'
-    || value.startsWith('/');
+  return (
+    value === '.' ||
+    value === '..' ||
+    value.startsWith('./') ||
+    value.startsWith('../') ||
+    value.startsWith('~/') ||
+    value === '~' ||
+    value.startsWith('/')
+  );
 }
 
 function normalizePackageSource(value: string, baseDir: string): string {
@@ -343,51 +348,49 @@ export function readPackageSourceTargetState(
   const profileName = typeof profileNameOrOptions === 'string' ? profileNameOrOptions : undefined;
   const options = typeof profileNameOrOptions === 'string' ? maybeOptions : (profileNameOrOptions ?? maybeOptions);
 
-  const settingsPath = target === 'local'
-    ? resolveLocalProfileSettingsFilePath(options)
-    : resolveProfileSettingsFilePath(profileName ?? 'shared', options);
+  const settingsPath =
+    target === 'local' ? resolveLocalProfileSettingsFilePath(options) : resolveProfileSettingsFilePath(profileName ?? 'shared', options);
 
   return {
     target,
     settingsPath,
-    packages: target === 'local'
-      ? readConfiguredPackageSources(settingsPath)
-      : readWritableProfilePackageEntries(profileName ?? 'shared', options)
-        .map((entry) => {
-          if (typeof entry === 'string') {
-            return {
-              source: entry,
-              filtered: false,
-            } satisfies ConfiguredPackageSource;
-          }
+    packages:
+      target === 'local'
+        ? readConfiguredPackageSources(settingsPath)
+        : readWritableProfilePackageEntries(profileName ?? 'shared', options)
+            .map((entry) => {
+              if (typeof entry === 'string') {
+                return {
+                  source: entry,
+                  filtered: false,
+                } satisfies ConfiguredPackageSource;
+              }
 
-          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-            return null;
-          }
+              if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                return null;
+              }
 
-          const source = extractPackageSource(entry);
-          if (!source) {
-            return null;
-          }
+              const source = extractPackageSource(entry);
+              if (!source) {
+                return null;
+              }
 
-          return {
-            source,
-            filtered: true,
-          } satisfies ConfiguredPackageSource;
-        })
-        .filter((entry): entry is ConfiguredPackageSource => entry !== null),
+              return {
+                source,
+                filtered: true,
+              } satisfies ConfiguredPackageSource;
+            })
+            .filter((entry): entry is ConfiguredPackageSource => entry !== null),
   };
 }
 
 export function installPackageSource(options: InstallPackageSourceOptions): InstallPackageSourceResult {
   const profileName = options.profileName ?? 'shared';
-  const settingsPath = options.target === 'local'
-    ? resolveLocalProfileSettingsFilePath(options)
-    : resolveProfileSettingsFilePath(profileName, options);
+  const settingsPath =
+    options.target === 'local' ? resolveLocalProfileSettingsFilePath(options) : resolveProfileSettingsFilePath(profileName, options);
   const normalizedSource = normalizePackageSource(options.source, options.sourceBaseDir ?? process.cwd());
-  const configuredPackages = options.target === 'local'
-    ? readConfiguredPackageEntries(settingsPath)
-    : readWritableProfilePackageEntries(profileName, options);
+  const configuredPackages =
+    options.target === 'local' ? readConfiguredPackageEntries(settingsPath) : readWritableProfilePackageEntries(profileName, options);
   const settingsDir = dirname(settingsPath);
   const alreadyPresent = configuredPackages.some((entry) => {
     const source = extractPackageSource(entry);
@@ -408,9 +411,7 @@ export function installPackageSource(options: InstallPackageSourceOptions): Inst
     };
   }
 
-  const settings = options.target === 'local'
-    ? readSettingsObject(settingsPath)
-    : readWritableProfileSettingsObject(profileName, options);
+  const settings = options.target === 'local' ? readSettingsObject(settingsPath) : readWritableProfileSettingsObject(profileName, options);
   settings.packages = [...configuredPackages, normalizedSource];
   writeSettingsObject(settingsPath, settings);
 
@@ -476,15 +477,18 @@ function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string
 }
 
 function resolveConfiguredInstructionFiles(): string[] {
-  return dedupe(readMachineInstructionFiles().flatMap((path) => {
-    const file = existingFile(path);
-    return file ? [file] : [];
-  }));
+  return dedupe(
+    readMachineInstructionFiles().flatMap((path) => {
+      const file = existingFile(path);
+      return file ? [file] : [];
+    }),
+  );
 }
 
 function collectConfiguredSkillDirs(rootDir: string): string[] {
-  const directSkillFiles = [existingFile(join(rootDir, 'SKILL.md')), existingFile(join(rootDir, 'INDEX.md'))]
-    .filter((value): value is string => value !== undefined);
+  const directSkillFiles = [existingFile(join(rootDir, 'SKILL.md')), existingFile(join(rootDir, 'INDEX.md'))].filter(
+    (value): value is string => value !== undefined,
+  );
   if (directSkillFiles.length > 0) {
     return [rootDir];
   }
@@ -501,10 +505,12 @@ function collectConfiguredSkillDirs(rootDir: string): string[] {
 }
 
 function resolveConfiguredSkillDirs(): string[] {
-  return dedupe(readMachineSkillDirs().flatMap((path) => {
-    const dir = existingDir(path);
-    return dir ? collectConfiguredSkillDirs(dir) : [];
-  }));
+  return dedupe(
+    readMachineSkillDirs().flatMap((path) => {
+      const dir = existingDir(path);
+      return dir ? collectConfiguredSkillDirs(dir) : [];
+    }),
+  );
 }
 
 function isExtensionEntrypointFile(name: string): boolean {
@@ -584,8 +590,7 @@ function discoverFilesWithExtensions(rootDir: string, extensions: string[]): str
 function validateProfileName(profileName: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(profileName)) {
     throw new Error(
-      `Invalid profile name "${profileName}". ` +
-      'Profile names may only include letters, numbers, dashes, and underscores.',
+      `Invalid profile name "${profileName}". ` + 'Profile names may only include letters, numbers, dashes, and underscores.',
     );
   }
 }
@@ -621,10 +626,7 @@ function resolveDurableModelsFiles(_profileName: string, options: ResolveProfile
   return dedupe(output);
 }
 
-export function resolveResourceProfile(
-  name: string,
-  options: ResolveProfileOptions = {},
-): ResolvedResourceProfile {
+export function resolveResourceProfile(name: string, options: ResolveProfileOptions = {}): ResolvedResourceProfile {
   validateProfileName(name || 'shared');
   const profileName = 'shared';
 
@@ -650,12 +652,12 @@ export function resolveResourceProfile(
   }
 
   if (
-    durableAgentFiles.length > 0
-    || durableSettingsFiles.length > 0
-    || durableModelsFiles.length > 0
-    || durableSkillDirs.length > 0
-    || existsSync(getProfileDir(profileName, options))
-    || profileName === 'shared'
+    durableAgentFiles.length > 0 ||
+    durableSettingsFiles.length > 0 ||
+    durableModelsFiles.length > 0 ||
+    durableSkillDirs.length > 0 ||
+    existsSync(getProfileDir(profileName, options)) ||
+    profileName === 'shared'
   ) {
     layers.push({ name: 'durable', agentDir: vaultRoot });
   }
@@ -665,9 +667,7 @@ export function resolveResourceProfile(
   }
 
   if (layers.length === 0) {
-    throw new Error(
-      `Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${vaultRoot}`,
-    );
+    throw new Error(`Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${vaultRoot}`);
   }
 
   const localLayers = layers.filter((layer) => layer.name === 'local');
@@ -676,18 +676,10 @@ export function resolveResourceProfile(
     .map((layer) => existingFile(join(layer.agentDir, 'SYSTEM.md')))
     .find((file): file is string => file !== undefined);
 
-  const extensionDirs = dedupe([
-    ...collectLayerDirs(localLayers, 'extensions'),
-  ]);
-  const skillDirs = dedupe([
-    ...durableSkillDirs,
-    ...configuredSkillDirs,
-    ...collectLayerDirs(localLayers, 'skills'),
-  ]);
+  const extensionDirs = dedupe([...collectLayerDirs(localLayers, 'extensions')]);
+  const skillDirs = dedupe([...durableSkillDirs, ...configuredSkillDirs, ...collectLayerDirs(localLayers, 'skills')]);
   const promptDirs = collectLayerDirs(localLayers, 'prompts');
-  const themeDirs = dedupe([
-    ...collectLayerDirs(localLayers, 'themes'),
-  ]);
+  const themeDirs = dedupe([...collectLayerDirs(localLayers, 'themes')]);
 
   const extensionEntries = dedupe(extensionDirs.flatMap((dir) => discoverExtensionEntries(dir)));
   const promptEntries = dedupe(promptDirs.flatMap((dir) => discoverFilesWithExtensions(dir, ['.md'])));
@@ -712,7 +704,10 @@ export function resolveResourceProfile(
       ...configuredInstructionFiles,
       ...collectLayerFiles(localLayers, 'AGENTS.md'),
     ]),
-    appendSystemFiles: collectLayerFiles(layers.filter((layer) => layer.name !== 'durable'), 'APPEND_SYSTEM.md'),
+    appendSystemFiles: collectLayerFiles(
+      layers.filter((layer) => layer.name !== 'durable'),
+      'APPEND_SYSTEM.md',
+    ),
     systemPromptFile,
     settingsFiles: dedupe([
       ...collectLayerFiles(repoDefaultsAgentDir ? [{ name: 'defaults', agentDir: repoDefaultsAgentDir }] : [], 'settings.json'),
@@ -736,7 +731,10 @@ export function mergeJsonFiles(paths: string[]): Record<string, unknown> {
 }
 
 function combineMarkdownChunks(chunks: string[], separator = '\n\n---\n\n'): string {
-  return chunks.map((chunk) => chunk.trim()).filter((text) => text.length > 0).join(separator);
+  return chunks
+    .map((chunk) => chunk.trim())
+    .filter((text) => text.length > 0)
+    .join(separator);
 }
 
 function combineMarkdownFiles(paths: string[]): string {
@@ -800,10 +798,7 @@ export interface MaterializeProfileResult {
   writtenFiles: string[];
 }
 
-export function materializeProfileToAgentDir(
-  profile: ResolvedResourceProfile,
-  agentDir: string,
-): MaterializeProfileResult {
+export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, agentDir: string): MaterializeProfileResult {
   const targetDir = resolve(agentDir);
   mkdirSync(targetDir, { recursive: true });
 
@@ -823,9 +818,8 @@ export function materializeProfileToAgentDir(
     writtenFiles.push(targetPath);
   };
 
-  const materializedSettings = profile.settingsFiles.length > 0
-    ? mergeMaterializedSettings(profile.settingsFiles, join(targetDir, 'settings.json'))
-    : null;
+  const materializedSettings =
+    profile.settingsFiles.length > 0 ? mergeMaterializedSettings(profile.settingsFiles, join(targetDir, 'settings.json')) : null;
 
   if (materializedSettings) {
     writeOrRemove('settings.json', JSON.stringify(materializedSettings, null, 2));
@@ -855,9 +849,7 @@ export function materializeProfileToAgentDir(
   }
 
   const generatedAppendContent = renderSystemPromptTemplate();
-  const fileAppendContent = profile.appendSystemFiles.length > 0
-    ? combineMarkdownFiles(profile.appendSystemFiles)
-    : undefined;
+  const fileAppendContent = profile.appendSystemFiles.length > 0 ? combineMarkdownFiles(profile.appendSystemFiles) : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
     buildVaultRootAppendSystemChunk(profile.vaultRoot),
@@ -906,10 +898,7 @@ export function getExtensionDependencyDirs(profile: ResolvedResourceProfile): st
   return dedupe(dependencyDirs);
 }
 
-export function buildPiResourceArgs(
-  profile: ResolvedResourceProfile,
-  options: BuildPiArgsOptions = {},
-): string[] {
+export function buildPiResourceArgs(profile: ResolvedResourceProfile, options: BuildPiArgsOptions = {}): string[] {
   const args: string[] = [];
 
   if (options.includeNoDiscoveryFlags !== false) {
@@ -935,9 +924,4 @@ export function buildPiResourceArgs(
   return args;
 }
 
-export {
-  getPromptCatalogRoot,
-  readPromptCatalogEntry,
-  renderPromptCatalogTemplate,
-  requirePromptCatalogEntry,
-} from './prompt-catalog.js';
+export { getPromptCatalogRoot, readPromptCatalogEntry, renderPromptCatalogTemplate, requirePromptCatalogEntry } from './prompt-catalog.js';

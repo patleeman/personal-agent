@@ -2,13 +2,11 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  closeAutomationDbs,
-  createStoredAutomation,
-  setStoredAutomationThreadBinding,
-} from './automation-store.js';
+
+import { closeAutomationDbs, createStoredAutomation, setStoredAutomationThreadBinding } from './automation-store.js';
 import { ensureAutomationThread } from './automation-threads.js';
 
 const tempDirs: string[] = [];
@@ -51,8 +49,8 @@ describe('ensureAutomationThread', () => {
 
     session.appendMessage({ role: 'assistant', content: 'hello' } as never);
     const persisted = readFileSync(ensured.threadSessionFile as string, 'utf-8');
-    expect((persisted.match(/"type":"session"/g) ?? [])).toHaveLength(1);
-    expect((persisted.match(/"type":"session_info"/g) ?? [])).toHaveLength(1);
+    expect(persisted.match(/"type":"session"/g) ?? []).toHaveLength(1);
+    expect(persisted.match(/"type":"session_info"/g) ?? []).toHaveLength(1);
   });
 
   it('uses the neutral Chat workspace for dedicated automation threads without an explicit cwd', () => {

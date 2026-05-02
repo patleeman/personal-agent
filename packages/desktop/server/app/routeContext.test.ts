@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { createServerRouteContext } from './routeContext.js';
 
 describe('createServerRouteContext', () => {
@@ -28,9 +29,16 @@ describe('createServerRouteContext', () => {
       getSavedUiPreferences: () => ({ sidebarExpanded: true }),
       listTasksForCurrentProfile: () => [{ id: 'daily', title: 'Daily', prompt: 'Run daily', enabled: true, running: false }],
       listMemoryDocs: () => [{ id: 'desktop', title: 'Desktop', path: '/vault/notes/Desktop.md' }],
-      listSkillsForCurrentProfile: () => [{ name: 'agent-browser', source: 'shared', description: 'Browser automation', path: '/vault/_skills/agent-browser/SKILL.md' }],
+      listSkillsForCurrentProfile: () => [
+        {
+          name: 'agent-browser',
+          source: 'shared',
+          description: 'Browser automation',
+          path: '/vault/_skills/agent-browser/SKILL.md',
+        },
+      ],
       listProfileAgentItems: () => [{ source: 'shared', path: '/vault/_profiles/assistant/AGENTS.md' }],
-      withTemporaryProfileAgentDir: async <T,>(_profile: string, run: (agentDir: string) => Promise<T>) => run('/tmp/agent-dir'),
+      withTemporaryProfileAgentDir: async <T>(_profile: string, run: (agentDir: string) => Promise<T>) => run('/tmp/agent-dir'),
       getDurableRunSnapshot: async () => ({ runId: 'run-123' }),
     };
 

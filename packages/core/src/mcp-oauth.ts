@@ -1,29 +1,37 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { randomUUID, createHash } from 'node:crypto';
-import net, { type AddressInfo } from 'node:net';
+import { createHash, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import open from 'open';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import net, { type AddressInfo } from 'node:net';
+
+import type { OAuthDiscoveryState } from '@modelcontextprotocol/sdk/client/auth.js';
 import { OAuthClientProvider, UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
-  StreamableHTTPClientTransport,
-  StreamableHTTPError,
-} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import {
+  type AuthorizationServerMetadata,
   OAuthClientInformationFull,
   OAuthClientInformationFullSchema,
-  OAuthProtectedResourceMetadataSchema,
-  OAuthTokens,
-  OAuthTokensSchema,
-  type AuthorizationServerMetadata,
   type OAuthClientInformationMixed,
   type OAuthClientMetadata,
   type OAuthProtectedResourceMetadata,
+  OAuthProtectedResourceMetadataSchema,
+  OAuthTokens,
+  OAuthTokensSchema,
 } from '@modelcontextprotocol/sdk/shared/auth.js';
-import type { OAuthDiscoveryState } from '@modelcontextprotocol/sdk/client/auth.js';
-import { deleteConfigFile, readJsonFile, readTextFile, writeJsonFile, writeTextFile, checkLockfile, createLockfile, deleteLockfile } from './mcp-auth-storage.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import open from 'open';
+
+import {
+  checkLockfile,
+  createLockfile,
+  deleteConfigFile,
+  deleteLockfile,
+  readJsonFile,
+  readTextFile,
+  writeJsonFile,
+  writeTextFile,
+} from './mcp-auth-storage.js';
 
 export type McpTransportStrategy = 'sse-only' | 'http-only' | 'sse-first' | 'http-first';
 
@@ -170,10 +178,7 @@ async function discoverProtectedResourceMetadata(
   return undefined;
 }
 
-async function discoverOAuthServerInfo(
-  serverUrl: string,
-  headers: Record<string, string> = {},
-): Promise<McpRemoteDiscoveryResult> {
+async function discoverOAuthServerInfo(serverUrl: string, headers: Record<string, string> = {}): Promise<McpRemoteDiscoveryResult> {
   let wwwAuthenticateHeader: string | undefined;
   let wwwAuthenticateScope: string | undefined;
 
@@ -250,17 +255,19 @@ function handleWaitForAuth(
     writeText(res, 202, 'Authentication in progress');
   }, state.authTimeoutMs);
 
-  void state.authCompletedPromise.then(() => {
-    clearTimeout(timeout);
-    if (!res.writableEnded) {
-      writeText(res, 200, 'Authentication completed');
-    }
-  }).catch(() => {
-    clearTimeout(timeout);
-    if (!res.writableEnded) {
-      writeText(res, 500, 'Authentication failed');
-    }
-  });
+  void state.authCompletedPromise
+    .then(() => {
+      clearTimeout(timeout);
+      if (!res.writableEnded) {
+        writeText(res, 200, 'Authentication completed');
+      }
+    })
+    .catch(() => {
+      clearTimeout(timeout);
+      if (!res.writableEnded) {
+        writeText(res, 500, 'Authentication failed');
+      }
+    });
 }
 
 function setupOAuthCallbackServer(options: {
@@ -529,7 +536,12 @@ function shouldFallbackTransport(error: unknown): boolean {
     return error.code === 404 || error.code === 405;
   }
 
-  return error.message.includes('404') || error.message.includes('405') || error.message.includes('Not Found') || error.message.includes('Method Not Allowed');
+  return (
+    error.message.includes('404') ||
+    error.message.includes('405') ||
+    error.message.includes('Not Found') ||
+    error.message.includes('Method Not Allowed')
+  );
 }
 
 async function connectToRemoteServer(options: {
@@ -559,9 +571,11 @@ async function connectToRemoteServer(options: {
     await options.client.connect(transport);
     return transport;
   } catch (error) {
-    if ((options.transportStrategy === 'http-first' || options.transportStrategy === 'sse-first')
-      && shouldFallbackTransport(error)
-      && !recursionReasons.has('transport-fallback')) {
+    if (
+      (options.transportStrategy === 'http-first' || options.transportStrategy === 'sse-first') &&
+      shouldFallbackTransport(error) &&
+      !recursionReasons.has('transport-fallback')
+    ) {
       recursionReasons.add('transport-fallback');
       return connectToRemoteServer({
         ...options,
@@ -600,20 +614,22 @@ class PersonalAgentOAuthClientProvider implements OAuthClientProvider {
   private readonly stateId = randomUUID();
   private cachedClientInfo: OAuthClientInformationMixed | undefined;
 
-  public constructor(private readonly input: {
-    serverUrlHash: string;
-    serverUrl: string;
-    callbackHost: string;
-    callbackPort: number;
-    callbackPath: string;
-    authorizeResource?: string;
-    staticClientMetadata?: OAuthClientMetadata;
-    staticClientInfo?: OAuthClientInformationFull;
-    authorizationServerMetadata?: AuthorizationServerMetadata;
-    protectedResourceMetadata?: OAuthProtectedResourceMetadata;
-    wwwAuthenticateScope?: string;
-    log?: (message: string) => void;
-  }) {}
+  public constructor(
+    private readonly input: {
+      serverUrlHash: string;
+      serverUrl: string;
+      callbackHost: string;
+      callbackPort: number;
+      callbackPath: string;
+      authorizeResource?: string;
+      staticClientMetadata?: OAuthClientMetadata;
+      staticClientInfo?: OAuthClientInformationFull;
+      authorizationServerMetadata?: AuthorizationServerMetadata;
+      protectedResourceMetadata?: OAuthProtectedResourceMetadata;
+      wwwAuthenticateScope?: string;
+      log?: (message: string) => void;
+    },
+  ) {}
 
   public get redirectUrl(): string {
     return `http://${this.input.callbackHost}:${this.input.callbackPort}${this.input.callbackPath}`;
@@ -748,9 +764,10 @@ class PersonalAgentOAuthClientProvider implements OAuthClientProvider {
       return protectedScopes.join(' ');
     }
 
-    const cachedScope = this.cachedClientInfo && 'scope' in this.cachedClientInfo && typeof this.cachedClientInfo.scope === 'string'
-      ? this.cachedClientInfo.scope
-      : undefined;
+    const cachedScope =
+      this.cachedClientInfo && 'scope' in this.cachedClientInfo && typeof this.cachedClientInfo.scope === 'string'
+        ? this.cachedClientInfo.scope
+        : undefined;
     if (cachedScope && cachedScope.trim().length > 0) {
       return cachedScope;
     }
@@ -764,11 +781,7 @@ class PersonalAgentOAuthClientProvider implements OAuthClientProvider {
   }
 }
 
-export function getMcpServerUrlHash(
-  serverUrl: string,
-  authorizeResource?: string,
-  headers?: Record<string, string>,
-): string {
+export function getMcpServerUrlHash(serverUrl: string, authorizeResource?: string, headers?: Record<string, string>): string {
   const parts = [serverUrl];
   if (authorizeResource) {
     parts.push(authorizeResource);
@@ -796,12 +809,15 @@ export async function resolveCallbackPort(serverUrlHash: string, preferredPort?:
 }
 
 export async function openRemoteMcpClient(options: McpRemoteOAuthOptions): Promise<McpRemoteClientConnection> {
-  const client = new Client({
-    name: 'personal-agent',
-    version: '1.0.0',
-  }, {
-    capabilities: {},
-  });
+  const client = new Client(
+    {
+      name: 'personal-agent',
+      version: '1.0.0',
+    },
+    {
+      capabilities: {},
+    },
+  );
 
   emitLog(options.log, `Discovering OAuth server configuration for ${options.serverName}…`);
   const discovery = await discoverOAuthServerInfo(options.serverUrl, options.headers);

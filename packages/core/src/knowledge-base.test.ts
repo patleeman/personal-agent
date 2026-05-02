@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { KnowledgeBaseManager } from './knowledge-base.js';
 
 const createdDirs: string[] = [];
@@ -26,7 +28,10 @@ function runGit(args: string[], cwd: string, env: Record<string, string> = {}): 
 
 function readGitConfigValues(cwd: string, key: string): string[] {
   const output = runGit(['config', '--get-all', key], cwd);
-  return output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 function initBareRepo(): string {
@@ -160,12 +165,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('does not import the old unmanaged vault into a non-empty managed repo', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/remote.md': '# Remote\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/remote.md': '# Remote\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -187,9 +196,13 @@ describe('KnowledgeBaseManager', () => {
 
   it('does not invent placeholder gitkeep files in an existing remote repo', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/remote.md': '# Remote\n',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/remote.md': '# Remote\n',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -207,11 +220,15 @@ describe('KnowledgeBaseManager', () => {
 
   it('honors remote deletion of a placeholder gitkeep instead of recreating it', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -244,12 +261,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('normalizes duplicated upstream tracking config during sync', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Seed\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Seed\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -261,11 +282,7 @@ describe('KnowledgeBaseManager', () => {
     runGit(['config', '--add', 'branch.main.merge', 'refs/heads/main'], managedRoot);
     runGit(['config', '--add', 'branch.main.merge', 'refs/heads/main'], managedRoot);
     expect(readGitConfigValues(managedRoot, 'branch.main.remote')).toEqual(['origin', 'origin']);
-    expect(readGitConfigValues(managedRoot, 'branch.main.merge')).toEqual([
-      'refs/heads/main',
-      'refs/heads/main',
-      'refs/heads/main',
-    ]);
+    expect(readGitConfigValues(managedRoot, 'branch.main.merge')).toEqual(['refs/heads/main', 'refs/heads/main', 'refs/heads/main']);
 
     manager.syncNow();
 
@@ -277,12 +294,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('reports local and remote git sync drift for the managed mirror', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Seed\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Seed\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -338,12 +359,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('waits for local changes to go quiet before committing and pushing them', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Seed\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Seed\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -377,12 +402,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('auto-resolves same-file collisions by keeping the newer remote version and saving a recovery copy', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Remote\nold\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Remote\nold\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -419,12 +448,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('skips sync work while another live process holds the cross-process lock', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Seed\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Seed\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -456,12 +489,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('reclaims a stale sync lock before syncing', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Seed\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Seed\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -489,12 +526,16 @@ describe('KnowledgeBaseManager', () => {
 
   it('runs a full maintenance pass when the prior one is stale', () => {
     const remoteRepo = initBareRepo();
-    seedRemoteRepo(remoteRepo, {
-      'notes/daily.md': '# Seed\n',
-      '.gitignore': '.DS_Store\n.obsidian/\n',
-      'skills/.gitkeep': '',
-      'notes/.gitkeep': '',
-    }, '2025-01-01T00:00:00Z');
+    seedRemoteRepo(
+      remoteRepo,
+      {
+        'notes/daily.md': '# Seed\n',
+        '.gitignore': '.DS_Store\n.obsidian/\n',
+        'skills/.gitkeep': '',
+        'notes/.gitkeep': '',
+      },
+      '2025-01-01T00:00:00Z',
+    );
 
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');

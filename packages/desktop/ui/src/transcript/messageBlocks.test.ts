@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { DisplayBlock, MessageBlock } from '../shared/types';
 import {
   addHydratingHistoricalBlockId,

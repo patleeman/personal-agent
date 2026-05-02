@@ -74,7 +74,7 @@ function normalizeQuestionOption(value: unknown): AskUserQuestionOption | null {
   return {
     value: optionValue,
     label: readOptionalString(value.label) ?? optionValue,
-    ...(readOptionalString(value.details) ?? readOptionalString(value.description)
+    ...((readOptionalString(value.details) ?? readOptionalString(value.description))
       ? { details: readOptionalString(value.details) ?? readOptionalString(value.description) }
       : {}),
   };
@@ -114,9 +114,7 @@ function dedupeQuestionIds(questions: AskUserQuestionPrompt[]): AskUserQuestionP
     const seenCount = counts.get(baseId) ?? 0;
     counts.set(baseId, seenCount + 1);
 
-    return seenCount === 0
-      ? question
-      : { ...question, id: `${baseId}-${seenCount + 1}` };
+    return seenCount === 0 ? question : { ...question, id: `${baseId}-${seenCount + 1}` };
   });
 }
 
@@ -140,7 +138,7 @@ function normalizeStructuredQuestion(value: unknown, index: number): AskUserQues
   return {
     id: sanitizeQuestionId(providedId ?? `question-${index + 1}`),
     label,
-    ...(readOptionalString(value.details) ?? readOptionalString(value.description)
+    ...((readOptionalString(value.details) ?? readOptionalString(value.description))
       ? { details: readOptionalString(value.details) ?? readOptionalString(value.description) }
       : {}),
     style: normalizeQuestionStyle(value.style ?? value.type),
@@ -158,13 +156,15 @@ function normalizeLegacyQuestion(source: Record<string, unknown>): AskUserQuesti
   const details = readOptionalString(source.details) ?? readOptionalString(source.description);
 
   return {
-    questions: [{
-      id: 'question-1',
-      label: question,
-      ...(details ? { details } : {}),
-      style: 'radio',
-      options,
-    }],
+    questions: [
+      {
+        id: 'question-1',
+        label: question,
+        ...(details ? { details } : {}),
+        style: 'radio',
+        options,
+      },
+    ],
   };
 }
 
@@ -173,9 +173,11 @@ function normalizeStructuredQuestions(source: Record<string, unknown>): AskUserQ
     return null;
   }
 
-  const questions = dedupeQuestionIds(source.questions
-    .map((question, index) => normalizeStructuredQuestion(question, index))
-    .filter((question): question is AskUserQuestionPrompt => question !== null));
+  const questions = dedupeQuestionIds(
+    source.questions
+      .map((question, index) => normalizeStructuredQuestion(question, index))
+      .filter((question): question is AskUserQuestionPrompt => question !== null),
+  );
 
   if (questions.length === 0) {
     return null;
@@ -195,21 +197,16 @@ export function readAskUserQuestionPresentation(block: Extract<MessageBlock, { t
   }
 
   const detailsPresentation = isRecord(block.details)
-    ? normalizeStructuredQuestions(block.details) ?? normalizeLegacyQuestion(block.details)
+    ? (normalizeStructuredQuestions(block.details) ?? normalizeLegacyQuestion(block.details))
     : null;
   if (detailsPresentation) {
     return detailsPresentation;
   }
 
-  return isRecord(block.input)
-    ? normalizeStructuredQuestions(block.input) ?? normalizeLegacyQuestion(block.input)
-    : null;
+  return isRecord(block.input) ? (normalizeStructuredQuestions(block.input) ?? normalizeLegacyQuestion(block.input)) : null;
 }
 
-export function isAskUserQuestionComplete(
-  presentation: AskUserQuestionPresentation,
-  answers: AskUserQuestionAnswers,
-): boolean {
+export function isAskUserQuestionComplete(presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers): boolean {
   return presentation.questions.every((question) => (answers[question.id]?.length ?? 0) > 0);
 }
 
@@ -252,10 +249,7 @@ export function resolveAskUserQuestionAnswerSelection(input: {
   };
 }
 
-export function shouldAdvanceAskUserQuestionAfterSelection(
-  question: AskUserQuestionPrompt,
-  selectedValues: string[],
-): boolean {
+export function shouldAdvanceAskUserQuestionAfterSelection(question: AskUserQuestionPrompt, selectedValues: string[]): boolean {
   if (question.style === 'radio') {
     return selectedValues.length > 0;
   }
@@ -311,10 +305,7 @@ export function buildPendingAskUserQuestionKey(pending: PendingAskUserQuestion |
   return `${blockKey}:${questionKey}`;
 }
 
-function resolveAskUserQuestionAnswerLabels(
-  question: AskUserQuestionPrompt,
-  selectedValues: string[],
-): string[] {
+function resolveAskUserQuestionAnswerLabels(question: AskUserQuestionPrompt, selectedValues: string[]): string[] {
   const labels: string[] = [];
   const seen = new Set<string>();
 
@@ -337,10 +328,7 @@ function resolveAskUserQuestionAnswerLabels(
   return labels;
 }
 
-export function resolveAskUserQuestionDefaultOptionIndex(
-  question: AskUserQuestionPrompt,
-  answers: AskUserQuestionAnswers,
-): number {
+export function resolveAskUserQuestionDefaultOptionIndex(question: AskUserQuestionPrompt, answers: AskUserQuestionAnswers): number {
   if (question.options.length === 0) {
     return -1;
   }
@@ -375,10 +363,7 @@ export function resolveAskUserQuestionNavigationHotkey(key: string): -1 | 0 | 1 
   return 0;
 }
 
-export function buildAskUserQuestionReplyText(
-  presentation: AskUserQuestionPresentation,
-  answers: AskUserQuestionAnswers,
-): string {
+export function buildAskUserQuestionReplyText(presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers): string {
   const questionAnswers = presentation.questions
     .map((question) => {
       const labels = resolveAskUserQuestionAnswerLabels(question, answers[question.id] ?? []);
@@ -398,8 +383,5 @@ export function buildAskUserQuestionReplyText(
     return `${questionAnswers[0].question.label}: ${questionAnswers[0].labels.join(', ')}`;
   }
 
-  return [
-    'Answers:',
-    ...questionAnswers.map(({ question, labels }) => `- ${question.label}: ${labels.join(', ')}`),
-  ].join('\n');
+  return ['Answers:', ...questionAnswers.map(({ question, labels }) => `- ${question.label}: ${labels.join(', ')}`)].join('\n');
 }

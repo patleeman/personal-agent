@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { MessageBlock } from '../../shared/types';
 
 const timeAgoSpy = vi.hoisted(() => vi.fn<(iso: string) => void>());
@@ -67,7 +68,8 @@ describe('ChatView rendering stability', () => {
   beforeEach(() => {
     timeAgoSpy.mockReset();
     if (!window.requestAnimationFrame) {
-      window.requestAnimationFrame = ((callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
+      window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+        window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
     }
     if (!window.cancelAnimationFrame) {
       window.cancelAnimationFrame = ((handle: number) => window.clearTimeout(handle)) as typeof window.cancelAnimationFrame;
@@ -118,12 +120,7 @@ describe('ChatView rendering stability', () => {
     mountedRoots.push(root);
 
     act(() => {
-      root.render(
-        <ChatView
-          messages={[createAssistantBlock()]}
-          onReplyToSelection={() => undefined}
-        />,
-      );
+      root.render(<ChatView messages={[createAssistantBlock()]} onReplyToSelection={() => undefined} />);
     });
 
     expect(setIntervalSpy).not.toHaveBeenCalled();
@@ -176,8 +173,7 @@ describe('ChatView rendering stability', () => {
     expect(container.textContent).toContain('Open browser');
     expect(container.textContent).toContain('https://example.com/');
 
-    const button = Array.from(container.querySelectorAll('button'))
-      .find((entry) => entry.textContent === 'Open browser');
+    const button = Array.from(container.querySelectorAll('button')).find((entry) => entry.textContent === 'Open browser');
     expect(button).toBeTruthy();
 
     act(() => {

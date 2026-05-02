@@ -9,11 +9,7 @@ vi.mock('../client/api', () => ({
   api: apiMocks,
 }));
 
-import {
-  ARCHIVED_SESSION_IDS_STORAGE_KEY,
-  OPEN_SESSION_IDS_STORAGE_KEY,
-  PINNED_SESSION_IDS_STORAGE_KEY,
-} from '../local/localSettings';
+import { ARCHIVED_SESSION_IDS_STORAGE_KEY, OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings';
 import {
   closeConversationTab,
   ensureConversationTabOpen,
@@ -40,7 +36,7 @@ function createStorage(): MockStorage {
   const map = new Map<string, string>();
   return {
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     setItem(key, value) {
       map.set(key, value);
@@ -62,15 +58,18 @@ describe('sessionTabs', () => {
     apiMocks.setOpenConversationTabs.mockResolvedValue({ ok: true });
 
     if (typeof CustomEvent === 'undefined') {
-      vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> {
-        type: string;
-        detail: T | null;
+      vi.stubGlobal(
+        'CustomEvent',
+        class CustomEvent<T = unknown> {
+          type: string;
+          detail: T | null;
 
-        constructor(type: string, init?: CustomEventInit<T>) {
-          this.type = type;
-          this.detail = init?.detail ?? null;
-        }
-      });
+          constructor(type: string, init?: CustomEventInit<T>) {
+            this.type = type;
+            this.detail = init?.detail ?? null;
+          }
+        },
+      );
     }
   });
 
@@ -333,5 +332,4 @@ describe('sessionTabs', () => {
     });
     expect(dispatchEvent).not.toHaveBeenCalled();
   });
-
 });

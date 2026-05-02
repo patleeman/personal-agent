@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -51,11 +51,7 @@ export function applyLatestPiVersion(rootPackage, latestVersion) {
 }
 
 export function fetchLatestPiVersion() {
-  const stdout = execFileSync(
-    'npm',
-    ['view', PI_PACKAGE_NAME, 'version', '--json'],
-    { encoding: 'utf-8' },
-  ).trim();
+  const stdout = execFileSync('npm', ['view', PI_PACKAGE_NAME, 'version', '--json'], { encoding: 'utf-8' }).trim();
 
   const parsed = JSON.parse(stdout);
   if (typeof parsed !== 'string' || parsed.trim().length === 0) {

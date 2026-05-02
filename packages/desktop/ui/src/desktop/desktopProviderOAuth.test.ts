@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DESKTOP_PROVIDER_OAUTH_EVENT } from './desktopBridge';
 import { subscribeDesktopProviderOAuthLogin } from './desktopProviderOAuth';
 
@@ -22,30 +23,37 @@ describe('subscribeDesktopProviderOAuthLogin', () => {
     } as unknown as Window & typeof globalThis;
 
     vi.stubGlobal('window', fakeWindow);
-    vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> extends Event {
-      readonly detail: T;
+    vi.stubGlobal(
+      'CustomEvent',
+      class CustomEvent<T = unknown> extends Event {
+        readonly detail: T;
 
-      constructor(type: string, init?: { detail?: T }) {
-        super(type);
-        this.detail = init?.detail as T;
-      }
-    });
+        constructor(type: string, init?: { detail?: T }) {
+          super(type);
+          this.detail = init?.detail as T;
+        }
+      },
+    );
 
     const onState = vi.fn();
     const unsubscribe = await subscribeDesktopProviderOAuthLogin('login-1', onState);
 
-    fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_PROVIDER_OAUTH_EVENT, {
-      detail: {
-        subscriptionId: 'other',
-        state: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
-      },
-    }));
-    fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_PROVIDER_OAUTH_EVENT, {
-      detail: {
-        subscriptionId: 'oauth-sub-1',
-        state: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
-      },
-    }));
+    fakeWindow.dispatchEvent(
+      new CustomEvent(DESKTOP_PROVIDER_OAUTH_EVENT, {
+        detail: {
+          subscriptionId: 'other',
+          state: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
+        },
+      }),
+    );
+    fakeWindow.dispatchEvent(
+      new CustomEvent(DESKTOP_PROVIDER_OAUTH_EVENT, {
+        detail: {
+          subscriptionId: 'oauth-sub-1',
+          state: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
+        },
+      }),
+    );
 
     expect(subscribeProviderOAuthLogin).toHaveBeenCalledWith('login-1');
     expect(onState).toHaveBeenCalledTimes(1);

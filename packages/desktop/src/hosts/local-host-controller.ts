@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
@@ -11,12 +12,12 @@ import type {
   DesktopConversationCwdChangeRequest,
   DesktopConversationDeferredResumeMutationRequest,
   DesktopConversationDeferredResumeScheduleRequest,
-  DesktopConversationStateBridgeEvent,
-  DesktopConversationStateSubscriptionRequest,
-  DesktopDurableRunAttentionRequest,
   DesktopConversationModelPreferencesRequest,
   DesktopConversationModelPreferencesUpdateRequest,
   DesktopConversationRenameRequest,
+  DesktopConversationStateBridgeEvent,
+  DesktopConversationStateSubscriptionRequest,
+  DesktopDurableRunAttentionRequest,
   DesktopDurableRunLogRequest,
   DesktopHostRecord,
   DesktopLiveSessionBranchRequest,
@@ -24,10 +25,10 @@ import type {
   DesktopLiveSessionCreateRequest,
   DesktopLiveSessionExportRequest,
   DesktopLiveSessionForkRequest,
-  DesktopLiveSessionParallelPromptRequest,
-  DesktopLiveSessionParallelPromptResult,
   DesktopLiveSessionParallelJobRequest,
   DesktopLiveSessionParallelJobResult,
+  DesktopLiveSessionParallelPromptRequest,
+  DesktopLiveSessionParallelPromptResult,
   DesktopLiveSessionPromptRequest,
   DesktopLiveSessionPromptResult,
   DesktopLiveSessionQueueRestoreRequest,
@@ -68,9 +69,7 @@ export class LocalHostController implements HostController {
     return {
       reachable: status.daemonHealthy,
       mode: 'local-app-runtime',
-      summary: status.daemonHealthy
-        ? 'Local desktop runtime is healthy.'
-        : 'Local desktop runtime is starting or unavailable.',
+      summary: status.daemonHealthy ? 'Local desktop runtime is healthy.' : 'Local desktop runtime is starting or unavailable.',
       webUrl: getDesktopAppBaseUrl(),
       daemonHealthy: status.daemonHealthy,
     };
@@ -126,7 +125,11 @@ export class LocalHostController implements HostController {
     return module.readDesktopModels();
   }
 
-  async updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<{ ok: true }> {
+  async updateModelPreferences(input: {
+    model?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+  }): Promise<{ ok: true }> {
     const module = await this.loadLocalApi();
     return module.updateDesktopModelPreferences(input);
   }
@@ -203,7 +206,12 @@ export class LocalHostController implements HostController {
     return module.readDesktopOpenConversationTabs();
   }
 
-  async updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[]; workspacePaths?: string[] }): Promise<unknown> {
+  async updateOpenConversationTabs(input: {
+    sessionIds?: string[];
+    pinnedSessionIds?: string[];
+    archivedSessionIds?: string[];
+    workspacePaths?: string[];
+  }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.updateDesktopOpenConversationTabs(input);
   }
@@ -525,7 +533,12 @@ export class LocalHostController implements HostController {
     return module.updateDesktopConversationAttachment(input);
   }
 
-  async readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown> {
+  async readConversationAttachmentAsset(input: {
+    conversationId: string;
+    attachmentId: string;
+    asset: 'source' | 'preview';
+    revision?: number;
+  }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationAttachmentAsset(input);
   }

@@ -1,7 +1,8 @@
-import { withFileMutationQueue } from '@mariozechner/pi-coding-agent';
 import { constants } from 'node:fs';
 import { access, mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
+
+import { withFileMutationQueue } from '@mariozechner/pi-coding-agent';
 
 const BEGIN_PATCH_MARKER = '*** Begin Patch';
 const END_PATCH_MARKER = '*** End Patch';
@@ -53,8 +54,7 @@ export type ApplyPatchResult = {
   summary: string;
 };
 
-export const APPLY_PATCH_PROMPT_SNIPPET =
-  'Edit files with apply_patch envelopes by sending the full patch text in the input field';
+export const APPLY_PATCH_PROMPT_SNIPPET = 'Edit files with apply_patch envelopes by sending the full patch text in the input field';
 
 export const APPLY_PATCH_PROMPT_GUIDELINES = [
   'When apply_patch is available, send the full patch in the input field using *** Begin Patch / *** End Patch.',
@@ -88,10 +88,7 @@ export function shouldUseApplyPatchTool(model: ModelLike | null | undefined): bo
   return typeof model?.id === 'string' && model.id.startsWith('gpt-');
 }
 
-export function synchronizeActiveTools(
-  activeTools: readonly string[],
-  model: ModelLike | null | undefined,
-): string[] {
+export function synchronizeActiveTools(activeTools: readonly string[], model: ModelLike | null | undefined): string[] {
   const preferredTool = shouldUseApplyPatchTool(model) ? 'apply_patch' : 'edit';
   const alternateTool = preferredTool === 'apply_patch' ? 'edit' : 'apply_patch';
   const synchronized: string[] = [];
@@ -189,9 +186,7 @@ export function parseApplyPatch(input: string, cwd: string): ApplyPatchOperation
           throw new Error(`'${bodyLines[index]}' is not a valid hunk header.`);
         }
 
-        const changeContext = header === EMPTY_CHANGE_CONTEXT_MARKER
-          ? undefined
-          : header.slice(CHANGE_CONTEXT_MARKER.length);
+        const changeContext = header === EMPTY_CHANGE_CONTEXT_MARKER ? undefined : header.slice(CHANGE_CONTEXT_MARKER.length);
         index += 1;
 
         const oldLines: string[] = [];
@@ -254,7 +249,9 @@ export function parseApplyPatch(input: string, cwd: string): ApplyPatchOperation
     }
 
     throw new Error(
-      `'${bodyLines[index]}' is not a valid file operation header. Valid headers: '${ADD_FILE_MARKER}{path}', '${DELETE_FILE_MARKER}{path}', '${UPDATE_FILE_MARKER}{path}'.`,
+      `'${
+        bodyLines[index]
+      }' is not a valid file operation header. Valid headers: '${ADD_FILE_MARKER}{path}', '${DELETE_FILE_MARKER}{path}', '${UPDATE_FILE_MARKER}{path}'.`,
     );
   }
 
@@ -405,10 +402,7 @@ function computeReplacements(
   return replacements.sort((left, right) => left.startIndex - right.startIndex);
 }
 
-function applyReplacements(
-  lines: string[],
-  replacements: Array<{ startIndex: number; oldLength: number; newLines: string[] }>,
-): string[] {
+function applyReplacements(lines: string[], replacements: Array<{ startIndex: number; oldLength: number; newLines: string[] }>): string[] {
   const nextLines = [...lines];
   for (const replacement of [...replacements].reverse()) {
     nextLines.splice(replacement.startIndex, replacement.oldLength, ...replacement.newLines);
@@ -416,12 +410,7 @@ function applyReplacements(
   return nextLines;
 }
 
-export function seekSequence(
-  lines: readonly string[],
-  pattern: readonly string[],
-  start: number,
-  eof: boolean,
-): number | undefined {
+export function seekSequence(lines: readonly string[], pattern: readonly string[], start: number, eof: boolean): number | undefined {
   if (pattern.length === 0) {
     return start;
   }
@@ -430,9 +419,7 @@ export function seekSequence(
   }
 
   const maxStartIndex = lines.length - pattern.length;
-  const searchStart = eof && lines.length >= pattern.length
-    ? Math.max(0, maxStartIndex)
-    : Math.max(0, start);
+  const searchStart = eof && lines.length >= pattern.length ? Math.max(0, maxStartIndex) : Math.max(0, start);
 
   const matchers = [
     (left: string, right: string) => left === right,
@@ -497,9 +484,7 @@ function normalizePatchInput(input: string): string {
 
 function isFileHeaderLine(line: string): boolean {
   const trimmed = line.trim();
-  return trimmed.startsWith(ADD_FILE_MARKER)
-    || trimmed.startsWith(DELETE_FILE_MARKER)
-    || trimmed.startsWith(UPDATE_FILE_MARKER);
+  return trimmed.startsWith(ADD_FILE_MARKER) || trimmed.startsWith(DELETE_FILE_MARKER) || trimmed.startsWith(UPDATE_FILE_MARKER);
 }
 
 function resolvePatchPath(cwd: string, patchPath: string, label: string): { patchPath: string; absolutePath: string } {

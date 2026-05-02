@@ -2,7 +2,9 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   readConversationPlanDefaults,
   readConversationPlanLibrary,
@@ -39,30 +41,33 @@ describe('readConversationPlanDefaults', () => {
   it('normalizes workflow presets and filters invalid defaults', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      ui: {
-        conversationAutomation: {
-          defaultEnabled: true,
-          workflowPresets: {
-            presets: [
-              {
-                id: ' preset-1 ',
-                name: ' Alpha preset ',
-                updatedAt: 'not-a-date',
-                items: [
-                  { kind: 'instruction', label: '  Instruction ', text: '  Follow the plan. ' },
-                  { kind: 'skill', label: '  Skill ', skillName: ' backfill-tests ', skillArgs: ' target=models ' },
-                  { kind: 'skill', label: 'Broken skill' },
-                ],
-              },
-              { name: 'No id preset', items: [{ kind: 'instruction', text: 'Second item' }] },
-              'ignore-me',
-            ],
-            defaultPresetIds: ['preset-1', 'preset-1', 'preset-2', 'missing'],
+    writeFileSync(
+      file,
+      JSON.stringify({
+        ui: {
+          conversationAutomation: {
+            defaultEnabled: true,
+            workflowPresets: {
+              presets: [
+                {
+                  id: ' preset-1 ',
+                  name: ' Alpha preset ',
+                  updatedAt: 'not-a-date',
+                  items: [
+                    { kind: 'instruction', label: '  Instruction ', text: '  Follow the plan. ' },
+                    { kind: 'skill', label: '  Skill ', skillName: ' backfill-tests ', skillArgs: ' target=models ' },
+                    { kind: 'skill', label: 'Broken skill' },
+                  ],
+                },
+                { name: 'No id preset', items: [{ kind: 'instruction', text: 'Second item' }] },
+                'ignore-me',
+              ],
+              defaultPresetIds: ['preset-1', 'preset-1', 'preset-2', 'missing'],
+            },
           },
         },
-      },
-    }));
+      }),
+    );
 
     expect(readConversationPlanDefaults(file)).toEqual({ defaultEnabled: true });
     expect(readConversationPlanLibrary(file)).toEqual({
@@ -80,9 +85,7 @@ describe('readConversationPlanDefaults', () => {
           id: 'preset-2',
           name: 'No id preset',
           updatedAt: '1970-01-01T00:00:00.000Z',
-          items: [
-            { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'Second item' },
-          ],
+          items: [{ id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'Second item' }],
         },
       ],
       defaultPresetIds: ['preset-1', 'preset-2'],
@@ -90,10 +93,7 @@ describe('readConversationPlanDefaults', () => {
     expect(readConversationPlansWorkspace(file)).toEqual({
       defaultEnabled: true,
       presetLibrary: {
-        presets: [
-          expect.objectContaining({ id: 'preset-1' }),
-          expect.objectContaining({ id: 'preset-2' }),
-        ],
+        presets: [expect.objectContaining({ id: 'preset-1' }), expect.objectContaining({ id: 'preset-2' })],
         defaultPresetIds: ['preset-1', 'preset-2'],
       },
     });
@@ -102,22 +102,25 @@ describe('readConversationPlanDefaults', () => {
   it('falls back for non-ISO workflow preset timestamps', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      ui: {
-        conversationAutomation: {
-          workflowPresets: {
-            presets: [
-              {
-                id: 'preset-1',
-                name: 'Alpha preset',
-                updatedAt: '9999',
-                items: [{ kind: 'instruction', text: 'Follow the plan.' }],
-              },
-            ],
+    writeFileSync(
+      file,
+      JSON.stringify({
+        ui: {
+          conversationAutomation: {
+            workflowPresets: {
+              presets: [
+                {
+                  id: 'preset-1',
+                  name: 'Alpha preset',
+                  updatedAt: '9999',
+                  items: [{ kind: 'instruction', text: 'Follow the plan.' }],
+                },
+              ],
+            },
           },
         },
-      },
-    }));
+      }),
+    );
 
     expect(readConversationPlanLibrary(file).presets[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
   });
@@ -125,22 +128,25 @@ describe('readConversationPlanDefaults', () => {
   it('falls back for overflowed workflow preset timestamps', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      ui: {
-        conversationAutomation: {
-          workflowPresets: {
-            presets: [
-              {
-                id: 'preset-1',
-                name: 'Alpha preset',
-                updatedAt: '2026-02-31T09:00:00.000Z',
-                items: [{ kind: 'instruction', text: 'Follow the plan.' }],
-              },
-            ],
+    writeFileSync(
+      file,
+      JSON.stringify({
+        ui: {
+          conversationAutomation: {
+            workflowPresets: {
+              presets: [
+                {
+                  id: 'preset-1',
+                  name: 'Alpha preset',
+                  updatedAt: '2026-02-31T09:00:00.000Z',
+                  items: [{ kind: 'instruction', text: 'Follow the plan.' }],
+                },
+              ],
+            },
           },
         },
-      },
-    }));
+      }),
+    );
 
     expect(readConversationPlanLibrary(file).presets[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
   });
@@ -150,12 +156,15 @@ describe('writeConversationPlanDefaults', () => {
   it('writes default enablement while preserving unrelated settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultModel: 'gpt-5.4',
-      ui: {
-        openConversationIds: ['session-1'],
-      },
-    }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultModel: 'gpt-5.4',
+        ui: {
+          openConversationIds: ['session-1'],
+        },
+      }),
+    );
 
     expect(writeConversationPlanDefaults({ defaultEnabled: true }, file)).toEqual({ defaultEnabled: true });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
@@ -174,30 +183,36 @@ describe('writeConversationPlanLibrary', () => {
   it('writes normalized presets while preserving unrelated settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultModel: 'gpt-5.4',
-      ui: {
-        openConversationIds: ['session-1'],
-        conversationAutomation: {
-          defaultEnabled: true,
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultModel: 'gpt-5.4',
+        ui: {
+          openConversationIds: ['session-1'],
+          conversationAutomation: {
+            defaultEnabled: true,
+          },
         },
-      },
-    }));
+      }),
+    );
 
-    const result = writeConversationPlanLibrary({
-      presets: [
-        {
-          id: ' preset-a ',
-          name: ' Reminder preset ',
-          items: [
-            { kind: 'instruction', text: '  First reminder  ' },
-            { kind: 'skill', skillName: ' deep-research ', skillArgs: ' topic=desktop ' },
-            { kind: 'instruction', text: '   ' },
-          ],
-        },
-      ],
-      defaultPresetIds: ['preset-a', 'missing', 'preset-a'],
-    }, file);
+    const result = writeConversationPlanLibrary(
+      {
+        presets: [
+          {
+            id: ' preset-a ',
+            name: ' Reminder preset ',
+            items: [
+              { kind: 'instruction', text: '  First reminder  ' },
+              { kind: 'skill', skillName: ' deep-research ', skillArgs: ' topic=desktop ' },
+              { kind: 'instruction', text: '   ' },
+            ],
+          },
+        ],
+        defaultPresetIds: ['preset-a', 'missing', 'preset-a'],
+      },
+      file,
+    );
 
     expect(result).toEqual({
       presets: [

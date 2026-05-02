@@ -122,7 +122,10 @@ Use `browser_cdp` when direct browser control is needed. It sends raw Chrome Dev
 
 ```json
 {
-  "command": { "method": "Runtime.evaluate", "params": { "expression": "document.title", "returnByValue": true } }
+  "command": {
+    "method": "Runtime.evaluate",
+    "params": { "expression": "document.title", "returnByValue": true }
+  }
 }
 ```
 
@@ -131,10 +134,40 @@ Send an array of command objects for multi-step actions instead of firing many s
 ```json
 {
   "command": [
-    { "method": "Input.dispatchMouseEvent", "params": { "type": "mouseMoved", "x": 300, "y": 250 } },
-    { "method": "Input.dispatchMouseEvent", "params": { "type": "mousePressed", "x": 300, "y": 250, "button": "left", "clickCount": 1 } },
-    { "method": "Input.dispatchMouseEvent", "params": { "type": "mouseMoved", "x": 520, "y": 420, "button": "left", "buttons": 1 } },
-    { "method": "Input.dispatchMouseEvent", "params": { "type": "mouseReleased", "x": 520, "y": 420, "button": "left", "clickCount": 1 } }
+    {
+      "method": "Input.dispatchMouseEvent",
+      "params": { "type": "mouseMoved", "x": 300, "y": 250 }
+    },
+    {
+      "method": "Input.dispatchMouseEvent",
+      "params": {
+        "type": "mousePressed",
+        "x": 300,
+        "y": 250,
+        "button": "left",
+        "clickCount": 1
+      }
+    },
+    {
+      "method": "Input.dispatchMouseEvent",
+      "params": {
+        "type": "mouseMoved",
+        "x": 520,
+        "y": 420,
+        "button": "left",
+        "buttons": 1
+      }
+    },
+    {
+      "method": "Input.dispatchMouseEvent",
+      "params": {
+        "type": "mouseReleased",
+        "x": 520,
+        "y": 420,
+        "button": "left",
+        "clickCount": 1
+      }
+    }
   ]
 }
 ```

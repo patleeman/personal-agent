@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { applyDesktopApplicationIcon } from './app-icon.js';
 
 describe('applyDesktopApplicationIcon', () => {

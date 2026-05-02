@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { INLINE_RUN_LOG_TAIL_LINES, normalizeInlineRunPollingOptions } from './linkedRunPolling';
 
 const INLINE_RUN_POLL_INTERVAL_MS = 2200;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from './layoutSizing.js';
 
 describe('layout sizing helpers', () => {
@@ -29,39 +30,46 @@ describe('layout sizing helpers', () => {
   });
 
   it('falls back to the default rail width for unknown routes', () => {
-    expect(getRailInitialWidth({
-      pathname: '/unknown',
-      viewportWidth: 1600,
-      sidebarWidth: 224,
-      railMinWidth: 160,
-      railMaxWidth: 1046,
-    })).toBe(380);
+    expect(
+      getRailInitialWidth({
+        pathname: '/unknown',
+        viewportWidth: 1600,
+        sidebarWidth: 224,
+        railMinWidth: 160,
+        railMaxWidth: 1046,
+      }),
+    ).toBe(380);
   });
 
-
   it('lets the rail expand until the main pane reaches its minimum width', () => {
-    expect(getRailMaxWidth({
-      viewportWidth: 1600,
-      sidebarWidth: 224,
-      railMinWidth: 160,
-      mainMinWidth: 320,
-    })).toBe(1046);
+    expect(
+      getRailMaxWidth({
+        viewportWidth: 1600,
+        sidebarWidth: 224,
+        railMinWidth: 160,
+        mainMinWidth: 320,
+      }),
+    ).toBe(1046);
   });
 
   it('never returns less than the rail minimum width', () => {
-    expect(getRailMaxWidth({
-      viewportWidth: 700,
-      sidebarWidth: 320,
-      railMinWidth: 220,
-    })).toBe(220);
+    expect(
+      getRailMaxWidth({
+        viewportWidth: 700,
+        sidebarWidth: 320,
+        railMinWidth: 220,
+      }),
+    ).toBe(220);
   });
 
   it('falls back to the rail minimum for malformed viewport geometry', () => {
-    expect(getRailMaxWidth({
-      viewportWidth: 1600.5,
-      sidebarWidth: 224,
-      railMinWidth: 220,
-      mainMinWidth: 320,
-    })).toBe(220);
+    expect(
+      getRailMaxWidth({
+        viewportWidth: 1600.5,
+        sidebarWidth: 224,
+        railMinWidth: 220,
+        mainMinWidth: 320,
+      }),
+    ).toBe(220);
   });
 });

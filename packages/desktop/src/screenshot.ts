@@ -1,7 +1,7 @@
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { spawn } from 'node:child_process';
 
 interface DesktopScreenshotImage {
   name?: string;
@@ -38,9 +38,7 @@ const defaultDeps: CaptureDesktopScreenshotDeps = {
   runInteractiveScreencapture,
 };
 
-export async function captureDesktopScreenshot(
-  deps: CaptureDesktopScreenshotDeps = defaultDeps,
-): Promise<DesktopScreenshotCaptureResult> {
+export async function captureDesktopScreenshot(deps: CaptureDesktopScreenshotDeps = defaultDeps): Promise<DesktopScreenshotCaptureResult> {
   if (deps.platform !== 'darwin') {
     throw new Error('Built-in screenshot capture is currently only available on macOS.');
   }
@@ -110,9 +108,8 @@ async function runInteractiveScreencapture(outputPath: string): Promise<Screensh
       stderr += chunk.toString();
     });
     child.once('error', (error) => {
-      const normalized = (error as NodeJS.ErrnoException).code === 'ENOENT'
-        ? new Error('macOS screencapture is unavailable on this machine.')
-        : error;
+      const normalized =
+        (error as NodeJS.ErrnoException).code === 'ENOENT' ? new Error('macOS screencapture is unavailable on this machine.') : error;
       reject(normalized);
     });
     child.once('close', (code, signal) => {

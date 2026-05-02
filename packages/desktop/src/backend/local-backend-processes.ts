@@ -1,6 +1,8 @@
 import { appendFileSync } from 'node:fs';
+
 import { updateMachineConfigSection } from '@personal-agent/core';
-import { PersonalAgentDaemon, bindInProcessDaemonClient, loadDaemonConfig, syncCompanionTailscaleServe } from '@personal-agent/daemon';
+import { bindInProcessDaemonClient, loadDaemonConfig, PersonalAgentDaemon, syncCompanionTailscaleServe } from '@personal-agent/daemon';
+
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 interface LocalBackendStatus {
@@ -9,11 +11,13 @@ interface LocalBackendStatus {
 
 function isLoopbackHost(value: string | undefined): boolean {
   const normalized = value?.trim() || '';
-  return normalized === ''
-    || normalized === '127.0.0.1'
-    || normalized === '::1'
-    || normalized === 'localhost'
-    || normalized === '::ffff:127.0.0.1';
+  return (
+    normalized === '' ||
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized === 'localhost' ||
+    normalized === '::ffff:127.0.0.1'
+  );
 }
 
 function readPortFromUrl(value: string | null | undefined): number | undefined {
@@ -100,9 +104,8 @@ export class LocalBackendProcesses {
     if (isLoopbackHost(currentHost) || currentConfig.companion?.enabled === false) {
       updateMachineConfigSection('daemon', (current) => {
         const next = current ? { ...current } : {};
-        const existingCompanion = next.companion && typeof next.companion === 'object'
-          ? { ...(next.companion as Record<string, unknown>) }
-          : {};
+        const existingCompanion =
+          next.companion && typeof next.companion === 'object' ? { ...(next.companion as Record<string, unknown>) } : {};
         next.companion = {
           ...existingCompanion,
           enabled: true,

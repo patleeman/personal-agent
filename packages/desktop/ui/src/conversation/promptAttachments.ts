@@ -1,11 +1,11 @@
-import type { PromptAttachmentRefInput, PromptImageInput } from '../shared/types';
-import type { DraftConversationDrawingAttachment } from './draftConversation';
 import {
   buildDrawingFileNames,
   inferDrawingTitleFromFileName,
   loadExcalidrawSceneFromBlob,
   serializeExcalidrawScene,
 } from '../content/excalidrawUtils';
+import type { PromptAttachmentRefInput, PromptImageInput } from '../shared/types';
+import type { DraftConversationDrawingAttachment } from './draftConversation';
 
 export type ComposerDrawingAttachment = DraftConversationDrawingAttachment;
 
@@ -44,14 +44,18 @@ function loadImageFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
 
 function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('Failed to encode image.'));
-        return;
-      }
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('Failed to encode image.'));
+          return;
+        }
 
-      resolve(blob);
-    }, mimeType, quality);
+        resolve(blob);
+      },
+      mimeType,
+      quality,
+    );
   });
 }
 
@@ -68,10 +72,15 @@ function normalizePromptImageMimeType(mimeType: string): string {
   return 'image/png';
 }
 
-export function constrainPromptImageDimensions(width: number, height: number, maxDimension = MAX_PROMPT_IMAGE_DIMENSION): { width: number; height: number } {
-  const safeMaxDimension = Number.isSafeInteger(maxDimension) && maxDimension > 0
-    ? Math.min(MAX_PROMPT_IMAGE_DIMENSION, maxDimension)
-    : MAX_PROMPT_IMAGE_DIMENSION;
+export function constrainPromptImageDimensions(
+  width: number,
+  height: number,
+  maxDimension = MAX_PROMPT_IMAGE_DIMENSION,
+): { width: number; height: number } {
+  const safeMaxDimension =
+    Number.isSafeInteger(maxDimension) && maxDimension > 0
+      ? Math.min(MAX_PROMPT_IMAGE_DIMENSION, maxDimension)
+      : MAX_PROMPT_IMAGE_DIMENSION;
 
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) {
     return {
@@ -125,11 +134,7 @@ async function preparePromptImage(file: File): Promise<PromptImageInput> {
     context.drawImage(image, 0, 0, targetSize.width, targetSize.height);
 
     const outputMimeType = normalizePromptImageMimeType(mimeType);
-    const outputBlob = await canvasToBlob(
-      canvas,
-      outputMimeType,
-      outputMimeType === 'image/png' ? undefined : 0.9,
-    );
+    const outputBlob = await canvasToBlob(canvas, outputMimeType, outputMimeType === 'image/png' ? undefined : 0.9);
     const resizedPreviewUrl = await readBlobAsDataUrl(outputBlob, file.name);
 
     return {
@@ -182,16 +187,8 @@ function safeBase64ToFile(data: string, mimeType: string, name: string): File | 
   }
 }
 
-export function screenshotCaptureImageToFile(image: {
-  data: string;
-  mimeType: string;
-  name?: string | null;
-}): File {
-  return base64ToFile(
-    image.data,
-    image.mimeType,
-    image.name?.trim() || 'Screenshot.png',
-  );
+export function screenshotCaptureImageToFile(image: { data: string; mimeType: string; name?: string | null }): File {
+  return base64ToFile(image.data, image.mimeType, image.name?.trim() || 'Screenshot.png');
 }
 
 export function restoreQueuedImageFiles(
@@ -208,10 +205,7 @@ export function restoreQueuedImageFiles(
   });
 }
 
-export function restoreComposerImageFiles(
-  images: PromptImageInput[] | undefined | null,
-  fallbackNamePrefix: string,
-): File[] {
+export function restoreComposerImageFiles(images: PromptImageInput[] | undefined | null, fallbackNamePrefix: string): File[] {
   const normalizedImages = Array.isArray(images) ? images : [];
   return normalizedImages.flatMap((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
@@ -367,13 +361,18 @@ export function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachme
     return null;
   }
 
-  const revision = typeof attachment.revision === 'number'
-    ? attachment.revision
-    : (typeof attachment.revision === 'string' && /^\d+$/.test(attachment.revision.trim()) ? Number.parseInt(attachment.revision.trim(), 10) : undefined);
+  const revision =
+    typeof attachment.revision === 'number'
+      ? attachment.revision
+      : typeof attachment.revision === 'string' && /^\d+$/.test(attachment.revision.trim())
+        ? Number.parseInt(attachment.revision.trim(), 10)
+        : undefined;
 
   return {
     attachmentId,
-    ...(Number.isSafeInteger(revision) && Number(revision) > 0 && Number(revision) <= MAX_COMPOSER_DRAWING_REVISION ? { revision: Number(revision) } : {}),
+    ...(Number.isSafeInteger(revision) && Number(revision) > 0 && Number(revision) <= MAX_COMPOSER_DRAWING_REVISION
+      ? { revision: Number(revision) }
+      : {}),
   };
 }
 

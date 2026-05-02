@@ -1,8 +1,9 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ConversationQuestionShelf } from './ConversationQuestionShelf';
+
 import type { AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
+import { ConversationQuestionShelf } from './ConversationQuestionShelf';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -22,9 +23,7 @@ const presentation: AskUserQuestionPresentation = {
       id: 'q2',
       label: 'Pick many',
       style: 'check',
-      options: [
-        { value: 'x', label: 'Xray' },
-      ],
+      options: [{ value: 'x', label: 'Xray' }],
     },
   ],
 };

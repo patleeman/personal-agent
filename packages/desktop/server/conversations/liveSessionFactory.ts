@@ -1,23 +1,24 @@
-import { resolveChildProcessEnv } from '@personal-agent/core';
 import {
   AgentSession,
   AuthStorage,
-  ModelRegistry,
   createAgentSession,
   createBashTool,
   type ExtensionFactory,
+  ModelRegistry,
   type SessionManager,
 } from '@mariozechner/pi-coding-agent';
-import { applyConversationModelPreferencesToLiveSession } from './conversationModelPreferences.js';
+import { resolveChildProcessEnv } from '@personal-agent/core';
+
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
-import { makeLoader, type LiveSessionLoaderOptions } from './liveSessionLoader.js';
-import { ensureSessionFileExists, patchSessionManagerPersistence, resolveLiveSessionFile } from './liveSessionPersistence.js';
+import { applyConversationModelPreferencesToLiveSession } from './conversationModelPreferences.js';
+import { type LiveSessionLoaderOptions, makeLoader } from './liveSessionLoader.js';
 import {
   applyLiveSessionServiceTier,
   repairSessionModelProvider,
   resolveConversationPreferenceStateForSession,
 } from './liveSessionModels.js';
+import { ensureSessionFileExists, patchSessionManagerPersistence, resolveLiveSessionFile } from './liveSessionPersistence.js';
 
 interface ToolPatchableSessionInternals {
   _baseToolRegistry?: Map<string, unknown>;
@@ -38,16 +39,22 @@ function patchConversationBashTool(session: AgentSession, cwd: string, conversat
     return;
   }
 
-  patchableSession._baseToolRegistry.set('bash', createBashTool(cwd, {
-    commandPrefix: session.settingsManager.getShellCommandPrefix(),
-    spawnHook: (context) => ({
-      ...context,
-      env: resolveChildProcessEnv({
-        PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
-        ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
-      }, context.env),
+  patchableSession._baseToolRegistry.set(
+    'bash',
+    createBashTool(cwd, {
+      commandPrefix: session.settingsManager.getShellCommandPrefix(),
+      spawnHook: (context) => ({
+        ...context,
+        env: resolveChildProcessEnv(
+          {
+            PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
+            ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
+          },
+          context.env,
+        ),
+      }),
     }),
-  }));
+  );
 
   patchableSession._refreshToolRegistry({
     activeToolNames: session.getActiveToolNames(),
@@ -86,8 +93,10 @@ export async function createPreparedLiveAgentSession(input: {
   const availableModels = modelRegistry.getAvailable();
   await repairSessionModelProvider(session, availableModels);
 
-  if (input.applyInitialPreferences
-    && (options.initialModel !== undefined || options.initialThinkingLevel !== undefined || options.initialServiceTier !== undefined)) {
+  if (
+    input.applyInitialPreferences &&
+    (options.initialModel !== undefined || options.initialThinkingLevel !== undefined || options.initialServiceTier !== undefined)
+  ) {
     await applyConversationModelPreferencesToLiveSession(
       session,
       {

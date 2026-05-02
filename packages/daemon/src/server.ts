@@ -1,16 +1,22 @@
-import { spawn, type ChildProcess } from 'child_process';
-import { createServer, type Server, type Socket } from 'net';
-import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { hydrateProcessEnvFromShell, resolveChildProcessEnv } from '@personal-agent/core';
+import { type ChildProcess, spawn } from 'child_process';
+import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { createServer, type Server, type Socket } from 'net';
+
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
-import { EventBus } from './event-bus.js';
-import { createDaemonEvent, isDaemonEvent } from './events.js';
-import { parseRequest, serializeResponse, type DaemonRequest, type DaemonResponse } from './ipc-protocol.js';
-import { loadDaemonConfig, writeDaemonPowerConfig, type DaemonConfig, type LogLevel } from './config.js';
 import { DaemonCompanionServer } from './companion/server.js';
 import type { CompanionRuntimeProvider } from './companion/types.js';
+import { type DaemonConfig, loadDaemonConfig, type LogLevel, writeDaemonPowerConfig } from './config.js';
+import { EventBus } from './event-bus.js';
+import { createDaemonEvent, isDaemonEvent } from './events.js';
+import { type DaemonRequest, type DaemonResponse, parseRequest, serializeResponse } from './ipc-protocol.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from './modules/index.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
+import { DaemonPowerController } from './power.js';
+import { deliverBackgroundRunCallbackWakeup } from './runs/background-run-callbacks.js';
+import { surfaceBackgroundRunResultsIfReady } from './runs/background-run-deferred-resumes.js';
+import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from './runs/background-run-replays.js';
+import { resolveBackgroundRunSessionDir } from './runs/background-run-sessions.js';
 import {
   createBackgroundRunRecord,
   finalizeBackgroundRun,
@@ -19,10 +25,6 @@ import {
   markBackgroundRunStarted,
   type StartBackgroundRunInput,
 } from './runs/background-runs.js';
-import { deliverBackgroundRunCallbackWakeup } from './runs/background-run-callbacks.js';
-import { surfaceBackgroundRunResultsIfReady } from './runs/background-run-deferred-resumes.js';
-import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from './runs/background-run-replays.js';
-import { resolveBackgroundRunSessionDir } from './runs/background-run-sessions.js';
 import {
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
@@ -30,28 +32,24 @@ import {
   scanDurableRunsForRecovery,
   summarizeScannedDurableRuns,
 } from './runs/store.js';
-import {
-  listRecoverableWebLiveConversationRuns,
-  saveWebLiveConversationRunState,
-} from './runs/web-live-conversations.js';
+import { listRecoverableWebLiveConversationRuns, saveWebLiveConversationRunState } from './runs/web-live-conversations.js';
 import type {
+  CancelDurableRunResult,
   DaemonEvent,
   DaemonModuleStatus,
   DaemonPaths,
   DaemonStatus,
   EventPayload,
+  FollowUpDurableRunResult,
   GetDurableRunResult,
   ListDurableRunsResult,
-  StartScheduledTaskRunResult,
-  StartBackgroundRunResult,
-  CancelDurableRunResult,
-  ReplayDurableRunResult,
-  FollowUpDurableRunResult,
-  SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,
+  ReplayDurableRunResult,
+  StartBackgroundRunResult,
+  StartScheduledTaskRunResult,
   SyncWebLiveConversationRunRequestInput,
+  SyncWebLiveConversationRunResult,
 } from './types.js';
-import { DaemonPowerController } from './power.js';
 
 interface ModuleRuntime {
   module: DaemonModule;
@@ -89,12 +87,14 @@ function looksLikePaCommand(binary: string | undefined): boolean {
     return false;
   }
 
-  return normalized === 'pa'
-    || normalized.endsWith('/pa')
-    || normalized.endsWith('\\pa')
-    || normalized === 'pa.cmd'
-    || normalized.endsWith('/pa.cmd')
-    || normalized.endsWith('\\pa.cmd');
+  return (
+    normalized === 'pa' ||
+    normalized.endsWith('/pa') ||
+    normalized.endsWith('\\pa') ||
+    normalized === 'pa.cmd' ||
+    normalized.endsWith('/pa.cmd') ||
+    normalized.endsWith('\\pa.cmd')
+  );
 }
 
 function hasExplicitSessionOverride(argv: string[] | undefined): boolean {
@@ -102,26 +102,30 @@ function hasExplicitSessionOverride(argv: string[] | undefined): boolean {
     return false;
   }
 
-  return argv.some((arg) => (
-    arg === '--no-session'
-    || arg === '--session'
-    || arg.startsWith('--session=')
-    || arg === '--session-dir'
-    || arg.startsWith('--session-dir=')
-    || arg === '--resume'
-    || arg === '--continue'
-  ));
+  return argv.some(
+    (arg) =>
+      arg === '--no-session' ||
+      arg === '--session' ||
+      arg.startsWith('--session=') ||
+      arg === '--session-dir' ||
+      arg.startsWith('--session-dir=') ||
+      arg === '--resume' ||
+      arg === '--continue',
+  );
 }
 
 function quoteShellArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function appendBackgroundRunSessionDir(input: {
-  argv?: string[];
-  shellCommand?: string;
-  continueSession?: boolean;
-}, runId: string): {
+function appendBackgroundRunSessionDir(
+  input: {
+    argv?: string[];
+    shellCommand?: string;
+    continueSession?: boolean;
+  },
+  runId: string,
+): {
   argv?: string[];
   shellCommand?: string;
 } {
@@ -138,11 +142,7 @@ function appendBackgroundRunSessionDir(input: {
     }
 
     return {
-      argv: [
-        ...argv,
-        '--session-dir', sessionDir,
-        ...(input.continueSession ? ['--continue'] : []),
-      ],
+      argv: [...argv, '--session-dir', sessionDir, ...(input.continueSession ? ['--continue'] : [])],
     };
   }
 
@@ -276,7 +276,10 @@ export class PersonalAgentDaemon {
     await this.companionServer.start();
     const fallbackPort = this.companionServer.getPortFallbackFrom();
     if (fallbackPort) {
-      this.log('warn', `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`);
+      this.log(
+        'warn',
+        `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`,
+      );
     }
 
     this.running = true;
@@ -358,11 +361,7 @@ export class PersonalAgentDaemon {
     return this.companionServer?.getUrl() ?? null;
   }
 
-  async updateCompanionConfig(input: {
-    enabled?: boolean;
-    host?: string;
-    port?: number;
-  }): Promise<{ url: string | null }> {
+  async updateCompanionConfig(input: { enabled?: boolean; host?: string; port?: number }): Promise<{ url: string | null }> {
     const previous = {
       enabled: this.config.companion?.enabled !== false,
       host: this.config.companion?.host ?? '127.0.0.1',
@@ -388,7 +387,10 @@ export class PersonalAgentDaemon {
       await this.companionServer.start();
       const fallbackPort = this.companionServer.getPortFallbackFrom();
       if (fallbackPort) {
-        this.log('warn', `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`);
+        this.log(
+          'warn',
+          `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`,
+        );
       }
       return { url: this.companionServer.getUrl() };
     } catch (error) {
@@ -761,15 +763,17 @@ export class PersonalAgentDaemon {
 
   async startScheduledTaskRun(taskId: string): Promise<StartScheduledTaskRunResult> {
     const runId = `task-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-    const accepted = this.bus.publish(createDaemonEvent({
-      type: 'tasks.run.requested',
-      source: 'daemon:ipc',
-      payload: {
-        taskId,
-        runId,
-        requestedAt: new Date().toISOString(),
-      },
-    }));
+    const accepted = this.bus.publish(
+      createDaemonEvent({
+        type: 'tasks.run.requested',
+        source: 'daemon:ipc',
+        payload: {
+          taskId,
+          runId,
+          requestedAt: new Date().toISOString(),
+        },
+      }),
+    );
 
     if (!accepted) {
       return {
@@ -833,7 +837,9 @@ export class PersonalAgentDaemon {
       if (callback.delivered) {
         this.log(
           'info',
-          `background run callback delivered run=${triggerRunId} wakeup=${callback.wakeupId ?? 'n/a'} conversation=${callback.conversationId ?? 'n/a'}`,
+          `background run callback delivered run=${triggerRunId} wakeup=${callback.wakeupId ?? 'n/a'} conversation=${
+            callback.conversationId ?? 'n/a'
+          }`,
         );
         return;
       }
@@ -893,11 +899,14 @@ export class PersonalAgentDaemon {
     }
 
     const outputStream = createWriteStream(record.paths.outputLogPath, { flags: 'a', encoding: 'utf-8' });
-    const spawnInput = appendBackgroundRunSessionDir({
-      argv: record.argv,
-      shellCommand: record.shellCommand,
-      continueSession: input.continueSession,
-    }, record.runId);
+    const spawnInput = appendBackgroundRunSessionDir(
+      {
+        argv: record.argv,
+        shellCommand: record.shellCommand,
+        continueSession: input.continueSession,
+      },
+      record.runId,
+    );
 
     const childEnv = resolveChildProcessEnv({
       PERSONAL_AGENT_RUN_ID: record.runId,
@@ -994,7 +1003,9 @@ export class PersonalAgentDaemon {
         cancelled: handle.cancelling,
         error: handle.cancelling
           ? (handle.cancelReason ?? 'Cancelled by user')
-          : (typeof code === 'number' && code === 0 ? undefined : `Command exited with code ${String(code ?? signal ?? 1)}`),
+          : typeof code === 'number' && code === 0
+            ? undefined
+            : `Command exited with code ${String(code ?? signal ?? 1)}`,
       })
         .then(async () => {
           await this.surfaceBackgroundRunOutcome(record.runId);
@@ -1067,10 +1078,9 @@ export class PersonalAgentDaemon {
 
   async followUpBackgroundRun(runId: string, prompt?: string): Promise<FollowUpDurableRunResult> {
     const run = this.getReplayableBackgroundRun(runId);
-    const result = await this.spawnBackgroundRun(buildFollowUpBackgroundRunInput(
-      run,
-      prompt?.trim() || 'Continue from where you left off.',
-    ));
+    const result = await this.spawnBackgroundRun(
+      buildFollowUpBackgroundRunInput(run, prompt?.trim() || 'Continue from where you left off.'),
+    );
     return {
       ...result,
       sourceRunId: runId,
@@ -1154,25 +1164,25 @@ export class PersonalAgentDaemon {
   private async recoverInterruptedBackgroundRuns(): Promise<void> {
     const runs = scanDurableRunsForRecovery(this.runsRoot);
 
-    await Promise.all(runs.map(async (run) => {
-      if (run.manifest?.kind !== 'background-run' && run.manifest?.kind !== 'raw-shell') {
-        return;
-      }
+    await Promise.all(
+      runs.map(async (run) => {
+        if (run.manifest?.kind !== 'background-run' && run.manifest?.kind !== 'raw-shell') {
+          return;
+        }
 
-      const interrupted = await markBackgroundRunInterrupted({
-        runId: run.runId,
-        runPaths: resolveDurableRunPaths(this.runsRoot, run.runId),
-        reason: 'Daemon restarted before background run completion.',
-      });
-      if (interrupted) {
-        await this.surfaceBackgroundRunOutcome(run.runId);
-      }
-    }));
+        const interrupted = await markBackgroundRunInterrupted({
+          runId: run.runId,
+          runPaths: resolveDurableRunPaths(this.runsRoot, run.runId),
+          reason: 'Daemon restarted before background run completion.',
+        });
+        if (interrupted) {
+          await this.surfaceBackgroundRunOutcome(run.runId);
+        }
+      }),
+    );
   }
 
-  async syncWebLiveConversationRun(
-    input: SyncWebLiveConversationRunRequestInput,
-  ): Promise<SyncWebLiveConversationRunResult> {
+  async syncWebLiveConversationRun(input: SyncWebLiveConversationRunRequestInput): Promise<SyncWebLiveConversationRunResult> {
     return saveWebLiveConversationRunState(input);
   }
 

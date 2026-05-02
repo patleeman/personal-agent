@@ -1,6 +1,8 @@
 import { appendFileSync } from 'node:fs';
+
 import { app, dialog } from 'electron';
 import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater';
+
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 const INITIAL_CHECK_DELAY_MS = 10_000;

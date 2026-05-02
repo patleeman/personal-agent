@@ -3,7 +3,5 @@ export interface MarkdownReadableEditor {
 }
 
 export function readMarkdownFromEditor(editor: MarkdownReadableEditor | null | undefined): string {
-  return typeof editor?.getMarkdown === 'function'
-    ? editor.getMarkdown()
-    : '';
+  return typeof editor?.getMarkdown === 'function' ? editor.getMarkdown() : '';
 }

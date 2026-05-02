@@ -1,31 +1,31 @@
 /**
  * Profile module - schema, validation, and merge engine
- * 
+ *
  * Supports layered profiles: shared < datadog < local
  * with deterministic merge rules and comprehensive validation.
  */
 
 // Types
 export type {
-  Profile,
-  ProfileData,
-  PartialProfile,
-  ProfileSource,
   LayeredProfileInput,
   MergeOptions,
+  ModelPreferences,
+  NotificationPreferences,
+  PartialProfile,
+  PrivacySettings,
+  Profile,
+  ProfileData,
+  ProfileSource,
+  ToolPermissions,
   ValidationError,
   ValidationResult,
-  NotificationPreferences,
-  PrivacySettings,
-  ModelPreferences,
-  ToolPermissions,
 } from './types.js';
 
 // Constants
-export { SCHEMA_VERSION, DEFAULTS } from './types.js';
+export { DEFAULTS, SCHEMA_VERSION } from './types.js';
 
 // Validation
 export { validatePartialProfile, validateProfile } from './validation.js';
 
 // Merge engine
-export { mergeProfiles, isProfile } from './merge.js';
+export { isProfile, mergeProfiles } from './merge.js';

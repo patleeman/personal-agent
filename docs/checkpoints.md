@@ -29,10 +29,10 @@ When a conversation has saved checkpoint diffs, they appear in the right workben
 
 ## Checkpoints vs. artifacts
 
-| Surface | Purpose | Lifecycle |
-|---|---|---|
-| Checkpoint | git commit snapshot of code changes | tied to conversation, persists in git |
-| Artifact | rendered output (HTML, diagram, report) | tied to conversation, stored in conversation artifact state |
+| Surface    | Purpose                                 | Lifecycle                                                   |
+| ---------- | --------------------------------------- | ----------------------------------------------------------- |
+| Checkpoint | git commit snapshot of code changes     | tied to conversation, persists in git                       |
+| Artifact   | rendered output (HTML, diagram, report) | tied to conversation, stored in conversation artifact state |
 
 Checkpoints are for code. Artifacts are for rendered output. The two are independent — a checkpoint can include an artifact file as part of the commit, and an artifact can reference checkpoint diffs.
 

@@ -1,21 +1,28 @@
 import { existsSync, readFileSync } from 'node:fs';
+
 import { clearTaskCallbackBinding, getTaskCallbackBinding, setTaskCallbackBinding } from '@personal-agent/core';
 import {
+  type AutomationActivityEntry,
   createStoredAutomation,
   deleteStoredAutomation,
   ensureAutomationThread,
   listAutomationActivityEntries,
   normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
-  updateStoredAutomation,
-  type AutomationActivityEntry,
   type StoredAutomation,
+  updateStoredAutomation,
 } from '@personal-agent/daemon';
-import { invalidateAppTopics } from '../shared/appEvents.js';
+
 import { readSessionMeta } from '../conversations/sessions.js';
-import { loadScheduledTasksForProfile, toScheduledTaskMetadata, type TaskRuntimeEntry } from './scheduledTasks.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
+import { loadScheduledTasksForProfile, type TaskRuntimeEntry, toScheduledTaskMetadata } from './scheduledTasks.js';
+import {
+  applyScheduledTaskThreadBinding,
+  buildScheduledTaskThreadDetail,
+  resolveScheduledTaskThreadBinding,
+  type ScheduledTaskThreadInput,
+} from './scheduledTaskThreads.js';
 import { findTaskForProfile, readRequiredTaskId } from './taskService.js';
-import { applyScheduledTaskThreadBinding, buildScheduledTaskThreadDetail, resolveScheduledTaskThreadBinding, type ScheduledTaskThreadInput } from './scheduledTaskThreads.js';
 
 export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadInput {
   title: string;
@@ -66,7 +73,11 @@ function summarizePrompt(value: string): string {
   return value.split('\n')[0]?.slice(0, 120) ?? '';
 }
 
-function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntimeEntry, callbackBinding?: ReturnType<typeof getTaskCallbackBinding>) {
+function buildScheduledTaskSummary(
+  task: StoredAutomation,
+  runtime?: TaskRuntimeEntry,
+  callbackBinding?: ReturnType<typeof getTaskCallbackBinding>,
+) {
   const threadDetail = buildScheduledTaskThreadDetail(task);
   return {
     id: task.id,
@@ -149,14 +160,10 @@ export function buildScheduledTaskDetail(
 
 export async function listScheduledTasksCapability(profile: string) {
   const loaded = loadScheduledTasksForProfile(profile);
-  const runtimeById = new Map(
-    loaded.runtimeEntries.flatMap((task) => task.id ? [[task.id, task] as const] : []),
-  );
+  const runtimeById = new Map(loaded.runtimeEntries.flatMap((task) => (task.id ? [[task.id, task] as const] : [])));
 
   return loaded.tasks.map((task) => {
-    const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId
-      ? ensureAutomationThread(task.id)
-      : task;
+    const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId ? ensureAutomationThread(task.id) : task;
     const callbackBinding = getTaskCallbackBinding({ profile, taskId: taskWithThread.id });
     return buildScheduledTaskSummary(taskWithThread, loaded.runtimeState[task.id] ?? runtimeById.get(task.id), callbackBinding);
   });
@@ -168,9 +175,10 @@ export async function readScheduledTaskCapability(profile: string, taskId: strin
     throw new Error('Task not found');
   }
 
-  const task = resolvedTask.task.threadMode === 'dedicated' && !resolvedTask.task.threadConversationId
-    ? ensureAutomationThread(resolvedTask.task.id)
-    : resolvedTask.task;
+  const task =
+    resolvedTask.task.threadMode === 'dedicated' && !resolvedTask.task.threadConversationId
+      ? ensureAutomationThread(resolvedTask.task.id)
+      : resolvedTask.task;
   const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
   const activity = listAutomationActivityEntries(task.id);
 
@@ -180,7 +188,16 @@ export async function readScheduledTaskCapability(profile: string, taskId: strin
 function applyScheduledTaskCallbackBinding(
   profile: string,
   taskId: string,
-  input: Pick<ScheduledTaskCreateCapabilityInput, 'callbackConversationId' | 'deliverOnSuccess' | 'deliverOnFailure' | 'notifyOnSuccess' | 'notifyOnFailure' | 'requireAck' | 'autoResumeIfOpen'>,
+  input: Pick<
+    ScheduledTaskCreateCapabilityInput,
+    | 'callbackConversationId'
+    | 'deliverOnSuccess'
+    | 'deliverOnFailure'
+    | 'notifyOnSuccess'
+    | 'notifyOnFailure'
+    | 'requireAck'
+    | 'autoResumeIfOpen'
+  >,
   targetType: string,
 ) {
   if (targetType === 'conversation') {
@@ -188,13 +205,14 @@ function applyScheduledTaskCallbackBinding(
     return;
   }
 
-  const hasExplicitCallbackConfig = input.callbackConversationId !== undefined
-    || input.deliverOnSuccess !== undefined
-    || input.deliverOnFailure !== undefined
-    || input.notifyOnSuccess !== undefined
-    || input.notifyOnFailure !== undefined
-    || input.requireAck !== undefined
-    || input.autoResumeIfOpen !== undefined;
+  const hasExplicitCallbackConfig =
+    input.callbackConversationId !== undefined ||
+    input.deliverOnSuccess !== undefined ||
+    input.deliverOnFailure !== undefined ||
+    input.notifyOnSuccess !== undefined ||
+    input.notifyOnFailure !== undefined ||
+    input.requireAck !== undefined ||
+    input.autoResumeIfOpen !== undefined;
   if (!hasExplicitCallbackConfig) {
     return;
   }
@@ -277,13 +295,11 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     throw new Error('Task not found');
   }
 
-  const targetType = input.targetType === undefined
-    ? resolvedTask.task.targetType
-    : normalizeAutomationTargetTypeForSelection(input.targetType);
+  const targetType =
+    input.targetType === undefined ? resolvedTask.task.targetType : normalizeAutomationTargetTypeForSelection(input.targetType);
   const threadSelection = resolveScheduledTaskThreadBinding({
-    threadMode: targetType === 'conversation' && input.threadMode === 'none'
-      ? 'dedicated'
-      : (input.threadMode ?? resolvedTask.task.threadMode),
+    threadMode:
+      targetType === 'conversation' && input.threadMode === 'none' ? 'dedicated' : (input.threadMode ?? resolvedTask.task.threadMode),
     threadConversationId: input.threadConversationId,
     cwd: input.cwd ?? resolvedTask.task.cwd,
   });

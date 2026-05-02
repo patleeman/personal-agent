@@ -1,8 +1,6 @@
 import type { AgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
-import {
-  generateConversationTitle,
-  hasAssistantTitleSourceMessage,
-} from './conversationAutoTitle.js';
+
+import { generateConversationTitle, hasAssistantTitleSourceMessage } from './conversationAutoTitle.js';
 import { getSessionMessages } from './liveSessionTitle.js';
 
 export interface LiveSessionAutoTitleHost {
@@ -62,7 +60,9 @@ export function requestLiveSessionAutoTitle(input: {
 
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
-      console.error(`[${new Date().toISOString()}] [web] [error] conversation auto-title failed sessionId=${entry.sessionId} message=${message}`);
+      console.error(
+        `[${new Date().toISOString()}] [web] [error] conversation auto-title failed sessionId=${entry.sessionId} message=${message}`,
+      );
       if (stack) {
         console.error(stack);
       }

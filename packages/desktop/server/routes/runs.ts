@@ -5,16 +5,9 @@
  */
 
 import type { Express } from 'express';
-import {
-  cancelDurableRun,
-  getDurableRun,
-  getDurableRunLog,
-  listDurableRuns,
-} from '../automation/durableRuns.js';
-import {
-  invalidateAppTopics,
-  logError,
-} from '../middleware/index.js';
+
+import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from '../automation/durableRuns.js';
+import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 function parseRunLogTail(queryTail: unknown): number | undefined {
   if (typeof queryTail !== 'string') {
@@ -87,11 +80,13 @@ export function registerRunRoutes(router: Pick<Express, 'get' | 'post' | 'patch'
 
     const runId = req.params.id;
     const writeSnapshot = () => {
-      void getDurableRun(runId).then((detail) => {
-        if (detail) {
-          res.write(`data: ${JSON.stringify(detail)}\n\n`);
-        }
-      }).catch(() => undefined);
+      void getDurableRun(runId)
+        .then((detail) => {
+          if (detail) {
+            res.write(`data: ${JSON.stringify(detail)}\n\n`);
+          }
+        })
+        .catch(() => undefined);
     };
 
     writeSnapshot();
@@ -143,6 +138,4 @@ export function registerRunRoutes(router: Pick<Express, 'get' | 'post' | 'patch'
       res.status(500).json({ error: String(err) });
     }
   });
-
 }
-

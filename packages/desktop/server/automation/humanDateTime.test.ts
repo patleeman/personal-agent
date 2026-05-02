@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseFutureHumanDateTime, parseHumanDateTime } from './humanDateTime.js';
 
 describe('humanDateTime', () => {
@@ -33,14 +34,18 @@ describe('humanDateTime', () => {
   });
 
   it('rejects expressions that resolve to the past', () => {
-    expect(() => parseFutureHumanDateTime('now-1d', {
-      now: new Date('2026-04-28T12:00:00.000Z'),
-    })).toThrow('must resolve to the future');
+    expect(() =>
+      parseFutureHumanDateTime('now-1d', {
+        now: new Date('2026-04-28T12:00:00.000Z'),
+      }),
+    ).toThrow('must resolve to the future');
   });
 
   it('returns null for unparseable input', () => {
-    expect(parseHumanDateTime('not a date', {
-      now: new Date('2026-04-28T12:00:00.000Z'),
-    })).toBeNull();
+    expect(
+      parseHumanDateTime('not a date', {
+        now: new Date('2026-04-28T12:00:00.000Z'),
+      }),
+    ).toBeNull();
   });
 });

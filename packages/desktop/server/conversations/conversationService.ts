@@ -1,4 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
+
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   ensureConversationAttentionBaselines,
@@ -11,30 +12,18 @@ import {
   markConversationAttentionUnread,
   summarizeConversationAttention,
 } from '@personal-agent/core';
-import { type DeferredResumeSummary } from '../automation/deferredResumes.js';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
-import {
-  ensureSessionFileExists,
-  registry as liveSessionRegistry,
-} from './liveSessions.js';
-import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
-import {
-  listSessions,
-  readSessionBlocksWithTelemetry,
-  readSessionMeta,
-} from './sessions.js';
-import { 
-  getLiveSessions as getLocalLiveSessions,
-  getAvailableModelObjects,
-} from './liveSessions.js';
-import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
-import {
-  resolveConversationModelPreferenceState,
-  readConversationModelPreferenceSnapshot,
-} from './conversationModelPreferences.js';
+
+import { type DeferredResumeSummary } from '../automation/deferredResumes.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { type SavedUiPreferences } from '../ui/uiPreferences.js';
 import { readConversationContextDocs } from './conversationContextDocs.js';
+import { readConversationModelPreferenceSnapshot, resolveConversationModelPreferenceState } from './conversationModelPreferences.js';
+import { ensureSessionFileExists, registry as liveSessionRegistry } from './liveSessions.js';
+import { getAvailableModelObjects, getLiveSessions as getLocalLiveSessions } from './liveSessions.js';
+import { listSessions, readSessionBlocksWithTelemetry, readSessionMeta } from './sessions.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation service');
@@ -282,16 +271,14 @@ export function publishConversationSessionMetaChanged(...conversationIds: Array<
   }
 }
 
-export function decorateSessionsWithAttention<T extends {
-  id: string;
-  file: string;
-  timestamp: string;
-  messageCount: number;
-}>(
-  profile: string,
-  sessions: T[],
-  deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile(),
-) {
+export function decorateSessionsWithAttention<
+  T extends {
+    id: string;
+    file: string;
+    timestamp: string;
+    messageCount: number;
+  },
+>(profile: string, sessions: T[], deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile()) {
   ensureConversationAttentionBaselines({
     profile,
     conversations: sessions.map((session) => ({
@@ -357,10 +344,10 @@ function buildSyntheticLiveSessionSnapshot(
 
 function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[number] | null | undefined): boolean {
   return Boolean(
-    liveEntry?.isStreaming
-      || liveEntry?.hasPendingHiddenTurn
-      || liveEntry?.lastDurableRunState === 'running'
-      || liveEntry?.lastDurableRunState === 'recovering',
+    liveEntry?.isStreaming ||
+    liveEntry?.hasPendingHiddenTurn ||
+    liveEntry?.lastDurableRunState === 'running' ||
+    liveEntry?.lastDurableRunState === 'recovering',
   );
 }
 
@@ -390,11 +377,7 @@ export function listConversationSessionsSnapshot() {
   ];
 }
 
-export function toggleConversationAttention(input: {
-  profile: string;
-  conversationId: string;
-  read?: boolean;
-}): boolean {
+export function toggleConversationAttention(input: { profile: string; conversationId: string; read?: boolean }): boolean {
   const session = listConversationSessionsSnapshot().find((entry) => entry.id === input.conversationId);
   if (!session) {
     return false;
@@ -428,7 +411,9 @@ export function resolveConversationSessionFile(conversationId: string): string |
     return liveSessionFile;
   }
 
-  const snapshotSessionFile = listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.file?.trim();
+  const snapshotSessionFile = listConversationSessionsSnapshot()
+    .find((session) => session.id === conversationId)
+    ?.file?.trim();
   return snapshotSessionFile || undefined;
 }
 
@@ -451,7 +436,7 @@ export function readConversationSessionMeta(conversationId: string) {
   const deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile();
   const storedSession = readSessionMeta(conversationId);
   const decoratedSession = storedSession
-    ? decorateSessionsWithAttention(profile, [storedSession], deferredResumesBySessionFile)[0] ?? null
+    ? (decorateSessionsWithAttention(profile, [storedSession], deferredResumesBySessionFile)[0] ?? null)
     : null;
   const liveEntry = listAllLiveSessions().find((session) => session.id === conversationId) ?? null;
 
@@ -481,36 +466,26 @@ function normalizeSessionDetailTailBlocks(value: number | undefined): number | u
 
 export function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
   const candidate = Array.isArray(rawTailBlocks) ? rawTailBlocks[0] : rawTailBlocks;
-  const parsed = typeof candidate === 'number'
-    ? candidate
-    : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
-      ? Number.parseInt(candidate.trim(), 10)
-      : undefined;
+  const parsed =
+    typeof candidate === 'number'
+      ? candidate
+      : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
+        ? Number.parseInt(candidate.trim(), 10)
+        : undefined;
 
-  return Number.isSafeInteger(parsed) && (parsed as number) > 0
-    ? Math.min(MAX_SESSION_DETAIL_TAIL_BLOCKS, parsed as number)
-    : undefined;
+  return Number.isSafeInteger(parsed) && (parsed as number) > 0 ? Math.min(MAX_SESSION_DETAIL_TAIL_BLOCKS, parsed as number) : undefined;
 }
 
-export async function readSessionDetailForRoute(input: {
-  conversationId: string;
-  profile: string;
-  tailBlocks?: number;
-}): Promise<{
+export async function readSessionDetailForRoute(input: { conversationId: string; profile: string; tailBlocks?: number }): Promise<{
   sessionRead: SessionDetailRouteReadResult;
   remoteMirror: SessionDetailRouteRemoteMirrorTelemetry;
 }> {
   const tailBlocks = normalizeSessionDetailTailBlocks(input.tailBlocks);
-  const sessionRead = readSessionBlocksWithTelemetry(
-    input.conversationId,
-    tailBlocks ? { tailBlocks } : undefined,
-  );
+  const sessionRead = readSessionBlocksWithTelemetry(input.conversationId, tailBlocks ? { tailBlocks } : undefined);
 
   return {
     sessionRead,
-    remoteMirror: sessionRead.detail
-      ? { status: 'deferred', durationMs: 0 }
-      : { status: 'not-remote', durationMs: 0 },
+    remoteMirror: sessionRead.detail ? { status: 'deferred', durationMs: 0 } : { status: 'not-remote', durationMs: 0 },
   };
 }
 

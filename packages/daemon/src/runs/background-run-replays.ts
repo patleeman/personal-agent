@@ -1,7 +1,8 @@
 import { existsSync } from 'fs';
+
+import { resolveBackgroundRunSessionDir } from './background-run-sessions.js';
 import type { StartBackgroundRunInput } from './background-runs.js';
 import type { ScannedDurableRun } from './store.js';
-import { resolveBackgroundRunSessionDir } from './background-run-sessions.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -16,11 +17,7 @@ function readOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function readSpec(run: ScannedDurableRun): Record<string, unknown> | undefined {
-  return isRecord(run.manifest?.spec)
-    ? run.manifest.spec
-    : isRecord(run.checkpoint?.payload)
-      ? run.checkpoint.payload
-      : undefined;
+  return isRecord(run.manifest?.spec) ? run.manifest.spec : isRecord(run.checkpoint?.payload) ? run.checkpoint.payload : undefined;
 }
 
 function readTarget(run: ScannedDurableRun): Record<string, unknown> | undefined {
@@ -47,7 +44,13 @@ function readCallback(run: ScannedDurableRun): StartBackgroundRunInput['callback
   const alertLevel = callback.alertLevel;
   const autoResumeIfOpen = readOptionalBoolean(callback.autoResumeIfOpen);
   const requireAck = readOptionalBoolean(callback.requireAck);
-  if (alertLevel !== 'none' && alertLevel !== 'passive' && alertLevel !== 'disruptive' && autoResumeIfOpen === undefined && requireAck === undefined) {
+  if (
+    alertLevel !== 'none' &&
+    alertLevel !== 'passive' &&
+    alertLevel !== 'disruptive' &&
+    autoResumeIfOpen === undefined &&
+    requireAck === undefined
+  ) {
     return undefined;
   }
 
@@ -60,9 +63,7 @@ function readCallback(run: ScannedDurableRun): StartBackgroundRunInput['callback
 
 function readCallbackConversation(run: ScannedDurableRun): StartBackgroundRunInput['callbackConversation'] | undefined {
   const metadata = readMetadata(run);
-  const raw = isRecord(metadata.callbackConversation)
-    ? metadata.callbackConversation
-    : undefined;
+  const raw = isRecord(metadata.callbackConversation) ? metadata.callbackConversation : undefined;
   if (!raw) {
     return undefined;
   }
@@ -85,19 +86,19 @@ function readCallbackConversation(run: ScannedDurableRun): StartBackgroundRunInp
 function readTaskSlug(run: ScannedDurableRun): string | undefined {
   const metadata = readMetadata(run);
   const spec = readSpec(run);
-  return readOptionalString(metadata.taskSlug)
-    ?? readOptionalString(spec?.taskSlug)
-    ?? readOptionalString(run.manifest?.source?.id)
-    ?? readOptionalString(run.runId);
+  return (
+    readOptionalString(metadata.taskSlug) ??
+    readOptionalString(spec?.taskSlug) ??
+    readOptionalString(run.manifest?.source?.id) ??
+    readOptionalString(run.runId)
+  );
 }
 
 function readCwd(run: ScannedDurableRun): string | undefined {
   const metadata = readMetadata(run);
   const target = readTarget(run);
   const spec = readSpec(run);
-  return readOptionalString(metadata.cwd)
-    ?? readOptionalString(target?.cwd)
-    ?? readOptionalString(spec?.cwd);
+  return readOptionalString(metadata.cwd) ?? readOptionalString(target?.cwd) ?? readOptionalString(spec?.cwd);
 }
 
 function readAgentSpec(run: ScannedDurableRun): StartBackgroundRunInput['agent'] | undefined {
@@ -122,8 +123,7 @@ function readAgentSpec(run: ScannedDurableRun): StartBackgroundRunInput['agent']
 
 function readShellCommand(run: ScannedDurableRun): string | undefined {
   const target = readTarget(run);
-  return readOptionalString(target?.command)
-    ?? readOptionalString(run.checkpoint?.payload?.shellCommand);
+  return readOptionalString(target?.command) ?? readOptionalString(run.checkpoint?.payload?.shellCommand);
 }
 
 function readArgv(run: ScannedDurableRun): string[] | undefined {
@@ -137,8 +137,7 @@ function readArgv(run: ScannedDurableRun): string[] | undefined {
     return undefined;
   }
 
-  const normalized = argv
-    .flatMap((entry) => typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []);
+  const normalized = argv.flatMap((entry) => (typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []));
   return normalized.length > 0 ? normalized : undefined;
 }
 

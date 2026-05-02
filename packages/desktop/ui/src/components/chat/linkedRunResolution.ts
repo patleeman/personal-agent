@@ -1,10 +1,4 @@
-import {
-  getRunHeadline,
-  getRunMoment,
-  getRunTaskSlug,
-  isRunActive,
-  type RunPresentationLookups,
-} from '../../automation/runPresentation';
+import { getRunHeadline, getRunMoment, getRunTaskSlug, isRunActive, type RunPresentationLookups } from '../../automation/runPresentation';
 import type { DurableRunRecord } from '../../shared/types';
 import { type LinkedRunPresentation, normalizeRunLabel } from './linkedRuns.js';
 
@@ -28,17 +22,19 @@ export function pickBestResolvedLinkedRunCandidate(candidates: DurableRunRecord[
     return null;
   }
 
-  return [...candidates].sort((left, right) => {
-    const leftActive = isRunActive(left) ? 1 : 0;
-    const rightActive = isRunActive(right) ? 1 : 0;
-    if (leftActive !== rightActive) {
-      return rightActive - leftActive;
-    }
+  return (
+    [...candidates].sort((left, right) => {
+      const leftActive = isRunActive(left) ? 1 : 0;
+      const rightActive = isRunActive(right) ? 1 : 0;
+      if (leftActive !== rightActive) {
+        return rightActive - leftActive;
+      }
 
-    const leftAt = getRunMoment(left).at ?? '';
-    const rightAt = getRunMoment(right).at ?? '';
-    return rightAt.localeCompare(leftAt) || left.runId.localeCompare(right.runId);
-  })[0] ?? null;
+      const leftAt = getRunMoment(left).at ?? '';
+      const rightAt = getRunMoment(right).at ?? '';
+      return rightAt.localeCompare(leftAt) || left.runId.localeCompare(right.runId);
+    })[0] ?? null
+  );
 }
 
 export function resolveLinkedRunRecord(

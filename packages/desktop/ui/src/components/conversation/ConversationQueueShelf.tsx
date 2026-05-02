@@ -1,5 +1,3 @@
-import { Pill } from '../ui';
-import type { ParallelPromptPreview } from '../../shared/types';
 import {
   formatParallelJobContextSummary,
   formatParallelJobStatusLabel,
@@ -7,6 +5,8 @@ import {
   formatQueuedPromptShelfText,
   truncateConversationShelfText,
 } from '../../conversation/conversationComposerPresentation';
+import type { ParallelPromptPreview } from '../../shared/types';
+import { Pill } from '../ui';
 
 export interface ConversationPendingQueueItem {
   id: string;
@@ -53,10 +53,16 @@ export function ConversationQueueShelf({
               {message.restorable !== false ? (
                 <button
                   type="button"
-                  onClick={() => { onRestoreQueuedPrompt(message.type, message.queueIndex, message.id); }}
+                  onClick={() => {
+                    onRestoreQueuedPrompt(message.type, message.queueIndex, message.id);
+                  }}
                   disabled={conversationNeedsTakeover}
                   className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
-                  title={conversationNeedsTakeover ? 'Take over this conversation before restoring queued prompts' : 'Restore this queued prompt to the composer'}
+                  title={
+                    conversationNeedsTakeover
+                      ? 'Take over this conversation before restoring queued prompts'
+                      : 'Restore this queued prompt to the composer'
+                  }
                   aria-label="Restore queued prompt to the composer"
                 >
                   restore
@@ -77,21 +83,26 @@ export function ConversationQueueShelf({
               imageCount: job.imageCount,
               attachmentRefs: job.attachmentRefs,
             });
-            const attachmentSummary = job.attachmentRefs.length > 0
-              ? truncateConversationShelfText(job.attachmentRefs.join(', '), { maxChars: 140, maxLines: 2 })
-              : null;
-            const touchedFileSummary = job.touchedFiles.length > 0
-              ? truncateConversationShelfText(job.touchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
-              : null;
-            const parentTouchedSummary = job.parentTouchedFiles.length > 0
-              ? truncateConversationShelfText(job.parentTouchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
-              : null;
-            const overlapSummary = job.overlapFiles.length > 0
-              ? truncateConversationShelfText(job.overlapFiles.join(', '), { maxChars: 180, maxLines: 2 })
-              : null;
-            const sideEffectSummary = job.sideEffects.length > 0
-              ? truncateConversationShelfText(job.sideEffects.join(' · '), { maxChars: 180, maxLines: 3 })
-              : null;
+            const attachmentSummary =
+              job.attachmentRefs.length > 0
+                ? truncateConversationShelfText(job.attachmentRefs.join(', '), { maxChars: 140, maxLines: 2 })
+                : null;
+            const touchedFileSummary =
+              job.touchedFiles.length > 0
+                ? truncateConversationShelfText(job.touchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
+                : null;
+            const parentTouchedSummary =
+              job.parentTouchedFiles.length > 0
+                ? truncateConversationShelfText(job.parentTouchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
+                : null;
+            const overlapSummary =
+              job.overlapFiles.length > 0
+                ? truncateConversationShelfText(job.overlapFiles.join(', '), { maxChars: 180, maxLines: 2 })
+                : null;
+            const sideEffectSummary =
+              job.sideEffects.length > 0
+                ? truncateConversationShelfText(job.sideEffects.join(' · '), { maxChars: 180, maxLines: 3 })
+                : null;
 
             return (
               <div key={job.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
@@ -109,16 +120,22 @@ export function ConversationQueueShelf({
                   {overlapSummary ? <p className="mt-0.5 text-[11px] text-warning">overlap: {overlapSummary}</p> : null}
                   {sideEffectSummary ? <p className="mt-0.5 text-[11px] text-dim">effects: {sideEffectSummary}</p> : null}
                   {job.status === 'failed' && job.error ? (
-                    <p className="mt-0.5 text-[11px] text-danger">{truncateConversationShelfText(job.error, { maxChars: 140, maxLines: 2 })}</p>
+                    <p className="mt-0.5 text-[11px] text-danger">
+                      {truncateConversationShelfText(job.error, { maxChars: 140, maxLines: 2 })}
+                    </p>
                   ) : job.resultPreview ? (
-                    <p className="mt-0.5 text-[11px] text-dim">{truncateConversationShelfText(job.resultPreview, { maxChars: 140, maxLines: 2 })}</p>
+                    <p className="mt-0.5 text-[11px] text-dim">
+                      {truncateConversationShelfText(job.resultPreview, { maxChars: 140, maxLines: 2 })}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-3 pt-0.5 text-[11px]">
                   {(job.status === 'ready' || job.status === 'failed') && (
                     <button
                       type="button"
-                      onClick={() => { onManageParallelJob(job.id, 'importNow'); }}
+                      onClick={() => {
+                        onManageParallelJob(job.id, 'importNow');
+                      }}
                       className="text-dim transition-colors hover:text-primary"
                       title="Append this parallel response to the main thread next"
                       aria-label="Import parallel response now"
@@ -129,7 +146,9 @@ export function ConversationQueueShelf({
                   {job.status === 'running' ? (
                     <button
                       type="button"
-                      onClick={() => { onManageParallelJob(job.id, 'cancel'); }}
+                      onClick={() => {
+                        onManageParallelJob(job.id, 'cancel');
+                      }}
                       className="text-dim transition-colors hover:text-primary"
                       title="Cancel this running parallel prompt"
                       aria-label="Cancel running parallel prompt"
@@ -139,7 +158,9 @@ export function ConversationQueueShelf({
                   ) : job.status !== 'importing' ? (
                     <button
                       type="button"
-                      onClick={() => { onManageParallelJob(job.id, 'skip'); }}
+                      onClick={() => {
+                        onManageParallelJob(job.id, 'skip');
+                      }}
                       className="text-dim transition-colors hover:text-primary"
                       title="Drop this parallel response without importing it"
                       aria-label="Skip parallel response"
@@ -149,7 +170,9 @@ export function ConversationQueueShelf({
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => { onOpenConversation(job.childConversationId); }}
+                    onClick={() => {
+                      onOpenConversation(job.childConversationId);
+                    }}
                     className="text-dim transition-colors hover:text-primary"
                     title="Open side thread"
                     aria-label="Open side thread"

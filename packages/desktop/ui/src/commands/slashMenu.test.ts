@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildSlashMenuItems, parseSlashInput } from './slashMenu';
+
 import type { MemorySkillItem } from '../shared/types';
+import { buildSlashMenuItems, parseSlashInput } from './slashMenu';
 
 const SKILLS: MemorySkillItem[] = [
   {
@@ -37,10 +38,7 @@ describe('buildSlashMenuItems', () => {
 
   it('returns skill entries when the query targets skills', () => {
     const items = buildSlashMenuItems('/ski', SKILLS);
-    expect(items.map((item) => item.displayCmd)).toEqual([
-      '/skill:frontend-design',
-      '/skill:react',
-    ]);
+    expect(items.map((item) => item.displayCmd)).toEqual(['/skill:frontend-design', '/skill:react']);
     expect(items.every((item) => item.kind === 'skill')).toBe(true);
   });
 
@@ -62,10 +60,7 @@ describe('buildSlashMenuItems', () => {
 
   it('shows the full skill list when the slash query targets skills directly', () => {
     const items = buildSlashMenuItems('/skills', SKILLS);
-    expect(items.map((item) => item.displayCmd)).toEqual([
-      '/skill:frontend-design',
-      '/skill:react',
-    ]);
+    expect(items.map((item) => item.displayCmd)).toEqual(['/skill:frontend-design', '/skill:react']);
     expect(items.every((item) => item.kind === 'skill')).toBe(true);
   });
 

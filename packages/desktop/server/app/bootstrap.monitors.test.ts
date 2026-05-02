@@ -101,7 +101,9 @@ describe('bootstrap monitor helpers', () => {
     oauthCallback?.({ status: 'completed' });
     expect(reloadAllLiveSessionAuthMock).toHaveBeenCalledTimes(1);
 
-    const logger = createServiceAttentionMonitorMock.mock.calls[0]?.[0]?.logger as { warn: (message: string, fields?: Record<string, unknown>) => void };
+    const logger = createServiceAttentionMonitorMock.mock.calls[0]?.[0]?.logger as {
+      warn: (message: string, fields?: Record<string, unknown>) => void;
+    };
     logger.warn('monitor warning', { area: 'attention' });
     expect(logWarnMock).toHaveBeenCalledWith('monitor warning', { area: 'attention' });
   });
@@ -126,13 +128,13 @@ describe('bootstrap monitor helpers', () => {
 
   it('flushes deferred resumes after successful conversation recovery', async () => {
     const flushLiveDeferredResumes = vi.fn().mockResolvedValue(undefined);
-    recoverDurableLiveConversationsMock.mockImplementation(async (options: {
-      logger: { info: (message: string) => void; warn: (message: string) => void };
-    }) => {
-      options.logger.info('recovery detail');
-      options.logger.warn('recovery warning');
-      return { recovered: [{ id: 'run-1' }] };
-    });
+    recoverDurableLiveConversationsMock.mockImplementation(
+      async (options: { logger: { info: (message: string) => void; warn: (message: string) => void } }) => {
+        options.logger.info('recovery detail');
+        options.logger.warn('recovery warning');
+        return { recovered: [{ id: 'run-1' }] };
+      },
+    );
 
     startConversationRecovery({
       flushLiveDeferredResumes,
@@ -147,16 +149,18 @@ describe('bootstrap monitor helpers', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(recoverDurableLiveConversationsMock).toHaveBeenCalledWith(expect.objectContaining({
-      loaderOptions: {
-        cwd: '/repo',
-        extensionFactories: [],
-      },
-      logger: {
-        info: expect.any(Function),
-        warn: expect.any(Function),
-      },
-    }));
+    expect(recoverDurableLiveConversationsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        loaderOptions: {
+          cwd: '/repo',
+          extensionFactories: [],
+        },
+        logger: {
+          info: expect.any(Function),
+          warn: expect.any(Function),
+        },
+      }),
+    );
     expect(logInfoMock).toHaveBeenCalledWith('recovery detail');
     expect(logWarnMock).toHaveBeenCalledWith('recovery warning');
     expect(logInfoMock).toHaveBeenCalledWith('Recovered 1 live conversation runs from durable state.');

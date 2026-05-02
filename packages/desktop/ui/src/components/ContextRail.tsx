@@ -1,18 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../client/api';
-import { setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
-import {
-  collectConversationRunMentions,
-  getConversationRunIdFromSearch,
-  setConversationRunIdInSearch,
-} from '../conversation/conversationRuns';
-import {
-  buildDraftConversationCwdStorageKey,
-  DRAFT_CONVERSATION_ID,
-} from '../conversation/draftConversation';
-import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../navigation/capabilitiesSelection';
-import { useReloadState } from '../local/reloadState';
+
+import { useAppData, useAppEvents } from '../app/contexts';
 import {
   getRunConnections,
   getRunHeadline,
@@ -25,37 +14,44 @@ import {
   getRunTimeline,
   getRunWorkingDirectory,
   isRunActive,
-  listRecentConversationBackgroundRuns,
   listConnectedConversationBackgroundRuns,
+  listRecentConversationBackgroundRuns,
   type RunPresentationLookups,
 } from '../automation/runPresentation';
-import { useApi } from '../hooks/useApi';
-import { useDurableRunStream } from '../hooks/useDurableRunStream';
-import { useConversations } from '../hooks/useConversations';
-import { fetchSessionDetailCached } from '../hooks/useSessions';
-import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { formatTaskSchedule } from '../automation/taskSchedule';
-import type {
-  AgentToolInfo,
-  DurableRunDetailResult,
-  ScheduledTaskSummary,
-} from '../shared/types';
-import { timeAgo } from '../shared/utils';
-import { useAppData, useAppEvents } from '../app/contexts';
+import { api } from '../client/api';
 import { completeConversationOpenPhase } from '../client/perfDiagnostics';
-import { ensureConversationTabOpen } from '../session/sessionTabs';
+import { setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
+import {
+  collectConversationRunMentions,
+  getConversationRunIdFromSearch,
+  setConversationRunIdInSearch,
+} from '../conversation/conversationRuns';
+import { buildDraftConversationCwdStorageKey, DRAFT_CONVERSATION_ID } from '../conversation/draftConversation';
+import { useApi } from '../hooks/useApi';
+import { useConversations } from '../hooks/useConversations';
+import { useDurableRunStream } from '../hooks/useDurableRunStream';
+import { fetchSessionDetailCached } from '../hooks/useSessions';
+import { useReloadState } from '../local/reloadState';
+import {
+  buildCapabilitiesSearch,
+  getCapabilitiesPresetId,
+  getCapabilitiesSection,
+  getCapabilitiesTaskId,
+  getCapabilitiesToolName,
+} from '../navigation/capabilitiesSelection';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
-import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
+import { ensureConversationTabOpen } from '../session/sessionTabs';
+import type { AgentToolInfo, DurableRunDetailResult, ScheduledTaskSummary } from '../shared/types';
+import { timeAgo } from '../shared/utils';
+import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
+import { cx, ErrorState, IconButton, LoadingState, Pill } from './ui';
 
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 
 function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
-  return (
-    <Suspense fallback={<LoadingState label={label} className="justify-center h-full" />}>
-      {element}
-    </Suspense>
-  );
+  return <Suspense fallback={<LoadingState label={label} className="justify-center h-full" />}>{element}</Suspense>;
 }
 
 export function prefetchConversationRailData(input: {
@@ -71,15 +67,7 @@ export function prefetchConversationRailData(input: {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function Section({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Section({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <section className={cx('space-y-3 border-t border-border-subtle pt-4 first:border-t-0 first:pt-0', className)}>
       <h3 className="text-[13px] font-semibold text-primary">{title}</h3>
@@ -89,11 +77,7 @@ function Section({
 }
 
 function ConversationInspectorShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="ui-node-workspace-chrome h-full min-h-0 overflow-y-auto px-5 py-5">
-      {children}
-    </div>
-  );
+  return <div className="ui-node-workspace-chrome h-full min-h-0 overflow-y-auto px-5 py-5">{children}</div>;
 }
 
 function EmptyPrompt({ text }: { text: string }) {
@@ -117,7 +101,17 @@ function RailHeader({ label, sub }: { label: string; sub?: string }) {
 
 function FolderIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z" />
       <path d="M3.75 9.75h16.5" />
     </svg>
@@ -126,7 +120,17 @@ function FolderIcon({ className }: { className?: string }) {
 
 function PencilIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 20.25h9" />
       <path d="m16.875 3.375 3.75 3.75" />
       <path d="M18.75 1.5a2.652 2.652 0 1 1 3.75 3.75L7.5 20.25l-4.5 1.5 1.5-4.5L18.75 1.5Z" />
@@ -136,7 +140,17 @@ function PencilIcon({ className }: { className?: string }) {
 
 function XIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="m6 6 12 12" />
       <path d="M18 6 6 18" />
     </svg>
@@ -161,7 +175,9 @@ interface ConversationRelatedWorkCard {
   activityAt?: string;
 }
 
-function groupConversationRailRunCards<T extends { mention: { source: ConversationRelatedWorkGroupKey } }>(cards: T[]): Array<{
+function groupConversationRailRunCards<T extends { mention: { source: ConversationRelatedWorkGroupKey } }>(
+  cards: T[],
+): Array<{
   key: ConversationRelatedWorkGroupKey;
   title: string;
   items: T[];
@@ -226,11 +242,7 @@ function runStatusText(detail: DurableRunDetailResult['run']): { text: string; c
   return { text: status ?? 'unknown', cls: 'text-dim' };
 }
 
-function compactRunCardSummary(
-  summary: string | null | undefined,
-  title?: string | null,
-  conversationId?: string,
-): string | null {
+function compactRunCardSummary(summary: string | null | undefined, title?: string | null, conversationId?: string): string | null {
   let trimmed = summary?.trim() ?? '';
   if (!trimmed) {
     return null;
@@ -291,21 +303,28 @@ function deriveRunOutcome(run: DurableRunDetailResult['run'], outputLog: string 
 
 function formatRecoveryAction(action: string): string {
   switch (action) {
-    case 'none': return 'stable';
-    case 'resume': return 'resume';
-    case 'rerun': return 'rerun';
-    case 'attention': return 'manual review';
-    case 'invalid': return 'invalid';
-    default: return action;
+    case 'none':
+      return 'stable';
+    case 'resume':
+      return 'resume';
+    case 'rerun':
+      return 'rerun';
+    case 'attention':
+      return 'manual review';
+    case 'invalid':
+      return 'invalid';
+    default:
+      return action;
   }
 }
 
 function canCancelRun(detail: DurableRunDetailResult['run']): boolean {
-  return detail.manifest?.kind === 'background-run' && (
-    detail.status?.status === 'queued'
-    || detail.status?.status === 'waiting'
-    || detail.status?.status === 'running'
-    || detail.status?.status === 'recovering'
+  return (
+    detail.manifest?.kind === 'background-run' &&
+    (detail.status?.status === 'queued' ||
+      detail.status?.status === 'waiting' ||
+      detail.status?.status === 'running' ||
+      detail.status?.status === 'recovering')
   );
 }
 
@@ -338,13 +357,7 @@ function RunContextPanel({
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const logViewportRef = useRef<HTMLDivElement | null>(null);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
-  const {
-    detail,
-    log,
-    loading,
-    error,
-    reconnect,
-  } = useDurableRunStream(runId, simplified ? 480 : 320);
+  const { detail, log, loading, error, reconnect } = useDurableRunStream(runId, simplified ? 480 : 320);
 
   const closeRun = useCallback(() => {
     navigate({
@@ -378,9 +391,7 @@ function RunContextPanel({
   }, [scrollOutputToBottom]);
 
   const detailsShouldAutoOpen = Boolean(
-    detail
-    && !isTerminalRun(detail.run)
-    && (Boolean(detail.run.status?.lastError) || detail.run.problems.length > 0 || Boolean(error)),
+    detail && !isTerminalRun(detail.run) && (Boolean(detail.run.status?.lastError) || detail.run.problems.length > 0 || Boolean(error)),
   );
 
   async function handleCancel() {
@@ -490,7 +501,9 @@ function RunContextPanel({
             {run.attentionSignature && (
               <button
                 type="button"
-                onClick={() => { void handleMarkReviewed(); }}
+                onClick={() => {
+                  void handleMarkReviewed();
+                }}
                 disabled={markingReviewed || run.attentionDismissed}
                 className="ui-toolbar-button"
               >
@@ -500,7 +513,9 @@ function RunContextPanel({
             {cancelable && (
               <button
                 type="button"
-                onClick={() => { void handleCancel(); }}
+                onClick={() => {
+                  void handleCancel();
+                }}
                 disabled={cancelling}
                 className="ui-toolbar-button text-danger"
               >
@@ -515,20 +530,30 @@ function RunContextPanel({
 
         <div className="mt-3 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={cx(
-              'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-wider',
-              terminalRun ? 'border-accent/20 text-accent/70 font-mono' : 'border-accent/20 text-accent',
-            )}>
+            <span
+              className={cx(
+                'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] uppercase tracking-wider',
+                terminalRun ? 'border-accent/20 text-accent/70 font-mono' : 'border-accent/20 text-accent',
+              )}
+            >
               {terminalRun ? '›_ Shell' : '✦ Agent'}
             </span>
             <p className="ui-card-title break-words">{headline.title}</p>
-            <Pill tone={status.cls === 'text-danger' ? 'danger' : status.cls === 'text-warning' ? 'warning' : status.cls === 'text-success' ? 'success' : 'muted'}>
+            <Pill
+              tone={
+                status.cls === 'text-danger'
+                  ? 'danger'
+                  : status.cls === 'text-warning'
+                    ? 'warning'
+                    : status.cls === 'text-success'
+                      ? 'success'
+                      : 'muted'
+              }
+            >
               {status.text}
             </Pill>
           </div>
-          {outcome && (
-            <p className="text-[12px] text-primary break-words">{outcome}</p>
-          )}
+          {outcome && <p className="text-[12px] text-primary break-words">{outcome}</p>}
           <p className="ui-card-meta flex flex-wrap items-center gap-1.5">
             <span>{headline.summary}</span>
             {showRecovery && (
@@ -540,7 +565,9 @@ function RunContextPanel({
             {timeline[0] && (
               <>
                 <span className="opacity-40">·</span>
-                <span>{timeline[0].label} {timeAgo(timeline[0].at)}</span>
+                <span>
+                  {timeline[0].label} {timeAgo(timeline[0].at)}
+                </span>
               </>
             )}
           </p>
@@ -601,9 +628,7 @@ function RunContextPanel({
       >
         <summary className="ui-disclosure-summary px-4">
           <span>Details</span>
-          <span className="ui-disclosure-meta">
-            {connections.length > 0 ? 'Links, command, and runtime' : 'Command and runtime'}
-          </span>
+          <span className="ui-disclosure-meta">{connections.length > 0 ? 'Links, command, and runtime' : 'Command and runtime'}</span>
         </summary>
         <div className="ui-disclosure-body px-4">
           <div className="space-y-4">
@@ -614,7 +639,9 @@ function RunContextPanel({
                   {connections.map((connection) => {
                     const isCurrentOwnerConnection = ownerRoute !== undefined && connection.to === ownerRoute;
                     const detailText = isCurrentOwnerConnection
-                      ? ['Current view', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
+                      ? ['Current view', connection.detail]
+                          .filter((value): value is string => typeof value === 'string' && value.length > 0)
+                          .join(' · ')
                       : connection.detail;
                     const connectionHref = connection.to ?? null;
 
@@ -651,16 +678,33 @@ function RunContextPanel({
                 <RailMetadataRow label="What ran" value={targetPrompt ?? targetCommand ?? headline.title} />
                 {outcome && <RailMetadataRow label="Outcome" value={outcome} />}
                 {taskSlug && <RailMetadataRow label="Task" value={taskSlug} />}
-                {targetPrompt && <RailMetadataRow label="Prompt" value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>} />}
-                {targetCommand && <RailMetadataRow label="Command" value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>} />}
-                {targetCwd && <RailMetadataRow label="Working dir" value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>} />}
+                {targetPrompt && (
+                  <RailMetadataRow
+                    label="Prompt"
+                    value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>}
+                  />
+                )}
+                {targetCommand && (
+                  <RailMetadataRow
+                    label="Command"
+                    value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>}
+                  />
+                )}
+                {targetCwd && (
+                  <RailMetadataRow
+                    label="Working dir"
+                    value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>}
+                  />
+                )}
                 {targetModel && <RailMetadataRow label="Model" value={targetModel} />}
                 {targetProfile && <RailMetadataRow label="Runtime" value={targetProfile} />}
                 <RailMetadataRow label="Internal kind" value={run.manifest?.kind ?? 'unknown kind'} />
                 <RailMetadataRow label="Source" value={run.manifest?.source?.type ?? 'unknown'} />
                 <RailMetadataRow label="Attempt" value={run.status?.activeAttempt ?? 0} />
                 {run.checkpoint?.step && <RailMetadataRow label="Checkpoint" value={run.checkpoint.step} />}
-                {log?.path && <RailMetadataRow label="Log" value={<span className="break-all font-mono text-[12px] text-primary">{log.path}</span>} />}
+                {log?.path && (
+                  <RailMetadataRow label="Log" value={<span className="break-all font-mono text-[12px] text-primary">{log.path}</span>} />
+                )}
               </div>
             </div>
 
@@ -767,7 +811,9 @@ function DraftConversationContextPanel() {
       <Section title="Working Directory">
         <div className="flex items-start gap-2">
           {hasExplicitCwd ? (
-            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={draftCwd}>{draftCwd}</p>
+            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={draftCwd}>
+              {draftCwd}
+            </p>
           ) : (
             <p className="ui-card-body min-w-0 flex-1 text-dim">No working directory set.</p>
           )}
@@ -785,7 +831,9 @@ function DraftConversationContextPanel() {
             )}
             <IconButton
               compact
-              onClick={() => { void pickDraftCwd(); }}
+              onClick={() => {
+                void pickDraftCwd();
+              }}
               disabled={pickCwdBusy}
               className="text-accent"
               title={pickCwdBusy ? 'Choosing working directory…' : 'Choose the initial working directory for this draft conversation'}
@@ -834,30 +882,21 @@ function DraftConversationContextPanel() {
               className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
             />
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
+              <p className="text-[11px] text-dim">
+                Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.
+              </p>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={cancelChangingCwd}
-                  disabled={pickCwdBusy}
-                  className="ui-toolbar-button"
-                >
+                <button type="button" onClick={cancelChangingCwd} disabled={pickCwdBusy} className="ui-toolbar-button">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={pickCwdBusy}
-                  className="ui-toolbar-button text-accent"
-                >
+                <button type="submit" disabled={pickCwdBusy} className="ui-toolbar-button text-accent">
                   Save
                 </button>
               </div>
             </div>
           </form>
         )}
-        {changeCwdError && (
-          <p className="text-[11px] text-danger/80">{changeCwdError}</p>
-        )}
+        {changeCwdError && <p className="text-[11px] text-danger/80">{changeCwdError}</p>}
       </Section>
     </div>
   );
@@ -877,7 +916,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     let cancelled = false;
-    void api.runs()
+    void api
+      .runs()
       .then((nextRuns) => {
         if (!cancelled) {
           setRuns(nextRuns);
@@ -892,10 +932,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     };
   }, [runs, setRuns]);
 
-  const runRecordsById = useMemo(
-    () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
-    [runs],
-  );
+  const runRecordsById = useMemo(() => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)), [runs]);
   const runsLoading = runs === null;
   const runsError = null;
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
@@ -924,7 +961,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     // Session detail can exceed MBs for long conversations; throttle mention scans while live.
     const minRefreshIntervalMs = isSessionRunning ? 12_000 : 0;
     const now = Date.now();
-    if (minRefreshIntervalMs > 0 && (now - runMentionsLastFetchedAtRef.current) < minRefreshIntervalMs) {
+    if (minRefreshIntervalMs > 0 && now - runMentionsLastFetchedAtRef.current < minRefreshIntervalMs) {
       return;
     }
 
@@ -955,27 +992,30 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id]);
 
   const selectedRunId = getConversationRunIdFromSearch(location.search);
-  const connectedBackgroundRuns = useMemo(() => listConnectedConversationBackgroundRuns({
-    conversationId: id,
-    runs,
-    lookups: runLookups,
-  }), [id, runLookups, runs]);
-  const recentBackgroundRuns = useMemo(() => listRecentConversationBackgroundRuns({
-    conversationId: id,
-    runs,
-    lookups: runLookups,
-    limit: 5,
-  }), [id, runLookups, runs]);
+  const connectedBackgroundRuns = useMemo(
+    () =>
+      listConnectedConversationBackgroundRuns({
+        conversationId: id,
+        runs,
+        lookups: runLookups,
+      }),
+    [id, runLookups, runs],
+  );
+  const recentBackgroundRuns = useMemo(
+    () =>
+      listRecentConversationBackgroundRuns({
+        conversationId: id,
+        runs,
+        lookups: runLookups,
+        limit: 5,
+      }),
+    [id, runLookups, runs],
+  );
   const visibleRunMentions = useMemo(() => {
     const next: ConversationRelatedWorkMention[] = [];
     const seen = new Set<string>();
 
-    const push = (
-      runId: string,
-      label: string,
-      meta: string,
-      source: ConversationRelatedWorkGroupKey,
-    ) => {
+    const push = (runId: string, label: string, meta: string, source: ConversationRelatedWorkGroupKey) => {
       if (seen.has(runId)) {
         return;
       }
@@ -999,9 +1039,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     for (const mention of detectedRunMentions) {
-      const mentionMeta = mention.mentionCount > 1
-        ? `Mentioned ${mention.mentionCount} times · last seen ${timeAgo(mention.lastSeenAt)}`
-        : `Mentioned ${timeAgo(mention.lastSeenAt)}`;
+      const mentionMeta =
+        mention.mentionCount > 1
+          ? `Mentioned ${mention.mentionCount} times · last seen ${timeAgo(mention.lastSeenAt)}`
+          : `Mentioned ${timeAgo(mention.lastSeenAt)}`;
       push(mention.runId, 'Mentioned in the thread', mentionMeta, 'mentioned');
     }
 
@@ -1013,10 +1054,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       const record = runRecordsById.get(mention.runId);
       const headline = record ? getRunHeadline(record, runLookups) : null;
       const status = record ? runStatusText(record) : { text: 'unresolved', cls: 'text-dim' };
-      const activityAt = record?.status?.completedAt
-        ?? record?.status?.updatedAt
-        ?? record?.status?.startedAt
-        ?? record?.manifest?.createdAt;
+      const activityAt =
+        record?.status?.completedAt ?? record?.status?.updatedAt ?? record?.status?.startedAt ?? record?.manifest?.createdAt;
 
       return {
         mention,
@@ -1028,21 +1067,22 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     });
   }, [runLookups, runRecordsById, visibleRunMentions]);
 
-  const groupedRunCards = useMemo(
-    () => groupConversationRailRunCards(visibleRunCards),
-    [visibleRunCards],
-  );
+  const groupedRunCards = useMemo(() => groupConversationRailRunCards(visibleRunCards), [visibleRunCards]);
   const activeRunCount = visibleRunCards.reduce((count, { record }) => (record && isRefreshingRun(record) ? count + 1 : count), 0);
   const runIssueCount = visibleRunCards.reduce((count, { record }) => (record && record.problems.length > 0 ? count + 1 : count), 0);
   const unresolvedRunCount = visibleRunCards.reduce((count, { record }) => (!record ? count + 1 : count), 0);
   const reviewRunCount = runIssueCount + unresolvedRunCount;
-  const runSummary = useMemo(() => formatConversationRailRunSummary({
-    loading: runsLoading,
-    totalCount: visibleRunCards.length,
-    activeCount: activeRunCount,
-    reviewCount: reviewRunCount,
-    hasOnlyUnresolvedCards: visibleRunCards.every(({ record }) => !record),
-  }), [activeRunCount, reviewRunCount, runsLoading, visibleRunCards]);
+  const runSummary = useMemo(
+    () =>
+      formatConversationRailRunSummary({
+        loading: runsLoading,
+        totalCount: visibleRunCards.length,
+        activeCount: activeRunCount,
+        reviewCount: reviewRunCount,
+        hasOnlyUnresolvedCards: visibleRunCards.every(({ record }) => !record),
+      }),
+    [activeRunCount, reviewRunCount, runsLoading, visibleRunCards],
+  );
 
   useEffect(() => {
     if (runsExpanded || selectedRunId || autoExpandedConnectedRunsConversationIdRef.current === id) {
@@ -1061,14 +1101,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   function openRun(runId: string) {
     navigate({
       pathname: location.pathname,
-      search: setConversationRunIdInSearch(
-        setConversationArtifactIdInSearch(location.search, null),
-        runId,
-      ),
+      search: setConversationRunIdInSearch(setConversationArtifactIdInSearch(location.search, null), runId),
     });
   }
 
-  
   return (
     <div className="space-y-4">
       <Section title="Background Work">
@@ -1081,7 +1117,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] text-secondary">{runSummary}</span>
-            <span className={runsExpanded ? 'text-[10px] uppercase tracking-[0.14em] text-accent' : 'text-[10px] uppercase tracking-[0.14em] text-dim'}>
+            <span
+              className={
+                runsExpanded ? 'text-[10px] uppercase tracking-[0.14em] text-accent' : 'text-[10px] uppercase tracking-[0.14em] text-dim'
+              }
+            >
               {runsExpanded ? 'hide' : 'show'}
             </span>
           </div>
@@ -1092,9 +1132,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             {runsLoading && visibleRunCards.every(({ record }) => !record) && (
               <p className="text-[11px] text-dim animate-pulse">Refreshing background work…</p>
             )}
-            {runsError && (
-              <p className="text-[11px] text-danger/80">{runsError}</p>
-            )}
+            {runsError && <p className="text-[11px] text-danger/80">{runsError}</p>}
             {groupedRunCards.length > 0 ? (
               <div className="space-y-4">
                 {groupedRunCards.map((group) => (
@@ -1107,9 +1145,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                       {group.items.map(({ mention, record, headline, status, activityAt }) => {
                         const isSelected = mention.selected;
                         const rawTitle = headline?.title ?? mention.label;
-                        const title = record && (rawTitle === record.runId || rawTitle.startsWith('run-') || rawTitle.startsWith('conversation-'))
-                          ? mention.label
-                          : rawTitle;
+                        const title =
+                          record && (rawTitle === record.runId || rawTitle.startsWith('run-') || rawTitle.startsWith('conversation-'))
+                            ? mention.label
+                            : rawTitle;
                         const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
                         const showSummary = Boolean(summary && summary !== title);
                         const issueCount = record?.problems.length ?? 0;
@@ -1128,9 +1167,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                           >
                             <div className="min-w-0">
                               <p className="truncate text-[12px] font-medium text-primary">{title}</p>
-                              {showSummary && (
-                                <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>
-                              )}
+                              {showSummary && <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>}
                               <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
                                 <span className={status.cls}>{status.text}</span>
                                 {timeLabel && (
@@ -1148,7 +1185,9 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                                 {issueCount > 0 && (
                                   <>
                                     <span className="opacity-35">·</span>
-                                    <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
+                                    <span className="text-danger">
+                                      {issueCount} issue{issueCount === 1 ? '' : 's'}
+                                    </span>
                                   </>
                                 )}
                               </div>
@@ -1166,7 +1205,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           </div>
         )}
       </Section>
-
     </div>
   );
 }
@@ -1183,16 +1221,20 @@ function RailMetadataRow({ label, value }: { label: string; value: React.ReactNo
 }
 
 function RailMarkdownPreview({ content, className }: { content: string; className?: string }) {
-  return <RichMarkdownRenderer content={content} className={className ?? 'ui-markdown max-w-none text-[13px] leading-relaxed'} stripFrontmatter />;
+  return (
+    <RichMarkdownRenderer
+      content={content}
+      className={className ?? 'ui-markdown max-w-none text-[13px] leading-relaxed'}
+      stripFrontmatter
+    />
+  );
 }
 
 function sortCapabilityTasks(items: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
   return [...items].sort((left, right) => {
     const leftWeight = Number(left.running) * 10 + Number(left.lastStatus === 'failure') * 5 + Number(left.enabled);
     const rightWeight = Number(right.running) * 10 + Number(right.lastStatus === 'failure') * 5 + Number(right.enabled);
-    return rightWeight - leftWeight
-      || (right.lastRunAt ?? '').localeCompare(left.lastRunAt ?? '')
-      || left.id.localeCompare(right.id);
+    return rightWeight - leftWeight || (right.lastRunAt ?? '').localeCompare(left.lastRunAt ?? '') || left.id.localeCompare(right.id);
   });
 }
 
@@ -1200,7 +1242,9 @@ function sortCapabilityTools(items: AgentToolInfo[]): AgentToolInfo[] {
   return [...items].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
 }
 
-function toolParameterDetails(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ name: string; required: boolean; description?: string; type?: string }> {
+function toolParameterDetails(
+  tool: Pick<AgentToolInfo, 'parameters'>,
+): Array<{ name: string; required: boolean; description?: string; type?: string }> {
   const properties = tool.parameters.properties ?? {};
   const required = new Set(tool.parameters.required ?? []);
 
@@ -1214,16 +1258,12 @@ function toolParameterDetails(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ 
 
 function ConversationsWorkspaceContext() {
   const { pinnedSessions, tabs, archivedSessions, archivedConversationIds = [], loading, refetch } = useConversations();
-  const archivedConversationIdSet = useMemo(
-    () => new Set(archivedConversationIds),
-    [archivedConversationIds],
-  );
+  const archivedConversationIdSet = useMemo(() => new Set(archivedConversationIds), [archivedConversationIds]);
   const attentionSessions = useMemo(
-    () => [
-      ...pinnedSessions,
-      ...tabs,
-      ...archivedSessions.filter((session) => !archivedConversationIdSet.has(session.id)),
-    ].filter((session) => sessionNeedsAttention(session)),
+    () =>
+      [...pinnedSessions, ...tabs, ...archivedSessions.filter((session) => !archivedConversationIdSet.has(session.id))].filter((session) =>
+        sessionNeedsAttention(session),
+      ),
     [archivedConversationIdSet, archivedSessions, pinnedSessions, tabs],
   );
 
@@ -1236,9 +1276,19 @@ function ConversationsWorkspaceContext() {
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="ui-card-title">Overview</p>
-          <p className="ui-card-meta">Browse pinned, open, and archived conversations in the main pane. Open one to switch this rail back into live session context.</p>
+          <p className="ui-card-meta">
+            Browse pinned, open, and archived conversations in the main pane. Open one to switch this rail back into live session context.
+          </p>
         </div>
-        <button type="button" onClick={() => { void refetch(); }} className="ui-toolbar-button shrink-0">↻ Refresh</button>
+        <button
+          type="button"
+          onClick={() => {
+            void refetch();
+          }}
+          className="ui-toolbar-button shrink-0"
+        >
+          ↻ Refresh
+        </button>
       </div>
 
       <div className="space-y-2">
@@ -1255,9 +1305,15 @@ function ConversationsWorkspaceContext() {
         ) : (
           <div className="space-y-2">
             {attentionSessions.slice(0, 5).map((session) => (
-              <Link key={session.id} to={`/conversations/${encodeURIComponent(session.id)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <Link
+                key={session.id}
+                to={`/conversations/${encodeURIComponent(session.id)}`}
+                className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60"
+              >
                 <p className="text-[12px] font-medium text-primary break-words">{session.title}</p>
-                <p className="ui-card-meta mt-1">{timeAgo(session.lastActivityAt ?? session.timestamp)} · {session.model?.split('/').pop() ?? 'model unknown'}</p>
+                <p className="ui-card-meta mt-1">
+                  {timeAgo(session.lastActivityAt ?? session.timestamp)} · {session.model?.split('/').pop() ?? 'model unknown'}
+                </p>
               </Link>
             ))}
           </div>
@@ -1266,22 +1322,27 @@ function ConversationsWorkspaceContext() {
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">Open now</p>
-        {[
-          ...pinnedSessions.map((session) => ({ session, label: 'pinned' })),
-          ...tabs.map((session) => ({ session, label: 'open' })),
-        ].slice(0, 5).length === 0 ? (
+        {[...pinnedSessions.map((session) => ({ session, label: 'pinned' })), ...tabs.map((session) => ({ session, label: 'open' }))].slice(
+          0,
+          5,
+        ).length === 0 ? (
           <p className="ui-card-meta">No open conversations yet.</p>
         ) : (
           <div className="space-y-2">
-            {[
-              ...pinnedSessions.map((session) => ({ session, label: 'pinned' })),
-              ...tabs.map((session) => ({ session, label: 'open' })),
-            ].slice(0, 5).map(({ session, label }) => (
-              <Link key={session.id} to={`/conversations/${encodeURIComponent(session.id)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-                <p className="text-[12px] font-medium text-primary break-words">{session.title}</p>
-                <p className="ui-card-meta mt-1">{label} · {timeAgo(session.lastActivityAt ?? session.timestamp)}</p>
-              </Link>
-            ))}
+            {[...pinnedSessions.map((session) => ({ session, label: 'pinned' })), ...tabs.map((session) => ({ session, label: 'open' }))]
+              .slice(0, 5)
+              .map(({ session, label }) => (
+                <Link
+                  key={session.id}
+                  to={`/conversations/${encodeURIComponent(session.id)}`}
+                  className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60"
+                >
+                  <p className="text-[12px] font-medium text-primary break-words">{session.title}</p>
+                  <p className="ui-card-meta mt-1">
+                    {label} · {timeAgo(session.lastActivityAt ?? session.timestamp)}
+                  </p>
+                </Link>
+              ))}
           </div>
         )}
       </div>
@@ -1323,18 +1384,26 @@ function CapabilitiesOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Defaults</p>
-          {defaultPresetIds.length === 0 ? <p className="ui-card-meta">No default presets configured.</p> : defaultPresetIds.map((presetId) => {
-            const preset = presets.find((item) => item.id === presetId);
-            if (!preset) {
-              return null;
-            }
-            return (
-              <Link key={preset.id} to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'presets', presetId: preset.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-                <p className="text-[12px] font-medium text-primary">{preset.name}</p>
-                <p className="ui-card-meta mt-1">{preset.items.length} items</p>
-              </Link>
-            );
-          })}
+          {defaultPresetIds.length === 0 ? (
+            <p className="ui-card-meta">No default presets configured.</p>
+          ) : (
+            defaultPresetIds.map((presetId) => {
+              const preset = presets.find((item) => item.id === presetId);
+              if (!preset) {
+                return null;
+              }
+              return (
+                <Link
+                  key={preset.id}
+                  to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'presets', presetId: preset.id })}`}
+                  className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60"
+                >
+                  <p className="text-[12px] font-medium text-primary">{preset.name}</p>
+                  <p className="ui-card-meta mt-1">{preset.items.length} items</p>
+                </Link>
+              );
+            })
+          )}
         </div>
       </div>
     );
@@ -1354,12 +1423,20 @@ function CapabilitiesOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Needs attention</p>
-          {failingTasks.length === 0 ? <p className="ui-card-meta">No scheduled tasks currently need attention.</p> : failingTasks.slice(0, 5).map((task) => (
-            <Link key={task.id} to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'scheduled', taskId: task.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{task.id}</p>
-              <p className="ui-card-meta mt-1">failed {task.lastRunAt ? timeAgo(task.lastRunAt) : 'recently'}</p>
-            </Link>
-          ))}
+          {failingTasks.length === 0 ? (
+            <p className="ui-card-meta">No scheduled tasks currently need attention.</p>
+          ) : (
+            failingTasks.slice(0, 5).map((task) => (
+              <Link
+                key={task.id}
+                to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'scheduled', taskId: task.id })}`}
+                className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60"
+              >
+                <p className="text-[12px] font-medium text-primary">{task.id}</p>
+                <p className="ui-card-meta mt-1">failed {task.lastRunAt ? timeAgo(task.lastRunAt) : 'recently'}</p>
+              </Link>
+            ))
+          )}
         </div>
       </div>
     );
@@ -1379,12 +1456,22 @@ function CapabilitiesOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Active by default</p>
-          {activeTools.length === 0 ? <p className="ui-card-meta">No active tools reported.</p> : activeTools.slice(0, 6).map((tool) => (
-            <Link key={tool.name} to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'tools', toolName: tool.name })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{tool.name}</p>
-              <p className="ui-card-meta mt-1">{toolParameterDetails(tool).length} parameter{toolParameterDetails(tool).length === 1 ? '' : 's'}</p>
-            </Link>
-          ))}
+          {activeTools.length === 0 ? (
+            <p className="ui-card-meta">No active tools reported.</p>
+          ) : (
+            activeTools.slice(0, 6).map((tool) => (
+              <Link
+                key={tool.name}
+                to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'tools', toolName: tool.name })}`}
+                className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60"
+              >
+                <p className="text-[12px] font-medium text-primary">{tool.name}</p>
+                <p className="ui-card-meta mt-1">
+                  {toolParameterDetails(tool).length} parameter{toolParameterDetails(tool).length === 1 ? '' : 's'}
+                </p>
+              </Link>
+            ))
+          )}
         </div>
       </div>
     );
@@ -1403,7 +1490,10 @@ function CapabilitiesOverviewContext({
       </div>
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">Current health</p>
-        <p className="ui-card-meta">{tasks.filter((task) => task.running).length} running scheduled task{tasks.filter((task) => task.running).length === 1 ? '' : 's'} · {failingTasks.length} failing · {unavailableCliCount} CLI issue{unavailableCliCount === 1 ? '' : 's'}.</p>
+        <p className="ui-card-meta">
+          {tasks.filter((task) => task.running).length} running scheduled task{tasks.filter((task) => task.running).length === 1 ? '' : 's'}{' '}
+          · {failingTasks.length} failing · {unavailableCliCount} CLI issue{unavailableCliCount === 1 ? '' : 's'}.
+        </p>
       </div>
     </div>
   );
@@ -1443,9 +1533,16 @@ function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="ui-card-title break-words">{data.id}</p>
-            <p className="ui-card-meta mt-1">{data.running ? 'running' : data.lastStatus ?? (data.enabled ? 'enabled' : 'disabled')}</p>
+            <p className="ui-card-meta mt-1">{data.running ? 'running' : (data.lastStatus ?? (data.enabled ? 'enabled' : 'disabled'))}</p>
           </div>
-          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              void refetch({ resetLoading: false });
+            }}
+            disabled={refreshing}
+            className="ui-toolbar-button shrink-0"
+          >
             {refreshing ? 'Refreshing…' : '↻ Refresh'}
           </button>
         </div>
@@ -1455,10 +1552,19 @@ function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
           <RailMetadataRow label="Cwd" value={<span className="font-mono break-all">{data.cwd ?? 'No cwd set'}</span>} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => { void handleRunNow(); }} disabled={runningNow || data.running} className="ui-toolbar-button text-accent">
+          <button
+            type="button"
+            onClick={() => {
+              void handleRunNow();
+            }}
+            disabled={runningNow || data.running}
+            className="ui-toolbar-button text-accent"
+          >
             {runningNow ? 'Running…' : 'Run now'}
           </button>
-          <Link to={`/automations/${encodeURIComponent(data.id)}`} className="ui-toolbar-button">Open automation</Link>
+          <Link to={`/automations/${encodeURIComponent(data.id)}`} className="ui-toolbar-button">
+            Open automation
+          </Link>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -1491,13 +1597,20 @@ function CapabilitiesToolContext({ tool }: { tool: AgentToolInfo }) {
       </div>
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">Parameters</p>
-        {parameters.length === 0 ? <p className="ui-card-meta">No parameters.</p> : parameters.map((parameter) => (
-          <div key={parameter.name} className="rounded-lg border border-border-subtle bg-base px-3 py-2">
-            <p className="text-[12px] font-medium text-primary">{parameter.name}</p>
-            <p className="ui-card-meta mt-1">{parameter.required ? 'required' : 'optional'}{parameter.type ? ` · ${parameter.type}` : ''}</p>
-            {parameter.description && <p className="text-[12px] leading-relaxed text-secondary mt-1">{parameter.description}</p>}
-          </div>
-        ))}
+        {parameters.length === 0 ? (
+          <p className="ui-card-meta">No parameters.</p>
+        ) : (
+          parameters.map((parameter) => (
+            <div key={parameter.name} className="rounded-lg border border-border-subtle bg-base px-3 py-2">
+              <p className="text-[12px] font-medium text-primary">{parameter.name}</p>
+              <p className="ui-card-meta mt-1">
+                {parameter.required ? 'required' : 'optional'}
+                {parameter.type ? ` · ${parameter.type}` : ''}
+              </p>
+              {parameter.description && <p className="text-[12px] leading-relaxed text-secondary mt-1">{parameter.description}</p>}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -1513,21 +1626,37 @@ function CapabilitiesContextPanel() {
   const tasksResult = useApi(api.tasks, 'capabilities-rail-tasks');
   const toolsResult = useApi(api.tools, 'capabilities-rail-tools');
 
-  const presets = [...(presetsResult.data?.presetLibrary.presets ?? [])].sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? '') || left.name.localeCompare(right.name));
+  const presets = [...(presetsResult.data?.presetLibrary.presets ?? [])].sort(
+    (left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? '') || left.name.localeCompare(right.name),
+  );
   const tasks = sortCapabilityTasks(tasksResult.data ?? []);
   const tools = sortCapabilityTools(toolsResult.data?.tools ?? []);
   const defaultPresetIds = presetsResult.data?.presetLibrary.defaultPresetIds ?? [];
   const selectedPreset = presets.find((item) => item.id === selectedPresetId) ?? null;
   const selectedTool = tools.find((item) => item.name === selectedToolName) ?? null;
 
-  if (selectedPreset) return <CapabilitiesPresetContext preset={selectedPreset} isDefault={defaultPresetIds.includes(selectedPreset.id)} />;
+  if (selectedPreset) {
+    return <CapabilitiesPresetContext preset={selectedPreset} isDefault={defaultPresetIds.includes(selectedPreset.id)} />;
+  }
   if (selectedTaskId) return <CapabilitiesTaskContext taskId={selectedTaskId} />;
   if (selectedTool) return <CapabilitiesToolContext tool={selectedTool} />;
-  if (presetsResult.loading && !presetsResult.data && tasksResult.loading && !tasksResult.data && toolsResult.loading && !toolsResult.data) {
+  if (
+    presetsResult.loading &&
+    !presetsResult.data &&
+    tasksResult.loading &&
+    !tasksResult.data &&
+    toolsResult.loading &&
+    !toolsResult.data
+  ) {
     return <LoadingState label="Loading capabilities…" className="px-4 py-4" />;
   }
   if (!presetsResult.data && !tasksResult.data && !toolsResult.data && (presetsResult.error || tasksResult.error || toolsResult.error)) {
-    return <ErrorState message={`Failed to load capabilities: ${[presetsResult.error, tasksResult.error, toolsResult.error].filter(Boolean).join(' · ')}`} className="px-4 py-4" />;
+    return (
+      <ErrorState
+        message={`Failed to load capabilities: ${[presetsResult.error, tasksResult.error, toolsResult.error].filter(Boolean).join(' · ')}`}
+        className="px-4 py-4"
+      />
+    );
   }
 
   return (
@@ -1548,7 +1677,9 @@ function SettingsOverviewContext() {
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
         <p className="ui-card-title">Settings</p>
-        <p className="ui-card-meta">This page controls runtime defaults, layout preferences, desktop connections, and integration settings.</p>
+        <p className="ui-card-meta">
+          This page controls runtime defaults, layout preferences, desktop connections, and integration settings.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -1559,7 +1690,10 @@ function SettingsOverviewContext() {
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">What lives here</p>
-        <p className="ui-card-meta">Use Settings for stable preferences, interface controls, desktop connections, and inline runtime service panels. Use Background Work for shell commands, agent tasks, and recovery review.</p>
+        <p className="ui-card-meta">
+          Use Settings for stable preferences, interface controls, desktop connections, and inline runtime service panels. Use Background
+          Work for shell commands, agent tasks, and recovery review.
+        </p>
       </div>
     </div>
   );
@@ -1578,60 +1712,78 @@ export function ContextRail() {
   const creatingPlan = new URLSearchParams(location.search).get('new') === '1';
 
   // Presets
-  if (section === 'plans') return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Reminder presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {suspendRailPanel(
-          selectedPlanId || creatingPlan
-            ? <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
-            : <EmptyPrompt text="Select a reminder preset or create a new one to edit reusable reminder presets." />,
-          'Loading reminder presets…',
-        )}
+  if (section === 'plans') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Reminder presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {suspendRailPanel(
+            selectedPlanId || creatingPlan ? (
+              <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
+            ) : (
+              <EmptyPrompt text="Select a reminder preset or create a new one to edit reusable reminder presets." />
+            ),
+            'Loading reminder presets…',
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // Conversations
-  if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
-    <ConversationInspectorShell>
-      <DraftConversationContextPanel />
-    </ConversationInspectorShell>
-  );
-  if (section === 'conversations' && id && selectedRunId) return (
-    <div className="flex-1 min-h-0 overflow-hidden">
-      <RunContextPanel runId={selectedRunId} ownerRoute={`/conversations/${encodeURIComponent(id)}`} closeLabel="Conversation" />
-    </div>
-  );
-  if (section === 'conversations' && id) return (
-    <ConversationInspectorShell>
-      <LiveSessionContextPanel id={id} />
-    </ConversationInspectorShell>
-  );
-  if (section === 'conversations') return (
-    <ConversationInspectorShell>
-      <ConversationsWorkspaceContext />
-    </ConversationInspectorShell>
-  );
+  if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) {
+    return (
+      <ConversationInspectorShell>
+        <DraftConversationContextPanel />
+      </ConversationInspectorShell>
+    );
+  }
+  if (section === 'conversations' && id && selectedRunId) {
+    return (
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <RunContextPanel runId={selectedRunId} ownerRoute={`/conversations/${encodeURIComponent(id)}`} closeLabel="Conversation" />
+      </div>
+    );
+  }
+  if (section === 'conversations' && id) {
+    return (
+      <ConversationInspectorShell>
+        <LiveSessionContextPanel id={id} />
+      </ConversationInspectorShell>
+    );
+  }
+  if (section === 'conversations') {
+    return (
+      <ConversationInspectorShell>
+        <ConversationsWorkspaceContext />
+      </ConversationInspectorShell>
+    );
+  }
 
   // Automations
-  if (scheduledSection && id && selectedRunId) return (
-    <div className="flex-1 min-h-0 overflow-hidden">
-      <RunContextPanel runId={selectedRunId} ownerRoute={`/automations/${encodeURIComponent(id)}`} closeLabel="Automation" />
-    </div>
-  );
-  if (scheduledSection && id) return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Automation" sub={id} />
-      {suspendRailPanel(<ScheduledTaskPanel id={id} />, 'Loading automation…')}
-    </div>
-  );
-  if (scheduledSection) return (
-    <div className="flex-1 flex flex-col">
-      <RailHeader label="Scheduled" />
-      <EmptyPrompt text="Select an automation or start a new one." />
-    </div>
-  );
+  if (scheduledSection && id && selectedRunId) {
+    return (
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <RunContextPanel runId={selectedRunId} ownerRoute={`/automations/${encodeURIComponent(id)}`} closeLabel="Automation" />
+      </div>
+    );
+  }
+  if (scheduledSection && id) {
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        <RailHeader label="Automation" sub={id} />
+        {suspendRailPanel(<ScheduledTaskPanel id={id} />, 'Loading automation…')}
+      </div>
+    );
+  }
+  if (scheduledSection) {
+    return (
+      <div className="flex-1 flex flex-col">
+        <RailHeader label="Scheduled" />
+        <EmptyPrompt text="Select an automation or start a new one." />
+      </div>
+    );
+  }
 
   // Capabilities
   if (section === 'capabilities') {

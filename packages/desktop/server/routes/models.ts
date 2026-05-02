@@ -1,11 +1,11 @@
 /**
  * Model and provider routes
- * 
+ *
  * Handles model preferences, model providers, and provider authentication.
  */
 
 import { existsSync, statSync } from 'node:fs';
-import type { Express } from 'express';
+
 import {
   getMachineConfigFilePath,
   readKnowledgeBaseState,
@@ -16,11 +16,16 @@ import {
   writeMachineInstructionFiles,
   writeMachineSkillDirs,
 } from '@personal-agent/core';
-import type { ServerRouteContext } from './context.js';
+import type { Express } from 'express';
+
 import {
-  writeSavedModelPreferences,
-} from '../models/modelPreferences.js';
-import { listModelDefinitions, readModelState } from '../models/modelState.js';
+  invalidateAppTopics,
+  logError,
+  persistSettingsWrite,
+  refreshAllLiveSessionModelRegistries,
+  reloadAllLiveSessionAuth,
+} from '../middleware/index.js';
+import { writeSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   readModelProvidersState,
   removeModelProvider,
@@ -28,6 +33,7 @@ import {
   upsertModelProvider,
   upsertModelProviderModel,
 } from '../models/modelProviders.js';
+import { listModelDefinitions, readModelState } from '../models/modelState.js';
 import {
   cancelProviderOAuthLogin,
   getProviderOAuthLoginState,
@@ -38,15 +44,9 @@ import {
   submitProviderOAuthLoginInput,
   subscribeProviderOAuthLogin,
 } from '../models/providerAuth.js';
-import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
-import {
-  invalidateAppTopics,
-  logError,
-  persistSettingsWrite,
-  reloadAllLiveSessionAuth,
-  refreshAllLiveSessionModelRegistries,
-} from '../middleware/index.js';
+import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
+import type { ServerRouteContext } from './context.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for model routes');
@@ -114,11 +114,14 @@ export function registerModelRoutes(
       }
 
       const models = listModelDefinitions();
-      persistSettingsWrite((settingsFile) => {
-        writeSavedModelPreferences({ model, thinkingLevel, serviceTier }, settingsFile, models);
-      }, {
-        runtimeSettingsFile: SETTINGS_FILE,
-      });
+      persistSettingsWrite(
+        (settingsFile) => {
+          writeSavedModelPreferences({ model, thinkingLevel, serviceTier }, settingsFile, models);
+        },
+        {
+          runtimeSettingsFile: SETTINGS_FILE,
+        },
+      );
 
       res.json({ ok: true });
     } catch (err) {
@@ -288,19 +291,17 @@ export function registerModelRoutes(
         return;
       }
 
-      const state = persistSettingsWrite((settingsFile) => writeSavedDefaultCwdPreference(
-        { cwd },
-        settingsFile,
-        { baseDir: process.cwd(), validate: true },
-      ), {
-        runtimeSettingsFile: SETTINGS_FILE,
-      });
+      const state = persistSettingsWrite(
+        (settingsFile) => writeSavedDefaultCwdPreference({ cwd }, settingsFile, { baseDir: process.cwd(), validate: true }),
+        {
+          runtimeSettingsFile: SETTINGS_FILE,
+        },
+      );
       res.json(state);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const status = message.includes('required') || message.includes('Directory does not exist') || message.includes('Not a directory')
-        ? 400
-        : 500;
+      const status =
+        message.includes('required') || message.includes('Directory does not exist') || message.includes('Not a directory') ? 400 : 500;
       res.status(status).json({ error: message });
     }
   });
@@ -329,16 +330,7 @@ export function registerModelRoutes(
 
   router.post('/api/model-providers/providers', (req, res) => {
     try {
-      const {
-        provider,
-        baseUrl,
-        api,
-        apiKey,
-        authHeader,
-        headers,
-        compat,
-        modelOverrides,
-      } = req.body as {
+      const { provider, baseUrl, api, apiKey, authHeader, headers, compat, modelOverrides } = req.body as {
         provider?: string;
         baseUrl?: string;
         api?: string;
@@ -399,19 +391,7 @@ export function registerModelRoutes(
   router.post('/api/model-providers/providers/:provider/models', (req, res) => {
     try {
       const { provider } = req.params;
-      const {
-        modelId,
-        name,
-        api,
-        baseUrl,
-        reasoning,
-        input,
-        contextWindow,
-        maxTokens,
-        headers,
-        cost,
-        compat,
-      } = req.body as {
+      const { modelId, name, api, baseUrl, reasoning, input, contextWindow, maxTokens, headers, cost, compat } = req.body as {
         modelId?: string;
         name?: string;
         api?: string;
@@ -596,10 +576,13 @@ export function registerModelRoutes(
       });
 
       // Timeout after 10 minutes
-      const timeoutId = setTimeout(() => {
-        unsubscribe();
-        res.end();
-      }, 10 * 60 * 1000);
+      const timeoutId = setTimeout(
+        () => {
+          unsubscribe();
+          res.end();
+        },
+        10 * 60 * 1000,
+      );
 
       req.on('close', () => {
         unsubscribe();

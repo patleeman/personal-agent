@@ -1,5 +1,5 @@
-import type { MessageBlock } from '../shared/types';
 import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
+import type { MessageBlock } from '../shared/types';
 
 export function shouldAutoDispatchPendingInitialPrompt(input: {
   draft: boolean;
@@ -9,12 +9,14 @@ export function shouldAutoDispatchPendingInitialPrompt(input: {
   hasStreamSnapshot: boolean;
   hasTranscriptMessages: boolean;
 }): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.hasPendingInitialPrompt
-    && !input.pendingInitialPromptDispatching
-    && input.hasStreamSnapshot
-    && !input.hasTranscriptMessages;
+  return (
+    !input.draft &&
+    Boolean(input.conversationId) &&
+    input.hasPendingInitialPrompt &&
+    !input.pendingInitialPromptDispatching &&
+    input.hasStreamSnapshot &&
+    !input.hasTranscriptMessages
+  );
 }
 
 export function shouldClaimPendingInitialPromptForSession(input: {
@@ -23,26 +25,20 @@ export function shouldClaimPendingInitialPromptForSession(input: {
   inFlightSessionId: string | null | undefined;
   failedSessionId: string | null | undefined;
 }): boolean {
-  return Boolean(input.conversationId)
-    && Boolean(input.prompt)
-    && input.inFlightSessionId !== input.conversationId
-    && input.failedSessionId !== input.conversationId;
+  return (
+    Boolean(input.conversationId) &&
+    Boolean(input.prompt) &&
+    input.inFlightSessionId !== input.conversationId &&
+    input.failedSessionId !== input.conversationId
+  );
 }
 
-export function shouldKeepStoredPendingInitialPromptDuringDispatch(
-  prompt: PendingConversationPrompt,
-): boolean {
+export function shouldKeepStoredPendingInitialPromptDuringDispatch(prompt: PendingConversationPrompt): boolean {
   return (prompt.relatedConversationIds?.length ?? 0) > 0;
 }
 
-export function normalizePendingRelatedConversationIds(
-  prompt: PendingConversationPrompt,
-): string[] {
-  return Array.from(new Set(
-    (prompt.relatedConversationIds ?? [])
-      .map((value) => value.trim())
-      .filter(Boolean),
-  ));
+export function normalizePendingRelatedConversationIds(prompt: PendingConversationPrompt): string[] {
+  return Array.from(new Set((prompt.relatedConversationIds ?? []).map((value) => value.trim()).filter(Boolean)));
 }
 
 export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
@@ -78,20 +74,21 @@ export function pendingPromptImagesMatchMessageImages(
   pendingImages: PendingConversationPrompt['images'],
   messageImages: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>,
 ): boolean {
-  return pendingImages.length === messageImages.length
-    && pendingImages.every((pendingImage, index) => {
+  return (
+    pendingImages.length === messageImages.length &&
+    pendingImages.every((pendingImage, index) => {
       const messageImage = messageImages[index];
       if (!messageImage) {
         return false;
       }
 
       const pendingPreviewUrl = pendingImage.previewUrl?.trim() || '';
-      const pendingDataUrl = pendingImage.data
-        ? `data:${pendingImage.mimeType};base64,${pendingImage.data}`
-        : '';
+      const pendingDataUrl = pendingImage.data ? `data:${pendingImage.mimeType};base64,${pendingImage.data}` : '';
       if (pendingPreviewUrl || messageImage.src) {
-        return (isSafePendingPromptImageUrl(pendingPreviewUrl) && messageImage.src === pendingPreviewUrl)
-          || (isSafePendingPromptImageUrl(pendingDataUrl) && messageImage.src === pendingDataUrl);
+        return (
+          (isSafePendingPromptImageUrl(pendingPreviewUrl) && messageImage.src === pendingPreviewUrl) ||
+          (isSafePendingPromptImageUrl(pendingDataUrl) && messageImage.src === pendingDataUrl)
+        );
       }
 
       const pendingName = pendingImage.name?.trim() || '';
@@ -107,7 +104,8 @@ export function pendingPromptImagesMatchMessageImages(
       }
 
       return true;
-    });
+    })
+  );
 }
 
 function isSafePendingPromptImageUrl(value: string): boolean {
@@ -124,7 +122,5 @@ function isSafePendingPromptImageUrl(value: string): boolean {
   }
   const commaIndex = value.indexOf(',');
   const base64 = commaIndex >= 0 ? value.slice(commaIndex + 1).trim() : '';
-  return Boolean(base64)
-    && base64.length % 4 !== 1
-    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
+  return Boolean(base64) && base64.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
 }

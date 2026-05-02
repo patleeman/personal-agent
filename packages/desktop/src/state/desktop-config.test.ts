@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -11,12 +12,8 @@ vi.mock('../desktop-env.js', () => ({
   resolveDesktopRuntimePaths: mocks.resolveDesktopRuntimePaths,
 }));
 
-import {
-  loadDesktopConfig,
-  readDesktopAppPreferences,
-  updateDesktopAppPreferences,
-} from './desktop-config.js';
 import { DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS } from '../keyboard-shortcuts.js';
+import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './desktop-config.js';
 
 describe('desktop-config', () => {
   let dir: string;
@@ -35,34 +32,52 @@ describe('desktop-config', () => {
   });
 
   it('drops legacy local and websocket host records while keeping ssh remotes', () => {
-    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
-      version: 1,
-      defaultHostId: 'tailnet',
-      openWindowOnLaunch: true,
-      hosts: [
-        { id: 'local', label: 'Local', kind: 'local' },
-        { id: 'tailnet', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex' },
-        { id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'user@gpu' },
-      ],
-    }, null, 2)}\n`, 'utf-8');
+    writeFileSync(
+      join(dir, 'config.json'),
+      `${JSON.stringify(
+        {
+          version: 1,
+          defaultHostId: 'tailnet',
+          openWindowOnLaunch: true,
+          hosts: [
+            { id: 'local', label: 'Local', kind: 'local' },
+            { id: 'tailnet', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex' },
+            { id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'user@gpu' },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
 
     const config = loadDesktopConfig();
-    expect(config).toEqual(expect.objectContaining({
-      version: 2,
-      hosts: [{ id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'user@gpu' }],
-    }));
+    expect(config).toEqual(
+      expect.objectContaining({
+        version: 2,
+        hosts: [{ id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'user@gpu' }],
+      }),
+    );
   });
 
   it('drops unsafe persisted window bounds', () => {
-    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
-      version: 2,
-      windowState: {
-        x: Number.MAX_SAFE_INTEGER + 1,
-        y: 40,
-        width: Number.MAX_SAFE_INTEGER + 1,
-        height: 700,
-      },
-    }, null, 2)}\n`, 'utf-8');
+    writeFileSync(
+      join(dir, 'config.json'),
+      `${JSON.stringify(
+        {
+          version: 2,
+          windowState: {
+            x: Number.MAX_SAFE_INTEGER + 1,
+            y: 40,
+            width: Number.MAX_SAFE_INTEGER + 1,
+            height: 700,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
 
     expect(loadDesktopConfig().windowState).toEqual({
       x: undefined,
@@ -73,15 +88,23 @@ describe('desktop-config', () => {
   });
 
   it('drops non-positive persisted window dimensions', () => {
-    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
-      version: 2,
-      windowState: {
-        x: -120,
-        y: 40,
-        width: -800,
-        height: 0,
-      },
-    }, null, 2)}\n`, 'utf-8');
+    writeFileSync(
+      join(dir, 'config.json'),
+      `${JSON.stringify(
+        {
+          version: 2,
+          windowState: {
+            x: -120,
+            y: 40,
+            width: -800,
+            height: 0,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
 
     expect(loadDesktopConfig().windowState).toEqual({
       x: -120,
@@ -122,10 +145,12 @@ describe('desktop-config', () => {
   });
 
   it('rejects shortcut updates that would steal plain typing keys', () => {
-    expect(() => updateDesktopAppPreferences({
-      keyboardShortcuts: {
-        conversationMode: 'K',
-      },
-    })).toThrow(/Unsupported keyboard shortcut/);
+    expect(() =>
+      updateDesktopAppPreferences({
+        keyboardShortcuts: {
+          conversationMode: 'K',
+        },
+      }),
+    ).toThrow(/Unsupported keyboard shortcut/);
   });
 });

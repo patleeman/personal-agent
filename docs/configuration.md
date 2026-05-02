@@ -25,12 +25,8 @@ Example:
 {
   "knowledgeBaseRepoUrl": "https://github.com/you/knowledge-base.git",
   "knowledgeBaseBranch": "main",
-  "instructionFiles": [
-    "~/Documents/personal-agent/instructions/base.md"
-  ],
-  "skillDirs": [
-    "~/Documents/personal-agent/skills"
-  ],
+  "instructionFiles": ["~/Documents/personal-agent/instructions/base.md"],
+  "skillDirs": ["~/Documents/personal-agent/skills"],
   "ui": {
     "resumeFallbackPrompt": "Continue from where you left off."
   }
@@ -58,17 +54,17 @@ Every desktop menu keyboard shortcut is configurable. Each shortcut auto-saves i
 
 Notable defaults:
 
-| Action | Default |
-|---|---|
+| Action              | Default          |
+| ------------------- | ---------------- |
 | Show Personal Agent | `⌘/Ctrl+Shift+A` |
-| New conversation | `⌘/Ctrl+N` |
-| Focus composer | `⌘/Ctrl+L` |
-| Conversation mode | F1 |
-| Workbench mode | F2 |
-| Zen mode | F3 |
-| Toggle sidebar | `⌘/Ctrl+/` |
-| Toggle right rail | `⌘/Ctrl+\` |
-| Settings | `⌘/Ctrl+,` |
+| New conversation    | `⌘/Ctrl+N`       |
+| Focus composer      | `⌘/Ctrl+L`       |
+| Conversation mode   | F1               |
+| Workbench mode      | F2               |
+| Zen mode            | F3               |
+| Toggle sidebar      | `⌘/Ctrl+/`       |
+| Toggle right rail   | `⌘/Ctrl+\`       |
+| Settings            | `⌘/Ctrl+,`       |
 
 Duplicate shortcuts are flagged inline.
 
@@ -84,10 +80,10 @@ Duplicate shortcuts are flagged inline.
 
 Transcription provider and model for voice input:
 
-| Provider | Models |
-|---|---|
-| `local-whisper` | `tiny.en`, `base.en`, `small.en`, `medium.en` |
-| Cloud (OpenAI) | `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` |
+| Provider        | Models                                                     |
+| --------------- | ---------------------------------------------------------- |
+| `local-whisper` | `tiny.en`, `base.en`, `small.en`, `medium.en`              |
+| Cloud (OpenAI)  | `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` |
 
 Settings also surface the download status of local models and allow installing/uninstalling them.
 
@@ -124,10 +120,10 @@ Each provider has an entry in the auth store under its provider ID. Credentials 
 
 **Provider auth types:**
 
-| Auth type | How credentials are provided |
-|---|---|
-| `api_key` | API key stored in auth.json or environment |
-| `oauth` | OAuth tokens stored in auth.json |
+| Auth type     | How credentials are provided                                       |
+| ------------- | ------------------------------------------------------------------ |
+| `api_key`     | API key stored in auth.json or environment                         |
+| `oauth`       | OAuth tokens stored in auth.json                                   |
 | `environment` | Credentials resolved from environment variables or external config |
 
 ### Daemon
@@ -243,15 +239,15 @@ The companion HTTP/WebSocket API lives under `/companion/v1` on the configured c
 
 ## What belongs where
 
-| Setting type | Best home |
-|---|---|
-| shipped defaults | repo files |
-| standing behavior | selected instruction files |
-| durable knowledge | docs, skills, and projects in `<vault-root>` |
-| machine-local runtime settings | `<config-root>/config.json` |
-| profile model/provider/settings | `<config-root>/profiles/<profile>/` |
-| default model/provider/ui overrides | `<config-root>/local/` |
-| machine-local one-off overrides | environment variables |
+| Setting type                        | Best home                                    |
+| ----------------------------------- | -------------------------------------------- |
+| shipped defaults                    | repo files                                   |
+| standing behavior                   | selected instruction files                   |
+| durable knowledge                   | docs, skills, and projects in `<vault-root>` |
+| machine-local runtime settings      | `<config-root>/config.json`                  |
+| profile model/provider/settings     | `<config-root>/profiles/<profile>/`          |
+| default model/provider/ui overrides | `<config-root>/local/`                       |
+| machine-local one-off overrides     | environment variables                        |
 
 ## Related docs
 

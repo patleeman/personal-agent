@@ -1,18 +1,16 @@
 import type { Express, Request, Response } from 'express';
-import type { ServerRouteContext } from './context.js';
-import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
-import { logError } from '../middleware/index.js';
-import { persistSettingsWrite } from '../ui/settingsPersistence.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
 
+import { logError } from '../middleware/index.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
+import { persistSettingsWrite } from '../ui/settingsPersistence.js';
+import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
+import type { ServerRouteContext } from './context.js';
 
 let getUiSettingsFileFn: () => string = () => {
   throw new Error('getUiSettingsFile not initialized for UI preference routes');
 };
 
-function initializeUiPreferenceRoutesContext(
-  context: Pick<ServerRouteContext, 'getSettingsFile'>,
-): void {
+function initializeUiPreferenceRoutesContext(context: Pick<ServerRouteContext, 'getSettingsFile'>): void {
   getUiSettingsFileFn = context.getSettingsFile;
 }
 
@@ -36,13 +34,7 @@ function handleOpenConversationLayoutReadRequest(_req: Request, res: Response): 
 
 async function handleOpenConversationLayoutWriteRequest(req: Request, res: Response): Promise<void> {
   try {
-    const {
-      sessionIds,
-      pinnedSessionIds,
-      archivedConversationIds,
-      archivedSessionIds,
-      workspacePaths,
-    } = req.body as {
+    const { sessionIds, pinnedSessionIds, archivedConversationIds, archivedSessionIds, workspacePaths } = req.body as {
       sessionIds?: unknown;
       pinnedSessionIds?: unknown;
       archivedConversationIds?: unknown;
@@ -75,22 +67,37 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
       return;
     }
 
-    if (sessionIds === undefined && pinnedSessionIds === undefined && archivedConversationIds === undefined && archivedSessionIds === undefined && workspacePaths === undefined) {
+    if (
+      sessionIds === undefined &&
+      pinnedSessionIds === undefined &&
+      archivedConversationIds === undefined &&
+      archivedSessionIds === undefined &&
+      workspacePaths === undefined
+    ) {
       res.status(400).json({ error: 'sessionIds, pinnedSessionIds, archived conversation ids, or workspacePaths required' });
       return;
     }
 
     const saved = persistSettingsWrite(
-      (settingsFile) => writeSavedUiPreferences({
-        openConversationIds: sessionIds as string[] | null | undefined,
-        pinnedConversationIds: pinnedSessionIds as string[] | null | undefined,
-        archivedConversationIds: (archivedConversationIds ?? archivedSessionIds) as string[] | null | undefined,
-        workspacePaths: workspacePaths as string[] | null | undefined,
-      }, settingsFile),
+      (settingsFile) =>
+        writeSavedUiPreferences(
+          {
+            openConversationIds: sessionIds as string[] | null | undefined,
+            pinnedConversationIds: pinnedSessionIds as string[] | null | undefined,
+            archivedConversationIds: (archivedConversationIds ?? archivedSessionIds) as string[] | null | undefined,
+            workspacePaths: workspacePaths as string[] | null | undefined,
+          },
+          settingsFile,
+        ),
       { runtimeSettingsFile: getUiSettingsFileFn() },
     );
 
-    if (sessionIds !== undefined || pinnedSessionIds !== undefined || archivedConversationIds !== undefined || archivedSessionIds !== undefined) {
+    if (
+      sessionIds !== undefined ||
+      pinnedSessionIds !== undefined ||
+      archivedConversationIds !== undefined ||
+      archivedSessionIds !== undefined
+    ) {
       invalidateAppTopics('sessions');
     }
     if (workspacePaths !== undefined) {
@@ -121,4 +128,3 @@ export function registerUiPreferenceRoutes(
   router.get('/api/ui/open-conversations', handleOpenConversationLayoutReadRequest);
   router.patch('/api/ui/open-conversations', handleOpenConversationLayoutWriteRequest);
 }
-

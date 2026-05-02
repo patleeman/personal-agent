@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import {
-  appendComposerHistory,
-  readComposerHistory,
-} from './composerHistory';
+
 import type { StorageLike } from '../local/reloadState';
+import { appendComposerHistory, readComposerHistory } from './composerHistory';
 
 function createStorage(): StorageLike {
   const map = new Map<string, string>();
   return {
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     setItem(key, value) {
       map.set(key, value);

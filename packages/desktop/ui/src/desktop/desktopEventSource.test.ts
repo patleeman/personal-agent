@@ -22,14 +22,17 @@ describe('createDesktopAwareEventSource', () => {
     } as unknown as Window & typeof globalThis;
 
     vi.stubGlobal('window', fakeWindow);
-    vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> extends Event {
-      readonly detail: T;
+    vi.stubGlobal(
+      'CustomEvent',
+      class CustomEvent<T = unknown> extends Event {
+        readonly detail: T;
 
-      constructor(type: string, init?: { detail?: T }) {
-        super(type);
-        this.detail = init?.detail as T;
-      }
-    });
+        constructor(type: string, init?: { detail?: T }) {
+          super(type);
+          this.detail = init?.detail as T;
+        }
+      },
+    );
 
     const { createDesktopAwareEventSource } = await import('./desktopEventSource');
     const source = createDesktopAwareEventSource('/api/live-sessions/live-1/events');
@@ -38,12 +41,16 @@ describe('createDesktopAwareEventSource', () => {
     source.onopen = onopen;
     source.onmessage = onmessage;
 
-    (source as unknown as { handleDesktopStreamEvent: (event: Event) => void }).handleDesktopStreamEvent(new CustomEvent(DESKTOP_API_STREAM_EVENT, {
-      detail: { subscriptionId: 'stream-early', event: { type: 'open' } },
-    }));
-    (source as unknown as { handleDesktopStreamEvent: (event: Event) => void }).handleDesktopStreamEvent(new CustomEvent(DESKTOP_API_STREAM_EVENT, {
-      detail: { subscriptionId: 'stream-early', event: { type: 'message', data: JSON.stringify({ type: 'snapshot', ok: true }) } },
-    }));
+    (source as unknown as { handleDesktopStreamEvent: (event: Event) => void }).handleDesktopStreamEvent(
+      new CustomEvent(DESKTOP_API_STREAM_EVENT, {
+        detail: { subscriptionId: 'stream-early', event: { type: 'open' } },
+      }),
+    );
+    (source as unknown as { handleDesktopStreamEvent: (event: Event) => void }).handleDesktopStreamEvent(
+      new CustomEvent(DESKTOP_API_STREAM_EVENT, {
+        detail: { subscriptionId: 'stream-early', event: { type: 'message', data: JSON.stringify({ type: 'snapshot', ok: true }) } },
+      }),
+    );
 
     expect(onopen).not.toHaveBeenCalled();
     expect(onmessage).not.toHaveBeenCalled();

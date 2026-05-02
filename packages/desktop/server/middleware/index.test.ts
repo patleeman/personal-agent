@@ -12,12 +12,7 @@ vi.mock('../shared/logging.js', () => ({
   webRequestLoggingMiddleware: vi.fn(),
 }));
 
-import {
-  readCookieValue,
-  logSlowConversationPerf,
-  setServerTimingHeaders,
-  writeSseHeaders,
-} from './index.js';
+import { logSlowConversationPerf, readCookieValue, setServerTimingHeaders, writeSseHeaders } from './index.js';
 
 describe('server middleware helpers', () => {
   beforeEach(() => {
@@ -28,10 +23,14 @@ describe('server middleware helpers', () => {
     const setHeader = vi.fn();
     const res = { setHeader, locals: {} } as unknown as { setHeader: typeof setHeader; locals: Record<string, unknown> };
 
-    setServerTimingHeaders(res as never, [
-      { name: 'sql', durationMs: 12.34, description: 'lookup "users"' },
-      { name: 'render', durationMs: Number.NaN },
-    ], { route: 'conversation' });
+    setServerTimingHeaders(
+      res as never,
+      [
+        { name: 'sql', durationMs: 12.34, description: 'lookup "users"' },
+        { name: 'render', durationMs: Number.NaN },
+      ],
+      { route: 'conversation' },
+    );
 
     expect(setHeader).toHaveBeenCalledWith('Server-Timing', 'sql;dur=12.3;desc="lookup users", render;dur=0.0');
     expect(res.locals.timingMeta).toEqual({ route: 'conversation' });
@@ -41,9 +40,7 @@ describe('server middleware helpers', () => {
     const setHeader = vi.fn();
     const res = { setHeader, locals: {} } as unknown as { setHeader: typeof setHeader; locals: Record<string, unknown> };
 
-    setServerTimingHeaders(res as never, [
-      { name: 'unsafe', durationMs: Number.MAX_SAFE_INTEGER + 1 },
-    ]);
+    setServerTimingHeaders(res as never, [{ name: 'unsafe', durationMs: Number.MAX_SAFE_INTEGER + 1 }]);
 
     expect(setHeader).toHaveBeenCalledWith('Server-Timing', 'unsafe;dur=0.0');
   });

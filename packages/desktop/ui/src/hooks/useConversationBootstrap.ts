@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
+
+import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import {
   readPersistedConversationBootstrapEntry,
   writePersistedConversationBootstrapEntry,
 } from '../conversation/conversationBootstrapPersistence';
-import { useAppEvents } from '../app/contexts';
 import type { ConversationBootstrapState, SessionDetail } from '../shared/types';
 
 interface CachedConversationBootstrapEntry {
@@ -12,9 +13,7 @@ interface CachedConversationBootstrapEntry {
   versionKey: string;
 }
 
-function readConversationBootstrapSessionSignature(
-  data: ConversationBootstrapState | null | undefined,
-): string | undefined {
+function readConversationBootstrapSessionSignature(data: ConversationBootstrapState | null | undefined): string | undefined {
   const sessionDetailSignature = data?.sessionDetail?.signature?.trim();
   if (sessionDetailSignature) {
     return sessionDetailSignature;
@@ -24,17 +23,12 @@ function readConversationBootstrapSessionSignature(
   return bootstrapSignature || undefined;
 }
 
-function readConversationBootstrapLastBlockId(
-  data: ConversationBootstrapState | null | undefined,
-): string | undefined {
+function readConversationBootstrapLastBlockId(data: ConversationBootstrapState | null | undefined): string | undefined {
   const blockId = data?.sessionDetail?.blocks.at(-1)?.id?.trim();
   return blockId && blockId.length > 0 ? blockId : undefined;
 }
 
-function mergeAppendOnlyConversationSessionDetail(
-  cached: SessionDetail,
-  nextData: ConversationBootstrapState,
-): SessionDetail | null {
+function mergeAppendOnlyConversationSessionDetail(cached: SessionDetail, nextData: ConversationBootstrapState): SessionDetail | null {
   const appendOnly = nextData.sessionDetailAppendOnly;
   if (!appendOnly) {
     return nextData.sessionDetail;
@@ -69,12 +63,13 @@ function normalizeConversationBootstrapState(data: ConversationBootstrapState): 
         };
   }
 
-  const normalizedSessionDetail = sessionDetailSignature && data.sessionDetail.signature !== sessionDetailSignature
-    ? {
-        ...data.sessionDetail,
-        signature: sessionDetailSignature,
-      }
-    : data.sessionDetail;
+  const normalizedSessionDetail =
+    sessionDetailSignature && data.sessionDetail.signature !== sessionDetailSignature
+      ? {
+          ...data.sessionDetail,
+          signature: sessionDetailSignature,
+        }
+      : data.sessionDetail;
 
   if (normalizedSessionDetail === data.sessionDetail && data.sessionDetailSignature === sessionDetailSignature) {
     return data;
@@ -87,9 +82,7 @@ function normalizeConversationBootstrapState(data: ConversationBootstrapState): 
   };
 }
 
-function stripConversationBootstrapTransientFlags(
-  data: ConversationBootstrapState,
-): ConversationBootstrapState {
+function stripConversationBootstrapTransientFlags(data: ConversationBootstrapState): ConversationBootstrapState {
   const normalized = normalizeConversationBootstrapState(data);
   const rest = { ...normalized };
   delete rest.sessionDetailUnchanged;
@@ -106,9 +99,7 @@ function mergeConversationBootstrapWithCachedSessionDetail(
     return normalized;
   }
 
-  const cachedDetail = cached?.conversationId === normalized.conversationId
-    ? cached.sessionDetail
-    : null;
+  const cachedDetail = cached?.conversationId === normalized.conversationId ? cached.sessionDetail : null;
   if (!cachedDetail) {
     return normalized;
   }
@@ -132,7 +123,8 @@ function mergeConversationBootstrapWithCachedSessionDetail(
   return {
     ...rest,
     sessionDetail: mergedDetail,
-    sessionDetailSignature: readConversationBootstrapSessionSignature({ ...rest, sessionDetail: mergedDetail }) ?? cachedSignature ?? nextSignature,
+    sessionDetailSignature:
+      readConversationBootstrapSessionSignature({ ...rest, sessionDetail: mergedDetail }) ?? cachedSignature ?? nextSignature,
   };
 }
 
@@ -155,12 +147,13 @@ function readCachedConversationBootstrapEntry(
   }
 
   const normalized = normalizeConversationBootstrapState(cached.data);
-  const normalizedEntry = normalized === cached.data
-    ? cached
-    : {
-        ...cached,
-        data: normalized,
-      };
+  const normalizedEntry =
+    normalized === cached.data
+      ? cached
+      : {
+          ...cached,
+          data: normalized,
+        };
   conversationBootstrapCache.delete(cacheKey);
   conversationBootstrapCache.set(cacheKey, normalizedEntry);
   return normalizedEntry;
@@ -208,12 +201,7 @@ async function readConversationBootstrapEntry(
     return null;
   }
 
-  return writeConversationBootstrapCacheEntry(
-    conversationId,
-    persisted.data,
-    options,
-    persisted.versionKey,
-  );
+  return writeConversationBootstrapCacheEntry(conversationId, persisted.data, options, persisted.versionKey);
 }
 
 export function primeConversationBootstrapCache(
@@ -250,7 +238,9 @@ export function fetchConversationBootstrapCached(
       ...(knownSessionSignature ? { knownSessionSignature } : {}),
       ...(typeof cachedSessionDetail?.blockOffset === 'number' ? { knownBlockOffset: cachedSessionDetail.blockOffset } : {}),
       ...(typeof cachedSessionDetail?.totalBlocks === 'number' ? { knownTotalBlocks: cachedSessionDetail.totalBlocks } : {}),
-      ...(readConversationBootstrapLastBlockId(cached?.data) ? { knownLastBlockId: readConversationBootstrapLastBlockId(cached?.data) } : {}),
+      ...(readConversationBootstrapLastBlockId(cached?.data)
+        ? { knownLastBlockId: readConversationBootstrapLastBlockId(cached?.data) }
+        : {}),
     });
     let nextData = mergeConversationBootstrapWithCachedSessionDetail(cached?.data ?? null, data);
     if ((nextData.sessionDetailUnchanged || nextData.sessionDetailAppendOnly) && !nextData.sessionDetail && !nextData.liveSession.live) {
@@ -266,10 +256,7 @@ export function fetchConversationBootstrapCached(
   return request;
 }
 
-export function buildConversationBootstrapVersionKey(input: {
-  sessionsVersion: number;
-  sessionFilesVersion: number;
-}): string {
+export function buildConversationBootstrapVersionKey(input: { sessionsVersion: number; sessionFilesVersion: number }): string {
   // Bootstrap is only the conversation-open fast path. The page and rail keep the
   // rest of their state incremental with separate invalidations. Session-file bumps
   // still rotate the bootstrap version key, but the server can now reuse a cached
@@ -300,15 +287,14 @@ function resolveConversationBootstrapSeed(
 
 const useCacheSeedEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export function useConversationBootstrap(
-  conversationId: string | undefined,
-  options?: { tailBlocks?: number; versionKey?: string },
-) {
+export function useConversationBootstrap(conversationId: string | undefined, options?: { tailBlocks?: number; versionKey?: string }) {
   const { versions } = useAppEvents();
-  const versionKey = options?.versionKey ?? buildConversationBootstrapVersionKey({
-    sessionsVersion: versions.sessions,
-    sessionFilesVersion: versions.sessionFiles,
-  });
+  const versionKey =
+    options?.versionKey ??
+    buildConversationBootstrapVersionKey({
+      sessionsVersion: versions.sessions,
+      sessionFilesVersion: versions.sessionFiles,
+    });
   const initialSeed = resolveConversationBootstrapSeed(conversationId, options);
   const [data, setData] = useState<ConversationBootstrapState | null>(initialSeed.data);
   const [loading, setLoading] = useState(initialSeed.loading);

@@ -1,9 +1,11 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AddressInfo } from 'node:net';
+
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { registerServerRoutes, type ServerRouteContext } from './index.js';
 
 function startServer(app: express.Express): Promise<{ baseUrl: string; close: () => Promise<void> }> {
@@ -17,15 +19,16 @@ function startServer(app: express.Express): Promise<{ baseUrl: string; close: ()
 
       resolve({
         baseUrl: `http://127.0.0.1:${(address as AddressInfo).port}`,
-        close: () => new Promise<void>((resolveClose, rejectClose) => {
-          server.close((error) => {
-            if (error) {
-              rejectClose(error);
-              return;
-            }
-            resolveClose();
-          });
-        }),
+        close: () =>
+          new Promise<void>((resolveClose, rejectClose) => {
+            server.close((error) => {
+              if (error) {
+                rejectClose(error);
+                return;
+              }
+              resolveClose();
+            });
+          }),
       });
     });
   });
@@ -108,10 +111,11 @@ describe('registerServerRoutes smoke test', () => {
     expect(defaultCwdResponse.status).toBe(200);
 
     expect(await titlesResponse.json()).toEqual(expect.any(Object));
-    expect(await defaultCwdResponse.json()).toEqual(expect.objectContaining({
-      currentCwd: expect.any(String),
-      effectiveCwd: expect.any(String),
-    }));
+    expect(await defaultCwdResponse.json()).toEqual(
+      expect.objectContaining({
+        currentCwd: expect.any(String),
+        effectiveCwd: expect.any(String),
+      }),
+    );
   });
-
 });

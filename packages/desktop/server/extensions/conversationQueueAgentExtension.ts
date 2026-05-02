@@ -1,21 +1,22 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { loadAutomationRuntimeStateMap, createStoredAutomation, deleteStoredAutomation, listStoredAutomations } from '@personal-agent/daemon';
 import { getSessionDeferredResumeEntries, loadDeferredResumeState, parseDeferredResumeDelayMs } from '@personal-agent/core';
+import {
+  createStoredAutomation,
+  deleteStoredAutomation,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
+} from '@personal-agent/daemon';
+import { Type } from '@sinclair/typebox';
+
 import {
   cancelDeferredResumeForSessionFile,
   DEFAULT_DEFERRED_RESUME_PROMPT,
   type DeferredResumeSummary,
 } from '../automation/deferredResumes.js';
-import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
-import {
-  cancelQueuedPrompt,
-  listQueuedPromptPreviews,
-  promptSession,
-  type QueuedPromptPreview,
-} from '../conversations/liveSessions.js';
-import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
+import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
+import { cancelQueuedPrompt, listQueuedPromptPreviews, promptSession, type QueuedPromptPreview } from '../conversations/liveSessions.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 
 const CONVERSATION_QUEUE_ACTION_VALUES = ['add', 'list', 'cancel'] as const;
 const CONVERSATION_QUEUE_TRIGGER_VALUES = ['after_turn', 'delay', 'at'] as const;
@@ -29,14 +30,29 @@ const ConversationQueueToolParams = Type.Object({
   action: Type.Union(CONVERSATION_QUEUE_ACTION_VALUES.map((value) => Type.Literal(value))),
   id: Type.Optional(Type.String({ description: 'Queue item id for cancel.' })),
   prompt: Type.Optional(Type.String({ description: 'Prompt to run when the queued continuation becomes active.' })),
-  trigger: Type.Optional(Type.Union(CONVERSATION_QUEUE_TRIGGER_VALUES.map((value) => Type.Literal(value)), {
-    description: 'Trigger for add: after_turn queues behind the current turn; delay/at schedule later continuation.',
-  })),
+  trigger: Type.Optional(
+    Type.Union(
+      CONVERSATION_QUEUE_TRIGGER_VALUES.map((value) => Type.Literal(value)),
+      {
+        description: 'Trigger for add: after_turn queues behind the current turn; delay/at schedule later continuation.',
+      },
+    ),
+  ),
   delay: Type.Optional(Type.String({ description: 'Delay for trigger="delay", for example 30s, 10m, 2h, or 1d.' })),
-  at: Type.Optional(Type.String({ description: 'Time for trigger="at". Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.' })),
-  deliverAs: Type.Optional(Type.Union(CONVERSATION_QUEUE_DELIVER_AS_VALUES.map((value) => Type.Literal(value)), {
-    description: 'How to enqueue the continuation when it runs.' ,
-  })),
+  at: Type.Optional(
+    Type.String({
+      description:
+        'Time for trigger="at". Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.',
+    }),
+  ),
+  deliverAs: Type.Optional(
+    Type.Union(
+      CONVERSATION_QUEUE_DELIVER_AS_VALUES.map((value) => Type.Literal(value)),
+      {
+        description: 'How to enqueue the continuation when it runs.',
+      },
+    ),
+  ),
   title: Type.Optional(Type.String({ description: 'Optional short label for scheduled queue entries.' })),
 });
 
@@ -67,10 +83,7 @@ function readRequiredString(value: string | undefined, label: string): string {
   return normalized;
 }
 
-function buildLiveQueueItem(
-  behavior: ConversationQueueDeliverAs,
-  preview: QueuedPromptPreview,
-): ConversationQueueItem {
+function buildLiveQueueItem(behavior: ConversationQueueDeliverAs, preview: QueuedPromptPreview): ConversationQueueItem {
   return {
     id: `live:${behavior}:${preview.id}`,
     source: 'live-queue',
@@ -115,10 +128,7 @@ function buildDeferredResumeQueueItem(resume: DeferredResumeSummary): Conversati
   };
 }
 
-function collectConversationQueueItems(input: {
-  sessionId?: string;
-  sessionFile?: string;
-}): ConversationQueueItem[] {
+function collectConversationQueueItems(input: { sessionId?: string; sessionFile?: string }): ConversationQueueItem[] {
   const items: ConversationQueueItem[] = [];
 
   const sessionId = readOptionalString(input.sessionId);
@@ -145,21 +155,23 @@ function collectConversationQueueItems(input: {
       });
     items.push(...automations.map(buildAutomationQueueItem));
 
-    const resumes = getSessionDeferredResumeEntries(loadDeferredResumeState(), sessionFile)
-      .map((resume) => ({
-        id: resume.id,
-        sessionFile: resume.sessionFile,
-        prompt: resume.prompt,
-        dueAt: resume.dueAt,
-        createdAt: resume.createdAt,
-        attempts: resume.attempts,
-        status: resume.status,
-        readyAt: resume.readyAt,
-        kind: resume.kind,
-        title: resume.title,
-        behavior: resume.behavior,
-        delivery: resume.delivery,
-      } satisfies DeferredResumeSummary));
+    const resumes = getSessionDeferredResumeEntries(loadDeferredResumeState(), sessionFile).map(
+      (resume) =>
+        ({
+          id: resume.id,
+          sessionFile: resume.sessionFile,
+          prompt: resume.prompt,
+          dueAt: resume.dueAt,
+          createdAt: resume.createdAt,
+          attempts: resume.attempts,
+          status: resume.status,
+          readyAt: resume.readyAt,
+          kind: resume.kind,
+          title: resume.title,
+          behavior: resume.behavior,
+          delivery: resume.delivery,
+        }) satisfies DeferredResumeSummary,
+    );
     items.push(...resumes.map(buildDeferredResumeQueueItem));
   }
 
@@ -189,11 +201,7 @@ function collectConversationQueueItems(input: {
 
 function formatQueueItem(item: ConversationQueueItem): string {
   const label = item.title?.trim() || item.prompt.trim() || '(empty prompt)';
-  const parts = [
-    `- ${item.id}`,
-    `[${item.status}]`,
-    item.trigger,
-  ];
+  const parts = [`- ${item.id}`, `[${item.status}]`, item.trigger];
 
   if (item.deliverAs) {
     parts.push(`deliverAs=${item.deliverAs}`);
@@ -215,10 +223,7 @@ function formatQueueList(items: ConversationQueueItem[]): string {
     return 'Conversation queue is empty.';
   }
 
-  return [
-    `Conversation queue (${items.length}):`,
-    ...items.map(formatQueueItem),
-  ].join('\n');
+  return [`Conversation queue (${items.length}):`, ...items.map(formatQueueItem)].join('\n');
 }
 
 function parseLiveQueueId(id: string): { behavior: ConversationQueueDeliverAs; previewId: string } | null {
@@ -281,7 +286,9 @@ function resolveScheduledAt(input: { delay?: string; at?: string }): { dueAt: st
 }
 
 function findConversationAutomation(id: string, sessionFile: string) {
-  return listStoredAutomations().find((task) => task.id === id && task.targetType === 'conversation' && task.threadSessionFile === sessionFile);
+  return listStoredAutomations().find(
+    (task) => task.id === id && task.targetType === 'conversation' && task.threadSessionFile === sessionFile,
+  );
 }
 
 function readAddTrigger(value: ConversationQueueTrigger | undefined): ConversationQueueTrigger {
@@ -329,9 +336,7 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
           case 'add': {
             const trigger = readAddTrigger(params.trigger as ConversationQueueTrigger | undefined);
             const prompt = readOptionalString(params.prompt) ?? DEFAULT_DEFERRED_RESUME_PROMPT;
-            const deliverAs = params.deliverAs === 'steer' || params.deliverAs === 'followUp'
-              ? params.deliverAs
-              : undefined;
+            const deliverAs = params.deliverAs === 'steer' || params.deliverAs === 'followUp' ? params.deliverAs : undefined;
 
             if (trigger === 'after_turn') {
               if (!sessionId) {
@@ -340,7 +345,12 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
 
               await promptSession(sessionId, prompt, deliverAs ?? 'followUp');
               return {
-                content: [{ type: 'text' as const, text: `Queued conversation continuation after the current turn (${deliverAs ?? 'followUp'}).` }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `Queued conversation continuation after the current turn (${deliverAs ?? 'followUp'}).`,
+                  },
+                ],
                 details: {
                   action: 'add',
                   trigger,
@@ -379,10 +389,14 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
             invalidateAppTopics('tasks');
             publishSessionMetaChanged(sessionId);
             return {
-              content: [{
-                type: 'text' as const,
-                text: `Queued conversation continuation ${task.id} (${trigger === 'delay' ? `in ${params.delay}` : `for ${scheduled.interpretation ?? scheduled.dueAt}`}).`,
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `Queued conversation continuation ${task.id} (${
+                    trigger === 'delay' ? `in ${params.delay}` : `for ${scheduled.interpretation ?? scheduled.dueAt}`
+                  }).`,
+                },
+              ],
               details: {
                 action: 'add',
                 trigger,

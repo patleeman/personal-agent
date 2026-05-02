@@ -1,7 +1,9 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   applyPatch,
   buildApplyPatchSummary,
@@ -28,12 +30,7 @@ describe('gpt apply_patch helper', () => {
     expect(shouldUseApplyPatchTool({ id: 'gpt-5.4' })).toBe(true);
     expect(shouldUseApplyPatchTool({ id: 'claude-sonnet-4-5' })).toBe(false);
 
-    expect(synchronizeActiveTools(['read', 'bash', 'edit', 'write'], { id: 'gpt-5.4' })).toEqual([
-      'read',
-      'bash',
-      'apply_patch',
-      'write',
-    ]);
+    expect(synchronizeActiveTools(['read', 'bash', 'edit', 'write'], { id: 'gpt-5.4' })).toEqual(['read', 'bash', 'apply_patch', 'write']);
 
     expect(synchronizeActiveTools(['read', 'bash', 'apply_patch', 'write'], { id: 'claude-sonnet-4-5' })).toEqual([
       'read',
@@ -42,22 +39,15 @@ describe('gpt apply_patch helper', () => {
       'write',
     ]);
 
-    expect(synchronizeActiveTools(['read', 'bash', 'write'], { id: 'gpt-5.4' })).toEqual([
-      'read',
-      'bash',
-      'write',
-    ]);
+    expect(synchronizeActiveTools(['read', 'bash', 'write'], { id: 'gpt-5.4' })).toEqual(['read', 'bash', 'write']);
 
-    expect(synchronizeActiveTools(['read', 'edit', 'apply_patch', 'write'], { id: 'gpt-5.4' })).toEqual([
-      'read',
-      'apply_patch',
-      'write',
-    ]);
+    expect(synchronizeActiveTools(['read', 'edit', 'apply_patch', 'write'], { id: 'gpt-5.4' })).toEqual(['read', 'apply_patch', 'write']);
   });
 
   it('parses add, delete, update, and move operations from a single patch envelope', () => {
     const cwd = '/repo';
-    const operations = parseApplyPatch(`*** Begin Patch
+    const operations = parseApplyPatch(
+      `*** Begin Patch
 *** Add File: notes/todo.txt
 +first line
 +second line
@@ -67,7 +57,9 @@ describe('gpt apply_patch helper', () => {
 @@ class Example
 -oldValue
 +newValue
-*** End Patch`, cwd);
+*** End Patch`,
+      cwd,
+    );
 
     expect(operations).toEqual([
       {
@@ -111,7 +103,8 @@ describe('gpt apply_patch helper', () => {
     await mkdir(join(dir, 'src'), { recursive: true });
     await writeFile(join(dir, 'src', 'app.ts'), 'const value = 1;\n', 'utf8');
 
-    const result = await applyPatch(`*** Begin Patch
+    const result = await applyPatch(
+      `*** Begin Patch
 *** Add File: notes/todo.txt
 +ship tests
 *** Delete File: delete-me.txt
@@ -120,7 +113,9 @@ describe('gpt apply_patch helper', () => {
 @@
 -const value = 1;
 +const value = 2;
-*** End Patch`, dir);
+*** End Patch`,
+      dir,
+    );
 
     expect(result).toEqual({
       added: ['notes/todo.txt'],
@@ -140,7 +135,8 @@ describe('gpt apply_patch helper', () => {
     const filePath = join(dir, 'interleaved.txt');
     await writeFile(filePath, 'a\nb\nc\nd\ne\nf\n', 'utf8');
 
-    const result = await applyPatch(`*** Begin Patch
+    const result = await applyPatch(
+      `*** Begin Patch
 *** Update File: interleaved.txt
 @@
  a
@@ -155,7 +151,9 @@ describe('gpt apply_patch helper', () => {
  f
 +g
 *** End of File
-*** End Patch`, dir);
+*** End Patch`,
+      dir,
+    );
 
     expect(result.summary).toBe('Success. Updated the following files:\nM interleaved.txt');
     await expect(readFile(filePath, 'utf8')).resolves.toBe('a\nB\nc\nd\nE\nf\ng\n');
@@ -166,12 +164,15 @@ describe('gpt apply_patch helper', () => {
     const filePath = join(dir, 'unicode.py');
     await writeFile(filePath, 'import asyncio  # local import – avoids top‑level dep\n', 'utf8');
 
-    await applyPatch(`*** Begin Patch
+    await applyPatch(
+      `*** Begin Patch
 *** Update File: unicode.py
 @@
 -import asyncio  # local import - avoids top-level dep
 +import asyncio  # HELLO
-*** End Patch`, dir);
+*** End Patch`,
+      dir,
+    );
 
     await expect(readFile(filePath, 'utf8')).resolves.toBe('import asyncio  # HELLO\n');
   });
@@ -179,15 +180,25 @@ describe('gpt apply_patch helper', () => {
   it('rejects absolute paths and paths that escape the working directory', async () => {
     const dir = await createTempDir();
 
-    await expect(applyPatch(`*** Begin Patch
+    await expect(
+      applyPatch(
+        `*** Begin Patch
 *** Add File: /tmp/evil.txt
 +nope
-*** End Patch`, dir)).rejects.toThrow('paths must be relative');
+*** End Patch`,
+        dir,
+      ),
+    ).rejects.toThrow('paths must be relative');
 
-    await expect(applyPatch(`*** Begin Patch
+    await expect(
+      applyPatch(
+        `*** Begin Patch
 *** Add File: ../evil.txt
 +nope
-*** End Patch`, dir)).rejects.toThrow('working directory');
+*** End Patch`,
+        dir,
+      ),
+    ).rejects.toThrow('working directory');
   });
 
   it('fails when update hunks cannot be matched against the target file', async () => {
@@ -195,12 +206,17 @@ describe('gpt apply_patch helper', () => {
     const filePath = join(dir, 'source.txt');
     await writeFile(filePath, 'original content\n', 'utf8');
 
-    await expect(applyPatch(`*** Begin Patch
+    await expect(
+      applyPatch(
+        `*** Begin Patch
 *** Update File: source.txt
 @@
 -missing content
 +new content
-*** End Patch`, dir)).rejects.toThrow('Failed to find expected lines');
+*** End Patch`,
+        dir,
+      ),
+    ).rejects.toThrow('Failed to find expected lines');
   });
 
   it('builds a no-op summary when status transitions cancel out', () => {

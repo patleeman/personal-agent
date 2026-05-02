@@ -2,14 +2,16 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, protocol, session, type Session as ElectronSession } from 'electron';
+
 import { getDaemonClientTransportOverride, loadDaemonConfig } from '@personal-agent/daemon';
+import { app, protocol, type Session as ElectronSession, session } from 'electron';
+
+import { dispatchConversationExecutionRequest, subscribeConversationExecutionApiStream } from './conversation-execution.js';
+import type { HostManager } from './hosts/host-manager.js';
+import type { DesktopApiStreamEvent } from './hosts/types.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
 import { dispatchReadonlyLocalApiRequest, shouldDispatchReadonlyLocalApiInWorker } from './readonly-local-api.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
-import type { DesktopApiStreamEvent } from './hosts/types.js';
-import type { HostManager } from './hosts/host-manager.js';
-import { dispatchConversationExecutionRequest, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 
 export const DESKTOP_APP_SCHEME = 'personal-agent';
 const DESKTOP_APP_HOST = 'app';
@@ -72,8 +74,7 @@ function resolveDesktopWebDistDir(): string {
   }
 
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim()
-    || resolve(currentDir, '..', '..', '..');
+  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim() || resolve(currentDir, '..', '..', '..');
   return resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist');
 }
 
@@ -146,9 +147,7 @@ async function proxyCompanionRequest(request: Request): Promise<Response> {
   const response = await fetch(targetUrl, {
     method: request.method,
     headers,
-    body: request.method === 'GET' || request.method === 'HEAD'
-      ? undefined
-      : Buffer.from(await request.arrayBuffer()),
+    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : Buffer.from(await request.arrayBuffer()),
   });
 
   return new Response(response.body, {
@@ -174,8 +173,7 @@ function buildDesktopProtocolErrorResponse(error: unknown): Response {
 }
 
 function isEventStreamRequest(request: Request): boolean {
-  return request.method === 'GET'
-    && (request.headers.get('accept') ?? '').toLowerCase().includes('text/event-stream');
+  return request.method === 'GET' && (request.headers.get('accept') ?? '').toLowerCase().includes('text/event-stream');
 }
 
 function createBinaryProtocolResponse(response: {
@@ -183,16 +181,17 @@ function createBinaryProtocolResponse(response: {
   headers: Record<string, string> | Headers;
   body: Uint8Array;
 }): Response {
-  const body = response.body.byteLength > 0
-    ? Uint8Array.from(response.body)
-    : null;
+  const body = response.body.byteLength > 0 ? Uint8Array.from(response.body) : null;
   return new Response(body, {
     status: response.statusCode,
     headers: response.headers,
   });
 }
 
-function createSseProtocolResponse(subscribe: (onEvent: (event: DesktopApiStreamEvent) => void) => Promise<() => void>, request: Request): Response {
+function createSseProtocolResponse(
+  subscribe: (onEvent: (event: DesktopApiStreamEvent) => void) => Promise<() => void>,
+  request: Request,
+): Response {
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
   let closed = false;
@@ -280,7 +279,13 @@ export function createDesktopProtocolHandler(options?: {
     }
 
     if (url.pathname.startsWith('/api/')) {
-      if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'PUT' && request.method !== 'PATCH' && request.method !== 'DELETE') {
+      if (
+        request.method !== 'GET' &&
+        request.method !== 'POST' &&
+        request.method !== 'PUT' &&
+        request.method !== 'PATCH' &&
+        request.method !== 'DELETE'
+      ) {
         return new Response('Method not allowed', { status: 405 });
       }
 
@@ -314,11 +319,13 @@ export function createDesktopProtocolHandler(options?: {
         const requestBody = await readDesktopProtocolRequestBody(request);
         const requestHeaders = Object.fromEntries(request.headers.entries());
 
-        if (shouldDispatchReadonlyLocalApiInWorker({
-          method: request.method,
-          path: requestPath,
-          hostId: options?.hostId ?? (options?.hostManager ? 'local' : null),
-        })) {
+        if (
+          shouldDispatchReadonlyLocalApiInWorker({
+            method: request.method,
+            path: requestPath,
+            hostId: options?.hostId ?? (options?.hostManager ? 'local' : null),
+          })
+        ) {
           const response = await dispatchReadonlyRequest({
             method: request.method,
             path: requestPath,
@@ -335,12 +342,14 @@ export function createDesktopProtocolHandler(options?: {
             body: requestBody,
             headers: requestHeaders,
           });
-          const response = targetedResponse ?? await options.hostManager.getHostController(options.hostId ?? 'local').dispatchApiRequest({
-            method: request.method,
-            path: requestPath,
-            body: requestBody,
-            headers: requestHeaders,
-          });
+          const response =
+            targetedResponse ??
+            (await options.hostManager.getHostController(options.hostId ?? 'local').dispatchApiRequest({
+              method: request.method,
+              path: requestPath,
+              body: requestBody,
+              headers: requestHeaders,
+            }));
 
           return createBinaryProtocolResponse(response);
         }
@@ -361,9 +370,7 @@ export function createDesktopProtocolHandler(options?: {
 
     const filePath = resolveStaticFilePath(url.pathname);
     const fallbackPath = resolveStaticFilePath('/index.html');
-    const targetPath = url.pathname.startsWith('/assets/') || url.pathname === '/favicon.ico'
-      ? filePath
-      : fallbackPath;
+    const targetPath = url.pathname.startsWith('/assets/') || url.pathname === '/favicon.ico' ? filePath : fallbackPath;
 
     try {
       const body = await readFile(targetPath);
@@ -400,17 +407,23 @@ export function ensureDesktopAppProtocolForHost(hostManager: HostManager, hostId
 
   const partitionSession = session.fromPartition(partition);
   configureDesktopProtocolSession(partitionSession, hostId);
-  partitionSession.protocol.handle(DESKTOP_APP_SCHEME, createDesktopProtocolHandler({
-    hostManager,
-    hostId,
-  }));
+  partitionSession.protocol.handle(
+    DESKTOP_APP_SCHEME,
+    createDesktopProtocolHandler({
+      hostManager,
+      hostId,
+    }),
+  );
   registeredDesktopProtocolPartitions.add(partition);
 }
 
 export function registerDesktopAppProtocol(hostManager: HostManager): void {
-  protocol.handle(DESKTOP_APP_SCHEME, createDesktopProtocolHandler({
-    hostManager,
-    hostId: 'local',
-  }));
+  protocol.handle(
+    DESKTOP_APP_SCHEME,
+    createDesktopProtocolHandler({
+      hostManager,
+      hostId: 'local',
+    }),
+  );
   ensureDesktopAppProtocolForHost(hostManager, 'local');
 }

@@ -1,9 +1,5 @@
-import {
-  ARCHIVED_SESSION_IDS_STORAGE_KEY,
-  OPEN_SESSION_IDS_STORAGE_KEY,
-  PINNED_SESSION_IDS_STORAGE_KEY,
-} from '../local/localSettings';
 import { api } from '../client/api';
+import { ARCHIVED_SESSION_IDS_STORAGE_KEY, OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings';
 
 export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
 
@@ -100,17 +96,15 @@ function sameSessionIds(left: readonly string[], right: readonly string[]): bool
 }
 
 function sameConversationLayout(left: ConversationLayout, right: ConversationLayout): boolean {
-  return sameSessionIds(left.sessionIds, right.sessionIds)
-    && sameSessionIds(left.pinnedSessionIds, right.pinnedSessionIds)
-    && sameSessionIds(left.archivedSessionIds, right.archivedSessionIds);
+  return (
+    sameSessionIds(left.sessionIds, right.sessionIds) &&
+    sameSessionIds(left.pinnedSessionIds, right.pinnedSessionIds) &&
+    sameSessionIds(left.archivedSessionIds, right.archivedSessionIds)
+  );
 }
 
 function persistConversationLayoutToServer(layout: ConversationLayout): void {
-  void api.setOpenConversationTabs(
-    layout.sessionIds,
-    layout.pinnedSessionIds,
-    layout.archivedSessionIds,
-  ).catch(() => {
+  void api.setOpenConversationTabs(layout.sessionIds, layout.pinnedSessionIds, layout.archivedSessionIds).catch(() => {
     // Ignore best-effort sync failures.
   });
 }
@@ -170,9 +164,11 @@ function writeConversationLayout(layout: ConversationLayout): ConversationLayout
   writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, normalizedLayout.pinnedSessionIds);
   writeStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY, normalizedLayout.archivedSessionIds);
   persistConversationLayoutToServer(normalizedLayout);
-  window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, {
-    detail: normalizedLayout,
-  }));
+  window.dispatchEvent(
+    new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, {
+      detail: normalizedLayout,
+    }),
+  );
 
   return normalizedLayout;
 }
@@ -229,12 +225,8 @@ export function setConversationArchivedState(sessionId: string, archived: boolea
   const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
   const openWithoutSession = current.sessionIds.filter((id) => id !== normalizedSessionId);
   const archivedWithoutSession = current.archivedSessionIds.filter((id) => id !== normalizedSessionId);
-  const nextSessionIds = archived
-    ? openWithoutSession
-    : [...openWithoutSession, normalizedSessionId];
-  const nextArchivedSessionIds = archived
-    ? [...archivedWithoutSession, normalizedSessionId]
-    : archivedWithoutSession;
+  const nextSessionIds = archived ? openWithoutSession : [...openWithoutSession, normalizedSessionId];
+  const nextArchivedSessionIds = archived ? [...archivedWithoutSession, normalizedSessionId] : archivedWithoutSession;
 
   return replaceConversationLayout({
     sessionIds: nextSessionIds,
@@ -270,10 +262,7 @@ export function pinConversationTab(sessionId: string): ConversationLayout {
   return moveConversationTab(normalizedSessionId, 'pinned', firstPinnedSessionId, 'before');
 }
 
-export function unpinConversationTab(
-  sessionId: string,
-  options: { open?: boolean } = {},
-): ConversationLayout {
+export function unpinConversationTab(sessionId: string, options: { open?: boolean } = {}): ConversationLayout {
   const normalizedSessionId = normalizeSessionId(sessionId);
   const current = readConversationLayout();
   const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
@@ -282,9 +271,10 @@ export function unpinConversationTab(
     return current;
   }
 
-  const nextSessionIds = options.open === false || current.sessionIds.includes(normalizedSessionId)
-    ? current.sessionIds
-    : [...current.sessionIds, normalizedSessionId];
+  const nextSessionIds =
+    options.open === false || current.sessionIds.includes(normalizedSessionId)
+      ? current.sessionIds
+      : [...current.sessionIds, normalizedSessionId];
 
   return replaceConversationLayout({
     sessionIds: nextSessionIds,
@@ -369,12 +359,7 @@ export function shiftConversationTab(sessionId: string, direction: -1 | 1): Conv
       return current;
     }
 
-    return moveConversationTab(
-      normalizedSessionId,
-      'pinned',
-      targetSessionId,
-      direction < 0 ? 'before' : 'after',
-    );
+    return moveConversationTab(normalizedSessionId, 'pinned', targetSessionId, direction < 0 ? 'before' : 'after');
   }
 
   const openIndex = current.sessionIds.indexOf(normalizedSessionId);
@@ -387,10 +372,5 @@ export function shiftConversationTab(sessionId: string, direction: -1 | 1): Conv
     return current;
   }
 
-  return moveConversationTab(
-    normalizedSessionId,
-    'open',
-    targetSessionId,
-    direction < 0 ? 'before' : 'after',
-  );
+  return moveConversationTab(normalizedSessionId, 'open', targetSessionId, direction < 0 ? 'before' : 'after');
 }

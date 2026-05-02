@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppEventsContext, INITIAL_APP_EVENT_VERSIONS } from '../app/contexts.js';
 import { INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../conversation/conversationEventVersions.js';
 import { useApi } from '../hooks/useApi';
@@ -38,7 +39,9 @@ function mockUseApiResults(results: Record<string, Partial<ReturnType<typeof use
 function renderModal(entry = '/conversations/conv-123?artifact=artifact-html') {
   return renderToString(
     <MemoryRouter initialEntries={[entry]}>
-      <AppEventsContext.Provider value={{ versions: INITIAL_APP_EVENT_VERSIONS, conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS }}>
+      <AppEventsContext.Provider
+        value={{ versions: INITIAL_APP_EVENT_VERSIONS, conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS }}
+      >
         <ConversationArtifactModal conversationId="conv-123" artifactId="artifact-html" />
       </AppEventsContext.Provider>
     </MemoryRouter>,

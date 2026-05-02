@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { DaemonConfig } from '../config.js';
 import { buildCompanionSetupState } from './setup-links.js';
 
@@ -51,9 +52,36 @@ describe('buildCompanionSetupState', () => {
       hostInstanceId: 'host-1',
       resolveTailnetUrl: () => 'https://my-host.tailnet.ts.net',
       readNetworkInterfaces: () => ({
-        lo0: [{ address: '127.0.0.1', family: 'IPv4', internal: true, netmask: '255.0.0.0', mac: '00:00:00:00:00:00', cidr: '127.0.0.1/8' }],
-        en0: [{ address: '192.168.1.25', family: 'IPv4', internal: false, netmask: '255.255.255.0', mac: '01:02:03:04:05:06', cidr: '192.168.1.25/24' }],
-        utun4: [{ address: '100.88.90.12', family: 'IPv4', internal: false, netmask: '255.255.255.255', mac: '00:00:00:00:00:00', cidr: '100.88.90.12/32' }],
+        lo0: [
+          {
+            address: '127.0.0.1',
+            family: 'IPv4',
+            internal: true,
+            netmask: '255.0.0.0',
+            mac: '00:00:00:00:00:00',
+            cidr: '127.0.0.1/8',
+          },
+        ],
+        en0: [
+          {
+            address: '192.168.1.25',
+            family: 'IPv4',
+            internal: false,
+            netmask: '255.255.255.0',
+            mac: '01:02:03:04:05:06',
+            cidr: '192.168.1.25/24',
+          },
+        ],
+        utun4: [
+          {
+            address: '100.88.90.12',
+            family: 'IPv4',
+            internal: false,
+            netmask: '255.255.255.255',
+            mac: '00:00:00:00:00:00',
+            cidr: '100.88.90.12/32',
+          },
+        ],
       }),
     });
 

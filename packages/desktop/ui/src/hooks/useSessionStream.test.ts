@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+
+import type { StreamState } from './useSessionStream';
 import {
+  normalizeLiveSessionTailBlocks,
   normalizePendingQueueItems,
   normalizeSurfaceRegistrationWaitOptions,
-  normalizeLiveSessionTailBlocks,
   removePendingQueueItemById,
   retryLiveSessionActionAfterTakeover,
   shouldReplaceOptimisticUserBlock,
   userMessageBlocksMatchForStreamDedupe,
 } from './useSessionStream';
-
-import type { StreamState } from './useSessionStream';
 
 function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
   return {
@@ -46,130 +46,147 @@ describe('normalizeLiveSessionTailBlocks', () => {
 
 describe('userMessageBlocksMatchForStreamDedupe', () => {
   it('requires matching image identity, not just matching image counts', () => {
-    expect(userMessageBlocksMatchForStreamDedupe(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: 'same text',
-        images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(false);
+    expect(
+      userMessageBlocksMatchForStreamDedupe(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: 'same text',
+          images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(false);
 
-    expect(userMessageBlocksMatchForStreamDedupe(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(true);
+    expect(
+      userMessageBlocksMatchForStreamDedupe(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(true);
 
-    expect(userMessageBlocksMatchForStreamDedupe(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'data:image/png;base64,abc', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(true);
+    expect(
+      userMessageBlocksMatchForStreamDedupe(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'data:image/png;base64,abc', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(true);
 
-    expect(userMessageBlocksMatchForStreamDedupe(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'data:text/html;base64,PHNjcmlwdA==', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(false);
+    expect(
+      userMessageBlocksMatchForStreamDedupe(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'data:text/html;base64,PHNjcmlwdA==', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(false);
 
-    expect(userMessageBlocksMatchForStreamDedupe(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'data:image/png;base64,not-valid-base64!', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(false);
+    expect(
+      userMessageBlocksMatchForStreamDedupe(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'data:image/png;base64,not-valid-base64!', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(false);
   });
 
   it('matches image mime types case-insensitively for stream dedupe', () => {
-    expect(userMessageBlocksMatchForStreamDedupe(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'IMAGE/PNG', caption: 'new.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: 'same text',
-        images: [{ alt: 'new.png', src: 'data:image/png;base64,abc', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(true);
+    expect(
+      userMessageBlocksMatchForStreamDedupe(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'IMAGE/PNG', caption: 'new.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: 'same text',
+          images: [{ alt: 'new.png', src: 'data:image/png;base64,abc', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(true);
   });
 });
 
 describe('shouldReplaceOptimisticUserBlock', () => {
   it('does not replace a skill prompt when accepted images differ', () => {
-    expect(shouldReplaceOptimisticUserBlock(
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:00.000Z',
-        text: '/skill:checkpoint',
-        images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
-      },
-      {
-        type: 'user',
-        ts: '2026-04-01T00:00:01.000Z',
-        text: '<skill name="checkpoint" location="/skills/checkpoint/SKILL.md">\nCommit current work.\n</skill>',
-        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
-      },
-    )).toBe(false);
+    expect(
+      shouldReplaceOptimisticUserBlock(
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:00.000Z',
+          text: '/skill:checkpoint',
+          images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
+        },
+        {
+          type: 'user',
+          ts: '2026-04-01T00:00:01.000Z',
+          text: '<skill name="checkpoint" location="/skills/checkpoint/SKILL.md">\nCommit current work.\n</skill>',
+          images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+        },
+      ),
+    ).toBe(false);
   });
 });
 
 describe('retryLiveSessionActionAfterTakeover', () => {
   it('retries generic live-session actions after taking over on control errors', async () => {
-    const attemptAction = vi.fn<() => Promise<string>>()
+    const attemptAction = vi
+      .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new Error('This conversation is controlled by another surface. Take over here to continue.'))
       .mockResolvedValueOnce('ok');
     const takeOver = vi.fn(async () => undefined);
 
-    await expect(retryLiveSessionActionAfterTakeover({
-      attemptAction,
-      takeOverSessionControl: takeOver,
-    })).resolves.toBe('ok');
+    await expect(
+      retryLiveSessionActionAfterTakeover({
+        attemptAction,
+        takeOverSessionControl: takeOver,
+      }),
+    ).resolves.toBe('ok');
 
     expect(attemptAction).toHaveBeenCalledTimes(2);
     expect(takeOver).toHaveBeenCalledTimes(1);
@@ -180,10 +197,12 @@ describe('retryLiveSessionActionAfterTakeover', () => {
     const attemptAction = vi.fn<() => Promise<void>>().mockRejectedValueOnce(error);
     const takeOver = vi.fn(async () => undefined);
 
-    await expect(retryLiveSessionActionAfterTakeover({
-      attemptAction,
-      takeOverSessionControl: takeOver,
-    })).rejects.toBe(error);
+    await expect(
+      retryLiveSessionActionAfterTakeover({
+        attemptAction,
+        takeOverSessionControl: takeOver,
+      }),
+    ).rejects.toBe(error);
 
     expect(attemptAction).toHaveBeenCalledTimes(1);
     expect(takeOver).not.toHaveBeenCalled();
@@ -236,9 +255,7 @@ describe('normalizePendingQueueItems', () => {
   });
 
   it('keeps image-only queue previews empty so the UI can render attachment chrome separately', () => {
-    expect(normalizePendingQueueItems([{ id: 'steer-1', text: '', imageCount: 2 }])).toEqual([
-      { id: 'steer-1', text: '', imageCount: 2 },
-    ]);
+    expect(normalizePendingQueueItems([{ id: 'steer-1', text: '', imageCount: 2 }])).toEqual([{ id: 'steer-1', text: '', imageCount: 2 }]);
   });
 
   it('rejects unsafe queue preview image counts', () => {
@@ -252,5 +269,3 @@ describe('normalizePendingQueueItems', () => {
     expect(normalizePendingQueueItems({ steering: ['bad-shape'] })).toEqual([]);
   });
 });
-
-

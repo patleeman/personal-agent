@@ -1,7 +1,17 @@
-import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEventHandler, type TextareaHTMLAttributes } from 'react';
+import {
+  forwardRef,
+  type KeyboardEventHandler,
+  type TextareaHTMLAttributes,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
 import { filterMentionItems, MAX_MENTION_MENU_ITEMS, type MentionItem } from '../conversation/conversationMentions';
 import { useNodeMentionItems } from '../hooks/useNodeMentionItems';
-import { Pill, cx } from './ui';
+import { cx, Pill } from './ui';
 
 interface MentionMatch {
   query: string;
@@ -35,19 +45,10 @@ function findMentionMatch(value: string, caret: number, selectionEnd: number): M
   };
 }
 
-export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaProps>(function MentionTextarea({
-  value,
-  onValueChange,
-  mentionItems,
-  className,
-  containerClassName,
-  disabled,
-  onKeyDown,
-  onClick,
-  onKeyUp,
-  onBlur,
-  ...rest
-}, ref) {
+export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaProps>(function MentionTextarea(
+  { value, onValueChange, mentionItems, className, containerClassName, disabled, onKeyDown, onClick, onKeyUp, onBlur, ...rest },
+  ref,
+) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => textareaRef.current as HTMLTextAreaElement, []);
 
@@ -55,13 +56,9 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
   const [mentionMatch, setMentionMatch] = useState<MentionMatch | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
 
-  const items = Array.isArray(mentionItems)
-    ? mentionItems
-    : Array.isArray(data)
-      ? data
-      : [];
+  const items = Array.isArray(mentionItems) ? mentionItems : Array.isArray(data) ? data : [];
   const filteredItems = useMemo(
-    () => mentionMatch ? filterMentionItems(items, mentionMatch.query, { limit: MAX_MENTION_MENU_ITEMS }) : [],
+    () => (mentionMatch ? filterMentionItems(items, mentionMatch.query, { limit: MAX_MENTION_MENU_ITEMS }) : []),
     [items, mentionMatch],
   );
   const showMentionMenu = !disabled && mentionMatch !== null && filteredItems.length > 0;
@@ -153,9 +150,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
               }}
               className={cx(
                 'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
-                index === selectedMentionIndex
-                  ? 'bg-elevated text-primary'
-                  : 'text-secondary hover:bg-elevated/50',
+                index === selectedMentionIndex ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50',
               )}
             >
               <Pill tone="muted">{item.kind}</Pill>

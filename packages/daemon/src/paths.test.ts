@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
 
 const tempDirs: string[] = [];

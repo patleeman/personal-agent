@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DESKTOP_REMOTE_OPERATION_EVENT } from './desktopBridge';
 import { subscribeDesktopRemoteOperations } from './desktopRemoteOperations';
 
@@ -22,14 +23,17 @@ describe('subscribeDesktopRemoteOperations', () => {
     } as unknown as Window & typeof globalThis;
 
     vi.stubGlobal('window', fakeWindow);
-    vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> extends Event {
-      readonly detail: T;
+    vi.stubGlobal(
+      'CustomEvent',
+      class CustomEvent<T = unknown> extends Event {
+        readonly detail: T;
 
-      constructor(type: string, init?: { detail?: T }) {
-        super(type);
-        this.detail = init?.detail as T;
-      }
-    });
+        constructor(type: string, init?: { detail?: T }) {
+          super(type);
+          this.detail = init?.detail as T;
+        }
+      },
+    );
 
     const onopen = vi.fn();
     const onevent = vi.fn();
@@ -37,39 +41,49 @@ describe('subscribeDesktopRemoteOperations', () => {
 
     const unsubscribe = await subscribeDesktopRemoteOperations({ onopen, onevent, onclose });
 
-    fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
-      detail: { subscriptionId: 'other', event: { type: 'open' } },
-    }));
-    fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
-      detail: { subscriptionId: 'sub-1', event: { type: 'open' } },
-    }));
-    fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
-      detail: {
-        subscriptionId: 'sub-1',
-        event: {
-          type: 'event',
+    fakeWindow.dispatchEvent(
+      new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
+        detail: { subscriptionId: 'other', event: { type: 'open' } },
+      }),
+    );
+    fakeWindow.dispatchEvent(
+      new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
+        detail: { subscriptionId: 'sub-1', event: { type: 'open' } },
+      }),
+    );
+    fakeWindow.dispatchEvent(
+      new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
+        detail: {
+          subscriptionId: 'sub-1',
           event: {
-            hostId: 'bender',
-            hostLabel: 'Bender',
-            scope: 'runtime',
-            stage: 'launch',
-            status: 'running',
-            message: 'Starting remote Pi runtime…',
-            at: new Date().toISOString(),
+            type: 'event',
+            event: {
+              hostId: 'bender',
+              hostLabel: 'Bender',
+              scope: 'runtime',
+              stage: 'launch',
+              status: 'running',
+              message: 'Starting remote Pi runtime…',
+              at: new Date().toISOString(),
+            },
           },
         },
-      },
-    }));
-    fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
-      detail: { subscriptionId: 'sub-1', event: { type: 'close' } },
-    }));
+      }),
+    );
+    fakeWindow.dispatchEvent(
+      new CustomEvent(DESKTOP_REMOTE_OPERATION_EVENT, {
+        detail: { subscriptionId: 'sub-1', event: { type: 'close' } },
+      }),
+    );
 
     expect(subscribeRemoteOperations).toHaveBeenCalledTimes(1);
     expect(onopen).toHaveBeenCalledTimes(1);
-    expect(onevent).toHaveBeenCalledWith(expect.objectContaining({
-      hostId: 'bender',
-      stage: 'launch',
-    }));
+    expect(onevent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hostId: 'bender',
+        stage: 'launch',
+      }),
+    );
     expect(onclose).toHaveBeenCalledTimes(1);
 
     unsubscribe();

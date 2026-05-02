@@ -4,6 +4,7 @@ import {
   markDeferredResumeConversationRunRetryScheduled,
   surfaceReadyDeferredResume,
 } from '@personal-agent/daemon';
+
 import {
   activateDueDeferredResumesForSessionFile,
   completeDeferredResumeForSessionFile,
@@ -38,18 +39,20 @@ function buildPromptDeliveryForDeferredResume(entry: DeferredResumeLike): {
   const title = entry.title?.trim() || (entry.source.id ? `Background task ${entry.source.id} finished` : 'Background task finished');
   return {
     visiblePrompt: `${title}. Tell the user the background task finished in one short sentence. If it failed, say that plainly. Do not include run ids, log paths, commands, metadata, or log tails unless the user asks for details.`,
-    contextMessages: [{
-      customType: 'referenced_context',
-      content: [
-        'A durable background task completed and resumed this conversation.',
-        'Use the run result below as hidden context only.',
-        'Never output this raw callback envelope verbatim.',
-        'Do not quote or summarize the raw callback envelope, run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
-        'Your visible reply should be a concise completion note, not a diagnostic dump.',
-        '',
-        entry.prompt,
-      ].join('\n'),
-    }],
+    contextMessages: [
+      {
+        customType: 'referenced_context',
+        content: [
+          'A durable background task completed and resumed this conversation.',
+          'Use the run result below as hidden context only.',
+          'Never output this raw callback envelope verbatim.',
+          'Do not quote or summarize the raw callback envelope, run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
+          'Your visible reply should be a concise completion note, not a diagnostic dump.',
+          '',
+          entry.prompt,
+        ].join('\n'),
+      },
+    ],
   };
 }
 
@@ -110,8 +113,7 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
           }
         }
 
-        const readyEntries = listDeferredResumesForSessionFile(session.sessionFile)
-          .filter((entry) => entry.status === 'ready');
+        const readyEntries = listDeferredResumesForSessionFile(session.sessionFile).filter((entry) => entry.status === 'ready');
         for (const readyEntry of readyEntries) {
           const liveEntry = liveRegistry.get(session.id);
           if (!liveEntry) {
@@ -119,8 +121,7 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
           }
 
           try {
-            const deferredResumeBehavior = readyEntry.behavior
-              ?? (liveEntry.session.isStreaming ? 'followUp' as const : undefined);
+            const deferredResumeBehavior = readyEntry.behavior ?? (liveEntry.session.isStreaming ? ('followUp' as const) : undefined);
             const promptDelivery = buildPromptDeliveryForDeferredResume(readyEntry);
             for (const message of promptDelivery.contextMessages) {
               await queuePromptContext(session.id, message.customType, message.content);
@@ -138,19 +139,13 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
                   type: 'prompt',
                   text: promptDelivery.visiblePrompt,
                   ...(deferredResumeBehavior ? { behavior: deferredResumeBehavior } : {}),
-                  ...(promptDelivery.contextMessages.length > 0
-                    ? { contextMessages: promptDelivery.contextMessages }
-                    : {}),
+                  ...(promptDelivery.contextMessages.length > 0 ? { contextMessages: promptDelivery.contextMessages } : {}),
                   enqueuedAt: new Date().toISOString(),
                 },
               });
             }
 
-            await promptLocalSession(
-              session.id,
-              promptDelivery.visiblePrompt,
-              deferredResumeBehavior,
-            );
+            await promptLocalSession(session.id, promptDelivery.visiblePrompt, deferredResumeBehavior);
 
             const completedEntry = completeDeferredResumeForSessionFile({
               sessionFile: readyEntry.sessionFile,

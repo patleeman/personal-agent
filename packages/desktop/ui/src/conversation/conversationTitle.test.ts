@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
 
 describe('conversation title helpers', () => {

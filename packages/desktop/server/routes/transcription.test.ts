@@ -1,11 +1,10 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  persistSettingsWriteMock,
-} = vi.hoisted(() => ({
+const { persistSettingsWriteMock } = vi.hoisted(() => ({
   persistSettingsWriteMock: vi.fn(),
 }));
 
@@ -61,25 +60,29 @@ describe('registerTranscriptionRoutes', () => {
       return writer('/tmp/runtime-settings.json');
     });
 
-    patchHandler({
-      body: {
-        provider: 'local-whisper',
-        model: 'base.en',
+    patchHandler(
+      {
+        body: {
+          provider: 'local-whisper',
+          model: 'base.en',
+        },
       },
-    }, res);
+      res,
+    );
 
     expect(persistSettingsWriteMock).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      settings: {
-        provider: 'local-whisper',
-        model: 'base.en',
-      },
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: {
+          provider: 'local-whisper',
+          model: 'base.en',
+        },
+      }),
+    );
   });
 
   it('rejects malformed transcription file base64 before provider dispatch', () => {
-    expect(() => readRequiredBase64('not-valid-base64!', 'dataBase64'))
-      .toThrow('dataBase64 must contain valid base64 data.');
+    expect(() => readRequiredBase64('not-valid-base64!', 'dataBase64')).toThrow('dataBase64 must contain valid base64 data.');
   });
 
   it('returns a client error for malformed transcription file base64', async () => {

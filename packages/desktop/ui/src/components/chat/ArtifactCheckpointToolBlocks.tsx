@@ -1,9 +1,10 @@
 import { memo } from 'react';
+
 import { readArtifactPresentation } from '../../conversation/conversationArtifacts';
 import { readCheckpointPresentation } from '../../conversation/conversationCheckpoints';
 import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
-import { Pill, SurfacePanel, cx } from '../ui';
+import { cx, Pill, SurfacePanel } from '../ui';
 import { CheckpointInlineDiff } from './CheckpointInlineDiff';
 
 const ArtifactToolBlock = memo(function ArtifactToolBlock({
@@ -23,13 +24,7 @@ const ArtifactToolBlock = memo(function ArtifactToolBlock({
   const actionLabel = isActive ? 'opened' : 'open';
 
   return (
-    <SurfacePanel
-      muted
-      className={cx(
-        'px-3.5 py-3 text-[12px] transition-colors',
-        isError && 'border-danger/30 bg-danger/5',
-      )}
-    >
+    <SurfacePanel muted className={cx('px-3.5 py-3 text-[12px] transition-colors', isError && 'border-danger/30 bg-danger/5')}>
       <div className="flex items-start gap-3">
         <div className="ui-chat-avatar mt-0.5">
           <span className="ui-chat-avatar-mark">◫</span>
@@ -37,16 +32,14 @@ const ArtifactToolBlock = memo(function ArtifactToolBlock({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="truncate text-[13px] font-medium text-primary">{artifact.title}</span>
-            <Pill tone={isError ? 'danger' : 'accent'} mono>{artifact.kind}</Pill>
+            <Pill tone={isError ? 'danger' : 'accent'} mono>
+              {artifact.kind}
+            </Pill>
             {artifact.revision !== undefined && <span className="text-[10px] text-dim">rev {artifact.revision}</span>}
           </div>
           <p className="mt-1 break-all font-mono text-[11px] text-secondary">{artifact.artifactId}</p>
-          {block.output && !isError && (
-            <p className="mt-2 text-[12px] leading-relaxed text-secondary">{block.output}</p>
-          )}
-          {isError && block.output && (
-            <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
-          )}
+          {block.output && !isError && <p className="mt-2 text-[12px] leading-relaxed text-secondary">{block.output}</p>}
+          {isError && block.output && <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
             {isRunning ? (
               <span className="inline-flex items-center gap-1.5 text-dim">
@@ -105,21 +98,26 @@ const CheckpointToolBlock = memo(function CheckpointToolBlock({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="truncate text-[13px] font-medium text-primary">{checkpoint.subject}</span>
-            <Pill tone={isError ? 'danger' : 'success'} mono>{checkpoint.shortSha}</Pill>
+            <Pill tone={isError ? 'danger' : 'success'} mono>
+              {checkpoint.shortSha}
+            </Pill>
             {typeof checkpoint.fileCount === 'number' ? <span className="text-[10px] text-dim">{checkpoint.fileCount} files</span> : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
             {typeof checkpoint.linesAdded === 'number' && typeof checkpoint.linesDeleted === 'number' ? (
-              <span className="font-mono tabular-nums text-secondary"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
+              <span className="font-mono tabular-nums text-secondary">
+                <span className="text-success">+{checkpoint.linesAdded}</span>{' '}
+                <span className="text-danger">-{checkpoint.linesDeleted}</span>
+              </span>
             ) : null}
             {typeof commentCount === 'number' && commentCount > 0 ? (
-              <span className="text-dim">{commentCount} comment{commentCount === 1 ? '' : 's'}</span>
+              <span className="text-dim">
+                {commentCount} comment{commentCount === 1 ? '' : 's'}
+              </span>
             ) : null}
             {checkpoint.updatedAt && <span className="text-dim">updated {timeAgo(checkpoint.updatedAt)}</span>}
           </div>
-          {isError && block.output && (
-            <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
-          )}
+          {isError && block.output && <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>}
           {isRunning ? (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
               <span className="inline-flex items-center gap-1.5 text-dim">
@@ -158,12 +156,9 @@ const BROWSER_TOOL_LABELS: Record<string, string> = {
 };
 
 function readBrowserUrl(block: Extract<MessageBlock, { type: 'tool_use' }>): string | null {
-  const details = block.details && typeof block.details === 'object'
-    ? block.details as { url?: unknown; state?: { url?: unknown } }
-    : null;
-  const input = block.input && typeof block.input === 'object'
-    ? block.input as { command?: unknown }
-    : null;
+  const details =
+    block.details && typeof block.details === 'object' ? (block.details as { url?: unknown; state?: { url?: unknown } }) : null;
+  const input = block.input && typeof block.input === 'object' ? (block.input as { command?: unknown }) : null;
 
   if (typeof details?.url === 'string' && details.url.trim()) {
     return details.url.trim();
@@ -193,13 +188,7 @@ const BrowserToolBlock = memo(function BrowserToolBlock({
   const title = BROWSER_TOOL_LABELS[block.tool] ?? 'Browser tool';
 
   return (
-    <SurfacePanel
-      muted
-      className={cx(
-        'px-3.5 py-3 text-[12px] transition-colors',
-        isError && 'border-danger/30 bg-danger/5',
-      )}
-    >
+    <SurfacePanel muted className={cx('px-3.5 py-3 text-[12px] transition-colors', isError && 'border-danger/30 bg-danger/5')}>
       <div className="flex items-start gap-3">
         <div className="ui-chat-avatar mt-0.5">
           <span className="ui-chat-avatar-mark">◎</span>
@@ -207,15 +196,15 @@ const BrowserToolBlock = memo(function BrowserToolBlock({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="truncate text-[13px] font-medium text-primary">{title}</span>
-            <Pill tone={isError ? 'danger' : 'teal'} mono>browser</Pill>
+            <Pill tone={isError ? 'danger' : 'teal'} mono>
+              browser
+            </Pill>
           </div>
           <p className="mt-1 text-[12px] leading-relaxed text-secondary">
             The agent used the Workbench Browser. Open it when you want to see or control the page.
           </p>
           {url ? <p className="mt-1 truncate font-mono text-[11px] text-secondary">{url}</p> : null}
-          {isError && block.output ? (
-            <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
-          ) : null}
+          {isError && block.output ? <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p> : null}
           <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
             {isRunning ? (
               <span className="inline-flex items-center gap-1.5 text-dim">
@@ -239,4 +228,4 @@ const BrowserToolBlock = memo(function BrowserToolBlock({
   );
 });
 
-export { ArtifactToolBlock, CheckpointToolBlock, BrowserToolBlock };
+export { ArtifactToolBlock, BrowserToolBlock, CheckpointToolBlock };

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import type { MessageBlock } from '../shared/types';
 import {
-  buildPendingAskUserQuestionKey,
   buildAskUserQuestionReplyText,
+  buildPendingAskUserQuestionKey,
   countAnsweredAskUserQuestions,
   findPendingAskUserQuestion,
   isAskUserQuestionComplete,
@@ -31,16 +32,18 @@ describe('ask user questions', () => {
     };
 
     expect(readAskUserQuestionPresentation(block)).toEqual({
-      questions: [{
-        id: 'question-1',
-        label: 'Which environment should I use?',
-        details: 'Pick one target.',
-        style: 'radio',
-        options: [
-          { value: 'staging', label: 'staging' },
-          { value: 'prod', label: 'prod' },
-        ],
-      }],
+      questions: [
+        {
+          id: 'question-1',
+          label: 'Which environment should I use?',
+          details: 'Pick one target.',
+          style: 'radio',
+          options: [
+            { value: 'staging', label: 'staging' },
+            { value: 'prod', label: 'prod' },
+          ],
+        },
+      ],
     });
   });
 
@@ -122,21 +125,23 @@ describe('ask user questions', () => {
 
     expect(pending?.messageIndex).toBe(1);
     expect(pending?.presentation.questions[0]?.label).toBe('Second?');
-    expect(findPendingAskUserQuestion([
-      {
-        type: 'tool_use',
-        ts: '2026-03-21T00:00:00.000Z',
-        tool: 'ask_user_question',
-        input: { question: 'Answered?', options: ['Yes', 'No'] },
-        output: '',
-        status: 'ok',
-      },
-      {
-        type: 'user',
-        ts: '2026-03-21T00:00:01.000Z',
-        text: 'Yes',
-      },
-    ])).toBeNull();
+    expect(
+      findPendingAskUserQuestion([
+        {
+          type: 'tool_use',
+          ts: '2026-03-21T00:00:00.000Z',
+          tool: 'ask_user_question',
+          input: { question: 'Answered?', options: ['Yes', 'No'] },
+          output: '',
+          status: 'ok',
+        },
+        {
+          type: 'user',
+          ts: '2026-03-21T00:00:01.000Z',
+          text: 'Yes',
+        },
+      ]),
+    ).toBeNull();
   });
 
   it('builds a stable pending question key from block and question ids', () => {
@@ -163,15 +168,17 @@ describe('ask user questions', () => {
 
   it('formats single radio answers as a direct reply and multiple answers as a structured list', () => {
     const singleQuestion = {
-      questions: [{
-        id: 'target',
-        label: 'Choose a target',
-        style: 'radio' as const,
-        options: [
-          { value: 'staging', label: 'Staging' },
-          { value: 'prod', label: 'Production' },
-        ],
-      }],
+      questions: [
+        {
+          id: 'target',
+          label: 'Choose a target',
+          style: 'radio' as const,
+          options: [
+            { value: 'staging', label: 'Staging' },
+            { value: 'prod', label: 'Production' },
+          ],
+        },
+      ],
     };
     const multiQuestion = {
       questions: [
@@ -197,14 +204,12 @@ describe('ask user questions', () => {
     };
 
     expect(buildAskUserQuestionReplyText(singleQuestion, { target: ['prod'] })).toBe('Production');
-    expect(buildAskUserQuestionReplyText(multiQuestion, {
-      target: ['staging'],
-      notify: ['email', 'sms'],
-    })).toBe([
-      'Answers:',
-      '- Choose a target: Staging',
-      '- Select notifications: Email, SMS',
-    ].join('\n'));
+    expect(
+      buildAskUserQuestionReplyText(multiQuestion, {
+        target: ['staging'],
+        notify: ['email', 'sms'],
+      }),
+    ).toBe(['Answers:', '- Choose a target: Staging', '- Select notifications: Email, SMS'].join('\n'));
   });
 
   it('tracks completion and formats selected labels', () => {
@@ -232,12 +237,15 @@ describe('ask user questions', () => {
     };
 
     expect(isAskUserQuestionComplete(presentation, { target: ['prod'] })).toBe(false);
-    expect(isAskUserQuestionComplete(presentation, {
-      target: ['prod'],
-      notify: ['email'],
-    })).toBe(true);
-    expect(buildAskUserQuestionReplyText({ questions: [presentation.questions[1]!] }, { notify: ['sms', 'email'] }))
-      .toBe('Select notifications: SMS, Email');
+    expect(
+      isAskUserQuestionComplete(presentation, {
+        target: ['prod'],
+        notify: ['email'],
+      }),
+    ).toBe(true);
+    expect(buildAskUserQuestionReplyText({ questions: [presentation.questions[1]!] }, { notify: ['sms', 'email'] })).toBe(
+      'Select notifications: SMS, Email',
+    );
     expect(countAnsweredAskUserQuestions(presentation, { target: ['prod'] })).toBe(1);
     expect(countAnsweredAskUserQuestions(null, { target: ['prod'] })).toBe(0);
   });
@@ -262,29 +270,35 @@ describe('ask user questions', () => {
       ],
     };
 
-    expect(resolveAskUserQuestionAnswerSelection({
-      question: radioQuestion,
-      option: radioQuestion.options[1]!,
-      answers: { target: ['staging'] },
-    })).toEqual({
+    expect(
+      resolveAskUserQuestionAnswerSelection({
+        question: radioQuestion,
+        option: radioQuestion.options[1]!,
+        answers: { target: ['staging'] },
+      }),
+    ).toEqual({
       selectedValues: ['prod'],
       nextAnswers: { target: ['prod'] },
     });
 
-    expect(resolveAskUserQuestionAnswerSelection({
-      question: checkQuestion,
-      option: checkQuestion.options[1]!,
-      answers: { notify: ['email'] },
-    })).toEqual({
+    expect(
+      resolveAskUserQuestionAnswerSelection({
+        question: checkQuestion,
+        option: checkQuestion.options[1]!,
+        answers: { notify: ['email'] },
+      }),
+    ).toEqual({
       selectedValues: ['email', 'sms'],
       nextAnswers: { notify: ['email', 'sms'] },
     });
 
-    expect(resolveAskUserQuestionAnswerSelection({
-      question: checkQuestion,
-      option: checkQuestion.options[0]!,
-      answers: { notify: ['email', 'sms'] },
-    })).toEqual({
+    expect(
+      resolveAskUserQuestionAnswerSelection({
+        question: checkQuestion,
+        option: checkQuestion.options[0]!,
+        answers: { notify: ['email', 'sms'] },
+      }),
+    ).toEqual({
       selectedValues: ['sms'],
       nextAnswers: { notify: ['sms'] },
     });

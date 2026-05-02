@@ -4,152 +4,18 @@
  * exposes a pub/sub SSE event layer for the web server.
  */
 import { join, resolve } from 'node:path';
-import {
-  getDurableSessionsDir,
-  getPiAgentRuntimeDir,
-} from '@personal-agent/core';
-import {
-  AgentSession,
-  ModelRegistry,
-} from '@mariozechner/pi-coding-agent';
+
+import { AgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
+
 import { publishAppEvent } from '../shared/appEvents.js';
-import {
-  type ConversationModelPreferenceInput,
-  type ConversationModelPreferenceState,
-} from './conversationModelPreferences.js';
-import type { WebLiveConversationRunState } from './conversationRuns.js';
-import { appendConversationWorkspaceMetadata, readSessionBlocksByFile, readSessionMetaByFile } from './sessions.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
   type ConversationAutoModeStateInput,
 } from './conversationAutoMode.js';
-import {
-  createLiveSessionPresenceHost,
-  LiveSessionControlError,
-  type LiveSessionPresenceState,
-  type LiveSessionSurfaceType,
-  type LiveSessionPresenceHost,
-} from './liveSessionPresence.js';
-import {
-  normalizeQueuedPromptBehavior,
-  type PromptImageAttachment,
-  type QueuedPromptPreview,
-} from './liveSessionQueue.js';
-import {
-  cancelLiveSessionQueuedPrompt,
-  restoreLiveSessionQueuedMessage,
-} from './liveSessionQueueOperations.js';
-import {
-  clearPrewarmedLiveSessionLoaders,
-  prewarmLiveSessionLoader,
-  type LiveSessionLoaderOptions,
-} from './liveSessionLoader.js';
-import {
-  writePersistedParallelJobs,
-  type ParallelPromptJob,
-} from './liveSessionParallelJobs.js';
-import {
-  loadPersistedParallelJobs,
-  type ResolveParallelChildSession,
-} from './liveSessionParallelReconciliation.js';
-import {
-  repairDanglingToolCallContext,
-  type TranscriptTailRecoveryReason,
-} from './liveSessionRecovery.js';
-import {
-  ensureSessionFileExists,
-  patchSessionManagerPersistence,
-  resolveLiveSessionFile,
-} from './liveSessionPersistence.js';
-import {
-  resolveStableSessionTitle,
-} from './liveSessionTitle.js';
-import {
-  buildConversationServiceTierPreferenceInput,
-  resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
-} from './liveSessionModels.js';
-import {
-  makeAuth as makeFactoryAuth,
-  makeRegistry,
-} from './liveSessionFactory.js';
-import {
-  createLiveSession as createLiveSessionWithCallbacks,
-  createLiveSessionFromExisting as createLiveSessionFromExistingWithCallbacks,
-  resumeLiveSession as resumeLiveSessionWithCallbacks,
-} from './liveSessionCreation.js';
-import {
-  createLiveSessionHiddenTurnState,
-  ensureHiddenTurnState,
-  hasQueuedOrActiveHiddenTurn,
-  type LiveSessionHiddenTurnState,
-} from './liveSessionHiddenTurns.js';
-import {
-  toSse,
-  type LiveContextUsage,
-  type LiveContextUsageSegment,
-  type SseEvent,
-} from './liveSessionEvents.js';
-import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
-import { executeLiveSessionBash } from './liveSessionBash.js';
-import {
-  inspectAvailableLiveSessionTools,
-  type BeforeAgentStartProbeMessage,
-} from './liveSessionToolInspection.js';
-import {
-  buildLiveSessionSnapshot,
-  readLiveSessionStateSnapshotFromEntry,
-  type LiveSessionStateSnapshot,
-} from './liveSessionStateSnapshot.js';
-import {
-  broadcastLiveSessionAutoModeState,
-  broadcastLiveSessionContextUsage,
-  broadcastLiveSessionParallelState,
-  broadcastLiveSessionQueueState,
-  clearLiveSessionContextUsageTimer,
-  scheduleLiveSessionContextUsage,
-} from './liveSessionStateBroadcasts.js';
-import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
-import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
-import {
-  applyPendingLiveSessionWorkingDirectoryChange,
-  requestLiveSessionWorkingDirectoryChange,
-  type PendingConversationWorkingDirectoryChange,
-} from './liveSessionCwdChange.js';
-import {
-  finalizeParallelChildLiveSession as finalizeParallelChildLiveSessionWithCallbacks,
-  manageParallelPromptJob as manageParallelPromptJobWithCallbacks,
-  startParallelPromptSession as startParallelPromptSessionWithCallbacks,
-  tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
-} from './liveSessionParallelImportOps.js';
-import {
-  runPromptOnLiveEntry as runPromptOnLiveEntryWithCallbacks,
-  submitPromptOnLiveEntry,
-} from './liveSessionPromptOps.js';
-import {
-  branchLiveSession,
-  forkLiveSession,
-} from './liveSessionBranching.js';
-import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
-import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
-import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
-import {
-  subscribeLiveSession,
-  type LiveSessionSubscriptionListener,
-} from './liveSessionSubscription.js';
-import {
-  appendDetachedLiveSessionUserMessage,
-  appendParallelImportedLiveSessionMessage,
-  appendVisibleLiveSessionCustomMessage,
-  queueLiveSessionPromptContext,
-} from './liveSessionMessageAppend.js';
-import {
-  formatAvailableModels,
-  getLiveSessionContextUsage as readLiveSessionContextUsageForEntry,
-  getLiveSessionForkEntries as readLiveSessionForkEntries,
-  getLiveSessionStats as readLiveSessionStats,
-  listLiveSessions as listLiveSessionEntries,
-} from './liveSessionReadApi.js';
+import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
+import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
   broadcastConversationAutoModeState as broadcastConversationAutoModeStateForEntry,
   markConversationAutoModeContinueRequested as markConversationAutoModeContinueRequestedForEntry,
@@ -158,75 +24,126 @@ import {
   requestConversationAutoModeTurn as requestConversationAutoModeTurnForEntry,
   setLiveSessionAutoModeState as setLiveSessionAutoModeStateForEntry,
 } from './liveSessionAutoModeFacade.js';
+import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
+import { executeLiveSessionBash } from './liveSessionBash.js';
+import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
+import { branchLiveSession, forkLiveSession } from './liveSessionBranching.js';
+import {
+  createLiveSession as createLiveSessionWithCallbacks,
+  createLiveSessionFromExisting as createLiveSessionFromExistingWithCallbacks,
+  resumeLiveSession as resumeLiveSessionWithCallbacks,
+} from './liveSessionCreation.js';
+import {
+  applyPendingLiveSessionWorkingDirectoryChange,
+  type PendingConversationWorkingDirectoryChange,
+  requestLiveSessionWorkingDirectoryChange,
+} from './liveSessionCwdChange.js';
 import { destroyLiveSession } from './liveSessionDestroy.js';
+import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
+import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
+import { type LiveContextUsage, type LiveContextUsageSegment, type SseEvent, toSse } from './liveSessionEvents.js';
+import { makeAuth as makeFactoryAuth, makeRegistry } from './liveSessionFactory.js';
+import {
+  createLiveSessionHiddenTurnState,
+  ensureHiddenTurnState,
+  hasQueuedOrActiveHiddenTurn,
+  type LiveSessionHiddenTurnState,
+} from './liveSessionHiddenTurns.js';
+import { clearPrewarmedLiveSessionLoaders, type LiveSessionLoaderOptions, prewarmLiveSessionLoader } from './liveSessionLoader.js';
 import {
   compactLiveSession,
   renameLiveSession,
   updateLiveSessionModelPreferences as updateLiveSessionModelPreferencesWithCallbacks,
 } from './liveSessionMaintenanceOps.js';
 import {
-  refreshAllLiveSessionModelRegistries as refreshLiveSessionModelRegistries,
-  reloadAllLiveSessionAuth as reloadLiveSessionAuth,
-} from './liveSessionRegistryMaintenance.js';
+  appendDetachedLiveSessionUserMessage,
+  appendParallelImportedLiveSessionMessage,
+  appendVisibleLiveSessionCustomMessage,
+  queueLiveSessionPromptContext,
+} from './liveSessionMessageAppend.js';
 import {
-  canInjectResumeFallbackPrompt as canInjectResumeFallbackPromptForEntry,
-  listQueuedPromptPreviews as listQueuedPromptPreviewsForEntry,
-} from './liveSessionQueueRead.js';
+  buildConversationServiceTierPreferenceInput,
+  resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
+} from './liveSessionModels.js';
+import {
+  finalizeParallelChildLiveSession as finalizeParallelChildLiveSessionWithCallbacks,
+  manageParallelPromptJob as manageParallelPromptJobWithCallbacks,
+  startParallelPromptSession as startParallelPromptSessionWithCallbacks,
+  tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
+} from './liveSessionParallelImportOps.js';
+import { type ParallelPromptJob, writePersistedParallelJobs } from './liveSessionParallelJobs.js';
+import { loadPersistedParallelJobs, type ResolveParallelChildSession } from './liveSessionParallelReconciliation.js';
+import { ensureSessionFileExists, patchSessionManagerPersistence, resolveLiveSessionFile } from './liveSessionPersistence.js';
+import {
+  createLiveSessionPresenceHost,
+  LiveSessionControlError,
+  type LiveSessionPresenceHost,
+  type LiveSessionPresenceState,
+  type LiveSessionSurfaceType,
+} from './liveSessionPresence.js';
 import {
   broadcastLiveSessionPresenceState,
   ensureLiveSessionSurfaceCanControl,
   takeOverLiveSessionControl,
 } from './liveSessionPresenceFacade.js';
+import { runPromptOnLiveEntry as runPromptOnLiveEntryWithCallbacks, submitPromptOnLiveEntry } from './liveSessionPromptOps.js';
+import { normalizeQueuedPromptBehavior, type PromptImageAttachment, type QueuedPromptPreview } from './liveSessionQueue.js';
+import { cancelLiveSessionQueuedPrompt, restoreLiveSessionQueuedMessage } from './liveSessionQueueOperations.js';
+import {
+  canInjectResumeFallbackPrompt as canInjectResumeFallbackPromptForEntry,
+  listQueuedPromptPreviews as listQueuedPromptPreviewsForEntry,
+} from './liveSessionQueueRead.js';
+import {
+  formatAvailableModels,
+  getLiveSessionContextUsage as readLiveSessionContextUsageForEntry,
+  getLiveSessionForkEntries as readLiveSessionForkEntries,
+  getLiveSessionStats as readLiveSessionStats,
+  listLiveSessions as listLiveSessionEntries,
+} from './liveSessionReadApi.js';
+import { repairDanglingToolCallContext, type TranscriptTailRecoveryReason } from './liveSessionRecovery.js';
+import {
+  refreshAllLiveSessionModelRegistries as refreshLiveSessionModelRegistries,
+  reloadAllLiveSessionAuth as reloadLiveSessionAuth,
+} from './liveSessionRegistryMaintenance.js';
+import {
+  broadcastLiveSessionAutoModeState,
+  broadcastLiveSessionContextUsage,
+  broadcastLiveSessionParallelState,
+  broadcastLiveSessionQueueState,
+  clearLiveSessionContextUsageTimer,
+  scheduleLiveSessionContextUsage,
+} from './liveSessionStateBroadcasts.js';
+import {
+  buildLiveSessionSnapshot,
+  type LiveSessionStateSnapshot,
+  readLiveSessionStateSnapshotFromEntry,
+} from './liveSessionStateSnapshot.js';
+import { type LiveSessionSubscriptionListener, subscribeLiveSession } from './liveSessionSubscription.js';
+import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
+import { resolveStableSessionTitle } from './liveSessionTitle.js';
+import { type BeforeAgentStartProbeMessage, inspectAvailableLiveSessionTools } from './liveSessionToolInspection.js';
+import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
+import { appendConversationWorkspaceMetadata, readSessionBlocksByFile, readSessionMetaByFile } from './sessions.js';
 export {
-  registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
   type LiveSessionLifecycleHandler,
+  registerLiveSessionLifecycleHandler,
 } from './liveSessionLifecycle.js';
 import { notifyLiveSessionLifecycleHandlers } from './liveSessionLifecycle.js';
 
-export {
-  clearPrewarmedLiveSessionLoaders,
-  prewarmLiveSessionLoader,
-  type LiveSessionLoaderOptions,
-} from './liveSessionLoader.js';
-
-export {
-  type ParallelPromptPreview,
-} from './liveSessionParallelJobs.js';
-
-export {
-  type LiveContextUsage,
-  type LiveContextUsageSegment,
-  type SseEvent,
-  toSse,
-} from './liveSessionEvents.js';
-
-export {
-  ensureSessionFileExists,
-  patchSessionManagerPersistence,
-} from './liveSessionPersistence.js';
-
-export {
-  isPlaceholderConversationTitle,
-  resolveStableSessionTitle,
-} from './liveSessionTitle.js';
-
-export {
-  resolveLastCompletedConversationEntryId,
-  resolveStableForkEntryId,
-} from './liveSessionForking.js';
-
+export { type LiveContextUsage, type LiveContextUsageSegment, type SseEvent, toSse } from './liveSessionEvents.js';
+export { resolveLastCompletedConversationEntryId, resolveStableForkEntryId } from './liveSessionForking.js';
+export { clearPrewarmedLiveSessionLoaders, type LiveSessionLoaderOptions, prewarmLiveSessionLoader } from './liveSessionLoader.js';
+export { type ParallelPromptPreview } from './liveSessionParallelJobs.js';
+export { ensureSessionFileExists, patchSessionManagerPersistence } from './liveSessionPersistence.js';
 export {
   LiveSessionControlError,
   type LiveSessionPresence,
   type LiveSessionPresenceState,
   type LiveSessionSurfaceType,
 } from './liveSessionPresence.js';
-
-export {
-  type PromptImageAttachment,
-  type QueuedPromptPreview,
-} from './liveSessionQueue.js';
+export { type PromptImageAttachment, type QueuedPromptPreview } from './liveSessionQueue.js';
+export { isPlaceholderConversationTitle, resolveStableSessionTitle } from './liveSessionTitle.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
@@ -456,12 +373,7 @@ export function takeOverSessionControl(sessionId: string, surfaceId: string): Li
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
-function wireSession(
-  id: string,
-  session: AgentSession,
-  cwd: string,
-  options: { autoTitleRequested?: boolean } = {},
-) {
+function wireSession(id: string, session: AgentSession, cwd: string, options: { autoTitleRequested?: boolean } = {}) {
   const entry: LiveEntry = {
     sessionId: id,
     session,
@@ -481,7 +393,6 @@ function wireSession(
     parallelJobs: [],
     importingParallelJobs: false,
     ...createLiveSessionPresenceHost(),
-
   };
   entry.parallelJobs = loadPersistedParallelJobs(entry.session.sessionFile, resolveParallelChildSession);
   registry.set(id, entry);
@@ -494,24 +405,25 @@ function wireSession(
     });
   }
 
-  session.subscribe((event) => handleLiveSessionEvent(entry, event, {
-    maybeAutoTitleConversation,
-    requestConversationAutoModeContinuationTurn,
-    syncDurableConversationRun,
-    notifyLifecycleHandlers: notifyEntryLifecycleHandlers,
-    applyPendingConversationWorkingDirectoryChange,
-    scheduleContextUsage,
-    publishSessionMetaChanged,
-    broadcastQueueState,
-    broadcastTitle,
-    broadcastStats: (target, tokens, cost) => broadcast(target, { type: 'stats_update', tokens, cost }),
-    clearContextUsageTimer,
-    broadcastContextUsage,
-    broadcastSnapshot,
-    broadcast,
-    tryImportReadyParallelJobs,
-  }));
-
+  session.subscribe((event) =>
+    handleLiveSessionEvent(entry, event, {
+      maybeAutoTitleConversation,
+      requestConversationAutoModeContinuationTurn,
+      syncDurableConversationRun,
+      notifyLifecycleHandlers: notifyEntryLifecycleHandlers,
+      applyPendingConversationWorkingDirectoryChange,
+      scheduleContextUsage,
+      publishSessionMetaChanged,
+      broadcastQueueState,
+      broadcastTitle,
+      broadcastStats: (target, tokens, cost) => broadcast(target, { type: 'stats_update', tokens, cost }),
+      clearContextUsageTimer,
+      broadcastContextUsage,
+      broadcastSnapshot,
+      broadcast,
+      tryImportReadyParallelJobs,
+    }),
+  );
 
   return entry;
 }
@@ -586,10 +498,7 @@ export function getSessionContextUsage(sessionId: string): LiveContextUsage | nu
 }
 
 /** Create a brand-new Pi session. */
-export async function createSession(
-  cwd: string,
-  options: LiveSessionLoaderOptions = {},
-): Promise<{ id: string; sessionFile: string }> {
+export async function createSession(cwd: string, options: LiveSessionLoaderOptions = {}): Promise<{ id: string; sessionFile: string }> {
   return createLiveSessionWithCallbacks({
     cwd,
     agentDir: AGENT_DIR,
@@ -648,9 +557,8 @@ async function applyPendingConversationWorkingDirectoryChange(entry: LiveEntry):
     resolveSessionFile: (candidate) => resolveLiveSessionFile(candidate.session, { ensurePersisted: true }) ?? undefined,
     changeSessionWorkingDirectory: async (candidate, sessionFile, cwd, options) => {
       const currentMeta = readSessionMetaByFile(sessionFile);
-      const previousWorkspaceCwd = currentMeta && 'workspaceCwd' in currentMeta
-        ? currentMeta.workspaceCwd
-        : (currentMeta?.cwd ?? candidate.cwd);
+      const previousWorkspaceCwd =
+        currentMeta && 'workspaceCwd' in currentMeta ? currentMeta.workspaceCwd : (currentMeta?.cwd ?? candidate.cwd);
       appendConversationWorkspaceMetadata({
         sessionFile,
         previousCwd: currentMeta?.cwd ?? candidate.cwd,
@@ -774,20 +682,13 @@ export async function setLiveSessionAutoModeState(
 }
 
 /** Append hidden context before the next user-visible prompt in a live session. */
-export async function queuePromptContext(
-  sessionId: string,
-  customType: string,
-  content: string,
-): Promise<void> {
+export async function queuePromptContext(sessionId: string, customType: string, content: string): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await queueLiveSessionPromptContext(entry, customType, content);
 }
 
-export async function appendDetachedUserMessage(
-  sessionId: string,
-  text: string,
-): Promise<void> {
+export async function appendDetachedUserMessage(sessionId: string, text: string): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await appendDetachedLiveSessionUserMessage(entry, text, {
@@ -796,12 +697,7 @@ export async function appendDetachedUserMessage(
   });
 }
 
-export async function appendVisibleCustomMessage(
-  sessionId: string,
-  customType: string,
-  content: string,
-  details?: unknown,
-): Promise<void> {
+export async function appendVisibleCustomMessage(sessionId: string, customType: string, content: string, details?: unknown): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await appendVisibleLiveSessionCustomMessage(entry, customType, content, details, {
@@ -818,10 +714,11 @@ async function appendParallelImportedMessage(
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await appendParallelImportedLiveSessionMessage(entry, content, details, {
-    appendDetachedUserMessage: (target, text) => appendDetachedLiveSessionUserMessage(target, text, {
-      broadcastTitle,
-      publishSessionMetaChanged,
-    }),
+    appendDetachedUserMessage: (target, text) =>
+      appendDetachedLiveSessionUserMessage(target, text, {
+        broadcastTitle,
+        publishSessionMetaChanged,
+      }),
     broadcastSnapshot,
     publishSessionMetaChanged,
   });
@@ -868,9 +765,10 @@ export async function startParallelPromptSession(
     forkSession,
     queuePromptContext,
     submitPromptSession,
-    resolveDefaultServiceTier: (candidate) => buildConversationServiceTierPreferenceInput(
-      resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
-    ),
+    resolveDefaultServiceTier: (candidate) =>
+      buildConversationServiceTierPreferenceInput(
+        resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
+      ),
     hasQueuedOrActiveHiddenTurn,
     persistParallelJobs,
     broadcastParallelState,
@@ -897,10 +795,7 @@ export async function manageParallelPromptJob(
   });
 }
 
-function resolvePromptBehavior(
-  entry: LiveEntry,
-  behavior?: 'steer' | 'followUp',
-): 'steer' | 'followUp' | undefined {
+function resolvePromptBehavior(entry: LiveEntry, behavior?: 'steer' | 'followUp'): 'steer' | 'followUp' | undefined {
   return normalizeQueuedPromptBehavior(behavior, {
     isStreaming: entry.session.isStreaming,
     hasHiddenTurnQueued: hasQueuedOrActiveHiddenTurn(entry),
@@ -1101,9 +996,10 @@ export async function forkSession(
     createSession,
     resumeSession,
     destroySession,
-    resolveDefaultServiceTier: (candidate) => buildConversationServiceTierPreferenceInput(
-      resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
-    ),
+    resolveDefaultServiceTier: (candidate) =>
+      buildConversationServiceTierPreferenceInput(
+        resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
+      ),
   });
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizeModelContextWindow } from './modelContextWindows.js';
 
 describe('normalizeModelContextWindow', () => {

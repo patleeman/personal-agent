@@ -20,13 +20,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 export function timeAgo(iso: string): string {
@@ -62,4 +64,3 @@ export function formatDate(iso: string): string {
     minute: '2-digit',
   });
 }
-

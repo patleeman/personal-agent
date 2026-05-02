@@ -1,5 +1,5 @@
-import type { ConversationContextDocRef } from '../../shared/types';
 import type { MentionItem } from '../../conversation/conversationMentions';
+import type { ConversationContextDocRef } from '../../shared/types';
 
 export function ConversationContextShelf({
   attachedContextDocs,
@@ -31,7 +31,9 @@ export function ConversationContextShelf({
               <span className="max-w-[18rem] truncate text-secondary">{doc.title}</span>
               <button
                 type="button"
-                onClick={() => { onRemoveAttachedContextDoc(doc.path); }}
+                onClick={() => {
+                  onRemoveAttachedContextDoc(doc.path);
+                }}
                 disabled={contextDocsBusy}
                 className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none disabled:opacity-50"
                 title={`Remove ${doc.title} from attached context`}
@@ -49,7 +51,9 @@ export function ConversationContextShelf({
           {unattachedDraftMentionItems.length > 0 && (
             <button
               type="button"
-              onClick={() => { onAttachMentionedDocs(unattachedDraftMentionItems); }}
+              onClick={() => {
+                onAttachMentionedDocs(unattachedDraftMentionItems);
+              }}
               disabled={contextDocsBusy}
               className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:opacity-50"
             >

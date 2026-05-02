@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildFolderPickerInvocation,
-  interpretFolderPickerProcessResult,
-} from './folderPicker.js';
+
+import { buildFolderPickerInvocation, interpretFolderPickerProcessResult } from './folderPicker.js';
 
 describe('buildFolderPickerInvocation', () => {
   it('builds an AppleScript folder picker on macOS', () => {
@@ -45,10 +43,12 @@ describe('buildFolderPickerInvocation', () => {
   });
 
   it('throws when no linux folder picker is available', () => {
-    expect(() => buildFolderPickerInvocation({
-      platform: 'linux',
-      hasCommand: () => false,
-    })).toThrow('No supported folder picker found');
+    expect(() =>
+      buildFolderPickerInvocation({
+        platform: 'linux',
+        hasCommand: () => false,
+      }),
+    ).toThrow('No supported folder picker found');
   });
 
   it('builds a PowerShell folder picker on windows', () => {
@@ -66,34 +66,42 @@ describe('buildFolderPickerInvocation', () => {
 
 describe('interpretFolderPickerProcessResult', () => {
   it('returns the selected path', () => {
-    expect(interpretFolderPickerProcessResult({
-      status: 0,
-      stdout: '/tmp/project\n',
-      stderr: '',
-    })).toEqual({ path: '/tmp/project', cancelled: false });
+    expect(
+      interpretFolderPickerProcessResult({
+        status: 0,
+        stdout: '/tmp/project\n',
+        stderr: '',
+      }),
+    ).toEqual({ path: '/tmp/project', cancelled: false });
   });
 
   it('treats an empty successful result as a cancellation', () => {
-    expect(interpretFolderPickerProcessResult({
-      status: 0,
-      stdout: '',
-      stderr: '',
-    })).toEqual({ path: null, cancelled: true });
+    expect(
+      interpretFolderPickerProcessResult({
+        status: 0,
+        stdout: '',
+        stderr: '',
+      }),
+    ).toEqual({ path: null, cancelled: true });
   });
 
   it('treats cancel-like failures as cancellations', () => {
-    expect(interpretFolderPickerProcessResult({
-      status: 1,
-      stdout: '',
-      stderr: 'User canceled.',
-    })).toEqual({ path: null, cancelled: true });
+    expect(
+      interpretFolderPickerProcessResult({
+        status: 1,
+        stdout: '',
+        stderr: 'User canceled.',
+      }),
+    ).toEqual({ path: null, cancelled: true });
   });
 
   it('throws on real picker failures', () => {
-    expect(() => interpretFolderPickerProcessResult({
-      status: 2,
-      stdout: '',
-      stderr: 'dialog backend exploded',
-    })).toThrow('dialog backend exploded');
+    expect(() =>
+      interpretFolderPickerProcessResult({
+        status: 2,
+        stdout: '',
+        stderr: 'dialog backend exploded',
+      }),
+    ).toThrow('dialog backend exploded');
   });
 });

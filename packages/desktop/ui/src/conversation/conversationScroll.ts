@@ -22,21 +22,17 @@ export function getConversationInitialScrollKey(
   return `${conversationId}:${options.isLiveSession && !options.hasLiveSnapshot ? 'provisional' : 'settled'}`;
 }
 
-export function getConversationBottomScrollTop(
-  metrics: Pick<ConversationScrollMetrics, 'scrollHeight' | 'clientHeight'>,
-): number {
+export function getConversationBottomScrollTop(metrics: Pick<ConversationScrollMetrics, 'scrollHeight' | 'clientHeight'>): number {
   return Math.max(0, metrics.scrollHeight - metrics.clientHeight);
 }
 
-export function getConversationPrependRestoreScrollTop(
-  metrics: {
-    previousScrollHeight: number;
-    previousScrollTop: number;
-    nextScrollHeight: number;
-    nextClientHeight: number;
-    stickToBottom: boolean;
-  },
-): number {
+export function getConversationPrependRestoreScrollTop(metrics: {
+  previousScrollHeight: number;
+  previousScrollTop: number;
+  nextScrollHeight: number;
+  nextClientHeight: number;
+  stickToBottom: boolean;
+}): number {
   if (metrics.stickToBottom) {
     return getConversationBottomScrollTop({
       scrollHeight: metrics.nextScrollHeight,
@@ -82,7 +78,10 @@ export function scrollConversationTailIntoView(
   root: TailQueryRoot | null | undefined,
   options?: Pick<ScrollIntoViewOptions, 'behavior'>,
 ): boolean {
-  const tail = root?.querySelector(CONVERSATION_TAIL_SELECTOR) as { scrollIntoView?: (options?: ScrollIntoViewOptions) => void } | null | undefined;
+  const tail = root?.querySelector(CONVERSATION_TAIL_SELECTOR) as
+    | { scrollIntoView?: (options?: ScrollIntoViewOptions) => void }
+    | null
+    | undefined;
   if (!tail || typeof tail.scrollIntoView !== 'function') {
     return false;
   }
@@ -106,14 +105,10 @@ export function isConversationTailVisibleAtBottom(
 
   const containerRect = container.getBoundingClientRect();
   const tailRect = tail.getBoundingClientRect();
-  return tailRect.bottom <= containerRect.bottom + thresholdPx
-    && tailRect.bottom >= containerRect.bottom - thresholdPx;
+  return tailRect.bottom <= containerRect.bottom + thresholdPx && tailRect.bottom >= containerRect.bottom - thresholdPx;
 }
 
-export function shouldAutoScrollToStreamingTail(
-  previousTailKey: string | null,
-  nextTailBlock: MessageBlock | null | undefined,
-): boolean {
+export function shouldAutoScrollToStreamingTail(previousTailKey: string | null, nextTailBlock: MessageBlock | null | undefined): boolean {
   const nextTailKey = getConversationTailBlockKey(nextTailBlock);
   if (nextTailKey === null) {
     return false;
@@ -123,9 +118,7 @@ export function shouldAutoScrollToStreamingTail(
     return true;
   }
 
-  return nextTailBlock?.type === 'text'
-    || nextTailBlock?.type === 'thinking'
-    || nextTailBlock?.type === 'tool_use';
+  return nextTailBlock?.type === 'text' || nextTailBlock?.type === 'thinking' || nextTailBlock?.type === 'tool_use';
 }
 
 export function shouldShowScrollToBottomControl(messageCount: number, atBottom: boolean): boolean {
@@ -148,24 +141,25 @@ export function shouldPreservePinnedBottomDuringAutoScroll(input: {
   return input.wasPinnedToBottom && input.isAutoScrollActive && !input.nextAtBottom;
 }
 
-export function shouldContinueConversationBottomSettle(
-  state: {
-    frameCount: number;
-    stableFrames: number;
-    minFrames?: number;
-    stableFrameCount?: number;
-    maxFrames?: number;
-  },
-): boolean {
-  const minFrames = typeof state.minFrames === 'number' && Number.isSafeInteger(state.minFrames) && state.minFrames >= 0
-    ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.minFrames)
-    : 0;
-  const stableFrameCount = typeof state.stableFrameCount === 'number' && Number.isSafeInteger(state.stableFrameCount) && state.stableFrameCount > 0
-    ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.stableFrameCount)
-    : DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT;
-  const maxFramesCandidate = typeof state.maxFrames === 'number' && Number.isSafeInteger(state.maxFrames) && state.maxFrames >= 0
-    ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.maxFrames)
-    : DEFAULT_BOTTOM_SETTLE_MAX_FRAMES;
+export function shouldContinueConversationBottomSettle(state: {
+  frameCount: number;
+  stableFrames: number;
+  minFrames?: number;
+  stableFrameCount?: number;
+  maxFrames?: number;
+}): boolean {
+  const minFrames =
+    typeof state.minFrames === 'number' && Number.isSafeInteger(state.minFrames) && state.minFrames >= 0
+      ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.minFrames)
+      : 0;
+  const stableFrameCount =
+    typeof state.stableFrameCount === 'number' && Number.isSafeInteger(state.stableFrameCount) && state.stableFrameCount > 0
+      ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.stableFrameCount)
+      : DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT;
+  const maxFramesCandidate =
+    typeof state.maxFrames === 'number' && Number.isSafeInteger(state.maxFrames) && state.maxFrames >= 0
+      ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.maxFrames)
+      : DEFAULT_BOTTOM_SETTLE_MAX_FRAMES;
   const maxFrames = Math.max(minFrames, maxFramesCandidate);
 
   if (state.frameCount >= maxFrames) {

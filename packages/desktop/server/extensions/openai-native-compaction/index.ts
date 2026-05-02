@@ -1,6 +1,7 @@
 import { arch, platform } from 'node:os';
-import { compact, type ExtensionAPI } from '@mariozechner/pi-coding-agent';
+
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import { compact, type ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonRecord = { [key: string]: unknown };
@@ -29,9 +30,7 @@ type ResponseItem =
   | {
       type: 'function_call_output';
       call_id: string;
-      output:
-        | string
-        | Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }>;
+      output: string | Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }>;
     }
   | { type: string; [key: string]: unknown };
 
@@ -147,12 +146,8 @@ export function extractCodexAccountId(token: string): string | undefined {
   if (parts.length !== 3) return undefined;
   try {
     const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8'));
-    const auth = isRecord(payload) && isRecord(payload['https://api.openai.com/auth'])
-      ? payload['https://api.openai.com/auth']
-      : undefined;
-    return typeof auth?.chatgpt_account_id === 'string' && auth.chatgpt_account_id
-      ? auth.chatgpt_account_id
-      : undefined;
+    const auth = isRecord(payload) && isRecord(payload['https://api.openai.com/auth']) ? payload['https://api.openai.com/auth'] : undefined;
+    return typeof auth?.chatgpt_account_id === 'string' && auth.chatgpt_account_id ? auth.chatgpt_account_id : undefined;
   } catch {
     return undefined;
   }
@@ -254,20 +249,20 @@ function parseReasoningSignature(signature: unknown): ResponseItem | undefined {
 
     const summary = Array.isArray(parsed.summary)
       ? parsed.summary
-        .map((item) => (isRecord(item) && typeof item.text === 'string' ? { type: 'summary_text' as const, text: item.text } : undefined))
-        .filter((item): item is { type: 'summary_text'; text: string } => Boolean(item))
+          .map((item) => (isRecord(item) && typeof item.text === 'string' ? { type: 'summary_text' as const, text: item.text } : undefined))
+          .filter((item): item is { type: 'summary_text'; text: string } => Boolean(item))
       : [];
 
     const content = Array.isArray(parsed.content)
       ? parsed.content
-        .map((item) => {
-          if (!isRecord(item) || typeof item.text !== 'string') return undefined;
-          return {
-            type: item.type === 'reasoning_text' ? 'reasoning_text' : 'text',
-            text: item.text,
-          } as const;
-        })
-        .filter((item): item is { type: 'reasoning_text' | 'text'; text: string } => Boolean(item))
+          .map((item) => {
+            if (!isRecord(item) || typeof item.text !== 'string') return undefined;
+            return {
+              type: item.type === 'reasoning_text' ? 'reasoning_text' : 'text',
+              text: item.text,
+            } as const;
+          })
+          .filter((item): item is { type: 'reasoning_text' | 'text'; text: string } => Boolean(item))
       : undefined;
 
     return {
@@ -350,16 +345,21 @@ function messageToResponseItems(message: AgentMessage): ResponseItem[] {
   if (message.role === 'toolResult') {
     const callId = message.toolCallId.split('|', 1)[0];
     const output = normalizeTextInput(message.content);
-    return [{
-      type: 'function_call_output',
-      call_id: callId,
-      output: output.length > 0 ? output : '',
-    }];
+    return [
+      {
+        type: 'function_call_output',
+        call_id: callId,
+        output: output.length > 0 ? output : '',
+      },
+    ];
   }
 
   if (message.role === 'bashExecution') {
-    return normalizeTextInput(`Bash command:\n${message.command}\n\nOutput:\n${message.output}`)
-      .map((content) => ({ type: 'message', role: 'user', content: [content] })) as ResponseItem[];
+    return normalizeTextInput(`Bash command:\n${message.command}\n\nOutput:\n${message.output}`).map((content) => ({
+      type: 'message',
+      role: 'user',
+      content: [content],
+    })) as ResponseItem[];
   }
 
   if (message.role === 'custom') {
@@ -401,7 +401,9 @@ function extractNativeDetails(details: unknown): NativeCompactionDetails | undef
   if (typeof native.modelKey !== 'string') return undefined;
   if (!Array.isArray(native.replacementHistory)) return undefined;
 
-  const replacementHistory = native.replacementHistory.filter((item): item is ResponseItem => isRecord(item) && typeof item.type === 'string');
+  const replacementHistory = native.replacementHistory.filter(
+    (item): item is ResponseItem => isRecord(item) && typeof item.type === 'string',
+  );
   if (replacementHistory.length === 0) return undefined;
 
   return {
@@ -492,7 +494,7 @@ export function reconstructNativeState(
     details: latestDetails,
     explicitHistory: sanitizeResponseHistory([
       ...cloneJson(latestDetails.replacementHistory),
-      ...pendingTurn.length ? [...trailing, ...pendingTurn] : trailing,
+      ...(pendingTurn.length ? [...trailing, ...pendingTurn] : trailing),
     ]),
   };
 }
@@ -535,7 +537,7 @@ async function callNativeCompaction(params: {
     throw new Error(`native compaction failed (${response.status}): ${text || response.statusText}`);
   }
 
-  const json = await response.json() as { output?: unknown; usage?: Json };
+  const json = (await response.json()) as { output?: unknown; usage?: Json };
   if (!Array.isArray(json.output)) throw new Error('native compaction returned no output array');
 
   const output = json.output.filter((item): item is ResponseItem => isRecord(item) && typeof item.type === 'string');
@@ -584,11 +586,7 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
 
     const rewritten: Record<string, unknown> = {
       ...event.payload,
-      input: [
-        ...envelope.leading,
-        ...cloneJson(nativeState.explicitHistory as unknown[]),
-        ...envelope.trailing,
-      ],
+      input: [...envelope.leading, ...cloneJson(nativeState.explicitHistory as unknown[]), ...envelope.trailing],
     };
     delete rewritten.messages;
     delete rewritten.previous_response_id;
@@ -613,14 +611,7 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
     const shape = requestShapeBySession.get(sessionId);
 
     const [localSummary, remoteCompaction] = await Promise.allSettled([
-      compact(
-        event.preparation,
-        model as never,
-        auth.apiKey,
-        auth.headers,
-        event.customInstructions,
-        event.signal,
-      ),
+      compact(event.preparation, model as never, auth.apiKey, auth.headers, event.customInstructions, event.signal),
       callNativeCompaction({
         model,
         apiKey: auth.apiKey,
@@ -647,14 +638,17 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
       return undefined;
     }
 
-    const fallbackSummary = `${describeProviderCompaction(model)} applied for ${String(model.provider)}/${String(model.id)}. Pi keeps this text summary for display and portability; supported future turns reuse the provider's compacted history.`;
-    const summary = localSummary.status === 'fulfilled'
-      ? localSummary.value
-      : {
-        summary: fallbackSummary,
-        firstKeptEntryId: event.preparation.firstKeptEntryId,
-        tokensBefore: event.preparation.tokensBefore,
-      };
+    const fallbackSummary = `${describeProviderCompaction(model)} applied for ${String(model.provider)}/${String(
+      model.id,
+    )}. Pi keeps this text summary for display and portability; supported future turns reuse the provider's compacted history.`;
+    const summary =
+      localSummary.status === 'fulfilled'
+        ? localSummary.value
+        : {
+            summary: fallbackSummary,
+            firstKeptEntryId: event.preparation.firstKeptEntryId,
+            tokensBefore: event.preparation.tokensBefore,
+          };
 
     return {
       compaction: {

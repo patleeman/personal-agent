@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 
 export interface SavedDefaultCwdPreferences {
@@ -32,10 +33,7 @@ function isExistingDirectory(path: string): boolean {
   return existsSync(path) && statSync(path).isDirectory();
 }
 
-export function readSavedDefaultCwdPreferences(
-  settingsFile: string,
-  fallbackCwd: string = process.cwd(),
-): SavedDefaultCwdPreferences {
+export function readSavedDefaultCwdPreferences(settingsFile: string, fallbackCwd: string = process.cwd()): SavedDefaultCwdPreferences {
   const settings = readSettingsObject(settingsFile);
   const currentCwd = readNonEmptyString(settings.defaultCwd);
   const resolvedCwd = currentCwd ? resolveRequestedCwd(currentCwd, fallbackCwd) : undefined;

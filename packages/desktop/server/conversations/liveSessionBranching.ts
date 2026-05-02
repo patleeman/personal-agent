@@ -1,4 +1,5 @@
-import { SessionManager, type AgentSession } from '@mariozechner/pi-coding-agent';
+import { type AgentSession, SessionManager } from '@mariozechner/pi-coding-agent';
+
 import type { LiveSessionLoaderOptions } from './liveSessionLoader.js';
 
 export interface LiveSessionBranchHost {
@@ -50,11 +51,7 @@ export async function forkLiveSession(
   options: LiveSessionLoaderOptions & { preserveSource?: boolean; beforeEntry?: boolean },
   callbacks: LiveSessionBranchCallbacks,
 ): Promise<{ newSessionId: string; sessionFile: string }> {
-  const {
-    preserveSource,
-    beforeEntry,
-    ...loaderOptions
-  } = options;
+  const { preserveSource, beforeEntry, ...loaderOptions } = options;
 
   if (entry.session.isStreaming && !preserveSource) {
     throw new Error('Cannot replace a running conversation while forking. Keep the source conversation open instead.');
@@ -76,13 +73,11 @@ export async function forkLiveSession(
   if (beforeEntry && !sourceEntry.parentId) {
     const created = await callbacks.createSession(entry.cwd, {
       ...loaderOptions,
-      initialModel: loaderOptions.initialModel === undefined ? entry.session.model?.id ?? null : loaderOptions.initialModel,
-      initialThinkingLevel: loaderOptions.initialThinkingLevel === undefined
-        ? entry.session.thinkingLevel ?? null
-        : loaderOptions.initialThinkingLevel,
-      initialServiceTier: loaderOptions.initialServiceTier === undefined
-        ? callbacks.resolveDefaultServiceTier(entry)
-        : loaderOptions.initialServiceTier,
+      initialModel: loaderOptions.initialModel === undefined ? (entry.session.model?.id ?? null) : loaderOptions.initialModel,
+      initialThinkingLevel:
+        loaderOptions.initialThinkingLevel === undefined ? (entry.session.thinkingLevel ?? null) : loaderOptions.initialThinkingLevel,
+      initialServiceTier:
+        loaderOptions.initialServiceTier === undefined ? callbacks.resolveDefaultServiceTier(entry) : loaderOptions.initialServiceTier,
     });
 
     if (!preserveSource) {

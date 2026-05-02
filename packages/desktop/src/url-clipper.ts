@@ -1,5 +1,5 @@
-import type { HostApiDispatchResult } from './hosts/types.js';
 import { parseApiDispatchResult, readApiDispatchError } from './hosts/api-dispatch.js';
+import type { HostApiDispatchResult } from './hosts/types.js';
 
 export interface DesktopUrlClipperHost {
   ensureActiveHostRunning(): Promise<void>;
@@ -26,7 +26,11 @@ export function normalizeClipboardUrl(input: string): string {
     throw new Error('Clipboard is empty. Copy a URL first.');
   }
 
-  const firstLine = value.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '';
+  const firstLine =
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? '';
   let parsed: URL;
   try {
     parsed = new URL(firstLine);

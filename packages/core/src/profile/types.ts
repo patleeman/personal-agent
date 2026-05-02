@@ -1,6 +1,6 @@
 /**
  * Profile schema types and validation contracts
- * 
+ *
  * Supports layered profiles: shared < datadog < local
  */
 

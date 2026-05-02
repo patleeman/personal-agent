@@ -1,8 +1,9 @@
-import React, { Children, cloneElement, isValidElement, memo, useId, type ReactElement, type ReactNode } from 'react';
+import React, { Children, cloneElement, isValidElement, memo, type ReactElement, type ReactNode, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import { parseSkillBlock, type ParsedSkillBlock } from '../../knowledge/skillBlock';
+
+import { type ParsedSkillBlock, parseSkillBlock } from '../../knowledge/skillBlock';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { cx } from '../ui';
 
@@ -14,7 +15,8 @@ function MentionPill({ text }: { text: string }) {
   return <span className="ui-markdown-mention">{text}</span>;
 }
 
-const INLINE_COMMIT_HASH_BUTTON_CLASS = 'inline-flex items-center font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere] transition-colors hover:bg-accent/12 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20';
+const INLINE_COMMIT_HASH_BUTTON_CLASS =
+  'inline-flex items-center font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere] transition-colors hover:bg-accent/12 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20';
 
 type EnhancedTextFragment = {
   text: string;
@@ -27,15 +29,13 @@ function looksLikeCommitHash(value: string): boolean {
   return /^[a-f0-9]{7,64}$/i.test(normalized) && /[a-f]/i.test(normalized);
 }
 
-function CommitHashButton({
-  hash,
-  onOpenCheckpoint,
-}: {
-  hash: string;
-  onOpenCheckpoint?: (checkpointId: string) => void;
-}) {
+function CommitHashButton({ hash, onOpenCheckpoint }: { hash: string; onOpenCheckpoint?: (checkpointId: string) => void }) {
   if (!onOpenCheckpoint) {
-    return <code className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{hash}</code>;
+    return (
+      <code className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+        {hash}
+      </code>
+    );
   }
 
   return (
@@ -63,15 +63,7 @@ function readKnowledgeBaseFileIdFromPath(value: string): string | null {
   return fileId && !fileId.endsWith('/') ? fileId : null;
 }
 
-function KnowledgeFileLink({
-  path,
-  fileId,
-  onOpenFilePath,
-}: {
-  path: string;
-  fileId: string;
-  onOpenFilePath?: (path: string) => void;
-}) {
+function KnowledgeFileLink({ path, fileId, onOpenFilePath }: { path: string; fileId: string; onOpenFilePath?: (path: string) => void }) {
   if (!onOpenFilePath) {
     return <React.Fragment>{path}</React.Fragment>;
   }
@@ -140,9 +132,8 @@ function splitEnhancedTextFragments(text: string): EnhancedTextFragment[] {
 
     const end = start + rawToken.length;
     const next = end < text.length ? text[end] : '';
-    const shouldSkip = (start > 0 && /[\w./+-]/.test(previous))
-      || (end < text.length && /[\w./+-]/.test(next))
-      || !looksLikeCommitHash(rawToken);
+    const shouldSkip =
+      (start > 0 && /[\w./+-]/.test(previous)) || (end < text.length && /[\w./+-]/.test(next)) || !looksLikeCommitHash(rawToken);
 
     if (shouldSkip) {
       continue;
@@ -180,7 +171,14 @@ function renderEnhancedTextFragments(
     }
 
     if (fragment.kind === 'knowledge-file' && fragment.fileId) {
-      return <KnowledgeFileLink key={`${fragment.text}-${index}`} path={fragment.text} fileId={fragment.fileId} onOpenFilePath={options?.onOpenFilePath} />;
+      return (
+        <KnowledgeFileLink
+          key={`${fragment.text}-${index}`}
+          path={fragment.text}
+          fileId={fragment.fileId}
+          onOpenFilePath={options?.onOpenFilePath}
+        />
+      );
     }
 
     return <React.Fragment key={`${index}-${fragment.text}`}>{fragment.text}</React.Fragment>;
@@ -271,7 +269,11 @@ function renderChildrenWithEnhancements(
       return child;
     }
 
-    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithEnhancements(props.children, options));
+    return cloneElement(
+      child as ReactElement<{ children?: ReactNode }>,
+      undefined,
+      renderChildrenWithEnhancements(props.children, options),
+    );
   });
 }
 
@@ -280,7 +282,9 @@ function MarkdownCodeBlock({ children }: { children: ReactNode }) {
 
   return (
     <div className="ui-markdown-code-block">
-      <pre className="whitespace-pre-wrap break-all"><code>{content}</code></pre>
+      <pre className="whitespace-pre-wrap break-all">
+        <code>{content}</code>
+      </pre>
     </div>
   );
 }
@@ -329,23 +333,47 @@ const MarkdownText = memo(function MarkdownText({
         remarkPlugins={MARKDOWN_REMARK_PLUGINS}
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</td>,
+          h1: ({ children, node: _node, ...props }) => (
+            <h1 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h1>
+          ),
+          h2: ({ children, node: _node, ...props }) => (
+            <h2 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h2>
+          ),
+          h3: ({ children, node: _node, ...props }) => (
+            <h3 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h3>
+          ),
+          h4: ({ children, node: _node, ...props }) => (
+            <h4 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h4>
+          ),
+          h5: ({ children, node: _node, ...props }) => (
+            <h5 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h5>
+          ),
+          h6: ({ children, node: _node, ...props }) => (
+            <h6 {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</h6>
+          ),
+          p: ({ children, node: _node, ...props }) => (
+            <p {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</p>
+          ),
+          li: ({ children, node: _node, ...props }) => (
+            <li {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</li>
+          ),
+          th: ({ children, node: _node, ...props }) => (
+            <th {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</th>
+          ),
+          td: ({ children, node: _node, ...props }) => (
+            <td {...props}>{renderChildrenWithEnhancements(children, { onOpenFilePath, onOpenCheckpoint })}</td>
+          ),
           a: ({ href, children, title }) => {
             if (typeof href !== 'string' || href.trim().length === 0) {
               return <span title={title}>{children}</span>;
             }
 
             if (href.startsWith('#')) {
-              return <a href={href} title={title}>{children}</a>;
+              return (
+                <a href={href} title={title}>
+                  {children}
+                </a>
+              );
             }
 
             const isExternal = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href);
@@ -365,13 +393,24 @@ const MarkdownText = memo(function MarkdownText({
             </div>
           ),
           pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
-          code: ({ className, children }) => <MarkdownInlineCodeWithCommitHash className={className} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint}>{children}</MarkdownInlineCodeWithCommitHash>,
-          img: ({ src, alt, title }) => src
-            ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
-            : <span className="text-dim">{alt ?? 'image'}</span>,
+          code: ({ className, children }) => (
+            <MarkdownInlineCodeWithCommitHash className={className} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint}>
+              {children}
+            </MarkdownInlineCodeWithCommitHash>
+          ),
+          img: ({ src, alt, title }) =>
+            src ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" /> : <span className="text-dim">{alt ?? 'image'}</span>,
           input: ({ type, checked }) => {
             if (type === 'checkbox') {
-              return <input type="checkbox" checked={Boolean(checked)} disabled readOnly className="mr-2 translate-y-[1px] accent-[rgb(var(--color-accent))]" />;
+              return (
+                <input
+                  type="checkbox"
+                  checked={Boolean(checked)}
+                  disabled
+                  readOnly
+                  className="mr-2 translate-y-[1px] accent-[rgb(var(--color-accent))]"
+                />
+              );
             }
 
             return <input type={type} checked={checked} readOnly disabled />;

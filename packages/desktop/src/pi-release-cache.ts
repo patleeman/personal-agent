@@ -1,9 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+
 import { resolveDesktopAboutVersionsForPaths } from './about.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import type { RemotePlatformInfo } from './remote-platform.js';

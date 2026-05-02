@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+
 import { api } from '../../client/api';
 import type { DurableRunDetailResult } from '../../shared/types';
 
@@ -27,16 +28,18 @@ export function buildInlineRunExpansionKey(clusterStartIndex: number, runId: str
   return `${clusterStartIndex}:${runId}`;
 }
 
-export function normalizeInlineRunPollingOptions(options?: {
-  tail?: number;
-  pollIntervalMs?: number;
-}): { tail: number; pollIntervalMs: number } {
-  const tail = Number.isSafeInteger(options?.tail) && (options?.tail as number) > 0
-    ? Math.min(MAX_INLINE_RUN_LOG_TAIL_LINES, options?.tail as number)
-    : INLINE_RUN_LOG_TAIL_LINES;
-  const pollIntervalMs = Number.isSafeInteger(options?.pollIntervalMs) && (options?.pollIntervalMs as number) > 0
-    ? Math.min(MAX_INLINE_RUN_POLL_INTERVAL_MS, options?.pollIntervalMs as number)
-    : INLINE_RUN_POLL_INTERVAL_MS;
+export function normalizeInlineRunPollingOptions(options?: { tail?: number; pollIntervalMs?: number }): {
+  tail: number;
+  pollIntervalMs: number;
+} {
+  const tail =
+    Number.isSafeInteger(options?.tail) && (options?.tail as number) > 0
+      ? Math.min(MAX_INLINE_RUN_LOG_TAIL_LINES, options?.tail as number)
+      : INLINE_RUN_LOG_TAIL_LINES;
+  const pollIntervalMs =
+    Number.isSafeInteger(options?.pollIntervalMs) && (options?.pollIntervalMs as number) > 0
+      ? Math.min(MAX_INLINE_RUN_POLL_INTERVAL_MS, options?.pollIntervalMs as number)
+      : INLINE_RUN_POLL_INTERVAL_MS;
   return { tail, pollIntervalMs };
 }
 
@@ -57,7 +60,7 @@ export function usePolledDurableRunSnapshot(
       return;
     }
 
-    setState((current) => (
+    setState((current) =>
       current.detail?.run.runId === runId
         ? current
         : {
@@ -66,8 +69,8 @@ export function usePolledDurableRunSnapshot(
             loading: false,
             refreshing: false,
             error: null,
-          }
-    ));
+          },
+    );
   }, [runId]);
 
   useEffect(() => {
@@ -96,10 +99,7 @@ export function usePolledDurableRunSnapshot(
       });
 
       try {
-        const [detail, log] = await Promise.all([
-          api.durableRun(runId),
-          api.durableRunLog(runId, tail),
-        ]);
+        const [detail, log] = await Promise.all([api.durableRun(runId), api.durableRunLog(runId, tail)]);
 
         if (cancelled) {
           return;

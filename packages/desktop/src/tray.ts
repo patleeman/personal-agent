@@ -1,11 +1,9 @@
-import { Menu, Tray, app, nativeImage, type MenuItemConstructorOptions, type NativeImage } from 'electron';
+import { app, Menu, type MenuItemConstructorOptions, type NativeImage, nativeImage, Tray } from 'electron';
+
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import type { HostManager } from './hosts/host-manager.js';
 
-export type DesktopTrayStartupState =
-  | { kind: 'starting' }
-  | { kind: 'ready' }
-  | { kind: 'error'; message: string };
+export type DesktopTrayStartupState = { kind: 'starting' } | { kind: 'ready' } | { kind: 'error'; message: string };
 
 export interface DesktopTrayActions {
   onOpen: () => void;
@@ -54,11 +52,7 @@ export function buildDesktopTrayMenuTemplate(options: {
   startupState: DesktopTrayStartupState;
   actions: DesktopTrayActions;
 }): MenuItemConstructorOptions[] {
-  const {
-    appName = 'Personal Agent',
-    startupState,
-    actions,
-  } = options;
+  const { appName = 'Personal Agent', startupState, actions } = options;
   const controlsReady = startupState.kind === 'ready';
   const canRetry = startupState.kind !== 'starting';
 
@@ -179,15 +173,15 @@ export class DesktopTrayController {
   }
 
   private renderMenu(): void {
-    const appName = typeof app.name === 'string' && app.name.trim().length > 0
-      ? app.name.trim()
-      : 'Personal Agent';
+    const appName = typeof app.name === 'string' && app.name.trim().length > 0 ? app.name.trim() : 'Personal Agent';
     this.tray.setToolTip(buildTrayToolTip(appName, this.startupState));
-    const menu = Menu.buildFromTemplate(buildDesktopTrayMenuTemplate({
-      appName,
-      startupState: this.startupState,
-      actions: this.options,
-    }));
+    const menu = Menu.buildFromTemplate(
+      buildDesktopTrayMenuTemplate({
+        appName,
+        startupState: this.startupState,
+        actions: this.options,
+      }),
+    );
     this.tray.setContextMenu(menu);
   }
 }

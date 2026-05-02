@@ -1,4 +1,7 @@
+import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 import { loadDesktopConfig, saveDesktopConfig } from '../state/desktop-config.js';
+import { LocalHostController } from './local-host-controller.js';
+import { SshHostController, testSshConnection } from './ssh-host-controller.js';
 import type {
   DesktopConfig,
   DesktopConnectionsState,
@@ -7,9 +10,6 @@ import type {
   DesktopSshConnectionTestResult,
   HostController,
 } from './types.js';
-import { LocalHostController } from './local-host-controller.js';
-import { SshHostController, testSshConnection } from './ssh-host-controller.js';
-import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 
 export class HostManager {
   private config: DesktopConfig;
@@ -67,9 +67,7 @@ export class HostManager {
     const existing = this.config.hosts.find((host) => host.id === record.id);
     this.config = {
       ...this.config,
-      hosts: existing
-        ? this.config.hosts.map((host) => host.id === record.id ? record : host)
-        : [...this.config.hosts, record],
+      hosts: existing ? this.config.hosts.map((host) => (host.id === record.id ? record : host)) : [...this.config.hosts, record],
     };
 
     if (existing) {
@@ -127,9 +125,7 @@ export class HostManager {
     }
 
     const record = this.getHostRecord(hostId);
-    const controller = record.kind === 'local'
-      ? new LocalHostController(record)
-      : new SshHostController(record);
+    const controller = record.kind === 'local' ? new LocalHostController(record) : new SshHostController(record);
     this.controllers.set(hostId, controller);
     return controller;
   }

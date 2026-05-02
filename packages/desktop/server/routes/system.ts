@@ -1,12 +1,11 @@
 import type { Express, Request, Response } from 'express';
-import type { ServerRouteContext } from './context.js';
+
 import { readDaemonState } from '../automation/daemon.js';
-import { type AppEventTopic } from '../shared/appEvents.js';
-import {
-  logError,
-} from '../middleware/index.js';
-import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
 import { listDurableRuns } from '../automation/durableRuns.js';
+import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
+import { logError } from '../middleware/index.js';
+import { type AppEventTopic } from '../shared/appEvents.js';
+import type { ServerRouteContext } from './context.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for system routes');
@@ -43,12 +42,7 @@ export async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise
   }
 }
 
-export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
-  'sessions',
-  'tasks',
-  'runs',
-  'daemon',
-];
+export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = ['sessions', 'tasks', 'runs', 'daemon'];
 
 function handleStatus(_req: Request, res: Response): void {
   try {

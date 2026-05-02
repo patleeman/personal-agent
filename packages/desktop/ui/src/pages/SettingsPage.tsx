@@ -1,26 +1,27 @@
-import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { api } from '../client/api';
-import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
+import { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, cx, Pill, ToolbarButton } from '../components/ui';
+import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
+import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktop/desktopBridge';
+import { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
+import { subscribeDesktopProviderOAuthLogin } from '../desktop/desktopProviderOAuth';
 import { useApi } from '../hooks/useApi';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSyncStatus';
+import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../local/localSettings';
+import { getModelSelectableServiceTierOptions, groupModelsByProvider, THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import {
   createModelEditorDraft,
   createProviderEditorDraft,
+  type ModelEditorDraft,
   parseOptionalJsonObject,
   parseOptionalNonNegativeNumber,
   parseOptionalPositiveInteger,
   parseOptionalStringRecord,
-  type ModelEditorDraft,
   type ProviderEditorDraft,
 } from '../model/modelProviderEditorDrafts';
-import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
-import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../local/localSettings';
-import { type ThemePreference, useTheme } from '../ui-state/theme';
-import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktop/desktopBridge';
-import { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
-import { subscribeDesktopProviderOAuthLogin } from '../desktop/desktopProviderOAuth';
 import type {
   DesktopAppPreferencesState,
   DesktopConnectionsState,
@@ -39,9 +40,10 @@ import type {
   TranscriptionModelStatus,
   TranscriptionProviderId,
 } from '../shared/types';
-import { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, Pill, ToolbarButton, cx } from '../components/ui';
+import { type ThemePreference, useTheme } from '../ui-state/theme';
 
-const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
+const INPUT_CLASS =
+  'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
@@ -135,10 +137,7 @@ function formatModelProviderSummary(provider: ModelProviderConfig): string {
 }
 
 function formatProviderModelSummary(model: ModelProviderModelConfig): string {
-  const parts = [
-    model.name || model.id,
-    `${formatContextWindowLabel(model.contextWindow ?? 128_000)} ctx`,
-  ];
+  const parts = [model.name || model.id, `${formatContextWindowLabel(model.contextWindow ?? 128_000)} ctx`];
 
   if (model.reasoning) {
     parts.push('reasoning');
@@ -230,9 +229,7 @@ function formatProviderAuthStatus(provider: ProviderAuthSummary | null): string 
 
   switch (provider.authType) {
     case 'api_key':
-      return provider.hasStoredCredential
-        ? 'Stored API key in auth.json.'
-        : 'API key is available at runtime.';
+      return provider.hasStoredCredential ? 'Stored API key in auth.json.' : 'API key is available at runtime.';
     case 'oauth':
       return provider.hasStoredCredential
         ? 'Logged in with OAuth credentials saved in auth.json.'
@@ -259,7 +256,9 @@ function formatMcpServerCommand(server: McpServerConfig): string {
     return server.url ?? 'Remote endpoint';
   }
 
-  const commandLine = [server.command, ...server.args].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  const commandLine = [server.command, ...server.args].filter(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  );
   return commandLine.length > 0 ? commandLine.join(' ') : 'Local stdio wrapper';
 }
 
@@ -340,7 +339,13 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
+    <section
+      id={id}
+      className={cx(
+        'scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8',
+        className,
+      )}
+    >
       <div className="min-w-0 space-y-2">
         <div className="space-y-1.5">
           <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
@@ -373,7 +378,18 @@ function formatDesktopHostDetails(host: Extract<DesktopHostRecord, { kind: 'ssh'
 
 function DesktopRuntimeIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <rect x="4" y="5" width="16" height="10" rx="2.5" />
       <path d="M8 19h8" />
       <path d="M12 15v4" />
@@ -383,7 +399,18 @@ function DesktopRuntimeIcon({ className }: { className?: string }) {
 
 function SshRemoteIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <rect x="4" y="5" width="7" height="6" rx="1.5" />
       <rect x="13" y="13" width="7" height="6" rx="1.5" />
       <path d="M11 8h2a3 3 0 0 1 3 3v2" />
@@ -425,13 +452,9 @@ function formatDesktopUpdateSummary(state: DesktopAppPreferencesState | null): s
           : `Personal Agent ${update.downloadedVersion} is ready. Quit the app to finish installing it.`
         : `Current version: ${update.currentVersion}.`;
     case 'installing':
-      return update.downloadedVersion
-        ? `Installing Personal Agent ${update.downloadedVersion}…`
-        : 'Installing the downloaded update…';
+      return update.downloadedVersion ? `Installing Personal Agent ${update.downloadedVersion}…` : 'Installing the downloaded update…';
     case 'error':
-      return update.lastError
-        ? `Update error: ${update.lastError}`
-        : 'The last update action failed.';
+      return update.lastError ? `Update error: ${update.lastError}` : 'The last update action failed.';
     case 'idle':
     default:
       return `Current version: ${update.currentVersion}.`;
@@ -502,19 +525,45 @@ function DaemonSettingsSection() {
   const daemonPower = daemonState?.power ?? { keepAwake: false, supported: true, active: false };
 
   return (
-    <SettingsSection id="settings-daemon" label="Daemon" description="Background runtime behavior for automations and durable runs." className="order-4">
+    <SettingsSection
+      id="settings-daemon"
+      label="Daemon"
+      description="Background runtime behavior for automations and durable runs."
+      className="order-4"
+    >
       <SettingsPanel title="Power" description="Control whether the daemon keeps this Mac awake for unattended background work.">
         {loading ? <p className="ui-card-meta">Loading daemon settings…</p> : null}
         {daemonState ? (
           <div className="space-y-3">
             <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="daemon-keep-awake">
-              <input id="daemon-keep-awake" type="checkbox" checked={daemonPower.keepAwake} onChange={(event) => { void handleKeepAwakeChange(event.target.checked); }} disabled={saving || !daemonState.runtime.running} className={CHECKBOX_CLASS} />
+              <input
+                id="daemon-keep-awake"
+                type="checkbox"
+                checked={daemonPower.keepAwake}
+                onChange={(event) => {
+                  void handleKeepAwakeChange(event.target.checked);
+                }}
+                disabled={saving || !daemonState.runtime.running}
+                className={CHECKBOX_CLASS}
+              />
               <span>Keep Mac awake while daemon is running</span>
             </label>
-            <p className="ui-card-meta break-words">Prevents idle system sleep so automations and background runs continue. Display can still sleep.</p>
+            <p className="ui-card-meta break-words">
+              Prevents idle system sleep so automations and background runs continue. Display can still sleep.
+            </p>
             <p className="ui-card-meta break-words">{formatDaemonPowerSummary(daemonState)}</p>
-            {!daemonState.runtime.running ? <p className="text-[12px] text-danger">Start the daemon before changing this setting.</p> : null}
-            {daemonState.warnings.length > 0 ? <div className="space-y-1">{daemonState.warnings.map((warning) => <p key={warning} className="text-[12px] text-warning">{warning}</p>)}</div> : null}
+            {!daemonState.runtime.running ? (
+              <p className="text-[12px] text-danger">Start the daemon before changing this setting.</p>
+            ) : null}
+            {daemonState.warnings.length > 0 ? (
+              <div className="space-y-1">
+                {daemonState.warnings.map((warning) => (
+                  <p key={warning} className="text-[12px] text-warning">
+                    {warning}
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {notice ? <p className="text-[12px] text-accent">{notice}</p> : null}
@@ -538,38 +587,69 @@ function normalizeKeyboardShortcutKey(event: ReactKeyboardEvent): string | null 
   if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(event.code)) return event.code;
 
   switch (event.code) {
-    case 'Space': return 'Space';
-    case 'Tab': return 'Tab';
+    case 'Space':
+      return 'Space';
+    case 'Tab':
+      return 'Tab';
     case 'Enter':
-    case 'NumpadEnter': return 'Enter';
-    case 'Escape': return 'Escape';
-    case 'Backspace': return 'Backspace';
-    case 'Delete': return 'Delete';
-    case 'Insert': return 'Insert';
-    case 'Home': return 'Home';
-    case 'End': return 'End';
-    case 'PageUp': return 'PageUp';
-    case 'PageDown': return 'PageDown';
-    case 'ArrowUp': return 'Up';
-    case 'ArrowDown': return 'Down';
-    case 'ArrowLeft': return 'Left';
-    case 'ArrowRight': return 'Right';
-    case 'Minus': return '-';
-    case 'Equal': return '=';
-    case 'BracketLeft': return '[';
-    case 'BracketRight': return ']';
-    case 'Backslash': return '\\';
-    case 'Semicolon': return ';';
-    case 'Quote': return "'";
-    case 'Comma': return ',';
-    case 'Period': return '.';
-    case 'Slash': return '/';
-    case 'Backquote': return '`';
-    case 'NumpadAdd': return 'Plus';
-    case 'NumpadSubtract': return '-';
-    case 'NumpadMultiply': return '*';
-    case 'NumpadDivide': return '/';
-    case 'NumpadDecimal': return '.';
+    case 'NumpadEnter':
+      return 'Enter';
+    case 'Escape':
+      return 'Escape';
+    case 'Backspace':
+      return 'Backspace';
+    case 'Delete':
+      return 'Delete';
+    case 'Insert':
+      return 'Insert';
+    case 'Home':
+      return 'Home';
+    case 'End':
+      return 'End';
+    case 'PageUp':
+      return 'PageUp';
+    case 'PageDown':
+      return 'PageDown';
+    case 'ArrowUp':
+      return 'Up';
+    case 'ArrowDown':
+      return 'Down';
+    case 'ArrowLeft':
+      return 'Left';
+    case 'ArrowRight':
+      return 'Right';
+    case 'Minus':
+      return '-';
+    case 'Equal':
+      return '=';
+    case 'BracketLeft':
+      return '[';
+    case 'BracketRight':
+      return ']';
+    case 'Backslash':
+      return '\\';
+    case 'Semicolon':
+      return ';';
+    case 'Quote':
+      return "'";
+    case 'Comma':
+      return ',';
+    case 'Period':
+      return '.';
+    case 'Slash':
+      return '/';
+    case 'Backquote':
+      return '`';
+    case 'NumpadAdd':
+      return 'Plus';
+    case 'NumpadSubtract':
+      return '-';
+    case 'NumpadMultiply':
+      return '*';
+    case 'NumpadDivide':
+      return '/';
+    case 'NumpadDecimal':
+      return '.';
     default:
       if (/^Numpad[0-9]$/.test(event.code)) return event.code.slice(6);
       return null;
@@ -653,9 +733,7 @@ function KeyboardShortcutCaptureInput({
       aria-label={capturing ? 'Press a keyboard shortcut' : `Keyboard shortcut ${formatKeyboardShortcutLabel(value)}`}
     >
       <span className={cx('block truncate', capturing && 'text-accent', invalid && 'text-danger')}>
-        {capturing
-          ? invalid ? 'Use a modifier, or press an F-key…' : 'Press shortcut…'
-          : formatKeyboardShortcutLabel(value)}
+        {capturing ? (invalid ? 'Use a modifier, or press an F-key…' : 'Press shortcut…') : formatKeyboardShortcutLabel(value)}
       </span>
     </button>
   );
@@ -732,16 +810,8 @@ export function DesktopKeyboardShortcutsSettingsSection() {
   }
 
   return (
-    <SettingsSection
-      id="settings-keyboard"
-      label="Keyboard"
-      description="Configure desktop app shortcuts."
-      className="order-1"
-    >
-      <SettingsPanel
-        title="Keyboard shortcuts"
-        description="Every desktop menu shortcut is configurable and auto-saves immediately."
-      >
+    <SettingsSection id="settings-keyboard" label="Keyboard" description="Configure desktop app shortcuts." className="order-1">
+      <SettingsPanel title="Keyboard shortcuts" description="Every desktop menu shortcut is configurable and auto-saves immediately.">
         {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
         {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
         {preferencesState ? (
@@ -750,7 +820,11 @@ export function DesktopKeyboardShortcutsSettingsSection() {
               {DESKTOP_KEYBOARD_SHORTCUT_IDS.map((id) => {
                 const metadata = DESKTOP_KEYBOARD_SHORTCUT_LABELS[id];
                 return (
-                  <label key={id} htmlFor={`settings-keyboard-${id}`} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center">
+                  <label
+                    key={id}
+                    htmlFor={`settings-keyboard-${id}`}
+                    className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center"
+                  >
                     <span className="min-w-0 space-y-1">
                       <span className="block text-[13px] font-medium text-primary">{metadata.label}</span>
                       <span className="block text-[12px] leading-5 text-secondary">{metadata.description}</span>
@@ -774,7 +848,9 @@ export function DesktopKeyboardShortcutsSettingsSection() {
 
             {duplicateShortcut ? (
               <p className="text-[12px] text-danger">
-                {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.first].label} and {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.second].label}.
+                {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both{' '}
+                {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.first].label} and{' '}
+                {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.second].label}.
               </p>
             ) : null}
             {error ? <p className="text-[12px] text-danger">{error}</p> : null}
@@ -848,7 +924,7 @@ interface CompanionAdminState {
 
 async function readCompanionApiError(response: Response): Promise<string> {
   try {
-    const data = await response.json() as { error?: string };
+    const data = (await response.json()) as { error?: string };
     if (typeof data.error === 'string' && data.error.trim().length > 0) {
       return data.error;
     }
@@ -902,13 +978,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 export function DesktopCompanionSettingsPanel() {
@@ -945,9 +1023,7 @@ export function DesktopCompanionSettingsPanel() {
   }, [refresh]);
 
   useEffect(() => {
-    const selectedLink = latestSetup?.links.find((entry) => entry.id === selectedSetupLinkId)
-      ?? latestSetup?.links[0]
-      ?? null;
+    const selectedLink = latestSetup?.links.find((entry) => entry.id === selectedSetupLinkId) ?? latestSetup?.links[0] ?? null;
     if (!selectedLink) {
       setSetupQrSvg(null);
       return;
@@ -962,16 +1038,18 @@ export function DesktopCompanionSettingsPanel() {
         dark: '#111111',
         light: '#ffffff',
       },
-    }).then((svg) => {
-      if (active) {
-        setSetupQrSvg(svg);
-      }
-    }).catch((nextError) => {
-      if (active) {
-        setSetupQrSvg(null);
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
-      }
-    });
+    })
+      .then((svg) => {
+        if (active) {
+          setSetupQrSvg(svg);
+        }
+      })
+      .catch((nextError) => {
+        if (active) {
+          setSetupQrSvg(null);
+          setError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      });
 
     return () => {
       active = false;
@@ -1014,8 +1092,11 @@ export function DesktopCompanionSettingsPanel() {
     setError(null);
     setNotice(null);
     try {
-      const result = await requestCompanionJson<{ devices: CompanionDeviceSummaryState[] }>('DELETE', `/companion/v1/admin/devices/${encodeURIComponent(deviceId)}`);
-      setAdminState((current) => current ? { ...current, devices: result.devices } : { pendingPairings: [], devices: result.devices });
+      const result = await requestCompanionJson<{ devices: CompanionDeviceSummaryState[] }>(
+        'DELETE',
+        `/companion/v1/admin/devices/${encodeURIComponent(deviceId)}`,
+      );
+      setAdminState((current) => (current ? { ...current, devices: result.devices } : { pendingPairings: [], devices: result.devices }));
       setNotice('Paired device revoked.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -1024,9 +1105,7 @@ export function DesktopCompanionSettingsPanel() {
     }
   };
 
-  const selectedSetupLink = latestSetup?.links.find((entry) => entry.id === selectedSetupLinkId)
-    ?? latestSetup?.links[0]
-    ?? null;
+  const selectedSetupLink = latestSetup?.links.find((entry) => entry.id === selectedSetupLinkId) ?? latestSetup?.links[0] ?? null;
 
   return (
     <SettingsPanel
@@ -1036,7 +1115,9 @@ export function DesktopCompanionSettingsPanel() {
       {loading ? <p className="ui-card-meta">Loading companion access state…</p> : null}
       {hello ? (
         <div className="space-y-1 text-[12px] text-secondary">
-          <p><span className="text-primary">{hello.hostLabel}</span> · protocol {hello.protocolVersion}</p>
+          <p>
+            <span className="text-primary">{hello.hostLabel}</span> · protocol {hello.protocolVersion}
+          </p>
           <p className="font-mono text-[11px] text-dim break-all">{hello.hostInstanceId}</p>
         </div>
       ) : null}
@@ -1046,7 +1127,9 @@ export function DesktopCompanionSettingsPanel() {
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => { void handleCreatePairingCode(); }}
+          onClick={() => {
+            void handleCreatePairingCode();
+          }}
           disabled={action !== null}
           className={ACTION_BUTTON_CLASS}
         >
@@ -1054,7 +1137,9 @@ export function DesktopCompanionSettingsPanel() {
         </button>
         <button
           type="button"
-          onClick={() => { void refresh(); }}
+          onClick={() => {
+            void refresh();
+          }}
           disabled={action !== null}
           className={ACTION_BUTTON_CLASS}
         >
@@ -1104,9 +1189,16 @@ export function DesktopCompanionSettingsPanel() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-2 text-[12px] text-secondary">
-                  <p><span className="text-primary">Base URL</span> · <span className="font-mono break-all">{selectedSetupLink?.baseUrl}</span></p>
-                  <p><span className="text-primary">Route</span> · <span className="font-mono break-all">{selectedSetupLink?.label}</span></p>
-                  <p className="text-[11px] text-dim">If the phone camera does not open the app directly, scan this QR inside the iPhone app instead.</p>
+                  <p>
+                    <span className="text-primary">Base URL</span> ·{' '}
+                    <span className="font-mono break-all">{selectedSetupLink?.baseUrl}</span>
+                  </p>
+                  <p>
+                    <span className="text-primary">Route</span> · <span className="font-mono break-all">{selectedSetupLink?.label}</span>
+                  </p>
+                  <p className="text-[11px] text-dim">
+                    If the phone camera does not open the app directly, scan this QR inside the iPhone app instead.
+                  </p>
                 </div>
               </div>
             </div>
@@ -1137,7 +1229,9 @@ export function DesktopCompanionSettingsPanel() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { void handleRevokeDevice(device.id); }}
+                  onClick={() => {
+                    void handleRevokeDevice(device.id);
+                  }}
                   disabled={action !== null}
                   className={ACTION_BUTTON_CLASS}
                 >
@@ -1163,14 +1257,7 @@ function SettingsTableOfContents({
   activeId: SettingsQuickLinkId;
   onNavigate: (sectionId: SettingsQuickLinkId) => void;
 }) {
-  return (
-    <AppPageToc
-      items={items}
-      activeId={activeId}
-      onNavigate={onNavigate}
-      ariaLabel="Settings sections"
-    />
-  );
+  return <AppPageToc items={items} activeId={activeId} onNavigate={onNavigate} ariaLabel="Settings sections" />;
 }
 
 export function DesktopConnectionsSettingsPanel() {
@@ -1186,10 +1273,7 @@ export function DesktopConnectionsSettingsPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [sshTestResult, setSshTestResult] = useState<DesktopSshConnectionTestResult | null>(null);
 
-  const selectedHost = useMemo(
-    () => connections?.hosts.find((host) => host.id === selectedHostId) ?? null,
-    [connections, selectedHostId],
-  );
+  const selectedHost = useMemo(() => connections?.hosts.find((host) => host.id === selectedHostId) ?? null, [connections, selectedHostId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1231,7 +1315,8 @@ export function DesktopConnectionsSettingsPanel() {
     }
 
     let cancelled = false;
-    bridge.readDesktopAppPreferences()
+    bridge
+      .readDesktopAppPreferences()
       .then((state) => {
         if (!cancelled) {
           setAppPreferencesState(state as DesktopAppPreferencesState);
@@ -1296,7 +1381,11 @@ export function DesktopConnectionsSettingsPanel() {
     setNotice(null);
   }
 
-  async function handleUpdateAppPreferences(nextPreferences: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }) {
+  async function handleUpdateAppPreferences(nextPreferences: {
+    autoInstallUpdates?: boolean;
+    startOnSystemStart?: boolean;
+    keyboardShortcuts?: Record<string, string>;
+  }) {
     const bridge = getDesktopBridge();
     if (!bridge) {
       setAppPreferencesError('Desktop bridge unavailable. Restart the desktop app and try again.');
@@ -1404,20 +1493,10 @@ export function DesktopConnectionsSettingsPanel() {
   }
 
   return (
-    <SettingsSection
-      id="settings-desktop"
-      label="Desktop"
-      description="Manage local app behavior and SSH remotes."
-      className="order-5"
-    >
-      <SettingsPanel
-        title="App behavior"
-        description="Control how the menu bar app starts and how downloaded updates install."
-      >
+    <SettingsSection id="settings-desktop" label="Desktop" description="Manage local app behavior and SSH remotes." className="order-5">
+      <SettingsPanel title="App behavior" description="Control how the menu bar app starts and how downloaded updates install.">
         {!getDesktopBridge() && isDesktopShell() ? (
-          <p className="text-[12px] text-danger">
-            Desktop bridge unavailable. Restart the desktop app and try again.
-          </p>
+          <p className="text-[12px] text-danger">Desktop bridge unavailable. Restart the desktop app and try again.</p>
         ) : null}
         {appPreferencesState ? (
           <div className="space-y-4">
@@ -1484,14 +1563,11 @@ export function DesktopConnectionsSettingsPanel() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-[14px] font-medium text-primary">Saved remotes</h3>
-                  <p className="mt-1 text-[12px] text-secondary">Use SSH aliases from <span className="font-mono text-[11px]">~/.ssh/config</span> or full targets.</p>
+                  <p className="mt-1 text-[12px] text-secondary">
+                    Use SSH aliases from <span className="font-mono text-[11px]">~/.ssh/config</span> or full targets.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={beginNewRemote}
-                  disabled={action !== null}
-                  className={ACTION_BUTTON_CLASS}
-                >
+                <button type="button" onClick={beginNewRemote} disabled={action !== null} className={ACTION_BUTTON_CLASS}>
                   New remote
                 </button>
               </div>
@@ -1504,7 +1580,9 @@ export function DesktopConnectionsSettingsPanel() {
                       <button
                         key={host.id}
                         type="button"
-                        onClick={() => { selectRemote(host); }}
+                        onClick={() => {
+                          selectRemote(host);
+                        }}
                         disabled={action !== null}
                         className={cx(
                           'group flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
@@ -1513,7 +1591,9 @@ export function DesktopConnectionsSettingsPanel() {
                             : 'text-secondary hover:bg-surface hover:text-primary',
                         )}
                       >
-                        <SshRemoteIcon className={cx('mt-0.5 shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')} />
+                        <SshRemoteIcon
+                          className={cx('mt-0.5 shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')}
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-3">
                             <span className="truncate text-[13px] font-medium text-primary">{host.label}</span>
@@ -1532,7 +1612,9 @@ export function DesktopConnectionsSettingsPanel() {
               ) : (
                 <div className="rounded-2xl bg-surface/70 px-4 py-4">
                   <p className="text-[13px] font-medium text-primary">No remotes yet</p>
-                  <p className="mt-1 text-[12px] leading-5 text-secondary">Add an SSH target here, then pick it per conversation from the footer.</p>
+                  <p className="mt-1 text-[12px] leading-5 text-secondary">
+                    Add an SSH target here, then pick it per conversation from the footer.
+                  </p>
                 </div>
               )}
             </div>
@@ -1550,7 +1632,9 @@ export function DesktopConnectionsSettingsPanel() {
                 {selectedHost ? (
                   <button
                     type="button"
-                    onClick={() => { void handleDelete(selectedHost.id); }}
+                    onClick={() => {
+                      void handleDelete(selectedHost.id);
+                    }}
                     disabled={action !== null}
                     className={ACTION_BUTTON_CLASS}
                   >
@@ -1561,7 +1645,9 @@ export function DesktopConnectionsSettingsPanel() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 min-w-0">
-                  <label className="ui-card-meta" htmlFor="desktop-host-id">Host id</label>
+                  <label className="ui-card-meta" htmlFor="desktop-host-id">
+                    Host id
+                  </label>
                   <input
                     id="desktop-host-id"
                     value={draft.id}
@@ -1575,7 +1661,9 @@ export function DesktopConnectionsSettingsPanel() {
                   <p className="text-[11px] text-dim">Stable id used by saved conversations.</p>
                 </div>
                 <div className="space-y-2 min-w-0">
-                  <label className="ui-card-meta" htmlFor="desktop-host-label">Label</label>
+                  <label className="ui-card-meta" htmlFor="desktop-host-label">
+                    Label
+                  </label>
                   <input
                     id="desktop-host-label"
                     value={draft.label}
@@ -1589,7 +1677,9 @@ export function DesktopConnectionsSettingsPanel() {
                   <p className="text-[11px] text-dim">Shown in the conversation target picker.</p>
                 </div>
                 <div className="space-y-2 min-w-0 md:col-span-2">
-                  <label className="ui-card-meta" htmlFor="desktop-host-ssh-target">SSH target</label>
+                  <label className="ui-card-meta" htmlFor="desktop-host-ssh-target">
+                    SSH target
+                  </label>
                   <input
                     id="desktop-host-ssh-target"
                     value={draft.sshTarget}
@@ -1600,7 +1690,9 @@ export function DesktopConnectionsSettingsPanel() {
                     spellCheck={false}
                     placeholder="user@desktop"
                   />
-                  <p className="text-[11px] text-dim">Use a host alias or any target that works with your normal <span className="font-mono">ssh</span> command.</p>
+                  <p className="text-[11px] text-dim">
+                    Use a host alias or any target that works with your normal <span className="font-mono">ssh</span> command.
+                  </p>
                 </div>
               </div>
 
@@ -1624,7 +1716,9 @@ export function DesktopConnectionsSettingsPanel() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => { void handleTestSshConnection(); }}
+                  onClick={() => {
+                    void handleTestSshConnection();
+                  }}
                   disabled={action !== null}
                   className={ACTION_BUTTON_CLASS}
                 >
@@ -1632,19 +1726,16 @@ export function DesktopConnectionsSettingsPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { void handleSave(); }}
+                  onClick={() => {
+                    void handleSave();
+                  }}
                   disabled={action !== null}
                   className={ACTION_BUTTON_CLASS}
                 >
                   {action === 'save' ? 'Saving…' : selectedHost ? 'Save changes' : 'Add remote'}
                 </button>
                 {selectedHost ? (
-                  <button
-                    type="button"
-                    onClick={beginNewRemote}
-                    disabled={action !== null}
-                    className={ACTION_BUTTON_CLASS}
-                  >
+                  <button type="button" onClick={beginNewRemote} disabled={action !== null} className={ACTION_BUTTON_CLASS}>
                     Add another
                   </button>
                 ) : null}
@@ -1671,17 +1762,8 @@ export function SettingsPage() {
     error: instructionFilesError,
     refetch: refetchInstructions,
   } = useApi(api.instructions);
-  const {
-    data: modelState,
-    loading: modelsLoading,
-    error: modelsError,
-    refetch: refetchModels,
-  } = useApi(api.models);
-  const {
-    data: toolsState,
-    loading: toolsLoading,
-    error: toolsError,
-  } = useApi(api.tools);
+  const { data: modelState, loading: modelsLoading, error: modelsError, refetch: refetchModels } = useApi(api.models);
+  const { data: toolsState, loading: toolsLoading, error: toolsError } = useApi(api.tools);
   const {
     data: modelProviderState,
     loading: modelProviderLoading,
@@ -1775,9 +1857,10 @@ export function SettingsPage() {
   const [activeQuickLinkId, setActiveQuickLinkId] = useState<SettingsQuickLinkId>(SETTINGS_QUICK_LINKS[0].id);
 
   const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(
-    () => (desktopEnvironment?.isElectron || isDesktopShell())
-      ? SETTINGS_QUICK_LINKS
-      : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard'),
+    () =>
+      desktopEnvironment?.isElectron || isDesktopShell()
+        ? SETTINGS_QUICK_LINKS
+        : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard'),
     [desktopEnvironment?.isElectron],
   );
 
@@ -1839,22 +1922,25 @@ export function SettingsPage() {
         setActiveQuickLinkId((current) => (current === nextId ? current : nextId));
       };
 
-      const observer = new IntersectionObserver((entries) => {
-        for (const entry of entries) {
-          const sectionId = entry.target.id as SettingsQuickLinkId;
-          if (entry.isIntersecting) {
-            visibleIds.add(sectionId);
-          } else {
-            visibleIds.delete(sectionId);
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const sectionId = entry.target.id as SettingsQuickLinkId;
+            if (entry.isIntersecting) {
+              visibleIds.add(sectionId);
+            } else {
+              visibleIds.delete(sectionId);
+            }
           }
-        }
 
-        updateActiveQuickLink();
-      }, {
-        root: container,
-        rootMargin: '-96px 0px -60% 0px',
-        threshold: 0,
-      });
+          updateActiveQuickLink();
+        },
+        {
+          root: container,
+          rootMargin: '-96px 0px -60% 0px',
+          threshold: 0,
+        },
+      );
 
       for (const item of sections) {
         observer.observe(item.section);
@@ -1900,10 +1986,7 @@ export function SettingsPage() {
     };
   }, [visibleQuickLinks]);
 
-  const groupedModels = useMemo(
-    () => groupModelsByProvider(modelState?.models ?? []),
-    [modelState?.models],
-  );
+  const groupedModels = useMemo(() => groupModelsByProvider(modelState?.models ?? []), [modelState?.models]);
 
   const selectedModel = useMemo(() => {
     if (!modelState?.currentModel) {
@@ -1913,10 +1996,7 @@ export function SettingsPage() {
     return modelState.models.find((model) => model.id === modelState.currentModel) ?? null;
   }, [modelState]);
 
-  const selectedModelServiceTierOptions = useMemo(
-    () => getModelSelectableServiceTierOptions(selectedModel),
-    [selectedModel],
-  );
+  const selectedModelServiceTierOptions = useMemo(() => getModelSelectableServiceTierOptions(selectedModel), [selectedModel]);
   const selectedModelSupportsFastMode = useMemo(
     () => selectedModelServiceTierOptions.some((option) => option.value === 'priority'),
     [selectedModelServiceTierOptions],
@@ -2019,41 +2099,39 @@ export function SettingsPage() {
   }, [editableModelProviderId, providerAuthState]);
 
   const knowledgeBaseDirty = knowledgeBaseState
-    ? knowledgeBaseRepoUrlDraft.trim() !== knowledgeBaseState.repoUrl
-      || knowledgeBaseBranchDraft.trim() !== knowledgeBaseState.branch
+    ? knowledgeBaseRepoUrlDraft.trim() !== knowledgeBaseState.repoUrl || knowledgeBaseBranchDraft.trim() !== knowledgeBaseState.branch
     : false;
   const knowledgeBaseSyncPresentation = useMemo(
     () => getKnowledgeBaseSyncPresentation(knowledgeBaseState, { includeLastSyncAt: true }),
     [knowledgeBaseState],
   );
-  const defaultCwdDirty = defaultCwdState
-    ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
-    : false;
+  const defaultCwdDirty = defaultCwdState ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd : false;
   const transcriptionDirty = transcriptionState
-    ? transcriptionProviderDraft !== (transcriptionState.settings.provider ?? '')
-      || transcriptionModelDraft.trim() !== transcriptionState.settings.model
+    ? transcriptionProviderDraft !== (transcriptionState.settings.provider ?? '') ||
+      transcriptionModelDraft.trim() !== transcriptionState.settings.model
     : false;
   const transcriptionModelOptions = transcriptionProviderDraft
     ? TRANSCRIPTION_MODEL_OPTIONS[transcriptionProviderDraft]
     : Array.from(new Set(Object.values(TRANSCRIPTION_MODEL_OPTIONS).flat()));
-  const transcriptionStatusMatchesDraft = transcriptionModelStatus?.provider === transcriptionProviderDraft
-    && transcriptionModelStatus.model === transcriptionModelDraft.trim();
-  const transcriptionModelStatusLabel = transcriptionProviderDraft && transcriptionModelDraft.trim()
-    ? loadingTranscriptionModelStatus
-      ? 'Checking model cache…'
-      : transcriptionStatusMatchesDraft
-        ? transcriptionModelStatus.installed
-          ? `Installed locally${transcriptionModelStatus.sizeBytes ? ` · ${formatBytes(transcriptionModelStatus.sizeBytes)}` : ''}`
-          : 'Not installed yet'
-        : 'Model cache status unavailable'
-    : 'Select a provider and model to check install status.';
+  const transcriptionStatusMatchesDraft =
+    transcriptionModelStatus?.provider === transcriptionProviderDraft && transcriptionModelStatus.model === transcriptionModelDraft.trim();
+  const transcriptionModelStatusLabel =
+    transcriptionProviderDraft && transcriptionModelDraft.trim()
+      ? loadingTranscriptionModelStatus
+        ? 'Checking model cache…'
+        : transcriptionStatusMatchesDraft
+          ? transcriptionModelStatus.installed
+            ? `Installed locally${transcriptionModelStatus.sizeBytes ? ` · ${formatBytes(transcriptionModelStatus.sizeBytes)}` : ''}`
+            : 'Not installed yet'
+          : 'Model cache status unavailable'
+      : 'Select a provider and model to check install status.';
   const skillFoldersDirty = skillFoldersState
-    ? skillFoldersDraft.length !== skillFoldersState.skillDirs.length
-      || skillFoldersDraft.some((value, index) => value !== skillFoldersState.skillDirs[index])
+    ? skillFoldersDraft.length !== skillFoldersState.skillDirs.length ||
+      skillFoldersDraft.some((value, index) => value !== skillFoldersState.skillDirs[index])
     : false;
   const instructionFilesDirty = instructionFilesState
-    ? instructionFilesDraft.length !== instructionFilesState.instructionFiles.length
-      || instructionFilesDraft.some((value, index) => value !== instructionFilesState.instructionFiles[index])
+    ? instructionFilesDraft.length !== instructionFilesState.instructionFiles.length ||
+      instructionFilesDraft.some((value, index) => value !== instructionFilesState.instructionFiles[index])
     : false;
   const pickingDefaultCwd = pathPickerTarget === 'default-cwd';
   const pickingSkillFolders = pathPickerTarget === 'skill-folders';
@@ -2112,7 +2190,8 @@ export function SettingsPage() {
 
     let cancelled = false;
     setLoadingTranscriptionModelStatus(true);
-    api.transcriptionModelStatus({ provider, model })
+    api
+      .transcriptionModelStatus({ provider, model })
       .then((status) => {
         if (!cancelled) {
           setTranscriptionModelStatus(status);
@@ -2147,10 +2226,11 @@ export function SettingsPage() {
     const timeout = window.setTimeout(() => {
       setTranscriptionSaveError(null);
       setSavingTranscription(true);
-      api.updateTranscriptionSettings({
-        provider: transcriptionProviderDraft || null,
-        model,
-      })
+      api
+        .updateTranscriptionSettings({
+          provider: transcriptionProviderDraft || null,
+          model,
+        })
         .then((saved) => {
           replaceTranscriptionState(saved);
         })
@@ -2165,7 +2245,15 @@ export function SettingsPage() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [installingTranscriptionModel, replaceTranscriptionState, savingTranscription, transcriptionDirty, transcriptionModelDraft, transcriptionProviderDraft, transcriptionState]);
+  }, [
+    installingTranscriptionModel,
+    replaceTranscriptionState,
+    savingTranscription,
+    transcriptionDirty,
+    transcriptionModelDraft,
+    transcriptionProviderDraft,
+    transcriptionState,
+  ]);
 
   useEffect(() => {
     if (skillFoldersState) {
@@ -2310,10 +2398,7 @@ export function SettingsPage() {
       setOauthError(null);
       setOauthInputValue('');
       setProviderCredentialNotice(`Logged in to ${oauthLoginState.providerName}.`);
-      void Promise.all([
-        refetchProviderAuth({ resetLoading: false }),
-        refetchModels({ resetLoading: false }),
-      ]);
+      void Promise.all([refetchProviderAuth({ resetLoading: false }), refetchModels({ resetLoading: false })]);
       return;
     }
 
@@ -2322,9 +2407,8 @@ export function SettingsPage() {
     }
   }, [oauthLoginState, refetchModels, refetchProviderAuth]);
 
-  const selectedProviderLogin = oauthLoginState && selectedProvider && oauthLoginState.provider === selectedProvider.id
-    ? oauthLoginState
-    : null;
+  const selectedProviderLogin =
+    oauthLoginState && selectedProvider && oauthLoginState.provider === selectedProvider.id ? oauthLoginState : null;
 
   async function handleAddSkillFolder() {
     if (!skillFoldersState || savingSkillFolders || pickingSkillFolders) {
@@ -2343,9 +2427,7 @@ export function SettingsPage() {
         return;
       }
 
-      setSkillFoldersDraft((current) => current.includes(result.path)
-        ? current
-        : [...current, result.path]);
+      setSkillFoldersDraft((current) => (current.includes(result.path) ? current : [...current, result.path]));
     } catch (error) {
       setSkillFoldersSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2461,7 +2543,10 @@ export function SettingsPage() {
     }
   }
 
-  async function handleModelPreferenceChange(input: { model?: string; thinkingLevel?: string; serviceTier?: string }, field: 'model' | 'thinking' | 'serviceTier') {
+  async function handleModelPreferenceChange(
+    input: { model?: string; thinkingLevel?: string; serviceTier?: string },
+    field: 'model' | 'thinking' | 'serviceTier',
+  ) {
     if (!modelState || savingPreference !== null) {
       return;
     }
@@ -2497,12 +2582,8 @@ export function SettingsPage() {
       return;
     }
 
-    const repoUrl = typeof nextInput?.repoUrl === 'string'
-      ? nextInput.repoUrl.trim()
-      : knowledgeBaseRepoUrlDraft.trim();
-    const branch = typeof nextInput?.branch === 'string'
-      ? nextInput.branch.trim()
-      : knowledgeBaseBranchDraft.trim();
+    const repoUrl = typeof nextInput?.repoUrl === 'string' ? nextInput.repoUrl.trim() : knowledgeBaseRepoUrlDraft.trim();
+    const branch = typeof nextInput?.branch === 'string' ? nextInput.branch.trim() : knowledgeBaseBranchDraft.trim();
     if (!nextInput && !knowledgeBaseDirty) {
       return;
     }
@@ -2651,10 +2732,7 @@ export function SettingsPage() {
     };
   }, [defaultCwdDirty, defaultCwdDraft, defaultCwdState, pickingDefaultCwd, savingDefaultCwd]);
 
-  async function handleConversationTitleSettingChange(
-    input: { enabled?: boolean; model?: string | null },
-    field: 'enabled' | 'model',
-  ) {
+  async function handleConversationTitleSettingChange(input: { enabled?: boolean; model?: string | null }, field: 'enabled' | 'model') {
     if (!conversationTitleState || savingConversationTitle !== null) {
       return;
     }
@@ -2842,10 +2920,7 @@ export function SettingsPage() {
       syncModelProviderSelection(state, providerId);
       setSelectedProviderId(providerId);
       setModelProviderMessage(existed ? `Saved ${providerId}.` : `Created ${providerId}.`);
-      await Promise.all([
-        refetchModels({ resetLoading: false }),
-        refetchProviderAuth({ resetLoading: false }),
-      ]);
+      await Promise.all([refetchModels({ resetLoading: false }), refetchProviderAuth({ resetLoading: false })]);
     } catch (error) {
       setModelProviderEditorError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2884,10 +2959,7 @@ export function SettingsPage() {
       setEditingModelId(null);
       setModelDraft(createModelEditorDraft(null));
       setModelProviderMessage(`Removed ${providerId}.`);
-      await Promise.all([
-        refetchModels({ resetLoading: false }),
-        refetchProviderAuth({ resetLoading: false }),
-      ]);
+      await Promise.all([refetchModels({ resetLoading: false }), refetchProviderAuth({ resetLoading: false })]);
     } catch (error) {
       setModelProviderEditorError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2949,10 +3021,7 @@ export function SettingsPage() {
       syncModelProviderSelection(state, providerId, modelId);
       setSelectedProviderId(providerId);
       setModelDraftMessage(existed ? `Saved ${modelId}.` : `Added ${modelId}.`);
-      await Promise.all([
-        refetchModels({ resetLoading: false }),
-        refetchProviderAuth({ resetLoading: false }),
-      ]);
+      await Promise.all([refetchModels({ resetLoading: false }), refetchProviderAuth({ resetLoading: false })]);
     } catch (error) {
       setModelDraftError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2978,10 +3047,7 @@ export function SettingsPage() {
       const state = await api.deleteModelProviderModel(selectedModelProvider.id, modelId);
       syncModelProviderSelection(state, selectedModelProvider.id);
       setModelDraftMessage(`Removed ${modelId}.`);
-      await Promise.all([
-        refetchModels({ resetLoading: false }),
-        refetchProviderAuth({ resetLoading: false }),
-      ]);
+      await Promise.all([refetchModels({ resetLoading: false }), refetchProviderAuth({ resetLoading: false })]);
     } catch (error) {
       setModelDraftError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3010,10 +3076,7 @@ export function SettingsPage() {
       setProviderApiKey('');
       setOauthLoginState(null);
       setProviderCredentialNotice(`Saved API key for ${selectedProvider.id}.`);
-      await Promise.all([
-        refetchProviderAuth({ resetLoading: false }),
-        refetchModels({ resetLoading: false }),
-      ]);
+      await Promise.all([refetchProviderAuth({ resetLoading: false }), refetchModels({ resetLoading: false })]);
     } catch (error) {
       setProviderCredentialError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3040,10 +3103,7 @@ export function SettingsPage() {
       await api.removeProviderCredential(selectedProvider.id);
       setOauthLoginState(null);
       setProviderCredentialNotice(`Removed stored credential for ${selectedProvider.id}.`);
-      await Promise.all([
-        refetchProviderAuth({ resetLoading: false }),
-        refetchModels({ resetLoading: false }),
-      ]);
+      await Promise.all([refetchProviderAuth({ resetLoading: false }), refetchModels({ resetLoading: false })]);
     } catch (error) {
       setProviderCredentialError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3068,10 +3128,7 @@ export function SettingsPage() {
 
       if (login.status === 'completed') {
         setProviderCredentialNotice(`Logged in to ${login.providerName}.`);
-        await Promise.all([
-          refetchProviderAuth({ resetLoading: false }),
-          refetchModels({ resetLoading: false }),
-        ]);
+        await Promise.all([refetchProviderAuth({ resetLoading: false }), refetchModels({ resetLoading: false })]);
       }
     } catch (error) {
       setOauthError(error instanceof Error ? error.message : String(error));
@@ -3127,7 +3184,7 @@ export function SettingsPage() {
     const confirmed = window.confirm(
       kind === 'layout'
         ? 'Reset the saved sidebar and context-rail widths back to defaults?'
-        : 'Clear the saved open-conversation state, unread attention cache, and composer history?'
+        : 'Clear the saved open-conversation state, unread attention cache, and composer history?',
     );
     if (!confirmed) {
       return;
@@ -3162,38 +3219,28 @@ export function SettingsPage() {
       <AppPageLayout
         asideLayout="centered"
         contentClassName="max-w-[72rem] flex flex-col gap-12"
-        aside={(
-          <SettingsTableOfContents
-            items={visibleQuickLinks}
-            activeId={activeQuickLinkId}
-            onNavigate={navigateToSection}
-          />
-        )}
+        aside={<SettingsTableOfContents items={visibleQuickLinks} activeId={activeQuickLinkId} onNavigate={navigateToSection} />}
       >
-        <AppPageIntro
-          title="Settings"
-          summary="Defaults, providers, skills, desktop runtime, and interface state."
-        />
+        <AppPageIntro title="Settings" summary="Defaults, providers, skills, desktop runtime, and interface state." />
 
         <div className="flex flex-col gap-12">
           <SettingsSection
-                  id="settings-skills"
-                  label="Skills"
-                  description="Skill discovery, bundled MCP wrappers, and extra runtime instructions."
-                  className="order-3"
-                >
-                  <div className="space-y-0">
-                    <SettingsPanel
-                title="Skill folders"
-                description="Load extra skill folders alongside the root skills directory."
-              >
+            id="settings-skills"
+            label="Skills"
+            description="Skill discovery, bundled MCP wrappers, and extra runtime instructions."
+            className="order-3"
+          >
+            <div className="space-y-0">
+              <SettingsPanel title="Skill folders" description="Load extra skill folders alongside the root skills directory.">
                 {skillFoldersLoading && !skillFoldersState ? (
                   <p className="ui-card-meta">Loading skill folders…</p>
                 ) : skillFoldersError && !skillFoldersState ? (
                   <p className="text-[12px] text-danger">Failed to load skill folders: {skillFoldersError}</p>
                 ) : skillFoldersState ? (
                   <div className="space-y-3">
-                    <p className="ui-card-meta break-all">Configured in <span className="font-mono text-[11px]">{skillFoldersState.configFile}</span>.</p>
+                    <p className="ui-card-meta break-all">
+                      Configured in <span className="font-mono text-[11px]">{skillFoldersState.configFile}</span>.
+                    </p>
                     {skillFoldersDraft.length === 0 ? (
                       <p className="ui-card-meta">No extra skill folders configured.</p>
                     ) : (
@@ -3206,7 +3253,9 @@ export function SettingsPage() {
                             <div className="flex shrink-0 items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => { handleMoveSkillFolder(index, -1); }}
+                                onClick={() => {
+                                  handleMoveSkillFolder(index, -1);
+                                }}
                                 disabled={savingSkillFolders || index === 0}
                                 className={ACTION_BUTTON_CLASS}
                               >
@@ -3214,7 +3263,9 @@ export function SettingsPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => { handleMoveSkillFolder(index, 1); }}
+                                onClick={() => {
+                                  handleMoveSkillFolder(index, 1);
+                                }}
                                 disabled={savingSkillFolders || index === skillFoldersDraft.length - 1}
                                 className={ACTION_BUTTON_CLASS}
                               >
@@ -3222,7 +3273,9 @@ export function SettingsPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => { handleRemoveSkillFolder(index); }}
+                                onClick={() => {
+                                  handleRemoveSkillFolder(index);
+                                }}
                                 disabled={savingSkillFolders}
                                 className={ACTION_BUTTON_CLASS}
                               >
@@ -3236,13 +3289,17 @@ export function SettingsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => { void handleAddSkillFolder(); }}
+                        onClick={() => {
+                          void handleAddSkillFolder();
+                        }}
                         disabled={savingSkillFolders || pickingSkillFolders}
                         className={ACTION_BUTTON_CLASS}
                       >
                         {pickingSkillFolders ? 'Picking…' : 'Add folder'}
                       </button>
-                      <span className="ui-card-meta">{savingSkillFolders ? 'Saving…' : skillFoldersDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
+                      <span className="ui-card-meta">
+                        {savingSkillFolders ? 'Saving…' : skillFoldersDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                      </span>
                     </div>
                     <p className="ui-card-meta">Folders load in the saved order after the root skills directory.</p>
                   </div>
@@ -3262,25 +3319,31 @@ export function SettingsPage() {
                 ) : toolsState ? (
                   <div className="space-y-5">
                     <p className="ui-card-meta break-all">
-                      {toolsState.mcp.configExists
-                        ? (
-                            <>
-                              Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
-                            </>
-                          )
-                        : 'No explicit MCP config file found. Using bundled skill manifests only.'}
+                      {toolsState.mcp.configExists ? (
+                        <>
+                          Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
+                        </>
+                      ) : (
+                        'No explicit MCP config file found. Using bundled skill manifests only.'
+                      )}
                     </p>
 
                     {toolsState.mcp.bundledSkills.length > 0 ? (
                       <div className="space-y-3">
                         <p className="ui-card-meta">
-                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active.
+                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'}{' '}
+                          active.
                         </p>
                         {toolsState.mcp.bundledSkills.map((bundle) => (
-                          <div key={bundle.manifestPath} className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
+                          <div
+                            key={bundle.manifestPath}
+                            className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0"
+                          >
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
-                              <span className="ui-card-meta">{bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}</span>
+                              <span className="ui-card-meta">
+                                {bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}
+                              </span>
                             </div>
                             <p className="ui-card-meta break-all">
                               <span className="font-mono text-[11px]">{bundle.manifestPath}</span>
@@ -3290,7 +3353,8 @@ export function SettingsPage() {
                             </p>
                             {bundle.overriddenServerNames.length > 0 ? (
                               <p className="text-[12px] text-secondary">
-                                Overridden by explicit config: <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
+                                Overridden by explicit config:{' '}
+                                <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
                               </p>
                             ) : null}
                           </div>
@@ -3350,17 +3414,16 @@ export function SettingsPage() {
                 ) : null}
               </SettingsPanel>
 
-              <SettingsPanel
-                title="AGENTS.md files"
-                description="Append extra AGENTS.md-style files to the runtime prompt."
-              >
+              <SettingsPanel title="AGENTS.md files" description="Append extra AGENTS.md-style files to the runtime prompt.">
                 {instructionFilesLoading && !instructionFilesState ? (
                   <p className="ui-card-meta">Loading AGENTS.md files…</p>
                 ) : instructionFilesError && !instructionFilesState ? (
                   <p className="text-[12px] text-danger">Failed to load AGENTS.md files: {instructionFilesError}</p>
                 ) : instructionFilesState ? (
                   <div className="space-y-3">
-                    <p className="ui-card-meta break-all">Configured in <span className="font-mono text-[11px]">{instructionFilesState.configFile}</span>.</p>
+                    <p className="ui-card-meta break-all">
+                      Configured in <span className="font-mono text-[11px]">{instructionFilesState.configFile}</span>.
+                    </p>
                     {instructionFilesDraft.length === 0 ? (
                       <p className="ui-card-meta">No extra AGENTS.md files configured.</p>
                     ) : (
@@ -3373,7 +3436,9 @@ export function SettingsPage() {
                             <div className="flex shrink-0 items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => { handleMoveInstructionFile(index, -1); }}
+                                onClick={() => {
+                                  handleMoveInstructionFile(index, -1);
+                                }}
                                 disabled={savingInstructionFiles || index === 0}
                                 className={ACTION_BUTTON_CLASS}
                               >
@@ -3381,7 +3446,9 @@ export function SettingsPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => { handleMoveInstructionFile(index, 1); }}
+                                onClick={() => {
+                                  handleMoveInstructionFile(index, 1);
+                                }}
                                 disabled={savingInstructionFiles || index === instructionFilesDraft.length - 1}
                                 className={ACTION_BUTTON_CLASS}
                               >
@@ -3389,7 +3456,9 @@ export function SettingsPage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => { handleRemoveInstructionFile(index); }}
+                                onClick={() => {
+                                  handleRemoveInstructionFile(index);
+                                }}
                                 disabled={savingInstructionFiles}
                                 className={ACTION_BUTTON_CLASS}
                               >
@@ -3403,13 +3472,17 @@ export function SettingsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => { void handleAddInstructionFiles(); }}
+                        onClick={() => {
+                          void handleAddInstructionFiles();
+                        }}
                         disabled={savingInstructionFiles || pickingInstructionFiles}
                         className={ACTION_BUTTON_CLASS}
                       >
                         {pickingInstructionFiles ? 'Picking…' : 'Add files'}
                       </button>
-                      <span className="ui-card-meta">{savingInstructionFiles ? 'Saving…' : instructionFilesDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
+                      <span className="ui-card-meta">
+                        {savingInstructionFiles ? 'Saving…' : instructionFilesDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                      </span>
                     </div>
                     <p className="ui-card-meta">Files append in the saved order after the root AGENTS.md.</p>
                   </div>
@@ -3427,17 +3500,16 @@ export function SettingsPage() {
             className="order-2"
           >
             <div className="space-y-0">
-              <SettingsPanel
-                title="Default model"
-                description="Used for new chats and runs unless a model is picked explicitly."
-              >
+              <SettingsPanel title="Default model" description="Used for new chats and runs unless a model is picked explicitly.">
                 {modelsLoading && !modelState ? (
                   <p className="ui-card-meta">Loading models…</p>
                 ) : modelsError && !modelState ? (
                   <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
                 ) : modelState ? (
                   <>
-                    <label className="ui-card-meta" htmlFor="settings-model">Model</label>
+                    <label className="ui-card-meta" htmlFor="settings-model">
+                      Model
+                    </label>
                     <select
                       id="settings-model"
                       value={modelState.currentModel}
@@ -3458,13 +3530,12 @@ export function SettingsPage() {
                       ))}
                     </select>
                     <p className="ui-card-meta">
-                      {savingPreference === 'model'
-                        ? 'Saving default model...'
-                        : formatModelSummary(selectedModel, 'No model selected.')
-                      }
+                      {savingPreference === 'model' ? 'Saving default model...' : formatModelSummary(selectedModel, 'No model selected.')}
                     </p>
 
-                    <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
+                    <label className="ui-card-meta pt-1" htmlFor="settings-thinking">
+                      Thinking level
+                    </label>
                     <select
                       id="settings-thinking"
                       value={modelState.currentThinkingLevel}
@@ -3475,7 +3546,9 @@ export function SettingsPage() {
                       className={INPUT_CLASS}
                     >
                       {THINKING_LEVEL_OPTIONS.map((option) => (
-                        <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                        <option key={option.value || 'unset'} value={option.value}>
+                          {option.label}
+                        </option>
                       ))}
                     </select>
                     <p className="ui-card-meta">
@@ -3514,10 +3587,7 @@ export function SettingsPage() {
                 {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
               </SettingsPanel>
 
-              <SettingsPanel
-                title="Knowledge base"
-                description="Point PA at a git repo and let it manage the local mirror and sync loop."
-              >
+              <SettingsPanel title="Knowledge base" description="Point PA at a git repo and let it manage the local mirror and sync loop.">
                 {knowledgeBaseLoading && !knowledgeBaseState ? (
                   <p className="ui-card-meta">Loading knowledge base…</p>
                 ) : knowledgeBaseLoadError && !knowledgeBaseState ? (
@@ -3530,7 +3600,9 @@ export function SettingsPage() {
                       void handleKnowledgeBaseSave();
                     }}
                   >
-                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">Repo URL</label>
+                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">
+                      Repo URL
+                    </label>
                     <input
                       id="settings-knowledge-base-repo"
                       value={knowledgeBaseRepoUrlDraft}
@@ -3546,7 +3618,9 @@ export function SettingsPage() {
                       spellCheck={false}
                       disabled={knowledgeBaseAction !== null}
                     />
-                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">Branch</label>
+                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">
+                      Branch
+                    </label>
                     <input
                       id="settings-knowledge-base-branch"
                       value={knowledgeBaseBranchDraft}
@@ -3562,7 +3636,9 @@ export function SettingsPage() {
                       spellCheck={false}
                       disabled={knowledgeBaseAction !== null}
                     />
-                    <p className="ui-card-meta break-all">Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span></p>
+                    <p className="ui-card-meta break-all">
+                      Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
+                    </p>
                     <p className={cx('ui-card-meta break-all', knowledgeBaseAction === null && knowledgeBaseSyncPresentation.toneClass)}>
                       {knowledgeBaseAction === 'save'
                         ? 'Saving knowledge base…'
@@ -3570,12 +3646,19 @@ export function SettingsPage() {
                           ? 'Syncing knowledge base…'
                           : knowledgeBaseSyncPresentation.text}
                     </p>
-                    <p className="ui-card-meta break-all">Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> · {knowledgeBaseState.recoveredEntryCount} saved</p>
+                    <p className="ui-card-meta break-all">
+                      Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
+                      {knowledgeBaseState.recoveredEntryCount} saved
+                    </p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="ui-card-meta">{knowledgeBaseAction === 'save' ? 'Saving…' : knowledgeBaseDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
+                      <span className="ui-card-meta">
+                        {knowledgeBaseAction === 'save' ? 'Saving…' : knowledgeBaseDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => { void handleKnowledgeBaseSync(); }}
+                        onClick={() => {
+                          void handleKnowledgeBaseSync();
+                        }}
                         disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
                         className={ACTION_BUTTON_CLASS}
                       >
@@ -3594,17 +3677,17 @@ export function SettingsPage() {
                         Disable managed sync
                       </button>
                     </div>
-                    <p className="ui-card-meta">PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder and file @ mentions read from that local mirror.</p>
+                    <p className="ui-card-meta">
+                      PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder
+                      and file @ mentions read from that local mirror.
+                    </p>
                   </form>
                 ) : null}
 
                 {knowledgeBaseSaveError && <p className="text-[12px] text-danger">{knowledgeBaseSaveError}</p>}
               </SettingsPanel>
 
-              <SettingsPanel
-                title="Working directory"
-                description="Fallback cwd for new chats and web actions."
-              >
+              <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
                 {defaultCwdLoading && !defaultCwdState ? (
                   <p className="ui-card-meta">Loading default working directory…</p>
                 ) : defaultCwdLoadError && !defaultCwdState ? (
@@ -3617,7 +3700,9 @@ export function SettingsPage() {
                       void handleDefaultCwdSave();
                     }}
                   >
-                    <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
+                    <label className="ui-card-meta" htmlFor="settings-default-cwd">
+                      Path
+                    </label>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <input
                         id="settings-default-cwd"
@@ -3636,7 +3721,9 @@ export function SettingsPage() {
                       />
                       <ToolbarButton
                         type="button"
-                        onClick={() => { void handleDefaultCwdPick(); }}
+                        onClick={() => {
+                          void handleDefaultCwdPick();
+                        }}
                         disabled={savingDefaultCwd || pickingDefaultCwd}
                         className="shrink-0 text-accent"
                         title="Choose default working directory"
@@ -3653,10 +3740,14 @@ export function SettingsPage() {
                           : `Process cwd · ${defaultCwdState.effectiveCwd}`}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="ui-card-meta">{savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
+                      <span className="ui-card-meta">
+                        {savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => { void handleDefaultCwdSave(''); }}
+                        onClick={() => {
+                          void handleDefaultCwdSave('');
+                        }}
                         disabled={savingDefaultCwd || pickingDefaultCwd || defaultCwdState.currentCwd.length === 0}
                         className={ACTION_BUTTON_CLASS}
                       >
@@ -3672,19 +3763,19 @@ export function SettingsPage() {
                 {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
               </SettingsPanel>
 
-              <SettingsPanel
-                title="Conversation titles"
-                description="Auto-title chats after the first assistant reply."
-              >
+              <SettingsPanel title="Conversation titles" description="Auto-title chats after the first assistant reply.">
                 {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
                   <p className="ui-card-meta">Loading conversation title settings…</p>
-                ) : (!conversationTitleState && conversationTitleError) ? (
+                ) : !conversationTitleState && conversationTitleError ? (
                   <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
-                ) : (!modelState && modelsError) ? (
+                ) : !modelState && modelsError ? (
                   <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
                 ) : conversationTitleState && modelState ? (
                   <>
-                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-titles-enabled">
+                    <label
+                      className="inline-flex items-center gap-3 text-[14px] text-primary"
+                      htmlFor="settings-conversation-titles-enabled"
+                    >
                       <input
                         id="settings-conversation-titles-enabled"
                         type="checkbox"
@@ -3705,7 +3796,9 @@ export function SettingsPage() {
                           : 'Disabled. New conversations keep the fallback title until renamed manually.'}
                     </p>
 
-                    <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">Title model</label>
+                    <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">
+                      Title model
+                    </label>
                     <select
                       id="settings-conversation-title-model"
                       value={conversationTitleState.currentModel}
@@ -3731,7 +3824,10 @@ export function SettingsPage() {
                         ? 'Saving title model…'
                         : conversationTitleState.currentModel
                           ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
-                          : `Using default title model: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
+                          : `Using default title model: ${formatModelSummary(
+                              effectiveConversationTitleModel,
+                              conversationTitleState.effectiveModel,
+                            )}`}
                     </p>
                   </>
                 ) : null}
@@ -3758,7 +3854,9 @@ export function SettingsPage() {
                   <p className="text-[12px] text-danger">Failed to load dictation settings: {transcriptionError}</p>
                 ) : transcriptionState ? (
                   <div className="space-y-3">
-                    <label className="ui-card-meta" htmlFor="settings-transcription-provider">Provider</label>
+                    <label className="ui-card-meta" htmlFor="settings-transcription-provider">
+                      Provider
+                    </label>
                     <select
                       id="settings-transcription-provider"
                       value={transcriptionProviderDraft}
@@ -3777,7 +3875,8 @@ export function SettingsPage() {
                       <option value="">Disabled</option>
                       {transcriptionState.providers.map((provider) => (
                         <option key={provider.id} value={provider.id}>
-                          {provider.label}{provider.status === 'planned' ? ' (planned)' : ''}
+                          {provider.label}
+                          {provider.status === 'planned' ? ' (planned)' : ''}
                         </option>
                       ))}
                     </select>
@@ -3791,7 +3890,9 @@ export function SettingsPage() {
 
                     {transcriptionProviderDraft ? (
                       <>
-                        <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">Model</label>
+                        <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
+                          Model
+                        </label>
                         <input
                           id="settings-transcription-model"
                           list="settings-transcription-model-options"
@@ -3814,17 +3915,32 @@ export function SettingsPage() {
                             <option key={model} value={model} />
                           ))}
                         </datalist>
-                        <p className="ui-card-meta">Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.</p>
-                        <p className={cx('text-[12px]', transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'text-success' : 'text-dim')}>{transcriptionModelStatusLabel}</p>
+                        <p className="ui-card-meta">
+                          Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.
+                        </p>
+                        <p
+                          className={cx(
+                            'text-[12px]',
+                            transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'text-success' : 'text-dim',
+                          )}
+                        >
+                          {transcriptionModelStatusLabel}
+                        </p>
 
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             disabled={installingTranscriptionModel || savingTranscription || !transcriptionModelDraft.trim()}
-                            onClick={() => { void handleTranscriptionInstallModel(); }}
+                            onClick={() => {
+                              void handleTranscriptionInstallModel();
+                            }}
                             className={ACTION_BUTTON_CLASS}
                           >
-                            {installingTranscriptionModel ? 'Installing…' : transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'Reinstall local model' : 'Install local model'}
+                            {installingTranscriptionModel
+                              ? 'Installing…'
+                              : transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed
+                                ? 'Reinstall local model'
+                                : 'Install local model'}
                           </button>
                           {savingTranscription ? <span className="ui-card-meta">Saving…</span> : null}
                         </div>
@@ -3848,10 +3964,7 @@ export function SettingsPage() {
             className="order-1"
           >
             <div className="space-y-0">
-              <SettingsPanel
-                title="Theme"
-                description="Choose Auto to follow the OS."
-              >
+              <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="ui-segmented-control" role="group" aria-label="Theme selection">
                     <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
@@ -3859,7 +3972,8 @@ export function SettingsPage() {
                     <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
                   </div>
                   <span className="ui-card-meta">
-                    Current theme: {theme}{themePreference === 'system' ? ' (auto)' : ''}
+                    Current theme: {theme}
+                    {themePreference === 'system' ? ' (auto)' : ''}
                   </span>
                 </div>
               </SettingsPanel>
@@ -3873,66 +3987,66 @@ export function SettingsPage() {
             className="order-3"
           >
             <div className="space-y-0">
-              <SettingsPanel
-                title="Provider & model definitions"
-              >
+              <SettingsPanel title="Provider & model definitions">
                 <div className="space-y-5">
-                <div className="space-y-3 min-w-0">
-                  <h3 className="text-[13px] font-medium text-primary">Providers</h3>
+                  <div className="space-y-3 min-w-0">
+                    <h3 className="text-[13px] font-medium text-primary">Providers</h3>
 
-                  {modelProviderLoading && !modelProviderState ? (
-                    <p className="ui-card-meta">Loading provider definitions…</p>
-                  ) : modelProviderError && !modelProviderState ? (
-                    <p className="text-[12px] text-danger">Failed to load provider definitions: {modelProviderError}</p>
-                  ) : modelProviderState ? (
-                    <>
-                      {providerAuthLoading && !providerAuthState && (
-                        <p className="ui-card-meta">Loading provider credentials…</p>
-                      )}
-                      {providerAuthError && !providerAuthState && (
-                        <p className="text-[12px] text-danger">Failed to load provider credentials: {providerAuthError}</p>
-                      )}
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <p className="ui-card-meta">Configured providers</p>
-                          {configuredProviderSummaries.length > 0 ? (
-                            <div className="space-y-px">
-                              {configuredProviderSummaries.map((provider) => {
-                                const selected = provider.id === selectedModelProviderId || provider.id === selectedProviderId;
-                                return (
-                                  <button
-                                    key={provider.id}
-                                    type="button"
-                                    onClick={() => {
-                                      if (provider.modelProvider) {
-                                        selectModelProvider(provider.id);
-                                      } else {
-                                        startNewModelProvider(provider.id, 'provider');
-                                      }
-                                    }}
-                                    className={cx(
-                                      'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-                                      selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
-                                    )}
-                                    aria-pressed={selected}
-                                  >
-                                    <span className="min-w-0">
-                                      <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
-                                      <span className="ui-card-meta block truncate">
-                                        {provider.modelProvider ? formatModelProviderSummary(provider.modelProvider) : formatProviderAuthStatus(provider.auth)}
+                    {modelProviderLoading && !modelProviderState ? (
+                      <p className="ui-card-meta">Loading provider definitions…</p>
+                    ) : modelProviderError && !modelProviderState ? (
+                      <p className="text-[12px] text-danger">Failed to load provider definitions: {modelProviderError}</p>
+                    ) : modelProviderState ? (
+                      <>
+                        {providerAuthLoading && !providerAuthState && <p className="ui-card-meta">Loading provider credentials…</p>}
+                        {providerAuthError && !providerAuthState && (
+                          <p className="text-[12px] text-danger">Failed to load provider credentials: {providerAuthError}</p>
+                        )}
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <p className="ui-card-meta">Configured providers</p>
+                            {configuredProviderSummaries.length > 0 ? (
+                              <div className="space-y-px">
+                                {configuredProviderSummaries.map((provider) => {
+                                  const selected = provider.id === selectedModelProviderId || provider.id === selectedProviderId;
+                                  return (
+                                    <button
+                                      key={provider.id}
+                                      type="button"
+                                      onClick={() => {
+                                        if (provider.modelProvider) {
+                                          selectModelProvider(provider.id);
+                                        } else {
+                                          startNewModelProvider(provider.id, 'provider');
+                                        }
+                                      }}
+                                      className={cx(
+                                        'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                        selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                                      )}
+                                      aria-pressed={selected}
+                                    >
+                                      <span className="min-w-0">
+                                        <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
+                                        <span className="ui-card-meta block truncate">
+                                          {provider.modelProvider
+                                            ? formatModelProviderSummary(provider.modelProvider)
+                                            : formatProviderAuthStatus(provider.auth)}
+                                        </span>
                                       </span>
-                                    </span>
-                                    {provider.modelProvider?.baseUrl && (
-                                      <span className="ui-card-meta hidden truncate text-right xl:block">{provider.modelProvider.baseUrl}</span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="ui-card-meta">No custom providers or overrides yet.</p>
-                          )}
-                        </div>
+                                      {provider.modelProvider?.baseUrl && (
+                                        <span className="ui-card-meta hidden truncate text-right xl:block">
+                                          {provider.modelProvider.baseUrl}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="ui-card-meta">No custom providers or overrides yet.</p>
+                            )}
+                          </div>
 
                           <div className="space-y-3 border-t border-border-subtle pt-4">
                             <div className="space-y-1">
@@ -3942,12 +4056,16 @@ export function SettingsPage() {
                               <select
                                 id="settings-model-provider-picker"
                                 value={modelProviderPickerId}
-                                onChange={(event) => { setModelProviderPickerId(event.target.value); }}
+                                onChange={(event) => {
+                                  setModelProviderPickerId(event.target.value);
+                                }}
                                 className={`${INPUT_CLASS} h-9 py-1.5 text-[12px]`}
                               >
                                 <option value="">Choose provider…</option>
                                 {unconfiguredModelProviderIds.map((providerId) => (
-                                  <option key={providerId} value={providerId}>{providerId}</option>
+                                  <option key={providerId} value={providerId}>
+                                    {providerId}
+                                  </option>
                                 ))}
                                 <option value={ADD_CUSTOM_PROVIDER_ID}>Add custom provider…</option>
                               </select>
@@ -3967,699 +4085,851 @@ export function SettingsPage() {
                               </button>
                             </div>
                           </div>
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-
-                {modelProviderModalOpen && (
-                  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="Provider settings"
-                      className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border-subtle bg-base shadow-2xl"
-                    >
-                      <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
-                        <div className="space-y-1">
-                          <h3 className="text-[17px] font-medium text-primary">
-                            {modelProviderModalMode === 'custom'
-                              ? (selectedModelProvider ? `Edit provider · ${selectedModelProvider.id}` : 'Add custom provider')
-                              : `Provider · ${editableModelProviderId}`}
-                          </h3>
                         </div>
-                        <button
-                          type="button"
-                          onClick={closeModelProviderModal}
-                          disabled={modelProviderAction !== null || modelDraftAction !== null || providerCredentialAction !== null || oauthAction !== null}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Close
-                        </button>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                <div className="space-y-8 min-w-0">
-                  {(modelProviderModalMode === 'custom' || selectedModelProvider) && (
-                  <div className="space-y-4 min-w-0">
-                    <div className="space-y-1">
-                      <h3 className="text-[15px] font-medium text-primary">
-                        {selectedModelProviderId === NEW_MODEL_PROVIDER_ID
-                          ? (modelProviderDraft.id.trim() ? `New provider · ${modelProviderDraft.id.trim()}` : 'New provider')
-                          : (selectedModelProvider?.id ?? 'Provider')}
-                      </h3>
-                      <p className="ui-card-meta max-w-3xl">
-                        Use built-in ids like <span className="font-mono text-[11px]">anthropic</span>, <span className="font-mono text-[11px]">openai</span>, <span className="font-mono text-[11px]">openai-codex</span>, or <span className="font-mono text-[11px]">google</span> to override a built-in provider. Use any new id for a custom provider.
-                      </p>
-                    </div>
-
-                    <form
-                      className="space-y-4"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleSaveModelProvider();
-                      }}
-                    >
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-id">Provider id</label>
-                          <input
-                            id="settings-model-provider-id"
-                            value={modelProviderDraft.id}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, id: event.target.value })); }}
-                            className={`${INPUT_CLASS} font-mono text-[13px]`}
-                            placeholder="ollama"
-                            autoComplete="off"
-                            spellCheck={false}
-                            disabled={modelProviderAction !== null || selectedModelProviderId !== NEW_MODEL_PROVIDER_ID}
-                          />
-                        </div>
-
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-base-url">Base URL</label>
-                          <input
-                            id="settings-model-provider-base-url"
-                            value={modelProviderDraft.baseUrl}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, baseUrl: event.target.value })); }}
-                            className={`${INPUT_CLASS} font-mono text-[13px]`}
-                            placeholder="http://localhost:11434/v1"
-                            autoComplete="off"
-                            spellCheck={false}
-                            disabled={modelProviderAction !== null}
-                          />
-                        </div>
-
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-api">API</label>
-                          <select
-                            id="settings-model-provider-api"
-                            value={modelProviderDraft.api}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, api: event.target.value })); }}
-                            className={INPUT_CLASS}
-                            disabled={modelProviderAction !== null}
-                          >
-                            <option value="">Use built-in or inherit</option>
-                            {MODEL_PROVIDER_API_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-api-key">Provider API key</label>
-                          <input
-                            id="settings-model-provider-api-key"
-                            value={modelProviderDraft.apiKey}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, apiKey: event.target.value })); }}
-                            className={`${INPUT_CLASS} font-mono text-[13px]`}
-                            placeholder="ollama, ENV_VAR, or !command"
-                            autoComplete="off"
-                            spellCheck={false}
-                            disabled={modelProviderAction !== null}
-                          />
-                        </div>
-                      </div>
-
-                      <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-model-provider-auth-header">
-                        <input
-                          id="settings-model-provider-auth-header"
-                          type="checkbox"
-                          checked={modelProviderDraft.authHeader}
-                          onChange={(event) => { setModelProviderDraft((current) => ({ ...current, authHeader: event.target.checked })); }}
-                          disabled={modelProviderAction !== null}
-                          className={CHECKBOX_CLASS}
-                        />
-                        <span>Add <span className="font-mono text-[11px]">Authorization: Bearer</span> from the provider API key</span>
-                      </label>
-
-                      <div className="grid gap-4 xl:grid-cols-2">
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-headers">Headers (JSON)</label>
-                          <textarea
-                            id="settings-model-provider-headers"
-                            value={modelProviderDraft.headersText}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, headersText: event.target.value })); }}
-                            className={JSON_TEXTAREA_CLASS}
-                            placeholder={'{\n  "x-app": "personal-agent"\n}'}
-                            spellCheck={false}
-                            disabled={modelProviderAction !== null}
-                          />
-                        </div>
-
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-compat">Compat (JSON)</label>
-                          <textarea
-                            id="settings-model-provider-compat"
-                            value={modelProviderDraft.compatText}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, compatText: event.target.value })); }}
-                            className={JSON_TEXTAREA_CLASS}
-                            placeholder={'{\n  "supportsDeveloperRole": false\n}'}
-                            spellCheck={false}
-                            disabled={modelProviderAction !== null}
-                          />
-                        </div>
-
-                        <div className="space-y-2 min-w-0 xl:col-span-2">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-overrides">Model overrides (JSON)</label>
-                          <textarea
-                            id="settings-model-provider-overrides"
-                            value={modelProviderDraft.modelOverridesText}
-                            onChange={(event) => { setModelProviderDraft((current) => ({ ...current, modelOverridesText: event.target.value })); }}
-                            className={JSON_TEXTAREA_CLASS}
-                            placeholder={'{\n  "claude-sonnet-4-6": {\n    "name": "Claude Sonnet 4.6 (Proxy)"\n  }\n}'}
-                            spellCheck={false}
-                            disabled={modelProviderAction !== null}
-                          />
-                        </div>
-                      </div>
-
-                      <p className="ui-card-meta max-w-3xl">
-                        Provider API keys here use <span className="font-mono text-[11px]">models.json</span> value resolution. Leave the field blank if you prefer <span className="font-mono text-[11px]">auth.json</span>, OAuth, or environment-only auth.
-                      </p>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="submit"
-                          disabled={modelProviderAction !== null || modelProviderDraft.id.trim().length === 0}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          {modelProviderAction === 'save'
-                            ? 'Saving provider…'
-                            : selectedModelProviderId === NEW_MODEL_PROVIDER_ID
-                              ? 'Create provider'
-                              : 'Save provider'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { void handleDeleteModelProvider(); }}
-                          disabled={modelProviderAction !== null || selectedModelProviderId === NEW_MODEL_PROVIDER_ID || !selectedModelProvider}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          {modelProviderAction === 'delete' ? 'Removing…' : 'Remove provider'}
-                        </button>
-                      </div>
-
-                      {modelProviderMessage && <p className="text-[12px] text-success">{modelProviderMessage}</p>}
-                      {modelProviderEditorError && <p className="text-[12px] text-danger">{modelProviderEditorError}</p>}
-                    </form>
-                  </div>
-                  )}
-
-                  <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-[15px] font-medium text-primary">Models</h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => { startEditingProviderModel(NEW_MODEL_ID); }}
-                        disabled={!editableModelProviderId || modelDraftAction !== null}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Add model
-                      </button>
-                    </div>
-
-                    {editableModelProviderId ? (
-                      <>
-                        {builtInProviderModels.length > 0 && (
-                          <div className="space-y-1.5">
-                            <h4 className="text-[12px] font-medium text-secondary">Built-in models</h4>
-                            <div className="grid gap-x-6 gap-y-1 md:grid-cols-2">
-                              {builtInProviderModels.map((model) => (
-                                <div key={`${model.provider}/${model.id}`} className="flex min-w-0 items-baseline gap-2 py-0.5 text-[12px]">
-                                  <span className="truncate font-medium text-primary">{model.id}</span>
-                                  <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <h4 className="text-[12px] font-medium text-secondary">Additional models</h4>
-                        {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
-                          <div className="space-y-px">
-                            {selectedModelProvider.models.map((model) => (
-                              <div
-                                key={model.id}
-                                className="group ui-list-row ui-list-row-hover justify-between px-2 py-1.5"
-                              >
-                                <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
-                                  <span className="truncate font-medium text-primary">{model.id}</span>
-                                  <span className="truncate text-dim">{formatProviderModelSummary(model)}</span>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => { startEditingProviderModel(model.id); }}
-                                    className={ACTION_BUTTON_CLASS}
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { void handleDeleteProviderModel(model.id); }}
-                                    disabled={modelDraftAction !== null}
-                                    className={ACTION_BUTTON_CLASS}
-                                  >
-                                    {modelDraftAction === 'delete' && editingModelId === model.id ? 'Removing…' : 'Remove'}
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[12px] text-dim">None yet.</p>
-                        )}
-                        </div>
-
-                        {modelDraftMessage && <p className="text-[12px] text-success">{modelDraftMessage}</p>}
-                        {modelDraftError && <p className="text-[12px] text-danger">{modelDraftError}</p>}
-
-                        {editingModelId === NEW_MODEL_ID && (
-                          <form
-                            className="flex flex-col gap-2 border-t border-border-subtle pt-4 sm:flex-row sm:items-end"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void handleSaveProviderModel();
-                            }}
-                          >
-                            <div className="min-w-0 flex-1 space-y-1.5">
-                              <label className="ui-card-meta" htmlFor="settings-provider-model-id">Model id</label>
-                              <input
-                                id="settings-provider-model-id"
-                                value={modelDraft.id}
-                                onChange={(event) => { setModelDraft((current) => ({ ...current, id: event.target.value })); }}
-                                className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                placeholder="gpt-5.6"
-                                autoComplete="off"
-                                spellCheck={false}
-                                disabled={modelDraftAction !== null}
-                                autoFocus
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                type="submit"
-                                disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                {modelDraftAction === 'save' ? 'Adding…' : 'Add model'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingModelId(null);
-                                  setModelDraft(createModelEditorDraft(null));
-                                  setModelDraftError(null);
-                                  setModelDraftMessage(null);
-                                }}
-                                disabled={modelDraftAction !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </form>
-                        )}
-
-                        {editingProviderModel && (
-                          <form
-                            className="space-y-4 border-t border-border-subtle pt-6"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void handleSaveProviderModel();
-                            }}
-                          >
-                            <div className="space-y-1">
-                              <h4 className="text-[13px] font-medium text-primary">
-                                Edit {editingProviderModel.id}
-                              </h4>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-id">Model id</label>
-                                <input
-                                  id="settings-provider-model-id"
-                                  value={modelDraft.id}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, id: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                  placeholder="llama3.1:8b"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null || editingModelId !== NEW_MODEL_ID}
-                                />
-                              </div>
-
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-name">Name</label>
-                                <input
-                                  id="settings-provider-model-name"
-                                  value={modelDraft.name}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, name: event.target.value })); }}
-                                  className={INPUT_CLASS}
-                                  placeholder="Llama 3.1 8B"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-api">API</label>
-                                <select
-                                  id="settings-provider-model-api"
-                                  value={modelDraft.api}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, api: event.target.value })); }}
-                                  className={INPUT_CLASS}
-                                  disabled={modelDraftAction !== null}
-                                >
-                                  <option value="">Inherit provider API</option>
-                                  {MODEL_PROVIDER_API_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-base-url">Base URL override</label>
-                                <input
-                                  id="settings-provider-model-base-url"
-                                  value={modelDraft.baseUrl}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, baseUrl: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                  placeholder="https://proxy.example.com/v1"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-1.5 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-context">Context window</label>
-                                <input
-                                  id="settings-provider-model-context"
-                                  value={modelDraft.contextWindow}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, contextWindow: event.target.value })); }}
-                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                  inputMode="numeric"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-1.5 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-max-tokens">Max tokens</label>
-                                <input
-                                  id="settings-provider-model-max-tokens"
-                                  value={modelDraft.maxTokens}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, maxTokens: event.target.value })); }}
-                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                  inputMode="numeric"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-4">
-                              <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-provider-model-reasoning">
-                                <input
-                                  id="settings-provider-model-reasoning"
-                                  type="checkbox"
-                                  checked={modelDraft.reasoning}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, reasoning: event.target.checked })); }}
-                                  disabled={modelDraftAction !== null}
-                                  className={CHECKBOX_CLASS}
-                                />
-                                <span>Reasoning capable</span>
-                              </label>
-
-                              <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-provider-model-images">
-                                <input
-                                  id="settings-provider-model-images"
-                                  type="checkbox"
-                                  checked={modelDraft.acceptsImages}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, acceptsImages: event.target.checked })); }}
-                                  disabled={modelDraftAction !== null}
-                                  className={CHECKBOX_CLASS}
-                                />
-                                <span>Accept images</span>
-                              </label>
-                            </div>
-
-                            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-                              <div className="space-y-1.5 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-cost-input">Input cost / 1M</label>
-                                <input
-                                  id="settings-provider-model-cost-input"
-                                  value={modelDraft.costInput}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, costInput: event.target.value })); }}
-                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                  inputMode="decimal"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-1.5 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-cost-output">Output cost / 1M</label>
-                                <input
-                                  id="settings-provider-model-cost-output"
-                                  value={modelDraft.costOutput}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, costOutput: event.target.value })); }}
-                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                  inputMode="decimal"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-1.5 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-read">Cache read / 1M</label>
-                                <input
-                                  id="settings-provider-model-cost-cache-read"
-                                  value={modelDraft.costCacheRead}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, costCacheRead: event.target.value })); }}
-                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                  inputMode="decimal"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-1.5 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-write">Cache write / 1M</label>
-                                <input
-                                  id="settings-provider-model-cost-cache-write"
-                                  value={modelDraft.costCacheWrite}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, costCacheWrite: event.target.value })); }}
-                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                  inputMode="decimal"
-                                  autoComplete="off"
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid gap-4 lg:grid-cols-2">
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-headers">Headers (JSON)</label>
-                                <textarea
-                                  id="settings-provider-model-headers"
-                                  value={modelDraft.headersText}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, headersText: event.target.value })); }}
-                                  className={JSON_TEXTAREA_CLASS}
-                                  placeholder={'{\n  "x-provider-key": "HEADER_VALUE"\n}'}
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor="settings-provider-model-compat">Compat (JSON)</label>
-                                <textarea
-                                  id="settings-provider-model-compat"
-                                  value={modelDraft.compatText}
-                                  onChange={(event) => { setModelDraft((current) => ({ ...current, compatText: event.target.value })); }}
-                                  className={JSON_TEXTAREA_CLASS}
-                                  placeholder={'{\n  "supportsReasoningEffort": false\n}'}
-                                  spellCheck={false}
-                                  disabled={modelDraftAction !== null}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="submit"
-                                disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                {modelDraftAction === 'save'
-                                  ? 'Saving model…'
-                                  : 'Save model'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingModelId(null);
-                                  setModelDraft(createModelEditorDraft(null));
-                                  setModelDraftError(null);
-                                  setModelDraftMessage(null);
-                                }}
-                                disabled={modelDraftAction !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-
-                          </form>
-                        )}
                       </>
-                    ) : (
-                      <p className="ui-card-meta">Select a provider, or type a provider id above, to edit its models.</p>
-                    )}
+                    ) : null}
                   </div>
 
-                  <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
-                    <div>
-                      <h3 className="text-[15px] font-medium text-primary">Credentials</h3>
-                    </div>
-
-                    {modalProviderAuth ? (
-                      <div className="space-y-2.5">
-                        <p className="text-[12px] text-secondary">{formatProviderAuthStatus(modalProviderAuth)}</p>
-
-                        {canProviderUseApiKey(modalProviderAuth) ? (
-                          <div className="space-y-2">
-                            <label className="ui-card-meta" htmlFor="settings-provider-api-key-modal">API key</label>
-                            <input
-                              id="settings-provider-api-key-modal"
-                              type="password"
-                              value={providerApiKey}
-                              onChange={(event) => { setProviderApiKey(event.target.value); }}
-                              className={INPUT_CLASS}
-                              placeholder="sk-... or op://vault/item/field"
-                              autoComplete="off"
-                              spellCheck={false}
-                              disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running'}
-                            />
+                  {modelProviderModalOpen && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+                      <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Provider settings"
+                        className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border-subtle bg-base shadow-2xl"
+                      >
+                        <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
+                          <div className="space-y-1">
+                            <h3 className="text-[17px] font-medium text-primary">
+                              {modelProviderModalMode === 'custom'
+                                ? selectedModelProvider
+                                  ? `Edit provider · ${selectedModelProvider.id}`
+                                  : 'Add custom provider'
+                                : `Provider · ${editableModelProviderId}`}
+                            </h3>
                           </div>
-                        ) : (
-                          null
-                        )}
-
-                        <div className="flex flex-wrap gap-2">
-                          {canProviderUseApiKey(modalProviderAuth) && (
-                            <button
-                              type="button"
-                              onClick={() => { void handleSaveProviderApiKey(); }}
-                              disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running' || providerApiKey.trim().length === 0}
-                              className={ACTION_BUTTON_CLASS}
-                            >
-                              {providerCredentialAction === 'saveKey' ? 'Saving key…' : 'Save API key'}
-                            </button>
-                          )}
                           <button
                             type="button"
-                            onClick={() => { void handleRemoveProviderCredential(); }}
-                            disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running' || !modalProviderAuth.hasStoredCredential}
+                            onClick={closeModelProviderModal}
+                            disabled={
+                              modelProviderAction !== null ||
+                              modelDraftAction !== null ||
+                              providerCredentialAction !== null ||
+                              oauthAction !== null
+                            }
                             className={ACTION_BUTTON_CLASS}
                           >
-                            {providerCredentialAction === 'remove' ? 'Removing…' : 'Remove stored credential'}
+                            Close
                           </button>
-                          {modalProviderAuth.oauthSupported && (
-                            <button
-                              type="button"
-                              onClick={() => { void handleStartProviderOAuthLogin(); }}
-                              disabled={providerCredentialAction !== null || oauthAction !== null || selectedProviderLogin?.status === 'running'}
-                              className={ACTION_BUTTON_CLASS}
-                            >
-                              {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${modalProviderAuth.id})`}
-                            </button>
-                          )}
                         </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+                          <div className="space-y-8 min-w-0">
+                            {(modelProviderModalMode === 'custom' || selectedModelProvider) && (
+                              <div className="space-y-4 min-w-0">
+                                <div className="space-y-1">
+                                  <h3 className="text-[15px] font-medium text-primary">
+                                    {selectedModelProviderId === NEW_MODEL_PROVIDER_ID
+                                      ? modelProviderDraft.id.trim()
+                                        ? `New provider · ${modelProviderDraft.id.trim()}`
+                                        : 'New provider'
+                                      : (selectedModelProvider?.id ?? 'Provider')}
+                                  </h3>
+                                  <p className="ui-card-meta max-w-3xl">
+                                    Use built-in ids like <span className="font-mono text-[11px]">anthropic</span>,{' '}
+                                    <span className="font-mono text-[11px]">openai</span>,{' '}
+                                    <span className="font-mono text-[11px]">openai-codex</span>, or{' '}
+                                    <span className="font-mono text-[11px]">google</span> to override a built-in provider. Use any new id
+                                    for a custom provider.
+                                  </p>
+                                </div>
 
-                        {selectedProviderLogin?.status === 'running' && (
-                          <div className="space-y-2 border-t border-border-subtle pt-3">
-                            <p className="ui-card-meta">
-                              OAuth login running for {selectedProviderLogin.providerName}.
-                              {selectedProviderLogin.authUrl ? ` Opened ${selectedProviderLogin.authUrl}` : ''}
-                            </p>
-                            {selectedProviderLogin.progress.length > 0 && (
-                              <p className="ui-card-meta">{selectedProviderLogin.progress[selectedProviderLogin.progress.length - 1]}</p>
+                                <form
+                                  className="space-y-4"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void handleSaveModelProvider();
+                                  }}
+                                >
+                                  <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2 min-w-0">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-id">
+                                        Provider id
+                                      </label>
+                                      <input
+                                        id="settings-model-provider-id"
+                                        value={modelProviderDraft.id}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, id: event.target.value }));
+                                        }}
+                                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                        placeholder="ollama"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        disabled={modelProviderAction !== null || selectedModelProviderId !== NEW_MODEL_PROVIDER_ID}
+                                      />
+                                    </div>
+
+                                    <div className="space-y-2 min-w-0">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-base-url">
+                                        Base URL
+                                      </label>
+                                      <input
+                                        id="settings-model-provider-base-url"
+                                        value={modelProviderDraft.baseUrl}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, baseUrl: event.target.value }));
+                                        }}
+                                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                        placeholder="http://localhost:11434/v1"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        disabled={modelProviderAction !== null}
+                                      />
+                                    </div>
+
+                                    <div className="space-y-2 min-w-0">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-api">
+                                        API
+                                      </label>
+                                      <select
+                                        id="settings-model-provider-api"
+                                        value={modelProviderDraft.api}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, api: event.target.value }));
+                                        }}
+                                        className={INPUT_CLASS}
+                                        disabled={modelProviderAction !== null}
+                                      >
+                                        <option value="">Use built-in or inherit</option>
+                                        {MODEL_PROVIDER_API_OPTIONS.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    <div className="space-y-2 min-w-0">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-api-key">
+                                        Provider API key
+                                      </label>
+                                      <input
+                                        id="settings-model-provider-api-key"
+                                        value={modelProviderDraft.apiKey}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, apiKey: event.target.value }));
+                                        }}
+                                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                        placeholder="ollama, ENV_VAR, or !command"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        disabled={modelProviderAction !== null}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <label
+                                    className="inline-flex items-center gap-3 text-[14px] text-primary"
+                                    htmlFor="settings-model-provider-auth-header"
+                                  >
+                                    <input
+                                      id="settings-model-provider-auth-header"
+                                      type="checkbox"
+                                      checked={modelProviderDraft.authHeader}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, authHeader: event.target.checked }));
+                                      }}
+                                      disabled={modelProviderAction !== null}
+                                      className={CHECKBOX_CLASS}
+                                    />
+                                    <span>
+                                      Add <span className="font-mono text-[11px]">Authorization: Bearer</span> from the provider API key
+                                    </span>
+                                  </label>
+
+                                  <div className="grid gap-4 xl:grid-cols-2">
+                                    <div className="space-y-2 min-w-0">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-headers">
+                                        Headers (JSON)
+                                      </label>
+                                      <textarea
+                                        id="settings-model-provider-headers"
+                                        value={modelProviderDraft.headersText}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, headersText: event.target.value }));
+                                        }}
+                                        className={JSON_TEXTAREA_CLASS}
+                                        placeholder={'{\n  "x-app": "personal-agent"\n}'}
+                                        spellCheck={false}
+                                        disabled={modelProviderAction !== null}
+                                      />
+                                    </div>
+
+                                    <div className="space-y-2 min-w-0">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-compat">
+                                        Compat (JSON)
+                                      </label>
+                                      <textarea
+                                        id="settings-model-provider-compat"
+                                        value={modelProviderDraft.compatText}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, compatText: event.target.value }));
+                                        }}
+                                        className={JSON_TEXTAREA_CLASS}
+                                        placeholder={'{\n  "supportsDeveloperRole": false\n}'}
+                                        spellCheck={false}
+                                        disabled={modelProviderAction !== null}
+                                      />
+                                    </div>
+
+                                    <div className="space-y-2 min-w-0 xl:col-span-2">
+                                      <label className="ui-card-meta" htmlFor="settings-model-provider-overrides">
+                                        Model overrides (JSON)
+                                      </label>
+                                      <textarea
+                                        id="settings-model-provider-overrides"
+                                        value={modelProviderDraft.modelOverridesText}
+                                        onChange={(event) => {
+                                          setModelProviderDraft((current) => ({ ...current, modelOverridesText: event.target.value }));
+                                        }}
+                                        className={JSON_TEXTAREA_CLASS}
+                                        placeholder={'{\n  "claude-sonnet-4-6": {\n    "name": "Claude Sonnet 4.6 (Proxy)"\n  }\n}'}
+                                        spellCheck={false}
+                                        disabled={modelProviderAction !== null}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <p className="ui-card-meta max-w-3xl">
+                                    Provider API keys here use <span className="font-mono text-[11px]">models.json</span> value resolution.
+                                    Leave the field blank if you prefer <span className="font-mono text-[11px]">auth.json</span>, OAuth, or
+                                    environment-only auth.
+                                  </p>
+
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="submit"
+                                      disabled={modelProviderAction !== null || modelProviderDraft.id.trim().length === 0}
+                                      className={ACTION_BUTTON_CLASS}
+                                    >
+                                      {modelProviderAction === 'save'
+                                        ? 'Saving provider…'
+                                        : selectedModelProviderId === NEW_MODEL_PROVIDER_ID
+                                          ? 'Create provider'
+                                          : 'Save provider'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void handleDeleteModelProvider();
+                                      }}
+                                      disabled={
+                                        modelProviderAction !== null ||
+                                        selectedModelProviderId === NEW_MODEL_PROVIDER_ID ||
+                                        !selectedModelProvider
+                                      }
+                                      className={ACTION_BUTTON_CLASS}
+                                    >
+                                      {modelProviderAction === 'delete' ? 'Removing…' : 'Remove provider'}
+                                    </button>
+                                  </div>
+
+                                  {modelProviderMessage && <p className="text-[12px] text-success">{modelProviderMessage}</p>}
+                                  {modelProviderEditorError && <p className="text-[12px] text-danger">{modelProviderEditorError}</p>}
+                                </form>
+                              </div>
                             )}
-                            {selectedProviderLogin.prompt && (
-                              <form
-                                className="flex flex-col gap-2 sm:flex-row sm:items-end"
-                                onSubmit={(event) => {
-                                  event.preventDefault();
-                                  void handleSubmitProviderOAuthInput();
-                                }}
-                              >
-                                <div className="min-w-0 flex-1 space-y-1.5">
-                                  <label className="ui-card-meta" htmlFor="settings-provider-oauth-input">{selectedProviderLogin.prompt.message}</label>
-                                  <input
-                                    id="settings-provider-oauth-input"
-                                    value={oauthInputValue}
-                                    onChange={(event) => { setOauthInputValue(event.target.value); }}
-                                    className={INPUT_CLASS}
-                                    placeholder={selectedProviderLogin.prompt.placeholder}
-                                    autoComplete="off"
-                                    disabled={oauthAction !== null}
-                                  />
+
+                            <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h3 className="text-[15px] font-medium text-primary">Models</h3>
                                 </div>
                                 <button
-                                  type="submit"
-                                  disabled={oauthAction !== null || (!selectedProviderLogin.prompt.allowEmpty && oauthInputValue.trim().length === 0)}
+                                  type="button"
+                                  onClick={() => {
+                                    startEditingProviderModel(NEW_MODEL_ID);
+                                  }}
+                                  disabled={!editableModelProviderId || modelDraftAction !== null}
                                   className={ACTION_BUTTON_CLASS}
                                 >
-                                  {oauthAction === 'submit' ? 'Submitting…' : 'Submit'}
+                                  Add model
                                 </button>
-                              </form>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => { void handleCancelProviderOAuthLogin(); }}
-                              disabled={oauthAction !== null}
-                              className={ACTION_BUTTON_CLASS}
-                            >
-                              {oauthAction === 'cancel' ? 'Cancelling…' : 'Cancel OAuth login'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : editableModelProviderId ? (
-                      <p className="ui-card-meta">Save or select the provider before managing stored credentials.</p>
-                    ) : (
-                      <p className="ui-card-meta">Choose or create a provider first.</p>
-                    )}
+                              </div>
 
-                    {providerCredentialNotice && <p className="text-[12px] text-success">{providerCredentialNotice}</p>}
-                    {providerCredentialError && <p className="text-[12px] text-danger">{providerCredentialError}</p>}
-                    {oauthError && <p className="text-[12px] text-danger">{oauthError}</p>}
-                    {selectedProviderLogin?.status === 'failed' && selectedProviderLogin.error && (
-                      <p className="text-[12px] text-danger">OAuth login failed: {selectedProviderLogin.error}</p>
-                    )}
-                  </div>
-                </div>
+                              {editableModelProviderId ? (
+                                <>
+                                  {builtInProviderModels.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      <h4 className="text-[12px] font-medium text-secondary">Built-in models</h4>
+                                      <div className="grid gap-x-6 gap-y-1 md:grid-cols-2">
+                                        {builtInProviderModels.map((model) => (
+                                          <div
+                                            key={`${model.provider}/${model.id}`}
+                                            className="flex min-w-0 items-baseline gap-2 py-0.5 text-[12px]"
+                                          >
+                                            <span className="truncate font-medium text-primary">{model.id}</span>
+                                            <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-1.5">
+                                    <h4 className="text-[12px] font-medium text-secondary">Additional models</h4>
+                                    {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
+                                      <div className="space-y-px">
+                                        {selectedModelProvider.models.map((model) => (
+                                          <div key={model.id} className="group ui-list-row ui-list-row-hover justify-between px-2 py-1.5">
+                                            <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
+                                              <span className="truncate font-medium text-primary">{model.id}</span>
+                                              <span className="truncate text-dim">{formatProviderModelSummary(model)}</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  startEditingProviderModel(model.id);
+                                                }}
+                                                className={ACTION_BUTTON_CLASS}
+                                              >
+                                                Edit
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  void handleDeleteProviderModel(model.id);
+                                                }}
+                                                disabled={modelDraftAction !== null}
+                                                className={ACTION_BUTTON_CLASS}
+                                              >
+                                                {modelDraftAction === 'delete' && editingModelId === model.id ? 'Removing…' : 'Remove'}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[12px] text-dim">None yet.</p>
+                                    )}
+                                  </div>
+
+                                  {modelDraftMessage && <p className="text-[12px] text-success">{modelDraftMessage}</p>}
+                                  {modelDraftError && <p className="text-[12px] text-danger">{modelDraftError}</p>}
+
+                                  {editingModelId === NEW_MODEL_ID && (
+                                    <form
+                                      className="flex flex-col gap-2 border-t border-border-subtle pt-4 sm:flex-row sm:items-end"
+                                      onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void handleSaveProviderModel();
+                                      }}
+                                    >
+                                      <div className="min-w-0 flex-1 space-y-1.5">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-id">
+                                          Model id
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-id"
+                                          value={modelDraft.id}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, id: event.target.value }));
+                                          }}
+                                          className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                          placeholder="gpt-5.6"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                          autoFocus
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="submit"
+                                          disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
+                                          className={ACTION_BUTTON_CLASS}
+                                        >
+                                          {modelDraftAction === 'save' ? 'Adding…' : 'Add model'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingModelId(null);
+                                            setModelDraft(createModelEditorDraft(null));
+                                            setModelDraftError(null);
+                                            setModelDraftMessage(null);
+                                          }}
+                                          disabled={modelDraftAction !== null}
+                                          className={ACTION_BUTTON_CLASS}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                  {editingProviderModel && (
+                                    <form
+                                      className="space-y-4 border-t border-border-subtle pt-6"
+                                      onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void handleSaveProviderModel();
+                                      }}
+                                    >
+                                      <div className="space-y-1">
+                                        <h4 className="text-[13px] font-medium text-primary">Edit {editingProviderModel.id}</h4>
+                                      </div>
+
+                                      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                                        <div className="space-y-2 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-id">
+                                            Model id
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-id"
+                                            value={modelDraft.id}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, id: event.target.value }));
+                                            }}
+                                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                            placeholder="llama3.1:8b"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null || editingModelId !== NEW_MODEL_ID}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-2 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-name">
+                                            Name
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-name"
+                                            value={modelDraft.name}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, name: event.target.value }));
+                                            }}
+                                            className={INPUT_CLASS}
+                                            placeholder="Llama 3.1 8B"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-2 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-api">
+                                            API
+                                          </label>
+                                          <select
+                                            id="settings-provider-model-api"
+                                            value={modelDraft.api}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, api: event.target.value }));
+                                            }}
+                                            className={INPUT_CLASS}
+                                            disabled={modelDraftAction !== null}
+                                          >
+                                            <option value="">Inherit provider API</option>
+                                            {MODEL_PROVIDER_API_OPTIONS.map((option) => (
+                                              <option key={option.value} value={option.value}>
+                                                {option.label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        <div className="space-y-2 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-base-url">
+                                            Base URL override
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-base-url"
+                                            value={modelDraft.baseUrl}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, baseUrl: event.target.value }));
+                                            }}
+                                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                            placeholder="https://proxy.example.com/v1"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1.5 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-context">
+                                            Context window
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-context"
+                                            value={modelDraft.contextWindow}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, contextWindow: event.target.value }));
+                                            }}
+                                            className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                            inputMode="numeric"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1.5 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-max-tokens">
+                                            Max tokens
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-max-tokens"
+                                            value={modelDraft.maxTokens}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, maxTokens: event.target.value }));
+                                            }}
+                                            className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                            inputMode="numeric"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="flex flex-wrap gap-4">
+                                        <label
+                                          className="inline-flex items-center gap-3 text-[14px] text-primary"
+                                          htmlFor="settings-provider-model-reasoning"
+                                        >
+                                          <input
+                                            id="settings-provider-model-reasoning"
+                                            type="checkbox"
+                                            checked={modelDraft.reasoning}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, reasoning: event.target.checked }));
+                                            }}
+                                            disabled={modelDraftAction !== null}
+                                            className={CHECKBOX_CLASS}
+                                          />
+                                          <span>Reasoning capable</span>
+                                        </label>
+
+                                        <label
+                                          className="inline-flex items-center gap-3 text-[14px] text-primary"
+                                          htmlFor="settings-provider-model-images"
+                                        >
+                                          <input
+                                            id="settings-provider-model-images"
+                                            type="checkbox"
+                                            checked={modelDraft.acceptsImages}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, acceptsImages: event.target.checked }));
+                                            }}
+                                            disabled={modelDraftAction !== null}
+                                            className={CHECKBOX_CLASS}
+                                          />
+                                          <span>Accept images</span>
+                                        </label>
+                                      </div>
+
+                                      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+                                        <div className="space-y-1.5 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-cost-input">
+                                            Input cost / 1M
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-cost-input"
+                                            value={modelDraft.costInput}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, costInput: event.target.value }));
+                                            }}
+                                            className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                            inputMode="decimal"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1.5 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-cost-output">
+                                            Output cost / 1M
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-cost-output"
+                                            value={modelDraft.costOutput}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, costOutput: event.target.value }));
+                                            }}
+                                            className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                            inputMode="decimal"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1.5 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-read">
+                                            Cache read / 1M
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-cost-cache-read"
+                                            value={modelDraft.costCacheRead}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, costCacheRead: event.target.value }));
+                                            }}
+                                            className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                            inputMode="decimal"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1.5 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-write">
+                                            Cache write / 1M
+                                          </label>
+                                          <input
+                                            id="settings-provider-model-cost-cache-write"
+                                            value={modelDraft.costCacheWrite}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, costCacheWrite: event.target.value }));
+                                            }}
+                                            className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                            inputMode="decimal"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="grid gap-4 lg:grid-cols-2">
+                                        <div className="space-y-2 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-headers">
+                                            Headers (JSON)
+                                          </label>
+                                          <textarea
+                                            id="settings-provider-model-headers"
+                                            value={modelDraft.headersText}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, headersText: event.target.value }));
+                                            }}
+                                            className={JSON_TEXTAREA_CLASS}
+                                            placeholder={'{\n  "x-provider-key": "HEADER_VALUE"\n}'}
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-2 min-w-0">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-model-compat">
+                                            Compat (JSON)
+                                          </label>
+                                          <textarea
+                                            id="settings-provider-model-compat"
+                                            value={modelDraft.compatText}
+                                            onChange={(event) => {
+                                              setModelDraft((current) => ({ ...current, compatText: event.target.value }));
+                                            }}
+                                            className={JSON_TEXTAREA_CLASS}
+                                            placeholder={'{\n  "supportsReasoningEffort": false\n}'}
+                                            spellCheck={false}
+                                            disabled={modelDraftAction !== null}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="flex flex-wrap gap-2">
+                                        <button
+                                          type="submit"
+                                          disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
+                                          className={ACTION_BUTTON_CLASS}
+                                        >
+                                          {modelDraftAction === 'save' ? 'Saving model…' : 'Save model'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingModelId(null);
+                                            setModelDraft(createModelEditorDraft(null));
+                                            setModelDraftError(null);
+                                            setModelDraftMessage(null);
+                                          }}
+                                          disabled={modelDraftAction !== null}
+                                          className={ACTION_BUTTON_CLASS}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+                                </>
+                              ) : (
+                                <p className="ui-card-meta">Select a provider, or type a provider id above, to edit its models.</p>
+                              )}
+                            </div>
+
+                            <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
+                              <div>
+                                <h3 className="text-[15px] font-medium text-primary">Credentials</h3>
+                              </div>
+
+                              {modalProviderAuth ? (
+                                <div className="space-y-2.5">
+                                  <p className="text-[12px] text-secondary">{formatProviderAuthStatus(modalProviderAuth)}</p>
+
+                                  {canProviderUseApiKey(modalProviderAuth) ? (
+                                    <div className="space-y-2">
+                                      <label className="ui-card-meta" htmlFor="settings-provider-api-key-modal">
+                                        API key
+                                      </label>
+                                      <input
+                                        id="settings-provider-api-key-modal"
+                                        type="password"
+                                        value={providerApiKey}
+                                        onChange={(event) => {
+                                          setProviderApiKey(event.target.value);
+                                        }}
+                                        className={INPUT_CLASS}
+                                        placeholder="sk-... or op://vault/item/field"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running'}
+                                      />
+                                    </div>
+                                  ) : null}
+
+                                  <div className="flex flex-wrap gap-2">
+                                    {canProviderUseApiKey(modalProviderAuth) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void handleSaveProviderApiKey();
+                                        }}
+                                        disabled={
+                                          providerCredentialAction !== null ||
+                                          oauthLoginState?.status === 'running' ||
+                                          providerApiKey.trim().length === 0
+                                        }
+                                        className={ACTION_BUTTON_CLASS}
+                                      >
+                                        {providerCredentialAction === 'saveKey' ? 'Saving key…' : 'Save API key'}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void handleRemoveProviderCredential();
+                                      }}
+                                      disabled={
+                                        providerCredentialAction !== null ||
+                                        oauthLoginState?.status === 'running' ||
+                                        !modalProviderAuth.hasStoredCredential
+                                      }
+                                      className={ACTION_BUTTON_CLASS}
+                                    >
+                                      {providerCredentialAction === 'remove' ? 'Removing…' : 'Remove stored credential'}
+                                    </button>
+                                    {modalProviderAuth.oauthSupported && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void handleStartProviderOAuthLogin();
+                                        }}
+                                        disabled={
+                                          providerCredentialAction !== null ||
+                                          oauthAction !== null ||
+                                          selectedProviderLogin?.status === 'running'
+                                        }
+                                        className={ACTION_BUTTON_CLASS}
+                                      >
+                                        {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${modalProviderAuth.id})`}
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {selectedProviderLogin?.status === 'running' && (
+                                    <div className="space-y-2 border-t border-border-subtle pt-3">
+                                      <p className="ui-card-meta">
+                                        OAuth login running for {selectedProviderLogin.providerName}.
+                                        {selectedProviderLogin.authUrl ? ` Opened ${selectedProviderLogin.authUrl}` : ''}
+                                      </p>
+                                      {selectedProviderLogin.progress.length > 0 && (
+                                        <p className="ui-card-meta">
+                                          {selectedProviderLogin.progress[selectedProviderLogin.progress.length - 1]}
+                                        </p>
+                                      )}
+                                      {selectedProviderLogin.prompt && (
+                                        <form
+                                          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                                          onSubmit={(event) => {
+                                            event.preventDefault();
+                                            void handleSubmitProviderOAuthInput();
+                                          }}
+                                        >
+                                          <div className="min-w-0 flex-1 space-y-1.5">
+                                            <label className="ui-card-meta" htmlFor="settings-provider-oauth-input">
+                                              {selectedProviderLogin.prompt.message}
+                                            </label>
+                                            <input
+                                              id="settings-provider-oauth-input"
+                                              value={oauthInputValue}
+                                              onChange={(event) => {
+                                                setOauthInputValue(event.target.value);
+                                              }}
+                                              className={INPUT_CLASS}
+                                              placeholder={selectedProviderLogin.prompt.placeholder}
+                                              autoComplete="off"
+                                              disabled={oauthAction !== null}
+                                            />
+                                          </div>
+                                          <button
+                                            type="submit"
+                                            disabled={
+                                              oauthAction !== null ||
+                                              (!selectedProviderLogin.prompt.allowEmpty && oauthInputValue.trim().length === 0)
+                                            }
+                                            className={ACTION_BUTTON_CLASS}
+                                          >
+                                            {oauthAction === 'submit' ? 'Submitting…' : 'Submit'}
+                                          </button>
+                                        </form>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void handleCancelProviderOAuthLogin();
+                                        }}
+                                        disabled={oauthAction !== null}
+                                        className={ACTION_BUTTON_CLASS}
+                                      >
+                                        {oauthAction === 'cancel' ? 'Cancelling…' : 'Cancel OAuth login'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : editableModelProviderId ? (
+                                <p className="ui-card-meta">Save or select the provider before managing stored credentials.</p>
+                              ) : (
+                                <p className="ui-card-meta">Choose or create a provider first.</p>
+                              )}
+
+                              {providerCredentialNotice && <p className="text-[12px] text-success">{providerCredentialNotice}</p>}
+                              {providerCredentialError && <p className="text-[12px] text-danger">{providerCredentialError}</p>}
+                              {oauthError && <p className="text-[12px] text-danger">{oauthError}</p>}
+                              {selectedProviderLogin?.status === 'failed' && selectedProviderLogin.error && (
+                                <p className="text-[12px] text-danger">OAuth login failed: {selectedProviderLogin.error}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 </div>
               </SettingsPanel>
-
-
             </div>
           </SettingsSection>
 
@@ -4667,7 +4937,7 @@ export function SettingsPage() {
 
           <DesktopConnectionsSettingsPanel />
 
-          {(desktopEnvironment?.isElectron || isDesktopShell()) ? <DesktopKeyboardShortcutsSettingsSection /> : null}
+          {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
 
           <SettingsSection
             id="settings-interface"
@@ -4675,21 +4945,21 @@ export function SettingsPage() {
             description="Browser-local UI state, saved layout preferences, and reset tools."
             className="order-6"
           >
-            <SettingsPanel
-              title="Reset saved UI preferences"
-              description="Clears saved UI state only. Conversations and data stay intact."
-            >
+            <SettingsPanel title="Reset saved UI preferences" description="Clears saved UI state only. Conversations and data stay intact.">
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
 
               <div className="space-y-6">
                 <div className="space-y-2 min-w-0">
                   <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
                   <p className="ui-card-meta">
-                    Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files), and per-doc context rail widths, then reloads the page.
+                    Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files), and per-doc context rail
+                    widths, then reloads the page.
                   </p>
                   <button
                     type="button"
-                    onClick={() => { void handleReset('layout'); }}
+                    onClick={() => {
+                      void handleReset('layout');
+                    }}
                     disabled={resetting !== null}
                     className={ACTION_BUTTON_CLASS}
                   >
@@ -4700,11 +4970,14 @@ export function SettingsPage() {
                 <div className="space-y-2 border-t border-border-subtle pt-6 min-w-0">
                   <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
                   <p className="ui-card-meta">
-                    Clears stored open-tab state, seen message counts, and composer history in this app, plus the durable open-tab snapshot stored by the desktop UI, then reloads the page.
+                    Clears stored open-tab state, seen message counts, and composer history in this app, plus the durable open-tab snapshot
+                    stored by the desktop UI, then reloads the page.
                   </p>
                   <button
                     type="button"
-                    onClick={() => { void handleReset('conversation'); }}
+                    onClick={() => {
+                      void handleReset('conversation');
+                    }}
                     disabled={resetting !== null}
                     className={ACTION_BUTTON_CLASS}
                   >

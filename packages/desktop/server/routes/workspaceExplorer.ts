@@ -1,8 +1,21 @@
-import type { Express } from 'express';
 import { watch } from 'node:fs';
-import type { ServerRouteContext } from './context.js';
-import { createWorkspaceFolder, deleteWorkspacePath, listWorkspaceDirectory, moveWorkspacePath, readUncommittedDiff, readWorkspaceDiffOverlay, readWorkspaceFile, readWorkspaceRootSnapshot, renameWorkspacePath, writeWorkspaceFile } from '../workspace/workspaceExplorer.js';
+
+import type { Express } from 'express';
+
 import { logError } from '../shared/logging.js';
+import {
+  createWorkspaceFolder,
+  deleteWorkspacePath,
+  listWorkspaceDirectory,
+  moveWorkspacePath,
+  readUncommittedDiff,
+  readWorkspaceDiffOverlay,
+  readWorkspaceFile,
+  readWorkspaceRootSnapshot,
+  renameWorkspacePath,
+  writeWorkspaceFile,
+} from '../workspace/workspaceExplorer.js';
+import type { ServerRouteContext } from './context.js';
 
 function resolveRequestCwd(context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>, cwd: unknown): string {
   const requested = typeof cwd === 'string' ? cwd : null;

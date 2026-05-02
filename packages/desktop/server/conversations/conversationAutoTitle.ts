@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
+
+import { type Api, completeSimple, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
 import { requirePromptCatalogEntry } from '@personal-agent/core';
 
 const DEFAULT_PROVIDER = 'openai-codex';
@@ -33,10 +34,9 @@ export interface ConversationTitleMessageInput {
 
 export interface ConversationTitleModelRegistry {
   getAvailable(): Model<Api>[];
-  getApiKeyAndHeaders(model: Model<Api>): Promise<
-    | { ok: true; apiKey?: string; headers?: Record<string, string> }
-    | { ok: false; error: string }
-  >;
+  getApiKeyAndHeaders(
+    model: Model<Api>,
+  ): Promise<{ ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string }>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,9 +65,7 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 }
 
 function readPositiveInteger(value: unknown, fallback: number, max: number): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(max, value)
-    : fallback;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(max, value) : fallback;
 }
 
 function normalizeThinkingLevel(value: unknown): ThinkingLevel {
@@ -98,16 +96,15 @@ export function readConversationAutoTitleSettings(settingsFile: string): Convers
   const configuredModel = readNonEmptyString(conversationTitles.model);
   const slashMatches = configuredModel.match(/\//g) ?? [];
   const slashIndex = configuredModel.indexOf('/');
-  const providerFromModel = slashMatches.length === 1 && slashIndex > 0 && slashIndex < configuredModel.length - 1
-    ? configuredModel.slice(0, slashIndex)
-    : '';
+  const providerFromModel =
+    slashMatches.length === 1 && slashIndex > 0 && slashIndex < configuredModel.length - 1 ? configuredModel.slice(0, slashIndex) : '';
   const modelId = providerFromModel ? configuredModel.slice(slashIndex + 1) : configuredModel;
   const explicitProvider = readNonEmptyString(conversationTitles.provider) || providerFromModel;
   const hasExplicitModel = modelId.length > 0;
 
   return {
     enabled: readBoolean(conversationTitles.enabled, true),
-    provider: hasExplicitModel ? (explicitProvider || DEFAULT_PROVIDER) : DEFAULT_PROVIDER,
+    provider: hasExplicitModel ? explicitProvider || DEFAULT_PROVIDER : DEFAULT_PROVIDER,
     model: hasExplicitModel ? modelId : DEFAULT_MODEL,
     reasoning: normalizeThinkingLevel(conversationTitles.reasoning),
     maxMessages: readPositiveInteger(conversationTitles.maxMessages, DEFAULT_MAX_MESSAGES, MAX_TITLE_SOURCE_MESSAGES),
@@ -168,11 +165,7 @@ function summarizeUserMessage(content: unknown): string {
     .trim();
   const imageCount = blocks.filter((block) => block.type === 'image' && hasValidImageContentBlock(block)).length;
 
-  const attachmentLabel = imageCount === 1
-    ? '(image attachment)'
-    : imageCount > 1
-      ? `(${imageCount} image attachments)`
-      : '';
+  const attachmentLabel = imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '';
 
   if (text && attachmentLabel) {
     return normalizeWhitespace(`${text} ${attachmentLabel}`);
@@ -187,19 +180,20 @@ function summarizeUserMessage(content: unknown): string {
 
 function summarizeAssistantMessage(content: unknown): string {
   const blocks = normalizeContent(content);
-  return normalizeWhitespace(blocks
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text ?? '')
-    .join('\n'));
+  return normalizeWhitespace(
+    blocks
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text ?? '')
+      .join('\n'),
+  );
 }
 
 export function collectConversationTitleSourceMessages(
   messages: ConversationTitleMessageInput[],
   maxMessages = DEFAULT_MAX_MESSAGES,
 ): ConversationTitleSourceMessage[] {
-  const messageLimit = Number.isSafeInteger(maxMessages) && maxMessages > 0
-    ? Math.min(MAX_TITLE_SOURCE_MESSAGES, maxMessages)
-    : DEFAULT_MAX_MESSAGES;
+  const messageLimit =
+    Number.isSafeInteger(maxMessages) && maxMessages > 0 ? Math.min(MAX_TITLE_SOURCE_MESSAGES, maxMessages) : DEFAULT_MAX_MESSAGES;
   const collected: ConversationTitleSourceMessage[] = [];
 
   for (const message of messages) {
@@ -239,9 +233,10 @@ export function buildConversationTitleTranscript(
     return '';
   }
 
-  const maxMessageLength = Number.isSafeInteger(options.maxMessageLength) && (options.maxMessageLength as number) > 0
-    ? Math.min(MAX_TITLE_MESSAGE_LENGTH, options.maxMessageLength as number)
-    : DEFAULT_MAX_MESSAGE_LENGTH;
+  const maxMessageLength =
+    Number.isSafeInteger(options.maxMessageLength) && (options.maxMessageLength as number) > 0
+      ? Math.min(MAX_TITLE_MESSAGE_LENGTH, options.maxMessageLength as number)
+      : DEFAULT_MAX_MESSAGE_LENGTH;
   return sourceMessages
     .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${truncateText(message.text, maxMessageLength)}`)
     .join('\n');
@@ -253,7 +248,10 @@ function extractAssistantText(content: unknown): string {
   }
 
   return content
-    .filter((block): block is { type: 'text'; text?: string } => Boolean(block) && typeof block === 'object' && (block as { type?: string }).type === 'text')
+    .filter(
+      (block): block is { type: 'text'; text?: string } =>
+        Boolean(block) && typeof block === 'object' && (block as { type?: string }).type === 'text',
+    )
     .map((block) => block.text ?? '')
     .join('\n');
 }
@@ -280,19 +278,19 @@ export function normalizeGeneratedConversationTitle(title: string | null | undef
     return null;
   }
 
-  const normalized = normalizeWhitespace(firstLine
-    .replace(/^title\s*:\s*/i, '')
-    .replace(/^[-*•#]+\s*/, '')
-    .replace(/^['"`]+/, '')
-    .replace(/['"`]+$/, ''));
+  const normalized = normalizeWhitespace(
+    firstLine
+      .replace(/^title\s*:\s*/i, '')
+      .replace(/^[-*•#]+\s*/, '')
+      .replace(/^['"`]+/, '')
+      .replace(/['"`]+$/, ''),
+  );
 
   if (!normalized) {
     return null;
   }
 
-  const titleLimit = Number.isSafeInteger(maxLength) && maxLength > 0
-    ? Math.min(MAX_TITLE_LENGTH, maxLength)
-    : DEFAULT_MAX_TITLE_LENGTH;
+  const titleLimit = Number.isSafeInteger(maxLength) && maxLength > 0 ? Math.min(MAX_TITLE_LENGTH, maxLength) : DEFAULT_MAX_TITLE_LENGTH;
   return truncateText(normalized, titleLimit);
 }
 

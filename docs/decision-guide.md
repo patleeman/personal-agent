@@ -4,19 +4,19 @@ Use this doc when you need to decide where something should live.
 
 ## Fast routing table
 
-| Need | Use | Durable home | Avoid defaulting to |
-| --- | --- | --- | --- |
-| Work with the agent right now | conversation | session state | a doc or automation |
-| Save reusable knowledge | doc | `<vault-root>` markdown | long chat history |
-| Keep durable knowledge attached to one thread | attached context doc | conversation state + `<vault-root>` refs | repeating `@file` every turn |
-| Save a reusable workflow | skill | `<vault-root>/skills/<skill>/SKILL.md` | ad hoc notes |
-| Track durable structured work | project | `<vault-root>/projects/<projectId>/...` | a giant thread |
-| Continue this conversation later | `conversation_queue` | conversation queue / wakeup state | reminder |
-| Tell the user later | reminder | reminder + wakeup state | scheduled task |
-| Start a detached shell command or agent task now | run tool | `<state-root>/daemon/runtime.db` + execution logs | scheduled task |
-| Run something later or repeatedly | scheduled task / automation | daemon automation state | run |
-| Produce inspectable rendered output in a thread | conversation artifact | conversation artifact state | screenshots pasted into chat |
-| Save project-owned deliverables | project artifact | `<vault-root>/projects/<projectId>/artifacts/` | conversation artifact only |
+| Need                                             | Use                         | Durable home                                      | Avoid defaulting to          |
+| ------------------------------------------------ | --------------------------- | ------------------------------------------------- | ---------------------------- |
+| Work with the agent right now                    | conversation                | session state                                     | a doc or automation          |
+| Save reusable knowledge                          | doc                         | `<vault-root>` markdown                           | long chat history            |
+| Keep durable knowledge attached to one thread    | attached context doc        | conversation state + `<vault-root>` refs          | repeating `@file` every turn |
+| Save a reusable workflow                         | skill                       | `<vault-root>/skills/<skill>/SKILL.md`            | ad hoc notes                 |
+| Track durable structured work                    | project                     | `<vault-root>/projects/<projectId>/...`           | a giant thread               |
+| Continue this conversation later                 | `conversation_queue`        | conversation queue / wakeup state                 | reminder                     |
+| Tell the user later                              | reminder                    | reminder + wakeup state                           | scheduled task               |
+| Start a detached shell command or agent task now | run tool                    | `<state-root>/daemon/runtime.db` + execution logs | scheduled task               |
+| Run something later or repeatedly                | scheduled task / automation | daemon automation state                           | run                          |
+| Produce inspectable rendered output in a thread  | conversation artifact       | conversation artifact state                       | screenshots pasted into chat |
+| Save project-owned deliverables                  | project artifact            | `<vault-root>/projects/<projectId>/artifacts/`    | conversation artifact only   |
 
 ## Durable knowledge split
 

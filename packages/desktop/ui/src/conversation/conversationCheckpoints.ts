@@ -40,29 +40,12 @@ export function getConversationCheckpointIdFromSearch(search: string): string | 
   return value ? value : null;
 }
 
-function getConversationCheckpointFileFromSearch(search: string): string | null {
-  const value = new URLSearchParams(search).get(CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM)?.trim();
-  return value ? value : null;
-}
-
 export function setConversationCheckpointIdInSearch(search: string, checkpointId: string | null): string {
   const params = new URLSearchParams(search);
   if (checkpointId?.trim()) {
     params.set(CONVERSATION_CHECKPOINT_QUERY_PARAM, checkpointId.trim());
   } else {
     params.delete(CONVERSATION_CHECKPOINT_QUERY_PARAM);
-    params.delete(CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM);
-  }
-
-  const next = params.toString();
-  return next.length > 0 ? `?${next}` : '';
-}
-
-function setConversationCheckpointFileInSearch(search: string, filePath: string | null): string {
-  const params = new URLSearchParams(search);
-  if (filePath?.trim()) {
-    params.set(CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM, filePath.trim());
-  } else {
     params.delete(CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM);
   }
 
@@ -83,25 +66,24 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
   };
 
   const action = details?.action ?? (isCheckpointAction(input.action) ? input.action : undefined);
-  const checkpointId = typeof details?.checkpointId === 'string' && details.checkpointId.trim().length > 0
-    ? details.checkpointId.trim()
-    : typeof input.checkpointId === 'string' && input.checkpointId.trim().length > 0
-      ? input.checkpointId.trim()
-      : null;
-  const commitSha = typeof details?.commitSha === 'string' && details.commitSha.trim().length > 0
-    ? details.commitSha.trim()
-    : checkpointId;
-  const shortSha = typeof details?.shortSha === 'string' && details.shortSha.trim().length > 0
-    ? details.shortSha.trim()
-    : commitSha?.slice(0, 7) ?? null;
-  const title = typeof details?.title === 'string' && details.title.trim().length > 0
-    ? details.title.trim()
-    : typeof details?.subject === 'string' && details.subject.trim().length > 0
-      ? details.subject.trim()
-      : shortSha;
-  const subject = typeof details?.subject === 'string' && details.subject.trim().length > 0
-    ? details.subject.trim()
-    : title;
+  const checkpointId =
+    typeof details?.checkpointId === 'string' && details.checkpointId.trim().length > 0
+      ? details.checkpointId.trim()
+      : typeof input.checkpointId === 'string' && input.checkpointId.trim().length > 0
+        ? input.checkpointId.trim()
+        : null;
+  const commitSha = typeof details?.commitSha === 'string' && details.commitSha.trim().length > 0 ? details.commitSha.trim() : checkpointId;
+  const shortSha =
+    typeof details?.shortSha === 'string' && details.shortSha.trim().length > 0
+      ? details.shortSha.trim()
+      : (commitSha?.slice(0, 7) ?? null);
+  const title =
+    typeof details?.title === 'string' && details.title.trim().length > 0
+      ? details.title.trim()
+      : typeof details?.subject === 'string' && details.subject.trim().length > 0
+        ? details.subject.trim()
+        : shortSha;
+  const subject = typeof details?.subject === 'string' && details.subject.trim().length > 0 ? details.subject.trim() : title;
 
   if (!action || !checkpointId || !commitSha || !shortSha || !title || !subject) {
     return null;
@@ -109,9 +91,8 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
 
   return {
     action,
-    conversationId: typeof details?.conversationId === 'string' && details.conversationId.trim().length > 0
-      ? details.conversationId.trim()
-      : undefined,
+    conversationId:
+      typeof details?.conversationId === 'string' && details.conversationId.trim().length > 0 ? details.conversationId.trim() : undefined,
     checkpointId,
     commitSha,
     shortSha,
@@ -121,8 +102,6 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
     linesAdded: typeof details?.linesAdded === 'number' ? details.linesAdded : undefined,
     linesDeleted: typeof details?.linesDeleted === 'number' ? details.linesDeleted : undefined,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,
-    openRequested: typeof details?.openRequested === 'boolean'
-      ? details.openRequested
-      : input.open === true,
+    openRequested: typeof details?.openRequested === 'boolean' ? details.openRequested : input.open === true,
   };
 }

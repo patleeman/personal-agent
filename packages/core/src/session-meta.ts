@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, sep } from 'path';
+
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from './runtime/paths.js';
 
 export interface StoredSessionMeta {
@@ -163,10 +164,7 @@ function readConversationWorkspaceMetadata(line: RawCustomEntry): ConversationWo
 }
 
 function slugToCwd(slug: string): string {
-  return slug
-    .replace(/^--/, '')
-    .replace(/--$/, '')
-    .replace(/-/g, '/');
+  return slug.replace(/^--/, '').replace(/--$/, '').replace(/-/g, '/');
 }
 
 function normalizeIsoTimestamp(timestamp: string | undefined, fallback: string): string {
@@ -276,23 +274,27 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
     }
 
     const fallbackTimestamp = normalizeIsoTimestamp(sessionRecord.timestamp, new Date(statSync(filePath).mtimeMs).toISOString());
-    const remoteHostId = typeof sessionRecord.remoteHostId === 'string' && sessionRecord.remoteHostId.trim().length > 0
-      ? sessionRecord.remoteHostId.trim()
-      : null;
-    const remoteHostLabel = typeof sessionRecord.remoteHostLabel === 'string' && sessionRecord.remoteHostLabel.trim().length > 0
-      ? sessionRecord.remoteHostLabel.trim()
-      : null;
-    const remoteConversationId = typeof sessionRecord.remoteConversationId === 'string' && sessionRecord.remoteConversationId.trim().length > 0
-      ? sessionRecord.remoteConversationId.trim()
-      : null;
+    const remoteHostId =
+      typeof sessionRecord.remoteHostId === 'string' && sessionRecord.remoteHostId.trim().length > 0
+        ? sessionRecord.remoteHostId.trim()
+        : null;
+    const remoteHostLabel =
+      typeof sessionRecord.remoteHostLabel === 'string' && sessionRecord.remoteHostLabel.trim().length > 0
+        ? sessionRecord.remoteHostLabel.trim()
+        : null;
+    const remoteConversationId =
+      typeof sessionRecord.remoteConversationId === 'string' && sessionRecord.remoteConversationId.trim().length > 0
+        ? sessionRecord.remoteConversationId.trim()
+        : null;
 
     const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
     const cwd = workspaceMetadata?.cwd ?? headerCwd;
-    const workspaceCwd = workspaceMetadata && 'workspaceCwd' in workspaceMetadata
-      ? workspaceMetadata.workspaceCwd ?? null
-      : isNeutralChatWorkspaceCwd(cwd)
-        ? null
-        : undefined;
+    const workspaceCwd =
+      workspaceMetadata && 'workspaceCwd' in workspaceMetadata
+        ? (workspaceMetadata.workspaceCwd ?? null)
+        : isNeutralChatWorkspaceCwd(cwd)
+          ? null
+          : undefined;
 
     return {
       id: sessionRecord.id,

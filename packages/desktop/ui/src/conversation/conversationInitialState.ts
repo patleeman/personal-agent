@@ -45,10 +45,9 @@ export function resolveDraftConversationServiceTierState(
   };
 }
 
-export function buildConversationServiceTierPreferenceInput(input: {
-  currentServiceTier: string;
-  hasExplicitServiceTier: boolean;
-}): { serviceTier?: string | null } {
+export function buildConversationServiceTierPreferenceInput(input: { currentServiceTier: string; hasExplicitServiceTier: boolean }): {
+  serviceTier?: string | null;
+} {
   if (!input.hasExplicitServiceTier) {
     return {};
   }
@@ -56,10 +55,7 @@ export function buildConversationServiceTierPreferenceInput(input: {
   return { serviceTier: input.currentServiceTier.trim() || null };
 }
 
-export function resolveFastModeToggleServiceTier(input: {
-  enableFastMode: boolean;
-  defaultServiceTier: string;
-}): string | null {
+export function resolveFastModeToggleServiceTier(input: { enableFastMode: boolean; defaultServiceTier: string }): string | null {
   if (input.enableFastMode) {
     return input.defaultServiceTier === 'priority' ? '' : 'priority';
   }

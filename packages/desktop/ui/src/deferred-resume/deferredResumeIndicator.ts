@@ -11,9 +11,7 @@ function parseIsoTimestamp(value: string | undefined): number {
 }
 
 function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
-  const parsed = parseIsoTimestamp(resume.status === 'ready'
-    ? resume.readyAt ?? resume.dueAt
-    : resume.dueAt);
+  const parsed = parseIsoTimestamp(resume.status === 'ready' ? (resume.readyAt ?? resume.dueAt) : resume.dueAt);
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }
 
@@ -100,9 +98,7 @@ export function resolveDeferredResumePresentationState(input: {
 }
 
 export function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
-  const target = resume.status === 'ready'
-    ? resume.readyAt ?? resume.dueAt
-    : resume.dueAt;
+  const target = resume.status === 'ready' ? (resume.readyAt ?? resume.dueAt) : resume.dueAt;
   const date = new Date(target);
   if (Number.isNaN(date.getTime())) {
     return target;

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
+
 import { getStateRoot } from './runtime/paths.js';
 
 export const DEFERRED_RESUME_STATE_FILE_NAME = 'deferred-resumes-state.json';
@@ -176,8 +177,8 @@ export function parseDeferredResumeDelayMs(raw: string): number | undefined {
 }
 
 function compareDeferredResumeRecords(left: DeferredResumeRecord, right: DeferredResumeRecord): number {
-  const leftKey = left.status === 'ready' ? left.readyAt ?? left.dueAt : left.dueAt;
-  const rightKey = right.status === 'ready' ? right.readyAt ?? right.dueAt : right.dueAt;
+  const leftKey = left.status === 'ready' ? (left.readyAt ?? left.dueAt) : left.dueAt;
+  const rightKey = right.status === 'ready' ? (right.readyAt ?? right.dueAt) : right.dueAt;
   const timeCompare = Date.parse(leftKey) - Date.parse(rightKey);
   if (timeCompare !== 0) {
     return timeCompare;
@@ -208,9 +209,7 @@ function parseRecord(value: unknown): DeferredResumeRecord | undefined {
   const createdAt = normalizeIsoTimestamp(toString(value.createdAt) ?? dueAt) ?? dueAt;
   const status = normalizeStatus(value.status);
   const kind = normalizeKind(value.kind);
-  const readyAt = status === 'ready'
-    ? normalizeIsoTimestamp(toString(value.readyAt) ?? dueAt) ?? dueAt
-    : undefined;
+  const readyAt = status === 'ready' ? (normalizeIsoTimestamp(toString(value.readyAt) ?? dueAt) ?? dueAt) : undefined;
 
   const record: DeferredResumeRecord = {
     id,
@@ -251,8 +250,8 @@ function compareDeferredResumeMergePriority(left: DeferredResumeRecord, right: D
     return left.attempts - right.attempts;
   }
 
-  const leftKey = left.status === 'ready' ? left.readyAt ?? left.dueAt : left.dueAt;
-  const rightKey = right.status === 'ready' ? right.readyAt ?? right.dueAt : right.dueAt;
+  const leftKey = left.status === 'ready' ? (left.readyAt ?? left.dueAt) : left.dueAt;
+  const rightKey = right.status === 'ready' ? (right.readyAt ?? right.dueAt) : right.dueAt;
   const timeCompare = leftKey.localeCompare(rightKey);
   if (timeCompare !== 0) {
     return timeCompare;
@@ -292,10 +291,7 @@ function mergeDeferredResumeRecord(left: DeferredResumeRecord, right: DeferredRe
 }
 
 function sortResumeIds(resumes: Record<string, DeferredResumeRecord>): Record<string, DeferredResumeRecord> {
-  return Object.fromEntries(
-    Object.entries(resumes)
-      .sort(([left], [right]) => left.localeCompare(right)),
-  );
+  return Object.fromEntries(Object.entries(resumes).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 function normalizeDocument(value: unknown): DeferredResumeStateFile | null {
@@ -324,9 +320,7 @@ function normalizeDocument(value: unknown): DeferredResumeStateFile | null {
   };
 }
 
-export function mergeDeferredResumeStateDocuments(options: {
-  documents: unknown[];
-}): DeferredResumeStateFile {
+export function mergeDeferredResumeStateDocuments(options: { documents: unknown[] }): DeferredResumeStateFile {
   const documents = options.documents
     .map((document) => normalizeDocument(document))
     .filter((document): document is DeferredResumeStateFile => document !== null);
@@ -345,9 +339,7 @@ export function mergeDeferredResumeStateDocuments(options: {
       }
 
       const existing = resumes[id];
-      resumes[id] = existing
-        ? mergeDeferredResumeRecord(existing, parsedRecord)
-        : parsedRecord;
+      resumes[id] = existing ? mergeDeferredResumeRecord(existing, parsedRecord) : parsedRecord;
     }
   }
 
@@ -409,10 +401,17 @@ export function loadDeferredResumeState(path = resolveDeferredResumeStateFile())
 
 export function saveDeferredResumeState(state: DeferredResumeStateFile, path = resolveDeferredResumeStateFile()): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${JSON.stringify({
-    version: 3,
-    resumes: sortResumeIds(state.resumes),
-  }, null, 2)}\n`);
+  writeFileSync(
+    path,
+    `${JSON.stringify(
+      {
+        version: 3,
+        resumes: sortResumeIds(state.resumes),
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 export function loadDeferredResumeEntries(stateFile = resolveDeferredResumeStateFile()): Array<{ sessionFile: string }> {
@@ -438,14 +437,12 @@ export function getDueScheduledSessionDeferredResumeEntries(
   at = new Date(),
 ): DeferredResumeRecord[] {
   const nowMs = at.getTime();
-  return getSessionDeferredResumeEntries(state, sessionFile)
-    .filter((entry) => entry.status === 'scheduled' && Date.parse(entry.dueAt) <= nowMs);
+  return getSessionDeferredResumeEntries(state, sessionFile).filter(
+    (entry) => entry.status === 'scheduled' && Date.parse(entry.dueAt) <= nowMs,
+  );
 }
 
-export function activateDeferredResume(
-  state: DeferredResumeStateFile,
-  input: { id: string; at?: Date },
-): DeferredResumeRecord | undefined {
+export function activateDeferredResume(state: DeferredResumeStateFile, input: { id: string; at?: Date }): DeferredResumeRecord | undefined {
   const current = state.resumes[input.id];
   if (!current) {
     return undefined;

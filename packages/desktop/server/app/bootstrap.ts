@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import type { Socket } from 'node:net';
 import { join } from 'node:path';
+
 import express, { type Express } from 'express';
+
 import type { RecoverDurableLiveConversationsDependencies } from '../conversations/conversationRecovery.js';
 import { recoverDurableLiveConversations } from '../conversations/conversationRecovery.js';
 import {
@@ -14,8 +16,8 @@ import {
   webRequestLoggingMiddleware,
 } from '../middleware/index.js';
 import { subscribeProviderOAuthLogins } from '../models/providerAuth.js';
-import { createServiceAttentionMonitor, type ServiceAttentionMonitorOptions } from '../shared/internalAttention.js';
 import { startAppEventMonitor } from '../shared/appEvents.js';
+import { createServiceAttentionMonitor, type ServiceAttentionMonitorOptions } from '../shared/internalAttention.js';
 
 export function createServerApps(): { app: Express } {
   const app = express();
@@ -64,10 +66,7 @@ export function startBootstrapMonitors(options: {
   }).start();
 }
 
-export function startDeferredResumeLoop(options: {
-  flushLiveDeferredResumes: () => Promise<void>;
-  pollMs: number;
-}): void {
+export function startDeferredResumeLoop(options: { flushLiveDeferredResumes: () => Promise<void>; pollMs: number }): void {
   const pollMs = normalizeDeferredResumePollMs(options.pollMs);
   void options.flushLiveDeferredResumes().catch((error) => {
     logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
@@ -106,24 +105,20 @@ export function startConversationRecovery(options: {
       info: (message) => logInfo(message),
       warn: (message) => logWarn(message),
     },
-  }).then(async (result) => {
-    if (result.recovered.length > 0) {
-      logInfo(`Recovered ${String(result.recovered.length)} live conversation runs from durable state.`);
-      await options.flushLiveDeferredResumes();
-    }
-  }).catch((error) => {
-    logWarn(`Conversation recovery failed: ${(error as Error).message}`);
-  });
+  })
+    .then(async (result) => {
+      if (result.recovered.length > 0) {
+        logInfo(`Recovered ${String(result.recovered.length)} live conversation runs from durable state.`);
+        await options.flushLiveDeferredResumes();
+      }
+    })
+    .catch((error) => {
+      logWarn(`Conversation recovery failed: ${(error as Error).message}`);
+    });
 }
 
-export function mountStaticServerApps(options: {
-  app: Express;
-  distDir: string;
-}): void {
-  const {
-    app,
-    distDir,
-  } = options;
+export function mountStaticServerApps(options: { app: Express; distDir: string }): void {
+  const { app, distDir } = options;
 
   if (existsSync(distDir)) {
     app.use(express.static(distDir));
@@ -138,11 +133,11 @@ export function mountStaticServerApps(options: {
   } else {
     app.get('/', (_req, res) => {
       res.send(
-        '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">'
-          + 'personal-agent desktop renderer\n\n'
-          + 'SPA not built yet.\n'
-          + 'Run: npm run build in packages/desktop\n'
-          + '</pre>',
+        '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">' +
+          'personal-agent desktop renderer\n\n' +
+          'SPA not built yet.\n' +
+          'Run: npm run build in packages/desktop\n' +
+          '</pre>',
       );
     });
   }

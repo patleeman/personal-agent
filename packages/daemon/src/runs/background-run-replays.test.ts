@@ -3,9 +3,10 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunPaths, type ScannedDurableRun } from './store.js';
+
 import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from './background-run-replays.js';
 import { resolveBackgroundRunSessionDir } from './background-run-sessions.js';
+import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunPaths, type ScannedDurableRun } from './store.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -17,11 +18,14 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function createRun(runId: string, input: {
-  kind: 'background-run' | 'raw-shell';
-  target: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-}): ScannedDurableRun {
+function createRun(
+  runId: string,
+  input: {
+    kind: 'background-run' | 'raw-shell';
+    target: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  },
+): ScannedDurableRun {
   const runsRoot = createTempDir('pa-run-replays-runs-');
   const paths = resolveDurableRunPaths(runsRoot, runId);
   return {

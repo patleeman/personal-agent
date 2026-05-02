@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DRAFT_SERVICE_TIER_DISABLED_SENTINEL } from './conversationInitialState';
 import {
   resolveDraftModelPreferenceUpdate,

@@ -1,16 +1,8 @@
 function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
-export function buildDesktopStartupErrorPageHtml(input: {
-  message: string;
-  logsDir: string;
-}): string {
+export function buildDesktopStartupErrorPageHtml(input: { message: string; logsDir: string }): string {
   const message = escapeHtml(input.message.trim() || 'Desktop startup failed.');
   const logsDir = escapeHtml(input.logsDir.trim());
 
@@ -182,9 +174,6 @@ export function buildDesktopStartupErrorPageHtml(input: {
 </html>`;
 }
 
-export function buildDesktopStartupErrorPageDataUrl(input: {
-  message: string;
-  logsDir: string;
-}): string {
+export function buildDesktopStartupErrorPageDataUrl(input: { message: string; logsDir: string }): string {
   return `data:text/html;charset=UTF-8,${encodeURIComponent(buildDesktopStartupErrorPageHtml(input))}`;
 }

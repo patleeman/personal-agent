@@ -69,8 +69,8 @@ export async function startComposerDictationCapture(options: ComposerDictationCa
     throw new Error('Microphone capture is not available in this browser.');
   }
 
-  const AudioContextConstructor = globalThis.AudioContext
-    ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  const AudioContextConstructor =
+    globalThis.AudioContext ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextConstructor) {
     throw new Error('Audio capture is not available in this browser.');
   }

@@ -1,4 +1,3 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   authenticateMcpServer,
@@ -9,30 +8,44 @@ import {
   inspectMcpTool,
   listMcpCatalog,
 } from '@personal-agent/core';
+import { Type } from '@sinclair/typebox';
 
 const MCP_ACTION_VALUES = ['list', 'info', 'grep', 'call', 'auth', 'logout'] as const;
 
 type McpAction = (typeof MCP_ACTION_VALUES)[number];
 
 const McpToolParams = Type.Object({
-  action: Type.Union(MCP_ACTION_VALUES.map((value) => Type.Literal(value)), {
-    description: 'MCP operation to perform.',
-  }),
-  server: Type.Optional(Type.String({
-    description: 'MCP server name. Required for info, grep, call, auth, logout.',
-  })),
-  tool: Type.Optional(Type.String({
-    description: 'Tool name within the server. Used with info and call actions.',
-  })),
-  pattern: Type.Optional(Type.String({
-    description: 'Glob pattern to search tools. Used with grep action. Supports * wildcards.',
-  })),
-  arguments: Type.Optional(Type.String({
-    description: 'JSON string of arguments to pass to the tool. Used with call action. Example: \'{"query":"hello"}\'',
-  })),
-  probe: Type.Optional(Type.Boolean({
-    description: 'When listing servers, whether to fetch and display their tools. Default false.',
-  })),
+  action: Type.Union(
+    MCP_ACTION_VALUES.map((value) => Type.Literal(value)),
+    {
+      description: 'MCP operation to perform.',
+    },
+  ),
+  server: Type.Optional(
+    Type.String({
+      description: 'MCP server name. Required for info, grep, call, auth, logout.',
+    }),
+  ),
+  tool: Type.Optional(
+    Type.String({
+      description: 'Tool name within the server. Used with info and call actions.',
+    }),
+  ),
+  pattern: Type.Optional(
+    Type.String({
+      description: 'Glob pattern to search tools. Used with grep action. Supports * wildcards.',
+    }),
+  ),
+  arguments: Type.Optional(
+    Type.String({
+      description: 'JSON string of arguments to pass to the tool. Used with call action. Example: \'{"query":"hello"}\'',
+    }),
+  ),
+  probe: Type.Optional(
+    Type.Boolean({
+      description: 'When listing servers, whether to fetch and display their tools. Default false.',
+    }),
+  ),
 });
 
 function validateMcpString(value: string | undefined, label: string): string {
@@ -44,14 +57,20 @@ function validateMcpString(value: string | undefined, label: string): string {
 }
 
 interface McpToolActionHandler {
-  (params: typeof McpToolParams.static, log: (message: string) => void): Promise<{
+  (
+    params: typeof McpToolParams.static,
+    log: (message: string) => void,
+  ): Promise<{
     content: Array<{ type: 'text'; text: string }>;
     isError?: boolean;
     details?: Record<string, unknown>;
   }>;
 }
 
-type McpToolHandler = (params: typeof McpToolParams.static, log: (message: string) => void) => Promise<{
+type McpToolHandler = (
+  params: typeof McpToolParams.static,
+  log: (message: string) => void,
+) => Promise<{
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
   details?: Record<string, unknown>;
@@ -61,7 +80,8 @@ export function createMcpAgentExtension(): ExtensionAPI {
   return (api: ExtensionAPI) => {
     api.registerTool({
       name: 'mcp',
-      description: 'Inspect and call MCP (Model Context Protocol) servers. Supports listing configured servers, inspecting tools, calling tools, searching tools, and managing OAuth authentication.',
+      description:
+        'Inspect and call MCP (Model Context Protocol) servers. Supports listing configured servers, inspecting tools, calling tools, searching tools, and managing OAuth authentication.',
       parameters: McpToolParams,
       handler: (async (rawParams: unknown) => {
         const params = rawParams as typeof McpToolParams.static;
@@ -246,9 +266,8 @@ export function createMcpAgentExtension(): ExtensionAPI {
 
               const result = await callMcpTool(callServer, callTool, parsedInput, commonOptions);
               if (result.data) {
-                const formatted = typeof result.data.parsed === 'object'
-                  ? JSON.stringify(result.data.parsed, null, 2)
-                  : String(result.data.parsed);
+                const formatted =
+                  typeof result.data.parsed === 'object' ? JSON.stringify(result.data.parsed, null, 2) : String(result.data.parsed);
 
                 return {
                   content: [{ type: 'text', text: formatted }],

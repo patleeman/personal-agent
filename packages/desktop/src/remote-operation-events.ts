@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+
 import type { DesktopRemoteOperationStatus } from './hosts/types.js';
 
 const emitter = new EventEmitter();
@@ -10,9 +11,7 @@ export function emitDesktopRemoteOperationStatus(event: DesktopRemoteOperationSt
   emitter.emit(REMOTE_OPERATION_EVENT, event);
 }
 
-export function subscribeDesktopRemoteOperationStatus(
-  listener: (event: DesktopRemoteOperationStatus) => void,
-): () => void {
+export function subscribeDesktopRemoteOperationStatus(listener: (event: DesktopRemoteOperationStatus) => void): () => void {
   emitter.on(REMOTE_OPERATION_EVENT, listener);
   return () => {
     emitter.off(REMOTE_OPERATION_EVENT, listener);

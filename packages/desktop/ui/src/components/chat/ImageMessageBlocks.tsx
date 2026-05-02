@@ -1,4 +1,5 @@
 import { memo } from 'react';
+
 import type { MessageBlock } from '../../shared/types';
 import { SurfacePanel } from '../ui';
 
@@ -10,13 +11,7 @@ export type InspectableImage = {
   height?: number;
 };
 
-export function ImageInspectModal({
-  image,
-  onClose,
-}: {
-  image: InspectableImage;
-  onClose: () => void;
-}) {
+export function ImageInspectModal({ image, onClose }: { image: InspectableImage; onClose: () => void }) {
   const label = image.caption?.trim() || image.alt.trim() || 'Conversation image';
 
   return (
@@ -34,14 +29,21 @@ export function ImageInspectModal({
         aria-modal="true"
         aria-label={label}
         className="ui-dialog-shell relative"
-        style={{ width: 'min(96vw, 1440px)', height: 'min(94vh, 1040px)', maxHeight: 'calc(100vh - 2rem)', background: 'rgb(10 13 20 / 0.96)' }}
+        style={{
+          width: 'min(96vw, 1440px)',
+          height: 'min(94vh, 1040px)',
+          maxHeight: 'calc(100vh - 2rem)',
+          background: 'rgb(10 13 20 / 0.96)',
+        }}
       >
         <div className="relative min-h-0 flex-1 bg-black/30 px-4 py-4 sm:px-6 sm:py-6">
           <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-3 sm:inset-x-6 sm:top-6">
             <div className="pointer-events-auto min-w-0 rounded-lg bg-black/45 px-3 py-1.5 backdrop-blur-sm" title={label}>
               <p className="truncate text-[12px] font-medium text-white/95">{label}</p>
               {image.width && image.height ? (
-                <p className="mt-0.5 text-[10px] text-white/60">{image.width}×{image.height}</p>
+                <p className="mt-0.5 text-[10px] text-white/60">
+                  {image.width}×{image.height}
+                </p>
               ) : null}
             </div>
             <button
@@ -53,11 +55,7 @@ export function ImageInspectModal({
               ×
             </button>
           </div>
-          <img
-            src={image.src}
-            alt={image.alt}
-            className="h-full w-full object-contain"
-          />
+          <img src={image.src} alt={image.alt} className="h-full w-full object-contain" />
         </div>
       </div>
     </div>
@@ -107,28 +105,43 @@ export function ImagePreview({
           aria-label={`Inspect image: ${caption ?? alt}`}
           title="Inspect image"
         >
-          <img
-            src={inspectableImage.src}
-            alt={alt}
-            className="block w-full object-contain bg-elevated"
-            style={{ maxHeight }}
-          />
+          <img src={inspectableImage.src} alt={alt} className="block w-full object-contain bg-elevated" style={{ maxHeight }} />
         </button>
       ) : (
         <div
           className="w-full bg-elevated flex flex-col items-center justify-center gap-2 px-4 py-5 text-dim"
           style={{ aspectRatio: `${width ?? 16} / ${height ?? 9}`, maxHeight }}
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"
-            strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="opacity-40"
+          >
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />
             <path d="m21 15-5-5L5 21" />
           </svg>
           <span className="text-[11px] font-mono opacity-50">{alt}</span>
-          {width && <span className="text-[10px] opacity-35">{width}×{height}</span>}
+          {width && (
+            <span className="text-[10px] opacity-35">
+              {width}×{height}
+            </span>
+          )}
           {deferred && onLoad && (
-            <button type="button" onClick={() => { void onLoad(); }} disabled={loading} className="ui-action-button text-[11px]">
+            <button
+              type="button"
+              onClick={() => {
+                void onLoad();
+              }}
+              disabled={loading}
+              className="ui-action-button text-[11px]"
+            >
               {loading ? 'Loading image…' : 'Load image'}
             </button>
           )}
@@ -173,4 +186,3 @@ export const ImageBlock = memo(function ImageBlock({
     />
   );
 });
-

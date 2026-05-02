@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   deleteConversationArtifact,
   getConversationArtifact,
@@ -29,21 +30,25 @@ function createTempStateRoot(): string {
 describe('conversation artifact paths', () => {
   it('resolves the profile artifact directory', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveProfileConversationArtifactsDir({ stateRoot, profile: 'datadog' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-artifacts', 'datadog'));
+    expect(resolveProfileConversationArtifactsDir({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-artifacts', 'datadog'),
+    );
   });
 
   it('resolves the conversation artifact directory and file path', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveConversationArtifactsDir({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-artifacts', 'datadog', 'conv-123'));
+    expect(resolveConversationArtifactsDir({ stateRoot, profile: 'datadog', conversationId: 'conv-123' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-artifacts', 'datadog', 'conv-123'),
+    );
 
-    expect(resolveConversationArtifactPath({
-      stateRoot,
-      profile: 'datadog',
-      conversationId: 'conv-123',
-      artifactId: 'mockup',
-    })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-artifacts', 'datadog', 'conv-123', 'mockup.json'));
+    expect(
+      resolveConversationArtifactPath({
+        stateRoot,
+        profile: 'datadog',
+        conversationId: 'conv-123',
+        artifactId: 'mockup',
+      }),
+    ).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-artifacts', 'datadog', 'conv-123', 'mockup.json'));
   });
 
   it('rejects invalid artifact ids', () => {
@@ -95,19 +100,22 @@ describe('conversation artifact storage', () => {
       updatedAt: '2026-03-12T16:10:00.000Z',
     });
 
-    expect(getConversationArtifact({
-      stateRoot,
-      profile: 'datadog',
-      conversationId: 'conv-123',
-      artifactId: first.id,
-    })).toMatchObject({
+    expect(
+      getConversationArtifact({
+        stateRoot,
+        profile: 'datadog',
+        conversationId: 'conv-123',
+        artifactId: first.id,
+      }),
+    ).toMatchObject({
       id: first.id,
       revision: 2,
       content: 'flowchart TD\nA-->C',
     });
 
-    expect(listConversationArtifacts({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }).map((artifact) => artifact.id))
-      .toEqual([other.id, first.id]);
+    expect(listConversationArtifacts({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }).map((artifact) => artifact.id)).toEqual(
+      [other.id, first.id],
+    );
   });
 
   it('creates unique ids when titles collide', () => {
@@ -148,18 +156,22 @@ describe('conversation artifact storage', () => {
       content: '<div>Mockup</div>',
     });
 
-    expect(deleteConversationArtifact({
-      stateRoot,
-      profile: 'datadog',
-      conversationId: 'conv-123',
-      artifactId: artifact.id,
-    })).toBe(true);
+    expect(
+      deleteConversationArtifact({
+        stateRoot,
+        profile: 'datadog',
+        conversationId: 'conv-123',
+        artifactId: artifact.id,
+      }),
+    ).toBe(true);
 
-    expect(getConversationArtifact({
-      stateRoot,
-      profile: 'datadog',
-      conversationId: 'conv-123',
-      artifactId: artifact.id,
-    })).toBeNull();
+    expect(
+      getConversationArtifact({
+        stateRoot,
+        profile: 'datadog',
+        conversationId: 'conv-123',
+        artifactId: artifact.id,
+      }),
+    ).toBeNull();
   });
 });

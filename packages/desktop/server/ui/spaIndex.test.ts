@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { resolveSpaIndexRelativePath } from './spaIndex.js';
 
 describe('resolveSpaIndexRelativePath', () => {

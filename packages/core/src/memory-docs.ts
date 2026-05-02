@@ -1,5 +1,6 @@
 import { mkdirSync } from 'fs';
 import { resolve } from 'path';
+
 import { getDurableNotesDir, getVaultRoot } from './runtime/paths.js';
 
 export interface ResolveMemoryDocsOptions {

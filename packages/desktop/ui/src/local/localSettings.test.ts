@@ -1,17 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { APP_LAYOUT_MODE_STORAGE_KEY } from '../ui-state/appLayoutMode';
+import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from './knowledgeOpenFiles';
+import { KNOWLEDGE_RECENTLY_CLOSED_FILE_IDS_STORAGE_KEY } from './knowledgeRecentlyClosedFiles';
+import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
 import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
-  OPEN_SESSION_IDS_STORAGE_KEY,
   LEGACY_KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY,
+  OPEN_SESSION_IDS_STORAGE_KEY,
   resetStoredConversationUiState,
   resetStoredLayoutPreferences,
   SIDEBAR_WIDTH_STORAGE_KEY,
 } from './localSettings';
-import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from './knowledgeOpenFiles';
-import { KNOWLEDGE_RECENTLY_CLOSED_FILE_IDS_STORAGE_KEY } from './knowledgeRecentlyClosedFiles';
-import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
-import { APP_LAYOUT_MODE_STORAGE_KEY } from '../ui-state/appLayoutMode';
 
 function createStorage(): Storage {
   const map = new Map<string, string>();
@@ -23,7 +24,7 @@ function createStorage(): Storage {
       map.clear();
     },
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     key(index) {
       return [...map.keys()][index] ?? null;

@@ -1,18 +1,21 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ConversationPreferencesRow } from './ConversationPreferencesRow';
+
 import type { ModelInfo } from '../../shared/types';
+import { ConversationPreferencesRow } from './ConversationPreferencesRow';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
-const models: ModelInfo[] = [{
-  id: 'model-a',
-  provider: 'Provider A',
-  name: 'Model A',
-  context: 128000,
-  supportedServiceTiers: ['priority'],
-}];
+const models: ModelInfo[] = [
+  {
+    id: 'model-a',
+    provider: 'Provider A',
+    name: 'Model A',
+    context: 128000,
+    supportedServiceTiers: ['priority'],
+  },
+];
 
 function renderRow(overrides: Partial<React.ComponentProps<typeof ConversationPreferencesRow>> = {}) {
   return renderToString(

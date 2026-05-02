@@ -1,16 +1,22 @@
-import React, { memo, useEffect, useMemo, useState, type RefObject } from 'react';
-import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
+import React, { memo, type RefObject, useEffect, useMemo, useState } from 'react';
+
 import type { MessageBlock } from '../../shared/types';
-import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
-import { CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
-import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
-import { getStreamingStatusLabel } from './toolPresentation.js';
-import type { ChatViewLayout } from './chatViewTypes.js';
-import { useChatReplySelection } from './useChatReplySelection.js';
-import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
-import { useChatWindowing } from './useChatWindowing.js';
+import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import { ChatRenderItemView } from './ChatRenderItemView.js';
 import { SelectionContextMenu, StreamingIndicator, WindowingBadge } from './ChatTranscriptChrome.js';
+import type { ChatViewLayout } from './chatViewTypes.js';
+import {
+  CHAT_VIEW_RENDERING_PROFILE,
+  CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
+  type ChatViewPerformanceMode,
+  WindowedChatChunk,
+} from './chatWindowing.js';
+import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
+import { getStreamingStatusLabel } from './toolPresentation.js';
+import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
+import { useChatReplySelection } from './useChatReplySelection.js';
+import { useChatWindowing } from './useChatWindowing.js';
+import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
@@ -63,18 +69,20 @@ function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<
     return false;
   }
 
-  return !target.closest([
-    '[data-message-index]',
-    '[data-selection-reply-scope]',
-    'a',
-    'button',
-    'input',
-    'textarea',
-    'select',
-    '[contenteditable="true"]',
-    '[role="button"]',
-    '[role="menu"]',
-  ].join(','));
+  return !target.closest(
+    [
+      '[data-message-index]',
+      '[data-selection-reply-scope]',
+      'a',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      '[contenteditable="true"]',
+      '[role="button"]',
+      '[role="menu"]',
+    ].join(','),
+  );
 }
 
 export const ChatView = memo(function ChatView({
@@ -113,11 +121,11 @@ export const ChatView = memo(function ChatView({
 
   const streamingStatusLabel = isCompacting
     ? 'Compacting context…'
-    : pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming);
+    : (pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming));
   const renderingProfile = CHAT_VIEW_RENDERING_PROFILE[performanceMode];
   const lastBlock = messages[messages.length - 1];
-  const showStreamingIndicator = !!streamingStatusLabel
-    && (isCompacting || Boolean(pendingStatusLabel) || !lastBlock || lastBlock.type === 'user');
+  const showStreamingIndicator =
+    !!streamingStatusLabel && (isCompacting || Boolean(pendingStatusLabel) || !lastBlock || lastBlock.type === 'user');
   const shouldUseContentVisibility = renderItems.length >= renderingProfile.contentVisibilityThreshold;
   const [contentVisibilityReady, setContentVisibilityReady] = useState(false);
 
@@ -143,12 +151,7 @@ export const ChatView = memo(function ChatView({
     [contentVisibilityReady, shouldUseContentVisibility],
   );
 
-  const {
-    shouldWindowTranscript,
-    renderChunks,
-    visibleChunkRange,
-    updateChunkHeight,
-  } = useChatWindowing({
+  const { shouldWindowTranscript, renderChunks, visibleChunkRange, updateChunkHeight } = useChatWindowing({
     scrollContainerRef,
     renderItems,
     messageIndexOffset,
@@ -188,9 +191,11 @@ export const ChatView = memo(function ChatView({
 
   const renderChatItem = (item: ChatRenderItem, itemIndex: number) => (
     <ChatRenderItemView
-      key={item.type === 'trace_cluster'
-        ? `trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`
-        : messageIndexOffset + item.index}
+      key={
+        item.type === 'trace_cluster'
+          ? `trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`
+          : messageIndexOffset + item.index
+      }
       item={item}
       itemIndex={itemIndex}
       renderItemsLength={renderItems.length}
@@ -223,11 +228,7 @@ export const ChatView = memo(function ChatView({
     />
   );
 
-  const fullTranscript = (
-    <div className="space-y-4">
-      {renderItems.map((item, itemIndex) => renderChatItem(item, itemIndex))}
-    </div>
-  );
+  const fullTranscript = <div className="space-y-4">{renderItems.map((item, itemIndex) => renderChatItem(item, itemIndex))}</div>;
 
   const windowedTranscript = visibleChunkRange ? (
     <>
@@ -243,7 +244,9 @@ export const ChatView = memo(function ChatView({
       ))}
       {visibleChunkRange.bottomSpacerHeight > 0 && <div style={{ height: visibleChunkRange.bottomSpacerHeight }} aria-hidden />}
     </>
-  ) : fullTranscript;
+  ) : (
+    fullTranscript
+  );
   const mountedMessageCount = visibleChunkRange
     ? visibleChunkRange.chunks.reduce((sum, chunk) => sum + chunk.spanCount, 0)
     : messages.length;
@@ -282,11 +285,7 @@ export const ChatView = memo(function ChatView({
         )}
       </div>
       {selectionContextMenu ? (
-        <SelectionContextMenu
-          menuState={selectionContextMenu}
-          menuRef={selectionContextMenuRef}
-          onAction={runSelectionContextMenuAction}
-        />
+        <SelectionContextMenu menuState={selectionContextMenu} menuRef={selectionContextMenuRef} onAction={runSelectionContextMenuAction} />
       ) : null}
       {selectedImage && <ImageInspectModal image={selectedImage} onClose={() => setSelectedImage(null)} />}
     </>

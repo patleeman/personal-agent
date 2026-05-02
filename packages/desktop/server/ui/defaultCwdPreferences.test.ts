@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 
 const tempDirs: string[] = [];
@@ -50,10 +52,12 @@ describe('writeSavedDefaultCwdPreference', () => {
     mkdirSync(workspace, { recursive: true });
     writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4' }));
 
-    expect(writeSavedDefaultCwdPreference({ cwd: './workspace' }, file, {
-      baseDir: dir,
-      validate: true,
-    })).toEqual({
+    expect(
+      writeSavedDefaultCwdPreference({ cwd: './workspace' }, file, {
+        baseDir: dir,
+        validate: true,
+      }),
+    ).toEqual({
       currentCwd: './workspace',
       effectiveCwd: workspace,
     });
@@ -69,10 +73,13 @@ describe('writeSavedDefaultCwdPreference', () => {
     const file = join(dir, 'settings.json');
     const fallbackCwd = join(dir, 'fallback');
     mkdirSync(fallbackCwd, { recursive: true });
-    writeFileSync(file, JSON.stringify({
-      defaultModel: 'gpt-5.4',
-      defaultCwd: '~/workspace',
-    }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultModel: 'gpt-5.4',
+        defaultCwd: '~/workspace',
+      }),
+    );
 
     expect(writeSavedDefaultCwdPreference({ cwd: '' }, file, { baseDir: fallbackCwd })).toEqual({
       currentCwd: '',
@@ -88,9 +95,11 @@ describe('writeSavedDefaultCwdPreference', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
 
-    expect(() => writeSavedDefaultCwdPreference({ cwd: './missing' }, file, {
-      baseDir: dir,
-      validate: true,
-    })).toThrow(`Directory does not exist: ${join(dir, 'missing')}`);
+    expect(() =>
+      writeSavedDefaultCwdPreference({ cwd: './missing' }, file, {
+        baseDir: dir,
+        validate: true,
+      }),
+    ).toThrow(`Directory does not exist: ${join(dir, 'missing')}`);
   });
 });

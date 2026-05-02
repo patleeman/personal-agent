@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
@@ -36,9 +37,11 @@ describe('runConversationComposerSubmitOnce', () => {
   it('unlocks after failed submissions', async () => {
     const lock = { current: false };
 
-    await expect(runConversationComposerSubmitOnce(lock, async () => {
-      throw new Error('boom');
-    })).rejects.toThrow('boom');
+    await expect(
+      runConversationComposerSubmitOnce(lock, async () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
 
     await expect(runConversationComposerSubmitOnce(lock, async () => 'recovered')).resolves.toBe('recovered');
   });

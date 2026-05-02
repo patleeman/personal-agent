@@ -1,7 +1,7 @@
 import type { Model } from '@mariozechner/pi-ai';
 
 const SERVICE_TIER_VALUES = ['auto', 'default', 'flex', 'priority', 'scale'] as const;
-export type ServiceTierValue = typeof SERVICE_TIER_VALUES[number];
+export type ServiceTierValue = (typeof SERVICE_TIER_VALUES)[number];
 
 // Single source of truth for model-level service tier support.
 //
@@ -27,14 +27,10 @@ function readNonEmptyString(value: unknown): string {
 
 export function normalizeServiceTierValue(value: unknown): ServiceTierValue | '' {
   const normalized = readNonEmptyString(value).toLowerCase();
-  return SERVICE_TIER_VALUES.includes(normalized as ServiceTierValue)
-    ? (normalized as ServiceTierValue)
-    : '';
+  return SERVICE_TIER_VALUES.includes(normalized as ServiceTierValue) ? (normalized as ServiceTierValue) : '';
 }
 
-export function getSupportedServiceTiersForModel(
-  model: Pick<Model<any>, 'id'> | { id?: unknown } | null | undefined,
-): ServiceTierValue[] {
+export function getSupportedServiceTiersForModel(model: Pick<Model<any>, 'id'> | { id?: unknown } | null | undefined): ServiceTierValue[] {
   const normalizedId = readNonEmptyString(model?.id).toLowerCase();
   if (!normalizedId) {
     return [];
@@ -44,9 +40,7 @@ export function getSupportedServiceTiersForModel(
   return supported ? [...supported] : [];
 }
 
-export function modelSupportsServiceTiers(
-  model: Pick<Model<any>, 'id'> | { id?: unknown } | null | undefined,
-): boolean {
+export function modelSupportsServiceTiers(model: Pick<Model<any>, 'id'> | { id?: unknown } | null | undefined): boolean {
   return getSupportedServiceTiersForModel(model).length > 0;
 }
 

@@ -1,7 +1,9 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { buildDesktopAboutPanelOptions, resolveDesktopAboutVersionsForPaths } from './about.js';
 
 const tempDirs: string[] = [];
@@ -59,11 +61,13 @@ describe('resolveDesktopAboutVersionsForPaths', () => {
 
 describe('buildDesktopAboutPanelOptions', () => {
   it('uses the app version and Pi version in native about panel metadata', () => {
-    expect(buildDesktopAboutPanelOptions({
-      applicationName: 'Personal Agent',
-      applicationVersion: '0.1.11',
-      piVersion: '0.66.0',
-    })).toEqual({
+    expect(
+      buildDesktopAboutPanelOptions({
+        applicationName: 'Personal Agent',
+        applicationVersion: '0.1.11',
+        piVersion: '0.66.0',
+      }),
+    ).toEqual({
       applicationName: 'Personal Agent',
       applicationVersion: '0.1.11',
       credits: 'Pi 0.66.0',

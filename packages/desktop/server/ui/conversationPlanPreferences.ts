@@ -80,13 +80,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function normalizeConversationPlanItem(value: unknown, index: number): ConversationPlanItemRecord | null {
@@ -95,14 +97,9 @@ function normalizeConversationPlanItem(value: unknown, index: number): Conversat
   }
 
   const kind = value.kind === 'skill' ? 'skill' : 'instruction';
-  const id = typeof value.id === 'string' && value.id.trim().length > 0
-    ? value.id.trim()
-    : `item-${index + 1}`;
-  const label = typeof value.label === 'string' && value.label.trim().length > 0
-    ? value.label.trim()
-    : kind === 'skill'
-      ? 'Skill'
-      : 'Instruction';
+  const id = typeof value.id === 'string' && value.id.trim().length > 0 ? value.id.trim() : `item-${index + 1}`;
+  const label =
+    typeof value.label === 'string' && value.label.trim().length > 0 ? value.label.trim() : kind === 'skill' ? 'Skill' : 'Instruction';
 
   if (kind === 'skill') {
     const skillName = typeof value.skillName === 'string' ? value.skillName.trim() : '';
@@ -110,9 +107,7 @@ function normalizeConversationPlanItem(value: unknown, index: number): Conversat
       return null;
     }
 
-    const skillArgs = typeof value.skillArgs === 'string' && value.skillArgs.trim().length > 0
-      ? value.skillArgs.trim()
-      : undefined;
+    const skillArgs = typeof value.skillArgs === 'string' && value.skillArgs.trim().length > 0 ? value.skillArgs.trim() : undefined;
 
     return {
       id,
@@ -146,10 +141,7 @@ export function readConversationPlanDefaults(settingsFile: string): Conversation
   };
 }
 
-export function writeConversationPlanDefaults(
-  input: { defaultEnabled?: boolean },
-  settingsFile: string,
-): ConversationPlanDefaultsState {
+export function writeConversationPlanDefaults(input: { defaultEnabled?: boolean }, settingsFile: string): ConversationPlanDefaultsState {
   const settings = readSettingsObject(settingsFile);
   const ui = isRecord(settings.ui) ? { ...settings.ui } : {};
   const conversationAutomation = isRecord(ui.conversationAutomation) ? { ...ui.conversationAutomation } : {};
@@ -177,12 +169,8 @@ export function readConversationPlanLibrary(settingsFile: string): ConversationP
             return null;
           }
 
-          const id = typeof preset.id === 'string' && preset.id.trim().length > 0
-            ? preset.id.trim()
-            : `preset-${index + 1}`;
-          const name = typeof preset.name === 'string' && preset.name.trim().length > 0
-            ? preset.name.trim()
-            : `Preset ${index + 1}`;
+          const id = typeof preset.id === 'string' && preset.id.trim().length > 0 ? preset.id.trim() : `preset-${index + 1}`;
+          const name = typeof preset.name === 'string' && preset.name.trim().length > 0 ? preset.name.trim() : `Preset ${index + 1}`;
           const updatedAt = normalizeTimestamp(preset.updatedAt, new Date(0).toISOString());
           const items = Array.isArray(preset.items)
             ? preset.items
@@ -224,12 +212,8 @@ export function writeConversationPlanLibrary(
               return null;
             }
 
-            const id = typeof preset.id === 'string' && preset.id.trim().length > 0
-              ? preset.id.trim()
-              : `preset-${index + 1}`;
-            const name = typeof preset.name === 'string' && preset.name.trim().length > 0
-              ? preset.name.trim()
-              : `Preset ${index + 1}`;
+            const id = typeof preset.id === 'string' && preset.id.trim().length > 0 ? preset.id.trim() : `preset-${index + 1}`;
+            const name = typeof preset.name === 'string' && preset.name.trim().length > 0 ? preset.name.trim() : `Preset ${index + 1}`;
             const updatedAt = normalizeTimestamp(preset.updatedAt, new Date().toISOString());
             const items = Array.isArray(preset.items)
               ? preset.items
@@ -247,13 +231,14 @@ export function writeConversationPlanLibrary(
     const presetIdSet = new Set(
       Array.isArray(workflowPresets.presets)
         ? workflowPresets.presets
-            .filter((preset): preset is ConversationPlanPresetRecord => (
-              isRecord(preset)
-              && typeof preset.id === 'string'
-              && typeof preset.name === 'string'
-              && typeof preset.updatedAt === 'string'
-              && Array.isArray(preset.items)
-            ))
+            .filter(
+              (preset): preset is ConversationPlanPresetRecord =>
+                isRecord(preset) &&
+                typeof preset.id === 'string' &&
+                typeof preset.name === 'string' &&
+                typeof preset.updatedAt === 'string' &&
+                Array.isArray(preset.items),
+            )
             .map((preset) => preset.id)
         : [],
     );

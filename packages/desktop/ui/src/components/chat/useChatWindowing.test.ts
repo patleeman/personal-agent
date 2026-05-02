@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { ChatRenderChunk } from './chatWindowing.js';
 import { buildChatRenderChunkLayouts, calculateAverageSpanHeight, resolveVisibleChunkRange } from './useChatWindowing.js';
 
@@ -39,7 +40,9 @@ describe('useChatWindowing helpers', () => {
   });
 
   it('builds chunk layouts using measured and estimated heights', () => {
-    expect(buildChatRenderChunkLayouts(chunks, { '0-1-1': 180 }, 100).map(({ key, top, height, bottom }) => ({ key, top, height, bottom }))).toEqual([
+    expect(
+      buildChatRenderChunkLayouts(chunks, { '0-1-1': 180 }, 100).map(({ key, top, height, bottom }) => ({ key, top, height, bottom })),
+    ).toEqual([
       { key: '0-1-1', top: 0, height: 180, bottom: 180 },
       { key: '2-4-1', top: 180, height: 300, bottom: 480 },
       { key: '5-5-1', top: 480, height: 100, bottom: 580 },
@@ -73,7 +76,12 @@ describe('useChatWindowing helpers', () => {
       spanCount: 1,
     }));
     const layouts = buildChatRenderChunkLayouts(manyChunks, {}, 100);
-    const range = resolveVisibleChunkRange({ chunkLayouts: layouts, focusMessageIndex: null, overscanChunks: Number.MAX_SAFE_INTEGER, viewport: null });
+    const range = resolveVisibleChunkRange({
+      chunkLayouts: layouts,
+      focusMessageIndex: null,
+      overscanChunks: Number.MAX_SAFE_INTEGER,
+      viewport: null,
+    });
 
     expect(range?.chunks.map((chunk) => chunk.key)).toEqual([
       '9-9-1',
@@ -92,7 +100,12 @@ describe('useChatWindowing helpers', () => {
 
   it('keeps a focused message mounted even outside the viewport', () => {
     const layouts = buildChatRenderChunkLayouts(chunks, {}, 100);
-    const range = resolveVisibleChunkRange({ chunkLayouts: layouts, focusMessageIndex: 0, overscanChunks: 0, viewport: { scrollTop: 500, clientHeight: 40 } });
+    const range = resolveVisibleChunkRange({
+      chunkLayouts: layouts,
+      focusMessageIndex: 0,
+      overscanChunks: 0,
+      viewport: { scrollTop: 500, clientHeight: 40 },
+    });
 
     expect(range?.chunks.map((chunk) => chunk.key)).toEqual(['0-1-1']);
   });

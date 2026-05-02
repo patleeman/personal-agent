@@ -52,9 +52,7 @@ function loadNodeSqliteDatabaseCtor(): SqliteDatabaseCtor | undefined {
     }) as typeof process.emitWarning;
 
     const nodeSqlite = require('node:sqlite') as { DatabaseSync?: SqliteDatabaseCtor };
-    return typeof nodeSqlite.DatabaseSync === 'function'
-      ? nodeSqlite.DatabaseSync
-      : undefined;
+    return typeof nodeSqlite.DatabaseSync === 'function' ? nodeSqlite.DatabaseSync : undefined;
   } catch {
     return undefined;
   } finally {

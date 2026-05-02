@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { SessionDetail, SessionMeta } from '../shared/types';
 
 const apiMocks = vi.hoisted(() => ({

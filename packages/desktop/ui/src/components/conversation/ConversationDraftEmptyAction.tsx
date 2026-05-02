@@ -1,10 +1,11 @@
-import { cx } from '../ui';
-import { DraftRelatedThreadsPanel } from '../DraftRelatedThreadsPanel';
-import { BrowsePathButton, ChatBubbleIcon, FolderIcon } from './ConversationComposerChrome';
 import type { RelatedConversationSearchResult } from '../../conversation/relatedConversationSearch';
+import { DraftRelatedThreadsPanel } from '../DraftRelatedThreadsPanel';
+import { cx } from '../ui';
+import { BrowsePathButton, ChatBubbleIcon, FolderIcon } from './ConversationComposerChrome';
 
 const DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS = 'max-w-[38rem]';
-const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
+const EMPTY_STATE_WORKSPACE_SELECT_CLASS =
+  'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
 
 export { DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS };
 
@@ -67,7 +68,9 @@ export function ConversationDraftEmptyAction({
             <span className="sr-only">Remote workspace path</span>
             <input
               value={draftCwdValue}
-              onChange={(event) => { onDraftRemoteCwdChange(event.target.value); }}
+              onChange={(event) => {
+                onDraftRemoteCwdChange(event.target.value);
+              }}
               className="h-10 w-full min-w-0 bg-transparent font-mono text-[13px] text-primary outline-none placeholder:text-secondary/70"
               aria-label="Remote workspace path"
               placeholder="~/workingdir/project"
@@ -88,20 +91,13 @@ export function ConversationDraftEmptyAction({
 
                 onSelectDraftWorkspace(nextWorkspacePath);
               }}
-              className={cx(
-                EMPTY_STATE_WORKSPACE_SELECT_CLASS,
-                hasDraftCwd ? 'font-mono text-primary' : 'text-secondary',
-              )}
+              className={cx(EMPTY_STATE_WORKSPACE_SELECT_CLASS, hasDraftCwd ? 'font-mono text-primary' : 'text-secondary')}
               aria-label="Saved workspace"
-              title={hasDraftCwd
-                ? draftCwdValue
-                : 'Start as a chat with no attached workspace.'}
+              title={hasDraftCwd ? draftCwdValue : 'Start as a chat with no attached workspace.'}
               disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
             >
               <option value="">
-                {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0
-                  ? 'Loading workspaces…'
-                  : 'Chat — no workspace'}
+                {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0 ? 'Loading workspaces…' : 'Chat — no workspace'}
               </option>
               {availableDraftWorkspacePaths.map((workspacePath) => (
                 <option key={workspacePath} value={workspacePath}>
@@ -109,7 +105,18 @@ export function ConversationDraftEmptyAction({
                 </option>
               ))}
             </select>
-            <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70">
+            <svg
+              aria-hidden="true"
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70"
+            >
               <path d="m6 9 6 6 6-6" />
             </svg>
           </label>
@@ -118,7 +125,13 @@ export function ConversationDraftEmptyAction({
         <BrowsePathButton
           busy={draftCwdPickBusy}
           onClick={onPickDraftCwd}
-          title={draftCwdPickBusy ? 'Choosing workspace…' : selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
+          title={
+            draftCwdPickBusy
+              ? 'Choosing workspace…'
+              : selectedExecutionTargetIsRemote
+                ? `Choose directory on ${selectedExecutionTargetLabel}`
+                : 'Choose workspace folder'
+          }
           ariaLabel={selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
         />
       </div>
@@ -127,9 +140,7 @@ export function ConversationDraftEmptyAction({
         <p className="text-[11px] text-secondary">Remote path on {selectedExecutionTargetLabel}.</p>
       ) : null}
 
-      {draftCwdError && (
-        <p className="text-[11px] text-danger/80">{draftCwdError}</p>
-      )}
+      {draftCwdError && <p className="text-[11px] text-danger/80">{draftCwdError}</p>}
 
       <DraftRelatedThreadsPanel
         query={relatedThreadQuery}

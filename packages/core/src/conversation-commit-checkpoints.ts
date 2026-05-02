@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
+
 import { validateConversationId } from './conversation-project-links.js';
 import { getStateRoot } from './runtime/paths.js';
 
@@ -70,9 +72,7 @@ function getConversationCommitCheckpointStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -195,13 +195,15 @@ function normalizeCheckpointComments(
     'commentUpdatedAt',
   );
 
-  return [{
-    id: `legacy-${randomUUID()}`,
-    authorName: 'You',
-    body: legacyComment,
-    createdAt: updatedAt,
-    updatedAt,
-  }];
+  return [
+    {
+      id: `legacy-${randomUUID()}`,
+      authorName: 'You',
+      body: legacyComment,
+      createdAt: updatedAt,
+      updatedAt,
+    },
+  ];
 }
 
 function normalizeCheckpointRecord(value: unknown): ConversationCommitCheckpointRecord {
@@ -213,9 +215,7 @@ function normalizeCheckpointRecord(value: unknown): ConversationCommitCheckpoint
   const id = typeof record.id === 'string' ? record.id.trim() : '';
   validateConversationCommitCheckpointId(id);
 
-  const files = Array.isArray(record.files)
-    ? record.files.map((file) => normalizeCheckpointFile(file))
-    : [];
+  const files = Array.isArray(record.files) ? record.files.map((file) => normalizeCheckpointFile(file)) : [];
   const comments = normalizeCheckpointComments(record);
 
   return {
@@ -254,10 +254,7 @@ function writeCheckpoint(path: string, record: ConversationCommitCheckpointRecor
   return record;
 }
 
-export function resolveProfileConversationCommitCheckpointsDir(options: {
-  profile: string;
-  stateRoot?: string;
-}): string {
+export function resolveProfileConversationCommitCheckpointsDir(options: { profile: string; stateRoot?: string }): string {
   validateProfileName(options.profile);
   return join(
     getConversationCommitCheckpointStateRoot(options.stateRoot),
@@ -281,7 +278,9 @@ export function resolveConversationCommitCheckpointPath(options: ResolveConversa
   return join(resolveConversationCommitCheckpointsDir(options), `${options.checkpointId}.json`);
 }
 
-export function getConversationCommitCheckpoint(options: ResolveConversationCommitCheckpointPathOptions): ConversationCommitCheckpointRecord | null {
+export function getConversationCommitCheckpoint(
+  options: ResolveConversationCommitCheckpointPathOptions,
+): ConversationCommitCheckpointRecord | null {
   const path = resolveConversationCommitCheckpointPath(options);
   if (!existsSync(path)) {
     return null;
@@ -290,7 +289,9 @@ export function getConversationCommitCheckpoint(options: ResolveConversationComm
   return readCheckpoint(path);
 }
 
-export function listConversationCommitCheckpoints(options: ResolveConversationCommitCheckpointOptions): ConversationCommitCheckpointSummary[] {
+export function listConversationCommitCheckpoints(
+  options: ResolveConversationCommitCheckpointOptions,
+): ConversationCommitCheckpointSummary[] {
   const dir = resolveConversationCommitCheckpointsDir(options);
   if (!existsSync(dir)) {
     return [];
@@ -333,19 +334,21 @@ export function saveConversationCommitCheckpoint(options: {
   validateConversationCommitCheckpointId(checkpointId);
 
   const updatedAt = normalizeIsoTimestamp(options.updatedAt ?? new Date().toISOString(), 'updatedAt');
-  const explicitComments = Array.isArray(options.comments)
-    ? options.comments.map((comment) => normalizeCheckpointComment(comment))
-    : null;
+  const explicitComments = Array.isArray(options.comments) ? options.comments.map((comment) => normalizeCheckpointComment(comment)) : null;
   const legacyComment = normalizeOptionalText(options.comment);
-  const comments = explicitComments ?? (legacyComment
-    ? [{
-        id: randomUUID(),
-        authorName: 'You',
-        body: legacyComment,
-        createdAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
-        updatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
-      } satisfies ConversationCommitCheckpointComment]
-    : []);
+  const comments =
+    explicitComments ??
+    (legacyComment
+      ? [
+          {
+            id: randomUUID(),
+            authorName: 'You',
+            body: legacyComment,
+            createdAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
+            updatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
+          } satisfies ConversationCommitCheckpointComment,
+        ]
+      : []);
 
   const record: ConversationCommitCheckpointRecord = {
     id: checkpointId,

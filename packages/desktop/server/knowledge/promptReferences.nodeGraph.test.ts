@@ -87,12 +87,14 @@ describe('expandPromptReferencesWithNodeGraph', () => {
       parseErrors: [],
     });
 
-    expect(expandPromptReferencesWithNodeGraph({
-      projectIds: ['project-seed'],
-      memoryDocIds: ['memory-seed'],
-      skillNames: ['missing-seed'],
-      maxRelatedPerSeed: 2,
-    })).toEqual({
+    expect(
+      expandPromptReferencesWithNodeGraph({
+        projectIds: ['project-seed'],
+        memoryDocIds: ['memory-seed'],
+        skillNames: ['missing-seed'],
+        maxRelatedPerSeed: 2,
+      }),
+    ).toEqual({
       projectIds: ['project-seed', 'parent-project'],
       memoryDocIds: ['memory-seed', 'child-note'],
       skillNames: ['missing-seed', 'skill-related'],
@@ -128,12 +130,14 @@ describe('expandPromptReferencesWithNodeGraph', () => {
       parseErrors: [],
     });
 
-    expect(expandPromptReferencesWithNodeGraph({
-      projectIds: [],
-      memoryDocIds: ['seed'],
-      skillNames: [],
-      maxRelatedPerSeed: 0.5,
-    })).toMatchObject({
+    expect(
+      expandPromptReferencesWithNodeGraph({
+        projectIds: [],
+        memoryDocIds: ['seed'],
+        skillNames: [],
+        maxRelatedPerSeed: 0.5,
+      }),
+    ).toMatchObject({
       memoryDocIds: ['seed', 'one', 'two'],
     });
   });
@@ -161,14 +165,13 @@ describe('expandPromptReferencesWithNodeGraph', () => {
       parseErrors: [],
     });
 
-    expect(expandPromptReferencesWithNodeGraph({
-      projectIds: [],
-      memoryDocIds: ['seed'],
-      skillNames: [],
-      maxRelatedPerSeed: Number.MAX_SAFE_INTEGER,
-    }).memoryDocIds).toEqual([
-      'seed',
-      ...Array.from({ length: 20 }, (_, index) => `note-${index}`),
-    ]);
+    expect(
+      expandPromptReferencesWithNodeGraph({
+        projectIds: [],
+        memoryDocIds: ['seed'],
+        skillNames: [],
+        maxRelatedPerSeed: Number.MAX_SAFE_INTEGER,
+      }).memoryDocIds,
+    ).toEqual(['seed', ...Array.from({ length: 20 }, (_, index) => `note-${index}`)]);
   });
 });

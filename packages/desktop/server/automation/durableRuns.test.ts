@@ -2,20 +2,28 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { markDurableRunAttentionRead } from '@personal-agent/core';
 import {
-  PersonalAgentDaemon,
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  type DaemonConfig,
+  PersonalAgentDaemon,
   resolveDaemonPaths,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
   saveDurableRunManifest,
   saveDurableRunStatus,
-  type DaemonConfig,
 } from '@personal-agent/daemon';
-import { clearDurableRunsListCache, getDurableRun, listDurableRunsWithTelemetry, normalizeDurableRunLogTail, readDurableRunLogDelta } from './durableRuns.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import {
+  clearDurableRunsListCache,
+  getDurableRun,
+  listDurableRunsWithTelemetry,
+  normalizeDurableRunLogTail,
+  readDurableRunLogDelta,
+} from './durableRuns.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -128,31 +136,39 @@ describe('durable run reads', () => {
 
     const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths().root);
     const runPaths = resolveDurableRunPaths(runsRoot, 'run-review');
-    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
-      id: 'run-review',
-      kind: 'background-run',
-      resumePolicy: 'manual',
-      createdAt: '2026-03-24T12:00:00.000Z',
-      source: {
-        type: 'background-run',
-        id: 'reviewable-work',
-      },
-    }));
-    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-review',
-      status: 'waiting',
-      createdAt: '2026-03-24T12:00:00.000Z',
-      updatedAt: '2026-03-24T12:05:00.000Z',
-      activeAttempt: 1,
-      startedAt: '2026-03-24T12:01:00.000Z',
-    }));
+    saveDurableRunManifest(
+      runPaths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-review',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-24T12:00:00.000Z',
+        source: {
+          type: 'background-run',
+          id: 'reviewable-work',
+        },
+      }),
+    );
+    saveDurableRunStatus(
+      runPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-review',
+        status: 'waiting',
+        createdAt: '2026-03-24T12:00:00.000Z',
+        updatedAt: '2026-03-24T12:05:00.000Z',
+        activeAttempt: 1,
+        startedAt: '2026-03-24T12:01:00.000Z',
+      }),
+    );
 
     clearDurableRunsListCache();
     const firstRead = await listDurableRunsWithTelemetry();
-    const run = firstRead.result.runs.find((entry) => entry.runId === 'run-review') as ((typeof firstRead.result.runs)[number] & {
-      attentionDismissed?: boolean;
-      attentionSignature?: string | null;
-    }) | undefined;
+    const run = firstRead.result.runs.find((entry) => entry.runId === 'run-review') as
+      | ((typeof firstRead.result.runs)[number] & {
+          attentionDismissed?: boolean;
+          attentionSignature?: string | null;
+        })
+      | undefined;
     expect(run).toBeDefined();
     expect(run?.attentionDismissed).toBe(false);
     expect(run?.attentionSignature).toBeTruthy();

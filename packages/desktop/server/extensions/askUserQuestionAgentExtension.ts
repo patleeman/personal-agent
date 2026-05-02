@@ -1,5 +1,5 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { Type } from '@sinclair/typebox';
 
 const ASK_USER_QUESTION_LEGACY_MAX_OPTIONS = 6;
 const ASK_USER_QUESTION_MAX_QUESTIONS = 8;
@@ -16,43 +16,42 @@ const AskUserQuestionPromptParams = Type.Object({
   label: Type.Optional(Type.String({ description: 'User-facing question label.' })),
   question: Type.Optional(Type.String({ description: 'Alias for label.' })),
   details: Type.Optional(Type.String({ description: 'Optional supporting context for this question.' })),
-  style: Type.Optional(Type.Union([
-    Type.Literal('radio'),
-    Type.Literal('check'),
-    Type.Literal('checkbox'),
-  ], { description: 'radio for one choice, check/checkbox for multi-select.' })),
-  options: Type.Array(
-    Type.Union([
-      Type.String({ minLength: 1 }),
-      AskUserQuestionOptionParams,
-    ]),
-    {
-      minItems: 1,
-      maxItems: ASK_USER_QUESTION_MAX_OPTIONS_PER_QUESTION,
-      description: 'Available answers for this question.',
-    },
+  style: Type.Optional(
+    Type.Union([Type.Literal('radio'), Type.Literal('check'), Type.Literal('checkbox')], {
+      description: 'radio for one choice, check/checkbox for multi-select.',
+    }),
   ),
+  options: Type.Array(Type.Union([Type.String({ minLength: 1 }), AskUserQuestionOptionParams]), {
+    minItems: 1,
+    maxItems: ASK_USER_QUESTION_MAX_OPTIONS_PER_QUESTION,
+    description: 'Available answers for this question.',
+  }),
 });
 
 const AskUserQuestionToolParams = Type.Object({
-  question: Type.Optional(Type.String({
-    description: 'Legacy single-question form. Use questions[] for multiple questions or check-style questions.',
-  })),
-  details: Type.Optional(Type.String({
-    description: 'Optional overall context, or legacy single-question context when question is used alone.',
-  })),
-  options: Type.Optional(Type.Array(
-    Type.String({ minLength: 1 }),
-    {
+  question: Type.Optional(
+    Type.String({
+      description: 'Legacy single-question form. Use questions[] for multiple questions or check-style questions.',
+    }),
+  ),
+  details: Type.Optional(
+    Type.String({
+      description: 'Optional overall context, or legacy single-question context when question is used alone.',
+    }),
+  ),
+  options: Type.Optional(
+    Type.Array(Type.String({ minLength: 1 }), {
       description: 'Legacy quick-reply options for a single-question prompt.',
       maxItems: ASK_USER_QUESTION_LEGACY_MAX_OPTIONS,
-    },
-  )),
-  questions: Type.Optional(Type.Array(AskUserQuestionPromptParams, {
-    minItems: 1,
-    maxItems: ASK_USER_QUESTION_MAX_QUESTIONS,
-    description: 'Structured questions to render in the desktop UI. Prefer this for multiple questions and radio/check layouts.',
-  })),
+    }),
+  ),
+  questions: Type.Optional(
+    Type.Array(AskUserQuestionPromptParams, {
+      minItems: 1,
+      maxItems: ASK_USER_QUESTION_MAX_QUESTIONS,
+      description: 'Structured questions to render in the desktop UI. Prefer this for multiple questions and radio/check layouts.',
+    }),
+  ),
 });
 
 type AskUserQuestionStyle = 'radio' | 'check';
@@ -154,9 +153,7 @@ function dedupeQuestionIds(questions: AskUserQuestionPrompt[]): AskUserQuestionP
     const seenCount = counts.get(baseId) ?? 0;
     counts.set(baseId, seenCount + 1);
 
-    return seenCount === 0
-      ? question
-      : { ...question, id: `${baseId}-${seenCount + 1}` };
+    return seenCount === 0 ? question : { ...question, id: `${baseId}-${seenCount + 1}` };
   });
 }
 
@@ -196,11 +193,7 @@ function normalizeStructuredPrompt(value: unknown, index: number): AskUserQuesti
   };
 }
 
-function normalizeLegacyQuestion(params: {
-  question?: unknown;
-  details?: unknown;
-  options?: unknown;
-}): AskUserQuestionPayload {
+function normalizeLegacyQuestion(params: { question?: unknown; details?: unknown; options?: unknown }): AskUserQuestionPayload {
   const question = readOptionalString(params.question);
   if (!question) {
     throw new Error('question is required when questions is not provided.');
@@ -210,13 +203,15 @@ function normalizeLegacyQuestion(params: {
   const options = normalizeOptions(params.options);
 
   return {
-    questions: [{
-      id: 'question-1',
-      label: question,
-      ...(details ? { details } : {}),
-      style: 'radio',
-      options,
-    }],
+    questions: [
+      {
+        id: 'question-1',
+        label: question,
+        ...(details ? { details } : {}),
+        style: 'radio',
+        options,
+      },
+    ],
   };
 }
 
@@ -239,9 +234,7 @@ function normalizePayload(params: {
 }
 
 function formatResultText(payload: AskUserQuestionPayload): string {
-  const lines = [
-    `Asked the user ${payload.questions.length === 1 ? 'a question' : `${payload.questions.length} questions`}.`,
-  ];
+  const lines = [`Asked the user ${payload.questions.length === 1 ? 'a question' : `${payload.questions.length} questions`}.`];
 
   if (payload.details) {
     lines.push(`Details: ${payload.details}`);
@@ -282,10 +275,12 @@ export function createAskUserQuestionAgentExtension(): (pi: ExtensionAPI) => voi
         const conversationId = ctx.sessionManager.getSessionId();
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: formatResultText(payload),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: formatResultText(payload),
+            },
+          ],
           details: {
             action: 'ask_user_question',
             conversationId,

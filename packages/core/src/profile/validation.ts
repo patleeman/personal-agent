@@ -2,14 +2,7 @@
  * Profile validation logic with source-aware error reporting
  */
 
-import type {
-  PartialProfile,
-  Profile,
-  ProfileSource,
-  ValidationError,
-  ValidationResult,
-} from './types.js';
-
+import type { PartialProfile, Profile, ProfileSource, ValidationError, ValidationResult } from './types.js';
 
 // Email validation regex (simplified RFC 5322)
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,24 +45,24 @@ function validateString(
   value: unknown,
   field: string,
   source: ProfileSource | 'merged',
-  options: { min?: number; max?: number; trim?: boolean } = {}
+  options: { min?: number; max?: number; trim?: boolean } = {},
 ): ValidationError | null {
   if (value === undefined || value === null) return null;
-  
+
   if (typeof value !== 'string') {
     return { source, field, message: `Expected string, got ${typeof value}`, value };
   }
-  
+
   const trimmed = options.trim !== false ? value.trim() : value;
-  
+
   if (options.min !== undefined && trimmed.length < options.min) {
     return { source, field, message: `Minimum length is ${options.min}`, value };
   }
-  
+
   if (options.max !== undefined && trimmed.length > options.max) {
     return { source, field, message: `Maximum length is ${options.max}`, value };
   }
-  
+
   return null;
 }
 
@@ -80,51 +73,43 @@ function validateEnum<T extends string>(
   value: unknown,
   field: string,
   source: ProfileSource | 'merged',
-  allowed: readonly T[]
+  allowed: readonly T[],
 ): ValidationError | null {
   if (value === undefined || value === null) return null;
-  
+
   if (!allowed.includes(value as T)) {
     return { source, field, message: `Must be one of: ${allowed.join(', ')}`, value };
   }
-  
+
   return null;
 }
 
 /**
  * Validate boolean field
  */
-function validateBoolean(
-  value: unknown,
-  field: string,
-  source: ProfileSource | 'merged'
-): ValidationError | null {
+function validateBoolean(value: unknown, field: string, source: ProfileSource | 'merged'): ValidationError | null {
   if (value === undefined || value === null) return null;
-  
+
   if (typeof value !== 'boolean') {
     return { source, field, message: `Expected boolean, got ${typeof value}`, value };
   }
-  
+
   return null;
 }
 
 /**
  * Validate notification preferences
  */
-function validateNotifications(
-  value: unknown,
-  field: string,
-  source: ProfileSource | 'merged'
-): ValidationError[] {
+function validateNotifications(value: unknown, field: string, source: ProfileSource | 'merged'): ValidationError[] {
   if (value === undefined || value === null) return [];
-  
+
   if (typeof value !== 'object' || value === null) {
     return [{ source, field, message: 'Expected object', value }];
   }
-  
+
   const obj = value as Record<string, unknown>;
   const errors: ValidationError[] = [];
-  
+
   const emailError = validateBoolean(obj.email, `${field}.email`, source);
   if (emailError) errors.push(emailError);
 
@@ -133,7 +118,7 @@ function validateNotifications(
 
   const digestError = validateEnum(obj.digest, `${field}.digest`, source, ['daily', 'weekly', 'never']);
   if (digestError) errors.push(digestError);
-  
+
   // Check for unknown keys
   const knownKeys = ['email', 'push', 'digest'];
   for (const key of Object.keys(obj)) {
@@ -141,24 +126,20 @@ function validateNotifications(
       errors.push({ source, field: `${field}.${key}`, message: 'Unknown field', value: obj[key] });
     }
   }
-  
+
   return errors;
 }
 
 /**
  * Validate privacy settings
  */
-function validatePrivacy(
-  value: unknown,
-  field: string,
-  source: ProfileSource | 'merged'
-): ValidationError[] {
+function validatePrivacy(value: unknown, field: string, source: ProfileSource | 'merged'): ValidationError[] {
   if (value === undefined || value === null) return [];
-  
+
   if (typeof value !== 'object' || value === null) {
     return [{ source, field, message: 'Expected object', value }];
   }
-  
+
   const obj = value as Record<string, unknown>;
   const errors: ValidationError[] = [];
 
@@ -175,31 +156,27 @@ function validatePrivacy(
       errors.push({ source, field: `${field}.${key}`, message: 'Unknown field', value: obj[key] });
     }
   }
-  
+
   return errors;
 }
 
 /**
  * Validate model preferences
  */
-function validateModelPreferences(
-  value: unknown,
-  field: string,
-  source: ProfileSource | 'merged'
-): ValidationError[] {
+function validateModelPreferences(value: unknown, field: string, source: ProfileSource | 'merged'): ValidationError[] {
   if (value === undefined || value === null) return [];
-  
+
   if (typeof value !== 'object' || value === null) {
     return [{ source, field, message: 'Expected object', value }];
   }
-  
+
   const obj = value as Record<string, unknown>;
   const errors: ValidationError[] = [];
-  
+
   // default is required when object is present
   const defaultError = validateString(obj.default, `${field}.default`, source, { min: 1 });
   if (defaultError) errors.push(defaultError);
-  
+
   // Optional fields must be string or null
   for (const key of ['coding', 'analysis', 'creative'] as const) {
     const val = obj[key];
@@ -212,7 +189,7 @@ function validateModelPreferences(
       });
     }
   }
-  
+
   // Check for unknown keys
   const knownKeys = ['default', 'coding', 'analysis', 'creative'];
   for (const key of Object.keys(obj)) {
@@ -220,27 +197,23 @@ function validateModelPreferences(
       errors.push({ source, field: `${field}.${key}`, message: 'Unknown field', value: obj[key] });
     }
   }
-  
+
   return errors;
 }
 
 /**
  * Validate tool permissions
  */
-function validateToolPermissions(
-  value: unknown,
-  field: string,
-  source: ProfileSource | 'merged'
-): ValidationError[] {
+function validateToolPermissions(value: unknown, field: string, source: ProfileSource | 'merged'): ValidationError[] {
   if (value === undefined || value === null) return [];
-  
+
   if (typeof value !== 'object' || value === null) {
     return [{ source, field, message: 'Expected object', value }];
   }
-  
+
   const obj = value as Record<string, unknown>;
   const errors: ValidationError[] = [];
-  
+
   for (const key of ['webSearch', 'codeExecution', 'fileSystem', 'externalApis'] as const) {
     const val = obj[key];
     if (val !== undefined && val !== null) {
@@ -248,7 +221,7 @@ function validateToolPermissions(
       if (err) errors.push(err);
     }
   }
-  
+
   // Check for unknown keys
   const knownKeys = ['webSearch', 'codeExecution', 'fileSystem', 'externalApis'];
   for (const key of Object.keys(obj)) {
@@ -256,60 +229,57 @@ function validateToolPermissions(
       errors.push({ source, field: `${field}.${key}`, message: 'Unknown field', value: obj[key] });
     }
   }
-  
+
   return errors;
 }
 
 /**
  * Validate a partial profile (for individual layers)
  */
-export function validatePartialProfile(
-  profile: unknown,
-  source: ProfileSource
-): ValidationResult {
+export function validatePartialProfile(profile: unknown, source: ProfileSource): ValidationResult {
   if (profile === undefined || profile === null) {
     return { valid: true, errors: [] };
   }
-  
+
   if (typeof profile !== 'object' || Array.isArray(profile)) {
     return {
       valid: false,
       errors: [{ source, field: '', message: 'Expected object', value: profile }],
     };
   }
-  
+
   const obj = profile as PartialProfile;
   const errors: ValidationError[] = [];
-  
+
   // Validate metadata fields if present
   if (obj.id !== undefined) {
     if (typeof obj.id !== 'string' || !UUID_REGEX.test(obj.id)) {
       errors.push({ source, field: 'id', message: 'Invalid UUID v4 format', value: obj.id });
     }
   }
-  
+
   if (obj.version !== undefined) {
     if (typeof obj.version !== 'string' || !SEMVER_REGEX.test(obj.version)) {
       errors.push({ source, field: 'version', message: 'Invalid semver format', value: obj.version });
     }
   }
-  
+
   if (obj.createdAt !== undefined) {
     if (typeof obj.createdAt !== 'string' || !isValidISO8601(obj.createdAt)) {
       errors.push({ source, field: 'createdAt', message: 'Invalid ISO8601 timestamp', value: obj.createdAt });
     }
   }
-  
+
   if (obj.updatedAt !== undefined) {
     if (typeof obj.updatedAt !== 'string' || !isValidISO8601(obj.updatedAt)) {
       errors.push({ source, field: 'updatedAt', message: 'Invalid ISO8601 timestamp', value: obj.updatedAt });
     }
   }
-  
+
   // Validate data fields
   const nameError = validateString(obj.name, 'name', source, { min: 1, max: 100 });
   if (nameError) errors.push(nameError);
-  
+
   if (obj.email !== undefined && obj.email !== null) {
     const emailError = validateString(obj.email, 'email', source);
     if (emailError) {
@@ -318,32 +288,32 @@ export function validatePartialProfile(
       errors.push({ source, field: 'email', message: 'Invalid email format', value: obj.email });
     }
   }
-  
+
   if (obj.timezone !== undefined) {
     if (typeof obj.timezone !== 'string' || !isValidTimezone(obj.timezone)) {
       errors.push({ source, field: 'timezone', message: 'Invalid IANA timezone', value: obj.timezone });
     }
   }
-  
+
   if (obj.locale !== undefined) {
     if (typeof obj.locale !== 'string' || !isValidLocale(obj.locale)) {
       errors.push({ source, field: 'locale', message: 'Invalid BCP 47 locale', value: obj.locale });
     }
   }
-  
+
   const themeError = validateEnum(obj.theme, 'theme', source, ['light', 'dark', 'system']);
   if (themeError) errors.push(themeError);
-  
+
   errors.push(...validateNotifications(obj.notifications, 'notifications', source));
   errors.push(...validatePrivacy(obj.privacy, 'privacy', source));
   errors.push(...validateModelPreferences(obj.modelPreferences, 'modelPreferences', source));
   errors.push(...validateToolPermissions(obj.toolPermissions, 'toolPermissions', source));
-  
+
   const customInstructionsError = validateString(obj.customInstructions, 'customInstructions', source, {
     max: 4000,
   });
   if (customInstructionsError) errors.push(customInstructionsError);
-  
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -357,50 +327,50 @@ export function validateProfile(profile: unknown): ValidationResult {
       errors: [{ source: 'merged', field: '', message: 'Expected object', value: profile }],
     };
   }
-  
+
   const obj = profile as Profile;
   const errors: ValidationError[] = [];
-  
+
   // Required fields
   if (!obj.id || typeof obj.id !== 'string' || !UUID_REGEX.test(obj.id)) {
     errors.push({ source: 'merged', field: 'id', message: 'Required valid UUID v4', value: obj.id });
   }
-  
+
   if (!obj.version || typeof obj.version !== 'string' || !SEMVER_REGEX.test(obj.version)) {
     errors.push({ source: 'merged', field: 'version', message: 'Required valid semver', value: obj.version });
   }
-  
+
   if (!obj.createdAt || typeof obj.createdAt !== 'string' || !isValidISO8601(obj.createdAt)) {
     errors.push({ source: 'merged', field: 'createdAt', message: 'Required valid ISO8601 timestamp', value: obj.createdAt });
   }
-  
+
   if (!obj.updatedAt || typeof obj.updatedAt !== 'string' || !isValidISO8601(obj.updatedAt)) {
     errors.push({ source: 'merged', field: 'updatedAt', message: 'Required valid ISO8601 timestamp', value: obj.updatedAt });
   }
-  
+
   if (!obj.name || typeof obj.name !== 'string' || obj.name.trim().length < 1 || obj.name.length > 100) {
     errors.push({ source: 'merged', field: 'name', message: 'Required: 1-100 characters', value: obj.name });
   }
-  
+
   // Optional fields with defaults
   if (obj.email !== null && obj.email !== undefined) {
     if (typeof obj.email !== 'string' || !EMAIL_REGEX.test(obj.email)) {
       errors.push({ source: 'merged', field: 'email', message: 'Invalid email format', value: obj.email });
     }
   }
-  
+
   if (!obj.timezone || typeof obj.timezone !== 'string' || !isValidTimezone(obj.timezone)) {
     errors.push({ source: 'merged', field: 'timezone', message: 'Required valid IANA timezone', value: obj.timezone });
   }
-  
+
   if (!obj.locale || typeof obj.locale !== 'string' || !isValidLocale(obj.locale)) {
     errors.push({ source: 'merged', field: 'locale', message: 'Required valid BCP 47 locale', value: obj.locale });
   }
-  
+
   if (!obj.theme || !['light', 'dark', 'system'].includes(obj.theme)) {
     errors.push({ source: 'merged', field: 'theme', message: 'Required: light, dark, or system', value: obj.theme });
   }
-  
+
   // Nested objects
   errors.push(...validateNotifications(obj.notifications, 'notifications', 'merged'));
   errors.push(...validatePrivacy(obj.privacy, 'privacy', 'merged'));
@@ -417,7 +387,12 @@ export function validateProfile(profile: unknown): ValidationResult {
       errors.push({ source: 'merged', field: 'notifications.push', message: 'Required boolean', value: obj.notifications.push });
     }
     if (!['daily', 'weekly', 'never'].includes(obj.notifications.digest)) {
-      errors.push({ source: 'merged', field: 'notifications.digest', message: 'Required: daily, weekly, or never', value: obj.notifications.digest });
+      errors.push({
+        source: 'merged',
+        field: 'notifications.digest',
+        message: 'Required: daily, weekly, or never',
+        value: obj.notifications.digest,
+      });
     }
   }
 
@@ -436,7 +411,12 @@ export function validateProfile(profile: unknown): ValidationResult {
     errors.push({ source: 'merged', field: 'modelPreferences', message: 'Required object', value: obj.modelPreferences });
   } else {
     if (typeof obj.modelPreferences.default !== 'string' || obj.modelPreferences.default.length === 0) {
-      errors.push({ source: 'merged', field: 'modelPreferences.default', message: 'Required non-empty string', value: obj.modelPreferences.default });
+      errors.push({
+        source: 'merged',
+        field: 'modelPreferences.default',
+        message: 'Required non-empty string',
+        value: obj.modelPreferences.default,
+      });
     }
 
     for (const key of ['coding', 'analysis', 'creative'] as const) {
@@ -457,12 +437,12 @@ export function validateProfile(profile: unknown): ValidationResult {
       }
     }
   }
-  
+
   if (obj.customInstructions !== undefined && obj.customInstructions !== null) {
     if (typeof obj.customInstructions !== 'string' || obj.customInstructions.length > 4000) {
       errors.push({ source: 'merged', field: 'customInstructions', message: 'Max 4000 characters', value: obj.customInstructions });
     }
   }
-  
+
   return { valid: errors.length === 0, errors };
 }

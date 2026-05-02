@@ -1,8 +1,24 @@
-import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { appendConversationWorkspaceMetadata, buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, clearStoredSessionRemoteTargetByFile, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, renameStoredSession, setStoredSessionRemoteTargetByFile } from './sessions.js';
+
+import {
+  appendConversationWorkspaceMetadata,
+  buildAppendOnlySessionDetailResponse,
+  buildDisplayBlocksFromEntries,
+  clearSessionCaches,
+  clearStoredSessionRemoteTargetByFile,
+  listSessions,
+  readSessionBlock,
+  readSessionBlocks,
+  readSessionBlocksWithTelemetry,
+  readSessionImageAsset,
+  readSessionSearchText,
+  renameStoredSession,
+  setStoredSessionRemoteTargetByFile,
+} from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -46,9 +62,8 @@ function writeSessionFile(options: {
   const cwd = options.cwd ?? '/tmp/project';
   const title = options.title ?? 'Initial title';
   const assistantTexts = options.assistantTexts ?? ['Assistant reply'];
-  const lastAssistantId = assistantTexts.length > 0
-    ? `${options.sessionId}-assistant-${assistantTexts.length}`
-    : `${options.sessionId}-user-1`;
+  const lastAssistantId =
+    assistantTexts.length > 0 ? `${options.sessionId}-assistant-${assistantTexts.length}` : `${options.sessionId}-user-1`;
 
   const lines = [
     JSON.stringify({
@@ -66,24 +81,28 @@ function writeSessionFile(options: {
       timestamp,
       message: { role: 'user', content: title },
     }),
-    ...assistantTexts.map((text, index) => JSON.stringify({
-      type: 'message',
-      id: `${options.sessionId}-assistant-${index + 1}`,
-      parentId: index === 0 ? `${options.sessionId}-user-1` : `${options.sessionId}-assistant-${index}`,
-      timestamp: `2026-03-11T12:00:0${index + 1}.000Z`,
-      message: {
-        role: 'assistant',
-        content: [{ type: 'text', text }],
-      },
-    })),
+    ...assistantTexts.map((text, index) =>
+      JSON.stringify({
+        type: 'message',
+        id: `${options.sessionId}-assistant-${index + 1}`,
+        parentId: index === 0 ? `${options.sessionId}-user-1` : `${options.sessionId}-assistant-${index}`,
+        timestamp: `2026-03-11T12:00:0${index + 1}.000Z`,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text }],
+        },
+      }),
+    ),
     ...(options.sessionName
-      ? [JSON.stringify({
-          type: 'session_info',
-          id: `${options.sessionId}-session-info`,
-          parentId: lastAssistantId,
-          timestamp: '2026-03-11T12:00:59.000Z',
-          name: options.sessionName,
-        })]
+      ? [
+          JSON.stringify({
+            type: 'session_info',
+            id: `${options.sessionId}-session-info`,
+            parentId: lastAssistantId,
+            timestamp: '2026-03-11T12:00:59.000Z',
+            name: options.sessionName,
+          }),
+        ]
       : []),
   ];
 
@@ -119,13 +138,13 @@ describe('sessions', () => {
 
     const detail = readSessionBlocks('session-0');
     expect(detail).not.toBeNull();
-    expect(detail?.meta).toEqual(expect.objectContaining({
-      id: 'session-0',
-      title: 'Direct open',
-    }));
-    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
-      'Loaded without listing first',
-    ]);
+    expect(detail?.meta).toEqual(
+      expect.objectContaining({
+        id: 'session-0',
+        title: 'Direct open',
+      }),
+    );
+    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual(['Loaded without listing first']);
   });
 
   it('can load only the newest tail of conversation blocks for large archived transcripts', () => {
@@ -143,10 +162,7 @@ describe('sessions', () => {
     expect(detail).not.toBeNull();
     expect(detail?.totalBlocks).toBe(5);
     expect(detail?.blockOffset).toBe(3);
-    expect(detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
-      'Reply 3',
-      'Reply 4',
-    ]);
+    expect(detail?.blocks.map((block) => (block.type === 'text' ? block.text : block.type))).toEqual(['Reply 3', 'Reply 4']);
   });
 
   it('indexes the most recent conversation text first for related-thread search', () => {
@@ -186,12 +202,14 @@ describe('sessions', () => {
       signature: 'sig-2',
     };
 
-    expect(buildAppendOnlySessionDetailResponse({
-      detail,
-      knownBlockOffset: 2,
-      knownTotalBlocks: 5,
-      knownLastBlockId: 'assistant-3',
-    })).toEqual({
+    expect(
+      buildAppendOnlySessionDetailResponse({
+        detail,
+        knownBlockOffset: 2,
+        knownTotalBlocks: 5,
+        knownLastBlockId: 'assistant-3',
+      }),
+    ).toEqual({
       appendOnly: true,
       meta: detail.meta,
       blocks: [{ type: 'text', id: 'assistant-4', ts: '2026-03-11T12:00:04.000Z', text: 'Reply 4' }],
@@ -225,12 +243,14 @@ describe('sessions', () => {
       signature: 'sig-2',
     };
 
-    expect(buildAppendOnlySessionDetailResponse({
-      detail,
-      knownBlockOffset: 2,
-      knownTotalBlocks: 5,
-      knownLastBlockId: 'assistant-3',
-    })).toBeNull();
+    expect(
+      buildAppendOnlySessionDetailResponse({
+        detail,
+        knownBlockOffset: 2,
+        knownTotalBlocks: 5,
+        knownLastBlockId: 'assistant-3',
+      }),
+    ).toBeNull();
   });
 
   it('rejects unsafe append-only transcript cache offsets', () => {
@@ -252,23 +272,27 @@ describe('sessions', () => {
       signature: 'sig-unsafe',
     };
 
-    expect(buildAppendOnlySessionDetailResponse({
-      detail,
-      knownBlockOffset: Number.MAX_SAFE_INTEGER + 1,
-      knownTotalBlocks: 0,
-      knownLastBlockId: 'assistant-1',
-    })).toBeNull();
+    expect(
+      buildAppendOnlySessionDetailResponse({
+        detail,
+        knownBlockOffset: Number.MAX_SAFE_INTEGER + 1,
+        knownTotalBlocks: 0,
+        knownLastBlockId: 'assistant-1',
+      }),
+    ).toBeNull();
 
-    expect(buildAppendOnlySessionDetailResponse({
-      detail: {
-        ...detail,
-        blockOffset: Number.MAX_SAFE_INTEGER + 1,
-        totalBlocks: Number.MAX_SAFE_INTEGER + 3,
-      },
-      knownBlockOffset: 0,
-      knownTotalBlocks: Number.MAX_SAFE_INTEGER + 1,
-      knownLastBlockId: 'assistant-1',
-    })).toBeNull();
+    expect(
+      buildAppendOnlySessionDetailResponse({
+        detail: {
+          ...detail,
+          blockOffset: Number.MAX_SAFE_INTEGER + 1,
+          totalBlocks: Number.MAX_SAFE_INTEGER + 3,
+        },
+        knownBlockOffset: 0,
+        knownTotalBlocks: Number.MAX_SAFE_INTEGER + 1,
+        knownLastBlockId: 'assistant-1',
+      }),
+    ).toBeNull();
   });
 
   it('reports cache and loader telemetry for archived transcript tail reads', () => {
@@ -283,10 +307,7 @@ describe('sessions', () => {
     });
 
     const firstRead = readSessionBlocksWithTelemetry('session-telemetry', { tailBlocks: 2 });
-    expect(firstRead.detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
-      'Reply 2',
-      'Reply 3',
-    ]);
+    expect(firstRead.detail?.blocks.map((block) => (block.type === 'text' ? block.text : block.type))).toEqual(['Reply 2', 'Reply 3']);
     expect(firstRead.telemetry).toMatchObject({
       cache: 'miss',
       loader: 'fast-tail',
@@ -321,11 +342,7 @@ describe('sessions', () => {
     });
 
     const read = readSessionBlocksWithTelemetry('session-unsafe-tail', { tailBlocks: Number.MAX_SAFE_INTEGER + 1 });
-    expect(read.detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
-      'user',
-      'Reply 1',
-      'Reply 2',
-    ]);
+    expect(read.detail?.blocks.map((block) => (block.type === 'text' ? block.text : block.type))).toEqual(['user', 'Reply 1', 'Reply 2']);
     expect(read.telemetry).toMatchObject({
       cache: 'miss',
       loader: 'full',
@@ -369,10 +386,7 @@ describe('sessions', () => {
     });
 
     const initialDetail = readSessionBlocks('session-cache', { tailBlocks: 2 });
-    expect(initialDetail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
-      'user',
-      'Reply 1',
-    ]);
+    expect(initialDetail?.blocks.map((block) => (block.type === 'text' ? block.text : block.type))).toEqual(['user', 'Reply 1']);
     expect(initialDetail?.signature).toMatch(/^\d+:\d+(?:\.\d+)?$/);
 
     writeSessionFile({
@@ -387,10 +401,7 @@ describe('sessions', () => {
     expect(detail?.signature).not.toBe(initialDetail?.signature);
     expect(detail?.totalBlocks).toBe(3);
     expect(detail?.blockOffset).toBe(1);
-    expect(detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
-      'Reply 1',
-      'Reply 2',
-    ]);
+    expect(detail?.blocks.map((block) => (block.type === 'text' ? block.text : block.type))).toEqual(['Reply 1', 'Reply 2']);
   });
 
   it('keeps exact tail counts when archived sessions include compaction summaries', () => {
@@ -400,17 +411,76 @@ describe('sessions', () => {
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-compaction.jsonl');
-    writeFileSync(filePath, [
-      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-compaction', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', id: 'session-tail-compaction-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
-      JSON.stringify({ type: 'message', id: 'c-user-1', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', message: { role: 'user', content: 'Before compaction' } }),
-      JSON.stringify({ type: 'message', id: 'c-assistant-1', parentId: 'c-user-1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Older reply' }] } }),
-      JSON.stringify({ type: 'message', id: 'c-user-2', parentId: 'c-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'user', content: 'Keep this prompt' } }),
-      JSON.stringify({ type: 'message', id: 'c-assistant-2', parentId: 'c-user-2', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Keep this reply' }] } }),
-      JSON.stringify({ type: 'compaction', id: 'c-compaction-1', parentId: 'c-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', summary: 'Compacted.', firstKeptEntryId: 'c-user-2', tokensBefore: 1234 }),
-      JSON.stringify({ type: 'message', id: 'c-user-3', parentId: 'c-compaction-1', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'user', content: 'Continue after compaction' } }),
-      JSON.stringify({ type: 'message', id: 'c-assistant-3', parentId: 'c-user-3', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Newest reply' }] } }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          version: 3,
+          id: 'session-tail-compaction',
+          timestamp: '2026-03-11T12:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({
+          type: 'model_change',
+          id: 'session-tail-compaction-model',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          modelId: 'test-model',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'c-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: { role: 'user', content: 'Before compaction' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'c-assistant-1',
+          parentId: 'c-user-1',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Older reply' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'c-user-2',
+          parentId: 'c-assistant-1',
+          timestamp: '2026-03-11T12:00:02.000Z',
+          message: { role: 'user', content: 'Keep this prompt' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'c-assistant-2',
+          parentId: 'c-user-2',
+          timestamp: '2026-03-11T12:00:03.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Keep this reply' }] },
+        }),
+        JSON.stringify({
+          type: 'compaction',
+          id: 'c-compaction-1',
+          parentId: 'c-assistant-2',
+          timestamp: '2026-03-11T12:00:04.000Z',
+          summary: 'Compacted.',
+          firstKeptEntryId: 'c-user-2',
+          tokensBefore: 1234,
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'c-user-3',
+          parentId: 'c-compaction-1',
+          timestamp: '2026-03-11T12:00:05.000Z',
+          message: { role: 'user', content: 'Continue after compaction' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'c-assistant-3',
+          parentId: 'c-user-3',
+          timestamp: '2026-03-11T12:00:06.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Newest reply' }] },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-tail-compaction', { tailBlocks: 2 });
     expect(detail?.totalBlocks).toBe(7);
@@ -428,15 +498,62 @@ describe('sessions', () => {
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-hidden.jsonl');
-    writeFileSync(filePath, [
-      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-hidden', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', id: 'session-tail-hidden-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
-      JSON.stringify({ type: 'message', id: 'h-user-1', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', message: { role: 'user', content: 'Visible prompt' } }),
-      JSON.stringify({ type: 'message', id: 'h-assistant-1', parentId: 'h-user-1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }] } }),
-      JSON.stringify({ type: 'custom_message', id: 'h-hidden-1', parentId: 'h-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', customType: 'conversation_automation_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
-      JSON.stringify({ type: 'message', id: 'h-assistant-2', parentId: 'h-hidden-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
-      JSON.stringify({ type: 'message', id: 'h-tool-1', parentId: 'h-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'bash', content: [{ type: 'text', text: 'ls' }] } }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          version: 3,
+          id: 'session-tail-hidden',
+          timestamp: '2026-03-11T12:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({
+          type: 'model_change',
+          id: 'session-tail-hidden-model',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          modelId: 'test-model',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'h-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: { role: 'user', content: 'Visible prompt' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'h-assistant-1',
+          parentId: 'h-user-1',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }] },
+        }),
+        JSON.stringify({
+          type: 'custom_message',
+          id: 'h-hidden-1',
+          parentId: 'h-assistant-1',
+          timestamp: '2026-03-11T12:00:02.000Z',
+          customType: 'conversation_automation_review',
+          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          display: false,
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'h-assistant-2',
+          parentId: 'h-hidden-1',
+          timestamp: '2026-03-11T12:00:03.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'h-tool-1',
+          parentId: 'h-assistant-2',
+          timestamp: '2026-03-11T12:00:04.000Z',
+          message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'bash', content: [{ type: 'text', text: 'ls' }] },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-tail-hidden', { tailBlocks: 5 });
     expect(detail?.totalBlocks).toBe(2);
@@ -454,18 +571,88 @@ describe('sessions', () => {
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-user-after-hidden.jsonl');
-    writeFileSync(filePath, [
-      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-user-after-hidden', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', id: 'uah-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
-      JSON.stringify({ type: 'message', id: 'uah-user-1', parentId: 'uah-model', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: 'First prompt' } }),
-      JSON.stringify({ type: 'message', id: 'uah-assistant-1', parentId: 'uah-user-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] } }),
-      JSON.stringify({ type: 'custom_message', id: 'uah-hidden-1', parentId: 'uah-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', customType: 'conversation_automation_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
-      JSON.stringify({ type: 'message', id: 'uah-assistant-2', parentId: 'uah-hidden-1', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden automation reply' }] } }),
-      JSON.stringify({ type: 'message', id: 'uah-tool-1', parentId: 'uah-assistant-2', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'wait_for_user', content: [{ type: 'text', text: 'Waiting for user.' }] } }),
-      JSON.stringify({ type: 'message', id: 'uah-assistant-3', parentId: 'uah-tool-1', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Still hidden automation summary.' }] } }),
-      JSON.stringify({ type: 'message', id: 'uah-user-2', parentId: 'uah-assistant-3', timestamp: '2026-03-11T12:00:07.000Z', message: { role: 'user', content: 'Second prompt' } }),
-      JSON.stringify({ type: 'message', id: 'uah-assistant-4', parentId: 'uah-user-2', timestamp: '2026-03-11T12:00:08.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] } }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          version: 3,
+          id: 'session-tail-user-after-hidden',
+          timestamp: '2026-03-11T12:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({
+          type: 'model_change',
+          id: 'uah-model',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          modelId: 'test-model',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-user-1',
+          parentId: 'uah-model',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: { role: 'user', content: 'First prompt' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-assistant-1',
+          parentId: 'uah-user-1',
+          timestamp: '2026-03-11T12:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        }),
+        JSON.stringify({
+          type: 'custom_message',
+          id: 'uah-hidden-1',
+          parentId: 'uah-assistant-1',
+          timestamp: '2026-03-11T12:00:03.000Z',
+          customType: 'conversation_automation_review',
+          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          display: false,
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-assistant-2',
+          parentId: 'uah-hidden-1',
+          timestamp: '2026-03-11T12:00:04.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden automation reply' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-tool-1',
+          parentId: 'uah-assistant-2',
+          timestamp: '2026-03-11T12:00:05.000Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: 'wait_for_user',
+            content: [{ type: 'text', text: 'Waiting for user.' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-assistant-3',
+          parentId: 'uah-tool-1',
+          timestamp: '2026-03-11T12:00:06.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Still hidden automation summary.' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-user-2',
+          parentId: 'uah-assistant-3',
+          timestamp: '2026-03-11T12:00:07.000Z',
+          message: { role: 'user', content: 'Second prompt' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'uah-assistant-4',
+          parentId: 'uah-user-2',
+          timestamp: '2026-03-11T12:00:08.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-tail-user-after-hidden', { tailBlocks: 400 });
     expect(detail?.totalBlocks).toBe(4);
@@ -485,17 +672,76 @@ describe('sessions', () => {
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-lineage.jsonl');
-    writeFileSync(filePath, [
-      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-lineage', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', id: 'lineage-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
-      JSON.stringify({ type: 'message', id: 'lineage-user-1', parentId: 'lineage-model', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: 'First prompt' } }),
-      JSON.stringify({ type: 'message', id: 'lineage-assistant-1', parentId: 'lineage-user-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] } }),
-      JSON.stringify({ type: 'message', id: 'lineage-user-2', parentId: 'lineage-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'user', content: 'Second prompt' } }),
-      JSON.stringify({ type: 'session_info', id: 'lineage-session-info', parentId: 'lineage-user-2', timestamp: '2026-03-11T12:00:04.000Z', name: 'Renamed session' }),
-      JSON.stringify({ type: 'message', id: 'lineage-assistant-2', parentId: 'lineage-session-info', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] } }),
-      JSON.stringify({ type: 'custom_message', id: 'lineage-hidden-1', parentId: 'lineage-assistant-2', timestamp: '2026-03-11T12:00:06.000Z', customType: 'conversation_automation_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
-      JSON.stringify({ type: 'message', id: 'lineage-hidden-assistant-1', parentId: 'lineage-hidden-1', timestamp: '2026-03-11T12:00:07.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          version: 3,
+          id: 'session-tail-lineage',
+          timestamp: '2026-03-11T12:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({
+          type: 'model_change',
+          id: 'lineage-model',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          modelId: 'test-model',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'lineage-user-1',
+          parentId: 'lineage-model',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: { role: 'user', content: 'First prompt' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'lineage-assistant-1',
+          parentId: 'lineage-user-1',
+          timestamp: '2026-03-11T12:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'lineage-user-2',
+          parentId: 'lineage-assistant-1',
+          timestamp: '2026-03-11T12:00:03.000Z',
+          message: { role: 'user', content: 'Second prompt' },
+        }),
+        JSON.stringify({
+          type: 'session_info',
+          id: 'lineage-session-info',
+          parentId: 'lineage-user-2',
+          timestamp: '2026-03-11T12:00:04.000Z',
+          name: 'Renamed session',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'lineage-assistant-2',
+          parentId: 'lineage-session-info',
+          timestamp: '2026-03-11T12:00:05.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+        }),
+        JSON.stringify({
+          type: 'custom_message',
+          id: 'lineage-hidden-1',
+          parentId: 'lineage-assistant-2',
+          timestamp: '2026-03-11T12:00:06.000Z',
+          customType: 'conversation_automation_review',
+          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+          display: false,
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'lineage-hidden-assistant-1',
+          parentId: 'lineage-hidden-1',
+          timestamp: '2026-03-11T12:00:07.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-tail-lineage', { tailBlocks: 400 });
     expect(detail?.totalBlocks).toBe(4);
@@ -514,65 +760,76 @@ describe('sessions', () => {
 
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-images.jsonl'), [
-      JSON.stringify({ type: 'session', id: 'session-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-images-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Here is an image' },
-            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
-          ],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-images-tool-1',
-        parentId: 'session-images-user-1',
-        timestamp: '2026-03-11T12:00:01.000Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-1',
-          toolName: 'render',
-          content: [
-            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'result.png' },
-          ],
-        },
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      join(dir, '2026-03-11T12-00-00-000Z_session-images.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'session-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-images-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Here is an image' },
+              { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-images-tool-1',
+          parentId: 'session-images-user-1',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-1',
+            toolName: 'render',
+            content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'result.png' }],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-images');
     const userBlock = detail?.blocks.find((block) => block.type === 'user');
     const imageBlock = detail?.blocks.find((block) => block.type === 'image');
-    expect(userBlock).toEqual(expect.objectContaining({
-      type: 'user',
-      images: [expect.objectContaining({ src: `/api/sessions/session-images/blocks/${userBlock?.id}/images/0` })],
-    }));
-    expect(imageBlock).toEqual(expect.objectContaining({
-      type: 'image',
-      src: `/api/sessions/session-images/blocks/${imageBlock?.id}/image`,
-    }));
+    expect(userBlock).toEqual(
+      expect.objectContaining({
+        type: 'user',
+        images: [expect.objectContaining({ src: `/api/sessions/session-images/blocks/${userBlock?.id}/images/0` })],
+      }),
+    );
+    expect(imageBlock).toEqual(
+      expect.objectContaining({
+        type: 'image',
+        src: `/api/sessions/session-images/blocks/${imageBlock?.id}/image`,
+      }),
+    );
 
-    expect(imageBlock ? readSessionBlock('session-images', imageBlock.id) : null).toEqual(expect.objectContaining({
-      type: 'image',
-      src: `/api/sessions/session-images/blocks/${imageBlock?.id}/image`,
-    }));
+    expect(imageBlock ? readSessionBlock('session-images', imageBlock.id) : null).toEqual(
+      expect.objectContaining({
+        type: 'image',
+        src: `/api/sessions/session-images/blocks/${imageBlock?.id}/image`,
+      }),
+    );
 
-    expect(userBlock ? readSessionImageAsset('session-images', userBlock.id, 0) : null).toEqual(expect.objectContaining({
-      mimeType: 'image/png',
-      fileName: 'hello.png',
-      data: Buffer.from('aGVsbG8=', 'base64'),
-    }));
-    expect(imageBlock ? readSessionImageAsset('session-images', imageBlock.id) : null).toEqual(expect.objectContaining({
-      mimeType: 'image/png',
-      fileName: 'result.png',
-      data: Buffer.from('aGVsbG8=', 'base64'),
-    }));
+    expect(userBlock ? readSessionImageAsset('session-images', userBlock.id, 0) : null).toEqual(
+      expect.objectContaining({
+        mimeType: 'image/png',
+        fileName: 'hello.png',
+        data: Buffer.from('aGVsbG8=', 'base64'),
+      }),
+    );
+    expect(imageBlock ? readSessionImageAsset('session-images', imageBlock.id) : null).toEqual(
+      expect.objectContaining({
+        mimeType: 'image/png',
+        fileName: 'result.png',
+        data: Buffer.from('aGVsbG8=', 'base64'),
+      }),
+    );
   });
 
   it('keeps user image asset indexes aligned when malformed image blocks are skipped', () => {
@@ -581,36 +838,43 @@ describe('sessions', () => {
 
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-mixed-images.jsonl'), [
-      JSON.stringify({ type: 'session', id: 'session-mixed-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-mixed-images-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Here is a valid image after a bad one' },
-            { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png', name: 'bad.png' },
-            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
-          ],
-        },
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      join(dir, '2026-03-11T12-00-00-000Z_session-mixed-images.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'session-mixed-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-mixed-images-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Here is a valid image after a bad one' },
+              { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png', name: 'bad.png' },
+              { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+            ],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-mixed-images');
     const userBlock = detail?.blocks.find((block) => block.type === 'user');
-    expect(userBlock).toEqual(expect.objectContaining({
-      type: 'user',
-      images: [expect.objectContaining({ src: `/api/sessions/session-mixed-images/blocks/${userBlock?.id}/images/0` })],
-    }));
-    expect(userBlock ? readSessionImageAsset('session-mixed-images', userBlock.id, 0) : null).toEqual(expect.objectContaining({
-      mimeType: 'image/png',
-      fileName: 'hello.png',
-      data: Buffer.from('aGVsbG8=', 'base64'),
-    }));
+    expect(userBlock).toEqual(
+      expect.objectContaining({
+        type: 'user',
+        images: [expect.objectContaining({ src: `/api/sessions/session-mixed-images/blocks/${userBlock?.id}/images/0` })],
+      }),
+    );
+    expect(userBlock ? readSessionImageAsset('session-mixed-images', userBlock.id, 0) : null).toEqual(
+      expect.objectContaining({
+        mimeType: 'image/png',
+        fileName: 'hello.png',
+        data: Buffer.from('aGVsbG8=', 'base64'),
+      }),
+    );
   });
 
   it('skips archived user image blocks with non-image mime types', () => {
@@ -619,36 +883,43 @@ describe('sessions', () => {
 
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-non-image-mime.jsonl'), [
-      JSON.stringify({ type: 'session', id: 'session-non-image-mime', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-non-image-mime-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Here is a valid image after a bad mime' },
-            { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain', name: 'bad.txt' },
-            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
-          ],
-        },
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      join(dir, '2026-03-11T12-00-00-000Z_session-non-image-mime.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'session-non-image-mime', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-non-image-mime-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Here is a valid image after a bad mime' },
+              { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain', name: 'bad.txt' },
+              { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+            ],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-non-image-mime');
     const userBlock = detail?.blocks.find((block) => block.type === 'user');
-    expect(userBlock).toEqual(expect.objectContaining({
-      type: 'user',
-      images: [expect.objectContaining({ mimeType: 'image/png' })],
-    }));
-    expect(userBlock ? readSessionImageAsset('session-non-image-mime', userBlock.id, 0) : null).toEqual(expect.objectContaining({
-      mimeType: 'image/png',
-      fileName: 'hello.png',
-      data: Buffer.from('aGVsbG8=', 'base64'),
-    }));
+    expect(userBlock).toEqual(
+      expect.objectContaining({
+        type: 'user',
+        images: [expect.objectContaining({ mimeType: 'image/png' })],
+      }),
+    );
+    expect(userBlock ? readSessionImageAsset('session-non-image-mime', userBlock.id, 0) : null).toEqual(
+      expect.objectContaining({
+        mimeType: 'image/png',
+        fileName: 'hello.png',
+        data: Buffer.from('aGVsbG8=', 'base64'),
+      }),
+    );
   });
 
   it('keeps tool image block ids aligned when malformed image blocks are skipped', () => {
@@ -657,46 +928,54 @@ describe('sessions', () => {
 
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-mixed-tool-images.jsonl'), [
-      JSON.stringify({ type: 'session', id: 'session-mixed-tool-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-mixed-tool-images-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'capture a screenshot' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-mixed-tool-images-tool-1',
-        parentId: 'session-mixed-tool-images-user-1',
-        timestamp: '2026-03-11T12:00:01.000Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-1',
-          toolName: 'screenshot',
-          content: [
-            { type: 'image', data: '   ', mimeType: 'image/png', name: 'bad.png' },
-            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
-          ],
-        },
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      join(dir, '2026-03-11T12-00-00-000Z_session-mixed-tool-images.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'session-mixed-tool-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-mixed-tool-images-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'capture a screenshot' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-mixed-tool-images-tool-1',
+          parentId: 'session-mixed-tool-images-user-1',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-1',
+            toolName: 'screenshot',
+            content: [
+              { type: 'image', data: '   ', mimeType: 'image/png', name: 'bad.png' },
+              { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+            ],
+          },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-mixed-tool-images');
     const imageBlock = detail?.blocks.find((block) => block.type === 'image');
-    expect(imageBlock).toEqual(expect.objectContaining({
-      type: 'image',
-      id: expect.stringMatching(/-i0$/),
-    }));
-    expect(imageBlock && 'src' in imageBlock ? imageBlock.src : undefined)
-      .toBe(`/api/sessions/session-mixed-tool-images/blocks/${imageBlock?.id}/image`);
-    expect(imageBlock ? readSessionImageAsset('session-mixed-tool-images', imageBlock.id) : null).toEqual(expect.objectContaining({
-      mimeType: 'image/png',
-      fileName: 'hello.png',
-      data: Buffer.from('aGVsbG8=', 'base64'),
-    }));
+    expect(imageBlock).toEqual(
+      expect.objectContaining({
+        type: 'image',
+        id: expect.stringMatching(/-i0$/),
+      }),
+    );
+    expect(imageBlock && 'src' in imageBlock ? imageBlock.src : undefined).toBe(
+      `/api/sessions/session-mixed-tool-images/blocks/${imageBlock?.id}/image`,
+    );
+    expect(imageBlock ? readSessionImageAsset('session-mixed-tool-images', imageBlock.id) : null).toEqual(
+      expect.objectContaining({
+        mimeType: 'image/png',
+        fileName: 'hello.png',
+        data: Buffer.from('aGVsbG8=', 'base64'),
+      }),
+    );
   });
 
   it('defers heavy tool output and image payloads in partial archived transcript loads', () => {
@@ -712,8 +991,20 @@ describe('sessions', () => {
     const lines: string[] = [
       JSON.stringify({ type: 'session', id: sessionId, timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project', version: 3 }),
       JSON.stringify({ type: 'model_change', id: 'm1', parentId: null, timestamp: '2026-03-11T12:00:00.100Z', modelId: 'test-model' }),
-      JSON.stringify({ type: 'message', id: 'u1', parentId: 'm1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'warmup' }] } }),
-      JSON.stringify({ type: 'message', id: 'a1', parentId: 'u1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'ack' }] } }),
+      JSON.stringify({
+        type: 'message',
+        id: 'u1',
+        parentId: 'm1',
+        timestamp: '2026-03-11T12:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'warmup' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'a1',
+        parentId: 'u1',
+        timestamp: '2026-03-11T12:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'ack' }] },
+      }),
       JSON.stringify({
         type: 'message',
         id: 'u2',
@@ -752,27 +1043,37 @@ describe('sessions', () => {
           ],
         },
       }),
-      JSON.stringify({ type: 'message', id: 'a3', parentId: 't1', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'continuing' }] } }),
+      JSON.stringify({
+        type: 'message',
+        id: 'a3',
+        parentId: 't1',
+        timestamp: '2026-03-11T12:00:06.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'continuing' }] },
+      }),
     ];
 
     let parentId = 'a3';
     for (let index = 0; index < 50; index += 1) {
       const userId = `u${index + 10}`;
       const assistantId = `a${index + 10}`;
-      lines.push(JSON.stringify({
-        type: 'message',
-        id: userId,
-        parentId,
-        timestamp: `2026-03-11T12:01:${String(index).padStart(2, '0')}.000Z`,
-        message: { role: 'user', content: [{ type: 'text', text: `follow-up ${index}` }] },
-      }));
-      lines.push(JSON.stringify({
-        type: 'message',
-        id: assistantId,
-        parentId: userId,
-        timestamp: `2026-03-11T12:02:${String(index).padStart(2, '0')}.000Z`,
-        message: { role: 'assistant', content: [{ type: 'text', text: `answer ${index}` }] },
-      }));
+      lines.push(
+        JSON.stringify({
+          type: 'message',
+          id: userId,
+          parentId,
+          timestamp: `2026-03-11T12:01:${String(index).padStart(2, '0')}.000Z`,
+          message: { role: 'user', content: [{ type: 'text', text: `follow-up ${index}` }] },
+        }),
+      );
+      lines.push(
+        JSON.stringify({
+          type: 'message',
+          id: assistantId,
+          parentId: userId,
+          timestamp: `2026-03-11T12:02:${String(index).padStart(2, '0')}.000Z`,
+          message: { role: 'assistant', content: [{ type: 'text', text: `answer ${index}` }] },
+        }),
+      );
       parentId = assistantId;
     }
 
@@ -807,11 +1108,13 @@ describe('sessions', () => {
       sessionName: 'Generated conversation title',
     });
 
-    expect(listSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-named',
-      title: 'Generated conversation title',
-      messageCount: 2,
-    }));
+    expect(listSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-named',
+        title: 'Generated conversation title',
+        messageCount: 2,
+      }),
+    );
     expect(readSessionBlocks('session-named')?.meta.title).toBe('Generated conversation title');
   });
 
@@ -821,17 +1124,20 @@ describe('sessions', () => {
 
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-bad-image-title.jsonl'), [
-      JSON.stringify({ type: 'session', id: 'session-bad-image-title', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-bad-image-title-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: { role: 'user', content: [{ type: 'image', data: '   ', mimeType: 'image/png' }] },
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      join(dir, '2026-03-11T12-00-00-000Z_session-bad-image-title.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'session-bad-image-title', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-bad-image-title-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'image', data: '   ', mimeType: 'image/png' }] },
+        }),
+      ].join('\n') + '\n',
+    );
 
     expect(listSessions()[0]?.title).toBe('New Conversation');
   });
@@ -842,26 +1148,29 @@ describe('sessions', () => {
 
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-custom.jsonl'), [
-      JSON.stringify({ type: 'session', id: 'session-custom', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-custom-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Investigate this result' }] },
-      }),
-      JSON.stringify({
-        type: 'custom_message',
-        id: 'session-custom-note-1',
-        parentId: 'session-custom-user-1',
-        timestamp: '2026-03-11T12:00:01.000Z',
-        customType: 'note',
-        content: [{ type: 'text', text: 'Imported summary note.' }],
-        display: true,
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      join(dir, '2026-03-11T12-00-00-000Z_session-custom.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'session-custom', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-custom-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Investigate this result' }] },
+        }),
+        JSON.stringify({
+          type: 'custom_message',
+          id: 'session-custom-note-1',
+          parentId: 'session-custom-user-1',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          customType: 'note',
+          content: [{ type: 'text', text: 'Imported summary note.' }],
+          display: true,
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-custom');
     expect(detail?.meta.messageCount).toBe(2);
@@ -886,45 +1195,47 @@ describe('sessions', () => {
   });
 
   it('falls back for malformed transcript entry timestamps', () => {
-    expect(buildDisplayBlocksFromEntries([
-      {
-        id: 'bad-string-timestamp',
-        timestamp: 'not-a-date',
-        message: { role: 'user', content: 'bad string timestamp' },
-      },
-      {
-        id: 'bad-number-timestamp',
-        timestamp: Number.MAX_VALUE,
-        message: { role: 'assistant', content: [{ type: 'text', text: 'bad number timestamp' }] },
-      },
-    ])).toEqual([
+    expect(
+      buildDisplayBlocksFromEntries([
+        {
+          id: 'bad-string-timestamp',
+          timestamp: 'not-a-date',
+          message: { role: 'user', content: 'bad string timestamp' },
+        },
+        {
+          id: 'bad-number-timestamp',
+          timestamp: Number.MAX_VALUE,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'bad number timestamp' }] },
+        },
+      ]),
+    ).toEqual([
       { type: 'user', id: 'bad-string-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'bad string timestamp' },
       { type: 'text', id: 'bad-number-timestamp-x1', ts: '1970-01-01T00:00:00.000Z', text: 'bad number timestamp' },
     ]);
   });
 
   it('falls back for non-ISO transcript entry timestamps', () => {
-    expect(buildDisplayBlocksFromEntries([
-      {
-        id: 'bad-string-timestamp',
-        timestamp: '1',
-        message: { role: 'user', content: 'bad string timestamp' },
-      },
-    ])).toEqual([
-      { type: 'user', id: 'bad-string-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'bad string timestamp' },
-    ]);
+    expect(
+      buildDisplayBlocksFromEntries([
+        {
+          id: 'bad-string-timestamp',
+          timestamp: '1',
+          message: { role: 'user', content: 'bad string timestamp' },
+        },
+      ]),
+    ).toEqual([{ type: 'user', id: 'bad-string-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'bad string timestamp' }]);
   });
 
   it('falls back for overflowed transcript entry timestamps', () => {
-    expect(buildDisplayBlocksFromEntries([
-      {
-        id: 'overflowed-timestamp',
-        timestamp: '2026-02-31T12:00:00.000Z',
-        message: { role: 'user', content: 'overflowed timestamp' },
-      },
-    ])).toEqual([
-      { type: 'user', id: 'overflowed-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'overflowed timestamp' },
-    ]);
+    expect(
+      buildDisplayBlocksFromEntries([
+        {
+          id: 'overflowed-timestamp',
+          timestamp: '2026-02-31T12:00:00.000Z',
+          message: { role: 'user', content: 'overflowed timestamp' },
+        },
+      ]),
+    ).toEqual([{ type: 'user', id: 'overflowed-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'overflowed timestamp' }]);
   });
 
   it('renders hidden related thread context as a visible summary event', () => {
@@ -936,25 +1247,27 @@ describe('sessions', () => {
           role: 'custom',
           customType: 'related_threads_context',
           display: false,
-          content: [{
-            type: 'text',
-            text: [
-              'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
-              'Use only the parts that still help. Prefer the current prompt and current repo state over stale historical details.',
-              '',
-              'Conversation 1 — Release signing',
-              'Workspace: /repo/a',
-              'Created: 2026-04-10T10:00:00.000Z',
-              '',
-              'Keep the notarization mapping fix.',
-              '',
-              'Conversation 2 — Auto mode wakeups',
-              'Workspace: /repo/b',
-              'Created: 2026-04-11T10:00:00.000Z',
-              '',
-              'Wakeups use durable run callbacks.',
-            ].join('\n'),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: [
+                'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
+                'Use only the parts that still help. Prefer the current prompt and current repo state over stale historical details.',
+                '',
+                'Conversation 1 — Release signing',
+                'Workspace: /repo/a',
+                'Created: 2026-04-10T10:00:00.000Z',
+                '',
+                'Keep the notarization mapping fix.',
+                '',
+                'Conversation 2 — Auto mode wakeups',
+                'Workspace: /repo/b',
+                'Created: 2026-04-11T10:00:00.000Z',
+                '',
+                'Wakeups use durable run callbacks.',
+              ].join('\n'),
+            },
+          ],
         },
       },
     ]);
@@ -1183,15 +1496,19 @@ describe('sessions', () => {
       assistantTexts: ['Generated answer'],
     });
 
-    expect(renameStoredSession('session-rename', '  Better manual title  ')).toEqual(expect.objectContaining({
-      id: 'session-rename',
-      title: 'Better manual title',
-    }));
-    expect(listSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-rename',
-      title: 'Better manual title',
-      messageCount: 2,
-    }));
+    expect(renameStoredSession('session-rename', '  Better manual title  ')).toEqual(
+      expect.objectContaining({
+        id: 'session-rename',
+        title: 'Better manual title',
+      }),
+    );
+    expect(listSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-rename',
+        title: 'Better manual title',
+        messageCount: 2,
+      }),
+    );
     expect(readSessionBlocks('session-rename')?.meta.title).toBe('Better manual title');
     expect(readFileSync(filePath, 'utf-8')).toContain('"name":"Better manual title"');
   });
@@ -1220,31 +1537,39 @@ describe('sessions', () => {
     expect(detail?.meta.cwd).toBe('/tmp/attached-project');
     expect(detail?.meta.workspaceCwd).toBe('/tmp/attached-project');
     expect(readFileSync(filePath, 'utf-8').split('\n')[0]).toContain('"cwd":"/tmp/original"');
-    expect(detail?.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'user', text: 'Move me' }),
-      expect.objectContaining({ type: 'text', text: 'Assistant reply' }),
-    ]));
-    expect(detail?.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        type: 'context',
-        customType: 'conversation_workspace_change',
-        text: 'Working directory changed from Chats to /tmp/attached-project.',
-      }),
-    ]));
+    expect(detail?.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'user', text: 'Move me' }),
+        expect.objectContaining({ type: 'text', text: 'Assistant reply' }),
+      ]),
+    );
+    expect(detail?.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'context',
+          customType: 'conversation_workspace_change',
+          text: 'Working directory changed from Chats to /tmp/attached-project.',
+        }),
+      ]),
+    );
 
     const appendedLines = readFileSync(filePath, 'utf-8')
       .split('\n')
       .filter(Boolean)
       .slice(-2)
       .map((line) => JSON.parse(line));
-    expect(appendedLines[0]).toEqual(expect.objectContaining({
-      type: 'custom',
-    }));
+    expect(appendedLines[0]).toEqual(
+      expect.objectContaining({
+        type: 'custom',
+      }),
+    );
     expect(appendedLines[0].parentId).toEqual(expect.any(String));
-    expect(appendedLines[1]).toEqual(expect.objectContaining({
-      type: 'custom_message',
-      parentId: appendedLines[0].id,
-    }));
+    expect(appendedLines[1]).toEqual(
+      expect.objectContaining({
+        type: 'custom_message',
+        parentId: appendedLines[0].id,
+      }),
+    );
   });
 
   it('infers neutral chat workspaces as chat conversations without metadata', () => {
@@ -1285,23 +1610,27 @@ describe('sessions', () => {
       cwd: chatCwd,
       workspaceCwd: null,
     });
-    appendFileSync(filePath, `${JSON.stringify({
-      type: 'message',
-      id: 'legacy-cwd-tool-result',
-      parentId: 'session-legacy-cwd-tool-assistant-1',
-      timestamp: '2026-03-11T12:00:03.000Z',
-      message: {
-        role: 'toolResult',
-        toolCallId: 'call-cwd',
-        toolName: 'change_working_directory',
-        content: [{ type: 'text', text: 'Queued working directory change to /tmp/project.' }],
-        details: {
-          action: 'queue',
-          cwd: '/tmp/project',
-          queued: true,
+    appendFileSync(
+      filePath,
+      `${JSON.stringify({
+        type: 'message',
+        id: 'legacy-cwd-tool-result',
+        parentId: 'session-legacy-cwd-tool-assistant-1',
+        timestamp: '2026-03-11T12:00:03.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'call-cwd',
+          toolName: 'change_working_directory',
+          content: [{ type: 'text', text: 'Queued working directory change to /tmp/project.' }],
+          details: {
+            action: 'queue',
+            cwd: '/tmp/project',
+            queued: true,
+          },
         },
-      },
-    })}\n`, 'utf-8');
+      })}\n`,
+      'utf-8',
+    );
 
     const detail = readSessionBlocks('session-legacy-cwd-tool');
     expect(detail?.meta.cwd).toBe('/tmp/project');
@@ -1344,30 +1673,40 @@ describe('sessions', () => {
       assistantTexts: ['Generated answer'],
     });
 
-    expect(setStoredSessionRemoteTargetByFile(filePath, {
-      remoteHostId: 'bender',
-      remoteHostLabel: 'Bender',
-      remoteConversationId: 'remote-thread-1',
-    })).toEqual(expect.objectContaining({
-      id: 'session-remote',
-      remoteHostId: 'bender',
-      remoteHostLabel: 'Bender',
-      remoteConversationId: 'remote-thread-1',
-    }));
+    expect(
+      setStoredSessionRemoteTargetByFile(filePath, {
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-thread-1',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        id: 'session-remote',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-thread-1',
+      }),
+    );
 
-    expect(listSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-remote',
-      remoteHostId: 'bender',
-      remoteHostLabel: 'Bender',
-      remoteConversationId: 'remote-thread-1',
-    }));
+    expect(listSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-remote',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-thread-1',
+      }),
+    );
 
-    expect(clearStoredSessionRemoteTargetByFile(filePath)).toEqual(expect.not.objectContaining({
-      remoteHostId: expect.anything(),
-    }));
-    expect(listSessions()[0]).toEqual(expect.not.objectContaining({
-      remoteHostId: expect.anything(),
-    }));
+    expect(clearStoredSessionRemoteTargetByFile(filePath)).toEqual(
+      expect.not.objectContaining({
+        remoteHostId: expect.anything(),
+      }),
+    );
+    expect(listSessions()[0]).toEqual(
+      expect.not.objectContaining({
+        remoteHostId: expect.anything(),
+      }),
+    );
   });
 
   it('keeps the first session header when duplicate session records appear later in the file', () => {
@@ -1387,23 +1726,28 @@ describe('sessions', () => {
       remoteConversationId: 'remote-thread-1',
     });
 
-    appendFileSync(filePath, [
-      JSON.stringify({
-        type: 'session',
-        id: 'session-remote-duplicate',
-        timestamp: '2026-03-11T12:00:00.000Z',
-        cwd: '/tmp/project',
-      }),
-      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-      '',
-    ].join('\n'));
+    appendFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'session-remote-duplicate',
+          timestamp: '2026-03-11T12:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+        '',
+      ].join('\n'),
+    );
 
-    expect(listSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-remote-duplicate',
-      remoteHostId: 'bender',
-      remoteHostLabel: 'Bender',
-      remoteConversationId: 'remote-thread-1',
-    }));
+    expect(listSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-remote-duplicate',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-thread-1',
+      }),
+    );
   });
 
   it('lets the latest manual rename win over earlier session names', () => {
@@ -1420,10 +1764,12 @@ describe('sessions', () => {
 
     renameStoredSession('session-renamed-twice', 'Updated manual title');
 
-    expect(listSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-renamed-twice',
-      title: 'Updated manual title',
-    }));
+    expect(listSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-renamed-twice',
+        title: 'Updated manual title',
+      }),
+    );
     expect(readSessionBlocks('session-renamed-twice')?.meta.title).toBe('Updated manual title');
   });
 
@@ -1455,13 +1801,15 @@ describe('sessions', () => {
     try {
       const second = listSessions();
       expect(second).toHaveLength(1);
-      expect(second[0]).toEqual(expect.objectContaining({
-        id: 'session-persist',
-        title: 'Persistent title',
-        messageCount: 2,
-        cwd: '/tmp/persistent-project',
-        workspaceCwd: '/tmp/persistent-project',
-      }));
+      expect(second[0]).toEqual(
+        expect.objectContaining({
+          id: 'session-persist',
+          title: 'Persistent title',
+          messageCount: 2,
+          cwd: '/tmp/persistent-project',
+          workspaceCwd: '/tmp/persistent-project',
+        }),
+      );
     } finally {
       chmodSync(filePath, 0o644);
     }
@@ -1480,12 +1828,14 @@ describe('sessions', () => {
 
     const first = listSessions();
     expect(first).toHaveLength(1);
-    expect(first[0]).toEqual(expect.objectContaining({
-      id: 'session-1',
-      title: 'Original title',
-      messageCount: 2,
-      model: 'test-model',
-    }));
+    expect(first[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-1',
+        title: 'Original title',
+        messageCount: 2,
+        model: 'test-model',
+      }),
+    );
 
     writeSessionFile({
       sessionsDir,
@@ -1496,11 +1846,13 @@ describe('sessions', () => {
 
     const second = listSessions();
     expect(second).toHaveLength(1);
-    expect(second[0]).toEqual(expect.objectContaining({
-      id: 'session-1',
-      title: 'Updated title that is definitely different',
-      messageCount: 3,
-    }));
+    expect(second[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-1',
+        title: 'Updated title that is definitely different',
+        messageCount: 3,
+      }),
+    );
   });
 
   it('lists sessions stored directly in the sessions root after restart', () => {
@@ -1531,9 +1883,11 @@ describe('sessions', () => {
         title: 'Root-level session',
       }),
     ]);
-    expect(readSessionBlocks('session-root')?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
-      'Root reply',
-    ]);
+    expect(
+      readSessionBlocks('session-root')
+        ?.blocks.filter((block) => block.type === 'text')
+        .map((block) => block.text),
+    ).toEqual(['Root reply']);
   });
 
   it('records parent session ids and source run ids for nested session lineage', () => {
@@ -1556,14 +1910,16 @@ describe('sessions', () => {
       parentSession: parentSessionFile,
     });
 
-    expect(listSessions()).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'child-session',
-        parentSessionFile,
-        parentSessionId: 'parent-session',
-        sourceRunId: 'run-subagent-123',
-      }),
-    ]));
+    expect(listSessions()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'child-session',
+          parentSessionFile,
+          parentSessionId: 'parent-session',
+          sourceRunId: 'run-subagent-123',
+        }),
+      ]),
+    );
   });
 
   it('refreshes persisted metadata after a restart when the file changes', () => {
@@ -1590,11 +1946,13 @@ describe('sessions', () => {
     });
 
     const afterRestart = listSessions();
-    expect(afterRestart[0]).toEqual(expect.objectContaining({
-      id: 'session-restart',
-      title: 'After restart',
-      messageCount: 3,
-    }));
+    expect(afterRestart[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-restart',
+        title: 'After restart',
+        messageCount: 3,
+      }),
+    );
   });
 
   it('reads the latest session blocks even when metadata was cached earlier', () => {
@@ -1621,10 +1979,7 @@ describe('sessions', () => {
     const detail = readSessionBlocks('session-2');
     expect(detail).not.toBeNull();
     expect(detail?.meta.title).toBe('After update');
-    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
-      'Old reply',
-      'Newest reply',
-    ]);
+    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual(['Old reply', 'Newest reply']);
   });
 
   it('shows the latest compaction summary and only the kept transcript tail', () => {
@@ -1634,61 +1989,76 @@ describe('sessions', () => {
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-compact.jsonl');
-    writeFileSync(filePath, [
-      JSON.stringify({ type: 'session', version: 3, id: 'session-compact', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', id: 'session-compact-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-compact-user-1',
-        parentId: null,
-        timestamp: '2026-03-11T12:00:00.000Z',
-        message: { role: 'user', content: 'Before compaction' },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-compact-assistant-1',
-        parentId: 'session-compact-user-1',
-        timestamp: '2026-03-11T12:00:01.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Older reply' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-compact-user-2',
-        parentId: 'session-compact-assistant-1',
-        timestamp: '2026-03-11T12:00:02.000Z',
-        message: { role: 'user', content: 'Keep this prompt' },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-compact-assistant-2',
-        parentId: 'session-compact-user-2',
-        timestamp: '2026-03-11T12:00:03.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Keep this reply' }] },
-      }),
-      JSON.stringify({
-        type: 'compaction',
-        id: 'session-compact-compaction-1',
-        parentId: 'session-compact-assistant-2',
-        timestamp: '2026-03-11T12:00:04.000Z',
-        summary: '## Goal\nKeep only the latest summary.\n\n## Progress\n- Preserved the recent turn.',
-        firstKeptEntryId: 'session-compact-user-2',
-        tokensBefore: 1234,
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-compact-user-3',
-        parentId: 'session-compact-compaction-1',
-        timestamp: '2026-03-11T12:00:05.000Z',
-        message: { role: 'user', content: 'Continue after compaction' },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-compact-assistant-3',
-        parentId: 'session-compact-user-3',
-        timestamp: '2026-03-11T12:00:06.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Newest reply' }] },
-      }),
-    ].join('\n') + '\n');
+    writeFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          version: 3,
+          id: 'session-compact',
+          timestamp: '2026-03-11T12:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({
+          type: 'model_change',
+          id: 'session-compact-model',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          modelId: 'test-model',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-compact-user-1',
+          parentId: null,
+          timestamp: '2026-03-11T12:00:00.000Z',
+          message: { role: 'user', content: 'Before compaction' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-compact-assistant-1',
+          parentId: 'session-compact-user-1',
+          timestamp: '2026-03-11T12:00:01.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Older reply' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-compact-user-2',
+          parentId: 'session-compact-assistant-1',
+          timestamp: '2026-03-11T12:00:02.000Z',
+          message: { role: 'user', content: 'Keep this prompt' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-compact-assistant-2',
+          parentId: 'session-compact-user-2',
+          timestamp: '2026-03-11T12:00:03.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Keep this reply' }] },
+        }),
+        JSON.stringify({
+          type: 'compaction',
+          id: 'session-compact-compaction-1',
+          parentId: 'session-compact-assistant-2',
+          timestamp: '2026-03-11T12:00:04.000Z',
+          summary: '## Goal\nKeep only the latest summary.\n\n## Progress\n- Preserved the recent turn.',
+          firstKeptEntryId: 'session-compact-user-2',
+          tokensBefore: 1234,
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-compact-user-3',
+          parentId: 'session-compact-compaction-1',
+          timestamp: '2026-03-11T12:00:05.000Z',
+          message: { role: 'user', content: 'Continue after compaction' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-compact-assistant-3',
+          parentId: 'session-compact-user-3',
+          timestamp: '2026-03-11T12:00:06.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Newest reply' }] },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-compact');
     expect(detail?.blocks).toEqual([
@@ -1746,34 +2116,55 @@ describe('sessions', () => {
     const dir = join(sessionsDir, '--tmp-project--');
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, '2026-03-11T13-00-00-000Z_session-codex-compact.jsonl');
-    writeFileSync(filePath, [
-      JSON.stringify({ type: 'session', version: 3, id: 'session-codex-compact', timestamp: '2026-03-11T13:00:00.000Z', cwd: '/tmp/project' }),
-      JSON.stringify({ type: 'model_change', id: 'session-codex-compact-model', parentId: null, timestamp: '2026-03-11T13:00:00.000Z', modelId: 'gpt-5.4' }),
-      JSON.stringify({
-        type: 'compaction',
-        id: 'session-codex-compact-compaction-1',
-        parentId: null,
-        timestamp: '2026-03-11T13:00:01.000Z',
-        summary: '## Goal\nKeep only the latest summary.',
-        firstKeptEntryId: 'session-codex-compact-user-1',
-        tokensBefore: 1234,
-        details: {
-          nativeCompaction: {
-            version: 1,
-            provider: 'openai-responses-compact',
-            modelKey: 'openai-codex:openai-codex-responses:gpt-5.4',
-            replacementHistory: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Prompt after compaction' }] }],
+    writeFileSync(
+      filePath,
+      [
+        JSON.stringify({
+          type: 'session',
+          version: 3,
+          id: 'session-codex-compact',
+          timestamp: '2026-03-11T13:00:00.000Z',
+          cwd: '/tmp/project',
+        }),
+        JSON.stringify({
+          type: 'model_change',
+          id: 'session-codex-compact-model',
+          parentId: null,
+          timestamp: '2026-03-11T13:00:00.000Z',
+          modelId: 'gpt-5.4',
+        }),
+        JSON.stringify({
+          type: 'compaction',
+          id: 'session-codex-compact-compaction-1',
+          parentId: null,
+          timestamp: '2026-03-11T13:00:01.000Z',
+          summary: '## Goal\nKeep only the latest summary.',
+          firstKeptEntryId: 'session-codex-compact-user-1',
+          tokensBefore: 1234,
+          details: {
+            nativeCompaction: {
+              version: 1,
+              provider: 'openai-responses-compact',
+              modelKey: 'openai-codex:openai-codex-responses:gpt-5.4',
+              replacementHistory: [
+                {
+                  type: 'message',
+                  role: 'user',
+                  content: [{ type: 'input_text', text: 'Prompt after compaction' }],
+                },
+              ],
+            },
           },
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'session-codex-compact-user-1',
-        parentId: 'session-codex-compact-compaction-1',
-        timestamp: '2026-03-11T13:00:02.000Z',
-        message: { role: 'user', content: 'Continue after compaction' },
-      }),
-    ].join('\n') + '\n');
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'session-codex-compact-user-1',
+          parentId: 'session-codex-compact-compaction-1',
+          timestamp: '2026-03-11T13:00:02.000Z',
+          message: { role: 'user', content: 'Continue after compaction' },
+        }),
+      ].join('\n') + '\n',
+    );
 
     const detail = readSessionBlocks('session-codex-compact');
     expect(detail?.blocks).toEqual([
@@ -1821,7 +2212,14 @@ describe('sessions', () => {
         timestamp: '2026-03-12T16:00:00.000Z',
         message: {
           role: 'assistant',
-          content: [{ type: 'toolCall', id: 'tool-1', name: 'artifact', arguments: { action: 'save', title: 'Counter demo', kind: 'html' } }],
+          content: [
+            {
+              type: 'toolCall',
+              id: 'tool-1',
+              name: 'artifact',
+              arguments: { action: 'save', title: 'Counter demo', kind: 'html' },
+            },
+          ],
         },
       },
       {

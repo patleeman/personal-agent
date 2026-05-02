@@ -44,9 +44,7 @@ export function normalizeConversationGroupCwd(cwd: string | null | undefined): s
   return trimTrailingPathSeparators(normalized) || normalized;
 }
 
-export function buildConversationGroupLabels(
-  cwds: Iterable<string | null | undefined>,
-): Map<string, string> {
+export function buildConversationGroupLabels(cwds: Iterable<string | null | undefined>): Map<string, string> {
   const entries: ConversationGroupLabelEntry[] = [];
   const seen = new Set<string>();
 
@@ -113,10 +111,7 @@ export function buildConversationGroupLabels(
   return labels;
 }
 
-export function getConversationGroupLabel(
-  cwd: string | null | undefined,
-  options?: { labelsByCwd?: ReadonlyMap<string, string> },
-): string {
+export function getConversationGroupLabel(cwd: string | null | undefined, options?: { labelsByCwd?: ReadonlyMap<string, string> }): string {
   const normalized = normalizeConversationGroupCwd(cwd);
   if (!normalized) {
     return 'No working directory';

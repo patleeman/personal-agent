@@ -48,9 +48,7 @@ export function normalizeCheckpointPaths(cwd: string, values: string[]): string[
       return ['.'];
     }
 
-    const relativePath = isAbsolute(trimmed)
-      ? relative(cwd, resolve(trimmed))
-      : trimmed.replace(/^\.\//, '');
+    const relativePath = isAbsolute(trimmed) ? relative(cwd, resolve(trimmed)) : trimmed.replace(/^\.\//, '');
     const normalized = relativePath.replace(/\\/g, '/').trim();
     if (!normalized || normalized.startsWith('..')) {
       throw new Error(`Invalid checkpoint path: ${rawValue}`);
@@ -161,13 +159,8 @@ export function parseCheckpointDiffSections(rawPatch: string): LocalCheckpointCo
     }
     const path = newPath === '/dev/null' ? oldPath : newPath;
     const previousPath = oldPath !== '/dev/null' && oldPath !== path ? oldPath : undefined;
-    let status: LocalCheckpointCommitFile['status'] = oldPath === '/dev/null'
-      ? 'added'
-      : newPath === '/dev/null'
-        ? 'deleted'
-        : previousPath
-          ? 'renamed'
-          : 'modified';
+    let status: LocalCheckpointCommitFile['status'] =
+      oldPath === '/dev/null' ? 'added' : newPath === '/dev/null' ? 'deleted' : previousPath ? 'renamed' : 'modified';
     if (lines.some((line) => line.startsWith('copy from '))) {
       status = 'copied';
     }
@@ -194,7 +187,11 @@ export function parseCheckpointDiffSections(rawPatch: string): LocalCheckpointCo
   });
 }
 
-export function createConversationCheckpointCommit(options: { cwd: string; message: string; paths: string[] }): LocalCheckpointCommitResult {
+export function createConversationCheckpointCommit(options: {
+  cwd: string;
+  message: string;
+  paths: string[];
+}): LocalCheckpointCommitResult {
   runCheckpointGit(options.cwd, ['rev-parse', '--show-toplevel']);
   runCheckpointGit(options.cwd, ['add', '--all', '--', ...options.paths], { allowEmptyStdout: true });
 
@@ -214,8 +211,14 @@ export function createConversationCheckpointCommit(options: { cwd: string; messa
 
   runCheckpointGit(options.cwd, ['commit', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
   const commitSha = runCheckpointGit(options.cwd, ['rev-parse', 'HEAD']).trim();
-  const metadata = parseCheckpointCommitMetadata(runCheckpointGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]));
-  const rawPatch = runCheckpointGit(options.cwd, ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha], { allowEmptyStdout: true });
+  const metadata = parseCheckpointCommitMetadata(
+    runCheckpointGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]),
+  );
+  const rawPatch = runCheckpointGit(
+    options.cwd,
+    ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha],
+    { allowEmptyStdout: true },
+  );
   const files = parseCheckpointDiffSections(rawPatch);
   return {
     metadata,

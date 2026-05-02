@@ -1,10 +1,6 @@
 import { BrowserWindow, Menu, type MenuItemConstructorOptions, type WebContents } from 'electron';
 
-export type ConversationCwdGroupContextMenuAction =
-  | 'open-in-finder'
-  | 'edit-name'
-  | 'archive-threads'
-  | 'remove';
+export type ConversationCwdGroupContextMenuAction = 'open-in-finder' | 'edit-name' | 'archive-threads' | 'remove';
 
 export interface ConversationCwdGroupContextMenuInput {
   x?: number;

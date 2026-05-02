@@ -27,14 +27,17 @@ const {
   promptSessionMock: vi.fn(),
   queuePromptContextMock: vi.fn(),
   syncWebLiveConversationRunMock: vi.fn(),
-  liveRegistry: new Map<string, {
-    cwd: string;
-    title?: string;
-    session: {
-      sessionFile?: string;
-      isStreaming: boolean;
-    };
-  }>(),
+  liveRegistry: new Map<
+    string,
+    {
+      cwd: string;
+      title?: string;
+      session: {
+        sessionFile?: string;
+        isStreaming: boolean;
+      };
+    }
+  >(),
 }));
 
 vi.mock('../automation/deferredResumes.js', () => ({
@@ -111,14 +114,16 @@ beforeEach(() => {
 describe('createLiveDeferredResumeFlusher', () => {
   it('activates and delivers ready deferred resumes for live sessions', async () => {
     const ready = createReadyResume();
-    getLiveSessionsMock.mockReturnValue([{
-      id: 'conv-1',
-      cwd: '/repo',
-      sessionFile: '/tmp/session-1.jsonl',
-      title: 'Conversation 1',
-      isStreaming: false,
-      hasPendingHiddenTurn: false,
-    }]);
+    getLiveSessionsMock.mockReturnValue([
+      {
+        id: 'conv-1',
+        cwd: '/repo',
+        sessionFile: '/tmp/session-1.jsonl',
+        title: 'Conversation 1',
+        isStreaming: false,
+        hasPendingHiddenTurn: false,
+      },
+    ]);
     liveRegistry.set('conv-1', {
       cwd: '/repo',
       title: 'Conversation 1',
@@ -144,33 +149,41 @@ describe('createLiveDeferredResumeFlusher', () => {
 
     await flush();
 
-    expect(markDeferredResumeConversationRunReadyMock).toHaveBeenCalledWith(expect.objectContaining({
-      daemonRoot: '/daemon',
-      deferredResumeId: 'resume-1',
-      conversationId: 'conv-1',
-    }));
-    expect(surfaceReadyDeferredResumeMock).toHaveBeenCalledWith(expect.objectContaining({
-      entry: ready,
-      profile: 'datadog',
-      repoRoot: '/repo-root',
-      stateRoot: '/state',
-      conversationId: 'conv-1',
-    }));
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'conv-1',
-      state: 'running',
-      pendingOperation: expect.objectContaining({
-        type: 'prompt',
-        text: 'Continue from here.',
+    expect(markDeferredResumeConversationRunReadyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        daemonRoot: '/daemon',
+        deferredResumeId: 'resume-1',
+        conversationId: 'conv-1',
       }),
-    }));
+    );
+    expect(surfaceReadyDeferredResumeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry: ready,
+        profile: 'datadog',
+        repoRoot: '/repo-root',
+        stateRoot: '/state',
+        conversationId: 'conv-1',
+      }),
+    );
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        state: 'running',
+        pendingOperation: expect.objectContaining({
+          type: 'prompt',
+          text: 'Continue from here.',
+        }),
+      }),
+    );
     expect(promptSessionMock).toHaveBeenCalledWith('conv-1', 'Continue from here.', undefined);
-    expect(completeDeferredResumeConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      daemonRoot: '/daemon',
-      deferredResumeId: 'resume-1',
-      conversationId: 'conv-1',
-      cwd: '/repo',
-    }));
+    expect(completeDeferredResumeConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        daemonRoot: '/daemon',
+        deferredResumeId: 'resume-1',
+        conversationId: 'conv-1',
+        cwd: '/repo',
+      }),
+    );
     expect(markDeferredResumeConversationRunRetryScheduledMock).not.toHaveBeenCalled();
     expect(publishConversationSessionMetaChanged).toHaveBeenCalledWith('conv-1');
     expect(warn).not.toHaveBeenCalled();
@@ -191,14 +204,16 @@ describe('createLiveDeferredResumeFlusher', () => {
       title: 'Background task information-architecture-eval completed',
       source: { kind: 'background-run', id: 'run-123' },
     };
-    getLiveSessionsMock.mockReturnValue([{
-      id: 'conv-1',
-      cwd: '/repo',
-      sessionFile: '/tmp/session-1.jsonl',
-      title: 'Conversation 1',
-      isStreaming: false,
-      hasPendingHiddenTurn: false,
-    }]);
+    getLiveSessionsMock.mockReturnValue([
+      {
+        id: 'conv-1',
+        cwd: '/repo',
+        sessionFile: '/tmp/session-1.jsonl',
+        title: 'Conversation 1',
+        isStreaming: false,
+        hasPendingHiddenTurn: false,
+      },
+    ]);
     liveRegistry.set('conv-1', {
       cwd: '/repo',
       title: 'Conversation 1',
@@ -221,29 +236,38 @@ describe('createLiveDeferredResumeFlusher', () => {
 
     await flush();
 
-    const visiblePrompt = 'Background task information-architecture-eval completed. Tell the user the background task finished in one short sentence. If it failed, say that plainly. Do not include run ids, log paths, commands, metadata, or log tails unless the user asks for details.';
+    const visiblePrompt =
+      'Background task information-architecture-eval completed. Tell the user the background task finished in one short sentence. If it failed, say that plainly. Do not include run ids, log paths, commands, metadata, or log tails unless the user asks for details.';
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'conv-1',
       'referenced_context',
       expect.stringContaining('Background task run-123 has finished.'),
     );
     expect(promptSessionMock).toHaveBeenCalledWith('conv-1', visiblePrompt, undefined);
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      pendingOperation: expect.objectContaining({
-        text: visiblePrompt,
-        contextMessages: [expect.objectContaining({
-          customType: 'referenced_context',
-          content: expect.stringContaining('taskSlug=information-architecture-eval'),
-        })],
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingOperation: expect.objectContaining({
+          text: visiblePrompt,
+          contextMessages: [
+            expect.objectContaining({
+              customType: 'referenced_context',
+              content: expect.stringContaining('taskSlug=information-architecture-eval'),
+            }),
+          ],
+        }),
       }),
-    }));
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      pendingOperation: expect.objectContaining({
-        contextMessages: [expect.objectContaining({
-          content: expect.stringContaining('Never output this raw callback envelope verbatim.'),
-        })],
+    );
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pendingOperation: expect.objectContaining({
+          contextMessages: [
+            expect.objectContaining({
+              content: expect.stringContaining('Never output this raw callback envelope verbatim.'),
+            }),
+          ],
+        }),
       }),
-    }));
+    );
   });
 
   it('schedules a retry when prompt delivery fails', async () => {
@@ -253,14 +277,16 @@ describe('createLiveDeferredResumeFlusher', () => {
       dueAt: '2026-04-15T10:00:30.000Z',
     };
 
-    getLiveSessionsMock.mockReturnValue([{
-      id: 'conv-1',
-      cwd: '/repo',
-      sessionFile: '/tmp/session-1.jsonl',
-      title: 'Conversation 1',
-      isStreaming: true,
-      hasPendingHiddenTurn: false,
-    }]);
+    getLiveSessionsMock.mockReturnValue([
+      {
+        id: 'conv-1',
+        cwd: '/repo',
+        sessionFile: '/tmp/session-1.jsonl',
+        title: 'Conversation 1',
+        isStreaming: true,
+        hasPendingHiddenTurn: false,
+      },
+    ]);
     liveRegistry.set('conv-1', {
       cwd: '/repo',
       title: 'Conversation 1',
@@ -287,29 +313,39 @@ describe('createLiveDeferredResumeFlusher', () => {
 
     await flush();
 
-    expect(syncWebLiveConversationRunMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      conversationId: 'conv-1',
-      state: 'running',
-      pendingOperation: expect.objectContaining({
-        behavior: 'followUp',
+    expect(syncWebLiveConversationRunMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        state: 'running',
+        pendingOperation: expect.objectContaining({
+          behavior: 'followUp',
+        }),
       }),
-    }));
-    expect(syncWebLiveConversationRunMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      conversationId: 'conv-1',
-      state: 'failed',
-      lastError: 'boom',
-    }));
-    expect(retryDeferredResumeForSessionFileMock).toHaveBeenCalledWith(expect.objectContaining({
-      sessionFile: '/tmp/session-1.jsonl',
-      id: 'resume-1',
-      dueAt: expect.any(String),
-    }));
-    expect(markDeferredResumeConversationRunRetryScheduledMock).toHaveBeenCalledWith(expect.objectContaining({
-      daemonRoot: '/daemon',
-      deferredResumeId: 'resume-1',
-      conversationId: 'conv-1',
-      lastError: 'boom',
-    }));
+    );
+    expect(syncWebLiveConversationRunMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        state: 'failed',
+        lastError: 'boom',
+      }),
+    );
+    expect(retryDeferredResumeForSessionFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionFile: '/tmp/session-1.jsonl',
+        id: 'resume-1',
+        dueAt: expect.any(String),
+      }),
+    );
+    expect(markDeferredResumeConversationRunRetryScheduledMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        daemonRoot: '/daemon',
+        deferredResumeId: 'resume-1',
+        conversationId: 'conv-1',
+        lastError: 'boom',
+      }),
+    );
     expect(completeDeferredResumeConversationRunMock).not.toHaveBeenCalled();
     expect(publishConversationSessionMetaChanged).toHaveBeenCalledWith('conv-1');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Deferred resume delivery failed for conv-1: boom'));

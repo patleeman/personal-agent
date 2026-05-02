@@ -3,19 +3,15 @@
  */
 
 import type { Express } from 'express';
-import type { ServerRouteContext } from './context.js';
-import {
-  readSavedConversationTitlePreferences,
-  writeSavedConversationTitlePreferences,
-} from '../ui/conversationTitlePreferences.js';
-import { persistSettingsWrite } from '../ui/settingsPersistence.js';
+
 import { logError } from '../middleware/index.js';
+import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from '../ui/conversationTitlePreferences.js';
+import { persistSettingsWrite } from '../ui/settingsPersistence.js';
+import type { ServerRouteContext } from './context.js';
 
 let SETTINGS_FILE: string = '';
 
-function initializeConversationTitleRoutesContext(
-  context: Pick<ServerRouteContext, 'getSettingsFile'>,
-): void {
+function initializeConversationTitleRoutesContext(context: Pick<ServerRouteContext, 'getSettingsFile'>): void {
   SETTINGS_FILE = context.getSettingsFile();
 }
 
@@ -43,10 +39,9 @@ export function registerConversationTitlesRoutes(
         res.status(400).json({ error: 'enabled or model required' });
         return;
       }
-      const saved = persistSettingsWrite(
-        (settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile),
-        { runtimeSettingsFile: SETTINGS_FILE },
-      );
+      const saved = persistSettingsWrite((settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile), {
+        runtimeSettingsFile: SETTINGS_FILE,
+      });
       res.json(saved);
     } catch (err) {
       logError('request handler error', {

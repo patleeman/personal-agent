@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
 import {
   ensureLegacyTaskImports,
   getAutomationDbPath,
@@ -7,8 +8,8 @@ import {
   listStoredAutomations,
   loadAutomationRuntimeStateMap,
   loadDaemonConfig,
-  parseTaskDefinition,
   type ParsedTaskDefinition,
+  parseTaskDefinition,
   type StoredAutomation,
 } from '@personal-agent/daemon';
 
@@ -96,7 +97,7 @@ function toRuntimeEntries(): { runtimeState: Record<string, TaskRuntimeEntry>; r
   }));
 
   return {
-    runtimeState: Object.fromEntries(entries.flatMap((entry) => entry.id ? [[entry.id, entry] as const] : [])),
+    runtimeState: Object.fromEntries(entries.flatMap((entry) => (entry.id ? [[entry.id, entry] as const] : []))),
     runtimeEntries: entries,
   };
 }
@@ -216,7 +217,10 @@ export function loadScheduledTasksForProfile(profile: string): LoadedScheduledTa
   };
 }
 
-export function resolveScheduledTaskForProfile(profile: string, taskId: string): {
+export function resolveScheduledTaskForProfile(
+  profile: string,
+  taskId: string,
+): {
   taskDir: string;
   task: StoredAutomation;
   runtime?: TaskRuntimeEntry;
@@ -255,10 +259,7 @@ export function buildScheduledTaskMarkdown(input: {
     throw new Error('Provide exactly one of cron or at.');
   }
 
-  const lines = [
-    '---',
-    `id: ${yamlString(input.taskId)}`,
-  ];
+  const lines = ['---', `id: ${yamlString(input.taskId)}`];
 
   const title = readOptionalString(input.title ?? undefined);
   if (title) {
@@ -291,14 +292,22 @@ export function buildScheduledTaskMarkdown(input: {
   }
 
   if (input.timeoutSeconds !== undefined && input.timeoutSeconds !== null) {
-    if (!Number.isSafeInteger(input.timeoutSeconds) || input.timeoutSeconds <= 0 || input.timeoutSeconds > MAX_SCHEDULED_TASK_DURATION_SECONDS) {
+    if (
+      !Number.isSafeInteger(input.timeoutSeconds) ||
+      input.timeoutSeconds <= 0 ||
+      input.timeoutSeconds > MAX_SCHEDULED_TASK_DURATION_SECONDS
+    ) {
       throw new Error('timeoutSeconds must be a positive integer.');
     }
     lines.push(`timeoutSeconds: ${input.timeoutSeconds}`);
   }
 
   if (input.catchUpWindowSeconds !== undefined && input.catchUpWindowSeconds !== null) {
-    if (!Number.isSafeInteger(input.catchUpWindowSeconds) || input.catchUpWindowSeconds <= 0 || input.catchUpWindowSeconds > MAX_SCHEDULED_TASK_DURATION_SECONDS) {
+    if (
+      !Number.isSafeInteger(input.catchUpWindowSeconds) ||
+      input.catchUpWindowSeconds <= 0 ||
+      input.catchUpWindowSeconds > MAX_SCHEDULED_TASK_DURATION_SECONDS
+    ) {
       throw new Error('catchUpWindowSeconds must be a positive integer.');
     }
     lines.push(`catchUpWindowSeconds: ${input.catchUpWindowSeconds}`);

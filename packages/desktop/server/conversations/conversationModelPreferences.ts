@@ -1,6 +1,7 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
 import { getSupportedThinkingLevels, type Model } from '@mariozechner/pi-ai';
+import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
+
 import {
   getSupportedServiceTiersForModel,
   modelSupportsServiceTier,
@@ -64,10 +65,7 @@ function normalizeServiceTier(value: unknown): ServiceTier | '' {
   return normalizeServiceTierValue(value);
 }
 
-function clampServiceTier(
-  serviceTier: ServiceTier | '',
-  model: Pick<Model<any>, 'id'> | null | undefined,
-): ServiceTier | '' {
+function clampServiceTier(serviceTier: ServiceTier | '', model: Pick<Model<any>, 'id'> | null | undefined): ServiceTier | '' {
   if (!serviceTier) {
     return '';
   }
@@ -90,7 +88,9 @@ function getAvailableThinkingLevels(model: Model<any> | null | undefined): Think
 function clampThinkingLevel(level: ThinkingLevel | '', model: Model<any> | null | undefined): ThinkingLevel {
   const availableLevels = getAvailableThinkingLevels(model);
   if (!level) {
-    return availableLevels.includes(DEFAULT_THINKING_LEVEL) ? DEFAULT_THINKING_LEVEL : availableLevels[availableLevels.length - 1] ?? 'off';
+    return availableLevels.includes(DEFAULT_THINKING_LEVEL)
+      ? DEFAULT_THINKING_LEVEL
+      : (availableLevels[availableLevels.length - 1] ?? 'off');
   }
 
   if (availableLevels.includes(level)) {
@@ -124,9 +124,10 @@ function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | n
   return null;
 }
 
-function readServiceTierOverride(
-  branch: Array<{ type: string; customType?: string; data?: unknown }>,
-): { currentServiceTier: string; hasExplicitServiceTier: boolean } {
+function readServiceTierOverride(branch: Array<{ type: string; customType?: string; data?: unknown }>): {
+  currentServiceTier: string;
+  hasExplicitServiceTier: boolean;
+} {
   for (let index = branch.length - 1; index >= 0; index -= 1) {
     const entry = branch[index];
     if (!entry || entry.type !== 'custom' || entry.customType !== SERVICE_TIER_CUSTOM_TYPE) {
@@ -198,19 +199,17 @@ function computeNextConversationModelPreferences(
   const requestedModel = input.model === undefined ? undefined : readNonEmptyString(input.model ?? '');
   const requestedThinkingLevel = input.thinkingLevel === undefined ? undefined : normalizeThinkingLevel(input.thinkingLevel ?? '');
   const requestedThinkingClearsToDefault = requestedThinkingLevel !== undefined && requestedThinkingLevel === '';
-  const requestedServiceTier = input.serviceTier === undefined || input.serviceTier === null
-    ? input.serviceTier
-    : normalizeServiceTier(input.serviceTier);
-  const requestedServiceTierClearsToDefault = requestedServiceTier !== undefined && requestedServiceTier !== null && requestedServiceTier === '';
+  const requestedServiceTier =
+    input.serviceTier === undefined || input.serviceTier === null ? input.serviceTier : normalizeServiceTier(input.serviceTier);
+  const requestedServiceTierClearsToDefault =
+    requestedServiceTier !== undefined && requestedServiceTier !== null && requestedServiceTier === '';
   const requestedServiceTierDisables = requestedServiceTier === null;
 
   if (requestedModel !== undefined && !requestedModel) {
     throw new Error('model required');
   }
 
-  const nextModel = requestedModel !== undefined
-    ? resolveModelById(requestedModel, models)
-    : resolved.currentModelDefinition;
+  const nextModel = requestedModel !== undefined ? resolveModelById(requestedModel, models) : resolved.currentModelDefinition;
 
   if (requestedModel !== undefined && !nextModel) {
     throw new Error(`Unknown model: ${requestedModel}`);
@@ -228,7 +227,10 @@ function computeNextConversationModelPreferences(
     const effectiveThinkingLevel = clampThinkingLevel(desiredThinkingLevel, nextModel);
     nextThinkingLevelForDisplay = effectiveThinkingLevel;
 
-    if (effectiveThinkingLevel !== resolved.currentThinkingLevel || (requestedThinkingClearsToDefault && snapshot.hasExplicitThinkingLevel)) {
+    if (
+      effectiveThinkingLevel !== resolved.currentThinkingLevel ||
+      (requestedThinkingClearsToDefault && snapshot.hasExplicitThinkingLevel)
+    ) {
       nextPersistedThinkingLevel = effectiveThinkingLevel;
     }
   } else if (shouldAppendModelChange && resolved.currentThinkingLevel) {
@@ -279,9 +281,7 @@ function computeNextConversationModelPreferences(
     currentModel,
     currentThinkingLevel: nextThinkingLevelForDisplay,
     currentServiceTier: nextServiceTierForDisplay,
-    hasExplicitServiceTier: nextServiceTierOverride === undefined
-      ? snapshot.hasExplicitServiceTier
-      : nextServiceTierOverride !== '',
+    hasExplicitServiceTier: nextServiceTierOverride === undefined ? snapshot.hasExplicitServiceTier : nextServiceTierOverride !== '',
     nextModel,
     shouldAppendModelChange,
     nextPersistedThinkingLevel,
@@ -328,7 +328,10 @@ function appendConversationServiceTierOverride(
 }
 
 export function applyConversationModelPreferencesToSessionManager(
-  sessionManager: Pick<SessionManager, 'appendCustomEntry' | 'appendModelChange' | 'appendThinkingLevelChange' | 'buildSessionContext' | 'getBranch'>,
+  sessionManager: Pick<
+    SessionManager,
+    'appendCustomEntry' | 'appendModelChange' | 'appendThinkingLevelChange' | 'buildSessionContext' | 'getBranch'
+  >,
   input: ConversationModelPreferenceInput,
   defaults: ConversationModelPreferenceDefaults,
   models: Model<any>[],

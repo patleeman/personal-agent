@@ -48,11 +48,7 @@ function createResponse() {
   };
 }
 
-function createHarness(options?: {
-  currentProfile?: string;
-  repoRoot?: string;
-  profilesRoot?: string;
-}) {
+function createHarness(options?: { currentProfile?: string; repoRoot?: string; profilesRoot?: string }) {
   const getHandlers = new Map<string, Handler>();
   const app = {
     get: vi.fn((path: string, handler: Handler) => {
@@ -64,10 +60,11 @@ function createHarness(options?: {
     getCurrentProfile: () => options?.currentProfile ?? 'assistant',
     getRepoRoot: () => options?.repoRoot ?? '/repo',
     getProfilesRoot: () => options?.profilesRoot ?? '/profiles',
-    buildLiveSessionResourceOptions: (profile: string) => ({
-      profileMarker: profile,
-      additionalSkillPaths: [`/skills/${profile}/jira-helper`],
-    } as never),
+    buildLiveSessionResourceOptions: (profile: string) =>
+      ({
+        profileMarker: profile,
+        additionalSkillPaths: [`/skills/${profile}/jira-helper`],
+      }) as never,
     buildLiveSessionExtensionFactories: () => ['extension-factory'] as never,
     withTemporaryProfileAgentDir: async <T>(profile: string, run: (agentDir: string) => Promise<T>) => run(`/tmp/${profile}-agent-dir`),
   });
@@ -141,28 +138,31 @@ describe('registerToolsRoutes', () => {
       path: '/repo/.mcp.json',
       exists: true,
       searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
-      servers: [{
-        name: 'atlassian',
-        transport: 'remote',
-        command: undefined,
-        args: [],
-        cwd: undefined,
-        url: 'https://mcp.atlassian.com/v1/mcp',
-        callbackHost: 'localhost',
-        callbackPort: 3118,
-        callbackPath: '/callback',
-        authorizeResource: 'https://datadoghq.atlassian.net/',
-        oauthClientInfo: { client_id: 'test-client' },
-        raw: {},
-      }, {
-        name: 'github',
-        transport: 'stdio',
-        command: 'npx',
-        args: ['@mcp/github'],
-        cwd: '/repo',
-        url: undefined,
-        raw: {},
-      }],
+      servers: [
+        {
+          name: 'atlassian',
+          transport: 'remote',
+          command: undefined,
+          args: [],
+          cwd: undefined,
+          url: 'https://mcp.atlassian.com/v1/mcp',
+          callbackHost: 'localhost',
+          callbackPort: 3118,
+          callbackPath: '/callback',
+          authorizeResource: 'https://datadoghq.atlassian.net/',
+          oauthClientInfo: { client_id: 'test-client' },
+          raw: {},
+        },
+        {
+          name: 'github',
+          transport: 'stdio',
+          command: 'npx',
+          args: ['@mcp/github'],
+          cwd: '/repo',
+          url: undefined,
+          raw: {},
+        },
+      ],
     });
     inspectCliBinaryMock.mockReturnValue({
       command: 'op-custom',
@@ -191,58 +191,65 @@ describe('registerToolsRoutes', () => {
       profile: 'other',
       tools: [{ id: 'shell' }],
       toolsets: [{ id: 'default' }],
-      dependentCliTools: [{
-        id: '1password-cli',
-        name: '1Password CLI',
-        description: 'Resolves op:// secret references used by personal-agent features and extensions.',
-        configuredBy: 'PERSONAL_AGENT_OP_BIN',
-        usedBy: ['op:// secret references', 'web-tools extension'],
-        binary: { command: 'op-custom', exists: true },
-      }],
+      dependentCliTools: [
+        {
+          id: '1password-cli',
+          name: '1Password CLI',
+          description: 'Resolves op:// secret references used by personal-agent features and extensions.',
+          configuredBy: 'PERSONAL_AGENT_OP_BIN',
+          usedBy: ['op:// secret references', 'web-tools extension'],
+          binary: { command: 'op-custom', exists: true },
+        },
+      ],
       mcp: {
         configPath: '/repo/.mcp.json',
         configExists: true,
         searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
-        servers: [{
-          name: 'atlassian',
-          transport: 'remote',
-          command: undefined,
-          args: [],
-          cwd: undefined,
-          url: 'https://mcp.atlassian.com/v1/mcp',
-          source: 'skill',
-          sourcePath: '/skills/other/jira-helper/mcp.json',
-          skillName: 'jira-helper',
-          skillPath: '/skills/other/jira-helper',
-          manifestPath: '/skills/other/jira-helper/mcp.json',
-          hasOAuth: true,
-          callbackUrl: 'http://localhost:3118/callback',
-          authorizeResource: 'https://datadoghq.atlassian.net/',
-          raw: {},
-        }, {
-          name: 'github',
-          transport: 'stdio',
-          command: 'npx',
-          args: ['@mcp/github'],
-          cwd: '/repo',
-          url: undefined,
-          source: 'config',
-          sourcePath: '/repo/.mcp.json',
-          skillName: undefined,
-          skillPath: undefined,
-          manifestPath: undefined,
-          hasOAuth: false,
-          callbackUrl: undefined,
-          authorizeResource: undefined,
-          raw: {},
-        }],
-        bundledSkills: [{
-          skillName: 'jira-helper',
-          skillPath: '/skills/other/jira-helper',
-          manifestPath: '/skills/other/jira-helper/mcp.json',
-          serverNames: ['atlassian'],
-          overriddenServerNames: [],
-        }],
+        servers: [
+          {
+            name: 'atlassian',
+            transport: 'remote',
+            command: undefined,
+            args: [],
+            cwd: undefined,
+            url: 'https://mcp.atlassian.com/v1/mcp',
+            source: 'skill',
+            sourcePath: '/skills/other/jira-helper/mcp.json',
+            skillName: 'jira-helper',
+            skillPath: '/skills/other/jira-helper',
+            manifestPath: '/skills/other/jira-helper/mcp.json',
+            hasOAuth: true,
+            callbackUrl: 'http://localhost:3118/callback',
+            authorizeResource: 'https://datadoghq.atlassian.net/',
+            raw: {},
+          },
+          {
+            name: 'github',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['@mcp/github'],
+            cwd: '/repo',
+            url: undefined,
+            source: 'config',
+            sourcePath: '/repo/.mcp.json',
+            skillName: undefined,
+            skillPath: undefined,
+            manifestPath: undefined,
+            hasOAuth: false,
+            callbackUrl: undefined,
+            authorizeResource: undefined,
+            raw: {},
+          },
+        ],
+        bundledSkills: [
+          {
+            skillName: 'jira-helper',
+            skillPath: '/skills/other/jira-helper',
+            manifestPath: '/skills/other/jira-helper/mcp.json',
+            serverNames: ['atlassian'],
+            overriddenServerNames: [],
+          },
+        ],
       },
       packageInstall: {
         currentProfile: 'assistant',
@@ -276,11 +283,13 @@ describe('registerToolsRoutes', () => {
     inspectAvailableToolsMock.mockRejectedValueOnce(new Error('inspect failed'));
     const failureRes = createResponse();
     await handler({ query: {} }, failureRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'inspect failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'inspect failed',
+      }),
+    );
     expect(failureRes.status).toHaveBeenCalledWith(500);
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'inspect failed' });
   });
-
 });

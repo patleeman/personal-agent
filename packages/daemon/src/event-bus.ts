@@ -67,10 +67,7 @@ export class EventBus {
       try {
         while (this.queue.length > 0) {
           const event = this.queue.shift() as DaemonEvent;
-          const handlers = [
-            ...(this.subscribers.get(event.type) ?? []),
-            ...(this.subscribers.get('*') ?? []),
-          ];
+          const handlers = [...(this.subscribers.get(event.type) ?? []), ...(this.subscribers.get('*') ?? [])];
 
           for (const handler of handlers) {
             try {

@@ -1,23 +1,24 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
-import { rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import {
   createEmptyDeferredResumeState,
   getActivityConversationLink,
   listProfileActivityEntries,
+  loadDeferredResumeState,
   saveDeferredResumeState,
   scheduleDeferredResume,
   setConversationProjectLinks,
-  loadDeferredResumeState,
 } from '@personal-agent/core';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DaemonConfig } from '../config.js';
 import { createDeferredResumeConversationRunId } from '../runs/deferred-resume-conversations.js';
 import { resolveDurableRunsRoot, scanDurableRun } from '../runs/store.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
-import type { DaemonModuleContext } from './types.js';
 import { createDeferredResumeModule } from './deferred-resume.js';
+import type { DaemonModuleContext } from './types.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -33,7 +34,11 @@ interface PublishedEvent {
   payload?: EventPayload;
 }
 
-function createContext(taskDir: string, stateRoot: string, warn = vi.fn()): {
+function createContext(
+  taskDir: string,
+  stateRoot: string,
+  warn = vi.fn(),
+): {
   context: DaemonModuleContext;
   published: PublishedEvent[];
   warn: ReturnType<typeof vi.fn>;
@@ -168,11 +173,13 @@ describe('deferred resume daemon module', () => {
     expect(activity).toHaveLength(1);
     expect(activity[0]?.entry.summary).toBe('Deferred resume fired. Open the conversation to continue.');
     expect(activity[0]?.entry.relatedProjectIds).toEqual(['desktop-ui']);
-    expect(getActivityConversationLink({
-      stateRoot,
-      profile: 'assistant',
-      activityId: activity[0]!.entry.id,
-    })?.relatedConversationIds).toEqual(['conv-123']);
+    expect(
+      getActivityConversationLink({
+        stateRoot,
+        profile: 'assistant',
+        activityId: activity[0]!.entry.id,
+      })?.relatedConversationIds,
+    ).toEqual(['conv-123']);
 
     expect(scanDurableRun(resolveDurableRunsRoot(stateRoot), createDeferredResumeConversationRunId('resume-123'))).toMatchObject({
       runId: createDeferredResumeConversationRunId('resume-123'),

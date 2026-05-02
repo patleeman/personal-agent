@@ -54,7 +54,9 @@ export async function syncLiveSessionDurableRun(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[${new Date().toISOString()}] [web] [error] conversation durable run sync failed sessionId=${entry.sessionId} state=${state} message=${message}`);
+    console.error(
+      `[${new Date().toISOString()}] [web] [error] conversation durable run sync failed sessionId=${entry.sessionId} state=${state} message=${message}`,
+    );
   }
 }
 

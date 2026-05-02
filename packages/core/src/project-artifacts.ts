@@ -152,11 +152,7 @@ function readYamlStringArray(value: unknown, label: string): string[] {
   return value.map((entry, index) => readYamlString(entry, `${label}[${index}]`));
 }
 
-function readOptionalYamlStringArray(
-  object: Record<string, unknown>,
-  key: string,
-  label: string,
-): string[] | undefined {
+function readOptionalYamlStringArray(object: Record<string, unknown>, key: string, label: string): string[] | undefined {
   const value = object[key];
 
   if (value === undefined || value === null) {
@@ -166,11 +162,7 @@ function readOptionalYamlStringArray(
   return readYamlStringArray(value, `${label}.${key}`);
 }
 
-function readRequiredYamlObject(
-  object: Record<string, unknown>,
-  key: string,
-  label: string,
-): Record<string, unknown> {
+function readRequiredYamlObject(object: Record<string, unknown>, key: string, label: string): Record<string, unknown> {
   if (!(key in object)) {
     throw new Error(`Missing required key ${key} in ${label}.`);
   }
@@ -184,11 +176,13 @@ function parseYamlDocument(yaml: string, label: string): Record<string, unknown>
 }
 
 function stringifyYamlDocument(value: Record<string, unknown>): string {
-  return stringifyYaml(value, {
-    lineWidth: 0,
-    indent: 2,
-    minContentWidth: 0,
-  }).trimEnd() + '\n';
+  return (
+    stringifyYaml(value, {
+      lineWidth: 0,
+      indent: 2,
+      minContentWidth: 0,
+    }).trimEnd() + '\n'
+  );
 }
 
 function validateProjectPlan(
@@ -342,7 +336,8 @@ function formatProjectState(document: ProjectDocument): Record<string, unknown> 
     requirements: {
       goal: assertNonEmptyText(document.requirements.goal, 'Project requirements.goal'),
       acceptanceCriteria: document.requirements.acceptanceCriteria.map((criterion, index) =>
-        assertNonEmptyText(criterion, `Project requirements.acceptanceCriteria[${index}]`)),
+        assertNonEmptyText(criterion, `Project requirements.acceptanceCriteria[${index}]`),
+      ),
     },
     status: assertNonEmptyText(document.status, 'Project status'),
     blockers: document.blockers.map((blocker, index) => assertNonEmptyText(blocker, `Project blockers[${index}]`)),
@@ -384,7 +379,7 @@ function splitMarkdownNode(markdown: string, label: string): { frontmatter: Reco
   const frontmatterRaw = normalized.slice(FRONTMATTER_DELIMITER.length + 1, secondDelimiterIndex);
   const parsed = parseYaml(frontmatterRaw);
   const frontmatter = assertPlainObject(parsed, `${label} frontmatter`);
-  const body = normalized.slice(secondDelimiterIndex + (`\n${FRONTMATTER_DELIMITER}\n`).length).trim();
+  const body = normalized.slice(secondDelimiterIndex + `\n${FRONTMATTER_DELIMITER}\n`.length).trim();
 
   return { frontmatter, body };
 }
@@ -406,14 +401,8 @@ function buildDefaultProjectIndexBody(document: ProjectDocument): string {
   return body.join('\n').trim();
 }
 
-function parseProjectStateDocument(
-  object: Record<string, unknown>,
-  baseDocument: ProjectDocument,
-  label: string,
-): ProjectDocument {
-  const planObject = object.plan === undefined
-    ? { tasks: [] }
-    : readRequiredYamlObject(object, 'plan', label);
+function parseProjectStateDocument(object: Record<string, unknown>, baseDocument: ProjectDocument, label: string): ProjectDocument {
+  const planObject = object.plan === undefined ? { tasks: [] } : readRequiredYamlObject(object, 'plan', label);
   const milestoneValues = planObject.milestones;
   const taskValues = planObject.tasks;
 
@@ -438,16 +427,15 @@ function parseProjectStateDocument(
   const currentMilestoneId = readOptionalYamlString(planObject, 'currentMilestoneId', `${label}.plan`);
   validateProjectPlan(parsedMilestones, parsedTasks, currentMilestoneId, `${label}.plan`);
 
-  const description = readOptionalYamlString(object, 'description', label)
-    ?? baseDocument.description
-    ?? baseDocument.summary;
+  const description = readOptionalYamlString(object, 'description', label) ?? baseDocument.description ?? baseDocument.summary;
   const requirementsValue = object.requirements;
-  const requirements = requirementsValue === undefined || requirementsValue === null
-    ? {
-        goal: baseDocument.requirements.goal || description,
-        acceptanceCriteria: baseDocument.requirements.acceptanceCriteria,
-      }
-    : parseProjectRequirements(assertPlainObject(requirementsValue, `${label}.requirements`), `${label}.requirements`);
+  const requirements =
+    requirementsValue === undefined || requirementsValue === null
+      ? {
+          goal: baseDocument.requirements.goal || description,
+          acceptanceCriteria: baseDocument.requirements.acceptanceCriteria,
+        }
+      : parseProjectRequirements(assertPlainObject(requirementsValue, `${label}.requirements`), `${label}.requirements`);
 
   return {
     ...baseDocument,
@@ -476,16 +464,18 @@ function parseProjectStateDocument(
 }
 
 function parseLegacyProjectDocument(object: Record<string, unknown>, label: string): ProjectDocument {
-  const description = readOptionalYamlString(object, 'description', label)
-    ?? readOptionalYamlString(object, 'summary', label)
-    ?? readRequiredYamlString(object, 'title', label);
+  const description =
+    readOptionalYamlString(object, 'description', label) ??
+    readOptionalYamlString(object, 'summary', label) ??
+    readRequiredYamlString(object, 'title', label);
   const requirementsValue = object.requirements;
-  const requirements = requirementsValue === undefined || requirementsValue === null
-    ? {
-        goal: description,
-        acceptanceCriteria: [],
-      }
-    : parseProjectRequirements(assertPlainObject(requirementsValue, `${label}.requirements`), `${label}.requirements`);
+  const requirements =
+    requirementsValue === undefined || requirementsValue === null
+      ? {
+          goal: description,
+          acceptanceCriteria: [],
+        }
+      : parseProjectRequirements(assertPlainObject(requirementsValue, `${label}.requirements`), `${label}.requirements`);
 
   const baseDocument: ProjectDocument = {
     id: readRequiredYamlString(object, 'id', label),
@@ -638,10 +628,7 @@ export function writeProject(path: string, document: ProjectDocument): void {
 }
 
 function stripWrappingQuotes(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"'))
-    || (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
     return value.slice(1, -1);
   }
 
@@ -693,7 +680,10 @@ function splitFrontmatter(markdown: string, label: string): FrontmatterSection {
 
   return {
     attributes,
-    body: lines.slice(endIndex + 1).join('\n').trim(),
+    body: lines
+      .slice(endIndex + 1)
+      .join('\n')
+      .trim(),
   };
 }
 
@@ -803,9 +793,7 @@ function formatOptionalListAttribute(values?: string[]): string | undefined {
     return undefined;
   }
 
-  const normalized = values
-    .map((value) => assertNonEmptyText(value, 'List attribute value'))
-    .join(', ');
+  const normalized = values.map((value) => assertNonEmptyText(value, 'List attribute value')).join(', ');
 
   return normalized.length > 0 ? normalized : undefined;
 }

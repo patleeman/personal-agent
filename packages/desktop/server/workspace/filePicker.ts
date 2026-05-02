@@ -46,9 +46,8 @@ export function buildFilePickerInvocation(input: {
   const prompt = input.prompt ?? 'Choose instruction files';
   const directoryExists = input.directoryExists ?? existsSync;
   const normalizedInitialDirectory = normalizeInitialDirectory(input.initialDirectory);
-  const initialDirectory = normalizedInitialDirectory && directoryExists(normalizedInitialDirectory)
-    ? normalizedInitialDirectory
-    : undefined;
+  const initialDirectory =
+    normalizedInitialDirectory && directoryExists(normalizedInitialDirectory) ? normalizedInitialDirectory : undefined;
   const hasCommand = input.hasCommand ?? ((command: string) => spawnSync('which', [command], { stdio: 'ignore' }).status === 0);
 
   if (platform === 'darwin') {
@@ -56,7 +55,9 @@ export function buildFilePickerInvocation(input: {
     const args = initialDirectory
       ? [
           '-e',
-          `set chosenFiles to choose file with prompt "${promptLiteral}" default location POSIX file "${escapeAppleScriptString(ensureTrailingSlash(initialDirectory))}" with multiple selections allowed`,
+          `set chosenFiles to choose file with prompt "${promptLiteral}" default location POSIX file "${escapeAppleScriptString(
+            ensureTrailingSlash(initialDirectory),
+          )}" with multiple selections allowed`,
           '-e',
           'set outputLines to {}',
           '-e',
@@ -66,7 +67,7 @@ export function buildFilePickerInvocation(input: {
           '-e',
           'end repeat',
           '-e',
-          'set AppleScript\'s text item delimiters to linefeed',
+          "set AppleScript's text item delimiters to linefeed",
           '-e',
           'outputLines as text',
         ]
@@ -82,7 +83,7 @@ export function buildFilePickerInvocation(input: {
           '-e',
           'end repeat',
           '-e',
-          'set AppleScript\'s text item delimiters to linefeed',
+          "set AppleScript's text item delimiters to linefeed",
           '-e',
           'outputLines as text',
         ];
@@ -107,14 +108,7 @@ export function buildFilePickerInvocation(input: {
     if (hasCommand('kdialog')) {
       return {
         command: 'kdialog',
-        args: [
-          '--getopenfilename',
-          initialDirectory ?? '',
-          '--multiple',
-          '--separate-output',
-          '--title',
-          prompt,
-        ],
+        args: ['--getopenfilename', initialDirectory ?? '', '--multiple', '--separate-output', '--title', prompt],
       };
     }
 
@@ -150,7 +144,10 @@ export function interpretFilePickerProcessResult(result: FilePickerProcessResult
   const stdout = result.stdout.trim();
   const stderr = result.stderr.trim();
   const paths = stdout
-    ? stdout.split(/\r?\n/).map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    ? stdout
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
     : [];
 
   if (paths.length > 0) {
@@ -173,10 +170,12 @@ export function interpretFilePickerProcessResult(result: FilePickerProcessResult
   throw new Error(stderr || `File picker exited with status ${result.status ?? 'unknown'}.`);
 }
 
-export function pickFiles(input: {
-  initialDirectory?: string;
-  prompt?: string;
-} = {}): FilePickerResult {
+export function pickFiles(
+  input: {
+    initialDirectory?: string;
+    prompt?: string;
+  } = {},
+): FilePickerResult {
   const invocation = buildFilePickerInvocation(input);
   const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf-8',

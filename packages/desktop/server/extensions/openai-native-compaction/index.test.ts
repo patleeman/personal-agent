@@ -152,30 +152,33 @@ describe('openai native compaction extension', () => {
   });
 
   it('reconstructs the native replay history from the latest matching compaction', () => {
-    const state = reconstructNativeState([
-      {
-        id: 'compaction-1',
-        type: 'compaction',
-        summary: 'Portable summary',
-        details: {
-          nativeCompaction: {
-            version: 1,
-            provider: 'openai-responses-compact',
-            modelKey: modelKey(OPENAI_MODEL),
-            replacementHistory: [
-              {
-                type: 'message',
-                role: 'assistant',
-                content: [{ type: 'output_text', text: 'Native compacted context' }],
-              },
-            ],
+    const state = reconstructNativeState(
+      [
+        {
+          id: 'compaction-1',
+          type: 'compaction',
+          summary: 'Portable summary',
+          details: {
+            nativeCompaction: {
+              version: 1,
+              provider: 'openai-responses-compact',
+              modelKey: modelKey(OPENAI_MODEL),
+              replacementHistory: [
+                {
+                  type: 'message',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: 'Native compacted context' }],
+                },
+              ],
+            },
           },
         },
-      },
-      userMessageEntry('user-1', 'Question after compaction'),
-      assistantMessageEntry('assistant-1', 'Answer after compaction'),
-      userMessageEntry('user-2', 'Current prompt'),
-    ] as never[], OPENAI_MODEL);
+        userMessageEntry('user-1', 'Question after compaction'),
+        assistantMessageEntry('assistant-1', 'Answer after compaction'),
+        userMessageEntry('user-2', 'Current prompt'),
+      ] as never[],
+      OPENAI_MODEL,
+    );
 
     expect(state?.details.modelKey).toBe(modelKey(OPENAI_MODEL));
     expect(state?.explicitHistory).toEqual([
@@ -203,31 +206,34 @@ describe('openai native compaction extension', () => {
   });
 
   it('drops orphan tool outputs when reconstructing replay history across model changes', () => {
-    const state = reconstructNativeState([
-      {
-        id: 'compaction-1',
-        type: 'compaction',
-        summary: 'Portable summary',
-        details: {
-          nativeCompaction: {
-            version: 1,
-            provider: 'openai-responses-compact',
-            modelKey: modelKey(OPENAI_MODEL),
-            replacementHistory: [
-              {
-                type: 'message',
-                role: 'assistant',
-                content: [{ type: 'output_text', text: 'Native compacted context' }],
-              },
-            ],
+    const state = reconstructNativeState(
+      [
+        {
+          id: 'compaction-1',
+          type: 'compaction',
+          summary: 'Portable summary',
+          details: {
+            nativeCompaction: {
+              version: 1,
+              provider: 'openai-responses-compact',
+              modelKey: modelKey(OPENAI_MODEL),
+              replacementHistory: [
+                {
+                  type: 'message',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: 'Native compacted context' }],
+                },
+              ],
+            },
           },
         },
-      },
-      userMessageEntry('user-1', 'Try another model'),
-      assistantToolCallEntry('assistant-1', 'call-1', 'read', OTHER_MODEL),
-      toolResultEntry('tool-1', 'call-1', 'read', 'README contents'),
-      userMessageEntry('user-2', 'Back on OpenAI now'),
-    ] as never[], OPENAI_MODEL);
+        userMessageEntry('user-1', 'Try another model'),
+        assistantToolCallEntry('assistant-1', 'call-1', 'read', OTHER_MODEL),
+        toolResultEntry('tool-1', 'call-1', 'read', 'README contents'),
+        userMessageEntry('user-2', 'Back on OpenAI now'),
+      ] as never[],
+      OPENAI_MODEL,
+    );
 
     expect(state?.explicitHistory).toEqual([
       {
@@ -247,7 +253,10 @@ describe('openai native compaction extension', () => {
     const harness = createPiHarness();
     openaiNativeCompactionExtension(harness.pi as never);
 
-    const beforeProviderRequest = harness.getHandler<(event: { payload: Record<string, unknown> }, ctx: Record<string, unknown>) => Record<string, unknown> | undefined>('before_provider_request');
+    const beforeProviderRequest =
+      harness.getHandler<
+        (event: { payload: Record<string, unknown> }, ctx: Record<string, unknown>) => Record<string, unknown> | undefined
+      >('before_provider_request');
 
     const result = beforeProviderRequest(
       {
@@ -317,14 +326,24 @@ describe('openai native compaction extension', () => {
     const harness = createPiHarness();
     openaiNativeCompactionExtension(harness.pi as never);
 
-    const beforeProviderRequest = harness.getHandler<(event: { payload: Record<string, unknown> }, ctx: Record<string, unknown>) => Record<string, unknown> | undefined>('before_provider_request');
-    const beforeCompact = harness.getHandler<(event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown>>('session_before_compact');
+    const beforeProviderRequest =
+      harness.getHandler<
+        (event: { payload: Record<string, unknown> }, ctx: Record<string, unknown>) => Record<string, unknown> | undefined
+      >('before_provider_request');
+    const beforeCompact =
+      harness.getHandler<(event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown>>('session_before_compact');
 
     beforeProviderRequest(
       {
         payload: {
           model: OPENAI_MODEL.id,
-          input: [{ role: 'system', content: 'system prompt' }, { role: 'user', content: [{ type: 'input_text', text: 'placeholder' }] }],
+          input: [
+            { role: 'system', content: 'system prompt' },
+            {
+              role: 'user',
+              content: [{ type: 'input_text', text: 'placeholder' }],
+            },
+          ],
           tools: [{ type: 'function', name: 'bash' }],
           parallel_tool_calls: true,
           reasoning: { effort: 'medium' },
@@ -364,7 +383,7 @@ describe('openai native compaction extension', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const abortController = new AbortController();
-    const result = await beforeCompact(
+    const result = (await beforeCompact(
       {
         branchEntries: [userMessageEntry('user-1', 'Prompt after compaction')],
         preparation: {
@@ -390,7 +409,7 @@ describe('openai native compaction extension', () => {
           }),
         },
       },
-    ) as {
+    )) as {
       compaction: {
         summary: string;
         firstKeptEntryId: string;
@@ -457,7 +476,8 @@ describe('openai native compaction extension', () => {
     const harness = createPiHarness();
     openaiNativeCompactionExtension(harness.pi as never);
 
-    const beforeCompact = harness.getHandler<(event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown>>('session_before_compact');
+    const beforeCompact =
+      harness.getHandler<(event: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown>>('session_before_compact');
 
     compactMock.mockResolvedValue({
       summary: 'Portable summary',

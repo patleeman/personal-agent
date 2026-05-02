@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { buildSelectionContextMenuTemplate, normalizeSelectionContextMenuCoordinate } from './selection-context-menu.js';
 
 describe('buildSelectionContextMenuTemplate', () => {
@@ -18,9 +19,7 @@ describe('buildSelectionContextMenuTemplate', () => {
 
   it('returns a single native copy action when only copy is available', () => {
     const onSelect = vi.fn();
-    expect(buildSelectionContextMenuTemplate({ canCopy: true }, onSelect)).toEqual([
-      expect.objectContaining({ label: 'Copy' }),
-    ]);
+    expect(buildSelectionContextMenuTemplate({ canCopy: true }, onSelect)).toEqual([expect.objectContaining({ label: 'Copy' })]);
   });
 
   it('omits the menu when no actions are available', () => {

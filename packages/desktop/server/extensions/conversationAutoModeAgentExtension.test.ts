@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createConversationAutoModeAgentExtension } from './conversationAutoModeAgentExtension.js';
 
 const {
@@ -53,19 +54,18 @@ function createHarness() {
   };
 }
 
-function createSessionManager(options: {
-  enabled?: boolean;
-  branch?: unknown[];
-}) {
+function createSessionManager(options: { enabled?: boolean; branch?: unknown[] }) {
   return {
     getSessionId: () => 'conversation-1',
-    getEntries: () => [{
-      type: 'custom',
-      customType: 'conversation-auto-mode',
-      data: {
-        enabled: options.enabled ?? false,
+    getEntries: () => [
+      {
+        type: 'custom',
+        customType: 'conversation-auto-mode',
+        data: {
+          enabled: options.enabled ?? false,
+        },
       },
-    }],
+    ],
     getBranch: () => options.branch ?? [],
   };
 }
@@ -92,18 +92,12 @@ describe('conversation auto mode agent extension', () => {
   it('marks the current review turn to continue when the controller continues', async () => {
     const { tool } = createHarness();
 
-    await tool.execute?.(
-      'tool-1',
-      { action: 'continue' },
-      undefined,
-      undefined,
-      {
-        sessionManager: createSessionManager({
-          enabled: true,
-          branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
-        }),
-      } as never,
-    );
+    await tool.execute?.('tool-1', { action: 'continue' }, undefined, undefined, {
+      sessionManager: createSessionManager({
+        enabled: true,
+        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+      }),
+    } as never);
 
     expect(markConversationAutoModeContinueRequestedMock).toHaveBeenCalledWith('conversation-1');
   });
@@ -116,18 +110,12 @@ describe('conversation auto mode agent extension', () => {
     });
 
     const { tool } = createHarness();
-    const result = await tool.execute?.(
-      'tool-1',
-      { action: 'stop', reason: 'needs user input' },
-      undefined,
-      undefined,
-      {
-        sessionManager: createSessionManager({
-          enabled: true,
-          branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
-        }),
-      } as never,
-    );
+    const result = await tool.execute?.('tool-1', { action: 'stop', reason: 'needs user input' }, undefined, undefined, {
+      sessionManager: createSessionManager({
+        enabled: true,
+        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+      }),
+    } as never);
 
     expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', {
       enabled: false,
@@ -143,12 +131,15 @@ describe('conversation auto mode agent extension', () => {
     const { handlers } = createHarness();
     const turnEndHandlers = handlers.get('turn_end') ?? [];
 
-    await turnEndHandlers[0]?.({} as never, {
-      sessionManager: createSessionManager({
-        enabled: true,
-        branch: [{ type: 'message', message: { role: 'user' } }],
-      }),
-    } as never);
+    await turnEndHandlers[0]?.(
+      {} as never,
+      {
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'message', message: { role: 'user' } }],
+        }),
+      } as never,
+    );
     await Promise.resolve();
 
     expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-1');
@@ -158,12 +149,15 @@ describe('conversation auto mode agent extension', () => {
     const { handlers, pi } = createHarness();
     const beforeAgentStartHandlers = handlers.get('before_agent_start') ?? [];
 
-    await beforeAgentStartHandlers[0]?.({} as never, {
-      sessionManager: createSessionManager({
-        enabled: true,
-        branch: [{ type: 'message', message: { role: 'user' } }],
-      }),
-    } as never);
+    await beforeAgentStartHandlers[0]?.(
+      {} as never,
+      {
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'message', message: { role: 'user' } }],
+        }),
+      } as never,
+    );
 
     expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash']);
   });
@@ -173,12 +167,15 @@ describe('conversation auto mode agent extension', () => {
     pi.getActiveTools.mockReturnValue(['read', 'bash']);
     const beforeAgentStartHandlers = handlers.get('before_agent_start') ?? [];
 
-    await beforeAgentStartHandlers[0]?.({} as never, {
-      sessionManager: createSessionManager({
-        enabled: true,
-        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
-      }),
-    } as never);
+    await beforeAgentStartHandlers[0]?.(
+      {} as never,
+      {
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+        }),
+      } as never,
+    );
 
     expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash', 'conversation_auto_control']);
   });
@@ -186,30 +183,29 @@ describe('conversation auto mode agent extension', () => {
   it('rejects stale auto control tool calls outside hidden auto-review turns', async () => {
     const { tool } = createHarness();
 
-    await expect(tool.execute?.(
-      'tool-1',
-      { action: 'continue' },
-      undefined,
-      undefined,
-      {
+    await expect(
+      tool.execute?.('tool-1', { action: 'continue' }, undefined, undefined, {
         sessionManager: createSessionManager({
           enabled: true,
           branch: [{ type: 'message', message: { role: 'user' } }],
         }),
-      } as never,
-    )).rejects.toThrow('hidden auto-review turns');
+      } as never),
+    ).rejects.toThrow('hidden auto-review turns');
   });
 
   it('does not reschedule hidden review turns from inside the hidden controller turn', async () => {
     const { handlers } = createHarness();
     const turnEndHandlers = handlers.get('turn_end') ?? [];
 
-    await turnEndHandlers[0]?.({} as never, {
-      sessionManager: createSessionManager({
-        enabled: true,
-        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
-      }),
-    } as never);
+    await turnEndHandlers[0]?.(
+      {} as never,
+      {
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+        }),
+      } as never,
+    );
     await Promise.resolve();
 
     expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();

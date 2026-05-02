@@ -1,10 +1,18 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { parseDeferredResumeDelayMs, setTaskCallbackBinding } from '@personal-agent/core';
 import { createStoredAutomation, pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
+import { Type } from '@sinclair/typebox';
+
+import {
+  cancelDurableRun,
+  followUpDurableRun,
+  getDurableRun,
+  getDurableRunLog,
+  listDurableRuns,
+  rerunDurableRun,
+} from '../automation/durableRuns.js';
 import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
-import { cancelDurableRun, followUpDurableRun, getDurableRun, getDurableRunLog, listDurableRuns, rerunDurableRun } from '../automation/durableRuns.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
 
@@ -17,17 +25,25 @@ const RunToolParams = Type.Object({
   command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
   prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent, or the follow-up prompt for follow_up.' })),
   model: Type.Optional(Type.String({ description: 'Optional full model ref for start_agent, for example openai-codex/gpt-5.4.' })),
-  profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
+  profile: Type.Optional(
+    Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' }),
+  ),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
-  deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether run completion should queue a wakeup back to the current conversation. Runs are detached by default.' })),
+  deliverResultToConversation: Type.Optional(
+    Type.Boolean({
+      description: 'Whether run completion should queue a wakeup back to the current conversation. Runs are detached by default.',
+    }),
+  ),
   // Trigger options for start_agent
   defer: Type.Optional(Type.String({ description: 'Delay before running, for example 30s, 10m, 2h, 1d. Use with start_agent.' })),
   cron: Type.Optional(Type.String({ description: 'Cron expression for recurring runs, for example "0 9 * * 1-5". Use with start_agent.' })),
   at: Type.Optional(Type.String({ description: 'ISO timestamp to run at. Use with start_agent.' })),
   // Loop options
   loop: Type.Optional(Type.Boolean({ description: 'Enable loop mode - agent schedules its own next iteration.' })),
-  loopDelay: Type.Optional(Type.String({ description: 'Default delay between loop iterations, for example 1h. Use with start_agent and loop=true.' })),
+  loopDelay: Type.Optional(
+    Type.String({ description: 'Default delay between loop iterations, for example 1h. Use with start_agent and loop=true.' }),
+  ),
   loopMaxIterations: Type.Optional(Type.Number({ description: 'Maximum number of loop iterations. Use with start_agent and loop=true.' })),
 });
 
@@ -50,9 +66,7 @@ function normalizeRunLogTail(value: unknown): number {
     return 120;
   }
 
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(1000, value)
-    : 120;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(1000, value) : 120;
 }
 
 function readOptionalPositiveInteger(value: unknown, label: string): number | undefined {
@@ -78,13 +92,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7]) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function resolveScheduledAt(input: { defer?: string; at?: string }): string | undefined {
@@ -219,10 +235,12 @@ export function createRunAgentExtension(options: {
               }
 
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: [`Run logs: ${runId}`, `path: ${result.path}`, '', result.log || '(empty log)'].join('\n'),
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: [`Run logs: ${runId}`, `path: ${result.path}`, '', result.log || '(empty log)'].join('\n'),
+                  },
+                ],
                 details: {
                   action: 'logs',
                   runId,
@@ -243,16 +261,17 @@ export function createRunAgentExtension(options: {
                 throw new Error('deliverResultToConversation requires an active persisted conversation.');
               }
 
-              const callbackConversation = deliverResultToConversation && conversationFile
-                ? {
-                    conversationId,
-                    sessionFile: conversationFile,
-                    profile: options.getCurrentProfile(),
-                    repoRoot: options.repoRoot,
-                  }
-                : undefined;
+              const callbackConversation =
+                deliverResultToConversation && conversationFile
+                  ? {
+                      conversationId,
+                      sessionFile: conversationFile,
+                      profile: options.getCurrentProfile(),
+                      repoRoot: options.repoRoot,
+                    }
+                  : undefined;
 
-              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+              if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await startBackgroundRun({
                 taskSlug,
                 cwd,
@@ -278,10 +297,12 @@ export function createRunAgentExtension(options: {
 
               invalidateAppTopics('runs');
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: `Started durable run ${result.runId} for ${taskSlug}.`,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `Started durable run ${result.runId} for ${taskSlug}.`,
+                  },
+                ],
                 details: {
                   action: 'start',
                   runId: result.runId,
@@ -304,14 +325,15 @@ export function createRunAgentExtension(options: {
                 throw new Error('deliverResultToConversation requires an active persisted conversation.');
               }
 
-              const callbackConversation = deliverResultToConversation && conversationFile
-                ? {
-                    conversationId,
-                    sessionFile: conversationFile,
-                    profile: options.getCurrentProfile(),
-                    repoRoot: options.repoRoot,
-                  }
-                : undefined;
+              const callbackConversation =
+                deliverResultToConversation && conversationFile
+                  ? {
+                      conversationId,
+                      sessionFile: conversationFile,
+                      profile: options.getCurrentProfile(),
+                      repoRoot: options.repoRoot,
+                    }
+                  : undefined;
               const model = readOptionalString(params.model);
               const profile = readOptionalString(params.profile) || options.getCurrentProfile();
               const defer = readOptionalString(params.defer);
@@ -332,7 +354,7 @@ export function createRunAgentExtension(options: {
                 }
 
                 const scheduledAt = resolveScheduledAt({ defer, at });
-                if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+                if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
                 const automation = createStoredAutomation({
                   id: taskSlug,
                   profile,
@@ -346,17 +368,20 @@ export function createRunAgentExtension(options: {
                   targetType: 'background-agent',
                 });
 
-                const task = applyScheduledTaskThreadBinding(automation.id, conversationFile
-                  ? {
-                      threadMode: ctx.cwd === cwd ? 'existing' : 'dedicated',
-                      threadConversationId: ctx.cwd === cwd ? conversationId : undefined,
-                      threadSessionFile: ctx.cwd === cwd ? conversationFile : undefined,
-                      cwd,
-                    }
-                  : {
-                      threadMode: 'none',
-                      cwd,
-                    });
+                const task = applyScheduledTaskThreadBinding(
+                  automation.id,
+                  conversationFile
+                    ? {
+                        threadMode: ctx.cwd === cwd ? 'existing' : 'dedicated',
+                        threadConversationId: ctx.cwd === cwd ? conversationId : undefined,
+                        threadSessionFile: ctx.cwd === cwd ? conversationFile : undefined,
+                        cwd,
+                      }
+                    : {
+                        threadMode: 'none',
+                        cwd,
+                      },
+                );
 
                 if (deliverResultToConversation && conversationFile) {
                   setTaskCallbackBinding({
@@ -375,16 +400,14 @@ export function createRunAgentExtension(options: {
 
                 invalidateAppTopics('tasks');
 
-                const triggerInfo = defer
-                  ? `defer ${defer}`
-                  : cron
-                    ? `cron ${cron}`
-                    : `at ${scheduledAt}`;
+                const triggerInfo = defer ? `defer ${defer}` : cron ? `cron ${cron}` : `at ${scheduledAt}`;
                 return {
-                  content: [{
-                    type: 'text' as const,
-                    text: `Saved automation @${task.id} for ${taskSlug} [${triggerInfo}].`,
-                  }],
+                  content: [
+                    {
+                      type: 'text' as const,
+                      text: `Saved automation @${task.id} for ${taskSlug} [${triggerInfo}].`,
+                    },
+                  ],
                   details: {
                     action: 'start_agent',
                     scheduled: true,
@@ -401,7 +424,7 @@ export function createRunAgentExtension(options: {
                 };
               }
 
-              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+              if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await startBackgroundRun({
                 taskSlug,
                 cwd,
@@ -437,10 +460,12 @@ export function createRunAgentExtension(options: {
               message += '.';
 
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: message,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: message,
+                  },
+                ],
                 details: {
                   action: 'start_agent',
                   runId: result.runId,
@@ -457,7 +482,7 @@ export function createRunAgentExtension(options: {
 
             case 'rerun': {
               const runId = readRequiredString(params.runId, 'runId');
-              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+              if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await rerunDurableRun(runId);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not rerun ${runId}.`);
@@ -478,7 +503,7 @@ export function createRunAgentExtension(options: {
             case 'follow_up': {
               const runId = readRequiredString(params.runId, 'runId');
               const prompt = params.prompt?.trim() || 'Continue from where you left off.';
-              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+              if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await followUpDurableRun(runId, prompt);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not continue ${runId}.`);
@@ -499,7 +524,7 @@ export function createRunAgentExtension(options: {
 
             case 'cancel': {
               const runId = readRequiredString(params.runId, 'runId');
-              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+              if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await cancelDurableRun(runId);
               if (!result.cancelled) {
                 throw new Error(result.reason ?? `Could not cancel run ${runId}.`);

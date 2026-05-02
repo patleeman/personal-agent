@@ -1,25 +1,17 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { getConfigRoot, getManagedKnowledgeBaseRoot, getStateRoot, getVaultRoot } from './runtime/paths.js';
+
 import {
   DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH,
-  readMachineKnowledgeBaseBranch,
-  readMachineKnowledgeBaseRepoUrl,
   type MachineConfigOptions,
   type MachineKnowledgeBaseState,
+  readMachineKnowledgeBaseBranch,
+  readMachineKnowledgeBaseRepoUrl,
   writeMachineKnowledgeBase,
 } from './machine-config.js';
+import { getConfigRoot, getManagedKnowledgeBaseRoot, getStateRoot, getVaultRoot } from './runtime/paths.js';
 
 interface WorkingSnapshotEntry {
   blobHash: string;
@@ -140,7 +132,11 @@ function parseTimestampMs(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function runGitCommand(cwd: string, args: string[], options: { allowFailure?: boolean; encoding?: BufferEncoding | 'buffer' } = {}): string | Buffer {
+function runGitCommand(
+  cwd: string,
+  args: string[],
+  options: { allowFailure?: boolean; encoding?: BufferEncoding | 'buffer' } = {},
+): string | Buffer {
   try {
     return execFileSync('git', args, {
       cwd,
@@ -153,11 +149,12 @@ function runGitCommand(cwd: string, args: string[], options: { allowFailure?: bo
     }
 
     const childError = error as { stderr?: string | Buffer; message?: string };
-    const stderr = typeof childError.stderr === 'string'
-      ? childError.stderr.trim()
-      : Buffer.isBuffer(childError.stderr)
-        ? childError.stderr.toString('utf-8').trim()
-        : '';
+    const stderr =
+      typeof childError.stderr === 'string'
+        ? childError.stderr.trim()
+        : Buffer.isBuffer(childError.stderr)
+          ? childError.stderr.toString('utf-8').trim()
+          : '';
     const message = stderr || childError.message || `git ${args.join(' ')} failed`;
     throw new Error(message);
   }
@@ -286,8 +283,7 @@ function countWorkingTreeChanges(cwd: string): number {
   return output
     .split(/\r?\n/u)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .length;
+    .filter((line) => line.length > 0).length;
 }
 
 function readAheadBehindCounts(cwd: string, branch: string): Pick<KnowledgeBaseGitStatus, 'aheadCount' | 'behindCount'> {
@@ -323,12 +319,14 @@ function readGitStatus(root: string, branch: string): KnowledgeBaseGitStatus | n
 }
 
 function safeSlug(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'knowledge-base';
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'knowledge-base'
+  );
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -340,9 +338,8 @@ function isProcessAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    const errorCode = typeof error === 'object' && error !== null && 'code' in error
-      ? String((error as { code?: unknown }).code ?? '')
-      : '';
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
     return errorCode === 'EPERM';
   }
 }
@@ -385,7 +382,12 @@ function readStoredState(filePath: string): StoredKnowledgeBaseState | null {
       return null;
     }
 
-    if (typeof parsed.repoUrl !== 'string' || typeof parsed.branch !== 'string' || !parsed.snapshot || typeof parsed.snapshot !== 'object') {
+    if (
+      typeof parsed.repoUrl !== 'string' ||
+      typeof parsed.branch !== 'string' ||
+      !parsed.snapshot ||
+      typeof parsed.snapshot !== 'object'
+    ) {
       return null;
     }
 
@@ -402,9 +404,15 @@ function readStoredState(filePath: string): StoredKnowledgeBaseState | null {
       repoUrl: parsed.repoUrl.trim(),
       branch: normalizeBranch(parsed.branch),
       ...(typeof parsed.lastSyncAt === 'string' && parsed.lastSyncAt.trim().length > 0 ? { lastSyncAt: parsed.lastSyncAt.trim() } : {}),
-      ...(typeof parsed.lastSyncHead === 'string' && parsed.lastSyncHead.trim().length > 0 ? { lastSyncHead: parsed.lastSyncHead.trim() } : {}),
-      ...(typeof parsed.lastMaintenanceAt === 'string' && parsed.lastMaintenanceAt.trim().length > 0 ? { lastMaintenanceAt: parsed.lastMaintenanceAt.trim() } : {}),
-      ...(typeof parsed.lastFullMaintenanceAt === 'string' && parsed.lastFullMaintenanceAt.trim().length > 0 ? { lastFullMaintenanceAt: parsed.lastFullMaintenanceAt.trim() } : {}),
+      ...(typeof parsed.lastSyncHead === 'string' && parsed.lastSyncHead.trim().length > 0
+        ? { lastSyncHead: parsed.lastSyncHead.trim() }
+        : {}),
+      ...(typeof parsed.lastMaintenanceAt === 'string' && parsed.lastMaintenanceAt.trim().length > 0
+        ? { lastMaintenanceAt: parsed.lastMaintenanceAt.trim() }
+        : {}),
+      ...(typeof parsed.lastFullMaintenanceAt === 'string' && parsed.lastFullMaintenanceAt.trim().length > 0
+        ? { lastFullMaintenanceAt: parsed.lastFullMaintenanceAt.trim() }
+        : {}),
       snapshot,
     };
   } catch {
@@ -504,10 +512,7 @@ function readLocalPathTimestampMs(root: string, relativePath: string, existsInLo
 }
 
 function hasRecentLocalChanges(root: string, baseSnapshot: Snapshot, workingSnapshot: Snapshot, nowMs: number): boolean {
-  const changedPaths = new Set<string>([
-    ...Object.keys(baseSnapshot),
-    ...Object.keys(workingSnapshot),
-  ]);
+  const changedPaths = new Set<string>([...Object.keys(baseSnapshot), ...Object.keys(workingSnapshot)]);
 
   for (const path of changedPaths) {
     if (snapshotsEqual(baseSnapshot[path], workingSnapshot[path])) {
@@ -563,8 +568,8 @@ function maybeRunRepositoryMaintenance(
   const lastMaintenanceAtMs = parseTimestampMs(storedState?.lastMaintenanceAt);
   const lastFullMaintenanceAtMs = parseTimestampMs(storedState?.lastFullMaintenanceAt);
 
-  const shouldRunFullMaintenance = lastFullMaintenanceAtMs !== null
-    && nowMs - lastFullMaintenanceAtMs >= KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS;
+  const shouldRunFullMaintenance =
+    lastFullMaintenanceAtMs !== null && nowMs - lastFullMaintenanceAtMs >= KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS;
   if (shouldRunFullMaintenance && runRepositoryMaintenance(root, 'gc')) {
     return {
       lastMaintenanceAt: timestamp,
@@ -572,8 +577,8 @@ function maybeRunRepositoryMaintenance(
     };
   }
 
-  const shouldRunAutoMaintenance = lastMaintenanceAtMs === null
-    || nowMs - lastMaintenanceAtMs >= KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS;
+  const shouldRunAutoMaintenance =
+    lastMaintenanceAtMs === null || nowMs - lastMaintenanceAtMs >= KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS;
   if (shouldRunAutoMaintenance && runRepositoryMaintenance(root, 'auto')) {
     return {
       lastMaintenanceAt: timestamp,
@@ -590,26 +595,27 @@ function maybeRunRepositoryMaintenance(
 function knowledgeBaseStateEquals(left: KnowledgeBaseState, right: KnowledgeBaseState): boolean {
   const leftGit = left.gitStatus ?? null;
   const rightGit = right.gitStatus ?? null;
-  return left.repoUrl === right.repoUrl
-    && left.branch === right.branch
-    && left.configured === right.configured
-    && left.effectiveRoot === right.effectiveRoot
-    && left.managedRoot === right.managedRoot
-    && left.usesManagedRoot === right.usesManagedRoot
-    && left.syncStatus === right.syncStatus
-    && left.lastError === right.lastError
-    && left.recoveredEntryCount === right.recoveredEntryCount
-    && left.recoveryDir === right.recoveryDir
-    && (leftGit === null ? rightGit === null : rightGit !== null
-      && leftGit.localChangeCount === rightGit.localChangeCount
-      && leftGit.aheadCount === rightGit.aheadCount
-      && leftGit.behindCount === rightGit.behindCount);
+  return (
+    left.repoUrl === right.repoUrl &&
+    left.branch === right.branch &&
+    left.configured === right.configured &&
+    left.effectiveRoot === right.effectiveRoot &&
+    left.managedRoot === right.managedRoot &&
+    left.usesManagedRoot === right.usesManagedRoot &&
+    left.syncStatus === right.syncStatus &&
+    left.lastError === right.lastError &&
+    left.recoveredEntryCount === right.recoveredEntryCount &&
+    left.recoveryDir === right.recoveryDir &&
+    (leftGit === null
+      ? rightGit === null
+      : rightGit !== null &&
+        leftGit.localChangeCount === rightGit.localChangeCount &&
+        leftGit.aheadCount === rightGit.aheadCount &&
+        leftGit.behindCount === rightGit.behindCount)
+  );
 }
 
-function setRuntimeState(
-  runtimeState: RuntimeSyncState,
-  input: Partial<RuntimeSyncState>,
-): void {
+function setRuntimeState(runtimeState: RuntimeSyncState, input: Partial<RuntimeSyncState>): void {
   if (input.syncStatus) {
     runtimeState.syncStatus = input.syncStatus;
   }
@@ -796,9 +802,7 @@ export class KnowledgeBaseManager {
 
     writeMachineKnowledgeBase({ repoUrl: nextRepoUrl, branch: nextBranch }, this.machineConfigOptions());
 
-    const nextState = nextRepoUrl
-      ? this.syncNow(previousState)
-      : this.readState();
+    const nextState = nextRepoUrl ? this.syncNow(previousState) : this.readState();
     this.notifyListeners(previousState, nextState);
     return nextState;
   }
@@ -819,9 +823,8 @@ export class KnowledgeBaseManager {
       try {
         mkdirSync(this.syncLockDir);
       } catch (error) {
-        const errorCode = typeof error === 'object' && error !== null && 'code' in error
-          ? String((error as { code?: unknown }).code ?? '')
-          : '';
+        const errorCode =
+          typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code ?? '') : '';
         if (errorCode === 'EEXIST') {
           return false;
         }
@@ -872,11 +875,15 @@ export class KnowledgeBaseManager {
 
     runGitText(root, ['add', '--all']);
     runGitText(root, [
-      '-c', `user.name=${SYNC_COMMIT_AUTHOR_NAME}`,
-      '-c', `user.email=${SYNC_COMMIT_AUTHOR_EMAIL}`,
-      '-c', 'commit.gpgsign=false',
+      '-c',
+      `user.name=${SYNC_COMMIT_AUTHOR_NAME}`,
+      '-c',
+      `user.email=${SYNC_COMMIT_AUTHOR_EMAIL}`,
+      '-c',
+      'commit.gpgsign=false',
       'commit',
-      '-m', `kb sync ${timestamp}`,
+      '-m',
+      `kb sync ${timestamp}`,
     ]);
 
     runGitText(root, ['push', 'origin', `HEAD:refs/heads/${branch}`]);
@@ -1163,10 +1170,7 @@ export function syncKnowledgeBaseNow(options: KnowledgeBaseManagerOptions = {}):
   return getKnowledgeBaseManager(options).syncNow();
 }
 
-export function subscribeKnowledgeBaseState(
-  listener: KnowledgeBaseStateListener,
-  options: KnowledgeBaseManagerOptions = {},
-): () => void {
+export function subscribeKnowledgeBaseState(listener: KnowledgeBaseStateListener, options: KnowledgeBaseManagerOptions = {}): () => void {
   return getKnowledgeBaseManager(options).subscribe(listener);
 }
 

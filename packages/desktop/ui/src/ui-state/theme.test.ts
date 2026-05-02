@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { THEME_STORAGE_KEY } from '../local/localSettings';
 import { ThemeProvider, useTheme } from './theme';
 
@@ -14,7 +15,7 @@ function createStorage(): Storage {
       map.clear();
     },
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     key(index) {
       return [...map.keys()][index] ?? null;
@@ -44,9 +45,7 @@ function ThemeProbe() {
 
 function renderThemeProbe() {
   lastThemeState = null;
-  renderToStaticMarkup(
-    React.createElement(ThemeProvider, null, React.createElement(ThemeProbe)),
-  );
+  renderToStaticMarkup(React.createElement(ThemeProvider, null, React.createElement(ThemeProbe)));
   return lastThemeState;
 }
 

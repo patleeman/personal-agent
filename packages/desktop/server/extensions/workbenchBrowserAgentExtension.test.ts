@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createWorkbenchBrowserAgentExtension, setWorkbenchBrowserToolHost } from './workbenchBrowserAgentExtension.js';
 
 function collectExtension() {
-  const tools: Array<{ name: string; promptSnippet?: string; promptGuidelines?: string[]; execute: (...args: never[]) => Promise<unknown> }> = [];
+  const tools: Array<{
+    name: string;
+    promptSnippet?: string;
+    promptGuidelines?: string[];
+    execute: (...args: never[]) => Promise<unknown>;
+  }> = [];
   const handlers = new Map<string, Array<(...args: never[]) => Promise<void>>>();
   const pi = {
     registerTool: (tool: never) => tools.push(tool),
@@ -27,11 +33,7 @@ const ctx = {
 describe('workbench browser agent extension', () => {
   it('registers the built-in browser tools', () => {
     const tools = collectTools();
-    expect(tools.map((tool) => tool.name)).toEqual([
-      'browser_snapshot',
-      'browser_cdp',
-      'browser_screenshot',
-    ]);
+    expect(tools.map((tool) => tool.name)).toEqual(['browser_snapshot', 'browser_cdp', 'browser_screenshot']);
   });
 
   it('makes the workbench-vs-agent-browser distinction explicit in tool prompts', () => {
@@ -51,17 +53,34 @@ describe('workbench browser agent extension', () => {
       isActive: async () => true,
       snapshot: async () => ({ url: 'https://example.com/', title: 'Example', loading: false, text: 'Example text', elements: [] }),
       cdp: async (input) => ({ ok: true, command: input.command, results: [{}], state: { url: 'https://example.com/' } }),
-      screenshot: async () => ({ url: 'https://example.com/', title: 'Example', mimeType: 'image/png', dataBase64: 'aW1n', viewport: { width: 1, height: 1 }, capturedAt: 'now' }),
+      screenshot: async () => ({
+        url: 'https://example.com/',
+        title: 'Example',
+        mimeType: 'image/png',
+        dataBase64: 'aW1n',
+        viewport: { width: 1, height: 1 },
+        capturedAt: 'now',
+      }),
     });
 
     const tools = collectTools();
-    const snapshot = await tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
+    const snapshot = (await tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never)) as {
+      content: Array<{ text?: string }>;
+    };
     expect(snapshot.content[0]?.text).toContain('https://example.com/');
 
-    const cdp = await tools[1]!.execute('tool-2' as never, { command: { method: 'Runtime.evaluate', params: { expression: 'location.href', returnByValue: true } } } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
+    const cdp = (await tools[1]!.execute(
+      'tool-2' as never,
+      { command: { method: 'Runtime.evaluate', params: { expression: 'location.href', returnByValue: true } } } as never,
+      undefined as never,
+      undefined as never,
+      ctx as never,
+    )) as { content: Array<{ text?: string }> };
     expect(cdp.content[0]?.text).toContain('Runtime.evaluate');
 
-    const screenshot = await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
+    const screenshot = (await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never)) as {
+      content: Array<{ type: string; data?: string }>;
+    };
     expect(screenshot.content[1]).toMatchObject({ type: 'image', data: 'aW1n' });
 
     setWorkbenchBrowserToolHost(null);
@@ -109,8 +128,9 @@ describe('workbench browser agent extension', () => {
     });
 
     const tools = collectTools();
-    await expect(tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never))
-      .rejects.toThrow('Workbench Browser is not active');
+    await expect(tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never)).rejects.toThrow(
+      'Workbench Browser is not active',
+    );
 
     setWorkbenchBrowserToolHost(null);
   });

@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import { createConversationTitleAgentExtension } from './conversationTitleAgentExtension.js';
 
 type RegisteredTool = Parameters<ExtensionAPI['registerTool']>[0];
@@ -60,13 +61,9 @@ describe('conversation title agent extension', () => {
   it('rejects blank titles', async () => {
     const { registeredTool, setConversationTitle } = registerConversationTitleTool();
 
-    await expect(registeredTool.execute(
-      'tool-1',
-      { title: '   \n  ' },
-      undefined,
-      undefined,
-      createToolContext(),
-    )).rejects.toThrow('Conversation title must not be empty.');
+    await expect(registeredTool.execute('tool-1', { title: '   \n  ' }, undefined, undefined, createToolContext())).rejects.toThrow(
+      'Conversation title must not be empty.',
+    );
 
     expect(setConversationTitle).not.toHaveBeenCalled();
   });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { DesktopConnectionsState } from '../shared/types';
 import {
   buildContinueInExecutionTargetOptions,
@@ -25,35 +26,43 @@ describe('desktop execution target helpers', () => {
   });
 
   it('keeps the current remote target available even when connections are stale', () => {
-    expect(resolveConversationExecutionTargetOptions({
-      continueInOptions: [{ value: 'local', label: 'Local' }],
-      hasDesktopBridge: true,
-      currentRemoteHostId: ' host-z ',
-      currentRemoteHostLabel: ' Host Z ',
-    })).toEqual([
+    expect(
+      resolveConversationExecutionTargetOptions({
+        continueInOptions: [{ value: 'local', label: 'Local' }],
+        hasDesktopBridge: true,
+        currentRemoteHostId: ' host-z ',
+        currentRemoteHostLabel: ' Host Z ',
+      }),
+    ).toEqual([
       { value: 'local', label: 'Local' },
       { value: 'host-z', label: 'Host Z' },
     ]);
 
-    expect(resolveConversationExecutionTargetOptions({
-      continueInOptions: [{ value: 'local', label: 'Local' }],
-      hasDesktopBridge: true,
-      currentRemoteConversationId: ' remote-thread-1 ',
-    })).toEqual([
+    expect(
+      resolveConversationExecutionTargetOptions({
+        continueInOptions: [{ value: 'local', label: 'Local' }],
+        hasDesktopBridge: true,
+        currentRemoteConversationId: ' remote-thread-1 ',
+      }),
+    ).toEqual([
       { value: 'local', label: 'Local' },
       { value: 'remote-conversation:remote-thread-1', label: 'Remote' },
     ]);
   });
 
   it('falls back to local when the desktop bridge exists without loaded options', () => {
-    expect(resolveConversationExecutionTargetOptions({
-      continueInOptions: [],
-      hasDesktopBridge: true,
-    })).toEqual([{ value: 'local', label: 'Local' }]);
-    expect(resolveConversationExecutionTargetOptions({
-      continueInOptions: [],
-      hasDesktopBridge: false,
-    })).toEqual([]);
+    expect(
+      resolveConversationExecutionTargetOptions({
+        continueInOptions: [],
+        hasDesktopBridge: true,
+      }),
+    ).toEqual([{ value: 'local', label: 'Local' }]);
+    expect(
+      resolveConversationExecutionTargetOptions({
+        continueInOptions: [],
+        hasDesktopBridge: false,
+      }),
+    ).toEqual([]);
   });
 
   it('finds selected remote hosts from connection state', () => {
@@ -63,17 +72,21 @@ describe('desktop execution target helpers', () => {
   });
 
   it('does not select local for conversations with only a remote conversation id', () => {
-    expect(resolveSelectedConversationExecutionTargetId({
-      draft: false,
-      draftExecutionTargetId: 'local',
-      currentRemoteConversationId: ' remote-thread-1 ',
-    })).toBe('remote-conversation:remote-thread-1');
+    expect(
+      resolveSelectedConversationExecutionTargetId({
+        draft: false,
+        draftExecutionTargetId: 'local',
+        currentRemoteConversationId: ' remote-thread-1 ',
+      }),
+    ).toBe('remote-conversation:remote-thread-1');
 
-    expect(resolveSelectedConversationExecutionTargetId({
-      draft: false,
-      draftExecutionTargetId: 'local',
-      currentRemoteHostId: 'host-a',
-      currentRemoteConversationId: 'remote-thread-1',
-    })).toBe('host-a');
+    expect(
+      resolveSelectedConversationExecutionTargetId({
+        draft: false,
+        draftExecutionTargetId: 'local',
+        currentRemoteHostId: 'host-a',
+        currentRemoteConversationId: 'remote-thread-1',
+      }),
+    ).toBe('host-a');
   });
 });

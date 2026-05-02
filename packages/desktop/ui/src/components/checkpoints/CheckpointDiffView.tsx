@@ -1,6 +1,7 @@
-import { useMemo, useCallback, type CSSProperties } from 'react';
-import { PatchDiff } from '@pierre/diffs/react';
 import type { FileDiffOptions } from '@pierre/diffs';
+import { PatchDiff } from '@pierre/diffs/react';
+import { type CSSProperties, useCallback, useMemo } from 'react';
+
 import type { ConversationCommitCheckpointFile } from '../../shared/types';
 import { useTheme } from '../../ui-state/theme';
 import { cx } from '../ui';
@@ -49,9 +50,7 @@ function statusLabel(file: ConversationCommitCheckpointFile): string {
 }
 
 export function fileDisplayPath(file: ConversationCommitCheckpointFile): string {
-  return file.previousPath && file.previousPath !== file.path
-    ? `${file.previousPath} → ${file.path}`
-    : file.path;
+  return file.previousPath && file.previousPath !== file.path ? `${file.previousPath} → ${file.path}` : file.path;
 }
 
 export function CheckpointDiffSection({
@@ -76,16 +75,19 @@ export function CheckpointDiffSection({
   onToggleCollapse?: () => void;
 }) {
   const { theme } = useTheme();
-  const diffOptions = useMemo<FileDiffOptions<undefined>>(() => ({
-    theme: { dark: 'tokyo-night', light: 'github-light' },
-    themeType: theme,
-    diffStyle: view,
-    diffIndicators: 'classic',
-    disableFileHeader: true,
-    hunkSeparators: 'metadata',
-    lineDiffType: 'word-alt',
-    overflow: 'wrap',
-  }), [theme, view]);
+  const diffOptions = useMemo<FileDiffOptions<undefined>>(
+    () => ({
+      theme: { dark: 'tokyo-night', light: 'github-light' },
+      themeType: theme,
+      diffStyle: view,
+      diffIndicators: 'classic',
+      disableFileHeader: true,
+      hunkSeparators: 'metadata',
+      lineDiffType: 'word-alt',
+      overflow: 'wrap',
+    }),
+    [theme, view],
+  );
 
   const handleToggleCollapse = useCallback(() => {
     onToggleCollapse?.();
@@ -95,7 +97,11 @@ export function CheckpointDiffSection({
     <section
       ref={registerSection}
       data-checkpoint-file-path={file.path}
-      className={cx('mb-4 scroll-mt-4 overflow-hidden rounded-lg border border-border-subtle/80 bg-base/80 shadow-[0_18px_50px_rgba(0,0,0,0.14)]', active && 'border-accent/30', sectionClassName)}
+      className={cx(
+        'mb-4 scroll-mt-4 overflow-hidden rounded-lg border border-border-subtle/80 bg-base/80 shadow-[0_18px_50px_rgba(0,0,0,0.14)]',
+        active && 'border-accent/30',
+        sectionClassName,
+      )}
     >
       <button
         type="button"
@@ -121,23 +127,22 @@ export function CheckpointDiffSection({
             >
               <path d="m9 18 6-6-6-6" />
             </svg>
-            <p className="truncate font-mono text-[12px] text-primary" title={fileDisplayPath(file)}>{fileDisplayPath(file)}</p>
+            <p className="truncate font-mono text-[12px] text-primary" title={fileDisplayPath(file)}>
+              {fileDisplayPath(file)}
+            </p>
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-2 pl-[18px] text-[10px] text-secondary">
             <span className="uppercase tracking-[0.14em] text-dim/80">{statusLabel(file)}</span>
-            <span className="font-mono tabular-nums"><span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span></span>
+            <span className="font-mono tabular-nums">
+              <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
+            </span>
           </p>
         </div>
         {showActiveBadge && active ? <span className="text-[10px] uppercase tracking-[0.14em] text-accent">Current</span> : null}
       </button>
       {!collapsed ? (
         <div className="overflow-hidden bg-[rgb(var(--color-terminal-surface))]">
-          <PatchDiff
-            key={`${file.path}:${view}`}
-            patch={file.patch}
-            options={diffOptions}
-            style={checkpointDiffStyle}
-          />
+          <PatchDiff key={`${file.path}:${view}`} patch={file.patch} options={diffOptions} style={checkpointDiffStyle} />
         </div>
       ) : null}
     </section>

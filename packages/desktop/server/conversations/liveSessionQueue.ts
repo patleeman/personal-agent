@@ -81,9 +81,7 @@ function buildQueuedPromptPreview(
   };
 }
 
-export function resolveInternalQueuedMessages(
-  queue: InternalQueuedAgentQueue | undefined,
-): InternalQueuedAgentMessage[] | undefined {
+export function resolveInternalQueuedMessages(queue: InternalQueuedAgentQueue | undefined): InternalQueuedAgentMessage[] | undefined {
   if (Array.isArray(queue)) {
     return queue;
   }
@@ -95,10 +93,7 @@ export function resolveInternalQueuedMessages(
   return undefined;
 }
 
-function ensureQueuedPromptPreviewId(
-  queueType: 'steer' | 'followUp',
-  message: InternalQueuedAgentMessage,
-): string {
+function ensureQueuedPromptPreviewId(queueType: 'steer' | 'followUp', message: InternalQueuedAgentMessage): string {
   const existingId = message.__personalAgentQueuedPromptId?.trim();
   if (existingId) {
     return existingId;
@@ -118,18 +113,11 @@ function ensureQueuedPromptPreviewId(
   return id;
 }
 
-export function createVisibleQueueFallbackPreview(
-  queueType: 'steer' | 'followUp',
-  index: number,
-  text: string,
-): QueuedPromptPreview {
+export function createVisibleQueueFallbackPreview(queueType: 'steer' | 'followUp', index: number, text: string): QueuedPromptPreview {
   return buildQueuedPromptPreview(`${queueType}-visible-${index}`, text, 0, { restorable: true });
 }
 
-export function isVisibleQueueFallbackPreviewId(
-  queueType: 'steer' | 'followUp',
-  previewId?: string,
-): boolean {
+export function isVisibleQueueFallbackPreviewId(queueType: 'steer' | 'followUp', previewId?: string): boolean {
   const normalizedPreviewId = previewId?.trim() ?? '';
   return normalizedPreviewId.startsWith(`${queueType}-visible-`);
 }
@@ -148,14 +136,17 @@ export function readQueuedPromptPreviews(
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
   }
 
-  const internalUserQueue = internalQueueMessages.filter((queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user');
+  const internalUserQueue = internalQueueMessages.filter(
+    (queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user',
+  );
   if (internalUserQueue.length === 0) {
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
   }
 
-  const alignedInternalQueue = internalUserQueue.length > visibleQueue.length
-    ? internalUserQueue.slice(internalUserQueue.length - visibleQueue.length)
-    : internalUserQueue;
+  const alignedInternalQueue =
+    internalUserQueue.length > visibleQueue.length
+      ? internalUserQueue.slice(internalUserQueue.length - visibleQueue.length)
+      : internalUserQueue;
 
   const previews: QueuedPromptPreview[] = [];
   let searchStartIndex = 0;
@@ -187,12 +178,8 @@ export function readQueuedPromptPreviews(
 }
 
 export function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
-  const steer = typeof session.getSteeringMessages === 'function'
-    ? session.getSteeringMessages()
-    : [];
-  const followUp = typeof session.getFollowUpMessages === 'function'
-    ? session.getFollowUpMessages()
-    : [];
+  const steer = typeof session.getSteeringMessages === 'function' ? session.getSteeringMessages() : [];
+  const followUp = typeof session.getFollowUpMessages === 'function' ? session.getFollowUpMessages() : [];
   const internalAgent = session.agent as unknown as InternalAgentQueues | undefined;
 
   return {
@@ -214,8 +201,7 @@ export function removeQueuedUserMessage(
       continue;
     }
 
-    const matchesPreviewId = previewId.length > 0
-      && queuedMessage.__personalAgentQueuedPromptId === previewId;
+    const matchesPreviewId = previewId.length > 0 && queuedMessage.__personalAgentQueuedPromptId === previewId;
     const matchesIndex = previewId.length === 0 && userQueueIndex === input.index;
     if (matchesPreviewId || matchesIndex) {
       return {
@@ -261,18 +247,18 @@ export function extractQueuedPromptContent(
       continue;
     }
 
-    if ((part as { type?: unknown }).type === 'image'
-      && typeof (part as { data?: unknown }).data === 'string'
-      && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
+    if (
+      (part as { type?: unknown }).type === 'image' &&
+      typeof (part as { data?: unknown }).data === 'string' &&
+      typeof (part as { mimeType?: unknown }).mimeType === 'string'
+    ) {
       const data = normalizeQueuedPromptImageData((part as { data: string }).data);
       const mimeType = (part as { mimeType: string }).mimeType.trim();
       if (!data || !mimeType.toLowerCase().startsWith('image/')) {
         continue;
       }
 
-      const name = typeof (part as { name?: unknown }).name === 'string'
-        ? (part as { name: string }).name.trim()
-        : undefined;
+      const name = typeof (part as { name?: unknown }).name === 'string' ? (part as { name: string }).name.trim() : undefined;
 
       images.push({
         type: 'image',

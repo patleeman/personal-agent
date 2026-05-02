@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { getConfigRoot, getPiAgentRuntimeDir } from '@personal-agent/core';
 
 const DEFAULT_LOCAL_PROFILE_DIR = join(getConfigRoot(), 'local');
@@ -37,12 +38,8 @@ export interface PersistSettingsWriteOptions {
   localProfileDir?: string;
 }
 
-export function persistSettingsWrite<T>(
-  writeSettingsFile: (settingsFile: string) => T,
-  options: PersistSettingsWriteOptions = {},
-): T {
-  const localSettingsFile = options.localSettingsFile
-    ?? resolveLocalProfileSettingsFilePath(options.localProfileDir);
+export function persistSettingsWrite<T>(writeSettingsFile: (settingsFile: string) => T, options: PersistSettingsWriteOptions = {}): T {
+  const localSettingsFile = options.localSettingsFile ?? resolveLocalProfileSettingsFilePath(options.localProfileDir);
   const runtimeSettingsFile = options.runtimeSettingsFile ?? DEFAULT_RUNTIME_SETTINGS_FILE;
 
   writeSettingsFile(localSettingsFile);

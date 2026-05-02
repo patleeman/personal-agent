@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import type { DeferredResumeSummary } from '../shared/types';
 import {
   buildDeferredResumeIndicatorText,
   compareDeferredResumes,
@@ -6,7 +8,6 @@ import {
   formatDeferredResumeWhen,
   resolveDeferredResumePresentationState,
 } from './deferredResumeIndicator';
-import type { DeferredResumeSummary } from '../shared/types';
 
 function scheduled(id: string, dueAt: string): DeferredResumeSummary {
   return {
@@ -35,24 +36,19 @@ function ready(id: string, readyAt: string): DeferredResumeSummary {
 
 describe('deferredResumeIndicator', () => {
   it('describes scheduled resume timing compactly', () => {
-    expect(describeDeferredResumeStatus(
-      scheduled('one', '2026-03-12T13:08:30.000Z'),
-      Date.parse('2026-03-12T13:00:00.000Z'),
-    )).toBe('in 8m 30s');
+    expect(describeDeferredResumeStatus(scheduled('one', '2026-03-12T13:08:30.000Z'), Date.parse('2026-03-12T13:00:00.000Z'))).toBe(
+      'in 8m 30s',
+    );
   });
 
   it('does not render absurd resume timing for unsafe clocks', () => {
-    expect(describeDeferredResumeStatus(
-      scheduled('one', '2026-03-12T13:08:30.000Z'),
-      -Number.MAX_SAFE_INTEGER - 1,
-    )).toBe('due now');
+    expect(describeDeferredResumeStatus(scheduled('one', '2026-03-12T13:08:30.000Z'), -Number.MAX_SAFE_INTEGER - 1)).toBe('due now');
   });
 
   it('treats ready resumes as ready now', () => {
-    expect(describeDeferredResumeStatus(
-      ready('one', '2026-03-12T13:00:00.000Z'),
-      Date.parse('2026-03-12T13:05:00.000Z'),
-    )).toBe('ready now');
+    expect(describeDeferredResumeStatus(ready('one', '2026-03-12T13:00:00.000Z'), Date.parse('2026-03-12T13:05:00.000Z'))).toBe(
+      'ready now',
+    );
   });
 
   it('sorts resumes by effective target time', () => {
@@ -62,46 +58,40 @@ describe('deferredResumeIndicator', () => {
       scheduled('soon', '2026-03-12T13:05:00.000Z'),
     ];
 
-    expect([...resumes].sort(compareDeferredResumes).map((resume) => resume.id)).toEqual([
-      'ready',
-      'soon',
-      'later',
-    ]);
+    expect([...resumes].sort(compareDeferredResumes).map((resume) => resume.id)).toEqual(['ready', 'soon', 'later']);
   });
 
   it('sorts malformed resume timestamps after valid targets', () => {
-    const resumes = [
-      scheduled('bad', '1'),
-      scheduled('soon', '2026-03-12T13:05:00.000Z'),
-    ];
+    const resumes = [scheduled('bad', '1'), scheduled('soon', '2026-03-12T13:05:00.000Z')];
 
-    expect([...resumes].sort(compareDeferredResumes).map((resume) => resume.id)).toEqual([
-      'soon',
-      'bad',
-    ]);
+    expect([...resumes].sort(compareDeferredResumes).map((resume) => resume.id)).toEqual(['soon', 'bad']);
   });
 
   it('builds a compact indicator for scheduled resumes', () => {
-    expect(buildDeferredResumeIndicatorText([
-      scheduled('one', '2026-03-12T13:08:00.000Z'),
-      scheduled('two', '2026-03-12T13:30:00.000Z'),
-    ], Date.parse('2026-03-12T13:00:00.000Z'))).toBe('2 scheduled · next in 8m 0s');
+    expect(
+      buildDeferredResumeIndicatorText(
+        [scheduled('one', '2026-03-12T13:08:00.000Z'), scheduled('two', '2026-03-12T13:30:00.000Z')],
+        Date.parse('2026-03-12T13:00:00.000Z'),
+      ),
+    ).toBe('2 scheduled · next in 8m 0s');
   });
 
   it('builds a compact indicator when ready resumes exist', () => {
-    expect(buildDeferredResumeIndicatorText([
-      ready('one', '2026-03-12T13:01:00.000Z'),
-      scheduled('two', '2026-03-12T13:08:00.000Z'),
-      ready('three', '2026-03-12T13:02:00.000Z'),
-    ], Date.parse('2026-03-12T13:03:00.000Z'))).toBe('2 ready now · 1 scheduled');
+    expect(
+      buildDeferredResumeIndicatorText(
+        [
+          ready('one', '2026-03-12T13:01:00.000Z'),
+          scheduled('two', '2026-03-12T13:08:00.000Z'),
+          ready('three', '2026-03-12T13:02:00.000Z'),
+        ],
+        Date.parse('2026-03-12T13:03:00.000Z'),
+      ),
+    ).toBe('2 ready now · 1 scheduled');
   });
 
   it('resolves ordered presentation state and auto-resume key together', () => {
     const state = resolveDeferredResumePresentationState({
-      resumes: [
-        scheduled('later', '2026-03-12T13:30:00.000Z'),
-        ready('ready', '2026-03-12T13:01:00.000Z'),
-      ],
+      resumes: [scheduled('later', '2026-03-12T13:30:00.000Z'), ready('ready', '2026-03-12T13:01:00.000Z')],
       nowMs: Date.parse('2026-03-12T13:03:00.000Z'),
       isLiveSession: false,
       sessionFile: '/tmp/session.jsonl',

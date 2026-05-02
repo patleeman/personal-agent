@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
+
 import { resolveMcpConfig } from './mcp.js';
 
 interface McpServersDocument {
@@ -37,11 +38,7 @@ function readRawMcpServersRecord(path: string): Record<string, unknown> {
     return {};
   }
 
-  const servers = isRecord(parsed.mcpServers)
-    ? parsed.mcpServers
-    : isRecord(parsed.servers)
-      ? parsed.servers
-      : {};
+  const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : isRecord(parsed.servers) ? parsed.servers : {};
 
   return { ...servers };
 }

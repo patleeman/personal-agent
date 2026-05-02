@@ -1,9 +1,11 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, normalize } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { getDurableAgentFilePath, getDurableSkillsDir, getProfilesRoot } from '@personal-agent/core';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   buildRecentReadUsage,
   buildStructuredNoteMarkdown,
@@ -241,7 +243,9 @@ Old body.
     expect(normalizeCreatedNoteSummary('  Durable   summary  ')).toBe('Durable summary');
     expect(normalizeCreatedNoteDescription('  Helpful   description  ')).toBe('Helpful description');
     expect(normalizeNoteBody('  line one\r\n\r\nline two  ')).toBe('line one\n\nline two');
-    expect(extractNoteSummaryFromBody('# Heading\n\n![diagram](./diagram.png)\n\nFirst summary sentence.\n\nSecond paragraph.')).toBe('First summary sentence.');
+    expect(extractNoteSummaryFromBody('# Heading\n\n![diagram](./diagram.png)\n\nFirst summary sentence.\n\nSecond paragraph.')).toBe(
+      'First summary sentence.',
+    );
 
     const markdown = buildStructuredNoteMarkdown(readFileSync(notePath(stateRoot, 'existing-note'), 'utf-8'), {
       noteId: 'existing-note',
@@ -258,14 +262,17 @@ Old body.
     expect(markdown).toContain('- type:note');
     expect(markdown).toContain('# Updated Note');
 
-    const markdownWithoutDescription = buildStructuredNoteMarkdown('---\nid: blank-note\nstatus: active\ndescription: Remove me\n---\n\n# Blank', {
-      noteId: 'blank-note',
-      title: 'Blank Note',
-      summary: 'Provided summary.',
-      description: ' ',
-      descriptionProvided: true,
-      body: 'Provided body.',
-    });
+    const markdownWithoutDescription = buildStructuredNoteMarkdown(
+      '---\nid: blank-note\nstatus: active\ndescription: Remove me\n---\n\n# Blank',
+      {
+        noteId: 'blank-note',
+        title: 'Blank Note',
+        summary: 'Provided summary.',
+        description: ' ',
+        descriptionProvided: true,
+        body: 'Provided body.',
+      },
+    );
     expect(markdownWithoutDescription).toContain('summary: Provided summary.');
     expect(markdownWithoutDescription).not.toContain('description: Remove me');
   });

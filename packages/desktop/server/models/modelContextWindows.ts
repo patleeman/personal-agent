@@ -14,17 +14,12 @@ function canonicalModelId(modelId: string | undefined): string | undefined {
   return parts[parts.length - 1];
 }
 
-export function normalizeModelContextWindow(
-  modelId: string | undefined,
-  contextWindow: number | undefined,
-  fallback: number,
-): number {
-  const safeFallback = Number.isSafeInteger(fallback) && fallback > 0 && fallback <= MAX_CONTEXT_WINDOW
-    ? fallback
-    : DEFAULT_CONTEXT_WINDOW;
-  const resolved = Number.isSafeInteger(contextWindow) && contextWindow !== undefined && contextWindow > 0
-    ? Math.min(MAX_CONTEXT_WINDOW, contextWindow)
-    : safeFallback;
+export function normalizeModelContextWindow(modelId: string | undefined, contextWindow: number | undefined, fallback: number): number {
+  const safeFallback = Number.isSafeInteger(fallback) && fallback > 0 && fallback <= MAX_CONTEXT_WINDOW ? fallback : DEFAULT_CONTEXT_WINDOW;
+  const resolved =
+    Number.isSafeInteger(contextWindow) && contextWindow !== undefined && contextWindow > 0
+      ? Math.min(MAX_CONTEXT_WINDOW, contextWindow)
+      : safeFallback;
   const minimum = MIN_CONTEXT_WINDOWS_BY_MODEL_ID[canonicalModelId(modelId) ?? ''];
   return minimum === undefined ? resolved : Math.max(resolved, minimum);
 }

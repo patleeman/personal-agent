@@ -45,16 +45,17 @@ describe('localApiStreams', () => {
     });
     const events: unknown[] = [];
 
-    await subscribeDesktopLocalApiStreamByUrl(
-      new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=20abc'),
-      (event) => events.push(event),
+    await subscribeDesktopLocalApiStreamByUrl(new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=20abc'), (event) =>
+      events.push(event),
     );
 
     expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), {});
-    expect(events).toEqual(expect.arrayContaining([
-      { type: 'open' },
-      { type: 'message', data: JSON.stringify({ type: 'snapshot', blocks: [], blockOffset: 0, totalBlocks: 0, isStreaming: false }) },
-    ]));
+    expect(events).toEqual(
+      expect.arrayContaining([
+        { type: 'open' },
+        { type: 'message', data: JSON.stringify({ type: 'snapshot', blocks: [], blockOffset: 0, totalBlocks: 0, isStreaming: false }) },
+      ]),
+    );
   });
 
   it('ignores unsafe live stream tailBlocks', async () => {
@@ -76,10 +77,7 @@ describe('localApiStreams', () => {
     const unsubscribe = vi.fn();
     subscribeLiveSessionMock.mockReturnValue(unsubscribe);
 
-    await subscribeDesktopLocalApiStreamByUrl(
-      new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=5000'),
-      vi.fn(),
-    );
+    await subscribeDesktopLocalApiStreamByUrl(new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=5000'), vi.fn());
 
     expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), { tailBlocks: 1000 });
   });

@@ -3,11 +3,8 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  clearTaskCallbackBinding,
-  getTaskCallbackBinding,
-  setTaskCallbackBinding,
-} from './task-callback-bindings.js';
+
+import { clearTaskCallbackBinding, getTaskCallbackBinding, setTaskCallbackBinding } from './task-callback-bindings.js';
 
 const tempDirs: string[] = [];
 
@@ -35,12 +32,14 @@ describe('task callback bindings', () => {
       notifyOnFailure: 'disruptive',
     });
 
-    expect(binding).toEqual(expect.objectContaining({
-      taskId: 'watch-prod-gates',
-      conversationId: 'conv-123',
-      deliverOnSuccess: true,
-      deliverOnFailure: true,
-    }));
+    expect(binding).toEqual(
+      expect.objectContaining({
+        taskId: 'watch-prod-gates',
+        conversationId: 'conv-123',
+        deliverOnSuccess: true,
+        deliverOnFailure: true,
+      }),
+    );
     expect(getTaskCallbackBinding({ stateRoot, profile: 'datadog', taskId: 'watch-prod-gates' })).toEqual(
       expect.objectContaining({ sessionFile: '/tmp/conv-123.jsonl' }),
     );

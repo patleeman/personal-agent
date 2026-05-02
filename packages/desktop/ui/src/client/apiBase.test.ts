@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { buildApiPath } from './apiBase.js';
 
 describe('buildApiPath', () => {

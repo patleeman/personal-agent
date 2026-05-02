@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
+
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { extension as mimeExtension } from 'mime-types';
@@ -59,24 +60,27 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]!);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function slugifyShareValue(value: string, fallback = 'shared-note'): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80)
-    || fallback;
+  return (
+    value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || fallback
+  );
 }
 
 function uniqueNameInDirectory(absDir: string, baseName: string, extension: string): string {
@@ -99,16 +103,19 @@ function summarizeShareText(text: string): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, 180);
 }
 
-function buildSharedTextNote(input: {
-  title?: string;
-  text: string;
-  sourceApp?: string;
-  createdAt: string;
-}): { title: string; content: string } {
+function buildSharedTextNote(input: { title?: string; text: string; sourceApp?: string; createdAt: string }): {
+  title: string;
+  content: string;
+} {
   const bodyText = input.text.replace(/\r\n/g, '\n').trim();
-  const title = input.title?.trim()
-    || bodyText.split('\n').find((line) => line.trim().length > 0)?.trim().slice(0, 80)
-    || `Shared text ${input.createdAt.slice(0, 10)}`;
+  const title =
+    input.title?.trim() ||
+    bodyText
+      .split('\n')
+      .find((line) => line.trim().length > 0)
+      ?.trim()
+      .slice(0, 80) ||
+    `Shared text ${input.createdAt.slice(0, 10)}`;
   const summary = summarizeShareText(bodyText) || `Shared text captured on ${input.createdAt.slice(0, 10)}.`;
   const frontmatter: Record<string, unknown> = {
     title,
@@ -158,10 +165,16 @@ async function extractReadableUrlShare(url: string): Promise<{
 
   const dom = new JSDOM(raw, { url, contentType: 'text/html' });
   const document = dom.window.document;
-  const description = document.querySelector('meta[name="description"], meta[property="og:description"]')?.getAttribute('content')?.trim() || undefined;
+  const description =
+    document.querySelector('meta[name="description"], meta[property="og:description"]')?.getAttribute('content')?.trim() || undefined;
   const siteName = document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.trim() || undefined;
-  const author = document.querySelector('meta[name="author"], meta[property="article:author"]')?.getAttribute('content')?.trim() || undefined;
-  const publishedAt = document.querySelector('meta[property="article:published_time"], meta[name="article:published_time"], meta[name="parsely-pub-date"]')?.getAttribute('content')?.trim() || undefined;
+  const author =
+    document.querySelector('meta[name="author"], meta[property="article:author"]')?.getAttribute('content')?.trim() || undefined;
+  const publishedAt =
+    document
+      .querySelector('meta[property="article:published_time"], meta[name="article:published_time"], meta[name="parsely-pub-date"]')
+      ?.getAttribute('content')
+      ?.trim() || undefined;
   const article = new Readability(document).parse();
   const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
   const title = article?.title?.trim() || document.title?.trim() || url;
@@ -213,10 +226,9 @@ async function buildSharedUrlNote(input: {
     if (extracted.contentType) {
       frontmatter.content_type = extracted.contentType;
     }
-    const body = [
-      `Source: [${title}](${input.url})`,
-      extracted.markdown || '_Readable content extraction returned no body._',
-    ].filter((part) => part.trim().length > 0).join('\n\n');
+    const body = [`Source: [${title}](${input.url})`, extracted.markdown || '_Readable content extraction returned no body._']
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n');
     return { title, content: markdownWithFrontmatter(frontmatter, body) };
   } catch (error) {
     const title = input.title?.trim() || input.url;
@@ -267,7 +279,10 @@ function resolveSharedImageAssetExtension(input: { fileName?: string; mimeType?:
     return mimeExt.trim();
   }
 
-  const fileExt = extname(input.fileName ?? '').trim().replace(/^\./, '').toLowerCase();
+  const fileExt = extname(input.fileName ?? '')
+    .trim()
+    .replace(/^\./, '')
+    .toLowerCase();
   return IMAGE_FILE_EXTENSIONS.has(fileExt) ? fileExt : 'png';
 }
 
@@ -286,9 +301,8 @@ function buildSharedImageNote(input: {
   if (normalizedMimeType && !normalizedMimeType.startsWith('image/')) {
     throw new Error('mimeType must be an image type for image imports.');
   }
-  const baseTitle = input.title?.trim()
-    || normalizeShareString(input.fileName)?.replace(/\.[^.]+$/, '')
-    || `Shared image ${input.createdAt.slice(0, 10)}`;
+  const baseTitle =
+    input.title?.trim() || normalizeShareString(input.fileName)?.replace(/\.[^.]+$/, '') || `Shared image ${input.createdAt.slice(0, 10)}`;
   const assetExt = resolveSharedImageAssetExtension({ fileName: input.fileName, mimeType: normalizedMimeType });
   const assetDirAbs = join(input.root, '_attachments');
   mkdirSync(assetDirAbs, { recursive: true });
@@ -308,10 +322,7 @@ function buildSharedImageNote(input: {
   if (input.sourceApp) {
     frontmatter.source_app = input.sourceApp;
   }
-  const body = [
-    `![${baseTitle}](${assetUrl})`,
-    `Saved asset path: \`${assetId}\``,
-  ].join('\n\n');
+  const body = [`![${baseTitle}](${assetUrl})`, `Saved asset path: \`${assetId}\``].join('\n\n');
   return {
     title: baseTitle,
     content: markdownWithFrontmatter(frontmatter, body),

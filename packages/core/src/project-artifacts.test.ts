@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   createInitialProject,
   createProjectActivityEntry,
@@ -13,15 +14,15 @@ import {
   parseProject,
   parseProjectActivityEntry,
   parseProjectTask,
+  type ProjectActivityEntryDocument,
+  type ProjectDocument,
+  type ProjectTaskDocument,
   readProject,
   readProjectActivityEntry,
   readProjectTask,
   writeProject,
   writeProjectActivityEntry,
   writeProjectTask,
-  type ProjectActivityEntryDocument,
-  type ProjectDocument,
-  type ProjectTaskDocument,
 } from './project-artifacts.js';
 
 const tempDirs: string[] = [];
@@ -73,10 +74,7 @@ describe('project artifacts', () => {
       summary: 'Core storage is in place and the CLI surface is next.',
       requirements: {
         goal: 'Create a durable artifact model that stays easy to inspect and edit.',
-        acceptanceCriteria: [
-          'Projects serialize cleanly to YAML.',
-          'Agents can recover the state without reading the whole repo.',
-        ],
+        acceptanceCriteria: ['Projects serialize cleanly to YAML.', 'Agents can recover the state without reading the whole repo.'],
       },
       status: 'active',
       blockers: ['Need to settle the activity entry shape'],
@@ -85,12 +83,8 @@ describe('project artifacts', () => {
       planSummary: 'Land the schema first, then wire the CLI surface around it.',
       completionSummary: 'Not complete yet. The schema is stable and the CLI work is next.',
       plan: {
-        milestones: [
-          { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
-        ],
-        tasks: [
-          { id: 'wire-activity', title: 'Wire the activity command', status: 'doing', milestoneId: 'schema' },
-        ],
+        milestones: [{ id: 'schema', title: 'Finalize the artifact schema', status: 'completed' }],
+        tasks: [{ id: 'wire-activity', title: 'Wire the activity command', status: 'doing', milestoneId: 'schema' }],
       },
     };
 
@@ -112,10 +106,7 @@ describe('project artifacts', () => {
       status: 'active',
       requirements: {
         goal: 'Create a durable artifact model that stays easy to inspect and edit.',
-        acceptanceCriteria: [
-          'Projects serialize cleanly to YAML.',
-          'Agents can recover the state without reading the whole repo.',
-        ],
+        acceptanceCriteria: ['Projects serialize cleanly to YAML.', 'Agents can recover the state without reading the whole repo.'],
       },
       currentFocus: 'Build the CLI activity surface.',
       blockers: ['Need to settle the activity entry shape'],
@@ -123,12 +114,8 @@ describe('project artifacts', () => {
       planSummary: 'Land the schema first, then wire the CLI surface around it.',
       completionSummary: 'Not complete yet. The schema is stable and the CLI work is next.',
       plan: {
-        milestones: [
-          { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
-        ],
-        tasks: [
-          { id: 'wire-activity', title: 'Wire the activity command', status: 'doing', milestoneId: 'schema' },
-        ],
+        milestones: [{ id: 'schema', title: 'Finalize the artifact schema', status: 'completed' }],
+        tasks: [{ id: 'wire-activity', title: 'Wire the activity command', status: 'doing', milestoneId: 'schema' }],
       },
     });
   });

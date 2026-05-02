@@ -29,8 +29,8 @@ vi.mock('./conversationService.js', () => ({
 }));
 
 import {
-  ConversationDeferredResumeCapabilityNotFoundError,
   cancelConversationDeferredResumeCapability,
+  ConversationDeferredResumeCapabilityNotFoundError,
   fireConversationDeferredResumeCapability,
   readConversationDeferredResumesCapability,
   scheduleConversationDeferredResumeCapability,
@@ -63,24 +63,32 @@ describe('conversationDeferredResumeCapability', () => {
   it('throws a not-found error when the conversation session file cannot be resolved', async () => {
     resolveConversationSessionFileMock.mockReturnValue(undefined);
 
-    expect(() => readConversationDeferredResumesCapability('conversation-missing')).toThrow(ConversationDeferredResumeCapabilityNotFoundError);
-    await expect(scheduleConversationDeferredResumeCapability({ conversationId: 'conversation-missing', delay: '5m' })).rejects.toThrow(ConversationDeferredResumeCapabilityNotFoundError);
+    expect(() => readConversationDeferredResumesCapability('conversation-missing')).toThrow(
+      ConversationDeferredResumeCapabilityNotFoundError,
+    );
+    await expect(scheduleConversationDeferredResumeCapability({ conversationId: 'conversation-missing', delay: '5m' })).rejects.toThrow(
+      ConversationDeferredResumeCapabilityNotFoundError,
+    );
   });
 
   it('schedules deferred resumes and validates the delay input', async () => {
     await expect(scheduleConversationDeferredResumeCapability({ conversationId: 'conversation-1' })).rejects.toThrow('delay is required');
-    await expect(scheduleConversationDeferredResumeCapability({
-      conversationId: 'conversation-1',
-      delay: '5m',
-      behavior: 'later' as 'steer',
-    })).rejects.toThrow('behavior must be "steer" or "followUp"');
+    await expect(
+      scheduleConversationDeferredResumeCapability({
+        conversationId: 'conversation-1',
+        delay: '5m',
+        behavior: 'later' as 'steer',
+      }),
+    ).rejects.toThrow('behavior must be "steer" or "followUp"');
 
-    await expect(scheduleConversationDeferredResumeCapability({
-      conversationId: 'conversation-1',
-      delay: ' 5m ',
-      prompt: 'Follow up later.',
-      behavior: 'followUp',
-    })).resolves.toEqual({
+    await expect(
+      scheduleConversationDeferredResumeCapability({
+        conversationId: 'conversation-1',
+        delay: ' 5m ',
+        prompt: 'Follow up later.',
+        behavior: 'followUp',
+      }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       resume: { id: 'resume-2', delay: '5m' },
       resumes: [{ id: 'resume-1' }],
@@ -95,10 +103,12 @@ describe('conversationDeferredResumeCapability', () => {
   });
 
   it('cancels deferred resumes and refreshes the conversation snapshot', async () => {
-    await expect(cancelConversationDeferredResumeCapability({
-      conversationId: 'conversation-1',
-      resumeId: 'resume-1',
-    })).resolves.toEqual({
+    await expect(
+      cancelConversationDeferredResumeCapability({
+        conversationId: 'conversation-1',
+        resumeId: 'resume-1',
+      }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       cancelledId: 'resume-1',
       resumes: [{ id: 'resume-1' }],
@@ -113,11 +123,13 @@ describe('conversationDeferredResumeCapability', () => {
   it('fires deferred resumes immediately and flushes live resumes when requested', async () => {
     const flushLiveDeferredResumes = vi.fn().mockResolvedValue(undefined);
 
-    await expect(fireConversationDeferredResumeCapability({
-      conversationId: 'conversation-1',
-      resumeId: 'resume-1',
-      flushLiveDeferredResumes,
-    })).resolves.toEqual({
+    await expect(
+      fireConversationDeferredResumeCapability({
+        conversationId: 'conversation-1',
+        resumeId: 'resume-1',
+        flushLiveDeferredResumes,
+      }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       resume: { id: 'resume-1', fired: true },
       resumes: [{ id: 'resume-1' }],

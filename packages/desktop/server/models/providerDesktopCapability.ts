@@ -1,3 +1,4 @@
+import { refreshAllLiveSessionModelRegistries, reloadAllLiveSessionAuth } from '../middleware/index.js';
 import type { ModelProviderState } from './modelProviders.js';
 import {
   readModelProvidersState,
@@ -16,7 +17,6 @@ import {
   startProviderOAuthLogin,
   submitProviderOAuthLoginInput,
 } from './providerAuth.js';
-import { refreshAllLiveSessionModelRegistries, reloadAllLiveSessionAuth } from '../middleware/index.js';
 
 export interface ProviderDesktopCapabilityContext {
   getCurrentProfile: () => string;
@@ -70,10 +70,7 @@ export function saveModelProviderCapability(
   return state;
 }
 
-export function deleteModelProviderCapability(
-  context: ProviderDesktopCapabilityContext,
-  providerInput: string,
-): ModelProviderState {
+export function deleteModelProviderCapability(context: ProviderDesktopCapabilityContext, providerInput: string): ModelProviderState {
   const provider = providerInput.trim();
   if (!provider) {
     throw new ProviderDesktopCapabilityInputError('provider required');
@@ -179,10 +176,7 @@ export function setProviderApiKeyCapability(
   return state;
 }
 
-export function removeProviderCredentialCapability(
-  context: ProviderDesktopCapabilityContext,
-  providerInput: string,
-): ProviderAuthState {
+export function removeProviderCredentialCapability(context: ProviderDesktopCapabilityContext, providerInput: string): ProviderAuthState {
   const provider = providerInput.trim();
   if (!provider) {
     throw new ProviderDesktopCapabilityInputError('provider required');

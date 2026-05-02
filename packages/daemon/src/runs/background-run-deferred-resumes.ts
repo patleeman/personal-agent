@@ -1,16 +1,17 @@
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
+
+import { getBackgroundRunCallbackDelivery } from './background-run-callbacks.js';
 import {
+  type DurableRunCheckpointFile,
+  type DurableRunStatus,
   loadDurableRunCheckpoint,
   resolveDurableRunPaths,
   saveDurableRunCheckpoint,
   scanDurableRun,
   scanDurableRunsForRecovery,
-  type DurableRunCheckpointFile,
-  type DurableRunStatus,
   type ScannedDurableRun,
 } from './store.js';
-import { getBackgroundRunCallbackDelivery } from './background-run-callbacks.js';
 
 const SINGLE_RUN_LOG_TAIL_LINES = 60;
 const BATCH_RUN_LOG_TAIL_LINES = 20;
@@ -80,13 +81,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function readCheckpointPayload(checkpoint: DurableRunCheckpointFile | undefined): Record<string, unknown> {
@@ -108,8 +111,8 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
   const payload = readCheckpointPayload(run.checkpoint);
 
   // Support both old structure (resumeParentOnExit at root) and new (in metadata)
-  const resumeParentOnExit = payload.resumeParentOnExit === true
-    || (isRecord(payload.metadata) && payload.metadata.resumeParentOnExit === true);
+  const resumeParentOnExit =
+    payload.resumeParentOnExit === true || (isRecord(payload.metadata) && payload.metadata.resumeParentOnExit === true);
 
   if (!resumeParentOnExit) {
     return undefined;
@@ -120,9 +123,7 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
     return undefined;
   }
 
-  const surfaced = isRecord(payload.backgroundRunResume)
-    ? payload.backgroundRunResume
-    : undefined;
+  const surfaced = isRecord(payload.backgroundRunResume) ? payload.backgroundRunResume : undefined;
 
   return {
     run,
@@ -134,17 +135,11 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
 }
 
 function isStoppedStatus(status: DurableRunStatus | undefined): boolean {
-  return status === 'completed'
-    || status === 'failed'
-    || status === 'cancelled'
-    || status === 'interrupted';
+  return status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted';
 }
 
 function isActiveStatus(status: DurableRunStatus | undefined): boolean {
-  return status === 'queued'
-    || status === 'running'
-    || status === 'recovering'
-    || status === 'waiting';
+  return status === 'queued' || status === 'running' || status === 'recovering' || status === 'waiting';
 }
 
 function readRunLogTail(logPath: string, maxLines: number): string {
@@ -153,12 +148,7 @@ function readRunLogTail(logPath: string, maxLines: number): string {
   }
 
   try {
-    return readFileSync(logPath, 'utf-8')
-      .replace(/\r\n/g, '\n')
-      .split('\n')
-      .slice(-maxLines)
-      .join('\n')
-      .trim();
+    return readFileSync(logPath, 'utf-8').replace(/\r\n/g, '\n').split('\n').slice(-maxLines).join('\n').trim();
   } catch {
     return '';
   }
@@ -169,29 +159,20 @@ function describeRunCommand(run: ScannedDurableRun): string | undefined {
 
   // Support both old structure (agent/shellCommand/argv at root) and new (in target)
   const target = isRecord(payload.target) ? payload.target : undefined;
-  const agent = isRecord(target?.agent) ? target.agent
-    : isRecord(payload.agent) ? payload.agent
-    : undefined;
+  const agent = isRecord(target?.agent) ? target.agent : isRecord(payload.agent) ? payload.agent : undefined;
   const agentPrompt = trimText(readOptionalString(agent?.prompt), MAX_COMMAND_LENGTH);
   if (agentPrompt) {
     return agentPrompt;
   }
 
-  const shellCommand = trimText(
-    readOptionalString(target?.command ?? payload.shellCommand),
-    MAX_COMMAND_LENGTH,
-  );
+  const shellCommand = trimText(readOptionalString(target?.command ?? payload.shellCommand), MAX_COMMAND_LENGTH);
   if (shellCommand) {
     return shellCommand;
   }
 
   // argv could be in target or at root level
-  const argvArray = Array.isArray(target?.argv)
-    ? target.argv
-    : Array.isArray(payload.argv)
-      ? payload.argv
-      : [];
-  const argv = argvArray.flatMap((value) => typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : []);
+  const argvArray = Array.isArray(target?.argv) ? target.argv : Array.isArray(payload.argv) ? payload.argv : [];
+  const argv = argvArray.flatMap((value) => (typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : []));
 
   if (argv.length === 0) {
     return undefined;
@@ -216,9 +197,7 @@ function sortRuns(runs: EligibleBackgroundRun[]): EligibleBackgroundRun[] {
 function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
   // Support both old structure (spec.taskSlug) and new (spec.metadata.taskSlug)
   const spec = run.run.manifest?.spec ?? {};
-  const taskSlug = readOptionalString(
-    isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug,
-  ) ?? 'unknown';
+  const taskSlug = readOptionalString(isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug) ?? 'unknown';
   const status = run.run.status?.status ?? 'unknown';
   const logText = readRunLogTail(run.run.paths.outputLogPath, SINGLE_RUN_LOG_TAIL_LINES) || '(empty log)';
   const lines = [
@@ -233,41 +212,23 @@ function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
     lines.push(`command=${command}`);
   }
 
-  lines.push(
-    '',
-    'Recent log tail:',
-    logText,
-    '',
-    'Use run get/logs if you need more detail. Then continue from this point.',
-  );
+  lines.push('', 'Recent log tail:', logText, '', 'Use run get/logs if you need more detail. Then continue from this point.');
 
   return lines.join('\n');
 }
 
 function buildGenericBatchPrompt(runs: EligibleBackgroundRun[]): string {
   const orderedRuns = sortRuns(runs);
-  const lines = [
-    'Background tasks have finished. Continue from this point.',
-    '',
-    'Completed runs:',
-  ];
+  const lines = ['Background tasks have finished. Continue from this point.', '', 'Completed runs:'];
 
   for (const run of orderedRuns) {
     // Support both old structure (spec.taskSlug) and new (spec.metadata.taskSlug)
     const spec = run.run.manifest?.spec ?? {};
-    const taskSlug = readOptionalString(
-      isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug,
-    ) ?? 'unknown';
+    const taskSlug = readOptionalString(isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug) ?? 'unknown';
     const status = run.run.status?.status ?? 'unknown';
     const logText = readRunLogTail(run.run.paths.outputLogPath, BATCH_RUN_LOG_TAIL_LINES) || '(empty log)';
 
-    lines.push(
-      '',
-      `Run ${run.run.runId}`,
-      `taskSlug=${taskSlug}`,
-      `status=${status}`,
-      `log=${run.run.paths.outputLogPath}`,
-    );
+    lines.push('', `Run ${run.run.runId}`, `taskSlug=${taskSlug}`, `status=${status}`, `log=${run.run.paths.outputLogPath}`);
 
     const command = describeRunCommand(run.run);
     if (command) {
@@ -277,10 +238,7 @@ function buildGenericBatchPrompt(runs: EligibleBackgroundRun[]): string {
     lines.push('', 'Recent log tail:', logText);
   }
 
-  lines.push(
-    '',
-    'Use run get/logs if you need more detail. Then continue from this point.',
-  );
+  lines.push('', 'Use run get/logs if you need more detail. Then continue from this point.');
 
   return lines.join('\n');
 }
@@ -327,10 +285,7 @@ function markRunsSurfaced(runsRoot: string, runs: EligibleBackgroundRun[], batch
   }
 }
 
-function collectBackgroundRunResultBatches(input: {
-  runsRoot: string;
-  sessionFile: string;
-}): Map<string, EligibleBackgroundRun[]> {
+function collectBackgroundRunResultBatches(input: { runsRoot: string; sessionFile: string }): Map<string, EligibleBackgroundRun[]> {
   const batches = new Map<string, EligibleBackgroundRun[]>();
 
   for (const run of scanDurableRunsForRecovery(input.runsRoot)) {
@@ -355,19 +310,17 @@ function collectBackgroundRunResultBatches(input: {
   return batches;
 }
 
-export function listPendingBackgroundRunResults(input: {
-  runsRoot: string;
-  sessionFile: string;
-}): BackgroundRunResultSummary[] {
+export function listPendingBackgroundRunResults(input: { runsRoot: string; sessionFile: string }): BackgroundRunResultSummary[] {
   return Array.from(collectBackgroundRunResultBatches(input).entries())
     .map(([batchId, runs]) => ({
       id: batchId,
       sessionFile: input.sessionFile,
       prompt: buildBackgroundRunResultPrompt(runs),
-      surfacedAt: runs
-        .map((run) => run.surfacedAt)
-        .filter((value): value is string => typeof value === 'string')
-        .sort()[0] ?? '',
+      surfacedAt:
+        runs
+          .map((run) => run.surfacedAt)
+          .filter((value): value is string => typeof value === 'string')
+          .sort()[0] ?? '',
       runIds: runs.map((run) => run.run.runId).sort(),
     }))
     .sort((left, right) => {
@@ -386,11 +339,7 @@ export function markBackgroundRunResultsDelivered(input: {
   resultIds: string[];
   deliveredAt?: string;
 }): string[] {
-  const resultIds = Array.from(new Set(
-    input.resultIds
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0),
-  ));
+  const resultIds = Array.from(new Set(input.resultIds.map((value) => value.trim()).filter((value) => value.length > 0)));
   if (resultIds.length === 0) {
     return [];
   }
@@ -446,24 +395,21 @@ export async function surfaceBackgroundRunResultsIfReady(input: {
     return { surfacedRunIds: [] };
   }
 
-  const eligibleRuns = scanDurableRunsForRecovery(input.runsRoot)
-    .flatMap((run) => {
-      const eligible = resolveEligibleBackgroundRun(run);
-      if (!eligible || eligible.sessionFile !== trigger.sessionFile) {
-        return [];
-      }
+  const eligibleRuns = scanDurableRunsForRecovery(input.runsRoot).flatMap((run) => {
+    const eligible = resolveEligibleBackgroundRun(run);
+    if (!eligible || eligible.sessionFile !== trigger.sessionFile) {
+      return [];
+    }
 
-      return [eligible];
-    });
+    return [eligible];
+  });
 
   const activeRuns = eligibleRuns.filter((run) => isActiveStatus(run.run.status?.status));
   if (activeRuns.length > 0) {
     return { surfacedRunIds: [] };
   }
 
-  const stoppedRuns = eligibleRuns
-    .filter((run) => isStoppedStatus(run.run.status?.status))
-    .filter((run) => !run.surfacedBatchId);
+  const stoppedRuns = eligibleRuns.filter((run) => isStoppedStatus(run.run.status?.status)).filter((run) => !run.surfacedBatchId);
 
   if (stoppedRuns.length === 0) {
     return { surfacedRunIds: [] };

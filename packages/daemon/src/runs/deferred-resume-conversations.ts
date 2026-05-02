@@ -1,10 +1,13 @@
+import { readSessionConversationId } from '@personal-agent/core';
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
-import { readSessionConversationId } from '@personal-agent/core';
+
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  type DurableRunPaths,
+  type DurableRunStatus,
   loadDurableRunManifest,
   loadDurableRunStatus,
   resolveDurableRunPaths,
@@ -12,8 +15,6 @@ import {
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
-  type DurableRunPaths,
-  type DurableRunStatus,
 } from './store.js';
 
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
@@ -52,13 +53,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function resolveConversationId(input: { conversationId?: string; sessionFile: string }): string | undefined {
@@ -117,25 +120,32 @@ async function saveDeferredResumeConversationRunState(
   const existingManifest = loadDurableRunManifest(paths.manifestPath);
   const existingStatus = loadDurableRunStatus(paths.statusPath);
   const conversationId = resolveConversationId(input);
-  const createdAt = normalizeTimestamp(existingManifest?.createdAt ?? existingStatus?.createdAt ?? input.createdAt ?? input.updatedAt, 'createdAt');
+  const createdAt = normalizeTimestamp(
+    existingManifest?.createdAt ?? existingStatus?.createdAt ?? input.createdAt ?? input.updatedAt,
+    'createdAt',
+  );
   const updatedAt = normalizeTimestamp(input.updatedAt, 'updatedAt');
-  const completedAt = input.status === 'completed' || input.status === 'failed' || input.status === 'cancelled'
-    ? normalizeTimestamp(input.completedAt ?? input.updatedAt, 'completedAt')
-    : undefined;
+  const completedAt =
+    input.status === 'completed' || input.status === 'failed' || input.status === 'cancelled'
+      ? normalizeTimestamp(input.completedAt ?? input.updatedAt, 'completedAt')
+      : undefined;
 
   if (!existingManifest) {
-    saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
-      id: runId,
-      kind: 'conversation',
-      resumePolicy: 'continue',
-      createdAt,
-      spec: createSpec(input),
-      source: {
-        type: 'deferred-resume',
-        id: input.deferredResumeId,
-        filePath: input.sessionFile,
-      },
-    }));
+    saveDurableRunManifest(
+      paths.manifestPath,
+      createDurableRunManifest({
+        id: runId,
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt,
+        spec: createSpec(input),
+        source: {
+          type: 'deferred-resume',
+          id: input.deferredResumeId,
+          filePath: input.sessionFile,
+        },
+      }),
+    );
 
     await appendDurableRunEvent(paths.eventsPath, {
       version: 1,
@@ -150,17 +160,20 @@ async function saveDeferredResumeConversationRunState(
     });
   }
 
-  saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
-    runId,
-    status: input.status,
-    createdAt,
-    updatedAt,
-    activeAttempt: existingStatus?.activeAttempt ?? (input.status === 'completed' ? 1 : 0),
-    startedAt: existingStatus?.startedAt,
-    completedAt,
-    checkpointKey: input.step,
-    lastError: input.lastError,
-  }));
+  saveDurableRunStatus(
+    paths.statusPath,
+    createInitialDurableRunStatus({
+      runId,
+      status: input.status,
+      createdAt,
+      updatedAt,
+      activeAttempt: existingStatus?.activeAttempt ?? (input.status === 'completed' ? 1 : 0),
+      startedAt: existingStatus?.startedAt,
+      completedAt,
+      checkpointKey: input.step,
+      lastError: input.lastError,
+    }),
+  );
 
   saveDurableRunCheckpoint(paths.checkpointPath, {
     version: 1,

@@ -55,14 +55,14 @@ Conversation queue items, reminders, and some scheduled-task callbacks use this 
 
 ## Choose the right async surface
 
-| Need | Use | Attention style | Durable home |
-| --- | --- | --- | --- |
-| Passive async summary tied to owned work | surface the owning conversation or automation | passive | conversation/automation + logs |
-| Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + logs |
-| Human reminder that should interrupt | reminder | currently hidden in the desktop/web UI; prefer surfaced conversation attention or OS delivery when visibility matters | wakeup + notification state |
-| Agent should continue this conversation later | conversation_queue | usually passive unless paired with notification delivery | live queue/wakeup + conversation |
-| Scheduled automation completes later | automation-owned run history, optionally callback into a conversation | passive by default | task log + owning thread + optional conversation wakeup |
-| High-signal blocked or failed background work | surfaced conversation attention, optionally with reminder state under the hood | visible on the owning thread | conversation plus logs |
+| Need                                          | Use                                                                            | Attention style                                                                                                       | Durable home                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Passive async summary tied to owned work      | surface the owning conversation or automation                                  | passive                                                                                                               | conversation/automation + logs                          |
+| Async result tied to an inactive conversation | surface the conversation                                                       | passive by default                                                                                                    | conversation + logs                                     |
+| Human reminder that should interrupt          | reminder                                                                       | currently hidden in the desktop/web UI; prefer surfaced conversation attention or OS delivery when visibility matters | wakeup + notification state                             |
+| Agent should continue this conversation later | conversation_queue                                                             | usually passive unless paired with notification delivery                                                              | live queue/wakeup + conversation                        |
+| Scheduled automation completes later          | automation-owned run history, optionally callback into a conversation          | passive by default                                                                                                    | task log + owning thread + optional conversation wakeup |
+| High-signal blocked or failed background work | surfaced conversation attention, optionally with reminder state under the hood | visible on the owning thread                                                                                          | conversation plus logs                                  |
 
 ## Owning surfaces
 
@@ -74,8 +74,6 @@ If something happened and it is worth noticing later, keep it on its owner:
 - background failures → owning conversation/thread
 - async work that finished outside the foreground thread → owning conversation/thread
 - daemon/system issues → diagnostics or selective OS notification
-
-See [Shared Inbox Removal](../inbox/INDEX.md).
 
 ## Reminders and notification delivery
 
@@ -90,7 +88,26 @@ Good fits:
 
 The current desktop/web UI does not render these notifications as standalone rows and does not trigger popup/browser delivery.
 
-See [Reminders and Notification Delivery](../alerts/INDEX.md).
+### Lifecycle
+
+Internally, reminder/callback notifications move through these states:
+
+- `active`
+- `acknowledged`
+- `dismissed`
+
+Active items remain internal alert state unless separately surfaced through conversation attention.
+
+Wakeup-backed notifications can also be **snoozed**, which acknowledges the current notification and reschedules the underlying wakeup for later. Acknowledging or dismissing does not delete the durable history.
+
+### Choosing the right tool
+
+| Need                                                         | Use                                                         |
+| ------------------------------------------------------------ | ----------------------------------------------------------- |
+| User explicitly wants "tell me later"                        | **reminder** — triggers wakeup + alert state under the hood |
+| Agent should continue later without user needing to remember | **conversation_queue**                                      |
+| Unattended automation should run later                       | **scheduled_task**                                          |
+| Passive async outcome on an owning thread                    | **conversation attention**                                  |
 
 ## Conversation queue
 
@@ -138,7 +155,6 @@ Use these defaults:
 - **user-requested tell-me-later behavior** should usually become surfaced conversation attention unless hidden reminder state is specifically needed
 - **agent-initiated continue-later behavior** becomes conversation_queue
 
-
 ## What not to do
 
 Do not:
@@ -152,7 +168,6 @@ Do not:
 ## Related docs
 
 - [Decision Guide](../../docs/decision-guide.md)
-- [Shared Inbox Removal](../inbox/INDEX.md)
-- [Reminders and Notification Delivery](../alerts/INDEX.md)
+- [Async Attention and Wakeups](#async-attention-and-wakeups)
 - [Scheduled Tasks](../scheduled-tasks/INDEX.md)
 - [Conversations](../../docs/conversations.md)

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
+
 import { validateConversationId } from './conversation-project-links.js';
 import { getDurableConversationAttentionDir, getStateRoot } from './runtime/paths.js';
 
@@ -65,9 +66,7 @@ function resolveLegacyConversationAttentionStatePath(options: ConversationAttent
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -102,9 +101,7 @@ function normalizeRecord(value: unknown, fallbackConversationId?: string): Conve
   }
 
   const record = value as Partial<ConversationAttentionRecord>;
-  const conversationId = typeof record.conversationId === 'string'
-    ? record.conversationId.trim()
-    : fallbackConversationId?.trim() ?? '';
+  const conversationId = typeof record.conversationId === 'string' ? record.conversationId.trim() : (fallbackConversationId?.trim() ?? '');
 
   if (conversationId.length === 0) {
     return null;
@@ -112,7 +109,11 @@ function normalizeRecord(value: unknown, fallbackConversationId?: string): Conve
 
   validateConversationId(conversationId);
 
-  if (typeof record.acknowledgedMessageCount !== 'number' || !Number.isFinite(record.acknowledgedMessageCount) || record.acknowledgedMessageCount < 0) {
+  if (
+    typeof record.acknowledgedMessageCount !== 'number' ||
+    !Number.isFinite(record.acknowledgedMessageCount) ||
+    record.acknowledgedMessageCount < 0
+  ) {
     return null;
   }
 
@@ -135,9 +136,7 @@ function normalizeDocument(value: unknown, fallbackProfile?: string): Conversati
   }
 
   const document = value as Partial<ConversationAttentionStateDocument>;
-  const profile = typeof document.profile === 'string'
-    ? document.profile.trim()
-    : fallbackProfile?.trim() ?? '';
+  const profile = typeof document.profile === 'string' ? document.profile.trim() : (fallbackProfile?.trim() ?? '');
 
   if (document.version !== 1 || profile.length === 0 || !document.conversations || typeof document.conversations !== 'object') {
     return null;
@@ -174,10 +173,7 @@ function readConversationAttentionStateFile(path: string, profile: string): Conv
   }
 }
 
-function mergeRecord(
-  left: ConversationAttentionRecord,
-  right: ConversationAttentionRecord,
-): ConversationAttentionRecord {
+function mergeRecord(left: ConversationAttentionRecord, right: ConversationAttentionRecord): ConversationAttentionRecord {
   if (left.conversationId !== right.conversationId) {
     throw new Error('Cannot merge conversation attention records with different conversation ids.');
   }
@@ -201,10 +197,7 @@ function mergeRecord(
 }
 
 function sortConversationIds(conversations: Record<string, ConversationAttentionRecord>): Record<string, ConversationAttentionRecord> {
-  return Object.fromEntries(
-    Object.entries(conversations)
-      .sort(([left], [right]) => left.localeCompare(right)),
-  );
+  return Object.fromEntries(Object.entries(conversations).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 export function resolveConversationAttentionStatePath(options: ConversationAttentionStateOptions): string {
@@ -260,11 +253,18 @@ export function saveConversationAttentionState(options: {
 
   const path = resolveConversationAttentionStatePath(options);
   mkdirSync(getDurableConversationAttentionDir(options.stateRoot), { recursive: true });
-  writeFileSync(path, JSON.stringify({
-    version: 1,
-    profile: options.profile,
-    conversations: sortConversationIds(conversations),
-  }, null, 2) + '\n');
+  writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        version: 1,
+        profile: options.profile,
+        conversations: sortConversationIds(conversations),
+      },
+      null,
+      2,
+    ) + '\n',
+  );
   return path;
 }
 
@@ -305,9 +305,7 @@ export function mergeConversationAttentionStateDocuments(options: {
       }
 
       const existing = conversations[normalized.conversationId];
-      conversations[normalized.conversationId] = existing
-        ? mergeRecord(existing, normalized)
-        : normalized;
+      conversations[normalized.conversationId] = existing ? mergeRecord(existing, normalized) : normalized;
     }
   }
 
@@ -460,9 +458,7 @@ export function summarizeConversationAttention(options: {
       ? normalizeIsoTimestamp(conversation.lastActivityAt, `Conversation ${conversation.conversationId} lastActivityAt`)
       : undefined;
     const needsAttention = Boolean(record.forcedUnread) || unreadMessageCount > 0 || visibleActivities.length > 0;
-    const attentionUpdatedAt = latestVisibleActivityAt
-      ?? (unreadMessageCount > 0 ? lastActivityAt : undefined)
-      ?? record.updatedAt;
+    const attentionUpdatedAt = latestVisibleActivityAt ?? (unreadMessageCount > 0 ? lastActivityAt : undefined) ?? record.updatedAt;
 
     return {
       conversationId: conversation.conversationId,

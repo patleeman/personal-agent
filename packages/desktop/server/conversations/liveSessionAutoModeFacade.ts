@@ -1,8 +1,5 @@
 import { publishAppEvent } from '../shared/appEvents.js';
-import type {
-  ConversationAutoModeState,
-  ConversationAutoModeStateInput,
-} from './conversationAutoMode.js';
+import type { ConversationAutoModeState, ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import {
   markLiveSessionAutoModeContinueRequested,
   requestLiveSessionAutoModeContinuationTurn,
@@ -11,11 +8,10 @@ import {
 } from './liveSessionAutoModeOps.js';
 import { readConversationAutoModeState } from './liveSessionStateBroadcasts.js';
 
-export type LiveSessionAutoModeFacadeHost = Parameters<typeof requestLiveSessionAutoModeTurn>[0]
-  & Parameters<typeof readConversationAutoModeState>[0]
-  & {
-  sessionId: string;
-};
+export type LiveSessionAutoModeFacadeHost = Parameters<typeof requestLiveSessionAutoModeTurn>[0] &
+  Parameters<typeof readConversationAutoModeState>[0] & {
+    sessionId: string;
+  };
 
 export function readLiveSessionAutoModeState(entry: LiveSessionAutoModeFacadeHost): ConversationAutoModeState {
   return readConversationAutoModeState(entry);

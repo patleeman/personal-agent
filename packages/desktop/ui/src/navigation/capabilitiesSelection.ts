@@ -11,7 +11,7 @@ const CAPABILITIES_SECTION_SET = new Set<string>(CAPABILITIES_SECTIONS);
 
 export function getCapabilitiesSection(search: string): CapabilitySection {
   const value = new URLSearchParams(search).get(CAPABILITIES_SECTION_QUERY_PARAM)?.trim() ?? '';
-  return CAPABILITIES_SECTION_SET.has(value) ? value as CapabilitySection : 'overview';
+  return CAPABILITIES_SECTION_SET.has(value) ? (value as CapabilitySection) : 'overview';
 }
 
 export function getCapabilitiesPresetId(search: string): string | null {
@@ -26,12 +26,15 @@ export function getCapabilitiesToolName(search: string): string | null {
   return new URLSearchParams(search).get(CAPABILITIES_TOOL_QUERY_PARAM)?.trim() || null;
 }
 
-export function buildCapabilitiesSearch(currentSearch: string, updates: {
-  section?: CapabilitySection;
-  presetId?: string | null;
-  taskId?: string | null;
-  toolName?: string | null;
-}): string {
+export function buildCapabilitiesSearch(
+  currentSearch: string,
+  updates: {
+    section?: CapabilitySection;
+    presetId?: string | null;
+    taskId?: string | null;
+    toolName?: string | null;
+  },
+): string {
   const params = new URLSearchParams(currentSearch);
   const nextSection = updates.section ?? getCapabilitiesSection(currentSearch);
 

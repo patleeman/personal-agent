@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ConversationBootstrapState, SessionDetail, SessionMeta } from '../shared/types';
 
 const apiMocks = vi.hoisted(() => ({
@@ -46,10 +47,7 @@ function createSessionDetail(signature = 'sig-1', text = 'Cached reply', id = 'c
   };
 }
 
-function createBootstrapState(
-  conversationId = 'conv-1',
-  overrides?: Partial<ConversationBootstrapState>,
-): ConversationBootstrapState {
+function createBootstrapState(conversationId = 'conv-1', overrides?: Partial<ConversationBootstrapState>): ConversationBootstrapState {
   return {
     conversationId,
     sessionDetail: createSessionDetail('sig-1', 'Cached reply', conversationId),

@@ -1,16 +1,15 @@
-import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import type { Api, Model } from '@mariozechner/pi-ai';
+import type { AgentSession } from '@mariozechner/pi-coding-agent';
+
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   applyConversationModelPreferencesToLiveSession,
   type ConversationModelPreferenceInput,
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
-import {
-  applyLiveSessionServiceTier,
-} from './liveSessionModels.js';
-import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
+import { applyLiveSessionServiceTier } from './liveSessionModels.js';
+import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
 
 export interface LiveSessionMaintenanceHost {
   sessionId: string;

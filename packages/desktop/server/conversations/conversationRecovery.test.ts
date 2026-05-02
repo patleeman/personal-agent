@@ -1,8 +1,10 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
 
@@ -85,11 +87,13 @@ describe('conversation recovery', () => {
     expect(queuePromptContext).toHaveBeenCalledWith('conv-123', 'referenced_context', 'Referenced projects: @foo');
     expect(promptSession).toHaveBeenCalledWith('conv-123', 'continue working', 'followUp', undefined);
     expect(recovered).toEqual({
-      recovered: [{
-        runId: 'conversation-live-conv-123',
-        conversationId: 'conv-123',
-        replayedPendingOperation: true,
-      }],
+      recovered: [
+        {
+          runId: 'conversation-live-conv-123',
+          conversationId: 'conv-123',
+          replayedPendingOperation: true,
+        },
+      ],
     });
   });
 

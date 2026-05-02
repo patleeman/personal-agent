@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { resolveDesktopLaunchPresentation } from './launch-mode.js';
 
 describe('resolveDesktopLaunchPresentation', () => {
@@ -10,9 +11,11 @@ describe('resolveDesktopLaunchPresentation', () => {
   });
 
   it('marks explicit testing launches clearly', () => {
-    expect(resolveDesktopLaunchPresentation({
-      PERSONAL_AGENT_DESKTOP_VARIANT: ' testing ',
-    })).toEqual({
+    expect(
+      resolveDesktopLaunchPresentation({
+        PERSONAL_AGENT_DESKTOP_VARIANT: ' testing ',
+      }),
+    ).toEqual({
       mode: 'testing',
       appName: 'Personal Agent Testing',
       launchLabel: 'Testing',
@@ -20,9 +23,11 @@ describe('resolveDesktopLaunchPresentation', () => {
   });
 
   it('treats the dev desktop bundle as a testing launch by default', () => {
-    expect(resolveDesktopLaunchPresentation({
-      PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1',
-    })).toEqual({
+    expect(
+      resolveDesktopLaunchPresentation({
+        PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1',
+      }),
+    ).toEqual({
       mode: 'testing',
       appName: 'Personal Agent Testing',
       launchLabel: 'Testing',

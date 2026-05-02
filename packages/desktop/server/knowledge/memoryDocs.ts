@@ -5,8 +5,9 @@
  * Extracted from index.ts so route modules can use them.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
+
 import {
   createUnifiedNode,
   getDurableAgentFilePath,
@@ -43,9 +44,7 @@ export function isEditableMemoryFilePath(filePath: string, profile: string): boo
   const baseAgentFile = normalizeMemoryPath(getDurableAgentFilePath(vaultRoot));
   const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(vaultRoot));
 
-  return normalized === baseAgentFile
-    || normalized.startsWith(`${noteDir}/`)
-    || normalized.startsWith(`${sharedSkillsDir}/`);
+  return normalized === baseAgentFile || normalized.startsWith(`${noteDir}/`) || normalized.startsWith(`${sharedSkillsDir}/`);
 }
 
 // ── Memory docs ───────────────────────────────────────────────────────────────
@@ -124,8 +123,7 @@ export function ensureMemoryDocsDir(): string {
   return resolveMemoryDocsDir();
 }
 
-export function clearMemoryBrowserCaches(): void {
-}
+export function clearMemoryBrowserCaches(): void {}
 
 export function warmMemoryBrowserCaches(profile: string): void {
   void listMemoryDocs();
@@ -143,23 +141,22 @@ export function buildRecentReadUsage(_paths: string[]): Map<string, RecentReadUs
 }
 
 export function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
-  const docs = loadUnifiedNodes().nodes
-    .filter((doc) => doc.kinds.includes('note') || (!doc.kinds.includes('project') && !doc.kinds.includes('skill')))
+  const docs = loadUnifiedNodes()
+    .nodes.filter((doc) => doc.kinds.includes('note') || (!doc.kinds.includes('project') && !doc.kinds.includes('skill')))
     .map((doc) => mapLoadedMemoryDoc(doc, options.includeSearchText === true));
 
   docs.sort((left, right) => {
-    return String(right.updated ?? '').localeCompare(String(left.updated ?? ''))
-      || left.title.localeCompare(right.title)
-      || left.id.localeCompare(right.id);
+    return (
+      String(right.updated ?? '').localeCompare(String(left.updated ?? '')) ||
+      left.title.localeCompare(right.title) ||
+      left.id.localeCompare(right.id)
+    );
   });
 
   return docs;
 }
 
-export function findMemoryDocById(
-  memoryId: string,
-  options: { includeSearchText?: boolean } = {},
-): MemoryDocItem | null {
+export function findMemoryDocById(memoryId: string, options: { includeSearchText?: boolean } = {}): MemoryDocItem | null {
   return listMemoryDocs(options).find((doc) => doc.id === memoryId) ?? null;
 }
 
@@ -175,9 +172,9 @@ function inferSkillSource(filePath: string, profile: string): string {
   const normalizedFilePath = normalizeMemoryPath(filePath);
 
   if (
-    normalizedFilePath.startsWith(`${profileSkillDir}/`)
-    || normalizedFilePath.startsWith(`${profileLegacySkillDir}/`)
-    || normalizedFilePath.startsWith(`${profileLegacyHiddenSkillDir}/`)
+    normalizedFilePath.startsWith(`${profileSkillDir}/`) ||
+    normalizedFilePath.startsWith(`${profileLegacySkillDir}/`) ||
+    normalizedFilePath.startsWith(`${profileLegacyHiddenSkillDir}/`)
   ) {
     return 'profile';
   }
@@ -205,9 +202,7 @@ function parseSkillFrontmatter(filePath: string): Record<string, unknown> {
       return {};
     }
     const parsed = document.toJS() as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
@@ -252,10 +247,7 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
   const seenNames = new Set<string>();
   const skills: SkillItem[] = [];
 
-  const skillDirs = [
-    ...resolved.skillDirs,
-    ...listUnifiedSkillNodeDirs(profile, { vaultRoot: getVaultRoot() }),
-  ];
+  const skillDirs = [...resolved.skillDirs, ...listUnifiedSkillNodeDirs(profile, { vaultRoot: getVaultRoot() })];
 
   for (const skillDir of skillDirs) {
     for (const filePath of listSkillFiles(skillDir)) {
@@ -270,19 +262,23 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
         continue;
       }
 
-      const name = typeof frontmatter.id === 'string' && frontmatter.id.trim().length > 0
-        ? frontmatter.id.trim()
-        : (typeof frontmatter.name === 'string' && frontmatter.name.trim().length > 0
-          ? frontmatter.name.trim()
-          : normalizedPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.md$/, '') ?? '');
+      const name =
+        typeof frontmatter.id === 'string' && frontmatter.id.trim().length > 0
+          ? frontmatter.id.trim()
+          : typeof frontmatter.name === 'string' && frontmatter.name.trim().length > 0
+            ? frontmatter.name.trim()
+            : (normalizedPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.md$/, '') ?? '');
       if (!name || seenNames.has(name)) {
         continue;
       }
       seenNames.add(name);
 
-      const description = typeof frontmatter.summary === 'string' && frontmatter.summary.trim().length > 0
-        ? frontmatter.summary.trim()
-        : (typeof frontmatter.description === 'string' ? frontmatter.description.trim() : '');
+      const description =
+        typeof frontmatter.summary === 'string' && frontmatter.summary.trim().length > 0
+          ? frontmatter.summary.trim()
+          : typeof frontmatter.description === 'string'
+            ? frontmatter.description.trim()
+            : '';
 
       skills.push({
         name,
@@ -344,7 +340,10 @@ export function normalizeNoteBody(value: unknown): string {
 
 export function extractNoteSummaryFromBody(content: string): string {
   for (const paragraph of content.replace(/\r\n/g, '\n').split(/\n\s*\n/)) {
-    const text = paragraph.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+    const text = paragraph
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (text && !text.startsWith('#')) return text;
   }
   return '';
@@ -369,45 +368,54 @@ function stringifyNoteMarkdown(frontmatter: Record<string, unknown>, body: strin
   return `---\n${text}\n---\n\n${normalizedBody.length > 0 ? `${normalizedBody}\n` : ''}`;
 }
 
-export function buildStructuredNoteMarkdown(rawContent: string, input: {
-  noteId: string;
-  title: string;
-  summary?: string;
-  description?: string;
-  descriptionProvided?: boolean;
-  body: string;
-}): string {
+export function buildStructuredNoteMarkdown(
+  rawContent: string,
+  input: {
+    noteId: string;
+    title: string;
+    summary?: string;
+    description?: string;
+    descriptionProvided?: boolean;
+    body: string;
+  },
+): string {
   const title = normalizeCreatedNoteTitle(input.title);
   if (title.length === 0) throw new Error('title required');
 
   const editableBody = normalizeNoteBody(input.body);
-  const summary = normalizeCreatedNoteSummary(input.summary)
-    || extractNoteSummaryFromBody(editableBody)
-    || `Personal note about ${title}.`;
+  const summary = normalizeCreatedNoteSummary(input.summary) || extractNoteSummaryFromBody(editableBody) || `Personal note about ${title}.`;
   const parsed = parseNoteFrontmatter(rawContent);
   const description = input.descriptionProvided
     ? normalizeCreatedNoteDescription(input.description)
     : normalizeCreatedNoteDescription(parsed.frontmatter.description as string);
 
   const existingTags = Array.isArray(parsed.frontmatter.tags)
-    ? parsed.frontmatter.tags.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    ? parsed.frontmatter.tags
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
     : [];
-  const nextTags = [...new Set([
-    ...existingTags.filter((tag) => !/^type:/i.test(tag) && !/^status:/i.test(tag)),
-    'type:note',
-    `status:${(typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0) ? parsed.frontmatter.status.trim() : 'active'}`,
-  ])].sort((left, right) => left.localeCompare(right));
+  const nextTags = [
+    ...new Set([
+      ...existingTags.filter((tag) => !/^type:/i.test(tag) && !/^status:/i.test(tag)),
+      'type:note',
+      `status:${
+        typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0
+          ? parsed.frontmatter.status.trim()
+          : 'active'
+      }`,
+    ]),
+  ].sort((left, right) => left.localeCompare(right));
 
   const frontmatter: MemoryDocFrontmatter = {
     ...parsed.frontmatter,
-    id: (typeof parsed.frontmatter.id === 'string' && parsed.frontmatter.id.trim().length > 0)
-      ? parsed.frontmatter.id.trim()
-      : input.noteId,
+    id: typeof parsed.frontmatter.id === 'string' && parsed.frontmatter.id.trim().length > 0 ? parsed.frontmatter.id.trim() : input.noteId,
     title,
     summary,
-    status: (typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0)
-      ? parsed.frontmatter.status.trim()
-      : 'active',
+    status:
+      typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0
+        ? parsed.frontmatter.status.trim()
+        : 'active',
     updatedAt: new Date().toISOString(),
     tags: nextTags,
   };
@@ -423,7 +431,15 @@ export function buildStructuredNoteMarkdown(rawContent: string, input: {
 }
 
 function slugifyNoteId(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-').slice(0, MAX_CREATED_NOTE_ID_LENGTH).replace(/-+$/g, '') || 'note';
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-')
+      .slice(0, MAX_CREATED_NOTE_ID_LENGTH)
+      .replace(/-+$/g, '') || 'note'
+  );
 }
 
 export function generateCreatedNoteId(title: string): string {
@@ -489,4 +505,3 @@ export function createMemoryDoc(input: CreatedMemoryDoc): CreatedMemoryDoc {
     updated: created.node.updatedAt,
   };
 }
-

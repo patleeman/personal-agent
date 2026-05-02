@@ -78,26 +78,32 @@ The file should stay short and operational. Keep these sections current:
 # Auto Mode State
 
 ## Goal
+
 One-sentence task goal.
 
 ## Current status
+
 What is done, what is in progress, what is blocked.
 
 ## Active run
+
 - run id
 - task slug
 - purpose
 
 ## Latest validation
+
 - last successful checks
 - last visual validation
 
 ## Active deferred resume
+
 - id
 - why it exists
 - when it should wake up
 
 ## Next step
+
 The next smallest correct action.
 ```
 

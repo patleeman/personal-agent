@@ -4,7 +4,7 @@ import { createServer, type Server } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getDefaultDaemonConfig } from './config.js';
+
 import {
   cancelDurableRun,
   emitDaemonEvent,
@@ -23,6 +23,7 @@ import {
   syncWebLiveConversationRunState,
 } from './client.js';
 import type { DaemonConfig } from './config.js';
+import { getDefaultDaemonConfig } from './config.js';
 import { clearDaemonClientTransportOverride, setDaemonClientTransportOverride } from './in-process-client.js';
 
 const originalEnv = process.env;
@@ -115,7 +116,10 @@ describe('client daemon ipc helpers', () => {
         case 'stop':
           return { ok: true, result: { stopping: true } };
         case 'power.setKeepAwake':
-          return { ok: true, result: { ...status, power: { keepAwake: request.keepAwake, supported: true, active: request.keepAwake } } };
+          return {
+            ok: true,
+            result: { ...status, power: { keepAwake: request.keepAwake, supported: true, active: request.keepAwake } },
+          };
         case 'runs.list':
           return { ok: true, result: runsList };
         case 'runs.get':
@@ -143,7 +147,10 @@ describe('client daemon ipc helpers', () => {
 
     await expect(pingDaemon(config)).resolves.toBe(true);
     await expect(getDaemonStatus(config)).resolves.toEqual(status);
-    await expect(setDaemonPowerKeepAwake(true, config)).resolves.toEqual({ ...status, power: { keepAwake: true, supported: true, active: true } });
+    await expect(setDaemonPowerKeepAwake(true, config)).resolves.toEqual({
+      ...status,
+      power: { keepAwake: true, supported: true, active: true },
+    });
     await expect(stopDaemon(config)).resolves.toBeUndefined();
     await expect(listDurableRuns(config)).resolves.toEqual(runsList);
     await expect(getDurableRun('run-1', config)).resolves.toEqual(durableRun);
@@ -244,8 +251,23 @@ describe('client daemon in-process transport override', () => {
   it('routes client helpers through the transport override instead of the socket', async () => {
     const transport = {
       ping: vi.fn().mockResolvedValue(true),
-      getStatus: vi.fn().mockResolvedValue({ running: true, pid: 9, startedAt: '2026-04-17T00:00:00.000Z', socketPath: 'in-process', queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 }, modules: [] }),
-      setPowerKeepAwake: vi.fn().mockResolvedValue({ running: true, pid: 9, startedAt: '2026-04-17T00:00:00.000Z', socketPath: 'in-process', power: { keepAwake: true, supported: true, active: true }, queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 }, modules: [] }),
+      getStatus: vi.fn().mockResolvedValue({
+        running: true,
+        pid: 9,
+        startedAt: '2026-04-17T00:00:00.000Z',
+        socketPath: 'in-process',
+        queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 },
+        modules: [],
+      }),
+      setPowerKeepAwake: vi.fn().mockResolvedValue({
+        running: true,
+        pid: 9,
+        startedAt: '2026-04-17T00:00:00.000Z',
+        socketPath: 'in-process',
+        power: { keepAwake: true, supported: true, active: true },
+        queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 },
+        modules: [],
+      }),
       stop: vi.fn().mockResolvedValue(undefined),
       listDurableRuns: vi.fn().mockResolvedValue({ scannedAt: '2026-04-17T00:00:00.000Z', runs: [], summary: { total: 0 } }),
       getDurableRun: vi.fn().mockResolvedValue({ scannedAt: '2026-04-17T00:00:00.000Z', run: { id: 'run-1' } }),
@@ -267,11 +289,20 @@ describe('client daemon in-process transport override', () => {
     await expect(listDurableRuns()).resolves.toEqual({ scannedAt: '2026-04-17T00:00:00.000Z', runs: [], summary: { total: 0 } });
     await expect(getDurableRun('run-1')).resolves.toEqual({ scannedAt: '2026-04-17T00:00:00.000Z', run: { id: 'run-1' } });
     await expect(startScheduledTaskRun('task-1')).resolves.toEqual({ accepted: true, runId: 'task-run-1' });
-    await expect(startBackgroundRun({ taskSlug: 'task', cwd: '/tmp' })).resolves.toEqual({ accepted: true, runId: 'background-run-1' });
+    await expect(startBackgroundRun({ taskSlug: 'task', cwd: '/tmp' })).resolves.toEqual({
+      accepted: true,
+      runId: 'background-run-1',
+    });
     await expect(cancelDurableRun('run-1')).resolves.toEqual({ cancelled: true, runId: 'run-1' });
     await expect(rerunDurableRun('run-1')).resolves.toEqual({ accepted: true, runId: 'rerun-1', sourceRunId: 'run-1' });
-    await expect(followUpDurableRun('run-1', '  keep going  ')).resolves.toEqual({ accepted: true, runId: 'follow-up-1', sourceRunId: 'run-1' });
-    await expect(syncWebLiveConversationRunState({ conversationId: 'conv-1', sessionFile: '/tmp/session.jsonl', cwd: '/tmp', state: 'running' })).resolves.toEqual({ runId: 'web-live-1' });
+    await expect(followUpDurableRun('run-1', '  keep going  ')).resolves.toEqual({
+      accepted: true,
+      runId: 'follow-up-1',
+      sourceRunId: 'run-1',
+    });
+    await expect(
+      syncWebLiveConversationRunState({ conversationId: 'conv-1', sessionFile: '/tmp/session.jsonl', cwd: '/tmp', state: 'running' }),
+    ).resolves.toEqual({ runId: 'web-live-1' });
     await expect(listRecoverableWebLiveConversationRunsFromDaemon()).resolves.toEqual({ runs: [{ runId: 'web-live-1' }] });
     await expect(emitDaemonEvent({ type: 'pi.run.completed', source: 'desktop' })).resolves.toBe(true);
 

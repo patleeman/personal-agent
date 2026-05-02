@@ -2,12 +2,13 @@ import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
+
 import {
   listPendingBackgroundRunResults,
   markBackgroundRunResultsDelivered,
   surfaceBackgroundRunResultsIfReady,
 } from './background-run-deferred-resumes.js';
+import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
 import { loadDurableRunCheckpoint } from './store.js';
 
 function createTempDir(prefix: string): string {
@@ -86,11 +87,13 @@ describe('background run result surfacing', () => {
       endedAt: '2026-03-22T19:00:05.000Z',
     });
 
-    await expect(surfaceBackgroundRunResultsIfReady({
-      runsRoot,
-      triggerRunId: fast.runId,
-      now: new Date('2026-03-22T19:00:05.000Z'),
-    })).resolves.toEqual({ surfacedRunIds: [] });
+    await expect(
+      surfaceBackgroundRunResultsIfReady({
+        runsRoot,
+        triggerRunId: fast.runId,
+        now: new Date('2026-03-22T19:00:05.000Z'),
+      }),
+    ).resolves.toEqual({ surfacedRunIds: [] });
     expect(listPendingBackgroundRunResults({ runsRoot, sessionFile })).toEqual([]);
 
     await finalizeBackgroundRun({
@@ -166,7 +169,9 @@ describe('background run result surfacing', () => {
     expect(listPendingBackgroundRunResults({ runsRoot, sessionFile })).toEqual([]);
 
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
-    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:30.000Z');
+    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe(
+      '2026-03-22T19:00:30.000Z',
+    );
   });
 
   it('falls back to the current clock when marking delivered with a malformed timestamp', async () => {
@@ -198,7 +203,9 @@ describe('background run result surfacing', () => {
 
     expect(delivered).toEqual([surfaced.resultId]);
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
-    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:45.000Z');
+    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe(
+      '2026-03-22T19:00:45.000Z',
+    );
   });
 
   it('falls back to the current clock when marking delivered with a non-ISO timestamp', async () => {
@@ -230,7 +237,9 @@ describe('background run result surfacing', () => {
 
     expect(delivered).toEqual([surfaced.resultId]);
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
-    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:45.000Z');
+    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe(
+      '2026-03-22T19:00:45.000Z',
+    );
   });
 
   it('falls back to the current clock when marking delivered with an overflowed timestamp', async () => {
@@ -262,7 +271,9 @@ describe('background run result surfacing', () => {
 
     expect(delivered).toEqual([surfaced.resultId]);
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
-    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:45.000Z');
+    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe(
+      '2026-03-22T19:00:45.000Z',
+    );
   });
 
   it('falls back to the current clock when surfacing with an invalid Date', async () => {
@@ -289,5 +300,4 @@ describe('background run result surfacing', () => {
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
     expect((checkpoint?.payload?.backgroundRunResume as { surfacedAt?: string } | undefined)?.surfacedAt).toBe('2026-03-22T19:00:05.000Z');
   });
-
 });

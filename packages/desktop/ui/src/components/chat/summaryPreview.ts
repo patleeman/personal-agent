@@ -5,7 +5,11 @@ export function stripPreviewMarkdownWrappers(line: string) {
     return line.slice(2, -2).trim();
   }
 
-  if ((line.startsWith('*') && line.endsWith('*')) || (line.startsWith('_') && line.endsWith('_')) || (line.startsWith('`') && line.endsWith('`'))) {
+  if (
+    (line.startsWith('*') && line.endsWith('*')) ||
+    (line.startsWith('_') && line.endsWith('_')) ||
+    (line.startsWith('`') && line.endsWith('`'))
+  ) {
     return line.slice(1, -1).trim();
   }
 
@@ -27,9 +31,7 @@ export function formatSummaryPreviewLine(line: string) {
 }
 
 export function buildSummaryPreview(text: string, maxLines: number) {
-  const lineLimit = Number.isSafeInteger(maxLines) && maxLines > 0
-    ? Math.min(MAX_SUMMARY_PREVIEW_LINES, maxLines)
-    : 1;
+  const lineLimit = Number.isSafeInteger(maxLines) && maxLines > 0 ? Math.min(MAX_SUMMARY_PREVIEW_LINES, maxLines) : 1;
   const previewLines: string[] = [];
 
   for (const rawLine of text.split('\n')) {

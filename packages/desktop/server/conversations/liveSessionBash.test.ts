@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { executeLiveSessionBash, type LiveSessionBashHost } from './liveSessionBash.js';
 
 function createMockHost(overrides?: Partial<LiveSessionBashHost>): LiveSessionBashHost {
@@ -22,8 +23,7 @@ describe('executeLiveSessionBash', () => {
       const host = createMockHost();
       const broadcast = createBroadcastMock();
 
-      await expect(executeLiveSessionBash(host, '', { broadcast }))
-        .rejects.toThrow('command required');
+      await expect(executeLiveSessionBash(host, '', { broadcast })).rejects.toThrow('command required');
       expect(broadcast).not.toHaveBeenCalled();
     });
 
@@ -31,8 +31,7 @@ describe('executeLiveSessionBash', () => {
       const host = createMockHost();
       const broadcast = createBroadcastMock();
 
-      await expect(executeLiveSessionBash(host, '   ', { broadcast }))
-        .rejects.toThrow('command required');
+      await expect(executeLiveSessionBash(host, '   ', { broadcast })).rejects.toThrow('command required');
       expect(broadcast).not.toHaveBeenCalled();
     });
 
@@ -40,8 +39,7 @@ describe('executeLiveSessionBash', () => {
       const host = createMockHost({ session: { isBashRunning: true, executeBash: vi.fn() } });
       const broadcast = createBroadcastMock();
 
-      await expect(executeLiveSessionBash(host, 'ls', { broadcast }))
-        .rejects.toThrow('A bash command is already running.');
+      await expect(executeLiveSessionBash(host, 'ls', { broadcast })).rejects.toThrow('A bash command is already running.');
       expect(broadcast).not.toHaveBeenCalled();
     });
   });
@@ -74,9 +72,7 @@ describe('executeLiveSessionBash', () => {
       );
 
       // Should broadcast tool_end with success
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls).toHaveLength(1);
       expect(toolEndCalls[0][0]).toMatchObject({
         type: 'tool_end',
@@ -105,9 +101,7 @@ describe('executeLiveSessionBash', () => {
 
       await executeLiveSessionBash(host, 'sleep 100', { broadcast });
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls[0][0].details).toMatchObject({ cancelled: true });
     });
 
@@ -118,9 +112,7 @@ describe('executeLiveSessionBash', () => {
 
       await executeLiveSessionBash(host, 'cat bigfile', { broadcast });
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls[0][0].details).toMatchObject({ truncated: true });
     });
 
@@ -135,9 +127,7 @@ describe('executeLiveSessionBash', () => {
 
       await executeLiveSessionBash(host, 'long command', { broadcast });
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls[0][0].details).toMatchObject({ fullOutputPath: '/tmp/bash-output.log' });
     });
 
@@ -150,14 +140,10 @@ describe('executeLiveSessionBash', () => {
 
       expect(executeBash).toHaveBeenCalledWith('ls', expect.any(Function), { excludeFromContext: true });
 
-      const toolStartCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_start',
-      );
+      const toolStartCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_start');
       expect(toolStartCalls[0][0].args).toMatchObject({ excludeFromContext: true });
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls[0][0].details).toMatchObject({ excludeFromContext: true });
     });
 
@@ -172,9 +158,7 @@ describe('executeLiveSessionBash', () => {
 
       await executeLiveSessionBash(host, 'echo test', { broadcast });
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls[0][0].output).toBe('streamed line 1\nstreamed line 2\n');
     });
   });
@@ -188,9 +172,7 @@ describe('executeLiveSessionBash', () => {
 
       await expect(executeLiveSessionBash(host, 'rm -rf /', { broadcast })).rejects.toThrow('permission denied');
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls).toHaveLength(1);
       expect(toolEndCalls[0][0]).toMatchObject({
         type: 'tool_end',
@@ -207,9 +189,7 @@ describe('executeLiveSessionBash', () => {
 
       await expect(executeLiveSessionBash(host, 'fail', { broadcast })).rejects.toBe('string error');
 
-      const toolEndCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_end',
-      );
+      const toolEndCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_end');
       expect(toolEndCalls[0][0].output).toBe('string error');
     });
   });
@@ -223,9 +203,7 @@ describe('executeLiveSessionBash', () => {
       await executeLiveSessionBash(host, 'cmd1', { broadcast });
       await executeLiveSessionBash(host, 'cmd2', { broadcast });
 
-      const toolStartCalls = broadcast.mock.calls.filter(
-        (c: unknown[]) => (c[0] as { type: string }).type === 'tool_start',
-      );
+      const toolStartCalls = broadcast.mock.calls.filter((c: unknown[]) => (c[0] as { type: string }).type === 'tool_start');
       expect(toolStartCalls).toHaveLength(2);
       expect(toolStartCalls[0][0].toolCallId).not.toBe(toolStartCalls[1][0].toolCallId);
     });

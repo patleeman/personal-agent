@@ -86,9 +86,7 @@ function formatStreamingThroughputLabel(sample: StreamingThroughputSample | null
     return null;
   }
 
-  const formatted = sample.tokensPerSecond >= 10
-    ? sample.tokensPerSecond.toFixed(0)
-    : sample.tokensPerSecond.toFixed(1);
+  const formatted = sample.tokensPerSecond >= 10 ? sample.tokensPerSecond.toFixed(0) : sample.tokensPerSecond.toFixed(1);
   return `~${formatted} tok/s`;
 }
 

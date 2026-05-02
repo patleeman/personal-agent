@@ -1,4 +1,5 @@
 import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, RefObject } from 'react';
+
 import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
@@ -124,22 +125,32 @@ export function ConversationComposerInputControls({
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(event) => { onInputChange(event.target.value, event.target); }}
-            onSelect={(event) => { onRememberComposerSelection(event.currentTarget); }}
-            onClick={(event) => { onRememberComposerSelection(event.currentTarget); }}
-            onKeyUp={(event) => { onRememberComposerSelection(event.currentTarget); }}
-            onFocus={(event) => { onRememberComposerSelection(event.currentTarget); }}
+            onChange={(event) => {
+              onInputChange(event.target.value, event.target);
+            }}
+            onSelect={(event) => {
+              onRememberComposerSelection(event.currentTarget);
+            }}
+            onClick={(event) => {
+              onRememberComposerSelection(event.currentTarget);
+            }}
+            onKeyUp={(event) => {
+              onRememberComposerSelection(event.currentTarget);
+            }}
+            onFocus={(event) => {
+              onRememberComposerSelection(event.currentTarget);
+            }}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
             rows={1}
             disabled={composerDisabled}
             className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
-            placeholder={pendingAskUserQuestion
-              ? 'Answer 1-9, or type to skip…'
-              : 'Message… / commands, @ notes'}
-            title={pendingAskUserQuestion
-              ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-              : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+            placeholder={pendingAskUserQuestion ? 'Answer 1-9, or type to skip…' : 'Message… / commands, @ notes'}
+            title={
+              pendingAskUserQuestion
+                ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+                : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'
+            }
             style={{ minHeight: '44px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' }}
           />
         </div>
@@ -154,7 +165,16 @@ export function ConversationComposerInputControls({
               title="Attach image or file"
               aria-label="Attach image or file"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M12 5v14" />
                 <path d="M5 12h14" />
               </svg>
@@ -171,7 +191,16 @@ export function ConversationComposerInputControls({
                 {screenshotCaptureBusy ? (
                   <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
                 ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z" />
                     <path d="M9 5 10.5 3.5h3L15 5" />
                     <circle cx="12" cy="12" r="3.25" />
@@ -187,7 +216,16 @@ export function ConversationComposerInputControls({
               title="Create drawing"
               aria-label="Create drawing"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M12 20h9" />
                 <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
               </svg>

@@ -1,8 +1,6 @@
 import { DRAFT_SERVICE_TIER_DISABLED_SENTINEL, resolveFastModeToggleServiceTier } from './conversationInitialState';
 
-export type DraftPreferenceStorageAction =
-  | { kind: 'clear' }
-  | { kind: 'persist'; value: string };
+export type DraftPreferenceStorageAction = { kind: 'clear' } | { kind: 'persist'; value: string };
 
 export interface DraftModelPreferenceUpdate {
   storage: DraftPreferenceStorageAction;
@@ -21,14 +19,9 @@ export interface DraftServiceTierPreferenceUpdate {
   savedServiceTierLabel: string;
 }
 
-export function resolveDraftModelPreferenceUpdate(input: {
-  modelId: string;
-  defaultModel: string;
-}): DraftModelPreferenceUpdate {
+export function resolveDraftModelPreferenceUpdate(input: { modelId: string; defaultModel: string }): DraftModelPreferenceUpdate {
   return {
-    storage: input.modelId === input.defaultModel
-      ? { kind: 'clear' }
-      : { kind: 'persist', value: input.modelId },
+    storage: input.modelId === input.defaultModel ? { kind: 'clear' } : { kind: 'persist', value: input.modelId },
     currentModel: input.modelId,
   };
 }
@@ -40,9 +33,10 @@ export function resolveDraftThinkingPreferenceUpdate(input: {
   const currentThinkingLevel = input.thinkingLevel || input.defaultThinkingLevel;
 
   return {
-    storage: !input.thinkingLevel || input.thinkingLevel === input.defaultThinkingLevel
-      ? { kind: 'clear' }
-      : { kind: 'persist', value: input.thinkingLevel },
+    storage:
+      !input.thinkingLevel || input.thinkingLevel === input.defaultThinkingLevel
+        ? { kind: 'clear' }
+        : { kind: 'persist', value: input.thinkingLevel },
     currentThinkingLevel,
   };
 }

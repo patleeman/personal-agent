@@ -21,7 +21,12 @@ export function readSessionHeader(filePath: string): { lines: string[]; headerIn
   }
 
   const parsed = JSON.parse(lines[headerIndex] ?? '') as Partial<SessionHeaderRecord>;
-  if (parsed.type !== 'session' || typeof parsed.id !== 'string' || typeof parsed.timestamp !== 'string' || typeof parsed.cwd !== 'string') {
+  if (
+    parsed.type !== 'session' ||
+    typeof parsed.id !== 'string' ||
+    typeof parsed.timestamp !== 'string' ||
+    typeof parsed.cwd !== 'string'
+  ) {
     throw new Error(`Conversation header missing in ${filePath}`);
   }
 
@@ -37,18 +42,26 @@ export function writeSessionHeader(filePath: string, header: SessionHeaderRecord
   writeFileSync(filePath, `${lines.filter((line) => line.length > 0).join('\n')}\n`, 'utf-8');
 }
 
-export function setSessionRemoteTarget(filePath: string, input: {
-  remoteHostId: string;
-  remoteHostLabel?: string;
-  remoteConversationId: string;
-}): void {
+export function setSessionRemoteTarget(
+  filePath: string,
+  input: {
+    remoteHostId: string;
+    remoteHostLabel?: string;
+    remoteConversationId: string;
+  },
+): void {
   const { lines, headerIndex, header } = readSessionHeader(filePath);
-  writeSessionHeader(filePath, {
-    ...header,
-    remoteHostId: input.remoteHostId,
-    ...(input.remoteHostLabel ? { remoteHostLabel: input.remoteHostLabel } : {}),
-    remoteConversationId: input.remoteConversationId,
-  }, lines, headerIndex);
+  writeSessionHeader(
+    filePath,
+    {
+      ...header,
+      remoteHostId: input.remoteHostId,
+      ...(input.remoteHostLabel ? { remoteHostLabel: input.remoteHostLabel } : {}),
+      remoteConversationId: input.remoteConversationId,
+    },
+    lines,
+    headerIndex,
+  );
 }
 
 export function clearSessionRemoteTarget(filePath: string): void {
@@ -71,10 +84,15 @@ export function setSessionCwd(filePath: string, cwd: string): void {
     return;
   }
 
-  writeSessionHeader(filePath, {
-    ...header,
-    cwd: normalizedCwd,
-  }, lines, headerIndex);
+  writeSessionHeader(
+    filePath,
+    {
+      ...header,
+      cwd: normalizedCwd,
+    },
+    lines,
+    headerIndex,
+  );
 }
 
 export function stripRemoteMetadataFromSessionContent(content: string): string {
@@ -100,13 +118,16 @@ export function stripRemoteMetadataFromSessionContent(content: string): string {
   }
 }
 
-export function applyRemoteMetadataToSessionContent(content: string, input: {
-  remoteHostId: string;
-  remoteHostLabel?: string;
-  remoteConversationId: string;
-  overrideConversationId?: string;
-  overrideCwd?: string;
-}): string {
+export function applyRemoteMetadataToSessionContent(
+  content: string,
+  input: {
+    remoteHostId: string;
+    remoteHostLabel?: string;
+    remoteConversationId: string;
+    overrideConversationId?: string;
+    overrideCwd?: string;
+  },
+): string {
   const lines = content.split(/\r?\n/);
   const headerIndex = lines.findIndex((line) => line.trim().length > 0);
   if (headerIndex === -1) {

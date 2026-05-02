@@ -1,10 +1,5 @@
 import { cx } from '../ui';
-import {
-  BrowsePathButton,
-  ChatBubbleIcon,
-  FolderIcon,
-  RemoteExecutionIcon,
-} from './ConversationComposerChrome';
+import { BrowsePathButton, ChatBubbleIcon, FolderIcon, RemoteExecutionIcon } from './ConversationComposerChrome';
 import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from './ConversationContextUsageIndicator';
 
 export type ConversationGitSummaryPresentation =
@@ -94,16 +89,31 @@ export function ConversationComposerMeta({
             <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
             <select
               value={selectedExecutionTargetId}
-              onChange={(event) => { onSelectExecutionTarget(event.target.value); }}
+              onChange={(event) => {
+                onSelectExecutionTarget(event.target.value);
+              }}
               disabled={continueInBusy}
               aria-label="Execution target"
               className="h-7 min-w-[8.25rem] max-w-[12rem] appearance-none rounded-md bg-transparent pl-6 pr-7 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary disabled:opacity-50"
             >
               {executionTargetOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
-            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 text-dim/70">
+            <svg
+              aria-hidden="true"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute right-2 text-dim/70"
+            >
               <path d="m6 9 6 6 6-6" />
             </svg>
           </label>
@@ -120,11 +130,15 @@ export function ConversationComposerMeta({
             {hasDraftCwd ? <FolderIcon className="shrink-0 text-dim/70" /> : <ChatBubbleIcon className="shrink-0 text-dim/70" />}
             {selectedExecutionTargetIsRemote ? (
               <>
-                <label className="sr-only" htmlFor="draft-composer-remote-cwd">Remote workspace path</label>
+                <label className="sr-only" htmlFor="draft-composer-remote-cwd">
+                  Remote workspace path
+                </label>
                 <input
                   id="draft-composer-remote-cwd"
                   value={draftCwdValue}
-                  onChange={(event) => { onDraftRemoteCwdChange(event.target.value); }}
+                  onChange={(event) => {
+                    onDraftRemoteCwdChange(event.target.value);
+                  }}
                   placeholder="~/workingdir/project"
                   spellCheck={false}
                   className="h-7 min-w-0 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50 xl:max-w-[22rem]"
@@ -139,7 +153,9 @@ export function ConversationComposerMeta({
               </>
             ) : (
               <>
-                <label className="sr-only" htmlFor="draft-composer-cwd">Workspace folder</label>
+                <label className="sr-only" htmlFor="draft-composer-cwd">
+                  Workspace folder
+                </label>
                 <div className="relative min-w-0 flex-1 xl:max-w-[22rem]">
                   <select
                     id="draft-composer-cwd"
@@ -156,10 +172,23 @@ export function ConversationComposerMeta({
                   >
                     <option value="">Chat</option>
                     {availableDraftWorkspacePaths.map((workspacePath) => (
-                      <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
+                      <option key={workspacePath} value={workspacePath}>
+                        {workspacePath}
+                      </option>
                     ))}
                   </select>
-                  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-dim/70">
+                  <svg
+                    aria-hidden="true"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-dim/70"
+                  >
                     <path d="m6 9 6 6 6-6" />
                   </svg>
                 </div>
@@ -184,7 +213,9 @@ export function ConversationComposerMeta({
             <input
               autoFocus
               value={conversationCwdDraft}
-              onChange={(event) => { onConversationCwdDraftChange(event.target.value); }}
+              onChange={(event) => {
+                onConversationCwdDraftChange(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   event.preventDefault();
@@ -203,10 +234,19 @@ export function ConversationComposerMeta({
               title={conversationCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
               ariaLabel="Choose folder"
             />
-            <button type="submit" className="h-7 rounded-md px-2 text-[10px] text-accent transition-colors hover:bg-surface/45 disabled:opacity-50" disabled={conversationCwdBusy || conversationCwdPickBusy}>
+            <button
+              type="submit"
+              className="h-7 rounded-md px-2 text-[10px] text-accent transition-colors hover:bg-surface/45 disabled:opacity-50"
+              disabled={conversationCwdBusy || conversationCwdPickBusy}
+            >
               {conversationCwdBusy ? 'Switching…' : 'Switch'}
             </button>
-            <button type="button" className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50" onClick={onCancelConversationCwdEdit} disabled={conversationCwdBusy || conversationCwdPickBusy}>
+            <button
+              type="button"
+              className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
+              onClick={onCancelConversationCwdEdit}
+              disabled={conversationCwdBusy || conversationCwdPickBusy}
+            >
               Cancel
             </button>
           </form>
@@ -229,13 +269,15 @@ export function ConversationComposerMeta({
 
       <div className="flex shrink-0 items-center justify-end gap-2 text-right">
         {!draft && branchLabel ? (
-          <span className="max-w-[8rem] truncate font-mono" title={branchLabel}>{branchLabel}</span>
+          <span className="max-w-[8rem] truncate font-mono" title={branchLabel}>
+            {branchLabel}
+          </span>
         ) : null}
         {!draft && hasGitSummary ? (
           gitSummaryPresentation.kind === 'diff' ? (
             <span className="font-mono tabular-nums">
               <span className="text-success">{gitSummaryPresentation.added}</span>
-              <span className="text-dim"> / </span>
+              <span className="text-dim">/</span>
               <span className="text-danger">{gitSummaryPresentation.deleted}</span>
             </span>
           ) : gitSummaryPresentation.kind === 'summary' ? (

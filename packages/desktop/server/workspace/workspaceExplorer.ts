@@ -1,8 +1,23 @@
 import { execFileSync } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  type Stats,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { readGitRepoInfo, readGitStatusSummary, type GitStatusChangeKind } from './gitStatus.js';
-import { parseCheckpointDiffSections, type LocalCheckpointCommitFile } from '../conversations/conversationCheckpointCommit.js';
+
+import { type LocalCheckpointCommitFile, parseCheckpointDiffSections } from '../conversations/conversationCheckpointCommit.js';
+import { type GitStatusChangeKind, readGitRepoInfo, readGitStatusSummary } from './gitStatus.js';
 
 export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
 
@@ -75,7 +90,10 @@ function normalizeRelativePath(input: string | null | undefined): string {
     return '';
   }
 
-  return trimmed.split('/').filter((part) => part && part !== '.').join('/');
+  return trimmed
+    .split('/')
+    .filter((part) => part && part !== '.')
+    .join('/');
 }
 
 function assertSafeWorkspacePath(root: string, relativePath: string): string {
@@ -202,7 +220,20 @@ export function readWorkspaceFile(cwd: string, relativePath: string, force = fal
   const absolutePath = assertSafeWorkspacePath(snapshot.root, path);
   const exists = existsSync(absolutePath);
   if (!exists) {
-    return { ...snapshot, path, name: basename(path), exists: false, kind: 'file', size: null, modifiedAt: null, binary: false, tooLarge: false, truncated: false, content: null, gitStatus: statusForPath(snapshot, path) };
+    return {
+      ...snapshot,
+      path,
+      name: basename(path),
+      exists: false,
+      kind: 'file',
+      size: null,
+      modifiedAt: null,
+      binary: false,
+      tooLarge: false,
+      truncated: false,
+      content: null,
+      gitStatus: statusForPath(snapshot, path),
+    };
   }
 
   const stats = statSync(absolutePath);
@@ -217,7 +248,10 @@ export function readWorkspaceFile(cwd: string, relativePath: string, force = fal
   if (stats.isFile() && !binary && (!tooLarge || force)) {
     const buffer = readFileSync(absolutePath);
     truncated = !force && buffer.length > MAX_FILE_BYTES;
-    content = buffer.subarray(0, force ? buffer.length : MAX_FILE_BYTES).toString('utf-8').replace(/\r\n?/g, '\n');
+    content = buffer
+      .subarray(0, force ? buffer.length : MAX_FILE_BYTES)
+      .toString('utf-8')
+      .replace(/\r\n?/g, '\n');
   }
 
   return {
@@ -388,12 +422,26 @@ export function readWorkspaceDiffOverlay(cwd: string, relativePath: string): Wor
   const path = file.path;
   const status = file.gitStatus;
   if (!status || file.binary || (file.size !== null && file.size > MAX_DIFF_FILE_BYTES)) {
-    return { ...file, gitStatus: status, binary: file.binary, tooLarge: file.size !== null && file.size > MAX_DIFF_FILE_BYTES, addedLines: [], deletedBlocks: [] };
+    return {
+      ...file,
+      gitStatus: status,
+      binary: file.binary,
+      tooLarge: file.size !== null && file.size > MAX_DIFF_FILE_BYTES,
+      addedLines: [],
+      deletedBlocks: [],
+    };
   }
 
   if (status === 'untracked') {
     const lineCount = file.content ? file.content.split('\n').length : 0;
-    return { ...file, gitStatus: status, binary: file.binary, tooLarge: file.tooLarge, addedLines: Array.from({ length: lineCount }, (_, index) => index + 1), deletedBlocks: [] };
+    return {
+      ...file,
+      gitStatus: status,
+      binary: file.binary,
+      tooLarge: file.tooLarge,
+      addedLines: Array.from({ length: lineCount }, (_, index) => index + 1),
+      deletedBlocks: [],
+    };
   }
 
   let diff = '';
@@ -430,11 +478,12 @@ function runGitAllowFailure(args: string[], cwd: string): { stdout: string; exit
     };
   } catch (error: unknown) {
     const childError = error as { stdout?: string | Buffer; status?: number | null; code?: string };
-    const stdout = typeof childError.stdout === 'string'
-      ? childError.stdout
-      : Buffer.isBuffer(childError.stdout)
-        ? childError.stdout.toString('utf-8')
-        : '';
+    const stdout =
+      typeof childError.stdout === 'string'
+        ? childError.stdout
+        : Buffer.isBuffer(childError.stdout)
+          ? childError.stdout.toString('utf-8')
+          : '';
     return {
       stdout,
       exitCode: typeof childError.status === 'number' ? childError.status : 1,
@@ -494,10 +543,7 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
   // Get tracked diffs in one shot so rename detection works
   if (trackedChanges.length > 0) {
     const fileArgs = trackedChanges.flatMap((c) => ['--', c.relativePath]);
-    const result = runGitAllowFailure(
-      ['diff', 'HEAD', '--unified=3', '--find-renames', ...fileArgs],
-      repo.root,
-    );
+    const result = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--find-renames', ...fileArgs], repo.root);
     if (result.exitCode === 0 || result.exitCode === 1) {
       try {
         const parsed = parseCheckpointDiffSections(result.stdout);
@@ -505,10 +551,7 @@ export function readUncommittedDiff(cwd: string): UncommittedDiffResult | null {
       } catch {
         // Fall back to per-file diffing
         for (const change of trackedChanges) {
-          const fileResult = runGitAllowFailure(
-            ['diff', 'HEAD', '--unified=3', '--', change.relativePath],
-            repo.root,
-          );
+          const fileResult = runGitAllowFailure(['diff', 'HEAD', '--unified=3', '--', change.relativePath], repo.root);
           if (fileResult.exitCode === 0 || fileResult.exitCode === 1) {
             try {
               const fileParsed = parseCheckpointDiffSections(fileResult.stdout);

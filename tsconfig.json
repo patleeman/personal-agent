@@ -18,11 +18,7 @@
       "@personal-agent/daemon": ["./packages/daemon/src"]
     }
   },
-  "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/daemon" },
-    { "path": "./packages/desktop" }
-  ],
+  "references": [{ "path": "./packages/core" }, { "path": "./packages/daemon" }, { "path": "./packages/desktop" }],
   "files": [],
   "exclude": ["node_modules", "dist"]
 }

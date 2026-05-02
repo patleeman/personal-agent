@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { stringify } from 'yaml';
+
 import {
   countMarkdownFrontmatterFields,
   isMarkdownFrontmatterValueEmpty,
@@ -82,11 +83,7 @@ export function FrontmatterDisclosure({
     [frontmatter],
   );
 
-  const summary = parseError
-    ? 'Invalid YAML'
-    : fieldCount === 0
-      ? 'No fields'
-      : `${fieldCount} field${fieldCount === 1 ? '' : 's'}`;
+  const summary = parseError ? 'Invalid YAML' : fieldCount === 0 ? 'No fields' : `${fieldCount} field${fieldCount === 1 ? '' : 's'}`;
 
   const showTagEditor = Boolean(onChange) || tags.length > 0;
 
@@ -103,7 +100,9 @@ export function FrontmatterDisclosure({
           <span className="kb-fm-toggle-label">Frontmatter</span>
           <span className="kb-fm-toggle-meta">{summary}</span>
         </span>
-        <span className="kb-fm-chevron" aria-hidden="true">⌄</span>
+        <span className="kb-fm-chevron" aria-hidden="true">
+          ⌄
+        </span>
       </button>
       {open ? (
         <div id={contentId} className="kb-fm-body">
@@ -117,7 +116,9 @@ export function FrontmatterDisclosure({
               <tbody>
                 {showTagEditor ? (
                   <tr>
-                    <th scope="row" className="kb-fm-key">tags</th>
+                    <th scope="row" className="kb-fm-key">
+                      tags
+                    </th>
                     <td className="kb-fm-value">
                       <div className="kb-fm-tag-list">
                         {tags.map((tag) => (
@@ -164,9 +165,9 @@ export function FrontmatterDisclosure({
                               }
                             }}
                           />
-                        ) : (
-                          tags.length === 0 ? <span className="kb-fm-empty">No tags</span> : null
-                        )}
+                        ) : tags.length === 0 ? (
+                          <span className="kb-fm-empty">No tags</span>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -175,7 +176,9 @@ export function FrontmatterDisclosure({
                   const formatted = formatFrontmatterValue(value);
                   return (
                     <tr key={key}>
-                      <th scope="row" className="kb-fm-key">{key}</th>
+                      <th scope="row" className="kb-fm-key">
+                        {key}
+                      </th>
                       <td className="kb-fm-value">
                         {formatted.multiline ? <pre className="kb-fm-pre">{formatted.text}</pre> : <span>{formatted.text}</span>}
                       </td>
@@ -184,8 +187,12 @@ export function FrontmatterDisclosure({
                 })}
                 {!showTagEditor && entries.length === 0 ? (
                   <tr>
-                    <th scope="row" className="kb-fm-key">—</th>
-                    <td className="kb-fm-value"><span className="kb-fm-empty">No frontmatter fields.</span></td>
+                    <th scope="row" className="kb-fm-key">
+                      —
+                    </th>
+                    <td className="kb-fm-value">
+                      <span className="kb-fm-empty">No frontmatter fields.</span>
+                    </td>
                   </tr>
                 ) : null}
               </tbody>

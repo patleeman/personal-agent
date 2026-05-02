@@ -1,4 +1,5 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
+
 import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
 
 export interface LiveSessionMessageAppendHost {

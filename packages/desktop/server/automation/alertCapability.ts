@@ -1,3 +1,4 @@
+import { invalidateAppTopics } from '../shared/appEvents.js';
 import {
   acknowledgeAlertForProfile,
   dismissAlertForProfile,
@@ -5,7 +6,6 @@ import {
   getAlertSnapshotForProfile,
   snoozeAlertForProfile,
 } from './alerts.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
 
 function normalizeAlertId(alertId: string): string {
   return alertId.trim();
@@ -52,11 +52,7 @@ export function dismissAlertCapability(profile: string, alertId: string) {
   return alert;
 }
 
-export async function snoozeAlertCapability(
-  profile: string,
-  alertId: string,
-  input: { delay?: string; at?: string },
-) {
+export async function snoozeAlertCapability(profile: string, alertId: string, input: { delay?: string; at?: string }) {
   const normalizedAlertId = normalizeAlertId(alertId);
   if (!normalizedAlertId) {
     return undefined;

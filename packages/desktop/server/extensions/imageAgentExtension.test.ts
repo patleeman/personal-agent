@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SessionEntry } from '@mariozechner/pi-coding-agent';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Api, Model } from '@mariozechner/pi-ai';
+import type { SessionEntry } from '@mariozechner/pi-coding-agent';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createImageAgentExtension, parseImageGenerationSse } from './imageAgentExtension.js';
 
 function createJwtWithAccountId(accountId: string): string {
@@ -36,10 +37,13 @@ function createModel(input: Partial<Model<Api>> & Pick<Model<Api>, 'id' | 'provi
 function registerImageTool() {
   let registeredTool:
     | {
-      name: string;
-      execute: (...args: unknown[]) => Promise<{ content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; details?: Record<string, unknown> }>;
-      promptGuidelines?: string[];
-    }
+        name: string;
+        execute: (...args: unknown[]) => Promise<{
+          content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+          details?: Record<string, unknown>;
+        }>;
+        promptGuidelines?: string[];
+      }
     | undefined;
 
   createImageAgentExtension()({
@@ -65,12 +69,14 @@ function buildSessionEntries(messages: AgentMessage[]): SessionEntry[] {
   }));
 }
 
-function createToolContext(options: {
-  currentModel?: Model<Api>;
-  models?: Model<Api>[];
-  authByProvider?: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
-  sessionMessages?: AgentMessage[];
-} = {}) {
+function createToolContext(
+  options: {
+    currentModel?: Model<Api>;
+    models?: Model<Api>[];
+    authByProvider?: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
+    sessionMessages?: AgentMessage[];
+  } = {},
+) {
   const models = options.models ?? [];
   const authByProvider = options.authByProvider ?? {};
   const sessionEntries = buildSessionEntries(options.sessionMessages ?? []);
@@ -110,35 +116,40 @@ function createToolContext(options: {
   };
 }
 
-function createSuccessfulImageResponse(options: {
-  text?: string;
-  outputFormat?: string;
-  quality?: string;
-  background?: string;
-  responseId?: string;
-} = {}) {
-  return new Response([
-    'event: response.output_item.done',
-    `data: ${JSON.stringify({
-      item: {
-        type: 'image_generation_call',
-        result: 'ZmFrZS1pbWFnZQ==',
-        output_format: options.outputFormat ?? 'png',
-        quality: options.quality ?? 'low',
-        background: options.background ?? 'opaque',
-      },
-    })}`,
-    '',
-    'event: response.output_text.done',
-    `data: ${JSON.stringify({ text: options.text ?? 'Generated image.' })}`,
-    '',
-    'event: response.completed',
-    `data: ${JSON.stringify({ response: { id: options.responseId ?? 'resp_image' } })}`,
-    '',
-  ].join('\n'), {
-    status: 200,
-    headers: { 'content-type': 'text/event-stream' },
-  });
+function createSuccessfulImageResponse(
+  options: {
+    text?: string;
+    outputFormat?: string;
+    quality?: string;
+    background?: string;
+    responseId?: string;
+  } = {},
+) {
+  return new Response(
+    [
+      'event: response.output_item.done',
+      `data: ${JSON.stringify({
+        item: {
+          type: 'image_generation_call',
+          result: 'ZmFrZS1pbWFnZQ==',
+          output_format: options.outputFormat ?? 'png',
+          quality: options.quality ?? 'low',
+          background: options.background ?? 'opaque',
+        },
+      })}`,
+      '',
+      'event: response.output_text.done',
+      `data: ${JSON.stringify({ text: options.text ?? 'Generated image.' })}`,
+      '',
+      'event: response.completed',
+      `data: ${JSON.stringify({ response: { id: options.responseId ?? 'resp_image' } })}`,
+      '',
+    ].join('\n'),
+    {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    },
+  );
 }
 
 afterEach(() => {
@@ -148,17 +159,19 @@ afterEach(() => {
 
 describe('image agent extension', () => {
   it('parses image-generation SSE output', () => {
-    const parsed = parseImageGenerationSse([
-      'event: response.output_item.done',
-      'data: {"item":{"type":"image_generation_call","result":"ZmFrZS1pbWFnZQ==","output_format":"png","quality":"medium","background":"opaque"}}',
-      '',
-      'event: response.output_text.done',
-      'data: {"text":"Here you go."}',
-      '',
-      'event: response.completed',
-      'data: {"response":{"id":"resp_123"}}',
-      '',
-    ].join('\n'));
+    const parsed = parseImageGenerationSse(
+      [
+        'event: response.output_item.done',
+        'data: {"item":{"type":"image_generation_call","result":"ZmFrZS1pbWFnZQ==","output_format":"png","quality":"medium","background":"opaque"}}',
+        '',
+        'event: response.output_text.done',
+        'data: {"text":"Here you go."}',
+        '',
+        'event: response.completed',
+        'data: {"response":{"id":"resp_123"}}',
+        '',
+      ].join('\n'),
+    );
 
     expect(parsed).toEqual({
       assistantText: 'Here you go.',
@@ -171,14 +184,18 @@ describe('image agent extension', () => {
   });
 
   it('rejects malformed image-generation SSE image data', () => {
-    expect(() => parseImageGenerationSse([
-      'event: response.output_item.done',
-      'data: {"item":{"type":"image_generation_call","result":"not-valid-base64!","output_format":"png"}}',
-      '',
-      'event: response.completed',
-      'data: {"response":{"id":"resp_123"}}',
-      '',
-    ].join('\n'))).toThrow('Image generation returned malformed image data.');
+    expect(() =>
+      parseImageGenerationSse(
+        [
+          'event: response.output_item.done',
+          'data: {"item":{"type":"image_generation_call","result":"not-valid-base64!","output_format":"png"}}',
+          '',
+          'event: response.completed',
+          'data: {"response":{"id":"resp_123"}}',
+          '',
+        ].join('\n'),
+      ),
+    ).toThrow('Image generation returned malformed image data.');
   });
 
   it('executes against the codex responses backend and returns an inline image', async () => {
@@ -225,9 +242,7 @@ describe('image agent extension', () => {
     };
     expect(body.model).toBe('gpt-5.4');
     expect(body.tools).toEqual([{ type: 'image_generation' }]);
-    expect(body.input[0]?.content).toEqual([
-      { type: 'input_text', text: 'A tiny orange robot waving.' },
-    ]);
+    expect(body.input[0]?.content).toEqual([{ type: 'input_text', text: 'A tiny orange robot waving.' }]);
 
     expect(result.content).toEqual([
       { type: 'text', text: 'Generated image.' },
@@ -272,14 +287,16 @@ describe('image agent extension', () => {
         authByProvider: {
           'openai-codex': { apiKey: token },
         },
-        sessionMessages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Please edit this image.' },
-            { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
-          ],
-          timestamp: Date.now(),
-        }],
+        sessionMessages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Please edit this image.' },
+              { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
+            ],
+            timestamp: Date.now(),
+          },
+        ],
       }),
     );
 
@@ -326,14 +343,16 @@ describe('image agent extension', () => {
         authByProvider: {
           'openai-codex': { apiKey: token },
         },
-        sessionMessages: [{
-          role: 'user',
-          content: [
-            { type: 'image', data: 'bm90LWltYWdl', mimeType: 'text/plain' },
-            { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
-          ],
-          timestamp: Date.now(),
-        }],
+        sessionMessages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', data: 'bm90LWltYWdl', mimeType: 'text/plain' },
+              { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
+            ],
+            timestamp: Date.now(),
+          },
+        ],
       }),
     );
 
@@ -373,14 +392,16 @@ describe('image agent extension', () => {
         authByProvider: {
           'openai-codex': { apiKey: token },
         },
-        sessionMessages: [{
-          role: 'user',
-          content: [
-            { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
-            { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
-          ],
-          timestamp: Date.now(),
-        }],
+        sessionMessages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
+              { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
+            ],
+            timestamp: Date.now(),
+          },
+        ],
       }),
     );
 
@@ -509,18 +530,20 @@ describe('image agent extension', () => {
         authByProvider: {
           'openai-codex': { apiKey: token },
         },
-        sessionMessages: [{
-          role: 'toolResult',
-          toolCallId: 'call-1',
-          toolName: 'image',
-          content: [
-            { type: 'text', text: 'Generated image.' },
-            { type: 'image', data: 'Z2VuZXJhdGVkLWltYWdl', mimeType: 'image/png' },
-          ],
-          details: { provider: 'openai-codex' },
-          isError: false,
-          timestamp: Date.now(),
-        }],
+        sessionMessages: [
+          {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: 'image',
+            content: [
+              { type: 'text', text: 'Generated image.' },
+              { type: 'image', data: 'Z2VuZXJhdGVkLWltYWdl', mimeType: 'image/png' },
+            ],
+            details: { provider: 'openai-codex' },
+            isError: false,
+            timestamp: Date.now(),
+          },
+        ],
       }),
     );
 
@@ -581,15 +604,17 @@ describe('image agent extension', () => {
       reasoning: false,
     });
 
-    await expect(imageTool.execute(
-      'tool-1',
-      { prompt: 'A skyline at dusk.' },
-      undefined,
-      undefined,
-      createToolContext({
-        currentModel: anthropicModel,
-        models: [anthropicModel],
-      }),
-    )).rejects.toThrow('Image generation requires configured openai-codex or openai auth with an image-generation-capable Responses model.');
+    await expect(
+      imageTool.execute(
+        'tool-1',
+        { prompt: 'A skyline at dusk.' },
+        undefined,
+        undefined,
+        createToolContext({
+          currentModel: anthropicModel,
+          models: [anthropicModel],
+        }),
+      ),
+    ).rejects.toThrow('Image generation requires configured openai-codex or openai auth with an image-generation-capable Responses model.');
   });
 });

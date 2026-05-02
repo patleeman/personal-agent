@@ -55,13 +55,7 @@ function buildDrawingPreviewTitle(attachment: ComposerAttachmentShelfDrawingAtta
   return `${attachment.title}${revisionText}`;
 }
 
-function ComposerImagePreviewModal({
-  image,
-  onClose,
-}: {
-  image: ComposerPreviewImage;
-  onClose: () => void;
-}) {
+function ComposerImagePreviewModal({ image, onClose }: { image: ComposerPreviewImage; onClose: () => void }) {
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
@@ -93,14 +87,21 @@ function ComposerImagePreviewModal({
         aria-modal="true"
         aria-label={image.label}
         className="ui-dialog-shell relative"
-        style={{ width: 'min(96vw, 1440px)', height: 'min(94vh, 1040px)', maxHeight: 'calc(100vh - 2rem)', background: 'rgb(10 13 20 / 0.96)' }}
+        style={{
+          width: 'min(96vw, 1440px)',
+          height: 'min(94vh, 1040px)',
+          maxHeight: 'calc(100vh - 2rem)',
+          background: 'rgb(10 13 20 / 0.96)',
+        }}
       >
         <div className="relative min-h-0 flex-1 bg-black/30 px-4 py-4 sm:px-6 sm:py-6">
           <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-3 sm:inset-x-6 sm:top-6">
             <div className="pointer-events-auto min-w-0 rounded-lg bg-black/45 px-3 py-1.5 backdrop-blur-sm" title={image.label}>
               <p className="truncate text-[12px] font-medium text-white/95">{image.label}</p>
               {dimensions ? (
-                <p className="mt-0.5 text-[10px] text-white/60">{dimensions.width}×{dimensions.height}</p>
+                <p className="mt-0.5 text-[10px] text-white/60">
+                  {dimensions.width}×{dimensions.height}
+                </p>
               ) : null}
             </div>
             <button
@@ -121,11 +122,9 @@ function ComposerImagePreviewModal({
                 width: event.currentTarget.naturalWidth,
                 height: event.currentTarget.naturalHeight,
               };
-              setDimensions((current) => (
-                current?.width === nextDimensions.width && current?.height === nextDimensions.height
-                  ? current
-                  : nextDimensions
-              ));
+              setDimensions((current) =>
+                current?.width === nextDimensions.width && current?.height === nextDimensions.height ? current : nextDimensions,
+              );
             }}
           />
         </div>
@@ -145,9 +144,12 @@ export function ComposerAttachmentShelf({
 }: ComposerAttachmentShelfProps) {
   const [previewImage, setPreviewImage] = useState<ComposerPreviewImage | null>(null);
 
-  useEffect(() => () => {
-    previewImage?.dispose?.();
-  }, [previewImage]);
+  useEffect(
+    () => () => {
+      previewImage?.dispose?.();
+    },
+    [previewImage],
+  );
 
   const closePreview = useCallback(() => {
     setPreviewImage(null);
@@ -193,7 +195,10 @@ export function ComposerAttachmentShelf({
             );
 
             return (
-              <div key={`${file.name}-${file.size}-${file.lastModified}-${index}`} className="flex max-w-[220px] items-center gap-1 rounded-lg border border-border-subtle bg-elevated text-[11px]">
+              <div
+                key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                className="flex max-w-[220px] items-center gap-1 rounded-lg border border-border-subtle bg-elevated text-[11px]"
+              >
                 {canPreview ? (
                   <button
                     type="button"
@@ -226,7 +231,10 @@ export function ComposerAttachmentShelf({
           {drawingAttachments.map((attachment) => {
             const label = buildDrawingPreviewTitle(attachment);
             return (
-              <div key={attachment.localId} className="flex max-w-[270px] items-center gap-1.5 rounded-lg border border-border-subtle bg-elevated px-1 py-1 text-[11px]">
+              <div
+                key={attachment.localId}
+                className="flex max-w-[270px] items-center gap-1.5 rounded-lg border border-border-subtle bg-elevated px-1 py-1 text-[11px]"
+              >
                 <button
                   type="button"
                   onClick={() => openDrawingPreview(attachment)}
@@ -234,14 +242,13 @@ export function ComposerAttachmentShelf({
                   title={`Preview ${label}`}
                   aria-label={`Preview ${label}`}
                 >
-                  <img
-                    src={attachment.previewUrl}
-                    alt={label}
-                    className="h-7 w-9 rounded object-cover"
-                  />
+                  <img src={attachment.previewUrl} alt={label} className="h-7 w-9 rounded object-cover" />
                   <div className="min-w-0">
                     <p className="truncate text-secondary">{label}</p>
-                    <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
+                    <p className="text-[10px] text-dim">
+                      {attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}
+                      {attachment.dirty ? ' · unsaved' : ''}
+                    </p>
                   </div>
                 </button>
                 <button
@@ -266,13 +273,9 @@ export function ComposerAttachmentShelf({
         </div>
       )}
 
-      {drawingsBusy && (
-        <div className="px-1 pt-2 text-[11px] text-dim">Syncing drawings…</div>
-      )}
+      {drawingsBusy && <div className="px-1 pt-2 text-[11px] text-dim">Syncing drawings…</div>}
 
-      {drawingsError && (
-        <div className="px-1 pt-2 text-[11px] text-danger">{drawingsError}</div>
-      )}
+      {drawingsError && <div className="px-1 pt-2 text-[11px] text-danger">{drawingsError}</div>}
 
       {previewImage ? <ComposerImagePreviewModal image={previewImage} onClose={closePreview} /> : null}
     </>

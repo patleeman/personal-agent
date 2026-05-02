@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+
 import { ConversationComposerActions } from './ConversationComposerActions';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+
 import { api } from '../client/api';
 import type { ModelInfo } from '../shared/types';
 
@@ -13,7 +14,8 @@ export function useConversationModels(enabled: boolean) {
       return;
     }
 
-    api.models()
+    api
+      .models()
       .then((data) => {
         setModels(data.models);
         setDefaultModel(data.currentModel);

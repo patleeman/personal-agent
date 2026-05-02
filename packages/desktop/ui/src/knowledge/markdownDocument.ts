@@ -85,9 +85,7 @@ export function countMarkdownFrontmatterFields(frontmatter: MarkdownFrontmatter 
 }
 
 function compactMarkdownFrontmatter(frontmatter: MarkdownFrontmatter): MarkdownFrontmatter {
-  return Object.fromEntries(
-    Object.entries(frontmatter).filter(([, value]) => !isMarkdownFrontmatterValueEmpty(value)),
-  );
+  return Object.fromEntries(Object.entries(frontmatter).filter(([, value]) => !isMarkdownFrontmatterValueEmpty(value)));
 }
 
 export function parseMarkdownDocument(content: string): MarkdownDocumentParts {
@@ -164,4 +162,3 @@ export function stringifyMarkdownFrontmatter(frontmatter: MarkdownFrontmatter, b
 
   return `---\n${rendered}\n---\n\n${normalizedBody}`;
 }
-

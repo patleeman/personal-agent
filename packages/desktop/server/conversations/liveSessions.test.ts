@@ -1,8 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { getDurableSessionsDir } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import * as conversationModelPreferences from './conversationModelPreferences.js';
 import {
   abortSession,
   appendDetachedUserMessage,
@@ -17,22 +20,22 @@ import {
   getSessionContextUsage,
   getSessionStats,
   isLive,
-  listQueuedPromptPreviews,
   isPlaceholderConversationTitle,
-  patchSessionManagerPersistence,
-  promptSession,
+  listQueuedPromptPreviews,
   manageParallelPromptJob,
   markConversationAutoModeContinueRequested,
+  patchSessionManagerPersistence,
+  promptSession,
   queuePromptContext,
   readLiveSessionAutoModeState,
-  registry,
-  repairLiveSessionTranscriptTail,
-  requestConversationAutoModeContinuationTurn,
-  requestConversationAutoModeTurn,
   refreshAllLiveSessionModelRegistries,
+  registry,
   reloadAllLiveSessionAuth,
   reloadSessionResources,
   renameSession,
+  repairLiveSessionTranscriptTail,
+  requestConversationAutoModeContinuationTurn,
+  requestConversationAutoModeTurn,
   requestConversationWorkingDirectoryChange,
   resolveLastCompletedConversationEntryId,
   resolvePersistentSessionDir,
@@ -41,14 +44,13 @@ import {
   restoreQueuedMessage,
   resumeSession,
   setLiveSessionAutoModeState,
-  subscribe,
+  type SseEvent,
   submitPromptSession,
+  subscribe,
   takeOverSessionControl,
   toSse,
   updateLiveSessionModelPreferences,
-  type SseEvent,
 } from './liveSessions.js';
-import * as conversationModelPreferences from './conversationModelPreferences.js';
 import { buildFallbackTitleFromContent } from './liveSessionTitle.js';
 import { clearSessionCaches } from './sessions.js';
 
@@ -57,10 +59,7 @@ type LiveRegistryEntry = Parameters<typeof registry.set>[1];
 type AgentSessionEvent = Parameters<typeof toSse>[0];
 type PersistedSessionManager = Parameters<typeof ensureSessionFileExists>[0];
 
-function setLiveEntry(
-  sessionId: string,
-  entry: Omit<Partial<LiveRegistryEntry>, 'session'> & { session: unknown },
-) {
+function setLiveEntry(sessionId: string, entry: Omit<Partial<LiveRegistryEntry>, 'session'> & { session: unknown }) {
   const session = entry.session as Record<string, unknown>;
   if (!('agent' in session)) {
     session.agent = {};
@@ -111,24 +110,27 @@ describe('resolveLastCompletedConversationEntryId', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-last-assistant.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-last-assistant', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ type: 'session', id: 'session-last-assistant', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     expect(resolveLastCompletedConversationEntryId(sessionFile)).toBe('assistant-1');
   });
@@ -137,24 +139,27 @@ describe('resolveLastCompletedConversationEntryId', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-last-user.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-last-user', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Find the issue' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'toolResult', content: [{ type: 'text', text: 'partial tool output' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ type: 'session', id: 'session-last-user', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Find the issue' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'toolResult', content: [{ type: 'text', text: 'partial tool output' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     expect(resolveLastCompletedConversationEntryId(sessionFile)).toBe('user-1');
   });
@@ -163,18 +168,26 @@ describe('resolveLastCompletedConversationEntryId', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-no-completed-turn.jsonl');
-    writeFileSync(sessionFile, [
-      'not json at all',
-      JSON.stringify({ type: 'session', id: 'session-no-completed-turn', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'toolResult', content: [{ type: 'text', text: 'tool-only transcript' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        'not json at all',
+        JSON.stringify({
+          type: 'session',
+          id: 'session-no-completed-turn',
+          timestamp: '2026-03-13T18:00:00.000Z',
+          cwd: '/tmp/workspace',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'toolResult', content: [{ type: 'text', text: 'tool-only transcript' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     expect(resolveLastCompletedConversationEntryId(sessionFile)).toBeNull();
   });
@@ -185,54 +198,62 @@ describe('resolveStableForkEntryId', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-stable-fork-visible-turn.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-stable-fork-visible-turn', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }], stopReason: 'stop' },
-      }),
-      JSON.stringify({
-        type: 'custom_message',
-        id: 'ctx-1',
-        parentId: 'assistant-1',
-        timestamp: '2026-03-13T18:00:03.000Z',
-        customType: 'referenced_context',
-        content: [{ type: 'text', text: 'Hidden context for the next turn.' }],
-        display: false,
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-2',
-        parentId: 'ctx-1',
-        timestamp: '2026-03-13T18:00:04.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Current prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-tool-2',
-        parentId: 'user-2',
-        timestamp: '2026-03-13T18:00:05.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Using a tool…' }], stopReason: 'toolUse' },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-2',
-        parentId: 'assistant-tool-2',
-        timestamp: '2026-03-13T18:00:06.000Z',
-        message: { role: 'toolResult', content: [{ type: 'text', text: 'partial tool output' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'session-stable-fork-visible-turn',
+          timestamp: '2026-03-13T18:00:00.000Z',
+          cwd: '/tmp/workspace',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }], stopReason: 'stop' },
+        }),
+        JSON.stringify({
+          type: 'custom_message',
+          id: 'ctx-1',
+          parentId: 'assistant-1',
+          timestamp: '2026-03-13T18:00:03.000Z',
+          customType: 'referenced_context',
+          content: [{ type: 'text', text: 'Hidden context for the next turn.' }],
+          display: false,
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-2',
+          parentId: 'ctx-1',
+          timestamp: '2026-03-13T18:00:04.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Current prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-tool-2',
+          parentId: 'user-2',
+          timestamp: '2026-03-13T18:00:05.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Using a tool…' }], stopReason: 'toolUse' },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-2',
+          parentId: 'assistant-tool-2',
+          timestamp: '2026-03-13T18:00:06.000Z',
+          message: { role: 'toolResult', content: [{ type: 'text', text: 'partial tool output' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
   });
@@ -241,33 +262,41 @@ describe('resolveStableForkEntryId', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-stable-fork-hidden-turn.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-stable-fork-hidden-turn', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Visible prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }], stopReason: 'stop' },
-      }),
-      JSON.stringify({
-        type: 'custom_message',
-        id: 'hidden-turn-1',
-        parentId: 'assistant-1',
-        timestamp: '2026-03-13T18:00:03.000Z',
-        customType: 'conversation_automation_post_turn_review',
-        content: [{ type: 'text', text: 'Hidden review prompt.' }],
-        display: false,
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'session-stable-fork-hidden-turn',
+          timestamp: '2026-03-13T18:00:00.000Z',
+          cwd: '/tmp/workspace',
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Visible prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }], stopReason: 'stop' },
+        }),
+        JSON.stringify({
+          type: 'custom_message',
+          id: 'hidden-turn-1',
+          parentId: 'assistant-1',
+          timestamp: '2026-03-13T18:00:03.000Z',
+          customType: 'conversation_automation_post_turn_review',
+          content: [{ type: 'text', text: 'Hidden review prompt.' }],
+          display: false,
+        }),
+        '',
+      ].join('\n'),
+    );
 
     expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
   });
@@ -285,7 +314,14 @@ describe('repairLiveSessionTranscriptTail', () => {
     }));
     const send = vi.fn();
     const state = {
-      messages: [{ role: 'assistant', content: [{ type: 'text', text: 'boom' }], stopReason: 'error', errorMessage: 'Codex error: upstream overloaded' }],
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'boom' }],
+          stopReason: 'error',
+          errorMessage: 'Codex error: upstream overloaded',
+        },
+      ],
       streamingMessage: null,
     };
 
@@ -319,15 +355,18 @@ describe('repairLiveSessionTranscriptTail', () => {
               },
             },
           ],
-          getEntry: (id: string) => ({
-            'user-1': {
-              type: 'message',
-              id: 'user-1',
-              parentId: null,
-              timestamp: '2026-04-20T10:00:00.000Z',
-              message: { role: 'user', content: [{ type: 'text', text: 'Retry the request.' }] },
-            },
-          } as Record<string, unknown>)[id],
+          getEntry: (id: string) =>
+            (
+              ({
+                'user-1': {
+                  type: 'message',
+                  id: 'user-1',
+                  parentId: null,
+                  timestamp: '2026-04-20T10:00:00.000Z',
+                  message: { role: 'user', content: [{ type: 'text', text: 'Retry the request.' }] },
+                },
+              }) as Record<string, unknown>
+            )[id],
           branch,
           branchWithSummary,
           resetLeaf,
@@ -399,15 +438,18 @@ describe('repairLiveSessionTranscriptTail', () => {
               },
             },
           ],
-          getEntry: (id: string) => ({
-            'user-1': {
-              type: 'message',
-              id: 'user-1',
-              parentId: null,
-              timestamp: '2026-04-20T10:01:00.000Z',
-              message: { role: 'user', content: [{ type: 'text', text: 'Check the file.' }] },
-            },
-          } as Record<string, unknown>)[id],
+          getEntry: (id: string) =>
+            (
+              ({
+                'user-1': {
+                  type: 'message',
+                  id: 'user-1',
+                  parentId: null,
+                  timestamp: '2026-04-20T10:01:00.000Z',
+                  message: { role: 'user', content: [{ type: 'text', text: 'Check the file.' }] },
+                },
+              }) as Record<string, unknown>
+            )[id],
         },
       },
     });
@@ -428,7 +470,15 @@ describe('parallel prompt job management', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-parallel-parent.jsonl');
-    writeFileSync(sessionFile, `${JSON.stringify({ type: 'session', id: 'session-parallel-parent', timestamp: '2026-04-17T00:00:00.000Z', cwd: '/tmp/workspace' })}\n`);
+    writeFileSync(
+      sessionFile,
+      `${JSON.stringify({
+        type: 'session',
+        id: 'session-parallel-parent',
+        timestamp: '2026-04-17T00:00:00.000Z',
+        cwd: '/tmp/workspace',
+      })}\n`,
+    );
 
     const runningJob = {
       id: 'parallel-running',
@@ -492,16 +542,20 @@ describe('parallel prompt job management', () => {
       },
     });
 
-    await expect(manageParallelPromptJob('session-parallel-parent', {
-      jobId: 'parallel-ready',
-      action: 'importNow',
-    })).resolves.toEqual({ ok: true, status: 'imported' });
+    await expect(
+      manageParallelPromptJob('session-parallel-parent', {
+        jobId: 'parallel-ready',
+        action: 'importNow',
+      }),
+    ).resolves.toEqual({ ok: true, status: 'imported' });
 
-    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
-      customType: 'parallel_result',
-      display: false,
-      details: expect.objectContaining({ childConversationId: 'child-ready', status: 'complete' }),
-    }));
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'parallel_result',
+        display: false,
+        details: expect.objectContaining({ childConversationId: 'child-ready', status: 'complete' }),
+      }),
+    );
     const importedMessages = registry.get('session-parallel-parent')?.session.state.messages ?? [];
     expect(importedMessages).toEqual([expect.objectContaining({ role: 'user' })]);
     expect(importedMessages[0].content[0].text).toContain('diagram (rev 2)');
@@ -511,9 +565,7 @@ describe('parallel prompt job management', () => {
     expect(registry.get('session-parallel-parent')?.parallelJobs).toEqual([
       expect.objectContaining({ id: 'parallel-running', status: 'running' }),
     ]);
-    expect(JSON.parse(readFileSync(jobsFile, 'utf-8'))).toEqual([
-      expect.objectContaining({ id: 'parallel-running', status: 'running' }),
-    ]);
+    expect(JSON.parse(readFileSync(jobsFile, 'utf-8'))).toEqual([expect.objectContaining({ id: 'parallel-running', status: 'running' })]);
     expect(isLive('child-ready')).toBe(false);
   });
 
@@ -521,7 +573,15 @@ describe('parallel prompt job management', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-parallel-cancel.jsonl');
-    writeFileSync(sessionFile, `${JSON.stringify({ type: 'session', id: 'session-parallel-cancel', timestamp: '2026-04-17T00:00:00.000Z', cwd: '/tmp/workspace' })}\n`);
+    writeFileSync(
+      sessionFile,
+      `${JSON.stringify({
+        type: 'session',
+        id: 'session-parallel-cancel',
+        timestamp: '2026-04-17T00:00:00.000Z',
+        cwd: '/tmp/workspace',
+      })}\n`,
+    );
 
     const runningJob = {
       id: 'parallel-running',
@@ -581,10 +641,12 @@ describe('parallel prompt job management', () => {
       },
     });
 
-    await expect(manageParallelPromptJob('session-parallel-cancel', {
-      jobId: 'parallel-running',
-      action: 'cancel',
-    })).resolves.toEqual({ ok: true, status: 'cancelled' });
+    await expect(
+      manageParallelPromptJob('session-parallel-cancel', {
+        jobId: 'parallel-running',
+        action: 'cancel',
+      }),
+    ).resolves.toEqual({ ok: true, status: 'cancelled' });
 
     expect(abort).toHaveBeenCalledTimes(1);
     expect(registry.get('session-parallel-cancel')?.parallelJobs).toEqual([]);
@@ -609,11 +671,13 @@ describe('parallel prompt job management', () => {
       },
     });
 
-    expect(getLiveSessions()).toContainEqual(expect.objectContaining({
-      id: 'session-hidden-auto-running',
-      isStreaming: false,
-      hasPendingHiddenTurn: true,
-    }));
+    expect(getLiveSessions()).toContainEqual(
+      expect.objectContaining({
+        id: 'session-hidden-auto-running',
+        isStreaming: false,
+        hasPendingHiddenTurn: true,
+      }),
+    );
   });
 });
 
@@ -633,10 +697,12 @@ describe('requestConversationWorkingDirectoryChange', () => {
       },
     });
 
-    await expect(requestConversationWorkingDirectoryChange({
-      conversationId: 'session-same-cwd',
-      cwd: '/tmp/workspace',
-    })).resolves.toEqual({
+    await expect(
+      requestConversationWorkingDirectoryChange({
+        conversationId: 'session-same-cwd',
+        cwd: '/tmp/workspace',
+      }),
+    ).resolves.toEqual({
       conversationId: 'session-same-cwd',
       cwd: '/tmp/workspace',
       queued: false,
@@ -659,11 +725,13 @@ describe('requestConversationWorkingDirectoryChange', () => {
       },
     });
 
-    await expect(requestConversationWorkingDirectoryChange({
-      conversationId: 'session-next-cwd',
-      cwd: '/tmp/workspace-b',
-      continuePrompt: 'Continue in the other repo.',
-    })).resolves.toEqual({
+    await expect(
+      requestConversationWorkingDirectoryChange({
+        conversationId: 'session-next-cwd',
+        cwd: '/tmp/workspace-b',
+        continuePrompt: 'Continue in the other repo.',
+      }),
+    ).resolves.toEqual({
       conversationId: 'session-next-cwd',
       cwd: '/tmp/workspace-b',
       queued: true,
@@ -729,20 +797,26 @@ describe('live session registry helpers', () => {
 
 describe('working directory change validation', () => {
   it('rejects invalid working directory change requests before queueing them', async () => {
-    await expect(requestConversationWorkingDirectoryChange({
-      conversationId: '   ',
-      cwd: '/tmp/workspace',
-    })).rejects.toThrow('conversationId is required.');
+    await expect(
+      requestConversationWorkingDirectoryChange({
+        conversationId: '   ',
+        cwd: '/tmp/workspace',
+      }),
+    ).rejects.toThrow('conversationId is required.');
 
-    await expect(requestConversationWorkingDirectoryChange({
-      conversationId: 'session-missing-cwd',
-      cwd: '   ',
-    })).rejects.toThrow('cwd is required.');
+    await expect(
+      requestConversationWorkingDirectoryChange({
+        conversationId: 'session-missing-cwd',
+        cwd: '   ',
+      }),
+    ).rejects.toThrow('cwd is required.');
 
-    await expect(requestConversationWorkingDirectoryChange({
-      conversationId: 'missing-session',
-      cwd: '/tmp/workspace',
-    })).rejects.toThrow('Session missing-session is not live.');
+    await expect(
+      requestConversationWorkingDirectoryChange({
+        conversationId: 'missing-session',
+        cwd: '/tmp/workspace',
+      }),
+    ).rejects.toThrow('Session missing-session is not live.');
 
     setLiveEntry('session-no-session-file', {
       sessionId: 'session-no-session-file',
@@ -758,10 +832,12 @@ describe('working directory change validation', () => {
       },
     });
 
-    await expect(requestConversationWorkingDirectoryChange({
-      conversationId: 'session-no-session-file',
-      cwd: '/tmp/next-workspace',
-    })).rejects.toThrow('Conversation working directory changes require a persisted session file.');
+    await expect(
+      requestConversationWorkingDirectoryChange({
+        conversationId: 'session-no-session-file',
+        cwd: '/tmp/next-workspace',
+      }),
+    ).rejects.toThrow('Conversation working directory changes require a persisted session file.');
   });
 });
 
@@ -806,10 +882,12 @@ describe('session stats and context usage', () => {
           contextWindow: 96,
           percent: 12.5,
         }),
-        messages: [{
-          role: 'user',
-          content: [{ type: 'text', text: 'Count the context tokens.' }],
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'Count the context tokens.' }],
+          },
+        ],
         model: { id: 'gpt-5' },
       },
     });
@@ -819,15 +897,15 @@ describe('session stats and context usage', () => {
       cost: 0.25,
     });
     expect(getSessionContextUsage('missing-session')).toBeNull();
-    expect(getSessionContextUsage('session-usage')).toEqual(expect.objectContaining({
-      tokens: 12,
-      contextWindow: 96,
-      percent: 12.5,
-      modelId: 'gpt-5',
-      segments: expect.arrayContaining([
-        expect.objectContaining({ key: 'user', label: 'user' }),
-      ]),
-    }));
+    expect(getSessionContextUsage('session-usage')).toEqual(
+      expect.objectContaining({
+        tokens: 12,
+        contextWindow: 96,
+        percent: 12.5,
+        modelId: 'gpt-5',
+        segments: expect.arrayContaining([expect.objectContaining({ key: 'user', label: 'user' })]),
+      }),
+    );
   });
 });
 
@@ -951,40 +1029,49 @@ describe('conversation titles', () => {
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-title.jsonl');
 
-    writeFileSync(sessionFile, `${JSON.stringify({
-      type: 'session',
-      id: 'session-title',
-      timestamp: '2026-03-18T00:00:00.000Z',
-      cwd: '/tmp/workspace',
-    })}\n`);
-
-    expect(resolveStableSessionTitle({
+    writeFileSync(
       sessionFile,
-      state: {
-        messages: [],
-      },
-    } as unknown as LiveRegistryEntry['session'])).toBe('');
+      `${JSON.stringify({
+        type: 'session',
+        id: 'session-title',
+        timestamp: '2026-03-18T00:00:00.000Z',
+        cwd: '/tmp/workspace',
+      })}\n`,
+    );
 
-    expect(resolveStableSessionTitle({
-      sessionFile,
-      state: {
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: 'Use the first prompt while the agent is running.' }],
-          },
-        ],
-      },
-    } as unknown as LiveRegistryEntry['session'])).toBe('Use the first prompt while the agent is running.');
+    expect(
+      resolveStableSessionTitle({
+        sessionFile,
+        state: {
+          messages: [],
+        },
+      } as unknown as LiveRegistryEntry['session']),
+    ).toBe('');
+
+    expect(
+      resolveStableSessionTitle({
+        sessionFile,
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Use the first prompt while the agent is running.' }],
+            },
+          ],
+        },
+      } as unknown as LiveRegistryEntry['session']),
+    ).toBe('Use the first prompt while the agent is running.');
   });
 
   it('does not derive fallback live titles from malformed image blocks', () => {
-    expect(buildFallbackTitleFromContent([
-      { type: 'image', data: '', mimeType: '' },
-      { type: 'image', data: '   ', mimeType: 'image/png' },
-      { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
-      { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
-    ])).toBe('');
+    expect(
+      buildFallbackTitleFromContent([
+        { type: 'image', data: '', mimeType: '' },
+        { type: 'image', data: '   ', mimeType: 'image/png' },
+        { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
+        { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
+      ]),
+    ).toBe('');
   });
 });
 
@@ -1147,37 +1234,47 @@ describe('live session subscriptions', () => {
     const desktopEvents: SseEvent[] = [];
     const mobileEvents: SseEvent[] = [];
 
-    subscribe('session-control', (event) => {
-      desktopEvents.push(event);
-    }, {
-      surface: {
-        surfaceId: 'desktop-1',
-        surfaceType: 'desktop_web',
+    subscribe(
+      'session-control',
+      (event) => {
+        desktopEvents.push(event);
       },
-    });
+      {
+        surface: {
+          surfaceId: 'desktop-1',
+          surfaceType: 'desktop_web',
+        },
+      },
+    );
 
     expect(desktopEvents.at(-1)).toEqual({
       type: 'presence_state',
       state: {
-        surfaces: [{
-          surfaceId: 'desktop-1',
-          surfaceType: 'desktop_web',
-          connectedAt: expect.any(String),
-        }],
+        surfaces: [
+          {
+            surfaceId: 'desktop-1',
+            surfaceType: 'desktop_web',
+            connectedAt: expect.any(String),
+          },
+        ],
         controllerSurfaceId: 'desktop-1',
         controllerSurfaceType: 'desktop_web',
         controllerAcquiredAt: expect.any(String),
       },
     });
 
-    subscribe('session-control', (event) => {
-      mobileEvents.push(event);
-    }, {
-      surface: {
-        surfaceId: 'mobile-1',
-        surfaceType: 'mobile_web',
+    subscribe(
+      'session-control',
+      (event) => {
+        mobileEvents.push(event);
       },
-    });
+      {
+        surface: {
+          surfaceId: 'mobile-1',
+          surfaceType: 'mobile_web',
+        },
+      },
+    );
 
     expect(mobileEvents.at(-1)).toEqual({
       type: 'presence_state',
@@ -1254,14 +1351,18 @@ describe('live session subscriptions', () => {
     });
 
     const secondDesktopEvents: SseEvent[] = [];
-    subscribe('session-same-surface-control', (event) => {
-      secondDesktopEvents.push(event);
-    }, {
-      surface: {
-        surfaceId: 'desktop-2',
-        surfaceType: 'desktop_web',
+    subscribe(
+      'session-same-surface-control',
+      (event) => {
+        secondDesktopEvents.push(event);
       },
-    });
+      {
+        surface: {
+          surfaceId: 'desktop-2',
+          surfaceType: 'desktop_web',
+        },
+      },
+    );
 
     expect(secondDesktopEvents.at(-1)).toEqual({
       type: 'presence_state',
@@ -1333,38 +1434,41 @@ describe('live session subscriptions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-merged.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-merged', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-2',
-        parentId: 'assistant-1',
-        timestamp: '2026-03-13T18:00:03.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-2',
-        parentId: 'user-2',
-        timestamp: '2026-03-13T18:00:04.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ type: 'session', id: 'session-merged', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-2',
+          parentId: 'assistant-1',
+          timestamp: '2026-03-13T18:00:03.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-2',
+          parentId: 'user-2',
+          timestamp: '2026-03-13T18:00:04.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     setLiveEntry('session-merged', {
       sessionId: 'session-merged',
@@ -1449,128 +1553,131 @@ describe('live session subscriptions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-reordered.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-reordered', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Initial prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Initial answer' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-2',
-        parentId: 'assistant-1',
-        timestamp: '2026-03-13T18:00:03.000Z',
-        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Pre-compaction A' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-3',
-        parentId: 'assistant-2',
-        timestamp: '2026-03-13T18:00:04.000Z',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo A' } }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-result-1',
-        parentId: 'assistant-3',
-        timestamp: '2026-03-13T18:00:04.500Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-a',
-          toolName: 'bash',
-          content: [{ type: 'text', text: 'A output' }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-4',
-        parentId: 'tool-result-1',
-        timestamp: '2026-03-13T18:00:05.000Z',
-        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Pre-compaction B' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-5',
-        parentId: 'assistant-4',
-        timestamp: '2026-03-13T18:00:06.000Z',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-result-2',
-        parentId: 'assistant-5',
-        timestamp: '2026-03-13T18:00:06.500Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-b',
-          toolName: 'read',
-          content: [{ type: 'text', text: 'B output' }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'summary-1',
-        parentId: 'tool-result-2',
-        timestamp: '2026-03-13T18:00:07.000Z',
-        message: {
-          role: 'compactionSummary',
-          summary: '## Goal\nCarry the compacted context forward.',
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-6',
-        parentId: 'summary-1',
-        timestamp: '2026-03-13T18:00:08.000Z',
-        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Post-compaction C' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-7',
-        parentId: 'assistant-6',
-        timestamp: '2026-03-13T18:00:09.000Z',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'toolCall', id: 'tool-c', name: 'edit', arguments: { path: 'notes.md' } }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-result-3',
-        parentId: 'assistant-7',
-        timestamp: '2026-03-13T18:00:09.500Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-c',
-          toolName: 'edit',
-          content: [{ type: 'text', text: 'C output' }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-8',
-        parentId: 'tool-result-3',
-        timestamp: '2026-03-13T18:00:10.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Durable tail' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ type: 'session', id: 'session-reordered', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Initial prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Initial answer' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-2',
+          parentId: 'assistant-1',
+          timestamp: '2026-03-13T18:00:03.000Z',
+          message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Pre-compaction A' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-3',
+          parentId: 'assistant-2',
+          timestamp: '2026-03-13T18:00:04.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo A' } }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-result-1',
+          parentId: 'assistant-3',
+          timestamp: '2026-03-13T18:00:04.500Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-a',
+            toolName: 'bash',
+            content: [{ type: 'text', text: 'A output' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-4',
+          parentId: 'tool-result-1',
+          timestamp: '2026-03-13T18:00:05.000Z',
+          message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Pre-compaction B' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-5',
+          parentId: 'assistant-4',
+          timestamp: '2026-03-13T18:00:06.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-result-2',
+          parentId: 'assistant-5',
+          timestamp: '2026-03-13T18:00:06.500Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-b',
+            toolName: 'read',
+            content: [{ type: 'text', text: 'B output' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'summary-1',
+          parentId: 'tool-result-2',
+          timestamp: '2026-03-13T18:00:07.000Z',
+          message: {
+            role: 'compactionSummary',
+            summary: '## Goal\nCarry the compacted context forward.',
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-6',
+          parentId: 'summary-1',
+          timestamp: '2026-03-13T18:00:08.000Z',
+          message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Post-compaction C' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-7',
+          parentId: 'assistant-6',
+          timestamp: '2026-03-13T18:00:09.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'tool-c', name: 'edit', arguments: { path: 'notes.md' } }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-result-3',
+          parentId: 'assistant-7',
+          timestamp: '2026-03-13T18:00:09.500Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-c',
+            toolName: 'edit',
+            content: [{ type: 'text', text: 'C output' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-8',
+          parentId: 'tool-result-3',
+          timestamp: '2026-03-13T18:00:10.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Durable tail' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     setLiveEntry('session-reordered', {
       sessionId: 'session-reordered',
@@ -1664,16 +1771,20 @@ describe('live session subscriptions', () => {
     }
 
     const blocks = events[0].blocks;
-    const toolABlocks = blocks.filter((block): block is Extract<(typeof blocks)[number], { type: 'tool_use' }> => (
-      block.type === 'tool_use' && block.toolCallId === 'tool-a'
-    ));
+    const toolABlocks = blocks.filter(
+      (block): block is Extract<(typeof blocks)[number], { type: 'tool_use' }> =>
+        block.type === 'tool_use' && block.toolCallId === 'tool-a',
+    );
     expect(toolABlocks).toHaveLength(1);
     expect(toolABlocks[0]?.ts).toBe('2026-03-13T18:00:03.100Z');
 
     expect(blocks.filter((block) => block.type === 'summary')).toHaveLength(1);
-    expect(blocks.filter((block): block is Extract<(typeof blocks)[number], { type: 'thinking' }> => (
-      block.type === 'thinking' && block.text === 'Live-only planning'
-    ))).toHaveLength(1);
+    expect(
+      blocks.filter(
+        (block): block is Extract<(typeof blocks)[number], { type: 'thinking' }> =>
+          block.type === 'thinking' && block.text === 'Live-only planning',
+      ),
+    ).toHaveLength(1);
     expect(blocks).toHaveLength(11);
   });
 
@@ -1681,96 +1792,99 @@ describe('live session subscriptions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-replayed-context.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-replayed-context', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect the first issue' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-2',
-        parentId: 'assistant-1',
-        timestamp: '2026-03-13T18:00:03.000Z',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo first' } }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-result-1',
-        parentId: 'assistant-2',
-        timestamp: '2026-03-13T18:00:03.500Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-a',
-          toolName: 'bash',
-          content: [{ type: 'text', text: 'first output' }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-3',
-        parentId: 'tool-result-1',
-        timestamp: '2026-03-13T18:00:04.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First done' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-2',
-        parentId: 'assistant-3',
-        timestamp: '2026-03-13T18:00:05.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-4',
-        parentId: 'user-2',
-        timestamp: '2026-03-13T18:00:06.000Z',
-        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect the second issue' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-5',
-        parentId: 'assistant-4',
-        timestamp: '2026-03-13T18:00:07.000Z',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'tool-result-2',
-        parentId: 'assistant-5',
-        timestamp: '2026-03-13T18:00:07.500Z',
-        message: {
-          role: 'toolResult',
-          toolCallId: 'tool-b',
-          toolName: 'read',
-          content: [{ type: 'text', text: 'second output' }],
-        },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-6',
-        parentId: 'tool-result-2',
-        timestamp: '2026-03-13T18:00:08.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Second done' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ type: 'session', id: 'session-replayed-context', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect the first issue' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-2',
+          parentId: 'assistant-1',
+          timestamp: '2026-03-13T18:00:03.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo first' } }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-result-1',
+          parentId: 'assistant-2',
+          timestamp: '2026-03-13T18:00:03.500Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-a',
+            toolName: 'bash',
+            content: [{ type: 'text', text: 'first output' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-3',
+          parentId: 'tool-result-1',
+          timestamp: '2026-03-13T18:00:04.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First done' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-2',
+          parentId: 'assistant-3',
+          timestamp: '2026-03-13T18:00:05.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-4',
+          parentId: 'user-2',
+          timestamp: '2026-03-13T18:00:06.000Z',
+          message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect the second issue' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-5',
+          parentId: 'assistant-4',
+          timestamp: '2026-03-13T18:00:07.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'tool-result-2',
+          parentId: 'assistant-5',
+          timestamp: '2026-03-13T18:00:07.500Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'tool-b',
+            toolName: 'read',
+            content: [{ type: 'text', text: 'second output' }],
+          },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-6',
+          parentId: 'tool-result-2',
+          timestamp: '2026-03-13T18:00:08.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Second done' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     setLiveEntry('session-replayed-context', {
       sessionId: 'session-replayed-context',
@@ -1848,9 +1962,12 @@ describe('live session subscriptions', () => {
     expect(blocks.filter((block) => block.type === 'user' && block.text === 'Second prompt')).toHaveLength(1);
     expect(blocks.filter((block) => block.type === 'text' && block.text === 'First done')).toHaveLength(1);
     expect(blocks.filter((block) => block.type === 'text' && block.text === 'Second done')).toHaveLength(1);
-    expect(blocks.filter((block): block is Extract<(typeof blocks)[number], { type: 'tool_use' }> => (
-      block.type === 'tool_use' && block.toolCallId === 'tool-b' && block.output === 'second output'
-    ))).toHaveLength(1);
+    expect(
+      blocks.filter(
+        (block): block is Extract<(typeof blocks)[number], { type: 'tool_use' }> =>
+          block.type === 'tool_use' && block.toolCallId === 'tool-b' && block.output === 'second output',
+      ),
+    ).toHaveLength(1);
     expect(blocks.at(-1)).toMatchObject({
       type: 'thinking',
       text: 'Plan the next fix',
@@ -1933,19 +2050,21 @@ describe('live session subscriptions', () => {
               role: 'custom',
               customType: 'related_threads_context',
               display: false,
-              content: [{
-                type: 'text',
-                text: [
-                  'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
-                  'Use only the parts that still help. Prefer the current prompt and current repo state over stale historical details.',
-                  '',
-                  'Conversation 1 — Release signing',
-                  'Workspace: /repo/a',
-                  'Created: 2026-04-10T10:00:00.000Z',
-                  '',
-                  'Keep the notarization mapping fix.',
-                ].join('\n'),
-              }],
+              content: [
+                {
+                  type: 'text',
+                  text: [
+                    'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
+                    'Use only the parts that still help. Prefer the current prompt and current repo state over stale historical details.',
+                    '',
+                    'Conversation 1 — Release signing',
+                    'Workspace: /repo/a',
+                    'Created: 2026-04-10T10:00:00.000Z',
+                    '',
+                    'Keep the notarization mapping fix.',
+                  ].join('\n'),
+                },
+              ],
               timestamp: 1,
             },
             {
@@ -2079,7 +2198,13 @@ describe('live session subscriptions', () => {
                   version: 1,
                   provider: 'openai-responses-compact',
                   modelKey: 'openai-codex:openai-codex-responses:gpt-5.4',
-                  replacementHistory: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Prompt after compaction' }] }],
+                  replacementHistory: [
+                    {
+                      type: 'message',
+                      role: 'user',
+                      content: [{ type: 'input_text', text: 'Prompt after compaction' }],
+                    },
+                  ],
                 },
               },
             },
@@ -2119,38 +2244,41 @@ describe('live session subscriptions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
     const sessionFile = join(dir, 'session-idle.jsonl');
-    writeFileSync(sessionFile, [
-      JSON.stringify({ type: 'session', id: 'session-idle', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-1',
-        parentId: null,
-        timestamp: '2026-03-13T18:00:01.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-1',
-        parentId: 'user-1',
-        timestamp: '2026-03-13T18:00:02.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'user-2',
-        parentId: 'assistant-1',
-        timestamp: '2026-03-13T18:00:03.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
-      }),
-      JSON.stringify({
-        type: 'message',
-        id: 'assistant-2',
-        parentId: 'user-2',
-        timestamp: '2026-03-13T18:00:04.000Z',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
-      }),
-      '',
-    ].join('\n'));
+    writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({ type: 'session', id: 'session-idle', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-1',
+          parentId: null,
+          timestamp: '2026-03-13T18:00:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-1',
+          parentId: 'user-1',
+          timestamp: '2026-03-13T18:00:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'user-2',
+          parentId: 'assistant-1',
+          timestamp: '2026-03-13T18:00:03.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          id: 'assistant-2',
+          parentId: 'user-2',
+          timestamp: '2026-03-13T18:00:04.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
 
     setLiveEntry('session-idle', {
       sessionId: 'session-idle',
@@ -2284,10 +2412,12 @@ describe('live session subscriptions', () => {
       },
     });
 
-    expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-3',
-      title: 'Generated title',
-    }));
+    expect(getLiveSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-3',
+        title: 'Generated title',
+      }),
+    );
 
     const events: SseEvent[] = [];
     subscribe('session-3', (event) => {
@@ -2328,10 +2458,12 @@ describe('live session subscriptions', () => {
       },
     });
 
-    expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-sticky',
-      title: 'Original conversation title',
-    }));
+    expect(getLiveSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-sticky',
+        title: 'Original conversation title',
+      }),
+    );
 
     const events: SseEvent[] = [];
     subscribe('session-sticky', (event) => {
@@ -2382,10 +2514,12 @@ describe('live session subscriptions', () => {
     renameSession('session-rename', 'Better generated title');
 
     expect(session.setSessionName).toHaveBeenCalledWith('Better generated title');
-    expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
-      id: 'session-rename',
-      title: 'Better generated title',
-    }));
+    expect(getLiveSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-rename',
+        title: 'Better generated title',
+      }),
+    );
     expect(events).toContainEqual({ type: 'title_update', title: 'Better generated title' });
   });
 });
@@ -2408,10 +2542,12 @@ describe('queued prompt restore', () => {
         isStreaming: true,
         agent: {
           steeringQueue: {
-            messages: [{
-              role: 'user',
-              content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
-            }],
+            messages: [
+              {
+                role: 'user',
+                content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
+              },
+            ],
           },
           followUpQueue: {
             messages: [],
@@ -2844,9 +2980,15 @@ describe('queued prompt restore', () => {
       },
     });
 
-    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', -1)).rejects.toThrow('Queued message index must be a non-negative integer');
-    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', 1)).rejects.toThrow('Queued prompt changed before it could be restored. Try again.');
-    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', 0, 'steer-visible-9')).rejects.toThrow('Queued prompt changed before it could be restored. Try again.');
+    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', -1)).rejects.toThrow(
+      'Queued message index must be a non-negative integer',
+    );
+    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', 1)).rejects.toThrow(
+      'Queued prompt changed before it could be restored. Try again.',
+    );
+    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', 0, 'steer-visible-9')).rejects.toThrow(
+      'Queued prompt changed before it could be restored. Try again.',
+    );
   });
 
   it('rebuilds remaining follow-up prompts after restoring a visible-only follow-up item', async () => {
@@ -2934,14 +3076,17 @@ describe('queuePromptContext', () => {
 
     await queuePromptContext('session-streaming-context', 'referenced_context', 'Conversation automation context');
 
-    expect(sendCustomMessage).toHaveBeenCalledWith({
-      customType: 'referenced_context',
-      content: 'Conversation automation context',
-      display: false,
-      details: undefined,
-    }, {
-      deliverAs: 'nextTurn',
-    });
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      {
+        customType: 'referenced_context',
+        content: 'Conversation automation context',
+        display: false,
+        details: undefined,
+      },
+      {
+        deliverAs: 'nextTurn',
+      },
+    );
   });
 
   it('ignores blank hidden context payloads', async () => {
@@ -3012,13 +3157,16 @@ describe('conversation auto mode', () => {
     expect(sendCustomMessage).not.toHaveBeenCalled();
 
     await expect(requestConversationAutoModeTurn('session-auto-mode')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
-      customType: 'conversation_automation_post_turn_review',
-      display: false,
-    }), {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    });
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'conversation_automation_post_turn_review',
+        display: false,
+      }),
+      {
+        deliverAs: 'followUp',
+        triggerTurn: true,
+      },
+    );
   });
 
   it('does not queue an auto review turn on a brand new conversation with no assistant history yet', async () => {
@@ -3033,14 +3181,16 @@ describe('conversation auto mode', () => {
       session: {
         state: { messages: [], streamingMessage: null },
         sessionManager: {
-          getEntries: () => [{
-            type: 'custom',
-            customType: 'conversation-auto-mode',
-            data: {
-              enabled: true,
-              updatedAt: '2026-04-12T15:09:00.000Z',
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: {
+                enabled: true,
+                updatedAt: '2026-04-12T15:09:00.000Z',
+              },
             },
-          }],
+          ],
           appendCustomEntry: vi.fn(),
         },
         getContextUsage: () => null,
@@ -3066,14 +3216,16 @@ describe('conversation auto mode', () => {
       session: {
         state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'done' }] }], streamingMessage: null },
         sessionManager: {
-          getEntries: () => [{
-            type: 'custom',
-            customType: 'conversation-auto-mode',
-            data: {
-              enabled: true,
-              updatedAt: '2026-04-12T15:10:00.000Z',
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: {
+                enabled: true,
+                updatedAt: '2026-04-12T15:10:00.000Z',
+              },
             },
-          }],
+          ],
           appendCustomEntry: vi.fn(),
         },
         getContextUsage: () => null,
@@ -3101,14 +3253,16 @@ describe('conversation auto mode', () => {
       session: {
         state: { messages: [], streamingMessage: null },
         sessionManager: {
-          getEntries: () => [{
-            type: 'custom',
-            customType: 'conversation-auto-mode',
-            data: {
-              enabled: true,
-              updatedAt: '2026-04-12T15:12:00.000Z',
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: {
+                enabled: true,
+                updatedAt: '2026-04-12T15:12:00.000Z',
+              },
             },
-          }],
+          ],
           appendCustomEntry: vi.fn(),
         },
         getContextUsage: () => null,
@@ -3123,14 +3277,17 @@ describe('conversation auto mode', () => {
     expect(registry.get('session-auto-continue')?.pendingAutoModeContinuation).toBe(true);
 
     await expect(requestConversationAutoModeContinuationTurn('session-auto-continue')).resolves.toBe(true);
-    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
-      customType: 'conversation_automation_auto_continue',
-      display: false,
-      details: { source: 'conversation-auto-mode' },
-    }), {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    });
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'conversation_automation_auto_continue',
+        display: false,
+        details: { source: 'conversation-auto-mode' },
+      }),
+      {
+        deliverAs: 'followUp',
+        triggerTurn: true,
+      },
+    );
     expect(registry.get('session-auto-continue')?.pendingHiddenTurnCustomTypes ?? []).toEqual([]);
   });
 });
@@ -3158,20 +3315,24 @@ describe('appendDetachedUserMessage', () => {
 
     await appendDetachedUserMessage('session-detached-user', '  Keep this draft alive.  ');
 
-    expect(appendMessage).toHaveBeenCalledWith(expect.objectContaining({
-      role: 'user',
-      content: [{ type: 'text', text: 'Keep this draft alive.' }],
-    }));
+    expect(appendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'user',
+        content: [{ type: 'text', text: 'Keep this draft alive.' }],
+      }),
+    );
     expect(registry.get('session-detached-user')?.session.state.messages).toEqual([
       expect.objectContaining({
         role: 'user',
         content: [{ type: 'text', text: 'Keep this draft alive.' }],
       }),
     ]);
-    expect(getLiveSessions()).toContainEqual(expect.objectContaining({
-      id: 'session-detached-user',
-      title: 'Keep this draft alive.',
-    }));
+    expect(getLiveSessions()).toContainEqual(
+      expect.objectContaining({
+        id: 'session-detached-user',
+        title: 'Keep this draft alive.',
+      }),
+    );
   });
 
   it('rejects detached user messages for missing or streaming sessions and ignores blank text', async () => {
@@ -3194,7 +3355,9 @@ describe('appendDetachedUserMessage', () => {
       },
     });
 
-    await expect(appendDetachedUserMessage('session-detached-streaming', 'hello')).rejects.toThrow('Session session-detached-streaming is currently streaming');
+    await expect(appendDetachedUserMessage('session-detached-streaming', 'hello')).rejects.toThrow(
+      'Session session-detached-streaming is currently streaming',
+    );
 
     setLiveEntry('session-detached-blank', {
       sessionId: 'session-detached-blank',
@@ -3267,7 +3430,9 @@ describe('appendVisibleCustomMessage', () => {
       },
     });
 
-    await expect(appendVisibleCustomMessage('session-visible-custom-streaming', 'automation_note', 'show this')).rejects.toThrow('Session session-visible-custom-streaming is currently streaming');
+    await expect(appendVisibleCustomMessage('session-visible-custom-streaming', 'automation_note', 'show this')).rejects.toThrow(
+      'Session session-visible-custom-streaming is currently streaming',
+    );
   });
 });
 
@@ -3297,14 +3462,16 @@ describe('submitPromptSession', () => {
         },
         prompt: vi.fn(async () => {
           listeners.forEach((listener) => {
-            listener(asAgentSessionEvent({
-              type: 'message_start',
-              message: {
-                role: 'user',
-                content: [{ type: 'text', text: 'hello there' }],
-                timestamp: 1,
-              },
-            }));
+            listener(
+              asAgentSessionEvent({
+                type: 'message_start',
+                message: {
+                  role: 'user',
+                  content: [{ type: 'text', text: 'hello there' }],
+                  timestamp: 1,
+                },
+              }),
+            );
           });
 
           await new Promise<void>((resolve) => {
@@ -3357,13 +3524,7 @@ describe('submitPromptSession', () => {
     takeOverSessionControl('session-submit-detached-surface', 'desktop-1');
     unsubscribe?.();
 
-    const submitted = await submitPromptSession(
-      'session-submit-detached-surface',
-      'send this anyway',
-      undefined,
-      undefined,
-      'desktop-1',
-    );
+    const submitted = await submitPromptSession('session-submit-detached-surface', 'send this anyway', undefined, undefined, 'desktop-1');
 
     expect(submitted.acceptedAs).toBe('started');
     await submitted.completion;
@@ -3421,16 +3582,18 @@ describe('submitPromptSession', () => {
         },
         prompt: vi.fn(async () => {
           listeners.forEach((listener) => {
-            listener(asAgentSessionEvent({
-              type: 'message_end',
-              message: {
-                role: 'assistant',
-                content: [],
-                stopReason: 'error',
-                errorMessage: 'Codex error: upstream overloaded',
-                timestamp: 1,
-              },
-            }));
+            listener(
+              asAgentSessionEvent({
+                type: 'message_end',
+                message: {
+                  role: 'assistant',
+                  content: [],
+                  stopReason: 'error',
+                  errorMessage: 'Codex error: upstream overloaded',
+                  timestamp: 1,
+                },
+              }),
+            );
           });
         }),
       },
@@ -3528,24 +3691,27 @@ describe('promptSession', () => {
               },
             },
           ],
-          getEntry: (id: string) => ({
-            'assistant-1': {
-              type: 'message',
-              id: 'assistant-1',
-              parentId: 'user-1',
-              timestamp: '2026-04-18T10:00:01.000Z',
-              message: { role: 'assistant', content: [{ type: 'text', text: 'Stable answer' }], stopReason: 'stop' },
-            },
-            'hidden-1': {
-              type: 'custom_message',
-              id: 'hidden-1',
-              parentId: 'assistant-1',
-              timestamp: '2026-04-18T10:00:02.000Z',
-              customType: 'conversation_automation_post_turn_review',
-              content: [{ type: 'text', text: 'Hidden review prompt.' }],
-              display: false,
-            },
-          } as Record<string, unknown>)[id],
+          getEntry: (id: string) =>
+            (
+              ({
+                'assistant-1': {
+                  type: 'message',
+                  id: 'assistant-1',
+                  parentId: 'user-1',
+                  timestamp: '2026-04-18T10:00:01.000Z',
+                  message: { role: 'assistant', content: [{ type: 'text', text: 'Stable answer' }], stopReason: 'stop' },
+                },
+                'hidden-1': {
+                  type: 'custom_message',
+                  id: 'hidden-1',
+                  parentId: 'assistant-1',
+                  timestamp: '2026-04-18T10:00:02.000Z',
+                  customType: 'conversation_automation_post_turn_review',
+                  content: [{ type: 'text', text: 'Hidden review prompt.' }],
+                  display: false,
+                },
+              }) as Record<string, unknown>
+            )[id],
           branch,
           resetLeaf,
           buildSessionContext: () => ({ messages: sanitizedMessages, thinkingLevel: 'off', model: null }),
@@ -3783,12 +3949,11 @@ describe('promptSession', () => {
       },
     });
 
-    await expect(promptSession(
-      'session-image-error',
-      'continue with this screenshot',
-      undefined,
-      [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
-    )).rejects.toThrow('network unavailable');
+    await expect(
+      promptSession('session-image-error', 'continue with this screenshot', undefined, [
+        { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' },
+      ]),
+    ).rejects.toThrow('network unavailable');
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 });
@@ -3804,12 +3969,14 @@ describe('session actions', () => {
       },
     });
 
-    expect(getSessionContextUsage('session-gpt-55-context')).toEqual(expect.objectContaining({
-      tokens: 200_000,
-      modelId: 'gpt-5.5',
-      contextWindow: 400_000,
-      percent: 50,
-    }));
+    expect(getSessionContextUsage('session-gpt-55-context')).toEqual(
+      expect.objectContaining({
+        tokens: 200_000,
+        modelId: 'gpt-5.5',
+        contextWindow: 400_000,
+        percent: 50,
+      }),
+    );
   });
 
   it('compacts a live session and broadcasts the refreshed snapshot and context usage', async () => {
@@ -3857,10 +4024,12 @@ describe('session actions', () => {
     expect(registry.get('session-compact')?.lastCompactionSummaryTitle).toBe('Manual compaction');
     expect(registry.get('session-compact')?.contextUsageTimer).toBeUndefined();
     expect(events).toContainEqual(expect.objectContaining({ type: 'snapshot' }));
-    expect(events).toContainEqual(expect.objectContaining({
-      type: 'context_usage',
-      usage: expect.objectContaining({ tokens: 8 }),
-    }));
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'context_usage',
+        usage: expect.objectContaining({ tokens: 8 }),
+      }),
+    );
   });
 
   it('reloads, exports, aborts, and destroys live sessions through the underlying session object', async () => {
@@ -3902,8 +4071,12 @@ describe('session actions', () => {
   });
 
   it('updates live session model preferences with the current session state', async () => {
-    const applyPreferences = vi.spyOn(conversationModelPreferences, 'applyConversationModelPreferencesToLiveSession')
-      .mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority', hasExplicitServiceTier: true });
+    const applyPreferences = vi.spyOn(conversationModelPreferences, 'applyConversationModelPreferencesToLiveSession').mockResolvedValue({
+      currentModel: 'gpt-5',
+      currentThinkingLevel: 'high',
+      currentServiceTier: 'priority',
+      hasExplicitServiceTier: true,
+    });
 
     try {
       setLiveEntry('session-model-preferences', {
@@ -3922,11 +4095,16 @@ describe('session actions', () => {
         },
       });
 
-      await expect(updateLiveSessionModelPreferences(
-        'session-model-preferences',
-        { model: 'gpt-5', thinkingLevel: 'high' },
-        [{ id: 'gpt-5', provider: 'openai' }] as never,
-      )).resolves.toEqual({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority', hasExplicitServiceTier: true });
+      await expect(
+        updateLiveSessionModelPreferences('session-model-preferences', { model: 'gpt-5', thinkingLevel: 'high' }, [
+          { id: 'gpt-5', provider: 'openai' },
+        ] as never),
+      ).resolves.toEqual({
+        currentModel: 'gpt-5',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'priority',
+        hasExplicitServiceTier: true,
+      });
 
       expect(applyPreferences).toHaveBeenCalledWith(
         registry.get('session-model-preferences')?.session,
@@ -3942,14 +4120,18 @@ describe('session actions', () => {
 
 describe('event translation', () => {
   it('surfaces user messages from message_start events immediately', () => {
-    expect(toSse(asAgentSessionEvent({
-      type: 'message_start',
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: 'Show this prompt right away.' }],
-        timestamp: 1,
-      },
-    }))).toEqual({
+    expect(
+      toSse(
+        asAgentSessionEvent({
+          type: 'message_start',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'Show this prompt right away.' }],
+            timestamp: 1,
+          },
+        }),
+      ),
+    ).toEqual({
       type: 'user_message',
       block: {
         type: 'user',
@@ -3961,60 +4143,78 @@ describe('event translation', () => {
   });
 
   it('ignores user message_end events to avoid duplicate rows', () => {
-    expect(toSse(asAgentSessionEvent({
-      type: 'message_end',
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: 'Show this prompt right away.' }],
-        timestamp: 1,
-      },
-    }))).toBeNull();
+    expect(
+      toSse(
+        asAgentSessionEvent({
+          type: 'message_end',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'Show this prompt right away.' }],
+            timestamp: 1,
+          },
+        }),
+      ),
+    ).toBeNull();
   });
 
   it('surfaces assistant error messages from message_end events', () => {
-    expect(toSse(asAgentSessionEvent({
-      type: 'message_end',
-      message: {
-        role: 'assistant',
-        content: [],
-        stopReason: 'error',
-        errorMessage: 'Codex error: upstream overloaded',
-        timestamp: 1,
-      },
-    }))).toEqual({
+    expect(
+      toSse(
+        asAgentSessionEvent({
+          type: 'message_end',
+          message: {
+            role: 'assistant',
+            content: [],
+            stopReason: 'error',
+            errorMessage: 'Codex error: upstream overloaded',
+            timestamp: 1,
+          },
+        }),
+      ),
+    ).toEqual({
       type: 'error',
       message: 'Codex error: upstream overloaded',
     });
   });
 
   it('translates tool completions, auto compaction starts, and unknown events consistently', () => {
-    expect(toSse(asAgentSessionEvent({
-      type: 'tool_execution_end',
-      toolCallId: 'tool-1',
-      toolName: 'read',
-      isError: false,
-      result: {
-        content: [
-          { type: 'text', text: 'first line' },
-          { type: 'image', data: 'ignored' },
-          { type: 'text', text: 'second line' },
-        ],
+    expect(
+      toSse(
+        asAgentSessionEvent({
+          type: 'tool_execution_end',
+          toolCallId: 'tool-1',
+          toolName: 'read',
+          isError: false,
+          result: {
+            content: [
+              { type: 'text', text: 'first line' },
+              { type: 'image', data: 'ignored' },
+              { type: 'text', text: 'second line' },
+            ],
+            details: { size: 2 },
+          },
+        }),
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        type: 'tool_end',
+        toolCallId: 'tool-1',
+        toolName: 'read',
+        isError: false,
+        output: 'first line\nsecond line',
         details: { size: 2 },
-      },
-    }))).toEqual(expect.objectContaining({
-      type: 'tool_end',
-      toolCallId: 'tool-1',
-      toolName: 'read',
-      isError: false,
-      output: 'first line\nsecond line',
-      details: { size: 2 },
-      durationMs: expect.any(Number),
-    }));
+        durationMs: expect.any(Number),
+      }),
+    );
 
-    expect(toSse(asAgentSessionEvent({
-      type: 'compaction_start',
-      reason: 'overflow',
-    }))).toEqual({ type: 'compaction_start', mode: 'auto' });
+    expect(
+      toSse(
+        asAgentSessionEvent({
+          type: 'compaction_start',
+          reason: 'overflow',
+        }),
+      ),
+    ).toEqual({ type: 'compaction_start', mode: 'auto' });
 
     expect(toSse(asAgentSessionEvent({ type: 'unhandled_event_type' }))).toBeNull();
   });

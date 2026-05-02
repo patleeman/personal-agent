@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import {
-  DRAFT_SERVICE_TIER_DISABLED_SENTINEL,
   buildConversationInitialModelPreferenceState,
   buildConversationServiceTierPreferenceInput,
+  DRAFT_SERVICE_TIER_DISABLED_SENTINEL,
   resolveConversationDraftHydrationState,
   resolveConversationInitialDeferredResumeState,
   resolveConversationInitialModelPreferenceState,
@@ -29,20 +30,26 @@ describe('conversation initial state helpers', () => {
   });
 
   it('only persists service tier when the user made an explicit choice', () => {
-    expect(buildConversationServiceTierPreferenceInput({
-      currentServiceTier: 'priority',
-      hasExplicitServiceTier: false,
-    })).toEqual({});
+    expect(
+      buildConversationServiceTierPreferenceInput({
+        currentServiceTier: 'priority',
+        hasExplicitServiceTier: false,
+      }),
+    ).toEqual({});
 
-    expect(buildConversationServiceTierPreferenceInput({
-      currentServiceTier: 'priority',
-      hasExplicitServiceTier: true,
-    })).toEqual({ serviceTier: 'priority' });
+    expect(
+      buildConversationServiceTierPreferenceInput({
+        currentServiceTier: 'priority',
+        hasExplicitServiceTier: true,
+      }),
+    ).toEqual({ serviceTier: 'priority' });
 
-    expect(buildConversationServiceTierPreferenceInput({
-      currentServiceTier: '',
-      hasExplicitServiceTier: true,
-    })).toEqual({ serviceTier: null });
+    expect(
+      buildConversationServiceTierPreferenceInput({
+        currentServiceTier: '',
+        hasExplicitServiceTier: true,
+      }),
+    ).toEqual({ serviceTier: null });
   });
 
   it('turns fast-mode toggles into the persisted service-tier override', () => {
@@ -53,16 +60,18 @@ describe('conversation initial state helpers', () => {
   });
 
   it('normalizes initial model preference state with defaults', () => {
-    expect(buildConversationInitialModelPreferenceState({
-      conversationId: 'conv-1',
-      currentModel: '',
-      currentThinkingLevel: ' high ',
-      currentServiceTier: '',
-      hasExplicitServiceTier: false,
-      defaultModel: ' default-model ',
-      defaultThinkingLevel: 'medium',
-      defaultServiceTier: 'priority',
-    })).toEqual({
+    expect(
+      buildConversationInitialModelPreferenceState({
+        conversationId: 'conv-1',
+        currentModel: '',
+        currentThinkingLevel: ' high ',
+        currentServiceTier: '',
+        hasExplicitServiceTier: false,
+        defaultModel: ' default-model ',
+        defaultThinkingLevel: 'medium',
+        defaultServiceTier: 'priority',
+      }),
+    ).toEqual({
       conversationId: 'conv-1',
       currentModel: 'default-model',
       currentThinkingLevel: 'high',
@@ -82,32 +91,38 @@ describe('conversation initial state helpers', () => {
       },
     };
 
-    expect(resolveConversationInitialModelPreferenceState({
-      draft: false,
-      conversationId: 'conv-1',
-      locationState,
-      defaultModel: 'model-default',
-      defaultThinkingLevel: 'medium',
-      defaultServiceTier: '',
-    })).toEqual(locationState.initialModelPreferenceState);
+    expect(
+      resolveConversationInitialModelPreferenceState({
+        draft: false,
+        conversationId: 'conv-1',
+        locationState,
+        defaultModel: 'model-default',
+        defaultThinkingLevel: 'medium',
+        defaultServiceTier: '',
+      }),
+    ).toEqual(locationState.initialModelPreferenceState);
 
-    expect(resolveConversationInitialModelPreferenceState({
-      draft: true,
-      conversationId: 'conv-1',
-      locationState,
-      defaultModel: 'model-default',
-      defaultThinkingLevel: 'medium',
-      defaultServiceTier: '',
-    })).toBeNull();
+    expect(
+      resolveConversationInitialModelPreferenceState({
+        draft: true,
+        conversationId: 'conv-1',
+        locationState,
+        defaultModel: 'model-default',
+        defaultThinkingLevel: 'medium',
+        defaultServiceTier: '',
+      }),
+    ).toBeNull();
 
-    expect(resolveConversationInitialModelPreferenceState({
-      draft: false,
-      conversationId: 'conv-2',
-      locationState,
-      defaultModel: 'model-default',
-      defaultThinkingLevel: 'medium',
-      defaultServiceTier: '',
-    })).toBeNull();
+    expect(
+      resolveConversationInitialModelPreferenceState({
+        draft: false,
+        conversationId: 'conv-2',
+        locationState,
+        defaultModel: 'model-default',
+        defaultThinkingLevel: 'medium',
+        defaultServiceTier: '',
+      }),
+    ).toBeNull();
   });
 
   it('accepts initial deferred-resume and draft-hydration state only for the active saved conversation', () => {
@@ -117,28 +132,36 @@ describe('conversation initial state helpers', () => {
       draftHydrationState: { conversationId: 'conv-1', enableAutoModeOnLoad: true },
     };
 
-    expect(resolveConversationInitialDeferredResumeState({
-      draft: false,
-      conversationId: 'conv-1',
-      locationState,
-    })).toBe(resumes);
+    expect(
+      resolveConversationInitialDeferredResumeState({
+        draft: false,
+        conversationId: 'conv-1',
+        locationState,
+      }),
+    ).toBe(resumes);
 
-    expect(resolveConversationDraftHydrationState({
-      draft: false,
-      conversationId: 'conv-1',
-      locationState,
-    })).toEqual({ conversationId: 'conv-1', enableAutoModeOnLoad: true });
+    expect(
+      resolveConversationDraftHydrationState({
+        draft: false,
+        conversationId: 'conv-1',
+        locationState,
+      }),
+    ).toEqual({ conversationId: 'conv-1', enableAutoModeOnLoad: true });
 
-    expect(resolveConversationInitialDeferredResumeState({
-      draft: false,
-      conversationId: 'conv-2',
-      locationState,
-    })).toBeNull();
+    expect(
+      resolveConversationInitialDeferredResumeState({
+        draft: false,
+        conversationId: 'conv-2',
+        locationState,
+      }),
+    ).toBeNull();
 
-    expect(resolveConversationDraftHydrationState({
-      draft: true,
-      conversationId: 'conv-1',
-      locationState,
-    })).toBeNull();
+    expect(
+      resolveConversationDraftHydrationState({
+        draft: true,
+        conversationId: 'conv-1',
+        locationState,
+      }),
+    ).toBeNull();
   });
 });

@@ -1,12 +1,9 @@
 import { Buffer } from 'node:buffer';
 import { readFileSync, statSync } from 'node:fs';
+
+import { clearSessionRemoteTarget, setSessionCwd, setSessionRemoteTarget } from './conversation-session-header.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { HostApiDispatchResult } from './hosts/types.js';
-import {
-  clearSessionRemoteTarget,
-  setSessionCwd,
-  setSessionRemoteTarget,
-} from './conversation-session-header.js';
 
 interface LocalConversationMeta {
   id: string;
@@ -27,13 +24,18 @@ interface ConversationBootstrapLike {
       title?: string;
     };
   } | null;
-  liveSession?: ({ live: false } | {
-    live: true;
-    id?: string;
-    cwd?: string;
-    sessionFile?: string;
-    title?: string;
-  }) | null;
+  liveSession?:
+    | (
+        | { live: false }
+        | {
+            live: true;
+            id?: string;
+            cwd?: string;
+            sessionFile?: string;
+            title?: string;
+          }
+      )
+    | null;
 }
 
 interface ConversationExecutionTargetState {
@@ -75,9 +77,7 @@ function resolveLocalConversationSessionFile(
   localMeta: LocalConversationMeta | null,
 ): ConversationSessionFileResolution {
   const candidates = [
-    typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
-      ? bootstrap.liveSession.sessionFile
-      : null,
+    typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true ? bootstrap.liveSession.sessionFile : null,
     bootstrap?.sessionDetail?.meta?.file,
     localMeta?.file,
   ];
@@ -139,7 +139,7 @@ async function readLocalConversationMeta(hostManager: HostManager, conversationI
   }
 
   try {
-    const meta = await controller.readSessionMeta(conversationId) as Partial<LocalConversationMeta> | null;
+    const meta = (await controller.readSessionMeta(conversationId)) as Partial<LocalConversationMeta> | null;
     if (!meta || typeof meta.file !== 'string' || typeof meta.id !== 'string') {
       return null;
     }
@@ -171,7 +171,10 @@ async function readConversationExecutionTarget(
   };
 }
 
-async function resolveConversationRemoteTarget(hostManager: HostManager, conversationId: string): Promise<{
+async function resolveConversationRemoteTarget(
+  hostManager: HostManager,
+  conversationId: string,
+): Promise<{
   hostId: string;
   hostLabel?: string;
   remoteConversationId: string;
@@ -188,15 +191,16 @@ async function resolveConversationRemoteTarget(hostManager: HostManager, convers
   };
 }
 
-
 function isPlaceholderConversationTitle(title: string | undefined): boolean {
   const normalized = title?.trim().toLowerCase();
   return !normalized || normalized === 'new conversation' || normalized === '(new conversation)' || normalized === 'conversation';
 }
 
 function formatFallbackConversationTitle(text: string, imageCount: number): string {
-  return text.trim().replace(/\s+/g, ' ').slice(0, 80)
-    || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${String(imageCount)} image attachments)` : '');
+  return (
+    text.trim().replace(/\s+/g, ' ').slice(0, 80) ||
+    (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${String(imageCount)} image attachments)` : '')
+  );
 }
 
 function hasPromptImageData(value: unknown): boolean {
@@ -220,13 +224,14 @@ function buildPromptFallbackConversationTitle(body: unknown): string {
   const candidate = body as { text?: unknown; images?: unknown };
   const text = typeof candidate.text === 'string' ? candidate.text : '';
   const imageCount = Array.isArray(candidate.images)
-    ? candidate.images.filter((image) => (
-        !!image
-        && typeof image === 'object'
-        && hasPromptImageData((image as { data?: unknown }).data)
-        && typeof (image as { mimeType?: unknown }).mimeType === 'string'
-        && (image as { mimeType: string }).mimeType.trim().toLowerCase().startsWith('image/')
-      )).length
+    ? candidate.images.filter(
+        (image) =>
+          !!image &&
+          typeof image === 'object' &&
+          hasPromptImageData((image as { data?: unknown }).data) &&
+          typeof (image as { mimeType?: unknown }).mimeType === 'string' &&
+          (image as { mimeType: string }).mimeType.trim().toLowerCase().startsWith('image/'),
+      ).length
     : 0;
   return formatFallbackConversationTitle(text, imageCount);
 }
@@ -236,9 +241,7 @@ function buildBashFallbackConversationTitle(body: unknown): string {
     return '';
   }
 
-  const command = typeof (body as { command?: unknown }).command === 'string'
-    ? ((body as { command: string }).command)
-    : '';
+  const command = typeof (body as { command?: unknown }).command === 'string' ? (body as { command: string }).command : '';
   return formatFallbackConversationTitle(command, 0);
 }
 
@@ -260,12 +263,15 @@ function parseRemoteTitleUpdateFromStreamEventData(data: string | undefined): st
   }
 }
 
-async function renameConversationForRemoteTarget(hostManager: HostManager, input: {
-  localConversationId: string;
-  remoteHostId: string;
-  remoteConversationId: string;
-  name: string;
-}): Promise<void> {
+async function renameConversationForRemoteTarget(
+  hostManager: HostManager,
+  input: {
+    localConversationId: string;
+    remoteHostId: string;
+    remoteConversationId: string;
+    name: string;
+  },
+): Promise<void> {
   const normalizedName = input.name.trim();
   if (!normalizedName) {
     return;
@@ -274,25 +280,31 @@ async function renameConversationForRemoteTarget(hostManager: HostManager, input
   const remoteController = hostManager.getHostController(input.remoteHostId);
   const localController = hostManager.getHostController('local');
 
-  await remoteController.dispatchApiRequest({
-    method: 'PATCH',
-    path: `/api/conversations/${encodeURIComponent(input.remoteConversationId)}/title`,
-    body: { name: normalizedName },
-  }).catch(() => undefined);
+  await remoteController
+    .dispatchApiRequest({
+      method: 'PATCH',
+      path: `/api/conversations/${encodeURIComponent(input.remoteConversationId)}/title`,
+      body: { name: normalizedName },
+    })
+    .catch(() => undefined);
 
   if (localController.renameConversation) {
-    await localController.renameConversation({
-      conversationId: input.localConversationId,
-      name: normalizedName,
-    }).catch(() => undefined);
+    await localController
+      .renameConversation({
+        conversationId: input.localConversationId,
+        name: normalizedName,
+      })
+      .catch(() => undefined);
     return;
   }
 
-  await localController.dispatchApiRequest({
-    method: 'PATCH',
-    path: `/api/conversations/${encodeURIComponent(input.localConversationId)}/title`,
-    body: { name: normalizedName },
-  }).catch(() => undefined);
+  await localController
+    .dispatchApiRequest({
+      method: 'PATCH',
+      path: `/api/conversations/${encodeURIComponent(input.localConversationId)}/title`,
+      body: { name: normalizedName },
+    })
+    .catch(() => undefined);
 }
 
 function translateConversationScopedPath(path: string, localConversationId: string, remoteConversationId: string): string | null {
@@ -312,15 +324,11 @@ function translateConversationScopedPath(path: string, localConversationId: stri
     return path.replace(conversationPathPrefix, `/api/conversations/${encodeURIComponent(remoteConversationId)}`);
   }
 
-  if (path === `${liveSessionPathPrefix}`
-    || path.startsWith(`${liveSessionPathPrefix}/`)
-    || path.startsWith(`${liveSessionPathPrefix}?`)) {
+  if (path === `${liveSessionPathPrefix}` || path.startsWith(`${liveSessionPathPrefix}/`) || path.startsWith(`${liveSessionPathPrefix}?`)) {
     return path.replace(liveSessionPathPrefix, `/api/live-sessions/${encodeURIComponent(remoteConversationId)}`);
   }
 
-  if (path === `${sessionPathPrefix}`
-    || path.startsWith(`${sessionPathPrefix}/`)
-    || path.startsWith(`${sessionPathPrefix}?`)) {
+  if (path === `${sessionPathPrefix}` || path.startsWith(`${sessionPathPrefix}/`) || path.startsWith(`${sessionPathPrefix}?`)) {
     return path.replace(sessionPathPrefix, `/api/sessions/${encodeURIComponent(remoteConversationId)}`);
   }
 
@@ -359,8 +367,10 @@ function rewriteConversationScopedResponse(
     return encodeJsonResultLike(response, body);
   }
 
-  if (originalPath === `/api/live-sessions/${encodeURIComponent(localConversationId)}`
-    || originalPath.startsWith(`/api/live-sessions/${encodeURIComponent(localConversationId)}?`)) {
+  if (
+    originalPath === `/api/live-sessions/${encodeURIComponent(localConversationId)}` ||
+    originalPath.startsWith(`/api/live-sessions/${encodeURIComponent(localConversationId)}?`)
+  ) {
     return encodeJsonResultLike(response, {
       ...parsed,
       id: localConversationId,
@@ -394,16 +404,18 @@ export async function continueConversationInHost(
   }
 
   const localController = hostManager.getHostController('local');
-  const bootstrap = await localController.readConversationBootstrap?.({ conversationId }) as ConversationBootstrapLike | undefined;
+  const bootstrap = (await localController.readConversationBootstrap?.({ conversationId })) as ConversationBootstrapLike | undefined;
   const localMeta = await readLocalConversationMeta(hostManager, conversationId);
   const sessionFileResolution = resolveLocalConversationSessionFile(bootstrap, localMeta);
   const sessionFile = sessionFileResolution.path;
-  const cwd = typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
-    ? bootstrap.liveSession.cwd?.trim() || localMeta?.cwd || ''
-    : bootstrap?.sessionDetail?.meta?.cwd?.trim() || localMeta?.cwd || '';
-  const title = typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
-    ? bootstrap.liveSession.title?.trim() || localMeta?.title || 'Conversation'
-    : bootstrap?.sessionDetail?.meta?.title?.trim() || localMeta?.title || 'Conversation';
+  const cwd =
+    typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
+      ? bootstrap.liveSession.cwd?.trim() || localMeta?.cwd || ''
+      : bootstrap?.sessionDetail?.meta?.cwd?.trim() || localMeta?.cwd || '';
+  const title =
+    typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
+      ? bootstrap.liveSession.title?.trim() || localMeta?.title || 'Conversation'
+      : bootstrap?.sessionDetail?.meta?.title?.trim() || localMeta?.title || 'Conversation';
 
   if (!sessionFile) {
     if (sessionFileResolution.invalidPath) {
@@ -421,10 +433,12 @@ export async function continueConversationInHost(
     const existingTarget = await resolveConversationRemoteTarget(hostManager, conversationId);
     if (existingTarget?.hostId) {
       const remoteController = hostManager.getHostController(existingTarget.hostId);
-      await remoteController.dispatchApiRequest({
-        method: 'DELETE',
-        path: `/api/live-sessions/${encodeURIComponent(existingTarget.remoteConversationId)}`,
-      }).catch(() => undefined);
+      await remoteController
+        .dispatchApiRequest({
+          method: 'DELETE',
+          path: `/api/live-sessions/${encodeURIComponent(existingTarget.remoteConversationId)}`,
+        })
+        .catch(() => undefined);
     }
 
     clearSessionRemoteTarget(sessionFile);
@@ -441,10 +455,12 @@ export async function continueConversationInHost(
 
   const existingTarget = await resolveConversationRemoteTarget(hostManager, conversationId);
   if (existingTarget?.hostId === hostId && existingTarget.remoteConversationId) {
-    const existingRemoteMeta = await remoteController.dispatchApiRequest({
-      method: 'GET',
-      path: `/api/sessions/${encodeURIComponent(existingTarget.remoteConversationId)}/meta`,
-    }).catch(() => null);
+    const existingRemoteMeta = await remoteController
+      .dispatchApiRequest({
+        method: 'GET',
+        path: `/api/sessions/${encodeURIComponent(existingTarget.remoteConversationId)}/meta`,
+      })
+      .catch(() => null);
     if (existingRemoteMeta && existingRemoteMeta.statusCode >= 200 && existingRemoteMeta.statusCode < 400) {
       const remoteMeta = parseJsonBody<{ cwd?: unknown }>(existingRemoteMeta);
       if (localMeta?.file && typeof remoteMeta?.cwd === 'string') {
@@ -467,17 +483,18 @@ export async function continueConversationInHost(
     ...(remoteCwd ? { cwd: remoteCwd } : {}),
     sessionContent,
   });
-  const remoteConversationId = typeof (created as { id?: unknown } | null | undefined)?.id === 'string'
-    ? ((created as { id: string }).id).trim()
-    : '';
+  const remoteConversationId =
+    typeof (created as { id?: unknown } | null | undefined)?.id === 'string' ? (created as { id: string }).id.trim() : '';
   if (!remoteConversationId) {
     throw new Error(`Remote host ${hostRecord.label} did not return a conversation id.`);
   }
 
   if (title.trim().length > 0) {
-    await remoteController.invokeLocalApi('PATCH', `/api/conversations/${encodeURIComponent(remoteConversationId)}/title`, {
-      name: title.trim(),
-    }).catch(() => undefined);
+    await remoteController
+      .invokeLocalApi('PATCH', `/api/conversations/${encodeURIComponent(remoteConversationId)}/title`, {
+        name: title.trim(),
+      })
+      .catch(() => undefined);
   }
 
   setSessionRemoteTarget(sessionFile, {
@@ -486,10 +503,12 @@ export async function continueConversationInHost(
     remoteConversationId: remoteConversationId || conversationId,
   });
 
-  const remoteMetaResponse = await remoteController.dispatchApiRequest({
-    method: 'GET',
-    path: `/api/sessions/${encodeURIComponent(remoteConversationId)}/meta`,
-  }).catch(() => null);
+  const remoteMetaResponse = await remoteController
+    .dispatchApiRequest({
+      method: 'GET',
+      path: `/api/sessions/${encodeURIComponent(remoteConversationId)}/meta`,
+    })
+    .catch(() => null);
   const remoteMeta = remoteMetaResponse ? parseJsonBody<{ cwd?: unknown }>(remoteMetaResponse) : null;
   if (typeof remoteMeta?.cwd === 'string') {
     setSessionCwd(sessionFile, remoteMeta.cwd);
@@ -533,11 +552,12 @@ export async function dispatchConversationExecutionRequest(
   if (input.method === 'POST') {
     if (localMeta && isPlaceholderConversationTitle(localMeta.title)) {
       const encodedConversationId = encodeURIComponent(localConversationId);
-      const fallbackTitle = input.path === `/api/live-sessions/${encodedConversationId}/prompt`
-        ? buildPromptFallbackConversationTitle(input.body)
-        : input.path === `/api/live-sessions/${encodedConversationId}/bash`
-          ? buildBashFallbackConversationTitle(input.body)
-          : '';
+      const fallbackTitle =
+        input.path === `/api/live-sessions/${encodedConversationId}/prompt`
+          ? buildPromptFallbackConversationTitle(input.body)
+          : input.path === `/api/live-sessions/${encodedConversationId}/bash`
+            ? buildBashFallbackConversationTitle(input.body)
+            : '';
 
       if (fallbackTitle) {
         await renameConversationForRemoteTarget(hostManager, {
@@ -553,12 +573,14 @@ export async function dispatchConversationExecutionRequest(
   if (input.path === `/api/conversations/${encodeURIComponent(localConversationId)}/title` && input.method === 'PATCH') {
     const localController = hostManager.getHostController('local');
     const remoteController = hostManager.getHostController(target.hostId);
-    await remoteController.dispatchApiRequest({
-      method: input.method,
-      path: `/api/conversations/${encodeURIComponent(target.remoteConversationId)}/title`,
-      body: input.body,
-      headers: input.headers,
-    }).catch(() => undefined);
+    await remoteController
+      .dispatchApiRequest({
+        method: input.method,
+        path: `/api/conversations/${encodeURIComponent(target.remoteConversationId)}/title`,
+        body: input.body,
+        headers: input.headers,
+      })
+      .catch(() => undefined);
     return localController.dispatchApiRequest(input);
   }
 
@@ -647,18 +669,22 @@ export async function subscribeConversationExecutionApiStream(
           }
 
           if (localController.renameConversation) {
-            await localController.renameConversation({
-              conversationId: localConversationId,
-              name: remoteTitle,
-            }).catch(() => undefined);
+            await localController
+              .renameConversation({
+                conversationId: localConversationId,
+                name: remoteTitle,
+              })
+              .catch(() => undefined);
             return;
           }
 
-          await localController.dispatchApiRequest({
-            method: 'PATCH',
-            path: `/api/conversations/${encodeURIComponent(localConversationId)}/title`,
-            body: { name: remoteTitle },
-          }).catch(() => undefined);
+          await localController
+            .dispatchApiRequest({
+              method: 'PATCH',
+              path: `/api/conversations/${encodeURIComponent(localConversationId)}/title`,
+              body: { name: remoteTitle },
+            })
+            .catch(() => undefined);
         })();
       }
     }
@@ -668,11 +694,7 @@ export async function subscribeConversationExecutionApiStream(
 }
 
 function decodeConversationIdFromPath(path: string): string | null {
-  const patterns = [
-    /^\/api\/conversations\/([^/]+)\//,
-    /^\/api\/live-sessions\/([^/]+)(?:\/|$)/,
-    /^\/api\/sessions\/([^/]+)(?:\/|$)/,
-  ];
+  const patterns = [/^\/api\/conversations\/([^/]+)\//, /^\/api\/live-sessions\/([^/]+)(?:\/|$)/, /^\/api\/sessions\/([^/]+)(?:\/|$)/];
 
   for (const pattern of patterns) {
     const match = path.match(pattern);

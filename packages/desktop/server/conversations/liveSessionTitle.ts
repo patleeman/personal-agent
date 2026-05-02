@@ -1,10 +1,11 @@
 import { type AgentSession } from '@mariozechner/pi-coding-agent';
-import { readSessionMetaByFile } from './sessions.js';
+
 import { resolveLiveSessionFile } from './liveSessionPersistence.js';
+import { readSessionMetaByFile } from './sessions.js';
 
 function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
   const blocks = Array.isArray(content)
-    ? content as Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }>
+    ? (content as Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }>)
     : typeof content === 'string'
       ? [{ type: 'text', text: content }]
       : [];
@@ -37,23 +38,29 @@ function hasValidImageBlockPayload(block: { data?: unknown; mimeType?: unknown }
 }
 
 function formatConversationTitle(text: string, imageCount: number): string {
-  return text.trim().replace(/\n/g, ' ').slice(0, 80)
-    || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '');
+  return (
+    text.trim().replace(/\n/g, ' ').slice(0, 80) ||
+    (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '')
+  );
 }
 
 export function getSessionMessages(session: AgentSession): Array<{ role?: string; content?: unknown }> {
-  const stateMessages = (session as AgentSession & {
-    state?: { messages?: Array<{ role?: string; content?: unknown }> };
-    agent?: { state?: { messages?: Array<{ role?: string; content?: unknown }> } };
-  }).state?.messages;
+  const stateMessages = (
+    session as AgentSession & {
+      state?: { messages?: Array<{ role?: string; content?: unknown }> };
+      agent?: { state?: { messages?: Array<{ role?: string; content?: unknown }> } };
+    }
+  ).state?.messages;
 
   if (Array.isArray(stateMessages)) {
     return stateMessages;
   }
 
-  const agentMessages = (session as AgentSession & {
-    agent?: { state?: { messages?: Array<{ role?: string; content?: unknown }> } };
-  }).agent?.state?.messages;
+  const agentMessages = (
+    session as AgentSession & {
+      agent?: { state?: { messages?: Array<{ role?: string; content?: unknown }> } };
+    }
+  ).agent?.state?.messages;
 
   return Array.isArray(agentMessages) ? agentMessages : [];
 }

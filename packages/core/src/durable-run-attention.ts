@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
+
 import { getPiAgentStateDir, getStateRoot } from './runtime/paths.js';
 
 export interface DurableRunAttentionStateOptions {
@@ -61,7 +62,7 @@ function normalizeRecord(value: unknown, fallbackRunId?: string): DurableRunAtte
   }
 
   const record = value as Partial<DurableRunAttentionRecord>;
-  const rawRunId = typeof record.runId === 'string' ? record.runId : fallbackRunId ?? '';
+  const rawRunId = typeof record.runId === 'string' ? record.runId : (fallbackRunId ?? '');
   const runId = typeof rawRunId === 'string' ? rawRunId.trim() : '';
 
   if (!runId || typeof record.attentionSignature !== 'string' || typeof record.readAt !== 'string') {
@@ -106,10 +107,7 @@ function normalizeDocument(value: unknown): DurableRunAttentionStateDocument | n
 }
 
 function sortRuns(runs: Record<string, DurableRunAttentionRecord>): Record<string, DurableRunAttentionRecord> {
-  return Object.fromEntries(
-    Object.entries(runs)
-      .sort(([left], [right]) => left.localeCompare(right)),
-  );
+  return Object.fromEntries(Object.entries(runs).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 export function resolveDurableRunAttentionStatePath(options: DurableRunAttentionStateOptions = {}): string {
@@ -129,7 +127,9 @@ export function loadDurableRunAttentionState(options: DurableRunAttentionStateOp
   }
 }
 
-export function saveDurableRunAttentionState(options: DurableRunAttentionStateOptions & { document: DurableRunAttentionStateDocument }): string {
+export function saveDurableRunAttentionState(
+  options: DurableRunAttentionStateOptions & { document: DurableRunAttentionStateDocument },
+): string {
   if (options.document.version !== 1) {
     throw new Error('Durable run attention document version must be 1.');
   }
@@ -150,11 +150,13 @@ export function saveDurableRunAttentionState(options: DurableRunAttentionStateOp
   return path;
 }
 
-export function markDurableRunAttentionRead(options: DurableRunAttentionStateOptions & {
-  runId: string;
-  attentionSignature: string;
-  readAt?: string;
-}): DurableRunAttentionStateDocument {
+export function markDurableRunAttentionRead(
+  options: DurableRunAttentionStateOptions & {
+    runId: string;
+    attentionSignature: string;
+    readAt?: string;
+  },
+): DurableRunAttentionStateDocument {
   const runId = validateRunId(options.runId);
   const attentionSignature = validateAttentionSignature(options.attentionSignature);
   const readAt = normalizeIsoTimestamp(options.readAt ?? new Date().toISOString(), `durable run attention readAt for ${runId}`);
@@ -174,7 +176,9 @@ export function markDurableRunAttentionRead(options: DurableRunAttentionStateOpt
   return document;
 }
 
-export function markDurableRunAttentionUnread(options: DurableRunAttentionStateOptions & { runId: string }): DurableRunAttentionStateDocument {
+export function markDurableRunAttentionUnread(
+  options: DurableRunAttentionStateOptions & { runId: string },
+): DurableRunAttentionStateDocument {
   const runId = validateRunId(options.runId);
   const document = loadDurableRunAttentionState(options);
 
@@ -189,10 +193,12 @@ export function markDurableRunAttentionUnread(options: DurableRunAttentionStateO
   return document;
 }
 
-export function isDurableRunAttentionDismissed(options: DurableRunAttentionStateOptions & {
-  runId: string;
-  attentionSignature: string;
-}): boolean {
+export function isDurableRunAttentionDismissed(
+  options: DurableRunAttentionStateOptions & {
+    runId: string;
+    attentionSignature: string;
+  },
+): boolean {
   const runId = validateRunId(options.runId);
   const attentionSignature = validateAttentionSignature(options.attentionSignature);
   const document = loadDurableRunAttentionState(options);

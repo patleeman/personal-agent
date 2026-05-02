@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
+
 import { validateProjectId } from './projects.js';
 import { getStateRoot } from './runtime/paths.js';
 
@@ -27,9 +28,7 @@ function getConversationLinkStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -43,13 +42,7 @@ export function validateConversationId(conversationId: string): void {
 
 export function resolveProfileConversationLinksDir(options: ResolveConversationLinkOptions): string {
   validateProfileName(options.profile);
-  return join(
-    getConversationLinkStateRoot(options.stateRoot),
-    'pi-agent',
-    'state',
-    'conversation-project-links',
-    options.profile,
-  );
+  return join(getConversationLinkStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-project-links', options.profile);
 }
 
 export function resolveConversationLinkPath(options: ResolveConversationLinkPathOptions): string {
@@ -208,10 +201,7 @@ export function addConversationProjectLink(options: {
     stateRoot: options.stateRoot,
     profile: options.profile,
     conversationId: options.conversationId,
-    relatedProjectIds: [
-      ...(existing?.relatedProjectIds ?? []),
-      options.projectId,
-    ],
+    relatedProjectIds: [...(existing?.relatedProjectIds ?? []), options.projectId],
     updatedAt: options.updatedAt,
   });
 }

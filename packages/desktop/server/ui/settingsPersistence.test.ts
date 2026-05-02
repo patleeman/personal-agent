@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { persistSettingsWrite, resolveLocalProfileSettingsFilePath } from './settingsPersistence.js';
 
 const tempDirs: string[] = [];
@@ -44,13 +46,16 @@ describe('persistSettingsWrite', () => {
   it('writes to local settings before runtime settings and returns runtime result', () => {
     const writes: string[] = [];
 
-    const result = persistSettingsWrite((settingsFile) => {
-      writes.push(settingsFile);
-      return settingsFile;
-    }, {
-      localSettingsFile: '/tmp/local-settings.json',
-      runtimeSettingsFile: '/tmp/runtime-settings.json',
-    });
+    const result = persistSettingsWrite(
+      (settingsFile) => {
+        writes.push(settingsFile);
+        return settingsFile;
+      },
+      {
+        localSettingsFile: '/tmp/local-settings.json',
+        runtimeSettingsFile: '/tmp/runtime-settings.json',
+      },
+    );
 
     expect(writes).toEqual(['/tmp/local-settings.json', '/tmp/runtime-settings.json']);
     expect(result).toBe('/tmp/runtime-settings.json');
@@ -59,16 +64,21 @@ describe('persistSettingsWrite', () => {
   it('does not attempt runtime write when local write fails', () => {
     const writes: string[] = [];
 
-    expect(() => persistSettingsWrite((settingsFile) => {
-      writes.push(settingsFile);
-      if (settingsFile.includes('local')) {
-        throw new Error('local write failed');
-      }
-      return settingsFile;
-    }, {
-      localSettingsFile: '/tmp/local-settings.json',
-      runtimeSettingsFile: '/tmp/runtime-settings.json',
-    })).toThrow('local write failed');
+    expect(() =>
+      persistSettingsWrite(
+        (settingsFile) => {
+          writes.push(settingsFile);
+          if (settingsFile.includes('local')) {
+            throw new Error('local write failed');
+          }
+          return settingsFile;
+        },
+        {
+          localSettingsFile: '/tmp/local-settings.json',
+          runtimeSettingsFile: '/tmp/runtime-settings.json',
+        },
+      ),
+    ).toThrow('local write failed');
 
     expect(writes).toEqual(['/tmp/local-settings.json']);
   });

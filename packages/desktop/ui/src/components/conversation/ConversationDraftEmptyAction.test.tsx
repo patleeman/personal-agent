@@ -1,7 +1,8 @@
 import React from 'react';
-import { MemoryRouter } from 'react-router-dom';
 import { renderToString } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+
 import { ConversationDraftEmptyAction } from './ConversationDraftEmptyAction';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -69,16 +70,18 @@ describe('ConversationDraftEmptyAction', () => {
   it('renders related thread panel state', () => {
     const html = renderAction({
       relatedThreadQuery: 'architecture',
-      relatedThreadResults: [{
-        sessionId: 'conv-1',
-        title: 'Architecture pass',
-        cwd: '/repo',
-        timestamp: '2026-04-01T00:00:00.000Z',
-        snippet: 'Split the page',
-        matchedTerms: ['architecture'],
-        score: 10,
-        sameWorkspace: true,
-      }],
+      relatedThreadResults: [
+        {
+          sessionId: 'conv-1',
+          title: 'Architecture pass',
+          cwd: '/repo',
+          timestamp: '2026-04-01T00:00:00.000Z',
+          snippet: 'Split the page',
+          matchedTerms: ['architecture'],
+          score: 10,
+          sameWorkspace: true,
+        },
+      ],
       selectedRelatedThreadIds: ['conv-1'],
     });
 

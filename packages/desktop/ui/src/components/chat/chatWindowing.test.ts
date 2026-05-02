@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
+import {
+  buildChatRenderChunks,
+  formatWindowingCount,
+  getChatRenderItemAbsoluteRange,
+  resolveChunkIndexForOffset,
+} from './chatWindowing.js';
 import type { ChatRenderItem } from './transcriptItems.js';
-import { buildChatRenderChunks, formatWindowingCount, getChatRenderItemAbsoluteRange, resolveChunkIndexForOffset } from './chatWindowing.js';
 
 function messageItem(index: number): ChatRenderItem {
   return {
@@ -27,12 +33,7 @@ describe('chatWindowing', () => {
   });
 
   it('builds render chunks with span counts across clustered items', () => {
-    const chunks = buildChatRenderChunks([
-      messageItem(0),
-      traceCluster(1, 3),
-      messageItem(4),
-      messageItem(5),
-    ], 20, 2);
+    const chunks = buildChatRenderChunks([messageItem(0), traceCluster(1, 3), messageItem(4), messageItem(5)], 20, 2);
 
     expect(chunks).toEqual([
       {

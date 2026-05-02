@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   addOpenFileId,
   KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY,
@@ -19,7 +20,7 @@ function createStorage(): Storage {
       map.clear();
     },
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     key(index) {
       return [...map.keys()][index] ?? null;
@@ -39,7 +40,10 @@ describe('knowledgeOpenFiles', () => {
   });
 
   it('normalizes stored file ids without folders or duplicates', () => {
-    expect(normalizeOpenFileIds(['README.md', ' README.md ', 'notes/', 'notes/today.md', '', null])).toEqual(['README.md', 'notes/today.md']);
+    expect(normalizeOpenFileIds(['README.md', ' README.md ', 'notes/', 'notes/today.md', '', null])).toEqual([
+      'README.md',
+      'notes/today.md',
+    ]);
   });
 
   it('persists and restores open file ids', () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { access, readdir, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -120,11 +120,7 @@ async function closeSession(session, pid) {
 
 async function runSession(args) {
   const session = typeof args['--session'] === 'string' ? args['--session'] : generateSessionName();
-  const command = typeof args['--command'] === 'string'
-    ? args['--command']
-    : args._.length > 0
-      ? args._.join(' ')
-      : null;
+  const command = typeof args['--command'] === 'string' ? args['--command'] : args._.length > 0 ? args._.join(' ') : null;
   const keepOpen = args['--keep-open'] === true;
 
   if (!command) {
@@ -203,7 +199,7 @@ async function cleanupSessions(args) {
       continue;
     }
 
-    if (thresholdMs > 0 && (now - stats.mtimeMs) < thresholdMs) {
+    if (thresholdMs > 0 && now - stats.mtimeMs < thresholdMs) {
       skippedRecent += 1;
       continue;
     }

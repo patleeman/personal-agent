@@ -1,11 +1,11 @@
+import type { SseEvent } from './liveSessionEvents.js';
 import {
   assertLiveSessionSurfaceCanControl,
   buildLiveSessionPresenceState,
-  takeOverLiveSessionSurface,
   type LiveSessionPresenceHost,
   type LiveSessionPresenceState,
+  takeOverLiveSessionSurface,
 } from './liveSessionPresence.js';
-import type { SseEvent } from './liveSessionEvents.js';
 
 export interface LiveSessionPresenceFacadeHost extends LiveSessionPresenceHost {
   sessionId: string;
@@ -21,10 +21,7 @@ export function broadcastLiveSessionPresenceState<TEntry extends LiveSessionPres
   callbacks.broadcast(entry, { type: 'presence_state', state: buildLiveSessionPresenceState(entry) }, options);
 }
 
-export function ensureLiveSessionSurfaceCanControl(
-  entry: LiveSessionPresenceFacadeHost,
-  surfaceId?: string,
-): void {
+export function ensureLiveSessionSurfaceCanControl(entry: LiveSessionPresenceFacadeHost, surfaceId?: string): void {
   assertLiveSessionSurfaceCanControl(entry, surfaceId);
 }
 

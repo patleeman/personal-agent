@@ -1,8 +1,9 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ConversationQueueShelf } from './ConversationQueueShelf';
+
 import type { ParallelPromptPreview } from '../../shared/types';
+import { ConversationQueueShelf } from './ConversationQueueShelf';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 

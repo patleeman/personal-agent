@@ -65,13 +65,14 @@ export function getKnowledgeBaseSyncPresentation(
     }
 
     if (parts.length > 0) {
-      const label = gitStatus.localChangeCount > 0
-        ? 'Pending sync'
-        : gitStatus.aheadCount > 0 && gitStatus.behindCount > 0
-          ? 'Diverged'
-          : gitStatus.aheadCount > 0
-            ? 'Push pending'
-            : 'Remote updates';
+      const label =
+        gitStatus.localChangeCount > 0
+          ? 'Pending sync'
+          : gitStatus.aheadCount > 0 && gitStatus.behindCount > 0
+            ? 'Diverged'
+            : gitStatus.aheadCount > 0
+              ? 'Push pending'
+              : 'Remote updates';
       return {
         text: `${label} · ${parts.join(' · ')}`,
         toneClass: 'text-warning',

@@ -7,10 +7,10 @@ const { spawnSyncMock } = vi.hoisted(() => ({
 vi.mock('node:child_process', () => ({ spawnSync: spawnSyncMock }));
 
 import {
-  readRequiredCheckpointString,
+  createConversationCheckpointCommit,
   normalizeCheckpointPaths,
   parseCheckpointDiffSections,
-  createConversationCheckpointCommit,
+  readRequiredCheckpointString,
 } from './conversationCheckpointCommit.js';
 
 const NULL = '\x00';
@@ -88,25 +88,17 @@ describe('parseCheckpointDiffSections', () => {
   });
 
   it('parses an added file', () => {
-    const patch = [
-      'diff --git a/new-file.ts b/new-file.ts',
-      '--- /dev/null',
-      '+++ b/new-file.ts',
-      '@@ -0,0 +1 @@',
-      '+new content',
-    ].join('\n');
+    const patch = ['diff --git a/new-file.ts b/new-file.ts', '--- /dev/null', '+++ b/new-file.ts', '@@ -0,0 +1 @@', '+new content'].join(
+      '\n',
+    );
     const files = parseCheckpointDiffSections(patch);
     expect(files[0]).toMatchObject({ path: 'new-file.ts', status: 'added', additions: 1, deletions: 0 });
   });
 
   it('parses a deleted file', () => {
-    const patch = [
-      'diff --git a/old-file.ts b/old-file.ts',
-      '--- a/old-file.ts',
-      '+++ /dev/null',
-      '@@ -1 +0,0 @@',
-      '-removed line',
-    ].join('\n');
+    const patch = ['diff --git a/old-file.ts b/old-file.ts', '--- a/old-file.ts', '+++ /dev/null', '@@ -1 +0,0 @@', '-removed line'].join(
+      '\n',
+    );
     const files = parseCheckpointDiffSections(patch);
     expect(files[0]).toMatchObject({ path: 'old-file.ts', status: 'deleted', additions: 0, deletions: 1 });
   });
@@ -124,13 +116,9 @@ describe('parseCheckpointDiffSections', () => {
   });
 
   it('parses a copied file', () => {
-    const patch = [
-      'diff --git a/source.ts b/copy.ts',
-      'copy from source.ts',
-      'copy to copy.ts',
-      '--- a/source.ts',
-      '+++ b/copy.ts',
-    ].join('\n');
+    const patch = ['diff --git a/source.ts b/copy.ts', 'copy from source.ts', 'copy to copy.ts', '--- a/source.ts', '+++ b/copy.ts'].join(
+      '\n',
+    );
     const files = parseCheckpointDiffSections(patch);
     expect(files[0]).toMatchObject({ path: 'copy.ts', status: 'copied' });
   });
@@ -138,9 +126,17 @@ describe('parseCheckpointDiffSections', () => {
   it('parses multiple file sections', () => {
     const patch = [
       'diff --git a/a.ts b/a.ts',
-      '--- a/a.ts', '+++ b/a.ts', '@@ -1 +1 @@', '-old', '+new',
+      '--- a/a.ts',
+      '+++ b/a.ts',
+      '@@ -1 +1 @@',
+      '-old',
+      '+new',
       'diff --git a/b.ts b/b.ts',
-      '--- a/b.ts', '+++ b/b.ts', '@@ -1 +1 @@', '-x', '+y',
+      '--- a/b.ts',
+      '+++ b/b.ts',
+      '@@ -1 +1 @@',
+      '-x',
+      '+y',
     ].join('\n');
     expect(parseCheckpointDiffSections(patch)).toHaveLength(2);
   });
@@ -197,9 +193,13 @@ describe('createConversationCheckpointCommit', () => {
 
   it('throws when git rev-parse fails', () => {
     mockGit('', 1, 'fatal: not a git repository');
-    expect(() => createConversationCheckpointCommit({
-      cwd: '/not-repo', message: 'msg', paths: ['file.ts'],
-    })).toThrow('not a git repository');
+    expect(() =>
+      createConversationCheckpointCommit({
+        cwd: '/not-repo',
+        message: 'msg',
+        paths: ['file.ts'],
+      }),
+    ).toThrow('not a git repository');
   });
 
   it('throws when no staged changes found', () => {
@@ -208,15 +208,23 @@ describe('createConversationCheckpointCommit', () => {
     // git diff --cached --quiet exit 0 = no changes
     mockGit('', 0);
 
-    expect(() => createConversationCheckpointCommit({
-      cwd: '/repo', message: 'msg', paths: ['file.ts'],
-    })).toThrow('No staged changes were found');
+    expect(() =>
+      createConversationCheckpointCommit({
+        cwd: '/repo',
+        message: 'msg',
+        paths: ['file.ts'],
+      }),
+    ).toThrow('No staged changes were found');
   });
 
   it('throws on spawn error', () => {
     mockError(new Error('ENOENT'));
-    expect(() => createConversationCheckpointCommit({
-      cwd: '/repo', message: 'msg', paths: ['file.ts'],
-    })).toThrow('ENOENT');
+    expect(() =>
+      createConversationCheckpointCommit({
+        cwd: '/repo',
+        message: 'msg',
+        paths: ['file.ts'],
+      }),
+    ).toThrow('ENOENT');
   });
 });

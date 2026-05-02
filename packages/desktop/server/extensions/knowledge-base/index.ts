@@ -1,5 +1,6 @@
-import { join, relative } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   getDurableAgentFilePath,
@@ -9,9 +10,7 @@ import {
   getVaultRoot,
   loadUnifiedNodes,
 } from '@personal-agent/core';
-import {
-  renderSystemPromptTemplate,
-} from '@personal-agent/core';
+import { renderSystemPromptTemplate } from '@personal-agent/core';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
@@ -79,10 +78,14 @@ function listAvailableSkills(activeProfile: string, nodes: LoadedNode[]): Resour
   const normalizedProfile = activeProfile.trim().toLowerCase();
   return nodes
     .filter((node) => node.kinds.includes('skill'))
-    .filter((node) => node.profiles.length === 0 || node.profiles.some((value) => {
-      const normalizedValue = value.toLowerCase();
-      return normalizedValue === normalizedProfile || normalizedValue === 'shared';
-    }))
+    .filter(
+      (node) =>
+        node.profiles.length === 0 ||
+        node.profiles.some((value) => {
+          const normalizedValue = value.toLowerCase();
+          return normalizedValue === normalizedProfile || normalizedValue === 'shared';
+        }),
+    )
     .map((node) => ({
       name: node.id,
       description: (node.summary || node.description || '').trim(),
@@ -112,15 +115,14 @@ function listAvailableInternalSkills(repoRoot: string): ResourceDefinition[] {
       }
 
       const contents = readFileSync(path, 'utf-8');
-      const title = parseFrontmatterValue(contents, 'title')
-        ?? contents.match(/^#\s+(.+)$/m)?.[1]?.trim()
-        ?? entry.name;
-      const description = parseFrontmatterValue(contents, 'summary')
-        ?? contents
+      const title = parseFrontmatterValue(contents, 'title') ?? contents.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? entry.name;
+      const description =
+        parseFrontmatterValue(contents, 'summary') ??
+        contents
           .split(/\r?\n/)
           .map((line) => line.trim())
-          .find((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('---') && !line.includes(': '))
-        ?? '';
+          .find((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('---') && !line.includes(': ')) ??
+        '';
 
       return {
         name: parseFrontmatterValue(contents, 'id') ?? entry.name,
@@ -139,9 +141,7 @@ export function resolveKnowledgeContext(cwd: string): KnowledgeContext {
   const requestedProfile = resolveRequestedProfile();
   const requestedProfileDir = resolveProfileDir(profilesRoot, requestedProfile);
   const sharedProfileDir = resolveProfileDir(profilesRoot, 'shared');
-  const activeProfile = requestedProfile === 'shared' || existsSync(requestedProfileDir)
-    ? requestedProfile
-    : 'shared';
+  const activeProfile = requestedProfile === 'shared' || existsSync(requestedProfileDir) ? requestedProfile : 'shared';
   const activeProfileDir = activeProfile === 'shared' ? sharedProfileDir : requestedProfileDir;
   const layers: KnowledgeLayer[] = [{ name: 'shared', agentDir: sharedProfileDir }];
   if (activeProfile !== 'shared') layers.push({ name: activeProfile, agentDir: activeProfileDir });

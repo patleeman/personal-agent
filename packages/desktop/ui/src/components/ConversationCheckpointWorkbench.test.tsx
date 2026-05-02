@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+
 import { ConversationCheckpointWorkbenchPane, ConversationDiffRailContent } from './ConversationCheckpointWorkbench.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -78,9 +79,7 @@ describe('ConversationCheckpointWorkbench', () => {
   });
 
   it('shows a placeholder when no diff is selected', () => {
-    const html = renderToString(
-      <ConversationCheckpointWorkbenchPane conversationId="conv-1" checkpointId={null} />,
-    );
+    const html = renderToString(<ConversationCheckpointWorkbenchPane conversationId="conv-1" checkpointId={null} />);
 
     expect(html).toContain('Select a diff');
     expect(html).toContain('Pick a saved conversation diff');

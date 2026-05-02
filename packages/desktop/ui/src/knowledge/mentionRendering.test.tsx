@@ -2,6 +2,7 @@ import React, { Fragment } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
+
 import { buildMentionLookup, renderChildrenWithMentionLinks } from './mentionRendering';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;

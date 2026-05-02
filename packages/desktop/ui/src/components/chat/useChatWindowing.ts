@@ -1,23 +1,24 @@
-import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
-import type { ChatRenderItem } from './transcriptItems.js';
+import { type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
+
 import {
   buildChatRenderChunks,
   CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT,
-  resolveChunkIndexForOffset,
   type ChatRenderChunk,
   type ChatRenderChunkLayout,
   type ChatWindowingProfile,
+  resolveChunkIndexForOffset,
 } from './chatWindowing.js';
+import type { ChatRenderItem } from './transcriptItems.js';
 
 const MAX_OVERSCAN_CHUNKS = 10;
 
-export function calculateAverageSpanHeight(
-  renderChunks: ChatRenderChunk[],
-  chunkHeights: Record<string, number>,
-): number {
+export function calculateAverageSpanHeight(renderChunks: ChatRenderChunk[], chunkHeights: Record<string, number>): number {
   const measurements = renderChunks
     .map((chunk) => ({ height: chunkHeights[chunk.key], spanCount: chunk.spanCount }))
-    .filter((entry): entry is { height: number; spanCount: number } => typeof entry.height === 'number' && entry.height > 0 && entry.spanCount > 0);
+    .filter(
+      (entry): entry is { height: number; spanCount: number } =>
+        typeof entry.height === 'number' && entry.height > 0 && entry.spanCount > 0,
+    );
 
   if (measurements.length === 0) {
     return CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT;
@@ -65,16 +66,16 @@ export function resolveVisibleChunkRange({
     return null;
   }
 
-  const normalizedOverscanChunks = Number.isSafeInteger(overscanChunks) && overscanChunks >= 0
-    ? Math.min(MAX_OVERSCAN_CHUNKS, overscanChunks)
-    : 0;
+  const normalizedOverscanChunks =
+    Number.isSafeInteger(overscanChunks) && overscanChunks >= 0 ? Math.min(MAX_OVERSCAN_CHUNKS, overscanChunks) : 0;
 
   const totalHeight = chunkLayouts[chunkLayouts.length - 1]?.bottom ?? 0;
   const tops = chunkLayouts.map((chunk) => chunk.top);
   const heights = chunkLayouts.map((chunk) => chunk.height);
-  const focusChunkIndex = focusMessageIndex === null
-    ? -1
-    : chunkLayouts.findIndex((chunk) => focusMessageIndex >= chunk.startMessageIndex && focusMessageIndex <= chunk.endMessageIndex);
+  const focusChunkIndex =
+    focusMessageIndex === null
+      ? -1
+      : chunkLayouts.findIndex((chunk) => focusMessageIndex >= chunk.startMessageIndex && focusMessageIndex <= chunk.endMessageIndex);
 
   let startChunkIndex: number;
   let endChunkIndex: number;
@@ -98,9 +99,7 @@ export function resolveVisibleChunkRange({
   }
 
   const topSpacerHeight = startChunkIndex > 0 ? chunkLayouts[startChunkIndex].top : 0;
-  const bottomSpacerHeight = endChunkIndex < chunkLayouts.length - 1
-    ? Math.max(0, totalHeight - chunkLayouts[endChunkIndex].bottom)
-    : 0;
+  const bottomSpacerHeight = endChunkIndex < chunkLayouts.length - 1 ? Math.max(0, totalHeight - chunkLayouts[endChunkIndex].bottom) : 0;
 
   return {
     chunks: chunkLayouts.slice(startChunkIndex, endChunkIndex + 1),
@@ -150,11 +149,9 @@ export function useChatWindowing({
         scrollTop: scrollEl.scrollTop,
         clientHeight: scrollEl.clientHeight,
       };
-      setViewport((current) => (
-        current && current.scrollTop === next.scrollTop && current.clientHeight === next.clientHeight
-          ? current
-          : next
-      ));
+      setViewport((current) =>
+        current && current.scrollTop === next.scrollTop && current.clientHeight === next.clientHeight ? current : next,
+      );
     };
     const scheduleSync = () => {
       if (frame !== 0) {
@@ -177,10 +174,7 @@ export function useChatWindowing({
     };
   }, [shouldWindowTranscript, scrollContainerRef]);
 
-  const averageSpanHeight = useMemo(
-    () => calculateAverageSpanHeight(renderChunks, chunkHeights),
-    [chunkHeights, renderChunks],
-  );
+  const averageSpanHeight = useMemo(() => calculateAverageSpanHeight(renderChunks, chunkHeights), [chunkHeights, renderChunks]);
 
   const chunkLayouts = useMemo(
     () => buildChatRenderChunkLayouts(renderChunks, chunkHeights, averageSpanHeight),
@@ -192,15 +186,16 @@ export function useChatWindowing({
   }, []);
 
   const visibleChunkRange = useMemo(
-    () => (shouldWindowTranscript
-      ? resolveVisibleChunkRange({
-          chunkLayouts,
-          focusMessageIndex,
-          anchorToTail,
-          overscanChunks: renderingProfile.windowingOverscanChunks,
-          viewport,
-        })
-      : null),
+    () =>
+      shouldWindowTranscript
+        ? resolveVisibleChunkRange({
+            chunkLayouts,
+            focusMessageIndex,
+            anchorToTail,
+            overscanChunks: renderingProfile.windowingOverscanChunks,
+            viewport,
+          })
+        : null,
     [anchorToTail, chunkLayouts, focusMessageIndex, renderingProfile.windowingOverscanChunks, shouldWindowTranscript, viewport],
   );
 

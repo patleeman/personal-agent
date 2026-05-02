@@ -1,21 +1,22 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   base64ToFile,
   buildComposerFilePreparationNotices,
+  type ComposerDrawingAttachment,
   constrainPromptImageDimensions,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
   fileExtensionForMimeType,
+  hasComposerTransferFiles,
   isPotentialExcalidrawFile,
   prepareComposerFiles,
-  hasComposerTransferFiles,
   readComposerTransferFiles,
   removeComposerDrawingAttachmentByLocalId,
   removeComposerImageFileAtIndex,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
   screenshotCaptureImageToFile,
-  type ComposerDrawingAttachment,
 } from './promptAttachments.js';
 
 describe('promptAttachments', () => {
@@ -34,12 +35,15 @@ describe('promptAttachments', () => {
   });
 
   it('restores queued and composer images with stable fallback names', async () => {
-    const restoredQueued = restoreQueuedImageFiles([
-      { data: globalThis.btoa('hello'), mimeType: 'image/jpeg', previewUrl: 'data:image/jpeg;base64,aGVsbG8=' },
-    ], 'followUp', 1);
-    const restoredComposer = restoreComposerImageFiles([
-      { data: globalThis.btoa('hello'), mimeType: 'image/png', previewUrl: 'data:image/png;base64,aGVsbG8=' },
-    ], 'draft-image');
+    const restoredQueued = restoreQueuedImageFiles(
+      [{ data: globalThis.btoa('hello'), mimeType: 'image/jpeg', previewUrl: 'data:image/jpeg;base64,aGVsbG8=' }],
+      'followUp',
+      1,
+    );
+    const restoredComposer = restoreComposerImageFiles(
+      [{ data: globalThis.btoa('hello'), mimeType: 'image/png', previewUrl: 'data:image/png;base64,aGVsbG8=' }],
+      'draft-image',
+    );
 
     expect(restoredQueued[0]?.name).toBe('queued-followUp-2-1.jpg');
     expect(restoredQueued[0]?.type).toBe('image/jpeg');
@@ -48,17 +52,28 @@ describe('promptAttachments', () => {
   });
 
   it('skips malformed restored image payloads instead of throwing', async () => {
-    expect(restoreQueuedImageFiles([
-      { data: '%%%', mimeType: 'image/png' },
-      { data: globalThis.btoa('hello'), mimeType: 'text/plain' },
-      { data: globalThis.btoa('hello'), mimeType: 'image/png' },
-    ], 'steer', 0)).toHaveLength(1);
+    expect(
+      restoreQueuedImageFiles(
+        [
+          { data: '%%%', mimeType: 'image/png' },
+          { data: globalThis.btoa('hello'), mimeType: 'text/plain' },
+          { data: globalThis.btoa('hello'), mimeType: 'image/png' },
+        ],
+        'steer',
+        0,
+      ),
+    ).toHaveLength(1);
 
-    expect(restoreComposerImageFiles([
-      { data: '   ', mimeType: 'image/png' },
-      { data: globalThis.btoa('hello'), mimeType: 'text/plain' },
-      { data: globalThis.btoa('hello'), mimeType: 'image/png' },
-    ], 'draft-image')).toHaveLength(1);
+    expect(
+      restoreComposerImageFiles(
+        [
+          { data: '   ', mimeType: 'image/png' },
+          { data: globalThis.btoa('hello'), mimeType: 'text/plain' },
+          { data: globalThis.btoa('hello'), mimeType: 'image/png' },
+        ],
+        'draft-image',
+      ),
+    ).toHaveLength(1);
   });
 
   it('detects Excalidraw-compatible files before parsing them', () => {
@@ -86,12 +101,7 @@ describe('promptAttachments', () => {
     const brokenDrawing = new File(['bad'], 'broken.excalidraw', { type: '' });
     const rejected = new File(['notes'], 'notes.txt', { type: 'text/plain' });
 
-    const result = await prepareComposerFiles([
-      image,
-      parsedDrawing,
-      brokenDrawing,
-      rejected,
-    ], async (file) => {
+    const result = await prepareComposerFiles([image, parsedDrawing, brokenDrawing, rejected], async (file) => {
       if (file.name === 'broken.excalidraw') {
         throw new Error('Invalid scene');
       }
@@ -141,24 +151,28 @@ describe('promptAttachments', () => {
   });
 
   it('builds composer file preparation notices from preparation results', () => {
-    expect(buildComposerFilePreparationNotices({
-      drawingAttachments: [{ localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment],
-      drawingParseFailures: [{ fileName: 'broken.excalidraw', message: 'Invalid scene' }],
-      rejectedFileNames: ['a.txt', 'b.mov', 'c.zip', 'd.bin'],
-    })).toEqual([
+    expect(
+      buildComposerFilePreparationNotices({
+        drawingAttachments: [{ localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment],
+        drawingParseFailures: [{ fileName: 'broken.excalidraw', message: 'Invalid scene' }],
+        rejectedFileNames: ['a.txt', 'b.mov', 'c.zip', 'd.bin'],
+      }),
+    ).toEqual([
       { tone: 'accent', text: 'Attached 1 drawing.' },
       { tone: 'danger', text: 'Failed to parse broken.excalidraw: Invalid scene', durationMs: 4000 },
       { tone: 'danger', text: 'Unsupported file type: a.txt, b.mov, c.zip, +1 more', durationMs: 4000 },
     ]);
 
-    expect(buildComposerFilePreparationNotices({
-      drawingAttachments: [
-        { localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment,
-        { localId: 'drawing-2', title: 'Two' } as ComposerDrawingAttachment,
-      ],
-      drawingParseFailures: [],
-      rejectedFileNames: [],
-    })).toEqual([{ tone: 'accent', text: 'Attached 2 drawings.' }]);
+    expect(
+      buildComposerFilePreparationNotices({
+        drawingAttachments: [
+          { localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment,
+          { localId: 'drawing-2', title: 'Two' } as ComposerDrawingAttachment,
+        ],
+        drawingParseFailures: [],
+        rejectedFileNames: [],
+      }),
+    ).toEqual([{ tone: 'accent', text: 'Attached 2 drawings.' }]);
   });
 
   it('converts drawing attachments to prompt image and attachment references', () => {
@@ -185,10 +199,18 @@ describe('promptAttachments', () => {
     });
     expect(drawingAttachmentToPromptRef(drawing)).toEqual({ attachmentId: 'attachment-1', revision: 2 });
     expect(drawingAttachmentToPromptRef({ ...drawing, attachmentId: undefined })).toBeNull();
-    expect(drawingAttachmentToPromptRef({ ...drawing, revision: 'not-a-number' } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
-    expect(drawingAttachmentToPromptRef({ ...drawing, revision: '2abc' } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
-    expect(drawingAttachmentToPromptRef({ ...drawing, revision: String(Number.MAX_SAFE_INTEGER + 1) } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
-    expect(drawingAttachmentToPromptRef({ ...drawing, revision: String(Number.MAX_SAFE_INTEGER) } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
+    expect(drawingAttachmentToPromptRef({ ...drawing, revision: 'not-a-number' } as ComposerDrawingAttachment)).toEqual({
+      attachmentId: 'attachment-1',
+    });
+    expect(drawingAttachmentToPromptRef({ ...drawing, revision: '2abc' } as ComposerDrawingAttachment)).toEqual({
+      attachmentId: 'attachment-1',
+    });
+    expect(
+      drawingAttachmentToPromptRef({ ...drawing, revision: String(Number.MAX_SAFE_INTEGER + 1) } as ComposerDrawingAttachment),
+    ).toEqual({ attachmentId: 'attachment-1' });
+    expect(drawingAttachmentToPromptRef({ ...drawing, revision: String(Number.MAX_SAFE_INTEGER) } as ComposerDrawingAttachment)).toEqual({
+      attachmentId: 'attachment-1',
+    });
   });
 
   it('keeps small binary helpers boring and predictable', async () => {

@@ -1,5 +1,6 @@
-import type { Express } from 'express';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { Express } from 'express';
+
 import type { SavedUiPreferences } from '../ui/uiPreferences.js';
 
 export interface LiveSessionResourceOptions extends Record<string, unknown> {

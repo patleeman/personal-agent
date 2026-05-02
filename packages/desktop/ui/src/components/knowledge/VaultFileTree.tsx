@@ -1,23 +1,18 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
-import {
-  FileTree as TreesModel,
   type ContextMenuItem as FileTreeContextMenuItem,
   type ContextMenuOpenContext as FileTreeContextMenuOpenContext,
+  FileTree as TreesModel,
   type FileTreeDropContext,
   type FileTreeDropResult,
   type FileTreeRenameEvent,
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { api, vaultApi } from '../../client/api';
-import { useInvalidateOnTopics } from '../../hooks/useInvalidateOnTopics';
+import { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 import { useApi } from '../../hooks/useApi';
+import { useInvalidateOnTopics } from '../../hooks/useInvalidateOnTopics';
 import { getKnowledgeBaseSyncPresentation } from '../../knowledge/knowledgeBaseSyncStatus';
 import {
   addOpenFileId,
@@ -39,10 +34,9 @@ import {
   writeStoredExpandedFolderIds,
 } from '../../local/knowledgeTreeState';
 import type { VaultEntry } from '../../shared/types';
+import { cx } from '../ui';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
-import { cx } from '../ui';
-import { getDesktopBridge, shouldUseNativeAppContextMenus, type DesktopKnowledgeEntryContextMenuAction } from '../../desktop/desktopBridge';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
@@ -65,16 +59,21 @@ function Ico({ d, size = 14 }: { d: string; size?: number }) {
 
 const ICON = {
   plus: 'M12 5v14M5 12h14',
-  folderPlus: 'M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z',
-  trash: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
-  pencil: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
+  folderPlus:
+    'M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z',
+  trash:
+    'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
+  pencil:
+    'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
   move: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
   search: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
   import: 'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
-  refresh: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99',
+  refresh:
+    'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99',
   x: 'M6 18 18 6M6 6l12 12',
   file: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
-  folderOpen: 'M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75',
+  folderOpen:
+    'M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75',
 };
 
 const TREE_HOST_STYLE = {
@@ -308,7 +307,12 @@ function TreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinde
           Move to…
         </button>
         <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
-        <button type="button" className="ui-context-menu-item gap-2 text-danger hover:bg-danger/10 focus-visible:bg-danger/10" onClick={onDelete} role="menuitem">
+        <button
+          type="button"
+          className="ui-context-menu-item gap-2 text-danger hover:bg-danger/10 focus-visible:bg-danger/10"
+          onClick={onDelete}
+          role="menuitem"
+        >
           <Ico d={ICON.trash} size={12} />
           Delete
         </button>
@@ -328,9 +332,7 @@ function MoveModal({
   onConfirm: (targetDir: string) => void;
   onClose: () => void;
 }) {
-  const currentDir = entry.kind === 'file'
-    ? idToDir(entry.id)
-    : entry.id;
+  const currentDir = entry.kind === 'file' ? idToDir(entry.id) : entry.id;
   const [selected, setSelected] = useState('');
 
   return (
@@ -347,18 +349,16 @@ function MoveModal({
             onChange={(event) => setSelected(event.target.value)}
           >
             {folderOptions.map((folder) => (
-              <option
-                key={folder.id}
-                value={folder.id}
-                disabled={folder.id === currentDir || !canDropVaultEntry(entry, folder.id)}
-              >
+              <option key={folder.id} value={folder.id} disabled={folder.id === currentDir || !canDropVaultEntry(entry, folder.id)}>
                 {folder.label}
               </option>
             ))}
           </select>
         </label>
         <div className="flex justify-end gap-2 pt-4">
-          <button type="button" className="ui-action-button text-[12px]" onClick={onClose}>Cancel</button>
+          <button type="button" className="ui-action-button text-[12px]" onClick={onClose}>
+            Cancel
+          </button>
           <button
             type="button"
             className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90"
@@ -395,35 +395,51 @@ function ImportUrlModal({
     urlRef.current?.focus();
   }, []);
 
-  const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmedUrl = url.trim();
-    if (!trimmedUrl) {
-      setError('URL is required.');
-      return;
-    }
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmedUrl = url.trim();
+      if (!trimmedUrl) {
+        setError('URL is required.');
+        return;
+      }
 
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onImport({
-        url: trimmedUrl,
-        title: title.trim(),
-        directoryId: normalizeDirectoryId(directoryId),
-      });
-      onClose();
-    } catch (importError) {
-      setError(importError instanceof Error ? importError.message : String(importError));
-      setSubmitting(false);
-    }
-  }, [directoryId, onClose, onImport, title, url]);
+      setSubmitting(true);
+      setError(null);
+      try {
+        await onImport({
+          url: trimmedUrl,
+          title: title.trim(),
+          directoryId: normalizeDirectoryId(directoryId),
+        });
+        onClose();
+      } catch (importError) {
+        setError(importError instanceof Error ? importError.message : String(importError));
+        setSubmitting(false);
+      }
+    },
+    [directoryId, onClose, onImport, title, url],
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!submitting) onClose(); }}>
-      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(34rem,calc(100vw-2rem))] p-5" onClick={(event) => event.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={() => {
+        if (!submitting) onClose();
+      }}
+    >
+      <div
+        className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(34rem,calc(100vw-2rem))] p-5"
+        onClick={(event) => event.stopPropagation()}
+      >
         <h3 className="text-[13px] font-semibold text-primary mb-1">Import URL</h3>
         <p className="text-[11px] text-dim mb-3">Paste a web URL and Personal Agent will fetch readable content into a new vault note.</p>
-        <form className="space-y-3" onSubmit={(event) => { void handleSubmit(event); }}>
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            void handleSubmit(event);
+          }}
+        >
           <label className="block space-y-1">
             <span className="text-[11px] text-dim">URL</span>
             <input
@@ -438,7 +454,9 @@ function ImportUrlModal({
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] text-dim">Title override <span className="text-dim/70">optional</span></span>
+            <span className="text-[11px] text-dim">
+              Title override <span className="text-dim/70">optional</span>
+            </span>
             <input
               type="text"
               value={title}
@@ -449,7 +467,9 @@ function ImportUrlModal({
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] text-dim">Target folder <span className="text-dim/70">optional</span></span>
+            <span className="text-[11px] text-dim">
+              Target folder <span className="text-dim/70">optional</span>
+            </span>
             <input
               type="text"
               value={directoryId}
@@ -462,8 +482,14 @@ function ImportUrlModal({
           </label>
           {error ? <p className="text-[12px] text-danger">{error}</p> : null}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" className="ui-action-button text-[12px]" onClick={onClose} disabled={submitting}>Cancel</button>
-            <button type="submit" className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70" disabled={submitting}>
+            <button type="button" className="ui-action-button text-[12px]" onClick={onClose} disabled={submitting}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70"
+              disabled={submitting}
+            >
               {submitting ? 'Importing…' : 'Import URL'}
             </button>
           </div>
@@ -492,35 +518,53 @@ function CreateEntryModal({
     inputRef.current?.select();
   }, []);
 
-  const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = value.trim();
-    if (!trimmed) {
-      setError(state.kind === 'file' ? 'File name is required.' : 'Folder name is required.');
-      return;
-    }
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = value.trim();
+      if (!trimmed) {
+        setError(state.kind === 'file' ? 'File name is required.' : 'Folder name is required.');
+        return;
+      }
 
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onConfirm(trimmed);
-      onClose();
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : String(submitError));
-      setSubmitting(false);
-    }
-  }, [onClose, onConfirm, state.kind, value]);
+      setSubmitting(true);
+      setError(null);
+      try {
+        await onConfirm(trimmed);
+        onClose();
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : String(submitError));
+        setSubmitting(false);
+      }
+    },
+    [onClose, onConfirm, state.kind, value],
+  );
 
   const title = state.kind === 'file' ? 'New file' : 'New folder';
   const label = state.kind === 'file' ? 'File name' : 'Folder name';
   const targetLabel = state.directoryId || 'vault root';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!submitting) onClose(); }}>
-      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(28rem,calc(100vw-2rem))] p-5" onClick={(event) => event.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={() => {
+        if (!submitting) onClose();
+      }}
+    >
+      <div
+        className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(28rem,calc(100vw-2rem))] p-5"
+        onClick={(event) => event.stopPropagation()}
+      >
         <h3 className="text-[13px] font-semibold text-primary mb-1">{title}</h3>
-        <p className="text-[11px] text-dim mb-3">Create a new {state.kind === 'file' ? 'markdown file' : 'folder'} in {targetLabel}.</p>
-        <form className="space-y-3" onSubmit={(event) => { void handleSubmit(event); }}>
+        <p className="text-[11px] text-dim mb-3">
+          Create a new {state.kind === 'file' ? 'markdown file' : 'folder'} in {targetLabel}.
+        </p>
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            void handleSubmit(event);
+          }}
+        >
           <label className="block space-y-1">
             <span className="text-[11px] text-dim">{label}</span>
             <input
@@ -536,8 +580,14 @@ function CreateEntryModal({
           </label>
           {error ? <p className="text-[12px] text-danger">{error}</p> : null}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" className="ui-action-button text-[12px]" onClick={onClose} disabled={submitting}>Cancel</button>
-            <button type="submit" className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70" disabled={submitting}>
+            <button type="button" className="ui-action-button text-[12px]" onClick={onClose} disabled={submitting}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70"
+              disabled={submitting}
+            >
               {submitting ? 'Creating…' : title}
             </button>
           </div>
@@ -565,11 +615,9 @@ function OpenFilesSection({
   className?: string;
 }) {
   return (
-    <div className={[
-      'flex flex-col px-2 pb-2 pt-1.5',
-      bordered ? 'border-t border-border-subtle' : '',
-      className,
-    ].filter(Boolean).join(' ')}>
+    <div
+      className={['flex flex-col px-2 pb-2 pt-1.5', bordered ? 'border-t border-border-subtle' : '', className].filter(Boolean).join(' ')}
+    >
       <div className="flex shrink-0 items-center justify-between gap-2 px-1 pb-1">
         <p className="ui-section-label">Open Files</p>
         {openFileIds.length > 0 ? (
@@ -605,7 +653,9 @@ function OpenFilesSection({
                   aria-current={isActive ? 'true' : undefined}
                   onClick={() => onSelect(fileId)}
                 >
-                  <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
+                  <span className="shrink-0 text-dim">
+                    <Ico d={ICON.file} size={12} />
+                  </span>
                   <span className="block min-w-0 flex-1 truncate text-[12px] font-medium">{fileName.replace(/\.md$/, '')}</span>
                 </button>
                 <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center">
@@ -664,41 +714,45 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     error: knowledgeBaseError,
     refetch: refetchKnowledgeBase,
   } = useApi(api.knowledgeBase, 'knowledge-base-tree-status');
-  const model = useMemo(() => new TreesModel({
-    paths: [],
-    search: false,
-    initialExpandedPaths: [...expandedFolderIdsRef.current],
-    initialSelectedPaths: initialActiveFileIdRef.current ? [initialActiveFileIdRef.current] : [],
-    composition: {
-      contextMenu: useNativeKnowledgeContextMenu
-        ? {
-            enabled: true,
-            triggerMode: 'right-click',
-            onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context),
-          }
-        : {
-            triggerMode: 'right-click',
+  const model = useMemo(
+    () =>
+      new TreesModel({
+        paths: [],
+        search: false,
+        initialExpandedPaths: [...expandedFolderIdsRef.current],
+        initialSelectedPaths: initialActiveFileIdRef.current ? [initialActiveFileIdRef.current] : [],
+        composition: {
+          contextMenu: useNativeKnowledgeContextMenu
+            ? {
+                enabled: true,
+                triggerMode: 'right-click',
+                onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context),
+              }
+            : {
+                triggerMode: 'right-click',
+              },
+        },
+        onSelectionChange: (paths) => selectionChangeRef.current(paths),
+        renaming: {
+          onRename: (event) => renameRef.current(event),
+        },
+        dragAndDrop: {
+          canDrop: (event) => canDropRef.current(event),
+          onDropComplete: (event) => dropCompleteRef.current(event),
+          onDropError: (error) => {
+            console.error('knowledge tree drop failed', error);
           },
-    },
-    onSelectionChange: (paths) => selectionChangeRef.current(paths),
-    renaming: {
-      onRename: (event) => renameRef.current(event),
-    },
-    dragAndDrop: {
-      canDrop: (event) => canDropRef.current(event),
-      onDropComplete: (event) => dropCompleteRef.current(event),
-      onDropError: (error) => {
-        console.error('knowledge tree drop failed', error);
-      },
-    },
-  }), [useNativeKnowledgeContextMenu]);
+        },
+      }),
+    [useNativeKnowledgeContextMenu],
+  );
 
   const entryMap = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
   const folderIds = useMemo(() => entries.filter((entry) => entry.kind === 'folder').map((entry) => entry.id), [entries]);
-  const folderOptions = useMemo<FolderOption[]>(() => [
-    { id: '', label: '/ (vault root)' },
-    ...folderIds.map((folderId) => ({ id: folderId, label: folderId })),
-  ], [folderIds]);
+  const folderOptions = useMemo<FolderOption[]>(
+    () => [{ id: '', label: '/ (vault root)' }, ...folderIds.map((folderId) => ({ id: folderId, label: folderId }))],
+    [folderIds],
+  );
   const knowledgeBaseDisabled = knowledgeBaseState?.configured === false;
   const knowledgeBaseSyncPresentation = useMemo(() => {
     if (knowledgeBaseError && !knowledgeBaseState && !knowledgeBaseLoading) {
@@ -728,10 +782,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   const persistExpandedFolderIds = useCallback((nextExpandedFolderIds: ReadonlySet<string>) => {
     const normalized = new Set(nextExpandedFolderIds);
-    if (
-      hasSameStringSet(expandedFolderIdsRef.current, normalized)
-      && hasSameStringSet(visibleExpandedFolderIdsRef.current, normalized)
-    ) {
+    if (hasSameStringSet(expandedFolderIdsRef.current, normalized) && hasSameStringSet(visibleExpandedFolderIdsRef.current, normalized)) {
       return;
     }
 
@@ -740,105 +791,126 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     writeStoredExpandedFolderIds(normalized);
   }, []);
 
-  const applyRenameEffects = useCallback((oldId: string, newId: string) => {
-    persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
+  const applyRenameEffects = useCallback(
+    (oldId: string, newId: string) => {
+      persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
 
-    if (oldId.endsWith('/') && newId.endsWith('/')) {
-      persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, oldId, newId));
-    }
+      if (oldId.endsWith('/') && newId.endsWith('/')) {
+        persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, oldId, newId));
+      }
 
-    const nextActiveFileId = resolveRenamedFileId(activeFileIdRef.current, oldId, newId);
-    if (nextActiveFileId && nextActiveFileId !== activeFileIdRef.current) {
-      onFileSelect(nextActiveFileId);
-    }
-  }, [onFileSelect, persistExpandedFolderIds, persistOpenFileIds]);
+      const nextActiveFileId = resolveRenamedFileId(activeFileIdRef.current, oldId, newId);
+      if (nextActiveFileId && nextActiveFileId !== activeFileIdRef.current) {
+        onFileSelect(nextActiveFileId);
+      }
+    },
+    [onFileSelect, persistExpandedFolderIds, persistOpenFileIds],
+  );
 
-  const applyDeleteEffects = useCallback((id: string) => {
-    persistOpenFileIds(removeOpenFileIdsWithin(openFileIdsRef.current, id));
+  const applyDeleteEffects = useCallback(
+    (id: string) => {
+      persistOpenFileIds(removeOpenFileIdsWithin(openFileIdsRef.current, id));
 
-    if (id.endsWith('/')) {
-      persistExpandedFolderIds(collapseExpandedFolderIds(expandedFolderIdsRef.current, id));
-    }
+      if (id.endsWith('/')) {
+        persistExpandedFolderIds(collapseExpandedFolderIds(expandedFolderIdsRef.current, id));
+      }
 
-    if (isPathAffectedByRemoval(activeFileIdRef.current, id)) {
-      onFileSelect('');
-    }
-  }, [onFileSelect, persistExpandedFolderIds, persistOpenFileIds]);
+      if (isPathAffectedByRemoval(activeFileIdRef.current, id)) {
+        onFileSelect('');
+      }
+    },
+    [onFileSelect, persistExpandedFolderIds, persistOpenFileIds],
+  );
 
-  const loadSnapshot = useCallback(async (options?: { keepLoadingState?: boolean }) => {
-    if (options?.keepLoadingState !== false) {
-      setLoading(true);
-    }
+  const loadSnapshot = useCallback(
+    async (options?: { keepLoadingState?: boolean }) => {
+      if (options?.keepLoadingState !== false) {
+        setLoading(true);
+      }
 
-    try {
-      const result = await api.vaultFiles();
-      setEntries(result.files);
-      model.resetPaths(result.files.map((entry) => entry.id), {
-        initialExpandedPaths: [...expandedFolderIdsRef.current],
+      try {
+        const result = await api.vaultFiles();
+        setEntries(result.files);
+        model.resetPaths(
+          result.files.map((entry) => entry.id),
+          {
+            initialExpandedPaths: [...expandedFolderIdsRef.current],
+          },
+        );
+      } catch (error) {
+        console.error('failed to load knowledge base snapshot', error);
+        setEntries([]);
+        model.resetPaths([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [model],
+  );
+
+  const handleRename = useCallback(
+    async ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
+      try {
+        const newName = destinationPath.split('/').filter(Boolean).pop() ?? '';
+        const updated = await vaultApi.rename(sourcePath, newName);
+        emitKBEvent('kb:file-renamed', { oldId: sourcePath, newId: updated.id });
+      } catch (error) {
+        console.error('rename failed', error);
+        await loadSnapshot({ keepLoadingState: false });
+      }
+    },
+    [loadSnapshot],
+  );
+
+  const handleMovePaths = useCallback(
+    async (paths: readonly string[], targetDirInput: string, options?: { emitEntriesChangedOnly?: boolean }) => {
+      const targetDir = normalizeVaultDir(targetDirInput);
+      const movedPairs: Array<{ oldId: string; newId: string }> = [];
+
+      try {
+        for (const path of getTopLevelDraggedPaths(paths)) {
+          const updated = await vaultApi.move(path, targetDir);
+          movedPairs.push({ oldId: path, newId: updated.id });
+        }
+      } catch (error) {
+        console.error('move failed', error);
+        await loadSnapshot({ keepLoadingState: false });
+        return;
+      }
+
+      if (movedPairs.length === 0) {
+        return;
+      }
+
+      if (options?.emitEntriesChangedOnly || movedPairs.length > 1) {
+        for (const pair of movedPairs) {
+          applyRenameEffects(pair.oldId, pair.newId);
+        }
+        emitKBEvent('kb:entries-changed');
+        return;
+      }
+
+      const pair = movedPairs[0];
+      if (pair) {
+        emitKBEvent('kb:file-renamed', { oldId: pair.oldId, newId: pair.newId });
+      }
+    },
+    [applyRenameEffects, loadSnapshot],
+  );
+
+  const handleImportUrl = useCallback(
+    async (input: { url: string; title: string; directoryId: string }) => {
+      const imported = await vaultApi.importUrl({
+        url: input.url,
+        ...(input.title ? { title: input.title } : {}),
+        ...(input.directoryId ? { directoryId: input.directoryId } : {}),
+        sourceApp: 'Personal Agent Knowledge UI',
       });
-    } catch (error) {
-      console.error('failed to load knowledge base snapshot', error);
-      setEntries([]);
-      model.resetPaths([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [model]);
-
-  const handleRename = useCallback(async ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
-    try {
-      const newName = destinationPath.split('/').filter(Boolean).pop() ?? '';
-      const updated = await vaultApi.rename(sourcePath, newName);
-      emitKBEvent('kb:file-renamed', { oldId: sourcePath, newId: updated.id });
-    } catch (error) {
-      console.error('rename failed', error);
-      await loadSnapshot({ keepLoadingState: false });
-    }
-  }, [loadSnapshot]);
-
-  const handleMovePaths = useCallback(async (paths: readonly string[], targetDirInput: string, options?: { emitEntriesChangedOnly?: boolean }) => {
-    const targetDir = normalizeVaultDir(targetDirInput);
-    const movedPairs: Array<{ oldId: string; newId: string }> = [];
-
-    try {
-      for (const path of getTopLevelDraggedPaths(paths)) {
-        const updated = await vaultApi.move(path, targetDir);
-        movedPairs.push({ oldId: path, newId: updated.id });
-      }
-    } catch (error) {
-      console.error('move failed', error);
-      await loadSnapshot({ keepLoadingState: false });
-      return;
-    }
-
-    if (movedPairs.length === 0) {
-      return;
-    }
-
-    if (options?.emitEntriesChangedOnly || movedPairs.length > 1) {
-      for (const pair of movedPairs) {
-        applyRenameEffects(pair.oldId, pair.newId);
-      }
       emitKBEvent('kb:entries-changed');
-      return;
-    }
-
-    const pair = movedPairs[0];
-    if (pair) {
-      emitKBEvent('kb:file-renamed', { oldId: pair.oldId, newId: pair.newId });
-    }
-  }, [applyRenameEffects, loadSnapshot]);
-
-  const handleImportUrl = useCallback(async (input: { url: string; title: string; directoryId: string }) => {
-    const imported = await vaultApi.importUrl({
-      url: input.url,
-      ...(input.title ? { title: input.title } : {}),
-      ...(input.directoryId ? { directoryId: input.directoryId } : {}),
-      sourceApp: 'Personal Agent Knowledge UI',
-    });
-    emitKBEvent('kb:entries-changed');
-    onFileSelect(imported.note.id);
-  }, [onFileSelect]);
+      onFileSelect(imported.note.id);
+    },
+    [onFileSelect],
+  );
 
   const handleKnowledgeBaseSync = useCallback(async () => {
     if (!knowledgeBaseState?.configured || syncingKnowledgeBase) {
@@ -848,10 +920,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     setSyncingKnowledgeBase(true);
     try {
       await api.syncKnowledgeBase();
-      await Promise.all([
-        refetchKnowledgeBase({ resetLoading: false }),
-        loadSnapshot({ keepLoadingState: false }),
-      ]);
+      await Promise.all([refetchKnowledgeBase({ resetLoading: false }), loadSnapshot({ keepLoadingState: false })]);
     } catch (error) {
       console.error('knowledge base sync failed', error);
       await refetchKnowledgeBase({ resetLoading: false });
@@ -869,118 +938,133 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     });
   }, []);
 
-  const handleCreateEntry = useCallback(async (value: string) => {
-    if (!createEntryState) {
-      return;
-    }
+  const handleCreateEntry = useCallback(
+    async (value: string) => {
+      if (!createEntryState) {
+        return;
+      }
 
-    const parentDir = normalizeVaultDir(createEntryState.directoryId);
-    const childName = value.replace(/^\/+|\/+$/gu, '');
-    const childPath = parentDir ? `${parentDir}${childName}` : childName;
+      const parentDir = normalizeVaultDir(createEntryState.directoryId);
+      const childName = value.replace(/^\/+|\/+$/gu, '');
+      const childPath = parentDir ? `${parentDir}${childName}` : childName;
 
-    if (createEntryState.kind === 'file') {
-      const fileId = childPath.endsWith('.md') ? childPath : `${childPath}.md`;
-      await vaultApi.writeFile(fileId, '');
-      emitKBEvent('kb:file-created', { id: fileId });
-      onFileSelect(fileId);
-      return;
-    }
+      if (createEntryState.kind === 'file') {
+        const fileId = childPath.endsWith('.md') ? childPath : `${childPath}.md`;
+        await vaultApi.writeFile(fileId, '');
+        emitKBEvent('kb:file-created', { id: fileId });
+        onFileSelect(fileId);
+        return;
+      }
 
-    const folderId = childPath.endsWith('/') ? childPath : `${childPath}/`;
-    const created = await vaultApi.createFolder(folderId);
-    emitKBEvent('kb:file-created', { id: created.id });
-  }, [createEntryState, onFileSelect]);
+      const folderId = childPath.endsWith('/') ? childPath : `${childPath}/`;
+      const created = await vaultApi.createFolder(folderId);
+      emitKBEvent('kb:file-created', { id: created.id });
+    },
+    [createEntryState, onFileSelect],
+  );
 
-  const handleDelete = useCallback(async (entry: VaultEntry) => {
-    if (!window.confirm(`Delete “${entry.name}”?`)) {
-      return;
-    }
+  const handleDelete = useCallback(
+    async (entry: VaultEntry) => {
+      if (!window.confirm(`Delete “${entry.name}”?`)) {
+        return;
+      }
 
-    try {
-      await vaultApi.deleteFile(entry.id);
-      applyDeleteEffects(entry.id);
-      setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, entry.id)));
       try {
-        model.remove(entry.id, entry.kind === 'folder' ? { recursive: true } : undefined);
-      } catch {
-        // The follow-up snapshot is authoritative; this is only an immediate UI update.
+        await vaultApi.deleteFile(entry.id);
+        applyDeleteEffects(entry.id);
+        setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, entry.id)));
+        try {
+          model.remove(entry.id, entry.kind === 'folder' ? { recursive: true } : undefined);
+        } catch {
+          // The follow-up snapshot is authoritative; this is only an immediate UI update.
+        }
+        emitKBEvent('kb:file-deleted', { id: entry.id });
+      } catch (error) {
+        console.error('delete failed', error);
       }
-      emitKBEvent('kb:file-deleted', { id: entry.id });
-    } catch (error) {
-      console.error('delete failed', error);
-    }
-  }, [applyDeleteEffects, model]);
+    },
+    [applyDeleteEffects, model],
+  );
 
-  const handleOpenInFinder = useCallback(async (entry: VaultEntry) => {
-    const desktopBridge = getDesktopBridge();
-    const targetPath = resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry);
-    if (!desktopBridge?.openPath || !targetPath) {
-      return;
-    }
-
-    try {
-      const result = await desktopBridge.openPath(targetPath);
-      if (!result.opened) {
-        console.error('open in Finder failed', result.error ?? 'Unknown error');
+  const handleOpenInFinder = useCallback(
+    async (entry: VaultEntry) => {
+      const desktopBridge = getDesktopBridge();
+      const targetPath = resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry);
+      if (!desktopBridge?.openPath || !targetPath) {
+        return;
       }
-    } catch (error) {
-      console.error('open in Finder failed', error);
-    }
-  }, [knowledgeBaseState?.effectiveRoot]);
 
-  const runKnowledgeContextMenuAction = useCallback((action: DesktopKnowledgeEntryContextMenuAction | null, entry: VaultEntry) => {
-    if (!action) {
-      return;
-    }
+      try {
+        const result = await desktopBridge.openPath(targetPath);
+        if (!result.opened) {
+          console.error('open in Finder failed', result.error ?? 'Unknown error');
+        }
+      } catch (error) {
+        console.error('open in Finder failed', error);
+      }
+    },
+    [knowledgeBaseState?.effectiveRoot],
+  );
 
-    switch (action) {
-      case 'new-file':
-        openCreateEntryModal('file', getCreateTargetDirectoryId(entry));
-        break;
-      case 'new-folder':
-        openCreateEntryModal('folder', getCreateTargetDirectoryId(entry));
-        break;
-      case 'open-in-finder':
-        void handleOpenInFinder(entry);
-        break;
-      case 'rename':
-        window.setTimeout(() => {
-          model.startRenaming(entry.id);
-        }, 0);
-        break;
-      case 'move':
-        setMoveEntry(entry);
-        break;
-      case 'delete':
-        void handleDelete(entry);
-        break;
-      default:
-        break;
-    }
-  }, [handleDelete, handleOpenInFinder, model, openCreateEntryModal]);
+  const runKnowledgeContextMenuAction = useCallback(
+    (action: DesktopKnowledgeEntryContextMenuAction | null, entry: VaultEntry) => {
+      if (!action) {
+        return;
+      }
 
-  const handleOpenFileClose = useCallback((id: string) => {
-    const normalizedId = id.trim();
-    if (!normalizedId) {
-      return;
-    }
+      switch (action) {
+        case 'new-file':
+          openCreateEntryModal('file', getCreateTargetDirectoryId(entry));
+          break;
+        case 'new-folder':
+          openCreateEntryModal('folder', getCreateTargetDirectoryId(entry));
+          break;
+        case 'open-in-finder':
+          void handleOpenInFinder(entry);
+          break;
+        case 'rename':
+          window.setTimeout(() => {
+            model.startRenaming(entry.id);
+          }, 0);
+          break;
+        case 'move':
+          setMoveEntry(entry);
+          break;
+        case 'delete':
+          void handleDelete(entry);
+          break;
+        default:
+          break;
+      }
+    },
+    [handleDelete, handleOpenInFinder, model, openCreateEntryModal],
+  );
 
-    if (openFileIdsRef.current.includes(normalizedId)) {
-      const nextRecentlyClosed = recordRecentlyClosedFileId(recentlyClosedFileIdsRef.current, normalizedId);
-      persistRecentlyClosedFileIds(nextRecentlyClosed);
-    }
+  const handleOpenFileClose = useCallback(
+    (id: string) => {
+      const normalizedId = id.trim();
+      if (!normalizedId) {
+        return;
+      }
 
-    const nextOpenFileIds = removeOpenFileId(openFileIdsRef.current, normalizedId);
-    const closedIndex = openFileIdsRef.current.indexOf(normalizedId);
-    persistOpenFileIds(nextOpenFileIds);
+      if (openFileIdsRef.current.includes(normalizedId)) {
+        const nextRecentlyClosed = recordRecentlyClosedFileId(recentlyClosedFileIdsRef.current, normalizedId);
+        persistRecentlyClosedFileIds(nextRecentlyClosed);
+      }
 
-    if (activeFileIdRef.current !== normalizedId) {
-      return;
-    }
+      const nextOpenFileIds = removeOpenFileId(openFileIdsRef.current, normalizedId);
+      const closedIndex = openFileIdsRef.current.indexOf(normalizedId);
+      persistOpenFileIds(nextOpenFileIds);
 
-    const fallbackIndex = Math.min(Math.max(closedIndex, 0), Math.max(nextOpenFileIds.length - 1, 0));
-    onFileSelect(nextOpenFileIds[fallbackIndex] ?? '');
-  }, [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds]);
+      if (activeFileIdRef.current !== normalizedId) {
+        return;
+      }
+
+      const fallbackIndex = Math.min(Math.max(closedIndex, 0), Math.max(nextOpenFileIds.length - 1, 0));
+      onFileSelect(nextOpenFileIds[fallbackIndex] ?? '');
+    },
+    [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds],
+  );
 
   const handleOpenFilesCloseAll = useCallback(() => {
     const currentOpenFileIds = openFileIdsRef.current;
@@ -1085,14 +1169,16 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   useEffect(() => {
     dropCompleteRef.current = (event) => {
-      void handleMovePaths(event.draggedPaths, event.target.directoryPath ?? '', { emitEntriesChangedOnly: event.draggedPaths.length > 1 });
+      void handleMovePaths(event.draggedPaths, event.target.directoryPath ?? '', {
+        emitEntriesChangedOnly: event.draggedPaths.length > 1,
+      });
     };
   }, [handleMovePaths]);
 
   useEffect(() => {
     nativeContextMenuOpenRef.current = (item, context) => {
-      const entry = entryMapRef.current.get(item.path)
-        ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+      const entry =
+        entryMapRef.current.get(item.path) ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
       const desktopBridge = getDesktopBridge();
       const canOpenInFinder = Boolean(desktopBridge?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry));
 
@@ -1101,16 +1187,18 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         return;
       }
 
-      void desktopBridge.showKnowledgeEntryContextMenu({
-        x: context.anchorRect.left,
-        y: context.anchorRect.bottom,
-        canCreateFile: true,
-        canCreateFolder: true,
-        canOpenInFinder,
-        canRename: true,
-        canMove: true,
-        canDelete: true,
-      }).then(({ action }) => runKnowledgeContextMenuAction(action, entry));
+      void desktopBridge
+        .showKnowledgeEntryContextMenu({
+          x: context.anchorRect.left,
+          y: context.anchorRect.bottom,
+          canCreateFile: true,
+          canCreateFolder: true,
+          canOpenInFinder,
+          canRename: true,
+          canMove: true,
+          canDelete: true,
+        })
+        .then(({ action }) => runKnowledgeContextMenuAction(action, entry));
     };
   }, [knowledgeBaseState?.effectiveRoot, runKnowledgeContextMenuAction]);
 
@@ -1122,7 +1210,9 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
       const rawExpandedFolderIds = collectRawExpandedFolderIds(model, folderIdsRef.current);
       const collapsedFolderIds = [...visibleExpandedFolderIdsRef.current].filter((folderId) => !rawExpandedFolderIds.has(folderId));
-      const descendantFolderIdsToCollapse = [...rawExpandedFolderIds].filter((folderId) => collapsedFolderIds.some((collapsedFolderId) => folderId !== collapsedFolderId && folderId.startsWith(collapsedFolderId)));
+      const descendantFolderIdsToCollapse = [...rawExpandedFolderIds].filter((folderId) =>
+        collapsedFolderIds.some((collapsedFolderId) => folderId !== collapsedFolderId && folderId.startsWith(collapsedFolderId)),
+      );
 
       if (descendantFolderIdsToCollapse.length > 0) {
         reconcilingExpansionRef.current = true;
@@ -1190,9 +1280,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
 
-  useEffect(() => () => {
-    model.cleanUp();
-  }, [model]);
+  useEffect(
+    () => () => {
+      model.cleanUp();
+    },
+    [model],
+  );
 
   useEffect(() => {
     if (!knowledgeBaseDisabled) {
@@ -1345,7 +1438,11 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 role="status"
                 aria-label={knowledgeBaseSyncPresentation.text}
                 title={knowledgeBaseSyncPresentation.text}
-                className={cx('h-2 w-2 shrink-0 rounded-full', knowledgeBaseSyncPresentation.dotClass, knowledgeBaseSyncPresentation.pulse && 'animate-pulse')}
+                className={cx(
+                  'h-2 w-2 shrink-0 rounded-full',
+                  knowledgeBaseSyncPresentation.dotClass,
+                  knowledgeBaseSyncPresentation.pulse && 'animate-pulse',
+                )}
               />
             </div>
           </div>
@@ -1386,7 +1483,11 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 role="status"
                 aria-label={knowledgeBaseSyncPresentation.text}
                 title={knowledgeBaseSyncPresentation.text}
-                className={cx('h-2 w-2 shrink-0 rounded-full', knowledgeBaseSyncPresentation.dotClass, knowledgeBaseSyncPresentation.pulse && 'animate-pulse')}
+                className={cx(
+                  'h-2 w-2 shrink-0 rounded-full',
+                  knowledgeBaseSyncPresentation.dotClass,
+                  knowledgeBaseSyncPresentation.pulse && 'animate-pulse',
+                )}
               />
               <button
                 type="button"
@@ -1394,7 +1495,9 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 title={syncingKnowledgeBase ? 'Syncing knowledge base…' : 'Sync knowledge base'}
                 aria-label="Sync knowledge base"
                 disabled={syncingKnowledgeBase}
-                onClick={() => { void handleKnowledgeBaseSync(); }}
+                onClick={() => {
+                  void handleKnowledgeBaseSync();
+                }}
               >
                 <Ico d={ICON.refresh} size={12} />
               </button>
@@ -1435,44 +1538,53 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
               <TreesFileTree
                 className="h-full"
                 model={model}
-                {...(!useNativeKnowledgeContextMenu ? {
-                  renderContextMenu: (item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
-                    const entry = entryMap.get(item.path)
-                      ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
-                    const canOpenInFinder = Boolean(getDesktopBridge()?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry));
+                {...(!useNativeKnowledgeContextMenu
+                  ? {
+                      renderContextMenu: (item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
+                        const entry =
+                          entryMap.get(item.path) ??
+                          createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+                        const canOpenInFinder = Boolean(
+                          getDesktopBridge()?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry),
+                        );
 
-                    return (
-                      <TreeContextMenu
-                        onCreateFile={() => {
-                          context.close();
-                          openCreateEntryModal('file', getCreateTargetDirectoryId(entry));
-                        }}
-                        onCreateFolder={() => {
-                          context.close();
-                          openCreateEntryModal('folder', getCreateTargetDirectoryId(entry));
-                        }}
-                        onOpenInFinder={canOpenInFinder ? () => {
-                          context.close();
-                          void handleOpenInFinder(entry);
-                        } : undefined}
-                        onRename={() => {
-                          context.close({ restoreFocus: false });
-                          window.setTimeout(() => {
-                            model.startRenaming(entry.id);
-                          }, 0);
-                        }}
-                        onMove={() => {
-                          context.close();
-                          setMoveEntry(entry);
-                        }}
-                        onDelete={() => {
-                          context.close();
-                          void handleDelete(entry);
-                        }}
-                      />
-                    );
-                  },
-                } : {})}
+                        return (
+                          <TreeContextMenu
+                            onCreateFile={() => {
+                              context.close();
+                              openCreateEntryModal('file', getCreateTargetDirectoryId(entry));
+                            }}
+                            onCreateFolder={() => {
+                              context.close();
+                              openCreateEntryModal('folder', getCreateTargetDirectoryId(entry));
+                            }}
+                            onOpenInFinder={
+                              canOpenInFinder
+                                ? () => {
+                                    context.close();
+                                    void handleOpenInFinder(entry);
+                                  }
+                                : undefined
+                            }
+                            onRename={() => {
+                              context.close({ restoreFocus: false });
+                              window.setTimeout(() => {
+                                model.startRenaming(entry.id);
+                              }, 0);
+                            }}
+                            onMove={() => {
+                              context.close();
+                              setMoveEntry(entry);
+                            }}
+                            onDelete={() => {
+                              context.close();
+                              void handleDelete(entry);
+                            }}
+                          />
+                        );
+                      },
+                    }
+                  : {})}
                 style={TREE_HOST_STYLE}
               />
             )}
@@ -1484,25 +1596,19 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         <MoveModal
           entry={moveEntry}
           folderOptions={folderOptions}
-          onConfirm={(targetDir) => { void handleMovePaths([moveEntry.id], targetDir); }}
+          onConfirm={(targetDir) => {
+            void handleMovePaths([moveEntry.id], targetDir);
+          }}
           onClose={() => setMoveEntry(null)}
         />
       ) : null}
 
       {importDirectoryId !== null ? (
-        <ImportUrlModal
-          initialDirectoryId={importDirectoryId}
-          onImport={handleImportUrl}
-          onClose={() => setImportDirectoryId(null)}
-        />
+        <ImportUrlModal initialDirectoryId={importDirectoryId} onImport={handleImportUrl} onClose={() => setImportDirectoryId(null)} />
       ) : null}
 
       {createEntryState ? (
-        <CreateEntryModal
-          state={createEntryState}
-          onConfirm={handleCreateEntry}
-          onClose={() => setCreateEntryState(null)}
-        />
+        <CreateEntryModal state={createEntryState} onConfirm={handleCreateEntry} onClose={() => setCreateEntryState(null)} />
       ) : null}
     </div>
   );

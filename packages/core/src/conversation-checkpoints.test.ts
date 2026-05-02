@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   deleteConversationCheckpoint,
   getConversationCheckpoint,
@@ -33,17 +34,21 @@ describe('conversation checkpoint paths', () => {
   it('resolves profile checkpoint directories and files', () => {
     const stateRoot = createTempStateRoot();
 
-    expect(resolveProfileConversationCheckpointsDir({ stateRoot, profile: 'datadog' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog'));
+    expect(resolveProfileConversationCheckpointsDir({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog'),
+    );
 
-    expect(resolveConversationCheckpointSnapshotsDir({ stateRoot, profile: 'datadog' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'snapshots'));
+    expect(resolveConversationCheckpointSnapshotsDir({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'snapshots'),
+    );
 
-    expect(resolveConversationCheckpointMetaPath({ stateRoot, profile: 'datadog', checkpointId: 'ckpt-1' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'meta', 'ckpt-1.json'));
+    expect(resolveConversationCheckpointMetaPath({ stateRoot, profile: 'datadog', checkpointId: 'ckpt-1' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'meta', 'ckpt-1.json'),
+    );
 
-    expect(resolveConversationCheckpointSnapshotPath({ stateRoot, profile: 'datadog', checkpointId: 'ckpt-1' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'snapshots', 'ckpt-1.jsonl'));
+    expect(resolveConversationCheckpointSnapshotPath({ stateRoot, profile: 'datadog', checkpointId: 'ckpt-1' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'snapshots', 'ckpt-1.jsonl'),
+    );
   });
 
   it('rejects invalid checkpoint ids', () => {
@@ -111,17 +116,22 @@ describe('conversation checkpoint storage', () => {
     expect(first.snapshot.bytes).toBeGreaterThan(20);
     expect(first.snapshotMissing).toBe(false);
 
-    expect(resolveConversationCheckpointSnapshotFile({
-      stateRoot,
-      profile: 'datadog',
-      checkpoint: first,
-    })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'snapshots', 'ckpt-alpha.jsonl'));
+    expect(
+      resolveConversationCheckpointSnapshotFile({
+        stateRoot,
+        profile: 'datadog',
+        checkpoint: first,
+      }),
+    ).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-checkpoints', 'datadog', 'snapshots', 'ckpt-alpha.jsonl'));
 
-    expect(listConversationCheckpoints({ stateRoot, profile: 'datadog' }).map((checkpoint) => checkpoint.id))
-      .toEqual([second.id, first.id]);
+    expect(listConversationCheckpoints({ stateRoot, profile: 'datadog' }).map((checkpoint) => checkpoint.id)).toEqual([
+      second.id,
+      first.id,
+    ]);
 
-    expect(listConversationCheckpoints({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }).map((checkpoint) => checkpoint.id))
-      .toEqual([first.id]);
+    expect(
+      listConversationCheckpoints({ stateRoot, profile: 'datadog', conversationId: 'conv-123' }).map((checkpoint) => checkpoint.id),
+    ).toEqual([first.id]);
   });
 
   it('reports missing snapshots and deletes checkpoints with snapshot files', () => {
@@ -165,16 +175,20 @@ describe('conversation checkpoint storage', () => {
 
     expect(missingSnapshot?.snapshotMissing).toBe(true);
 
-    expect(deleteConversationCheckpoint({
-      stateRoot,
-      profile: 'datadog',
-      checkpointId: 'ckpt-cleanup',
-    })).toBe(true);
+    expect(
+      deleteConversationCheckpoint({
+        stateRoot,
+        profile: 'datadog',
+        checkpointId: 'ckpt-cleanup',
+      }),
+    ).toBe(true);
 
-    expect(getConversationCheckpoint({
-      stateRoot,
-      profile: 'datadog',
-      checkpointId: 'ckpt-cleanup',
-    })).toBeNull();
+    expect(
+      getConversationCheckpoint({
+        stateRoot,
+        profile: 'datadog',
+        checkpointId: 'ckpt-cleanup',
+      }),
+    ).toBeNull();
   });
 });

@@ -1,11 +1,12 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import { estimateContextUsageSegments } from './sessionContextUsage.js';
+
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
-import { readQueueState } from './liveSessionQueue.js';
-import { readParallelState, type ParallelPromptJob } from './liveSessionParallelJobs.js';
-import { readLiveSessionAutoModeHostState } from './liveSessionAutoModeOps.js';
 import type { ConversationAutoModeState } from './conversationAutoMode.js';
+import { readLiveSessionAutoModeHostState } from './liveSessionAutoModeOps.js';
 import type { LiveContextUsage, SseEvent } from './liveSessionEvents.js';
+import { type ParallelPromptJob, readParallelState } from './liveSessionParallelJobs.js';
+import { readQueueState } from './liveSessionQueue.js';
+import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 export interface LiveSessionContextUsageHost {
   session: AgentSession;
@@ -36,20 +37,14 @@ export function readLiveSessionContextUsage(session: AgentSession): LiveContextU
     }
 
     const modelId = session.model?.id;
-    const contextWindow = normalizeModelContextWindow(
-      modelId,
-      usage.contextWindow,
-      session.model?.contextWindow ?? 128_000,
-    );
+    const contextWindow = normalizeModelContextWindow(modelId, usage.contextWindow, session.model?.contextWindow ?? 128_000);
 
     return {
       ...usage,
       modelId,
       contextWindow,
       percent: usage.tokens !== null && contextWindow > 0 ? (usage.tokens / contextWindow) * 100 : null,
-      ...(usage.tokens !== null
-        ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) }
-        : {}),
+      ...(usage.tokens !== null ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) } : {}),
     };
   } catch {
     return null;
@@ -60,11 +55,7 @@ export function readConversationAutoModeState(entry: LiveSessionAutoModeStateHos
   return readLiveSessionAutoModeHostState(entry);
 }
 
-export function broadcastLiveSessionContextUsage(
-  entry: LiveSessionContextUsageHost,
-  send: (event: SseEvent) => void,
-  force = false,
-): void {
+export function broadcastLiveSessionContextUsage(entry: LiveSessionContextUsageHost, send: (event: SseEvent) => void, force = false): void {
   const usage = readLiveSessionContextUsage(entry.session);
   const nextJson = JSON.stringify(usage);
   if (!force && entry.lastContextUsageJson === nextJson) {
@@ -75,11 +66,7 @@ export function broadcastLiveSessionContextUsage(
   send({ type: 'context_usage', usage });
 }
 
-export function broadcastLiveSessionQueueState(
-  entry: LiveSessionQueueStateHost,
-  send: (event: SseEvent) => void,
-  force = false,
-): void {
+export function broadcastLiveSessionQueueState(entry: LiveSessionQueueStateHost, send: (event: SseEvent) => void, force = false): void {
   const queueState = readQueueState(entry.session);
   const nextJson = JSON.stringify(queueState);
   if (!force && entry.lastQueueStateJson === nextJson) {
@@ -120,11 +107,7 @@ export function broadcastLiveSessionAutoModeState(
   send({ type: 'auto_mode_state', state });
 }
 
-export function scheduleLiveSessionContextUsage(
-  entry: LiveSessionContextUsageHost,
-  send: (event: SseEvent) => void,
-  delayMs = 400,
-): void {
+export function scheduleLiveSessionContextUsage(entry: LiveSessionContextUsageHost, send: (event: SseEvent) => void, delayMs = 400): void {
   if (entry.contextUsageTimer) {
     return;
   }

@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  markDurableRunAttentionCapabilityMock,
-  DurableRunCapabilityInputErrorMock,
-  logErrorMock,
-} = vi.hoisted(() => ({
+const { markDurableRunAttentionCapabilityMock, DurableRunCapabilityInputErrorMock, logErrorMock } = vi.hoisted(() => ({
   markDurableRunAttentionCapabilityMock: vi.fn(),
   DurableRunCapabilityInputErrorMock: class DurableRunCapabilityInputError extends Error {},
   logErrorMock: vi.fn(),
@@ -28,7 +24,9 @@ describe('registerRunsOpsRoutes', () => {
   });
 
   function createHarness() {
-    let handler: ((req: { params: { id: string }; body?: { read?: boolean } }, res: ReturnType<typeof createResponse>) => Promise<void>) | undefined;
+    let handler:
+      | ((req: { params: { id: string }; body?: { read?: boolean } }, res: ReturnType<typeof createResponse>) => Promise<void>)
+      | undefined;
     const router = {
       get: vi.fn(),
       post: vi.fn(),

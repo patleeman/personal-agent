@@ -1,6 +1,5 @@
-import {
-  type ProjectActivityNotificationState,
-} from '@personal-agent/core';
+import { type ProjectActivityNotificationState } from '@personal-agent/core';
+
 import type { DaemonStateSnapshot } from '../automation/daemon.js';
 import { logWarn } from './logging.js';
 
@@ -99,12 +98,7 @@ function buildIssueDetails(
   state: ClassifiedInternalServiceState,
   detectedAt: string,
 ): string | undefined {
-  return buildDetails([
-    `Detected: ${detectedAt}`,
-    `State: ${state.label}`,
-    state.details,
-    supportHint(service),
-  ]);
+  return buildDetails([`Detected: ${detectedAt}`, `State: ${state.label}`, state.details, supportHint(service)]);
 }
 
 function buildRecoveryDetails(
@@ -112,11 +106,7 @@ function buildRecoveryDetails(
   previousState: ClassifiedInternalServiceState,
   recoveredAt: string,
 ): string | undefined {
-  return buildDetails([
-    `Recovered: ${recoveredAt}`,
-    `Previous state: ${previousState.label}`,
-    supportHint(service),
-  ]);
+  return buildDetails([`Recovered: ${recoveredAt}`, `Previous state: ${previousState.label}`, supportHint(service)]);
 }
 
 export function writeInternalAttentionEntry(_input: WriteInternalAttentionEntryInput): string {
@@ -124,10 +114,7 @@ export function writeInternalAttentionEntry(_input: WriteInternalAttentionEntryI
 }
 
 export function suppressMonitoredServiceAttention(service: MonitoredInternalService, durationMs = DEFAULT_SUPPRESSION_MS): void {
-  suppressedServiceAttentionUntilMs[service] = Math.max(
-    suppressedServiceAttentionUntilMs[service],
-    Date.now() + Math.max(0, durationMs),
-  );
+  suppressedServiceAttentionUntilMs[service] = Math.max(suppressedServiceAttentionUntilMs[service], Date.now() + Math.max(0, durationMs));
 }
 
 export function clearMonitoredServiceAttentionSuppression(): void {
@@ -173,29 +160,28 @@ interface ServiceAttentionStateRecord {
 export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOptions): ServiceAttentionMonitor {
   const now = options.now ?? (() => new Date());
   const logger = options.logger ?? { warn: (message: string, fields?: Record<string, unknown>) => logWarn(message, fields) };
-  const writeEntry = options.writeEntry ?? ((input: WriteInternalAttentionEntryInput) => {
-    logger.warn('suppressed ownerless internal attention event', {
-      profile: input.profile,
-      kind: input.kind,
-      summary: input.summary,
-      details: input.details,
-      idPrefix: input.idPrefix,
+  const writeEntry =
+    options.writeEntry ??
+    ((input: WriteInternalAttentionEntryInput) => {
+      logger.warn('suppressed ownerless internal attention event', {
+        profile: input.profile,
+        kind: input.kind,
+        summary: input.summary,
+        details: input.details,
+        idPrefix: input.idPrefix,
+      });
     });
-  });
   const stateRecords = new Map<MonitoredInternalService, ServiceAttentionStateRecord>();
-  const issueGraceMs = typeof options.issueGraceMs === 'number'
-    && Number.isSafeInteger(options.issueGraceMs)
-    && options.issueGraceMs >= 0
-    && options.issueGraceMs <= MAX_ISSUE_GRACE_MS
-    ? options.issueGraceMs
-    : DEFAULT_ISSUE_GRACE_MS;
+  const issueGraceMs =
+    typeof options.issueGraceMs === 'number' &&
+    Number.isSafeInteger(options.issueGraceMs) &&
+    options.issueGraceMs >= 0 &&
+    options.issueGraceMs <= MAX_ISSUE_GRACE_MS
+      ? options.issueGraceMs
+      : DEFAULT_ISSUE_GRACE_MS;
   let intervalHandle: ReturnType<typeof setInterval> | undefined;
 
-  const handleTransition = (
-    service: MonitoredInternalService,
-    nextState: ClassifiedInternalServiceState,
-    profile: string,
-  ): void => {
+  const handleTransition = (service: MonitoredInternalService, nextState: ClassifiedInternalServiceState, profile: string): void => {
     const timestamp = now();
     const timestampMs = timestamp.getTime();
     const createdAt = timestamp.toISOString();
@@ -233,10 +219,10 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
     }
 
     if (
-      isIssueState(nextState)
-      && !record.issueSurfaced
-      && !isSuppressed(service, timestampMs)
-      && (timestampMs - record.sinceMs) >= issueGraceMs
+      isIssueState(nextState) &&
+      !record.issueSurfaced &&
+      !isSuppressed(service, timestampMs) &&
+      timestampMs - record.sinceMs >= issueGraceMs
     ) {
       writeEntry({
         repoRoot: options.repoRoot,
@@ -263,7 +249,6 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
         message: error instanceof Error ? error.message : String(error),
       });
     }
-
   };
 
   return {

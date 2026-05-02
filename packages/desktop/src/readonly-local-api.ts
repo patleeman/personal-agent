@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+
 import type { DesktopLocalApiDispatchResult } from './local-api-module.js';
 
 const WORKER_SAFE_LOCAL_API_ROUTES: Array<{
@@ -107,10 +108,13 @@ export function shouldDispatchReadonlyLocalApiInWorker(input: { method: string; 
 class ReadonlyLocalApiWorkerClient {
   private worker: Worker | null = null;
   private nextRequestId = 0;
-  private pending = new Map<number, {
-    resolve: (value: DesktopLocalApiDispatchResult) => void;
-    reject: (error: Error) => void;
-  }>();
+  private pending = new Map<
+    number,
+    {
+      resolve: (value: DesktopLocalApiDispatchResult) => void;
+      reject: (error: Error) => void;
+    }
+  >();
 
   async dispatch(input: ReadonlyLocalApiRequest): Promise<DesktopLocalApiDispatchResult> {
     const worker = this.ensureWorker();

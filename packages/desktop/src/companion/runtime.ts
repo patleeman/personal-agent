@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
+
 import type {
   CompanionAttachmentAssetInput,
   CompanionAttachmentCreateInput,
@@ -32,10 +33,15 @@ import type {
   CompanionSshTargetTestInput,
   CompanionSurfaceType,
 } from '@personal-agent/daemon';
-import type { DesktopApiStreamEvent } from '../hosts/types.js';
-import type { HostManager } from '../hosts/host-manager.js';
+
+import {
+  continueConversationInHost,
+  dispatchConversationExecutionRequest,
+  subscribeConversationExecutionApiStream,
+} from '../conversation-execution.js';
 import { parseApiDispatchResult, readApiDispatchError } from '../hosts/api-dispatch.js';
-import { continueConversationInHost, dispatchConversationExecutionRequest, subscribeConversationExecutionApiStream } from '../conversation-execution.js';
+import type { HostManager } from '../hosts/host-manager.js';
+import type { DesktopApiStreamEvent } from '../hosts/types.js';
 
 function toQuery(params: Record<string, string | undefined>): string {
   const search = new URLSearchParams();
@@ -115,29 +121,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeCompanionTailBlocks(value: number | undefined): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(MAX_COMPANION_TAIL_BLOCKS, value)
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(MAX_COMPANION_TAIL_BLOCKS, value) : undefined;
 }
 
 function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
-  const candidate = input && typeof input === 'object'
-    ? input as { dataUrl?: unknown; mimeType?: unknown; fileName?: unknown }
-    : {};
+  const candidate = input && typeof input === 'object' ? (input as { dataUrl?: unknown; mimeType?: unknown; fileName?: unknown }) : {};
   const dataUrl = typeof candidate.dataUrl === 'string' ? candidate.dataUrl.trim() : '';
-  const fileName = typeof candidate.fileName === 'string' && candidate.fileName.trim().length > 0
-    ? candidate.fileName.trim()
-    : undefined;
+  const fileName = typeof candidate.fileName === 'string' && candidate.fileName.trim().length > 0 ? candidate.fileName.trim() : undefined;
 
   const match = /^data:([^;,]+)?(?:;charset=[^;,]+)?;base64,(.*)$/i.exec(dataUrl);
   if (!match) {
     throw new Error('Attachment asset payload is malformed.');
   }
-  const dataUrlMimeType = typeof match[1] === 'string' && match[1].trim().length > 0
-    ? match[1].trim().toLowerCase()
-    : undefined;
-  const mimeType = dataUrlMimeType
-    ?? (typeof candidate.mimeType === 'string' && candidate.mimeType.trim().length > 0
+  const dataUrlMimeType = typeof match[1] === 'string' && match[1].trim().length > 0 ? match[1].trim().toLowerCase() : undefined;
+  const mimeType =
+    dataUrlMimeType ??
+    (typeof candidate.mimeType === 'string' && candidate.mimeType.trim().length > 0
       ? candidate.mimeType.trim().toLowerCase()
       : 'application/octet-stream');
 
@@ -178,9 +177,9 @@ function normalizeConversationBlockForCompanion(conversationId: string, block: u
   if (blockType === 'user' && Array.isArray(block.images) && blockId) {
     return {
       ...block,
-      images: block.images.map((image, imageIndex) => isRecord(image)
-        ? { ...image, src: buildCompanionConversationBlockImagePath(conversationId, blockId, imageIndex) }
-        : image),
+      images: block.images.map((image, imageIndex) =>
+        isRecord(image) ? { ...image, src: buildCompanionConversationBlockImagePath(conversationId, blockId, imageIndex) } : image,
+      ),
     };
   }
 
@@ -269,12 +268,13 @@ async function buildConversationListState(hostManager: HostManager) {
   const localController = hostManager.getHostController('local');
   const [sessions, ordering] = await Promise.all([
     localController.readSessions?.() ?? Promise.resolve([]),
-    localController.readOpenConversationTabs?.() ?? Promise.resolve({
-      sessionIds: [],
-      pinnedSessionIds: [],
-      archivedSessionIds: [],
-      workspacePaths: [],
-    }),
+    localController.readOpenConversationTabs?.() ??
+      Promise.resolve({
+        sessionIds: [],
+        pinnedSessionIds: [],
+        archivedSessionIds: [],
+        workspacePaths: [],
+      }),
   ]);
 
   return {
@@ -293,17 +293,27 @@ async function restoreConversationToSharedLayout(
     return;
   }
 
-  const sessionIds = Array.isArray(currentLayout.sessionIds) ? currentLayout.sessionIds.filter((id): id is string => typeof id === 'string') : [];
-  const pinnedSessionIds = Array.isArray(currentLayout.pinnedSessionIds) ? currentLayout.pinnedSessionIds.filter((id): id is string => typeof id === 'string') : [];
-  const archivedSessionIds = Array.isArray(currentLayout.archivedSessionIds) ? currentLayout.archivedSessionIds.filter((id): id is string => typeof id === 'string' && id !== conversationId) : [];
-  const workspacePaths = Array.isArray(currentLayout.workspacePaths) ? currentLayout.workspacePaths.filter((path): path is string => typeof path === 'string') : [];
+  const sessionIds = Array.isArray(currentLayout.sessionIds)
+    ? currentLayout.sessionIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const pinnedSessionIds = Array.isArray(currentLayout.pinnedSessionIds)
+    ? currentLayout.pinnedSessionIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const archivedSessionIds = Array.isArray(currentLayout.archivedSessionIds)
+    ? currentLayout.archivedSessionIds.filter((id): id is string => typeof id === 'string' && id !== conversationId)
+    : [];
+  const workspacePaths = Array.isArray(currentLayout.workspacePaths)
+    ? currentLayout.workspacePaths.filter((path): path is string => typeof path === 'string')
+    : [];
 
-  await localController.updateOpenConversationTabs({
-    sessionIds: [conversationId, ...sessionIds.filter((id) => id !== conversationId)],
-    pinnedSessionIds,
-    archivedSessionIds,
-    workspacePaths,
-  }).catch(() => undefined);
+  await localController
+    .updateOpenConversationTabs({
+      sessionIds: [conversationId, ...sessionIds.filter((id) => id !== conversationId)],
+      pinnedSessionIds,
+      archivedSessionIds,
+      workspacePaths,
+    })
+    .catch(() => undefined);
 }
 
 export function createDesktopCompanionRuntime(hostManager: HostManager): CompanionRuntime {
@@ -714,17 +724,21 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
     async readConversationBlockImage(input: CompanionConversationBlockImageInput): Promise<CompanionBinaryAsset> {
       const response = await dispatchDesktopApi(hostManager, {
         method: 'GET',
-        path: typeof input.imageIndex === 'number'
-          ? `/api/sessions/${encodeURIComponent(input.conversationId)}/blocks/${encodeURIComponent(input.blockId)}/images/${String(input.imageIndex)}`
-          : `/api/sessions/${encodeURIComponent(input.conversationId)}/blocks/${encodeURIComponent(input.blockId)}/image`,
+        path:
+          typeof input.imageIndex === 'number'
+            ? `/api/sessions/${encodeURIComponent(input.conversationId)}/blocks/${encodeURIComponent(input.blockId)}/images/${String(
+                input.imageIndex,
+              )}`
+            : `/api/sessions/${encodeURIComponent(input.conversationId)}/blocks/${encodeURIComponent(input.blockId)}/image`,
       });
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw new Error(readApiDispatchError(response));
       }
 
-      const mimeType = typeof response.headers['content-type'] === 'string' && response.headers['content-type'].trim().length > 0
-        ? response.headers['content-type'].trim().split(';')[0] ?? 'application/octet-stream'
-        : 'application/octet-stream';
+      const mimeType =
+        typeof response.headers['content-type'] === 'string' && response.headers['content-type'].trim().length > 0
+          ? (response.headers['content-type'].trim().split(';')[0] ?? 'application/octet-stream')
+          : 'application/octet-stream';
 
       return {
         data: response.body,
@@ -787,9 +801,8 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
 
     async searchKnowledge(input: { query?: string | null; limit?: number | null }) {
       const query = input.query?.trim() ?? '';
-      const limit = typeof input.limit === 'number' && Number.isSafeInteger(input.limit) && input.limit > 0
-        ? Math.min(50, input.limit)
-        : 20;
+      const limit =
+        typeof input.limit === 'number' && Number.isSafeInteger(input.limit) && input.limit > 0 ? Math.min(50, input.limit) : 20;
       const params = new URLSearchParams({ limit: String(limit) });
       if (query) {
         params.set('q', query);

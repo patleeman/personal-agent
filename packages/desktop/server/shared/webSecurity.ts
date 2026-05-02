@@ -59,10 +59,7 @@ export function resolveRequestOrigin(input: {
   return `${proto}://${host}`;
 }
 
-export function isTrustedOrigin(
-  originHeader: string | null | undefined,
-  requestOrigin: string | null,
-): boolean {
+export function isTrustedOrigin(originHeader: string | null | undefined, requestOrigin: string | null): boolean {
   if (!requestOrigin || typeof originHeader !== 'string' || originHeader.trim().length === 0) {
     return false;
   }

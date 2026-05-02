@@ -1,17 +1,10 @@
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { readProject, type ProjectDocument, type ProjectMilestoneDocument, type ProjectTaskDocument } from './project-artifacts.js';
+
 import { migrateLegacyProfileMemoryDirs } from './memory-docs.js';
-import { getDurableNodesDir, getDurableProjectsDir, getDurableNotesDir, getDurableSkillsDir, getVaultRoot } from './runtime/paths.js';
+import { type ProjectDocument, type ProjectMilestoneDocument, type ProjectTaskDocument, readProject } from './project-artifacts.js';
+import { getDurableNodesDir, getDurableNotesDir, getDurableProjectsDir, getDurableSkillsDir, getVaultRoot } from './runtime/paths.js';
 
 const INDEX_FILE_NAME = 'INDEX.md';
 const LEGACY_SKILL_FILE_NAMES = [INDEX_FILE_NAME, 'SKILL.md'] as const;
@@ -185,10 +178,14 @@ function readStringArray(value: unknown): string[] {
     return [];
   }
 
-  return [...new Set(value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0))];
+  return [
+    ...new Set(
+      value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  ];
 }
 
 function normalizeTag(value: string): string {
@@ -196,10 +193,9 @@ function normalizeTag(value: string): string {
 }
 
 function normalizeTags(values: string[] | undefined): string[] {
-  return [...new Set((values ?? [])
-    .map((value) => normalizeTag(String(value)))
-    .filter((value) => value.length > 0))]
-    .sort((left, right) => left.localeCompare(right));
+  return [...new Set((values ?? []).map((value) => normalizeTag(String(value))).filter((value) => value.length > 0))].sort((left, right) =>
+    left.localeCompare(right),
+  );
 }
 
 function parseFrontmatterYaml(rawFrontmatter: string): Record<string, unknown> {
@@ -242,7 +238,10 @@ function splitFrontmatter(rawContent: string): FrontmatterSection {
 
   return {
     attributes: parseFrontmatterYaml(lines.slice(1, endIndex).join('\n')),
-    body: lines.slice(endIndex + 1).join('\n').trim(),
+    body: lines
+      .slice(endIndex + 1)
+      .join('\n')
+      .trim(),
   };
 }
 
@@ -270,7 +269,10 @@ function extractFirstParagraph(body: string): string | undefined {
     .filter((paragraph) => !paragraph.startsWith('#'));
 
   for (const paragraph of paragraphs) {
-    const text = paragraph.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+    const text = paragraph
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (text) {
       return text;
     }
@@ -292,7 +294,11 @@ function normalizeRelationshipType(value: unknown): string | undefined {
     return undefined;
   }
 
-  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   return normalized.length > 0 ? normalized : undefined;
 }
 
@@ -357,7 +363,12 @@ function readLinks(attributes: Record<string, unknown>): UnifiedNodeLinkInfo {
 
 function collectKindsFromTags(tags: string[], fallbackKind?: string): string[] {
   const kinds = tags
-    .map((tag) => tag.match(/^type:(.+)$/i)?.[1]?.trim().toLowerCase())
+    .map((tag) =>
+      tag
+        .match(/^type:(.+)$/i)?.[1]
+        ?.trim()
+        .toLowerCase(),
+    )
     .filter((value): value is string => Boolean(value));
   if (kinds.length > 0) {
     return [...new Set(kinds)];
@@ -371,9 +382,7 @@ function collectKindsFromTags(tags: string[], fallbackKind?: string): string[] {
 }
 
 function collectTagValues(tags: string[], key: string): string[] {
-  return tags
-    .map((tag) => tag.match(new RegExp(`^${key}:(.+)$`, 'i'))?.[1]?.trim())
-    .filter((value): value is string => Boolean(value));
+  return tags.map((tag) => tag.match(new RegExp(`^${key}:(.+)$`, 'i'))?.[1]?.trim()).filter((value): value is string => Boolean(value));
 }
 
 function hasTag(tags: string[], expected: string): boolean {
@@ -449,10 +458,7 @@ function parseUnifiedNode(filePath: string): UnifiedNodeRecord {
     ...(readOptionalString(metadata.area) ? [`area:${readOptionalString(metadata.area)}`] : []),
     ...(readOptionalString(metadata.role) ? [`role:${readOptionalString(metadata.role)}`] : []),
   ];
-  const tags = normalizeTags([
-    ...readStringArray(attributes.tags),
-    ...metadataTags,
-  ]);
+  const tags = normalizeTags([...readStringArray(attributes.tags), ...metadataTags]);
   const fallbackKind = (readOptionalString(attributes.kind) ?? readOptionalString(attributes.type))?.toLowerCase();
   const kinds = collectKindsFromTags(tags, fallbackKind);
   const type = kinds[0] ?? 'note';
@@ -516,17 +522,14 @@ function parseSkillNode(filePath: string): UnifiedNodeRecord {
 
   const title = readOptionalString(metadata.title) ?? humanizeId(id);
   const description = readOptionalString(attributes.description);
-  const summary = readOptionalString(metadata.summary) ?? description ?? extractFirstParagraph(section.body) ?? `Skill package for ${title}.`;
+  const summary =
+    readOptionalString(metadata.summary) ?? description ?? extractFirstParagraph(section.body) ?? `Skill package for ${title}.`;
   const status = readOptionalString(metadata.status) ?? 'active';
   const profiles = dedupeStrings([
     ...readStringArray(attributes.profiles).map((value) => value.toLowerCase()),
     ...(readOptionalString(metadata.profile) ? [readOptionalString(metadata.profile) as string] : []),
   ]);
-  const tags = normalizeTags([
-    'type:skill',
-    ...(status ? [`status:${status}`] : []),
-    ...profiles.map((profile) => `profile:${profile}`),
-  ]);
+  const tags = normalizeTags(['type:skill', ...(status ? [`status:${status}`] : []), ...profiles.map((profile) => `profile:${profile}`)]);
   const searchText = buildSearchText({
     id,
     title,
@@ -690,7 +693,9 @@ function buildTokenPredicate(token: string): QueryPredicate {
       case 'summary':
         return wildcard ? node.summary.toLowerCase().includes(value) : node.summary.toLowerCase().includes(value);
       case 'description':
-        return wildcard ? (node.description?.toLowerCase().includes(value) ?? false) : (node.description?.toLowerCase().includes(value) ?? false);
+        return wildcard
+          ? (node.description?.toLowerCase().includes(value) ?? false)
+          : (node.description?.toLowerCase().includes(value) ?? false);
       case 'type':
         return node.kinds.some((kind) => matches(kind));
       case 'status':
@@ -699,9 +704,11 @@ function buildTokenPredicate(token: string): QueryPredicate {
       case 'host':
       case 'cwd':
       case 'parent':
-        return collectTagValues(node.tags, field).some((candidate) => matches(candidate)) || (field === 'parent' && matches(node.links.parent));
+        return (
+          collectTagValues(node.tags, field).some((candidate) => matches(candidate)) || (field === 'parent' && matches(node.links.parent))
+        );
       case 'tag':
-        return node.tags.some((tag) => wildcard ? tag.toLowerCase().startsWith(value) : tag.toLowerCase() === value);
+        return node.tags.some((tag) => (wildcard ? tag.toLowerCase().startsWith(value) : tag.toLowerCase() === value));
       default:
         return node.tags.some((tag) => {
           const prefix = `${field}:`;
@@ -825,10 +832,7 @@ function buildNodeFrontmatter(input: {
   relationships?: UnifiedNodeRelationship[];
 }): Record<string, unknown> {
   const relationships = normalizeRelationships(input.relationships);
-  const related = dedupeStrings([
-    ...(input.related ?? []),
-    ...relationships.map((relationship) => relationship.targetId),
-  ]);
+  const related = dedupeStrings([...(input.related ?? []), ...relationships.map((relationship) => relationship.targetId)]);
   const tags = normalizeTags([
     ...input.tags,
     ...(input.parent ? [`parent:${input.parent}`] : []),
@@ -840,11 +844,11 @@ function buildNodeFrontmatter(input: {
     ...(related.length > 0 ? { related } : {}),
     ...(relationships.length > 0
       ? {
-        relationships: relationships.map((relationship) => ({
-          type: relationship.type,
-          target: relationship.targetId,
-        })),
-      }
+          relationships: relationships.map((relationship) => ({
+            type: relationship.type,
+            target: relationship.targetId,
+          })),
+        }
       : {}),
   };
 
@@ -868,18 +872,21 @@ function writeUnifiedNode(targetPath: string, frontmatter: Record<string, unknow
   return parseUnifiedNode(targetPath);
 }
 
-function writeSkillNode(targetPath: string, input: {
-  id: string;
-  title: string;
-  summary: string;
-  description?: string;
-  status: string;
-  profiles: string[];
-  body: string;
-  createdAt?: string;
-  updatedAt?: string;
-  createdBy?: string;
-}): UnifiedNodeRecord {
+function writeSkillNode(
+  targetPath: string,
+  input: {
+    id: string;
+    title: string;
+    summary: string;
+    description?: string;
+    status: string;
+    profiles: string[];
+    body: string;
+    createdAt?: string;
+    updatedAt?: string;
+    createdBy?: string;
+  },
+): UnifiedNodeRecord {
   mkdirSync(dirname(targetPath), { recursive: true });
   const frontmatter: Record<string, unknown> = {
     name: input.id,
@@ -995,20 +1002,24 @@ export function createUnifiedNode(input: CreateUnifiedNodeInput, options: Resolv
     if (existsSync(targetPath) && !overwrite) {
       throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
     }
-    node = writeUnifiedNode(targetPath, buildNodeFrontmatter({
-      id,
-      title,
-      summary,
-      description,
-      status,
-      createdAt: input.createdAt,
-      updatedAt,
-      createdBy: input.createdBy,
-      tags,
-      parent: input.parent?.trim() || undefined,
-      related: input.related,
-      relationships: input.relationships,
-    }), body);
+    node = writeUnifiedNode(
+      targetPath,
+      buildNodeFrontmatter({
+        id,
+        title,
+        summary,
+        description,
+        status,
+        createdAt: input.createdAt,
+        updatedAt,
+        createdBy: input.createdBy,
+        tags,
+        parent: input.parent?.trim() || undefined,
+        related: input.related,
+        relationships: input.relationships,
+      }),
+      body,
+    );
   } else if (primaryKind === 'skill') {
     targetPath = join(getDurableSkillsDir(vaultRoot), id, 'SKILL.md');
     if (existsSync(targetPath) && !overwrite) {
@@ -1031,20 +1042,24 @@ export function createUnifiedNode(input: CreateUnifiedNodeInput, options: Resolv
     if (existsSync(targetPath) && !overwrite) {
       throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
     }
-    node = writeUnifiedNode(targetPath, buildNodeFrontmatter({
-      id,
-      title,
-      summary,
-      description,
-      status,
-      createdAt: input.createdAt,
-      updatedAt,
-      createdBy: input.createdBy,
-      tags,
-      parent: input.parent?.trim() || undefined,
-      related: input.related,
-      relationships: input.relationships,
-    }), body);
+    node = writeUnifiedNode(
+      targetPath,
+      buildNodeFrontmatter({
+        id,
+        title,
+        summary,
+        description,
+        status,
+        createdAt: input.createdAt,
+        updatedAt,
+        createdBy: input.createdBy,
+        tags,
+        parent: input.parent?.trim() || undefined,
+        related: input.related,
+        relationships: input.relationships,
+      }),
+      body,
+    );
   }
 
   return { nodesDir: resolveUnifiedNodesDir({ vaultRoot }), node, overwritten: overwrite };
@@ -1067,7 +1082,13 @@ export function updateUnifiedNode(input: UpdateUnifiedNodeInput, options: Resolv
 
   const parsed = readNodeFrontmatter(filePath);
   const nextTags = normalizeTags([
-    ...current.tags.filter((tag) => !hasTag((input.removeTags ?? []).map((value) => value.trim()), tag)),
+    ...current.tags.filter(
+      (tag) =>
+        !hasTag(
+          (input.removeTags ?? []).map((value) => value.trim()),
+          tag,
+        ),
+    ),
     ...(input.addTags ?? []),
   ]);
   const related = input.related ?? current.links.related;
@@ -1076,13 +1097,13 @@ export function updateUnifiedNode(input: UpdateUnifiedNodeInput, options: Resolv
     id,
     title: input.title?.trim() || current.title,
     summary: input.summary?.trim() || current.summary,
-    description: input.description === null ? undefined : (input.description?.trim() || current.description),
+    description: input.description === null ? undefined : input.description?.trim() || current.description,
     status: input.status?.trim() || current.status,
     createdAt: readOptionalString(parsed.frontmatter.createdAt) ?? current.createdAt,
     updatedAt: new Date().toISOString(),
     createdBy: readOptionalString(parsed.frontmatter.createdBy) ?? current.createdBy,
     tags: nextTags.filter((tag) => !/^status:/i.test(tag) && !/^parent:/i.test(tag)),
-    parent: input.parent === null ? undefined : (input.parent?.trim() || current.links.parent),
+    parent: input.parent === null ? undefined : input.parent?.trim() || current.links.parent,
     related,
     relationships,
   });
@@ -1102,11 +1123,14 @@ export function deleteUnifiedNode(id: string, options: ResolveNodesOptions = {})
 }
 
 export function tagUnifiedNode(input: TagUnifiedNodeInput, options: ResolveNodesOptions = {}): UnifiedNodeRecord {
-  return updateUnifiedNode({
-    id: input.id,
-    addTags: input.add,
-    removeTags: input.remove,
-  }, options);
+  return updateUnifiedNode(
+    {
+      id: input.id,
+      addTags: input.add,
+      removeTags: input.remove,
+    },
+    options,
+  );
 }
 
 export function collectDuplicateUnifiedNodeIds(nodes: UnifiedNodeRecord[]): UnifiedNodeDuplicateId[] {
@@ -1130,24 +1154,51 @@ export function collectUnifiedNodeReferenceErrors(nodes: UnifiedNodeRecord[]): U
   for (const node of nodes) {
     if (node.links.parent) {
       if (node.links.parent === node.id) {
-        errors.push({ filePath: node.filePath, id: node.id, field: 'parent', targetId: node.links.parent, error: 'parent must not reference the same node' });
+        errors.push({
+          filePath: node.filePath,
+          id: node.id,
+          field: 'parent',
+          targetId: node.links.parent,
+          error: 'parent must not reference the same node',
+        });
       } else if (!ids.has(node.links.parent)) {
-        errors.push({ filePath: node.filePath, id: node.id, field: 'parent', targetId: node.links.parent, error: 'parent does not match any node id' });
+        errors.push({
+          filePath: node.filePath,
+          id: node.id,
+          field: 'parent',
+          targetId: node.links.parent,
+          error: 'parent does not match any node id',
+        });
       }
     }
 
     for (const relatedId of node.links.related) {
       if (relatedId === node.id) {
-        errors.push({ filePath: node.filePath, id: node.id, field: 'related', targetId: relatedId, error: 'related must not reference the same node' });
+        errors.push({
+          filePath: node.filePath,
+          id: node.id,
+          field: 'related',
+          targetId: relatedId,
+          error: 'related must not reference the same node',
+        });
         continue;
       }
       if (!ids.has(relatedId)) {
-        errors.push({ filePath: node.filePath, id: node.id, field: 'related', targetId: relatedId, error: 'related does not match any node id' });
+        errors.push({
+          filePath: node.filePath,
+          id: node.id,
+          field: 'related',
+          targetId: relatedId,
+          error: 'related does not match any node id',
+        });
       }
     }
   }
 
-  return errors.sort((left, right) => left.id.localeCompare(right.id) || left.field.localeCompare(right.field) || left.targetId.localeCompare(right.targetId));
+  return errors.sort(
+    (left, right) =>
+      left.id.localeCompare(right.id) || left.field.localeCompare(right.field) || left.targetId.localeCompare(right.targetId),
+  );
 }
 
 export function lintUnifiedNodes(options: ResolveNodesOptions = {}): LintUnifiedNodesResult {
@@ -1188,14 +1239,15 @@ function buildProjectTasksMarkdown(tasks: ProjectTaskDocument[]): string {
     return '- [ ] No tasks yet';
   }
 
-  return tasks.map((task) => {
-    const done = task.status === 'done' || task.status === 'completed';
-    const statusSuffix = !done && task.status !== 'pending' && task.status !== 'todo' && task.status !== 'in_progress'
-      ? ` (status: ${task.status})`
-      : '';
-    const milestoneSuffix = task.milestoneId ? ` (milestone: ${task.milestoneId})` : '';
-    return `- [${done ? 'x' : ' '}] ${task.title}${milestoneSuffix}${statusSuffix}`;
-  }).join('\n');
+  return tasks
+    .map((task) => {
+      const done = task.status === 'done' || task.status === 'completed';
+      const statusSuffix =
+        !done && task.status !== 'pending' && task.status !== 'todo' && task.status !== 'in_progress' ? ` (status: ${task.status})` : '';
+      const milestoneSuffix = task.milestoneId ? ` (milestone: ${task.milestoneId})` : '';
+      return `- [${done ? 'x' : ' '}] ${task.title}${milestoneSuffix}${statusSuffix}`;
+    })
+    .join('\n');
 }
 
 function buildProjectMilestonesMarkdown(milestones: ProjectMilestoneDocument[]): string {
@@ -1203,7 +1255,9 @@ function buildProjectMilestonesMarkdown(milestones: ProjectMilestoneDocument[]):
     return '- pending: No milestones yet';
   }
 
-  return milestones.map((milestone) => `- ${milestone.status}: ${milestone.title}${milestone.summary ? ` — ${milestone.summary}` : ''}`).join('\n');
+  return milestones
+    .map((milestone) => `- ${milestone.status}: ${milestone.title}${milestone.summary ? ` — ${milestone.summary}` : ''}`)
+    .join('\n');
 }
 
 function sectionBlock(title: string, body: string | undefined): string {
@@ -1232,40 +1286,57 @@ function buildProjectNodeBody(candidate: LegacyNodeCandidate): string {
   return parts.join('\n\n');
 }
 
-function copyLegacyNodeCandidate(candidate: LegacyNodeCandidate, nodesDir: string, existingKinds: string[] = []): { action: 'created' | 'updated' | 'skipped'; conflict?: LegacyNodeMigrationConflict } {
+function copyLegacyNodeCandidate(
+  candidate: LegacyNodeCandidate,
+  nodesDir: string,
+  existingKinds: string[] = [],
+): { action: 'created' | 'updated' | 'skipped'; conflict?: LegacyNodeMigrationConflict } {
   const targetDir = join(nodesDir, candidate.id);
   const targetPath = join(targetDir, INDEX_FILE_NAME);
   const sourceTags = readStringArray(candidate.frontmatter.tags);
   const relatedLinks = readLinks(candidate.frontmatter).related;
   const parentLink = readLinks(candidate.frontmatter).parent;
 
-  const nextTags = candidate.sourceKind === 'note'
-    ? normalizeLegacyTags([
-      'type:note',
-      ...sourceTags,
-      ...(readOptionalString((isRecord(candidate.frontmatter.metadata) ? candidate.frontmatter.metadata.type : undefined)) ? [`noteType:${String((candidate.frontmatter.metadata as Record<string, unknown>).type).trim()}`] : []),
-      ...(readOptionalString((isRecord(candidate.frontmatter.metadata) ? candidate.frontmatter.metadata.area : undefined)) ? [`area:${String((candidate.frontmatter.metadata as Record<string, unknown>).area).trim()}`] : []),
-      ...(readOptionalString((isRecord(candidate.frontmatter.metadata) ? candidate.frontmatter.metadata.role : undefined)) ? [`role:${String((candidate.frontmatter.metadata as Record<string, unknown>).role).trim()}`] : []),
-    ])
-    : candidate.sourceKind === 'skill'
+  const nextTags =
+    candidate.sourceKind === 'note'
       ? normalizeLegacyTags([
-        'type:skill',
-        'profile:shared',
-        ...sourceTags,
-        ...readStringArray(candidate.frontmatter.profiles).map((profile) => `profile:${profile}`),
-      ])
-      : normalizeLegacyTags([
-        'type:project',
-        ...(candidate.project?.ownerProfile ? [`profile:${candidate.project.ownerProfile}`] : []),
-        ...(candidate.project?.repoRoot ? [`cwd:${candidate.project.repoRoot}`] : []),
-        ...sourceTags,
-      ]);
+          'type:note',
+          ...sourceTags,
+          ...(readOptionalString(isRecord(candidate.frontmatter.metadata) ? candidate.frontmatter.metadata.type : undefined)
+            ? [`noteType:${String((candidate.frontmatter.metadata as Record<string, unknown>).type).trim()}`]
+            : []),
+          ...(readOptionalString(isRecord(candidate.frontmatter.metadata) ? candidate.frontmatter.metadata.area : undefined)
+            ? [`area:${String((candidate.frontmatter.metadata as Record<string, unknown>).area).trim()}`]
+            : []),
+          ...(readOptionalString(isRecord(candidate.frontmatter.metadata) ? candidate.frontmatter.metadata.role : undefined)
+            ? [`role:${String((candidate.frontmatter.metadata as Record<string, unknown>).role).trim()}`]
+            : []),
+        ])
+      : candidate.sourceKind === 'skill'
+        ? normalizeLegacyTags([
+            'type:skill',
+            'profile:shared',
+            ...sourceTags,
+            ...readStringArray(candidate.frontmatter.profiles).map((profile) => `profile:${profile}`),
+          ])
+        : normalizeLegacyTags([
+            'type:project',
+            ...(candidate.project?.ownerProfile ? [`profile:${candidate.project.ownerProfile}`] : []),
+            ...(candidate.project?.repoRoot ? [`cwd:${candidate.project.repoRoot}`] : []),
+            ...sourceTags,
+          ]);
 
-  const title = readOptionalString(candidate.frontmatter.title) ?? candidate.project?.title ?? extractMarkdownTitle(candidate.body) ?? humanizeId(candidate.id);
-  const summary = readOptionalString(candidate.frontmatter.summary) ?? candidate.project?.summary ?? extractFirstParagraph(candidate.body) ?? `Durable node for ${title}.`;
-  const description = candidate.sourceKind === 'project'
-    ? undefined
-    : readOptionalString(candidate.frontmatter.description);
+  const title =
+    readOptionalString(candidate.frontmatter.title) ??
+    candidate.project?.title ??
+    extractMarkdownTitle(candidate.body) ??
+    humanizeId(candidate.id);
+  const summary =
+    readOptionalString(candidate.frontmatter.summary) ??
+    candidate.project?.summary ??
+    extractFirstParagraph(candidate.body) ??
+    `Durable node for ${title}.`;
+  const description = candidate.sourceKind === 'project' ? undefined : readOptionalString(candidate.frontmatter.description);
   const status = readOptionalString(candidate.frontmatter.status) ?? candidate.project?.status ?? 'active';
   const createdAt = readOptionalString(candidate.frontmatter.createdAt) ?? candidate.project?.createdAt;
   const updatedAt = readOptionalString(candidate.frontmatter.updatedAt) ?? candidate.project?.updatedAt ?? new Date().toISOString();
@@ -1305,9 +1376,10 @@ function copyLegacyNodeCandidate(candidate: LegacyNodeCandidate, nodesDir: strin
       return { action: 'skipped' };
     }
 
-    const combinedBody = candidate.sourceKind === 'project'
-      ? `${existing.body}\n\n${sectionBlock('Legacy Project State', body)}`.trim()
-      : `${existing.body}\n\n${sectionBlock(candidate.sourceKind === 'note' ? 'Merged Note' : 'Merged Skill', body)}`.trim();
+    const combinedBody =
+      candidate.sourceKind === 'project'
+        ? `${existing.body}\n\n${sectionBlock('Legacy Project State', body)}`.trim()
+        : `${existing.body}\n\n${sectionBlock(candidate.sourceKind === 'note' ? 'Merged Note' : 'Merged Skill', body)}`.trim();
     const mergedFrontmatter = buildNodeFrontmatter({
       id: existing.id,
       title: existing.title,
@@ -1320,10 +1392,7 @@ function copyLegacyNodeCandidate(candidate: LegacyNodeCandidate, nodesDir: strin
       tags: normalizeTags([...existing.tags.filter((tag) => !/^status:/i.test(tag) && !/^parent:/i.test(tag)), ...nextTags]),
       parent: existing.links.parent ?? parentLink,
       related: dedupeStrings([...existing.links.related, ...mergedRelated]),
-      relationships: normalizeRelationships([
-        ...existing.links.relationships,
-        ...readLinks(candidate.frontmatter).relationships,
-      ]),
+      relationships: normalizeRelationships([...existing.links.relationships, ...readLinks(candidate.frontmatter).relationships]),
     });
     writeUnifiedNode(targetPath, mergedFrontmatter, combinedBody);
     return {
@@ -1369,13 +1438,19 @@ function collectLegacyCandidates(options: ResolveNodesOptions = {}): LegacyNodeC
   if (existsSync(skillsDir)) {
     for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      const indexPath = LEGACY_SKILL_FILE_NAMES
-        .map((fileName) => join(skillsDir, entry.name, fileName))
-        .find((filePath) => existsSync(filePath));
+      const indexPath = LEGACY_SKILL_FILE_NAMES.map((fileName) => join(skillsDir, entry.name, fileName)).find((filePath) =>
+        existsSync(filePath),
+      );
       if (!indexPath) continue;
       const parsed = parseLegacyMarkdown(indexPath);
       const id = (readOptionalString(parsed.frontmatter.id) ?? readOptionalString(parsed.frontmatter.name) ?? entry.name).toLowerCase();
-      output.push({ id, sourceKind: 'skill', sourceDir: join(skillsDir, entry.name), frontmatter: parsed.frontmatter, body: parsed.body });
+      output.push({
+        id,
+        sourceKind: 'skill',
+        sourceDir: join(skillsDir, entry.name),
+        frontmatter: parsed.frontmatter,
+        body: parsed.body,
+      });
     }
   }
 
@@ -1418,7 +1493,11 @@ export function listUnifiedSkillNodeDirs(profile: string, options: ResolveNodesO
   const normalizedProfile = profile.trim().toLowerCase();
   return loaded.nodes
     .filter((node) => node.kinds.includes('skill'))
-    .filter((node) => node.profiles.length === 0 || node.profiles.some((value) => value.toLowerCase() === normalizedProfile || value.toLowerCase() === 'shared'))
+    .filter(
+      (node) =>
+        node.profiles.length === 0 ||
+        node.profiles.some((value) => value.toLowerCase() === normalizedProfile || value.toLowerCase() === 'shared'),
+    )
     .map((node) => node.dirPath)
     .sort((left, right) => left.localeCompare(right));
 }

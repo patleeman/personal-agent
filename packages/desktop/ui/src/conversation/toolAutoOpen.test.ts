@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import type { MessageBlock } from '../shared/types';
-import {
-  collectCompletedToolAutoOpenBlockKeys,
-  findRequestedToolPresentationToOpen,
-} from './toolAutoOpen';
+import { collectCompletedToolAutoOpenBlockKeys, findRequestedToolPresentationToOpen } from './toolAutoOpen';
 
 interface Presentation {
   id: string;
@@ -30,18 +28,20 @@ function readPresentation(block: Extract<MessageBlock, { type: 'tool_use' }>): P
   }
 
   const details = block.details as { id?: unknown; openRequested?: unknown };
-  return typeof details.id === 'string'
-    ? { id: details.id, openRequested: details.openRequested === true }
-    : null;
+  return typeof details.id === 'string' ? { id: details.id, openRequested: details.openRequested === true } : null;
 }
 
 describe('toolAutoOpen', () => {
   it('seeds completed presentation block keys without opening historical tools', () => {
-    const keys = collectCompletedToolAutoOpenBlockKeys([
-      toolBlock({ id: 'completed', details: { id: 'a', openRequested: true } }),
-      toolBlock({ id: 'running', status: 'running', running: true, details: { id: 'b', openRequested: true } }),
-      { type: 'text', ts: '2026-01-01T00:00:00.000Z', text: 'ignored' },
-    ], readPresentation, 'artifact');
+    const keys = collectCompletedToolAutoOpenBlockKeys(
+      [
+        toolBlock({ id: 'completed', details: { id: 'a', openRequested: true } }),
+        toolBlock({ id: 'running', status: 'running', running: true, details: { id: 'b', openRequested: true } }),
+        { type: 'text', ts: '2026-01-01T00:00:00.000Z', text: 'ignored' },
+      ],
+      readPresentation,
+      'artifact',
+    );
 
     expect([...keys]).toEqual(['completed']);
   });
@@ -64,9 +64,7 @@ describe('toolAutoOpen', () => {
 
   it('marks stale requested presentations processed without opening them', () => {
     const result = findRequestedToolPresentationToOpen({
-      messages: [
-        toolBlock({ id: 'stale', ts: '2025-12-31T23:59:59.000Z', details: { id: 'stale-target', openRequested: true } }),
-      ],
+      messages: [toolBlock({ id: 'stale', ts: '2025-12-31T23:59:59.000Z', details: { id: 'stale-target', openRequested: true } })],
       processedBlockKeys: new Set(),
       autoOpenStartedAt: '2026-01-01T00:00:00.000Z',
       readPresentation,
@@ -79,9 +77,7 @@ describe('toolAutoOpen', () => {
 
   it('marks malformed timestamp presentations processed without opening them', () => {
     const result = findRequestedToolPresentationToOpen({
-      messages: [
-        toolBlock({ id: 'malformed', ts: '9999', details: { id: 'malformed-target', openRequested: true } }),
-      ],
+      messages: [toolBlock({ id: 'malformed', ts: '9999', details: { id: 'malformed-target', openRequested: true } })],
       processedBlockKeys: new Set(),
       autoOpenStartedAt: '2026-01-01T00:00:00.000Z',
       readPresentation,
@@ -96,7 +92,13 @@ describe('toolAutoOpen', () => {
     const result = findRequestedToolPresentationToOpen({
       messages: [
         toolBlock({ id: 'processed', ts: '2026-01-01T00:00:03.000Z', details: { id: 'processed-target', openRequested: true } }),
-        toolBlock({ id: 'running', ts: '2026-01-01T00:00:04.000Z', status: 'running', running: true, details: { id: 'running-target', openRequested: true } }),
+        toolBlock({
+          id: 'running',
+          ts: '2026-01-01T00:00:04.000Z',
+          status: 'running',
+          running: true,
+          details: { id: 'running-target', openRequested: true },
+        }),
         toolBlock({ id: 'not-requested', ts: '2026-01-01T00:00:05.000Z', details: { id: 'quiet-target', openRequested: false } }),
       ],
       processedBlockKeys: new Set(['processed']),

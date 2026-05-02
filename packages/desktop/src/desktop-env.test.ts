@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { resolveDesktopRuntimePathsForContext } from './desktop-env.js';
 
 function createTempDir(prefix: string): string {

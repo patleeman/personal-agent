@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { HostManager } from '../hosts/host-manager.js';
 import { createDesktopCompanionRuntime } from './runtime.js';
 
@@ -155,11 +157,13 @@ describe('desktop companion runtime', () => {
         .mockResolvedValueOnce(jsonResponse({ id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md' }))
         .mockResolvedValueOnce(jsonResponse({ ok: true }))
         .mockResolvedValueOnce(jsonResponse({ id: '_attachments/photo.png', url: '/api/vault/asset?id=_attachments%2Fphoto.png' }))
-        .mockResolvedValueOnce(jsonResponse({
-          note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
-          sourceKind: 'url',
-          title: 'Shared link',
-        })),
+        .mockResolvedValueOnce(
+          jsonResponse({
+            note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
+            sourceKind: 'url',
+            title: 'Shared link',
+          }),
+        ),
     };
 
     const hostManager = {
@@ -168,22 +172,28 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.searchKnowledge({ query: 'release', limit: 7 })).resolves.toEqual({ results: [{ id: 'notes/release-checklist.md', title: 'Release checklist' }] });
+    await expect(runtime.searchKnowledge({ query: 'release', limit: 7 })).resolves.toEqual({
+      results: [{ id: 'notes/release-checklist.md', title: 'Release checklist' }],
+    });
     await expect(runtime.searchKnowledge({ query: 'release', limit: 7.5 })).resolves.toEqual({ results: [] });
     await expect(runtime.renameKnowledgeEntry({ id: 'Inbox/original.md', newName: 'renamed.md' })).resolves.toEqual({
-      id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md',
+      id: 'Inbox/renamed.md',
+      kind: 'file',
+      name: 'renamed.md',
     });
     await expect(runtime.deleteKnowledgeEntry('Inbox/renamed.md')).resolves.toEqual({ ok: true });
     await expect(runtime.createKnowledgeImageAsset({ fileName: 'photo.png', mimeType: 'image/png', dataBase64: 'Zm9v' })).resolves.toEqual({
       id: '_attachments/photo.png',
       url: '/api/vault/asset?id=_attachments%2Fphoto.png',
     });
-    await expect(runtime.importKnowledge({
-      kind: 'url',
-      directoryId: 'Inbox',
-      title: 'Shared link',
-      url: 'https://example.com/post',
-    })).resolves.toEqual({
+    await expect(
+      runtime.importKnowledge({
+        kind: 'url',
+        directoryId: 'Inbox',
+        title: 'Shared link',
+        url: 'https://example.com/post',
+      }),
+    ).resolves.toEqual({
       note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
       sourceKind: 'url',
       title: 'Shared link',
@@ -241,10 +251,12 @@ describe('desktop companion runtime', () => {
     const runtime = createDesktopCompanionRuntime(hostManager);
     await runtime.readConversationBootstrap({ conversationId: 'conv-1', tailBlocks: 5000 });
 
-    expect(localController.dispatchApiRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'GET',
-      path: '/api/conversations/conv-1/bootstrap?tailBlocks=1000',
-    }));
+    expect(localController.dispatchApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/api/conversations/conv-1/bootstrap?tailBlocks=1000',
+      }),
+    );
   });
 
   it('defaults unsafe knowledge search limits instead of clamping them', async () => {
@@ -286,10 +298,12 @@ describe('desktop companion runtime', () => {
     conversationExecutionMocks.dispatchConversationExecutionRequest.mockResolvedValueOnce(null);
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.changeConversationExecutionTarget({
-      conversationId: 'conv-1',
-      executionTargetId: 'ssh-1',
-    })).resolves.toEqual({
+    await expect(
+      runtime.changeConversationExecutionTarget({
+        conversationId: 'conv-1',
+        executionTargetId: 'ssh-1',
+      }),
+    ).resolves.toEqual({
       bootstrap: { bootstrap: { conversationId: 'conv-1' } },
       sessionMeta: { id: 'conv-1' },
       attachments: { attachments: [] },
@@ -300,10 +314,12 @@ describe('desktop companion runtime', () => {
       conversationId: 'conv-1',
       hostId: 'ssh-1',
     });
-    expect(localController.dispatchApiRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'GET',
-      path: '/api/conversations/conv-1/bootstrap?tailBlocks=120',
-    }));
+    expect(localController.dispatchApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/api/conversations/conv-1/bootstrap?tailBlocks=120',
+      }),
+    );
   });
 
   it('restores queued prompts and manages parallel jobs through local controller helpers', async () => {
@@ -318,17 +334,21 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.restoreConversationQueuePrompt({
-      conversationId: 'conv-1',
-      behavior: 'followUp',
-      index: 0,
-      previewId: 'queue-1',
-    })).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
-    await expect(runtime.manageConversationParallelJob({
-      conversationId: 'conv-1',
-      jobId: 'job-1',
-      action: 'importNow',
-    })).resolves.toEqual({ ok: true, status: 'imported' });
+    await expect(
+      runtime.restoreConversationQueuePrompt({
+        conversationId: 'conv-1',
+        behavior: 'followUp',
+        index: 0,
+        previewId: 'queue-1',
+      }),
+    ).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
+    await expect(
+      runtime.manageConversationParallelJob({
+        conversationId: 'conv-1',
+        jobId: 'job-1',
+        action: 'importNow',
+      }),
+    ).resolves.toEqual({ ok: true, status: 'imported' });
 
     expect(localController.restoreQueuedLiveSessionMessage).toHaveBeenCalledWith({
       conversationId: 'conv-1',
@@ -356,11 +376,13 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.readConversationAttachmentAsset({
-      conversationId: 'conv-1',
-      attachmentId: 'drawing-1',
-      asset: 'preview',
-    })).rejects.toThrow('Attachment asset payload must contain valid base64 data.');
+    await expect(
+      runtime.readConversationAttachmentAsset({
+        conversationId: 'conv-1',
+        attachmentId: 'drawing-1',
+        asset: 'preview',
+      }),
+    ).rejects.toThrow('Attachment asset payload must contain valid base64 data.');
   });
 
   it('uses the companion attachment data url mime type for binary assets', async () => {
@@ -376,11 +398,13 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.readConversationAttachmentAsset({
-      conversationId: 'conv-1',
-      attachmentId: 'drawing-1',
-      asset: 'preview',
-    })).resolves.toMatchObject({
+    await expect(
+      runtime.readConversationAttachmentAsset({
+        conversationId: 'conv-1',
+        attachmentId: 'drawing-1',
+        asset: 'preview',
+      }),
+    ).resolves.toMatchObject({
       mimeType: 'image/png',
       disposition: 'inline',
     });
@@ -398,11 +422,13 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.readConversationAttachmentAsset({
-      conversationId: 'conv-1',
-      attachmentId: 'drawing-1',
-      asset: 'preview',
-    })).resolves.toMatchObject({
+    await expect(
+      runtime.readConversationAttachmentAsset({
+        conversationId: 'conv-1',
+        attachmentId: 'drawing-1',
+        asset: 'preview',
+      }),
+    ).resolves.toMatchObject({
       mimeType: 'image/png',
       disposition: 'inline',
     });
@@ -410,7 +436,9 @@ describe('desktop companion runtime', () => {
 
   it('routes parallel prompts to the dedicated live-session endpoint', async () => {
     const localController = {
-      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' })),
+      dispatchApiRequest: vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' })),
     };
 
     const hostManager = {
@@ -421,11 +449,13 @@ describe('desktop companion runtime', () => {
     conversationExecutionMocks.dispatchConversationExecutionRequest.mockResolvedValueOnce(null);
 
     const runtime = createDesktopCompanionRuntime(hostManager);
-    await expect(runtime.parallelPromptConversation({
-      conversationId: 'conv-1',
-      text: 'Investigate this in parallel.',
-      surfaceId: 'ios-surface-1',
-    })).resolves.toEqual({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' });
+    await expect(
+      runtime.parallelPromptConversation({
+        conversationId: 'conv-1',
+        text: 'Investigate this in parallel.',
+        surfaceId: 'ios-surface-1',
+      }),
+    ).resolves.toEqual({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' });
 
     expect(localController.dispatchApiRequest).toHaveBeenCalledWith({
       method: 'POST',
@@ -441,10 +471,12 @@ describe('desktop companion runtime', () => {
     let appListener: ((event: { type: string; event?: unknown; message?: string }) => void) | null = null;
     const unsubscribe = vi.fn();
     const localController = {
-      subscribeDesktopAppEvents: vi.fn().mockImplementation(async (listener: (event: { type: string; event?: unknown; message?: string }) => void) => {
-        appListener = listener;
-        return unsubscribe;
-      }),
+      subscribeDesktopAppEvents: vi
+        .fn()
+        .mockImplementation(async (listener: (event: { type: string; event?: unknown; message?: string }) => void) => {
+          appListener = listener;
+          return unsubscribe;
+        }),
     };
 
     const hostManager = {
@@ -476,30 +508,32 @@ describe('desktop companion runtime', () => {
   it('maps ios_native conversation subscriptions onto mobile_web live-session streams', async () => {
     const unsubscribe = vi.fn();
     const localController = {
-      subscribeApiStream: vi.fn().mockImplementation(async (_path: string, onEvent: (event: { type: 'message'; data?: string }) => void) => {
-        onEvent({
-          type: 'message',
-          data: JSON.stringify({
-            type: 'snapshot',
-            blocks: [
-              {
-                type: 'user',
-                id: 'block-user-1',
-                images: [{ alt: 'Attached image', src: 'data:image/png;base64,AAAA' }],
-              },
-              {
-                type: 'image',
-                id: 'block-image-1',
-                src: 'data:image/png;base64,BBBB',
-              },
-            ],
-            blockOffset: 0,
-            totalBlocks: 2,
-          }),
-        });
-        onEvent({ type: 'message', data: JSON.stringify({ type: 'text_delta', delta: 'hello' }) });
-        return unsubscribe;
-      }),
+      subscribeApiStream: vi
+        .fn()
+        .mockImplementation(async (_path: string, onEvent: (event: { type: 'message'; data?: string }) => void) => {
+          onEvent({
+            type: 'message',
+            data: JSON.stringify({
+              type: 'snapshot',
+              blocks: [
+                {
+                  type: 'user',
+                  id: 'block-user-1',
+                  images: [{ alt: 'Attached image', src: 'data:image/png;base64,AAAA' }],
+                },
+                {
+                  type: 'image',
+                  id: 'block-image-1',
+                  src: 'data:image/png;base64,BBBB',
+                },
+              ],
+              blockOffset: 0,
+              totalBlocks: 2,
+            }),
+          });
+          onEvent({ type: 'message', data: JSON.stringify({ type: 'text_delta', delta: 'hello' }) });
+          return unsubscribe;
+        }),
     };
 
     const hostManager = {
@@ -511,14 +545,17 @@ describe('desktop companion runtime', () => {
 
     const runtime = createDesktopCompanionRuntime(hostManager);
     const events: unknown[] = [];
-    const stop = await runtime.subscribeConversation({
-      conversationId: 'conv-1',
-      surfaceId: 'ios-surface-1',
-      surfaceType: 'ios_native',
-      tailBlocks: 5,
-    }, (event) => {
-      events.push(event);
-    });
+    const stop = await runtime.subscribeConversation(
+      {
+        conversationId: 'conv-1',
+        surfaceId: 'ios-surface-1',
+        surfaceType: 'ios_native',
+        tailBlocks: 5,
+      },
+      (event) => {
+        events.push(event);
+      },
+    );
 
     expect(localController.subscribeApiStream).toHaveBeenCalledWith(
       '/api/live-sessions/conv-1/events?surfaceId=ios-surface-1&surfaceType=mobile_web&tailBlocks=5',

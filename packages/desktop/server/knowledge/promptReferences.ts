@@ -1,4 +1,5 @@
 import { relative } from 'node:path';
+
 import { loadUnifiedNodes, type UnifiedNodeRecord } from '@personal-agent/core';
 
 export interface PromptReferenceTask {
@@ -169,9 +170,10 @@ export function expandPromptReferencesWithNodeGraph(input: {
   }
 
   const seedIds = [...new Set([...input.projectIds, ...input.memoryDocIds, ...input.skillNames])];
-  const maxRelatedPerSeed = Number.isSafeInteger(input.maxRelatedPerSeed) && (input.maxRelatedPerSeed as number) >= 0
-    ? Math.min(MAX_RELATED_PROMPT_REFERENCES_PER_SEED, input.maxRelatedPerSeed as number)
-    : 2;
+  const maxRelatedPerSeed =
+    Number.isSafeInteger(input.maxRelatedPerSeed) && (input.maxRelatedPerSeed as number) >= 0
+      ? Math.min(MAX_RELATED_PROMPT_REFERENCES_PER_SEED, input.maxRelatedPerSeed as number)
+      : 2;
   const projectIds = [...input.projectIds];
   const memoryDocIds = [...input.memoryDocIds];
   const skillNames = [...input.skillNames];
@@ -246,9 +248,7 @@ export function buildReferencedTasksContext(tasks: PromptReferenceTask[], repoRo
   return [
     'Referenced scheduled tasks:',
     ...tasks.map((task) => {
-      const lines = [
-        `- @${task.id}`,
-      ];
+      const lines = [`- @${task.id}`];
 
       if (task.title) {
         lines.push(`  title: ${task.title}`);
@@ -289,10 +289,7 @@ export function buildReferencedMemoryDocsContext(memoryDocs: PromptReferenceMemo
   return [
     'Referenced note nodes:',
     ...memoryDocs.map((doc) => {
-      const lines = [
-        `- @${doc.id}: ${doc.title}`,
-        `  path: ${toDisplayPath(repoRoot, doc.path)}`,
-      ];
+      const lines = [`- @${doc.id}: ${doc.title}`, `  path: ${toDisplayPath(repoRoot, doc.path)}`];
 
       if (doc.summary) {
         lines.push(`  summary: ${doc.summary}`);
@@ -314,11 +311,7 @@ export function buildReferencedSkillsContext(skills: PromptReferenceSkill[], rep
   return [
     'Referenced skills:',
     ...skills.map((skill) => {
-      const lines = [
-        `- @${skill.name}`,
-        `  path: ${toDisplayPath(repoRoot, skill.path)}`,
-        `  source: ${skill.source}`,
-      ];
+      const lines = [`- @${skill.name}`, `  path: ${toDisplayPath(repoRoot, skill.path)}`, `  source: ${skill.source}`];
 
       if (skill.description) {
         lines.push(`  description: ${skill.description}`);
@@ -329,4 +322,3 @@ export function buildReferencedSkillsContext(skills: PromptReferenceSkill[], rep
     'These are reusable workflow skills. Read the skill file when the user refers to that workflow, asks how it works, or wants it applied.',
   ].join('\n');
 }
-

@@ -17,9 +17,9 @@ Runtime settings live in the normal web/profile `settings.json` file under `tran
 
 Supported provider ids:
 
-| Provider | Status | Transports | Notes |
-| --- | --- | --- | --- |
-| `local-whisper` | implemented | file | Runs `Xenova/whisper-*` models locally through Transformers.js. Models are downloaded into the runtime `transcription-models/` cache on first use or via the Settings install button. |
+| Provider        | Status      | Transports | Notes                                                                                                                                                                                 |
+| --------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `local-whisper` | implemented | file       | Runs `Xenova/whisper-*` models locally through Transformers.js. Models are downloaded into the runtime `transcription-models/` cache on first use or via the Settings install button. |
 
 Recommended models:
 
@@ -76,14 +76,14 @@ Server-side providers implement `TranscriptionProvider`:
 
 ```ts
 interface TranscriptionProvider {
-  id: TranscriptionProviderId
-  label: string
-  transports: Array<'stream' | 'file'>
-  isAvailable(): Promise<boolean>
-  installModel?(): Promise<TranscriptionInstallResult>
-  getModelStatus?(): Promise<TranscriptionModelStatus>
-  transcribeFile?(input: TranscriptionFileInput, options?: TranscriptionOptions): Promise<TranscriptionResult>
-  stream?(chunks: AsyncIterable<TranscriptionAudioChunk>, options?: TranscriptionOptions): AsyncIterable<TranscriptionStreamEvent>
+  id: TranscriptionProviderId;
+  label: string;
+  transports: Array<'stream' | 'file'>;
+  isAvailable(): Promise<boolean>;
+  installModel?(): Promise<TranscriptionInstallResult>;
+  getModelStatus?(): Promise<TranscriptionModelStatus>;
+  transcribeFile?(input: TranscriptionFileInput, options?: TranscriptionOptions): Promise<TranscriptionResult>;
+  stream?(chunks: AsyncIterable<TranscriptionAudioChunk>, options?: TranscriptionOptions): AsyncIterable<TranscriptionStreamEvent>;
 }
 ```
 

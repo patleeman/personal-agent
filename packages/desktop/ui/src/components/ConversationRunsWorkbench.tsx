@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../client/api';
+
 import { useAppEvents } from '../app/contexts';
-import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import {
   getRunConnections,
   getRunHeadline,
@@ -16,8 +15,10 @@ import {
   runNeedsAttention,
   type RunPresentationLookups,
 } from '../automation/runPresentation';
+import { api } from '../client/api';
+import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import type { DurableRunListResult, DurableRunRecord } from '../shared/types';
-import { ErrorState, LoadingState, cx } from './ui';
+import { cx, ErrorState, LoadingState } from './ui';
 
 function timeAgo(iso: string | undefined): string {
   if (!iso) return '';
@@ -57,7 +58,11 @@ function terminalStatus(status: string | undefined): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted';
 }
 
-export function useConversationRunList(conversationId: string | null | undefined, runs: DurableRunListResult | null, lookups: RunPresentationLookups) {
+export function useConversationRunList(
+  conversationId: string | null | undefined,
+  runs: DurableRunListResult | null,
+  lookups: RunPresentationLookups,
+) {
   return useMemo(() => {
     if (!conversationId) return [];
     return listConnectedConversationBackgroundRuns({ conversationId, runs, lookups });
@@ -178,12 +183,17 @@ export function ConversationRunWorkbenchPane({
   useEffect(() => {
     if (runId || fallbackRunId || !conversationId) return;
     let cancelled = false;
-    api.runs().then((result) => {
-      if (cancelled) return;
-      const first = listConnectedConversationBackgroundRuns({ conversationId, runs: result, lookups })[0]?.runId ?? null;
-      setFallbackRunId(first);
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
+    api
+      .runs()
+      .then((result) => {
+        if (cancelled) return;
+        const first = listConnectedConversationBackgroundRuns({ conversationId, runs: result, lookups })[0]?.runId ?? null;
+        setFallbackRunId(first);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [conversationId, fallbackRunId, lookups, runId, versions.runs]);
 
   if (!resolvedRunId) {
@@ -265,20 +275,33 @@ function ShellRunDetail({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-secondary">
-              <span className={cx('inline-flex items-center gap-1 rounded-md border border-accent/20 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent/70')}>
+              <span
+                className={cx(
+                  'inline-flex items-center gap-1 rounded-md border border-accent/20 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent/70',
+                )}
+              >
                 ›_ Shell
               </span>
               <span className={cx('font-medium', statusTone(run))}>{statusLabel(run)}</span>
             </div>
-            <h2 className="mt-1 truncate text-[17px] font-semibold text-primary" title={headline.title}>{headline.title}</h2>
+            <h2 className="mt-1 truncate text-[17px] font-semibold text-primary" title={headline.title}>
+              {headline.title}
+            </h2>
           </div>
           <div className="flex items-center gap-2">
             {canCancel ? (
-              <button type="button" className="ui-toolbar-button text-[11px] text-danger" disabled={cancelling} onClick={() => void cancelRun()}>
+              <button
+                type="button"
+                className="ui-toolbar-button text-[11px] text-danger"
+                disabled={cancelling}
+                onClick={() => void cancelRun()}
+              >
                 {cancelling ? 'Cancelling…' : 'Cancel'}
               </button>
             ) : null}
-            <button type="button" className="ui-toolbar-button text-[11px]" onClick={reconnect}>Refresh</button>
+            <button type="button" className="ui-toolbar-button text-[11px]" onClick={reconnect}>
+              Refresh
+            </button>
           </div>
         </div>
       </div>
@@ -287,7 +310,18 @@ function ShellRunDetail({
         <div className="grid gap-3 border-b border-border-subtle pb-4 text-[12px] md:grid-cols-2 xl:grid-cols-3">
           <Meta label="Command" value={command ?? headline.title} mono />
           <Meta label="cwd" value={cwd ?? '—'} mono />
-          <Meta label="Exit" value={run.status?.status === 'completed' ? '0' : run.status?.status === 'failed' ? 'non-zero' : run.status?.status === 'cancelled' ? '—' : 'running…'} />
+          <Meta
+            label="Exit"
+            value={
+              run.status?.status === 'completed'
+                ? '0'
+                : run.status?.status === 'failed'
+                  ? 'non-zero'
+                  : run.status?.status === 'cancelled'
+                    ? '—'
+                    : 'running…'
+            }
+          />
         </div>
 
         {error && <div className="mt-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[12px] text-danger">{error}</div>}
@@ -375,16 +409,29 @@ function AgentRunDetail({
               <span className={cx('font-medium', statusTone(run))}>{statusLabel(run)}</span>
               {model ? <span className="truncate text-dim">{model}</span> : null}
             </div>
-            <h2 className="mt-1 truncate text-[17px] font-semibold text-primary" title={headline.title}>{headline.title}</h2>
+            <h2 className="mt-1 truncate text-[17px] font-semibold text-primary" title={headline.title}>
+              {headline.title}
+            </h2>
           </div>
           <div className="flex items-center gap-2">
-            {transcript ? <Link to={transcript.to!} className="ui-toolbar-button text-[11px]">Open transcript</Link> : null}
+            {transcript ? (
+              <Link to={transcript.to!} className="ui-toolbar-button text-[11px]">
+                Open transcript
+              </Link>
+            ) : null}
             {canCancel ? (
-              <button type="button" className="ui-toolbar-button text-[11px] text-danger" disabled={cancelling} onClick={() => void cancelRun()}>
+              <button
+                type="button"
+                className="ui-toolbar-button text-[11px] text-danger"
+                disabled={cancelling}
+                onClick={() => void cancelRun()}
+              >
                 {cancelling ? 'Cancelling…' : 'Cancel'}
               </button>
             ) : null}
-            <button type="button" className="ui-toolbar-button text-[11px]" onClick={reconnect}>Refresh</button>
+            <button type="button" className="ui-toolbar-button text-[11px]" onClick={reconnect}>
+              Refresh
+            </button>
           </div>
         </div>
       </div>
@@ -405,8 +452,13 @@ function AgentRunDetail({
           <div className="mt-4">
             <div className="min-h-[340px] rounded-lg border border-border-subtle bg-elevated/30 p-4">
               <p className="ui-section-label">Subagent transcript</p>
-              <p className="mt-3 text-[13px] leading-6 text-secondary">This run produced a conversation transcript. Open it to inspect the full subagent work, messages, tool calls, and final answer.</p>
-              <Link to={transcript.to!} className="mt-4 inline-flex ui-toolbar-button text-[12px] text-accent">Open transcript →</Link>
+              <p className="mt-3 text-[13px] leading-6 text-secondary">
+                This run produced a conversation transcript. Open it to inspect the full subagent work, messages, tool calls, and final
+                answer.
+              </p>
+              <Link to={transcript.to!} className="mt-4 inline-flex ui-toolbar-button text-[12px] text-accent">
+                Open transcript →
+              </Link>
             </div>
           </div>
         ) : (
@@ -438,17 +490,18 @@ function Meta({ label, value, mono = false }: { label: string; value: string; mo
   return (
     <div className="min-w-0">
       <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{label}</p>
-      <p className={cx('mt-1 truncate text-[12px] text-primary', mono && 'font-mono')} title={value}>{value}</p>
+      <p className={cx('mt-1 truncate text-[12px] text-primary', mono && 'font-mono')} title={value}>
+        {value}
+      </p>
     </div>
   );
 }
 
 function Related({ connections }: { connections: ReturnType<typeof getRunConnections> }) {
-  const relatedConnections = connections.filter((connection) => (
-    connection.label === 'Automation'
-    || connection.label === 'Conversation'
-    || connection.label === 'Conversation to reopen'
-  ));
+  const relatedConnections = connections.filter(
+    (connection) =>
+      connection.label === 'Automation' || connection.label === 'Conversation' || connection.label === 'Conversation to reopen',
+  );
 
   if (relatedConnections.length === 0) {
     return null;
@@ -458,15 +511,18 @@ function Related({ connections }: { connections: ReturnType<typeof getRunConnect
     <div className="mt-4 min-w-0 rounded-lg border border-border-subtle bg-elevated/20 p-3">
       <p className="ui-section-label">Related</p>
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-        {relatedConnections.map((connection) => connection.to ? (
-          <Link key={connection.key} to={connection.to} className="text-[12px] text-accent hover:underline">
-            {connection.label}: {connection.value}
-          </Link>
-        ) : (
-          <div key={connection.key} className="text-[12px] text-secondary">
-            <span className="text-dim">{connection.label}: </span>{connection.value}
-          </div>
-        ))}
+        {relatedConnections.map((connection) =>
+          connection.to ? (
+            <Link key={connection.key} to={connection.to} className="text-[12px] text-accent hover:underline">
+              {connection.label}: {connection.value}
+            </Link>
+          ) : (
+            <div key={connection.key} className="text-[12px] text-secondary">
+              <span className="text-dim">{connection.label}:</span>
+              {connection.value}
+            </div>
+          ),
+        )}
       </div>
     </div>
   );

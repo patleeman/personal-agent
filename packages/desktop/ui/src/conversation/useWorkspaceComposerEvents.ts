@@ -1,4 +1,5 @@
-import { useEffect, type RefObject, type MutableRefObject } from 'react';
+import { type MutableRefObject, type RefObject, useEffect } from 'react';
+
 import { insertFileReplyQuoteIntoComposer } from './conversationReplyQuote';
 
 const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';

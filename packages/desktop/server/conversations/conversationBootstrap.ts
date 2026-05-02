@@ -26,9 +26,7 @@ export interface ReadConversationBootstrapStateResult {
     sessionDetailSignature?: string | null;
     sessionDetailUnchanged?: boolean;
     sessionDetailAppendOnly?: ReturnType<typeof buildAppendOnlySessionDetailResponse>;
-    liveSession:
-      | ({ live: true } & ReturnType<typeof toPublicLiveSessionMeta>)
-      | { live: false };
+    liveSession: ({ live: true } & ReturnType<typeof toPublicLiveSessionMeta>) | { live: false };
   };
   telemetry: {
     sessionRead: ConversationBootstrapSessionReadTelemetry;
@@ -37,24 +35,15 @@ export interface ReadConversationBootstrapStateResult {
   };
 }
 
-export function isMissingConversationBootstrapState(
-  state: ReadConversationBootstrapStateResult['state'],
-): boolean {
-  return !state.sessionDetail
-    && !state.sessionDetailUnchanged
-    && !state.sessionDetailAppendOnly
-    && !state.liveSession.live;
+export function isMissingConversationBootstrapState(state: ReadConversationBootstrapStateResult['state']): boolean {
+  return !state.sessionDetail && !state.sessionDetailUnchanged && !state.sessionDetailAppendOnly && !state.liveSession.live;
 }
 
 export async function readConversationBootstrapState(
   input: ReadConversationBootstrapStateInput,
 ): Promise<ReadConversationBootstrapStateResult> {
   const sessionSignature = readConversationSessionSignature(input.conversationId);
-  const sessionDetailReused = Boolean(
-    sessionSignature
-    && input.knownSessionSignature
-    && input.knownSessionSignature === sessionSignature,
-  );
+  const sessionDetailReused = Boolean(sessionSignature && input.knownSessionSignature && input.knownSessionSignature === sessionSignature);
   const sessionResult = sessionDetailReused
     ? {
         sessionRead: {
@@ -68,17 +57,18 @@ export async function readConversationBootstrapState(
         profile: input.profile,
         tailBlocks: input.tailBlocks,
       });
-  const sessionDetailAppendOnly = !sessionDetailReused
-    && input.knownSessionSignature
-    && sessionResult.sessionRead.detail?.signature
-    && input.knownSessionSignature !== sessionResult.sessionRead.detail.signature
-    ? buildAppendOnlySessionDetailResponse({
-        detail: sessionResult.sessionRead.detail,
-        knownBlockOffset: input.knownBlockOffset,
-        knownTotalBlocks: input.knownTotalBlocks,
-        knownLastBlockId: input.knownLastBlockId,
-      })
-    : null;
+  const sessionDetailAppendOnly =
+    !sessionDetailReused &&
+    input.knownSessionSignature &&
+    sessionResult.sessionRead.detail?.signature &&
+    input.knownSessionSignature !== sessionResult.sessionRead.detail.signature
+      ? buildAppendOnlySessionDetailResponse({
+          detail: sessionResult.sessionRead.detail,
+          knownBlockOffset: input.knownBlockOffset,
+          knownTotalBlocks: input.knownTotalBlocks,
+          knownLastBlockId: input.knownLastBlockId,
+        })
+      : null;
 
   const liveSession = listAllLiveSessions().find((session) => session.id === input.conversationId);
 
@@ -89,9 +79,7 @@ export async function readConversationBootstrapState(
       sessionDetailSignature: sessionDetailAppendOnly?.signature ?? sessionResult.sessionRead.detail?.signature ?? sessionSignature,
       ...(sessionDetailReused ? { sessionDetailUnchanged: true } : {}),
       ...(sessionDetailAppendOnly ? { sessionDetailAppendOnly } : {}),
-      liveSession: liveSession
-        ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) }
-        : { live: false as const },
+      liveSession: liveSession ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) } : { live: false as const },
     },
     telemetry: {
       sessionRead: sessionResult.sessionRead.telemetry,

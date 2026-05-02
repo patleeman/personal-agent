@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent } from './events.js';
 
@@ -11,11 +12,13 @@ describe('EventBus', () => {
     bus.subscribe('session.updated', typed);
     bus.subscribe('*', wildcard);
 
-    const accepted = bus.publish(createDaemonEvent({
-      type: 'session.updated',
-      source: 'test',
-      payload: {},
-    }));
+    const accepted = bus.publish(
+      createDaemonEvent({
+        type: 'session.updated',
+        source: 'test',
+        payload: {},
+      }),
+    );
 
     expect(accepted).toBe(true);
 
@@ -28,11 +31,13 @@ describe('EventBus', () => {
   it('drops events when queue is full', () => {
     const bus = new EventBus({ maxDepth: 0 });
 
-    const accepted = bus.publish(createDaemonEvent({
-      type: 'session.updated',
-      source: 'test',
-      payload: {},
-    }));
+    const accepted = bus.publish(
+      createDaemonEvent({
+        type: 'session.updated',
+        source: 'test',
+        payload: {},
+      }),
+    );
 
     expect(accepted).toBe(false);
     expect(bus.getStatus().droppedEvents).toBe(1);

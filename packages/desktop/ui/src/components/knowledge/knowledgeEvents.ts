@@ -10,9 +10,16 @@ export type KBEventType =
   | 'kb:close-active-file'
   | 'kb:reopen-closed-file';
 
-export interface KBFileRenamedDetail { oldId: string; newId: string }
-export interface KBFileCreatedDetail { id: string }
-export interface KBFileDeletedDetail { id: string }
+export interface KBFileRenamedDetail {
+  oldId: string;
+  newId: string;
+}
+export interface KBFileCreatedDetail {
+  id: string;
+}
+export interface KBFileDeletedDetail {
+  id: string;
+}
 
 export function emitKBEvent(type: 'kb:file-renamed', detail: KBFileRenamedDetail): void;
 export function emitKBEvent(type: 'kb:file-created', detail: KBFileCreatedDetail): void;
@@ -25,10 +32,7 @@ export function emitKBEvent(type: KBEventType, detail?: unknown): void {
   window.dispatchEvent(new CustomEvent(type, detail !== undefined ? { detail } : undefined));
 }
 
-export function onKBEvent<T = unknown>(
-  type: KBEventType,
-  handler: (detail: T) => void,
-): () => void {
+export function onKBEvent<T = unknown>(type: KBEventType, handler: (detail: T) => void): () => void {
   const listener = (e: Event) => handler((e as CustomEvent<T>).detail);
   window.addEventListener(type, listener);
   return () => window.removeEventListener(type, listener);

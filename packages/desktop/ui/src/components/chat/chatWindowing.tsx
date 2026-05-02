@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { type ReactNode, useLayoutEffect, useRef } from 'react';
+
 import type { ChatRenderItem } from './transcriptItems.js';
 
 export type ChatViewPerformanceMode = 'default' | 'aggressive';
@@ -57,11 +58,7 @@ export function getChatRenderItemAbsoluteRange(item: ChatRenderItem, messageInde
   };
 }
 
-export function buildChatRenderChunks(
-  renderItems: ChatRenderItem[],
-  messageIndexOffset: number,
-  chunkSize: number,
-): ChatRenderChunk[] {
+export function buildChatRenderChunks(renderItems: ChatRenderItem[], messageIndexOffset: number, chunkSize: number): ChatRenderChunk[] {
   const chunks: ChatRenderChunk[] = [];
 
   for (let startItemIndex = 0; startItemIndex < renderItems.length; startItemIndex += chunkSize) {
@@ -132,9 +129,7 @@ export function WindowedChatChunk({
     };
 
     measure();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => measure())
-      : null;
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
     observer?.observe(element);
 
     return () => {
@@ -148,4 +143,3 @@ export function WindowedChatChunk({
     </div>
   );
 }
-

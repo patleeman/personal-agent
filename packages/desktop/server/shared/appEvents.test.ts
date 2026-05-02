@@ -2,8 +2,10 @@ import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { getConfigRoot, getDurableSessionsDir, getStateRoot } from '@personal-agent/core';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import type { AppEvent } from './appEvents.js';
 import { startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 
@@ -32,7 +34,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 12_000): Promise<vo
   const startedAt = Date.now();
 
   while (!predicate()) {
-    if ((Date.now() - startedAt) >= timeoutMs) {
+    if (Date.now() - startedAt >= timeoutMs) {
       throw new Error('Timed out waiting for app event monitor update.');
     }
 

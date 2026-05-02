@@ -1,15 +1,10 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  buildPiResourceArgs,
-  listProfiles,
-  materializeProfileToAgentDir,
-  mergeJsonFiles,
-  resolveResourceProfile,
-} from './index.js';
+
+import { buildPiResourceArgs, listProfiles, materializeProfileToAgentDir, mergeJsonFiles, resolveResourceProfile } from './index.js';
 
 const tempDirs: string[] = [];
 const originalEnv = { ...process.env };

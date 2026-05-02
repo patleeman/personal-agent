@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
-import { getStateRoot } from './runtime/paths.js';
+
 import { validateConversationId } from './conversation-project-links.js';
+import { getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ATTACHMENT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -96,9 +97,7 @@ function getConversationAttachmentStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -190,13 +189,10 @@ function trimTrailingHyphens(value: string): string {
   return value.replace(/-+$/g, '');
 }
 
-function buildDownloadPath(
-  conversationId: string,
-  attachmentId: string,
-  asset: ConversationAttachmentAsset,
-  revision?: number,
-): string {
-  const basePath = `/api/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(attachmentId)}/download/${asset}`;
+function buildDownloadPath(conversationId: string, attachmentId: string, asset: ConversationAttachmentAsset, revision?: number): string {
+  const basePath = `/api/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(
+    attachmentId,
+  )}/download/${asset}`;
   if (!revision) {
     return basePath;
   }
@@ -279,9 +275,7 @@ function normalizeStoredDocument(value: unknown): StoredConversationAttachmentDo
   const kindCandidate = typeof parsed.kind === 'string' ? parsed.kind : '';
   validateConversationAttachmentKind(kindCandidate);
 
-  const revisions = Array.isArray(parsed.revisions)
-    ? parsed.revisions.map((revision) => normalizeStoredRevision(revision))
-    : [];
+  const revisions = Array.isArray(parsed.revisions) ? parsed.revisions.map((revision) => normalizeStoredRevision(revision)) : [];
 
   if (revisions.length === 0) {
     throw new Error('Attachment must have at least one revision.');
@@ -412,13 +406,7 @@ function ensureAttachmentDocument(options: ResolveConversationAttachmentPathOpti
 
 export function resolveProfileConversationAttachmentsDir(options: { profile: string; stateRoot?: string }): string {
   validateProfileName(options.profile);
-  return join(
-    getConversationAttachmentStateRoot(options.stateRoot),
-    'pi-agent',
-    'state',
-    'conversation-attachments',
-    options.profile,
-  );
+  return join(getConversationAttachmentStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-attachments', options.profile);
 }
 
 export function resolveConversationAttachmentsDir(options: ResolveConversationAttachmentOptions): string {
@@ -473,20 +461,22 @@ export function getConversationAttachment(options: ResolveConversationAttachment
   };
 }
 
-export function saveConversationAttachment(options: ResolveConversationAttachmentOptions & {
-  attachmentId?: string;
-  kind?: ConversationAttachmentKind;
-  title?: string;
-  sourceData: string;
-  sourceName?: string;
-  sourceMimeType?: string;
-  previewData: string;
-  previewName?: string;
-  previewMimeType?: string;
-  note?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}): ConversationAttachmentRecord {
+export function saveConversationAttachment(
+  options: ResolveConversationAttachmentOptions & {
+    attachmentId?: string;
+    kind?: ConversationAttachmentKind;
+    title?: string;
+    sourceData: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  },
+): ConversationAttachmentRecord {
   validateProfileName(options.profile);
   validateConversationId(options.conversationId);
 
@@ -514,11 +504,12 @@ export function saveConversationAttachment(options: ResolveConversationAttachmen
     throw new Error(`Attachment kind mismatch for ${attachmentId}: expected ${existing.kind}, received ${kind}.`);
   }
 
-  const title = options.title !== undefined
-    ? normalizeTitle(options.title)
-    : existing?.title
-      ? normalizeTitle(existing.title)
-      : normalizeTitle('Drawing');
+  const title =
+    options.title !== undefined
+      ? normalizeTitle(options.title)
+      : existing?.title
+        ? normalizeTitle(existing.title)
+        : normalizeTitle('Drawing');
 
   const revision = (existing?.revisions.length ?? 0) + 1;
   const revisionCreatedAt = normalizeIsoTimestamp(options.updatedAt ?? nowIso, 'attachment revision createdAt');
@@ -539,8 +530,7 @@ export function saveConversationAttachment(options: ResolveConversationAttachmen
   writeFileSync(files.sourcePath, sourceBuffer);
   writeFileSync(files.previewPath, previewBuffer);
 
-  const createdAt = existing?.createdAt
-    ?? normalizeIsoTimestamp(options.createdAt ?? revisionCreatedAt, 'attachment createdAt');
+  const createdAt = existing?.createdAt ?? normalizeIsoTimestamp(options.createdAt ?? revisionCreatedAt, 'attachment createdAt');
 
   const updatedAt = normalizeIsoTimestamp(options.updatedAt ?? revisionCreatedAt, 'attachment updatedAt');
 
@@ -572,10 +562,12 @@ export function deleteConversationAttachment(options: ResolveConversationAttachm
   return true;
 }
 
-export function readConversationAttachmentDownload(options: ResolveConversationAttachmentPathOptions & {
-  asset: ConversationAttachmentAsset;
-  revision?: number;
-}): {
+export function readConversationAttachmentDownload(
+  options: ResolveConversationAttachmentPathOptions & {
+    asset: ConversationAttachmentAsset;
+    revision?: number;
+  },
+): {
   attachment: ConversationAttachmentSummary;
   revision: ConversationAttachmentRevision;
   filePath: string;
@@ -633,9 +625,11 @@ function normalizePromptRefs(refs: ConversationAttachmentPromptRef[]): Conversat
   return normalized;
 }
 
-export function resolveConversationAttachmentPromptFiles(options: ResolveConversationAttachmentOptions & {
-  refs: ConversationAttachmentPromptRef[];
-}): ConversationAttachmentPromptFile[] {
+export function resolveConversationAttachmentPromptFiles(
+  options: ResolveConversationAttachmentOptions & {
+    refs: ConversationAttachmentPromptRef[];
+  },
+): ConversationAttachmentPromptFile[] {
   validateProfileName(options.profile);
   validateConversationId(options.conversationId);
 

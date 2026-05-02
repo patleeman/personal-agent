@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizeDesktopConversationStateTailBlocks } from './useDesktopConversationState.js';
 
 describe('normalizeDesktopConversationStateTailBlocks', () => {

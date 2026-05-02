@@ -1,7 +1,9 @@
 import { existsSync } from 'node:fs';
+
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import { parsePendingOperation } from '@personal-agent/daemon';
 import { readMachineUiConfig } from '@personal-agent/core';
+import { parsePendingOperation } from '@personal-agent/daemon';
+
 import { getDurableRun } from '../automation/durableRuns.js';
 import { logError } from '../middleware/index.js';
 import { readConversationAutoModeStateFromSessionManager } from './conversationAutoMode.js';
@@ -16,12 +18,12 @@ import {
   isLive as isLiveSession,
   promptSession,
   queuePromptContext,
+  registry as liveRegistry,
   repairLiveSessionTranscriptTail,
   requestConversationAutoModeTurn,
-  registry as liveRegistry,
   resumeSession,
 } from './liveSessions.js';
-import { readSessionBlocks, type DisplayBlock } from './sessions.js';
+import { type DisplayBlock, readSessionBlocks } from './sessions.js';
 
 interface RecoveryLoaderOptions {
   extensionFactories?: ExtensionFactory[];
@@ -94,10 +96,7 @@ function isSyntheticResumeFallbackOperation(
 
   const hasImages = Array.isArray(operation.images) && operation.images.length > 0;
   const hasContextMessages = Array.isArray(operation.contextMessages) && operation.contextMessages.length > 0;
-  return operation.text.trim() === normalizedPrompt
-    && operation.behavior === undefined
-    && !hasImages
-    && !hasContextMessages;
+  return operation.text.trim() === normalizedPrompt && operation.behavior === undefined && !hasImages && !hasContextMessages;
 }
 
 function isTerminalBashDisplayBlock(block: DisplayBlock | null | undefined): boolean {
@@ -106,10 +105,12 @@ function isTerminalBashDisplayBlock(block: DisplayBlock | null | undefined): boo
   }
 
   const details = block.details;
-  return typeof details === 'object'
-    && details !== null
-    && !Array.isArray(details)
-    && (details as { displayMode?: unknown }).displayMode === 'terminal';
+  return (
+    typeof details === 'object' &&
+    details !== null &&
+    !Array.isArray(details) &&
+    (details as { displayMode?: unknown }).displayMode === 'terminal'
+  );
 }
 
 function displayBlockNeedsResumeFallback(block: DisplayBlock | null | undefined): boolean {
@@ -141,23 +142,25 @@ async function continueRecoveredConversation(input: {
   const repairedTail = repairLiveSessionTranscriptTail(input.conversationId);
   const liveEntry = liveRegistry.get(input.conversationId);
   const autoModeEnabled = Boolean(
-    liveEntry?.session.sessionManager
-    && readConversationAutoModeStateFromSessionManager(liveEntry.session.sessionManager).enabled,
+    liveEntry?.session.sessionManager && readConversationAutoModeStateFromSessionManager(liveEntry.session.sessionManager).enabled,
   );
 
   const fallbackPrompt = readMachineUiConfig().resumeFallbackPrompt.trim();
-  const shouldUseFallbackPrompt = !input.recoveryOperation
-    && !autoModeEnabled
-    && fallbackPrompt.length > 0
-    && (repairedTail.recoverable || displayBlockNeedsResumeFallback(input.lastBlock));
+  const shouldUseFallbackPrompt =
+    !input.recoveryOperation &&
+    !autoModeEnabled &&
+    fallbackPrompt.length > 0 &&
+    (repairedTail.recoverable || displayBlockNeedsResumeFallback(input.lastBlock));
 
-  const promptOperation = input.recoveryOperation ?? (shouldUseFallbackPrompt
-    ? {
-        type: 'prompt' as const,
-        text: fallbackPrompt,
-        enqueuedAt: new Date().toISOString(),
-      }
-    : null);
+  const promptOperation =
+    input.recoveryOperation ??
+    (shouldUseFallbackPrompt
+      ? {
+          type: 'prompt' as const,
+          text: fallbackPrompt,
+          enqueuedAt: new Date().toISOString(),
+        }
+      : null);
 
   const sessionFile = input.sessionFile?.trim();
   if (sessionFile) {
@@ -177,12 +180,7 @@ async function continueRecoveredConversation(input: {
       await queuePromptContext(input.conversationId, message.customType, message.content);
     }
 
-    promptSession(
-      input.conversationId,
-      promptOperation.text,
-      promptOperation.behavior,
-      promptOperation.images,
-    ).catch(async (error) => {
+    promptSession(input.conversationId, promptOperation.text, promptOperation.behavior, promptOperation.images).catch(async (error) => {
       if (sessionFile) {
         await syncWebLiveConversationRun({
           conversationId: input.conversationId,
@@ -251,15 +249,12 @@ export async function recoverConversationCapability(
 
   const runDetail = await getDurableRun(createWebLiveConversationRunId(conversationId));
   const payload = runDetail?.run.checkpoint?.payload;
-  const checkpointPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? payload as Record<string, unknown>
-    : {};
+  const checkpointPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
 
   const pendingOperation = parsePendingOperation(checkpointPayload.pendingOperation);
   const sessionDetail = readSessionBlocks(conversationId);
-  const sessionFile = sessionDetail?.meta.file
-    ?? readCheckpointString(checkpointPayload, 'sessionFile')
-    ?? runDetail?.run.manifest?.source?.filePath?.trim();
+  const sessionFile =
+    sessionDetail?.meta.file ?? readCheckpointString(checkpointPayload, 'sessionFile') ?? runDetail?.run.manifest?.source?.filePath?.trim();
 
   if (!sessionFile || !existsSync(sessionFile)) {
     throw new Error('Conversation not found.');
@@ -267,12 +262,8 @@ export async function recoverConversationCapability(
 
   const currentProfile = context.getCurrentProfile();
   const manifestSpec = runDetail?.run.manifest?.spec;
-  const manifestCwd = typeof manifestSpec?.cwd === 'string' && manifestSpec.cwd.trim().length > 0
-    ? manifestSpec.cwd.trim()
-    : undefined;
-  const requestedCwd = sessionDetail?.meta.cwd
-    ?? readCheckpointString(checkpointPayload, 'cwd')
-    ?? manifestCwd;
+  const manifestCwd = typeof manifestSpec?.cwd === 'string' && manifestSpec.cwd.trim().length > 0 ? manifestSpec.cwd.trim() : undefined;
+  const requestedCwd = sessionDetail?.meta.cwd ?? readCheckpointString(checkpointPayload, 'cwd') ?? manifestCwd;
   const resumed = await resumeSession(sessionFile, {
     ...buildRecoveryLoaderOptions(context, currentProfile),
     ...(requestedCwd ? { cwdOverride: requestedCwd } : {}),
@@ -280,8 +271,7 @@ export async function recoverConversationCapability(
   await context.flushLiveDeferredResumes();
 
   const resumedEntry = liveRegistry.get(resumed.id);
-  const effectiveCwd = resumedEntry?.cwd
-    ?? requestedCwd;
+  const effectiveCwd = resumedEntry?.cwd ?? requestedCwd;
   const effectiveTitle = sessionDetail?.meta.title ?? readCheckpointString(checkpointPayload, 'title');
   const effectiveProfile = readCheckpointString(checkpointPayload, 'profile') ?? currentProfile;
 
@@ -320,9 +310,7 @@ export async function recoverDurableLiveConversations(
     }
 
     try {
-      const pendingOperation = isSyntheticResumeFallbackOperation(run.pendingOperation, resumeFallbackPrompt)
-        ? null
-        : run.pendingOperation;
+      const pendingOperation = isSyntheticResumeFallbackOperation(run.pendingOperation, resumeFallbackPrompt) ? null : run.pendingOperation;
 
       if (!pendingOperation) {
         continue;
@@ -347,25 +335,16 @@ export async function recoverDurableLiveConversations(
         await dependencies.queuePromptContext(resumed.id, message.customType, message.content);
       }
 
-      await dependencies.promptSession(
-        resumed.id,
-        pendingOperation.text,
-        pendingOperation.behavior,
-        pendingOperation.images,
-      );
+      await dependencies.promptSession(resumed.id, pendingOperation.text, pendingOperation.behavior, pendingOperation.images);
 
       recovered.push({
         runId: run.runId,
         conversationId: resumed.id,
         replayedPendingOperation: true,
       });
-      dependencies.logger?.info(
-        `recovered conversation run=${run.runId} conversation=${resumed.id} replayed=true`,
-      );
+      dependencies.logger?.info(`recovered conversation run=${run.runId} conversation=${resumed.id} replayed=true`);
     } catch (error) {
-      dependencies.logger?.warn(
-        `failed to recover conversation run=${run.runId}: ${(error as Error).message}`,
-      );
+      dependencies.logger?.warn(`failed to recover conversation run=${run.runId}: ${(error as Error).message}`);
     }
   }
 

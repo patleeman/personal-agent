@@ -1,13 +1,12 @@
 import { type AgentSession, type SessionEntry, type SessionManager } from '@mariozechner/pi-coding-agent';
+
 import { getAssistantErrorDisplayMessage } from './sessions.js';
 
 function isHiddenSessionBranchEntry(entry: SessionEntry | undefined): boolean {
   return entry?.type === 'custom_message' && entry.display === false;
 }
 
-function resolveDanglingToolCallRepairLeafId(
-  sessionManager: Pick<SessionManager, 'getBranch' | 'getEntry'>,
-): string | null | undefined {
+function resolveDanglingToolCallRepairLeafId(sessionManager: Pick<SessionManager, 'getBranch' | 'getEntry'>): string | null | undefined {
   const branch = sessionManager.getBranch();
   if (branch.length === 0) {
     return undefined;
@@ -73,13 +72,17 @@ function resolveDanglingToolCallRepairLeafId(
 }
 
 export function repairDanglingToolCallContext(session: Pick<AgentSession, 'sessionManager' | 'state'>): boolean {
-  const sessionManager = session.sessionManager as Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'resetLeaf' | 'buildSessionContext'>> | undefined;
-  if (!sessionManager
-    || typeof sessionManager.getBranch !== 'function'
-    || typeof sessionManager.getEntry !== 'function'
-    || typeof sessionManager.branch !== 'function'
-    || typeof sessionManager.resetLeaf !== 'function'
-    || typeof sessionManager.buildSessionContext !== 'function') {
+  const sessionManager = session.sessionManager as
+    | Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'resetLeaf' | 'buildSessionContext'>>
+    | undefined;
+  if (
+    !sessionManager ||
+    typeof sessionManager.getBranch !== 'function' ||
+    typeof sessionManager.getEntry !== 'function' ||
+    typeof sessionManager.branch !== 'function' ||
+    typeof sessionManager.resetLeaf !== 'function' ||
+    typeof sessionManager.buildSessionContext !== 'function'
+  ) {
     return false;
   }
 
@@ -121,16 +124,15 @@ function resolveVisibleSessionBranchTargetId(
   return targetEntryId;
 }
 
-function buildTranscriptTailRecoveryPlan(
-  input: {
-    targetEntryId: string | null;
-    reason: TranscriptTailRecoveryReason;
-    errorMessage?: string;
-  },
-): TranscriptTailRecoveryPlan {
-  const summaryLines = input.reason === 'assistant_error'
-    ? ['Recovered from a failed tail so the conversation can continue from the last stable point.']
-    : ['Recovered from an unfinished tool-use tail so the conversation can continue from the last stable point.'];
+function buildTranscriptTailRecoveryPlan(input: {
+  targetEntryId: string | null;
+  reason: TranscriptTailRecoveryReason;
+  errorMessage?: string;
+}): TranscriptTailRecoveryPlan {
+  const summaryLines =
+    input.reason === 'assistant_error'
+      ? ['Recovered from a failed tail so the conversation can continue from the last stable point.']
+      : ['Recovered from an unfinished tool-use tail so the conversation can continue from the last stable point.'];
 
   const errorMessage = input.errorMessage?.trim();
   if (errorMessage) {

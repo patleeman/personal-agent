@@ -41,12 +41,7 @@ export function PageHeader({
   );
 }
 
-export function ToolbarButton({
-  className,
-  children,
-  type = 'button',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) {
+export function ToolbarButton({ className, children, type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button type={type} className={cx('ui-toolbar-button', className)} {...props}>
       {children}
@@ -62,11 +57,7 @@ export function IconButton({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { compact?: boolean }) {
   return (
-    <button
-      type={type}
-      className={cx('ui-icon-button', compact && 'ui-icon-button-compact', className)}
-      {...props}
-    >
+    <button type={type} className={cx('ui-icon-button', compact && 'ui-icon-button-compact', className)} {...props}>
       {children}
     </button>
   );
@@ -84,19 +75,18 @@ export function Pill({
   children: ReactNode;
   className?: string;
 } & HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cx('ui-pill', pillToneClass(tone), mono && 'font-mono', className)} {...props}>{children}</span>;
+  return (
+    <span className={cx('ui-pill', pillToneClass(tone), mono && 'font-mono', className)} {...props}>
+      {children}
+    </span>
+  );
 }
 
 export function Keycap({ children, className }: { children: ReactNode; className?: string }) {
   return <kbd className={cx('ui-kbd', className)}>{children}</kbd>;
 }
 
-export function SurfacePanel({
-  className,
-  muted = false,
-  children,
-  ...props
-}: HTMLAttributes<HTMLDivElement> & { muted?: boolean }) {
+export function SurfacePanel({ className, muted = false, children, ...props }: HTMLAttributes<HTMLDivElement> & { muted?: boolean }) {
   return (
     <div className={cx(muted ? 'ui-panel-muted' : 'ui-panel', className)} {...props}>
       {children}
@@ -174,7 +164,9 @@ export function AppPageLayout({
   return (
     <div className={cx('ui-app-page-shell', shellClassName)}>
       <div className={cx(asideLayout === 'centered' ? 'ui-app-page-grid-centered' : 'ui-app-page-grid', gridClassName)}>
-        <div className={cx('ui-app-page-main', asideLayout === 'centered' && 'ui-app-page-main-centered', contentClassName)}>{children}</div>
+        <div className={cx('ui-app-page-main', asideLayout === 'centered' && 'ui-app-page-main-centered', contentClassName)}>
+          {children}
+        </div>
         <div className={cx(asideLayout === 'centered' ? 'ui-app-page-aside-centered' : 'ui-app-page-aside', asideClassName)}>{aside}</div>
       </div>
     </div>
@@ -273,9 +265,7 @@ export function AppPageToc<TId extends string>({
               >
                 <span className="block text-[13px] font-medium">{item.label}</span>
                 {item.summary ? (
-                  <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>
-                    {item.summary}
-                  </span>
+                  <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>{item.summary}</span>
                 ) : null}
               </a>
             );
@@ -311,15 +301,7 @@ export function AppPageEmptyState({
         className,
       )}
     >
-      <EmptyState
-        icon={icon}
-        title={title}
-        body={body}
-        action={action}
-        className={cx('w-full max-w-[34rem]', contentClassName)}
-      />
+      <EmptyState icon={icon} title={title} body={body} action={action} className={cx('w-full max-w-[34rem]', contentClassName)} />
     </div>
   );
 }
-
-

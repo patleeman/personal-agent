@@ -1,7 +1,13 @@
 import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
+
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { loadLocalApiModule, type LocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
+import { emitDesktopRemoteOperationStatus } from '../remote-operation-events.js';
+import { parseRemotePlatform } from '../remote-platform.js';
+import { SshRemoteConversationRuntime } from '../ssh-remote-runtime.js';
+import { runSshCommand } from '../system-ssh.js';
+import { parseApiDispatchResult } from './api-dispatch.js';
 import type {
   DesktopApiStreamEvent,
   DesktopHostRecord,
@@ -10,11 +16,6 @@ import type {
   HostController,
   HostStatus,
 } from './types.js';
-import { parseApiDispatchResult } from './api-dispatch.js';
-import { SshRemoteConversationRuntime } from '../ssh-remote-runtime.js';
-import { parseRemotePlatform } from '../remote-platform.js';
-import { runSshCommand } from '../system-ssh.js';
-import { emitDesktopRemoteOperationStatus } from '../remote-operation-events.js';
 
 function jsonResult(statusCode: number, body: unknown): HostApiDispatchResult {
   return {
@@ -217,9 +218,7 @@ export class SshHostController implements HostController {
           const [provider, modelId] = model.includes('/') ? model.split('/', 2) : ['', model];
           await runtime.requestHelper({
             type: 'rpc',
-            command: provider
-              ? { type: 'set_model', provider, modelId }
-              : { type: 'set_model', modelId },
+            command: provider ? { type: 'set_model', provider, modelId } : { type: 'set_model', modelId },
           });
         }
         if (thinkingLevel) {
@@ -271,9 +270,10 @@ export class SshHostController implements HostController {
           id: conversationId,
           cwd: runtimeInfo.cwd,
           sessionFile: localFile,
-          title: typeof ((parsed.liveSession as { title?: unknown } | undefined)?.title) === 'string'
-            ? (parsed.liveSession as { title: string }).title
-            : ((parsed.sessionDetail as { meta?: { title?: unknown } } | undefined)?.meta?.title as string | undefined),
+          title:
+            typeof (parsed.liveSession as { title?: unknown } | undefined)?.title === 'string'
+              ? (parsed.liveSession as { title: string }).title
+              : ((parsed.sessionDetail as { meta?: { title?: unknown } } | undefined)?.meta?.title as string | undefined),
           isStreaming: runtimeInfo.isStreaming,
           hasPendingHiddenTurn: false,
         },
@@ -309,29 +309,28 @@ export class SshHostController implements HostController {
 
     if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/prompt` && input.method === 'POST') {
       const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
-      const body = (input.body as {
-        text?: unknown;
-        behavior?: unknown;
-        images?: unknown;
-        attachmentRefs?: unknown;
-        contextMessages?: unknown;
-      } | undefined) ?? {};
+      const body =
+        (input.body as
+          | {
+              text?: unknown;
+              behavior?: unknown;
+              images?: unknown;
+              attachmentRefs?: unknown;
+              contextMessages?: unknown;
+            }
+          | undefined) ?? {};
       const attachmentRefs = Array.isArray(body.attachmentRefs) ? body.attachmentRefs : [];
       if (attachmentRefs.length > 0) {
         return jsonResult(400, { error: 'Remote Pi sessions do not support local attachment refs yet.' });
       }
-      const behavior = body.behavior === 'steer'
-        ? 'steer'
-        : body.behavior === 'followUp'
-          ? 'followUp'
-          : 'prompt';
+      const behavior = body.behavior === 'steer' ? 'steer' : body.behavior === 'followUp' ? 'followUp' : 'prompt';
       const commandType = behavior === 'steer' ? 'steer' : behavior === 'followUp' ? 'follow_up' : 'prompt';
       const command = {
         type: commandType,
         ...(typeof body.text === 'string' ? { message: body.text } : {}),
         ...(Array.isArray(body.images) ? { images: body.images } : {}),
       } as Record<string, unknown>;
-      const response = await runtime.requestHelper({ type: 'rpc', command }) as {
+      const response = (await runtime.requestHelper({ type: 'rpc', command })) as {
         success?: boolean;
         error?: string;
       };
@@ -356,7 +355,7 @@ export class SshHostController implements HostController {
       if (!command) {
         return jsonResult(400, { error: 'command required' });
       }
-      const response = await runtime.requestHelper({ type: 'rpc', command: { type: 'bash', command } }) as {
+      const response = (await runtime.requestHelper({ type: 'rpc', command: { type: 'bash', command } })) as {
         data?: { output?: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string };
       };
       return jsonResult(200, {
@@ -378,13 +377,13 @@ export class SshHostController implements HostController {
       const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
       const body = (input.body as { outputPath?: unknown } | undefined) ?? {};
       const outputPath = typeof body.outputPath === 'string' ? body.outputPath.trim() : '';
-      const response = await runtime.requestHelper({
+      const response = (await runtime.requestHelper({
         type: 'rpc',
         command: {
           type: 'export_html',
           ...(outputPath ? { outputPath } : {}),
         },
-      }) as { data?: { path?: string } };
+      })) as { data?: { path?: string } };
       return jsonResult(200, {
         ok: true,
         path: typeof response?.data?.path === 'string' ? response.data.path : outputPath,
@@ -393,13 +392,16 @@ export class SshHostController implements HostController {
 
     if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/fork-entries` && input.method === 'GET') {
       const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
-      const response = await runtime.requestHelper({ type: 'rpc', command: { type: 'get_fork_messages' } }) as {
+      const response = (await runtime.requestHelper({ type: 'rpc', command: { type: 'get_fork_messages' } })) as {
         data?: { messages?: Array<{ entryId?: string; text?: string }> };
       };
-      return jsonResult(200, (response?.data?.messages ?? []).map((message) => ({
-        entryId: typeof message.entryId === 'string' ? message.entryId : '',
-        text: typeof message.text === 'string' ? message.text : '',
-      })));
+      return jsonResult(
+        200,
+        (response?.data?.messages ?? []).map((message) => ({
+          entryId: typeof message.entryId === 'string' ? message.entryId : '',
+          text: typeof message.text === 'string' ? message.text : '',
+        })),
+      );
     }
 
     if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/reload` && input.method === 'POST') {
@@ -436,11 +438,8 @@ export class SshHostController implements HostController {
   }
 
   async readDirectory(path?: string | null) {
-    const runtime = new SshRemoteConversationRuntime(
-      this.record.sshTarget,
-      this.id,
-      this.label,
-      (status) => emitDesktopRemoteOperationStatus(status),
+    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label, (status) =>
+      emitDesktopRemoteOperationStatus(status),
     );
     return runtime.readDirectory(path);
   }
@@ -522,9 +521,10 @@ export class SshHostController implements HostController {
           });
           return;
         case 'tool_execution_end': {
-          const result = typeof event.result === 'object' && event.result !== null
-            ? event.result as { content?: Array<{ text?: string }>; details?: unknown }
-            : null;
+          const result =
+            typeof event.result === 'object' && event.result !== null
+              ? (event.result as { content?: Array<{ text?: string }>; details?: unknown })
+              : null;
           const output = result?.content?.map((entry) => entry?.text ?? '').join('') ?? '';
           onEvent({
             type: 'message',
@@ -540,9 +540,10 @@ export class SshHostController implements HostController {
           return;
         }
         case 'message_update': {
-          const assistantMessageEvent = typeof event.assistantMessageEvent === 'object' && event.assistantMessageEvent !== null
-            ? event.assistantMessageEvent as { type?: unknown; delta?: unknown }
-            : null;
+          const assistantMessageEvent =
+            typeof event.assistantMessageEvent === 'object' && event.assistantMessageEvent !== null
+              ? (event.assistantMessageEvent as { type?: unknown; delta?: unknown })
+              : null;
           if (assistantMessageEvent?.type === 'text_delta' && typeof assistantMessageEvent.delta === 'string') {
             onEvent({ type: 'message', data: JSON.stringify({ type: 'text_delta', delta: assistantMessageEvent.delta }) });
           }
@@ -607,7 +608,7 @@ export class SshHostController implements HostController {
   }
 
   private async readPiState(runtime: SshRemoteConversationRuntime): Promise<Record<string, unknown>> {
-    const response = await runtime.requestHelper({ type: 'rpc', command: { type: 'get_state' } }) as {
+    const response = (await runtime.requestHelper({ type: 'rpc', command: { type: 'get_state' } })) as {
       data?: Record<string, unknown>;
     };
     return response?.data ?? {};
@@ -636,7 +637,7 @@ export class SshHostController implements HostController {
   private async readLocalSessionMeta(conversationId: string): Promise<{ file?: string; cwd?: string; title?: string } | null> {
     const localApi = await this.getLocalApi();
     try {
-      return await localApi.readDesktopSessionMeta(conversationId) as { file?: string; cwd?: string; title?: string } | null;
+      return (await localApi.readDesktopSessionMeta(conversationId)) as { file?: string; cwd?: string; title?: string } | null;
     } catch {
       return null;
     }
@@ -657,11 +658,8 @@ export class SshHostController implements HostController {
       return existing;
     }
 
-    const runtime = new SshRemoteConversationRuntime(
-      this.record.sshTarget,
-      this.id,
-      this.label,
-      (status) => emitDesktopRemoteOperationStatus(status),
+    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label, (status) =>
+      emitDesktopRemoteOperationStatus(status),
     );
     this.runtimes.set(conversationId, runtime);
     return runtime;

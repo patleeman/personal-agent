@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs';
 import { isAbsolute, join, resolve } from 'path';
+
 import { validateConversationId } from './conversation-project-links.js';
 import { getStateRoot } from './runtime/paths.js';
 
@@ -76,9 +77,7 @@ function getConversationCheckpointStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -124,8 +123,8 @@ function normalizeCheckpointSource(source: ConversationCheckpointSource): Conver
   const cwd = normalizeOptionalText(source.cwd);
   const relatedProjectIds = Array.isArray(source.relatedProjectIds)
     ? source.relatedProjectIds
-      .map((projectId) => (typeof projectId === 'string' ? projectId.trim() : ''))
-      .filter((projectId) => projectId.length > 0)
+        .map((projectId) => (typeof projectId === 'string' ? projectId.trim() : ''))
+        .filter((projectId) => projectId.length > 0)
     : [];
 
   return {
@@ -207,7 +206,10 @@ function writeFileAtomic(path: string, content: string): void {
 }
 
 function createUniqueCheckpointId(options: ResolveConversationCheckpointOptions): string {
-  const timestamp = new Date().toISOString().replace(/[T:.Z-]/g, '').slice(0, 14);
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[T:.Z-]/g, '')
+    .slice(0, 14);
 
   let attempts = 0;
   while (attempts < 20) {
@@ -287,13 +289,7 @@ function readCheckpointRecordFromPath(path: string): ConversationCheckpointRecor
 
 export function resolveProfileConversationCheckpointsDir(options: ResolveConversationCheckpointOptions): string {
   validateProfileName(options.profile);
-  return join(
-    getConversationCheckpointStateRoot(options.stateRoot),
-    'pi-agent',
-    'state',
-    'conversation-checkpoints',
-    options.profile,
-  );
+  return join(getConversationCheckpointStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-checkpoints', options.profile);
 }
 
 export function resolveConversationCheckpointMetaDir(options: ResolveConversationCheckpointOptions): string {
@@ -319,9 +315,7 @@ export function resolveConversationCheckpointSnapshotFile(options: ResolveConver
 
   const checkpointsDir = resolveProfileConversationCheckpointsDir(options);
   const snapshotFile = options.checkpoint.snapshot.file.trim();
-  const absolutePath = isAbsolute(snapshotFile)
-    ? resolve(snapshotFile)
-    : resolve(checkpointsDir, snapshotFile);
+  const absolutePath = isAbsolute(snapshotFile) ? resolve(snapshotFile) : resolve(checkpointsDir, snapshotFile);
 
   if (!isSubPath(checkpointsDir, absolutePath)) {
     throw new Error(`Checkpoint snapshot path escapes checkpoint directory: ${snapshotFile}`);
@@ -349,7 +343,9 @@ export function getConversationCheckpoint(options: ResolveConversationCheckpoint
   };
 }
 
-export function listConversationCheckpoints(options: ResolveConversationCheckpointOptions & { conversationId?: string }): ConversationCheckpointRecord[] {
+export function listConversationCheckpoints(
+  options: ResolveConversationCheckpointOptions & { conversationId?: string },
+): ConversationCheckpointRecord[] {
   if (options.conversationId) {
     validateConversationId(options.conversationId);
   }
@@ -370,10 +366,12 @@ export function listConversationCheckpoints(options: ResolveConversationCheckpoi
           checkpoint: record,
         });
 
-        return [{
-          ...record,
-          snapshotMissing: !existsSync(snapshotPath),
-        } satisfies ConversationCheckpointRecord];
+        return [
+          {
+            ...record,
+            snapshotMissing: !existsSync(snapshotPath),
+          } satisfies ConversationCheckpointRecord,
+        ];
       } catch {
         return [];
       }
@@ -406,8 +404,7 @@ export function saveConversationCheckpoint(options: SaveConversationCheckpointOp
   const source = normalizeCheckpointSource(options.source);
   const anchor = normalizeCheckpointAnchor(options.anchor);
 
-  const createdAt = existing?.createdAt
-    ?? normalizeIsoTimestamp(options.createdAt ?? new Date().toISOString(), 'checkpoint createdAt');
+  const createdAt = existing?.createdAt ?? normalizeIsoTimestamp(options.createdAt ?? new Date().toISOString(), 'checkpoint createdAt');
   const updatedAt = normalizeIsoTimestamp(options.updatedAt ?? new Date().toISOString(), 'checkpoint updatedAt');
 
   const snapshotLineCount = options.snapshotLineCount ?? countSnapshotLines(snapshotContent);

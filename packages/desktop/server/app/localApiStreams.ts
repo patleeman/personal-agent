@@ -1,12 +1,8 @@
-import {
-  getDurableRunLogCursor,
-  getDurableRunSnapshot,
-  readDurableRunLogDelta,
-} from '../automation/durableRuns.js';
+import { getDurableRunLogCursor, getDurableRunSnapshot, readDurableRunLogDelta } from '../automation/durableRuns.js';
 import { inlineConversationSessionSnapshotAssetsCapability } from '../conversations/conversationSessionAssetCapability.js';
 import { subscribe as subscribeLiveSession } from '../conversations/liveSessions.js';
-import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 import type { DisplayBlock } from '../conversations/sessions.js';
+import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 
 const MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS = 1000;
 
@@ -16,10 +12,7 @@ export type DesktopLocalApiStreamEvent =
   | { type: 'error'; message: string }
   | { type: 'close' };
 
-function emitStreamMessage(
-  onEvent: (event: DesktopLocalApiStreamEvent) => void,
-  payload: unknown,
-): void {
+function emitStreamMessage(onEvent: (event: DesktopLocalApiStreamEvent) => void, payload: unknown): void {
   onEvent({ type: 'message', data: JSON.stringify(payload) });
 }
 
@@ -51,10 +44,7 @@ function parsePositiveInteger(raw: string | null, options?: { minimum?: number; 
   return parsed;
 }
 
-async function subscribeDesktopLiveSessionStream(
-  url: URL,
-  onEvent: (event: DesktopLocalApiStreamEvent) => void,
-): Promise<() => void> {
+async function subscribeDesktopLiveSessionStream(url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
   const match = /^\/api\/live-sessions\/([^/]+)\/events$/.exec(url.pathname);
   const sessionId = decodeURIComponent(match?.[1] ?? '');
   if (!sessionId) {
@@ -65,9 +55,7 @@ async function subscribeDesktopLiveSessionStream(
     maximum: MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS,
   });
   const surfaceId = url.searchParams.get('surfaceId')?.trim() ?? '';
-  const surfaceType = url.searchParams.get('surfaceType') === 'mobile_web'
-    ? 'mobile_web'
-    : 'desktop_web';
+  const surfaceType = url.searchParams.get('surfaceType') === 'mobile_web' ? 'mobile_web' : 'desktop_web';
 
   const pendingPayloads: unknown[] = [];
   let opened = false;
@@ -77,14 +65,18 @@ async function subscribeDesktopLiveSessionStream(
       return;
     }
 
-    const payload = event && typeof event === 'object' && (event as { type?: unknown }).type === 'snapshot'
-      ? inlineConversationSessionSnapshotAssetsCapability(sessionId, event as {
-          type: 'snapshot';
-          blocks: DisplayBlock[];
-          blockOffset: number;
-          totalBlocks: number;
-        })
-      : event;
+    const payload =
+      event && typeof event === 'object' && (event as { type?: unknown }).type === 'snapshot'
+        ? inlineConversationSessionSnapshotAssetsCapability(
+            sessionId,
+            event as {
+              type: 'snapshot';
+              blocks: DisplayBlock[];
+              blockOffset: number;
+              totalBlocks: number;
+            },
+          )
+        : event;
 
     if (!opened) {
       pendingPayloads.push(payload);
@@ -126,14 +118,9 @@ const ACTIVE_RUN_LOG_POLL_INTERVAL_MS = 250;
 const IDLE_RUN_LOG_POLL_INTERVAL_MS = 2_000;
 
 function isRunStreamActive(snapshot: { detail: { run: { status?: { status?: string } | string } } }): boolean {
-  const runStatus = typeof snapshot.detail.run.status === 'string'
-    ? snapshot.detail.run.status
-    : snapshot.detail.run.status?.status;
+  const runStatus = typeof snapshot.detail.run.status === 'string' ? snapshot.detail.run.status : snapshot.detail.run.status?.status;
 
-  return runStatus === 'queued'
-    || runStatus === 'waiting'
-    || runStatus === 'running'
-    || runStatus === 'recovering';
+  return runStatus === 'queued' || runStatus === 'waiting' || runStatus === 'running' || runStatus === 'recovering';
 }
 
 function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
@@ -144,10 +131,7 @@ function getRunLogPollInterval(active: boolean): number {
   return active ? ACTIVE_RUN_LOG_POLL_INTERVAL_MS : IDLE_RUN_LOG_POLL_INTERVAL_MS;
 }
 
-async function subscribeDesktopRunStream(
-  url: URL,
-  onEvent: (event: DesktopLocalApiStreamEvent) => void,
-): Promise<() => void> {
+async function subscribeDesktopRunStream(url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
   const match = /^\/api\/runs\/([^/]+)\/events$/.exec(url.pathname);
   const runId = decodeURIComponent(match?.[1] ?? '');
   if (!runId) {
@@ -295,10 +279,7 @@ async function subscribeDesktopRunStream(
   return close;
 }
 
-async function subscribeDesktopProviderOAuthStream(
-  url: URL,
-  onEvent: (event: DesktopLocalApiStreamEvent) => void,
-): Promise<() => void> {
+async function subscribeDesktopProviderOAuthStream(url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
   const match = /^\/api\/provider-auth\/oauth\/([^/]+)\/events$/.exec(url.pathname);
   const loginId = decodeURIComponent(match?.[1] ?? '');
   if (!loginId) {
@@ -335,9 +316,12 @@ async function subscribeDesktopProviderOAuthStream(
     }
   });
 
-  timeoutId = setTimeout(() => {
-    close();
-  }, 10 * 60 * 1000);
+  timeoutId = setTimeout(
+    () => {
+      close();
+    },
+    10 * 60 * 1000,
+  );
 
   return close;
 }

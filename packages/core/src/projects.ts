@@ -1,16 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
-import {
-  findUnifiedNodeById,
-  loadUnifiedNodes,
-  migrateLegacyNodes,
-} from './nodes.js';
-import {
-  createInitialProject,
-  readProject,
-  writeProject,
-} from './project-artifacts.js';
+
+import { findUnifiedNodeById, loadUnifiedNodes, migrateLegacyNodes } from './nodes.js';
+import { createInitialProject, readProject, writeProject } from './project-artifacts.js';
 import { getDurableProjectsDir } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -162,25 +155,19 @@ export function listResolvedProjectRepoRoots(options: ListResolvedProjectRepoRoo
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
 export function validateProjectId(projectId: string): void {
   if (!PROJECT_ID_PATTERN.test(projectId)) {
-    throw new Error(
-      `Invalid project id "${projectId}". Project ids may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid project id "${projectId}". Project ids may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
 export function validateTaskId(taskId: string): void {
   if (!TASK_ID_PATTERN.test(taskId)) {
-    throw new Error(
-      `Invalid task id "${taskId}". Task ids may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid task id "${taskId}". Task ids may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -208,7 +195,11 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
     repoRoot: normalizedRepoRoot,
     projectsDir,
     projectDir,
-    projectFile: existsSync(preferredProjectFile) ? preferredProjectFile : (existsSync(legacyProjectFile) ? legacyProjectFile : preferredProjectFile),
+    projectFile: existsSync(preferredProjectFile)
+      ? preferredProjectFile
+      : existsSync(legacyProjectFile)
+        ? legacyProjectFile
+        : preferredProjectFile,
     documentFile: join(projectDir, 'project.md'),
     tasksDir: join(projectDir, 'tasks'),
     filesDir: join(projectDir, 'files'),
@@ -242,17 +233,18 @@ export function readProjectOwnerProfile(options: { repoRoot?: string; projectId:
 export function listProjectIds(options: ResolveProjectOptions): string[] {
   resolveProfileProjectsDir(options);
 
-  return listAllProjectIds({ repoRoot: options.repoRoot })
-    .filter((projectId) => {
-      try {
-        return readProjectOwnerProfile({
+  return listAllProjectIds({ repoRoot: options.repoRoot }).filter((projectId) => {
+    try {
+      return (
+        readProjectOwnerProfile({
           repoRoot: options.repoRoot,
           projectId,
-        }) === options.profile;
-      } catch {
-        return true;
-      }
-    });
+        }) === options.profile
+      );
+    } catch {
+      return true;
+    }
+  });
 }
 
 export function resolveProjectTaskPath(options: ResolveProjectTaskPathOptions): string {
@@ -275,9 +267,7 @@ function assertProjectCanBeCreated(paths: ProjectPaths, overwrite: boolean): voi
   }
 }
 
-export function createProjectScaffold(
-  options: CreateProjectScaffoldOptions,
-): CreateProjectScaffoldResult {
+export function createProjectScaffold(options: CreateProjectScaffoldOptions): CreateProjectScaffoldResult {
   const title = options.title.trim();
   const description = options.description.trim();
 

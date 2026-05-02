@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext } from '../../app/contexts';
-import { ChatView } from './ChatView';
 import type { DurableRunRecord, MessageBlock } from '../../shared/types';
+import { ChatView } from './ChatView';
 
 const apiMocks = vi.hoisted(() => ({
   durableRun: vi.fn(),
@@ -107,25 +108,27 @@ function renderChatView(messages: MessageBlock[]) {
 
   act(() => {
     root.render(
-      <AppDataContext.Provider value={{
-        projects: null,
-        sessions: null,
-        tasks: null,
-        runs: {
-          scannedAt: '2026-03-11T18:00:10.000Z',
-          runsRoot: '/tmp/runs',
-          summary: {
-            total: 1,
-            recoveryActions: {},
-            statuses: { running: 1 },
+      <AppDataContext.Provider
+        value={{
+          projects: null,
+          sessions: null,
+          tasks: null,
+          runs: {
+            scannedAt: '2026-03-11T18:00:10.000Z',
+            runsRoot: '/tmp/runs',
+            summary: {
+              total: 1,
+              recoveryActions: {},
+              statuses: { running: 1 },
+            },
+            runs: [runRecord],
           },
-          runs: [runRecord],
-        },
-        setProjects: () => {},
-        setSessions: () => {},
-        setTasks: () => {},
-        setRuns: () => {},
-      }}>
+          setProjects: () => {},
+          setSessions: () => {},
+          setTasks: () => {},
+          setRuns: () => {},
+        }}
+      >
         <ChatView messages={messages} isStreaming={false} />
       </AppDataContext.Provider>,
     );
@@ -163,7 +166,8 @@ describe('ChatView inline run cards', () => {
     });
 
     if (!window.requestAnimationFrame) {
-      window.requestAnimationFrame = ((callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
+      window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+        window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
     }
     if (!window.cancelAnimationFrame) {
       window.cancelAnimationFrame = ((handle: number) => window.clearTimeout(handle)) as typeof window.cancelAnimationFrame;
@@ -208,20 +212,22 @@ describe('ChatView inline run cards', () => {
   });
 
   it('collapses raw delivered run callbacks into a clickable run card', async () => {
-    const { container } = renderChatView([{
-      type: 'text',
-      ts: '2026-03-11T18:00:00.000Z',
-      text: [
-        `Durable run ${RUN_ID} has finished.`,
-        'taskSlug=ui-preview-check',
-        'status=completed',
-        `log=/tmp/runs/${RUN_ID}/output.log`,
-        'command=npm test',
-        '',
-        'Recent log tail:',
-        'very noisy callback output',
-      ].join('\n'),
-    }]);
+    const { container } = renderChatView([
+      {
+        type: 'text',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: [
+          `Durable run ${RUN_ID} has finished.`,
+          'taskSlug=ui-preview-check',
+          'status=completed',
+          `log=/tmp/runs/${RUN_ID}/output.log`,
+          'command=npm test',
+          '',
+          'Recent log tail:',
+          'very noisy callback output',
+        ].join('\n'),
+      },
+    ]);
 
     expect(container.textContent).toContain('Background work finished.');
     expect(container.textContent).toContain('ui-preview-check');
@@ -243,21 +249,23 @@ describe('ChatView inline run cards', () => {
   });
 
   it('collapses raw run callback context blocks into a clickable run card', async () => {
-    const { container } = renderChatView([{
-      type: 'context',
-      ts: '2026-03-11T18:00:00.000Z',
-      customType: 'referenced_context',
-      text: [
-        `Background task ${RUN_ID} has finished.`,
-        'taskSlug=ui-preview-check',
-        'status=failed',
-        `log=/tmp/runs/${RUN_ID}/output.log`,
-        'command=npm test',
-        '',
-        'Recent log tail:',
-        'very noisy callback output',
-      ].join('\n'),
-    }]);
+    const { container } = renderChatView([
+      {
+        type: 'context',
+        ts: '2026-03-11T18:00:00.000Z',
+        customType: 'referenced_context',
+        text: [
+          `Background task ${RUN_ID} has finished.`,
+          'taskSlug=ui-preview-check',
+          'status=failed',
+          `log=/tmp/runs/${RUN_ID}/output.log`,
+          'command=npm test',
+          '',
+          'Recent log tail:',
+          'very noisy callback output',
+        ].join('\n'),
+      },
+    ]);
 
     expect(container.textContent).toContain('Background work finished.');
     expect(container.textContent).toContain('ui-preview-check');

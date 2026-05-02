@@ -175,10 +175,12 @@ function createMockSession(options: {
   extensionRunner?: { emitBeforeAgentStart: (prompt: string, images: unknown[] | undefined, systemPrompt: string) => Promise<unknown> };
 }): MockSessionBundle {
   const listeners = new Set<(event: any) => void>();
-  const sessionManager = options.manager ?? createMockManager({
-    sessionFile: options.sessionFile ?? `/tmp/${options.sessionId}.jsonl`,
-    getCwd: vi.fn(() => options.cwd ?? '/tmp/workspace'),
-  });
+  const sessionManager =
+    options.manager ??
+    createMockManager({
+      sessionFile: options.sessionFile ?? `/tmp/${options.sessionId}.jsonl`,
+      getCwd: vi.fn(() => options.cwd ?? '/tmp/workspace'),
+    });
   const session: any = {
     _baseToolRegistry: new Map<string, unknown>(),
     _refreshToolRegistry: vi.fn(),
@@ -289,7 +291,12 @@ describe('liveSessions bootstrap helpers', () => {
     syncWebLiveConversationRunMock.mockReset();
 
     authCreateMock.mockReturnValue({ kind: 'auth' });
-    applyConversationModelPreferencesMock.mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
+    applyConversationModelPreferencesMock.mockResolvedValue({
+      currentModel: 'gpt-5',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
     createBashToolMock.mockReturnValue({ name: 'bash-tool' });
     createRuntimeModelRegistryMock.mockReturnValue({
       getAvailable: vi.fn(() => []),
@@ -364,10 +371,12 @@ describe('liveSessions bootstrap helpers', () => {
     sessionManagerInMemoryMock.mockReturnValue(inMemoryManager);
     createAgentSessionMock.mockResolvedValue({ session: inspectionSession.session });
 
-    await expect(inspectAvailableTools('/tmp/workspace', {
-      agentDir: '/tmp/custom-agent-dir',
-      additionalExtensionPaths: ['/tmp/extensions'],
-    })).resolves.toEqual({
+    await expect(
+      inspectAvailableTools('/tmp/workspace', {
+        agentDir: '/tmp/custom-agent-dir',
+        additionalExtensionPaths: ['/tmp/extensions'],
+      }),
+    ).resolves.toEqual({
       cwd: '/tmp/workspace',
       activeTools: ['read'],
       tools: [
@@ -449,32 +458,42 @@ describe('liveSessions bootstrap helpers', () => {
     sessionManagerCreateMock.mockReturnValue(manager);
     createAgentSessionMock.mockResolvedValue({ session: createdSession.session });
 
-    await expect(createSession('/tmp/workspace', {
-      initialModel: 'gpt-5',
-      initialThinkingLevel: 'high',
-    })).resolves.toEqual({
+    await expect(
+      createSession('/tmp/workspace', {
+        initialModel: 'gpt-5',
+        initialThinkingLevel: 'high',
+      }),
+    ).resolves.toEqual({
       id: 'session-created',
       sessionFile: '/tmp/durable-sessions/--tmp-workspace--/session-created.jsonl',
     });
 
     expect(sessionManagerCreateMock).toHaveBeenCalledWith('/tmp/workspace', '/tmp/durable-sessions/--tmp-workspace--');
-    expect(createBashToolMock).toHaveBeenCalledWith('/tmp/workspace', expect.objectContaining({
-      commandPrefix: 'PREFIX',
-      spawnHook: expect.any(Function),
-    }));
-    const bashToolOptions = createBashToolMock.mock.calls.at(-1)?.[1] as { spawnHook: (context: { env: Record<string, string>; cwd: string; command: string }) => { env: Record<string, string> } };
+    expect(createBashToolMock).toHaveBeenCalledWith(
+      '/tmp/workspace',
+      expect.objectContaining({
+        commandPrefix: 'PREFIX',
+        spawnHook: expect.any(Function),
+      }),
+    );
+    const bashToolOptions = createBashToolMock.mock.calls.at(-1)?.[1] as {
+      spawnHook: (context: { env: Record<string, string>; cwd: string; command: string }) => { env: Record<string, string> };
+    };
     const spawned = bashToolOptions.spawnHook({
       command: 'echo hello',
       cwd: '/tmp/workspace',
       env: { PATH: '/usr/bin', BASE: '1' },
     });
-    expect(resolveChildProcessEnvMock).toHaveBeenCalledWith({
-      PERSONAL_AGENT_SOURCE_CONVERSATION_ID: 'session-created',
-      PERSONAL_AGENT_SOURCE_SESSION_FILE: '/tmp/durable-sessions/--tmp-workspace--/session-created.jsonl',
-    }, {
-      PATH: '/usr/bin',
-      BASE: '1',
-    });
+    expect(resolveChildProcessEnvMock).toHaveBeenCalledWith(
+      {
+        PERSONAL_AGENT_SOURCE_CONVERSATION_ID: 'session-created',
+        PERSONAL_AGENT_SOURCE_SESSION_FILE: '/tmp/durable-sessions/--tmp-workspace--/session-created.jsonl',
+      },
+      {
+        PATH: '/usr/bin',
+        BASE: '1',
+      },
+    );
     expect(spawned.env).toEqual({
       PATH: '/interactive/bin:/usr/bin',
       BASE: '1',
@@ -543,7 +562,11 @@ describe('liveSessions bootstrap helpers', () => {
       id: 'session-resumed',
     });
 
-    expect(sessionManagerForkFromMock).toHaveBeenCalledWith('/tmp/source-session.jsonl', '/tmp/next-workspace', '/tmp/durable-sessions/--tmp-next-workspace--');
+    expect(sessionManagerForkFromMock).toHaveBeenCalledWith(
+      '/tmp/source-session.jsonl',
+      '/tmp/next-workspace',
+      '/tmp/durable-sessions/--tmp-next-workspace--',
+    );
     expect(sessionManagerOpenMock).toHaveBeenCalledWith('/tmp/stored-session.jsonl', undefined, '/tmp/override-workspace');
     expect(registry.get('session-resumed')?.cwd).toBe('/tmp/override-workspace');
     expect(registry.get('session-resumed')?.autoTitleRequested).toBe(true);
@@ -819,16 +842,21 @@ describe('liveSessions bootstrap helpers', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(registry.has('session-summary-live')).toBe(true);
-    expect(logWarnMock).toHaveBeenCalledWith('summary fork compaction failed', expect.objectContaining({
-      sourceConversationId: 'session-summary-source',
-      conversationId: 'session-summary-live',
-      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
-    }));
-    expect(summarySession.session.sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
-      customType: 'system_notice',
-      display: true,
-      content: 'Summarize & New could not compact this copy automatically: compaction exploded',
-    }));
+    expect(logWarnMock).toHaveBeenCalledWith(
+      'summary fork compaction failed',
+      expect.objectContaining({
+        sourceConversationId: 'session-summary-source',
+        conversationId: 'session-summary-live',
+        sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+      }),
+    );
+    expect(summarySession.session.sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'system_notice',
+        display: true,
+        content: 'Summarize & New could not compact this copy automatically: compaction exploded',
+      }),
+    );
   });
 
   it('rewinds to a blank session when the selected entry is the first turn', async () => {
@@ -866,19 +894,18 @@ describe('liveSessions bootstrap helpers', () => {
       },
     });
 
-    await expect(forkSession('session-rewind-source', 'entry-1', {
-      beforeEntry: true,
-      preserveSource: true,
-    })).resolves.toEqual({
+    await expect(
+      forkSession('session-rewind-source', 'entry-1', {
+        beforeEntry: true,
+        preserveSource: true,
+      }),
+    ).resolves.toEqual({
       newSessionId: 'session-rewind-live',
       sessionFile: '/tmp/rewind-root-session.jsonl',
     });
 
     expect(sourceManager.createBranchedSession).not.toHaveBeenCalled();
-    expect(sessionManagerCreateMock).toHaveBeenCalledWith(
-      '/tmp/source-workspace',
-      '/tmp/durable-sessions/--tmp-source-workspace--',
-    );
+    expect(sessionManagerCreateMock).toHaveBeenCalledWith('/tmp/source-workspace', '/tmp/durable-sessions/--tmp-source-workspace--');
     expect(applyConversationModelPreferencesMock).toHaveBeenCalledWith(
       createdSession.session,
       { model: 'gpt-5', thinkingLevel: 'high' },

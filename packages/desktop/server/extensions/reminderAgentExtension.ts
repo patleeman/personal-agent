@@ -1,34 +1,44 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { publishAppEvent } from '../shared/appEvents.js';
+import { Type } from '@sinclair/typebox';
+
 import { scheduleDeferredResumeForSessionFile } from '../automation/deferredResumes.js';
 import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
+import { publishAppEvent } from '../shared/appEvents.js';
 
 const ReminderToolParams = Type.Object({
-  delay: Type.Optional(Type.String({
-    description: 'Relative delay until the reminder, for example 30s, 10m, 2h, or 1d.',
-  })),
-  at: Type.Optional(Type.String({
-    description: 'Reminder time. Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.',
-  })),
+  delay: Type.Optional(
+    Type.String({
+      description: 'Relative delay until the reminder, for example 30s, 10m, 2h, or 1d.',
+    }),
+  ),
+  at: Type.Optional(
+    Type.String({
+      description: 'Reminder time. Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.',
+    }),
+  ),
   prompt: Type.String({
     description: 'What the reminder should tell the agent/user when it fires.',
   }),
-  title: Type.Optional(Type.String({
-    description: 'Short reminder label shown in alerts and conversation UI.',
-  })),
-  notify: Type.Optional(Type.Union([
-    Type.Literal('passive'),
-    Type.Literal('disruptive'),
-  ], {
-    description: 'How strongly the reminder should interrupt in-app. Defaults to disruptive.',
-  })),
-  requireAck: Type.Optional(Type.Boolean({
-    description: 'Whether the reminder alert should stay active until acknowledged.',
-  })),
-  autoResumeIfOpen: Type.Optional(Type.Boolean({
-    description: 'Whether an open saved conversation should auto-resume when the reminder becomes ready.',
-  })),
+  title: Type.Optional(
+    Type.String({
+      description: 'Short reminder label shown in alerts and conversation UI.',
+    }),
+  ),
+  notify: Type.Optional(
+    Type.Union([Type.Literal('passive'), Type.Literal('disruptive')], {
+      description: 'How strongly the reminder should interrupt in-app. Defaults to disruptive.',
+    }),
+  ),
+  requireAck: Type.Optional(
+    Type.Boolean({
+      description: 'Whether the reminder alert should stay active until acknowledged.',
+    }),
+  ),
+  autoResumeIfOpen: Type.Optional(
+    Type.Boolean({
+      description: 'Whether an open saved conversation should auto-resume when the reminder becomes ready.',
+    }),
+  ),
 });
 
 export function createReminderAgentExtension(): (pi: ExtensionAPI) => void {
@@ -74,10 +84,14 @@ export function createReminderAgentExtension(): (pi: ExtensionAPI) => void {
           publishAppEvent({ type: 'session_meta_changed', sessionId });
         }
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Scheduled reminder ${reminder.id}${params.delay ? ` in ${params.delay}` : ''} (due ${parsedAt?.interpretation ?? reminder.dueAt}).`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Scheduled reminder ${reminder.id}${params.delay ? ` in ${params.delay}` : ''} (due ${
+                parsedAt?.interpretation ?? reminder.dueAt
+              }).`,
+            },
+          ],
           details: {
             id: reminder.id,
             sessionFile,

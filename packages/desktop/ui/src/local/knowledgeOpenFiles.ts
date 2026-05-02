@@ -72,9 +72,8 @@ export function writeStoredOpenFileIds(openFileIds: readonly string[], storage?:
 }
 
 export function addOpenFileId(openFileIds: readonly string[], fileId: string, maxOpenFileIds: number = MAX_OPEN_FILE_IDS): string[] {
-  const limit = Number.isSafeInteger(maxOpenFileIds) && maxOpenFileIds > 0
-    ? Math.min(MAX_OPEN_FILE_IDS, maxOpenFileIds)
-    : MAX_OPEN_FILE_IDS;
+  const limit =
+    Number.isSafeInteger(maxOpenFileIds) && maxOpenFileIds > 0 ? Math.min(MAX_OPEN_FILE_IDS, maxOpenFileIds) : MAX_OPEN_FILE_IDS;
   const normalizedId = fileId.trim();
   if (!normalizedId || normalizedId.endsWith('/')) {
     return normalizeOpenFileIds(openFileIds).slice(0, limit);
@@ -102,11 +101,9 @@ export function renameOpenFileIds(openFileIds: readonly string[], oldId: string,
   }
 
   if (oldId.endsWith('/') && newId.endsWith('/')) {
-    return normalizeOpenFileIds(normalized.map((openFileId) => (
-      openFileId.startsWith(oldId)
-        ? `${newId}${openFileId.slice(oldId.length)}`
-        : openFileId
-    )));
+    return normalizeOpenFileIds(
+      normalized.map((openFileId) => (openFileId.startsWith(oldId) ? `${newId}${openFileId.slice(oldId.length)}` : openFileId)),
+    );
   }
 
   return normalizeOpenFileIds(normalized.map((openFileId) => (openFileId === oldId ? newId : openFileId)));

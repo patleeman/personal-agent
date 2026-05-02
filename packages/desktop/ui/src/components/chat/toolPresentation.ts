@@ -2,18 +2,21 @@ import type { MessageBlock } from '../../shared/types';
 
 // ── Tool icon & color ─────────────────────────────────────────────────────────
 
-const TOOL_META: Record<string, { icon: string; label: string; color: string; tone: 'steel' | 'teal' | 'accent' | 'success' | 'warning' | 'muted' }> = {
-  bash:        { icon: '$',  label: 'bash',            color: 'text-steel bg-steel/5',       tone: 'steel' },
-  read:        { icon: '≡',  label: 'read',            color: 'text-teal bg-teal/5',         tone: 'teal' },
-  write:       { icon: '✎',  label: 'write',           color: 'text-accent bg-accent/5',     tone: 'accent' },
-  edit:        { icon: '✎',  label: 'edit',            color: 'text-accent bg-accent/5',     tone: 'accent' },
-  web_search:  { icon: '⌕',  label: 'web_search',      color: 'text-success bg-success/5',   tone: 'success' },
-  web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success bg-success/5',   tone: 'success' },
-  image:       { icon: '◌',  label: 'image',           color: 'text-accent bg-accent/5',     tone: 'accent' },
-  screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary bg-elevated',  tone: 'muted' },
-  artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent bg-accent/5',     tone: 'accent' },
-  checkpoint:  { icon: '✓',  label: 'checkpoint',      color: 'text-success bg-success/5',   tone: 'success' },
-  ask_user_question: { icon: '?', label: 'question',   color: 'text-warning bg-warning/5',   tone: 'warning' },
+const TOOL_META: Record<
+  string,
+  { icon: string; label: string; color: string; tone: 'steel' | 'teal' | 'accent' | 'success' | 'warning' | 'muted' }
+> = {
+  bash: { icon: '$', label: 'bash', color: 'text-steel bg-steel/5', tone: 'steel' },
+  read: { icon: '≡', label: 'read', color: 'text-teal bg-teal/5', tone: 'teal' },
+  write: { icon: '✎', label: 'write', color: 'text-accent bg-accent/5', tone: 'accent' },
+  edit: { icon: '✎', label: 'edit', color: 'text-accent bg-accent/5', tone: 'accent' },
+  web_search: { icon: '⌕', label: 'web_search', color: 'text-success bg-success/5', tone: 'success' },
+  web_fetch: { icon: '⌕', label: 'web_fetch', color: 'text-success bg-success/5', tone: 'success' },
+  image: { icon: '◌', label: 'image', color: 'text-accent bg-accent/5', tone: 'accent' },
+  screenshot: { icon: '⊡', label: 'screenshot', color: 'text-secondary bg-elevated', tone: 'muted' },
+  artifact: { icon: '◫', label: 'artifact', color: 'text-accent bg-accent/5', tone: 'accent' },
+  checkpoint: { icon: '✓', label: 'checkpoint', color: 'text-success bg-success/5', tone: 'success' },
+  ask_user_question: { icon: '?', label: 'question', color: 'text-warning bg-warning/5', tone: 'warning' },
   change_working_directory: { icon: '↗', label: 'cwd', color: 'text-teal bg-teal/5', tone: 'teal' },
   deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning bg-warning/5', tone: 'warning' },
 };
@@ -37,12 +40,7 @@ export function shouldAutoOpenTraceCluster(live: boolean, hasRunning: boolean): 
   return live || hasRunning;
 }
 
-export function shouldAutoOpenConversationBlock(
-  block: MessageBlock,
-  index: number,
-  total: number,
-  isStreaming: boolean,
-): boolean {
+export function shouldAutoOpenConversationBlock(block: MessageBlock, index: number, total: number, isStreaming: boolean): boolean {
   if (block.type === 'tool_use') {
     return block.status === 'running' || !!block.running;
   }
@@ -68,17 +66,12 @@ export function getStreamingStatusLabel(messages: MessageBlock[], isStreaming: b
     case 'thinking':
       return 'Thinking…';
     case 'tool_use':
-      return last.status === 'running' || !!last.running
-        ? `Running ${toolMeta(last.tool).label}…`
-        : 'Working…';
+      return last.status === 'running' || !!last.running ? `Running ${toolMeta(last.tool).label}…` : 'Working…';
     case 'subagent':
-      return last.status === 'running'
-        ? `Running ${last.name}…`
-        : 'Working…';
+      return last.status === 'running' ? `Running ${last.name}…` : 'Working…';
     case 'text':
       return 'Responding…';
     default:
       return 'Working…';
   }
 }
-

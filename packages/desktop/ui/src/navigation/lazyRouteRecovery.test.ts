@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { lazyRouteWithRecovery } from './lazyRouteRecovery.js';
 
 const originalWindow = globalThis.window;

@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  readSessionMetaMock,
-  readConversationSummaryMock,
-  scheduleConversationSearchIndexingMock,
-  searchIndexedConversationDocumentsMock,
-} = vi.hoisted(() => ({
-  readSessionMetaMock: vi.fn(),
-  readConversationSummaryMock: vi.fn(),
-  scheduleConversationSearchIndexingMock: vi.fn(),
-  searchIndexedConversationDocumentsMock: vi.fn(),
-}));
+const { readSessionMetaMock, readConversationSummaryMock, scheduleConversationSearchIndexingMock, searchIndexedConversationDocumentsMock } =
+  vi.hoisted(() => ({
+    readSessionMetaMock: vi.fn(),
+    readConversationSummaryMock: vi.fn(),
+    scheduleConversationSearchIndexingMock: vi.fn(),
+    searchIndexedConversationDocumentsMock: vi.fn(),
+  }));
 
 vi.mock('./sessions.js', () => ({
   readSessionMeta: readSessionMetaMock,
@@ -26,10 +22,10 @@ vi.mock('./conversationSearchIndex.js', () => ({
 }));
 
 import {
-  RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE,
   buildRelatedConversationPointers,
   clearRelatedConversationPointerCache,
   readCachedRelatedConversationPointers,
+  RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE,
   warmRelatedConversationPointerCache,
 } from './relatedConversationPointers.js';
 
@@ -52,7 +48,7 @@ beforeEach(() => {
   clearRelatedConversationPointerCache();
   readConversationSummaryMock.mockReturnValue(null);
   searchIndexedConversationDocumentsMock.mockReturnValue([]);
-} );
+});
 
 describe('buildRelatedConversationPointers', () => {
   it('includes manual selections even when weak', () => {
@@ -73,7 +69,16 @@ describe('buildRelatedConversationPointers', () => {
   });
 
   it('serves warmed pointer results from a short-lived cache', () => {
-    searchIndexedConversationDocumentsMock.mockReturnValue([{ sessionId: 'cached-hit', title: 'Release signing cached', cwd: '/repo/a', timestamp: '2026-04-21T10:00:00.000Z', lastActivityAt: '2026-04-21T10:00:00.000Z', searchText: 'release signing fix' }]);
+    searchIndexedConversationDocumentsMock.mockReturnValue([
+      {
+        sessionId: 'cached-hit',
+        title: 'Release signing cached',
+        cwd: '/repo/a',
+        timestamp: '2026-04-21T10:00:00.000Z',
+        lastActivityAt: '2026-04-21T10:00:00.000Z',
+        searchText: 'release signing fix',
+      },
+    ]);
 
     warmRelatedConversationPointerCache({
       prompt: 'Fix release signing',
@@ -83,27 +88,40 @@ describe('buildRelatedConversationPointers', () => {
     });
 
     expect(scheduleConversationSearchIndexingMock).toHaveBeenCalledTimes(1);
-    expect(readCachedRelatedConversationPointers({
-      prompt: 'Fix release signing',
-      currentConversationId: 'current',
-      currentCwd: '/repo/a',
-      nowMs: TEST_NOW_MS + 30_000,
-    })?.pointers.map((pointer) => pointer.sessionId)).toEqual(['cached-hit']);
-    expect(readCachedRelatedConversationPointers({
-      prompt: 'Fix release signing',
-      currentConversationId: 'current',
-      currentCwd: '/repo/a',
-      nowMs: TEST_NOW_MS + 61_000,
-    })).toBeNull();
+    expect(
+      readCachedRelatedConversationPointers({
+        prompt: 'Fix release signing',
+        currentConversationId: 'current',
+        currentCwd: '/repo/a',
+        nowMs: TEST_NOW_MS + 30_000,
+      })?.pointers.map((pointer) => pointer.sessionId),
+    ).toEqual(['cached-hit']);
+    expect(
+      readCachedRelatedConversationPointers({
+        prompt: 'Fix release signing',
+        currentConversationId: 'current',
+        currentCwd: '/repo/a',
+        nowMs: TEST_NOW_MS + 61_000,
+      }),
+    ).toBeNull();
   });
 
   it('fills remaining slots with auto-ranked conversations above threshold', () => {
     readSessionMetaMock.mockReturnValue({ ...baseMeta, id: 'manual-1', title: 'Manual release' });
-    readConversationSummaryMock.mockImplementation((sessionId: string) => sessionId === 'auto-1'
-      ? { displaySummary: 'Notarization release upload fix', promptSummary: '', keyTerms: [], filesTouched: [] }
-      : null);
+    readConversationSummaryMock.mockImplementation((sessionId: string) =>
+      sessionId === 'auto-1'
+        ? { displaySummary: 'Notarization release upload fix', promptSummary: '', keyTerms: [], filesTouched: [] }
+        : null,
+    );
     searchIndexedConversationDocumentsMock.mockReturnValue([
-      { sessionId: 'auto-1', title: 'Notarization release fix', cwd: '/repo/a', timestamp: '2026-04-20T10:00:00.000Z', lastActivityAt: '2026-04-20T10:00:00.000Z', searchText: 'release notarization Apple credentials' },
+      {
+        sessionId: 'auto-1',
+        title: 'Notarization release fix',
+        cwd: '/repo/a',
+        timestamp: '2026-04-20T10:00:00.000Z',
+        lastActivityAt: '2026-04-20T10:00:00.000Z',
+        searchText: 'release notarization Apple credentials',
+      },
     ]);
 
     const result = buildRelatedConversationPointers({
@@ -133,9 +151,21 @@ describe('buildRelatedConversationPointers', () => {
   });
 
   it('keeps feature terms after aggressive stopword removal', () => {
-    readConversationSummaryMock.mockReturnValue({ displaySummary: 'Dictation was added with a mic button and transcription provider', promptSummary: '', keyTerms: [], filesTouched: [] });
+    readConversationSummaryMock.mockReturnValue({
+      displaySummary: 'Dictation was added with a mic button and transcription provider',
+      promptSummary: '',
+      keyTerms: [],
+      filesTouched: [],
+    });
     searchIndexedConversationDocumentsMock.mockReturnValue([
-      { sessionId: 'dictation-1', title: 'Add Whisper Dictation to PA', cwd: '/repo/a', timestamp: '2026-04-20T10:00:00.000Z', lastActivityAt: '2026-04-20T10:00:00.000Z', searchText: 'dictation whisper transcription streaming' },
+      {
+        sessionId: 'dictation-1',
+        title: 'Add Whisper Dictation to PA',
+        cwd: '/repo/a',
+        timestamp: '2026-04-20T10:00:00.000Z',
+        lastActivityAt: '2026-04-20T10:00:00.000Z',
+        searchText: 'dictation whisper transcription streaming',
+      },
     ]);
 
     const result = buildRelatedConversationPointers({
@@ -150,11 +180,20 @@ describe('buildRelatedConversationPointers', () => {
   });
 
   it('uses indexed search text for auto ranking without reading session files', () => {
-    readConversationSummaryMock.mockImplementation((sessionId: string) => sessionId === 'summary-hit'
-      ? { displaySummary: '', promptSummary: '', searchText: 'release signing fix', keyTerms: [], filesTouched: [] }
-      : null);
+    readConversationSummaryMock.mockImplementation((sessionId: string) =>
+      sessionId === 'summary-hit'
+        ? { displaySummary: '', promptSummary: '', searchText: 'release signing fix', keyTerms: [], filesTouched: [] }
+        : null,
+    );
     searchIndexedConversationDocumentsMock.mockReturnValue([
-      { sessionId: 'summary-hit', title: 'Mac app packaging', cwd: '/repo/a', timestamp: '2026-04-20T10:00:00.000Z', lastActivityAt: '2026-04-20T10:00:00.000Z', searchText: 'release signing fix' },
+      {
+        sessionId: 'summary-hit',
+        title: 'Mac app packaging',
+        cwd: '/repo/a',
+        timestamp: '2026-04-20T10:00:00.000Z',
+        lastActivityAt: '2026-04-20T10:00:00.000Z',
+        searchText: 'release signing fix',
+      },
     ]);
 
     const result = buildRelatedConversationPointers({
@@ -176,9 +215,11 @@ describe('buildRelatedConversationPointers', () => {
     });
 
     expect(result.pointers).toEqual([]);
-    expect(searchIndexedConversationDocumentsMock).toHaveBeenCalledWith(expect.objectContaining({
-      terms: expect.arrayContaining(['needle', 'release', 'signing', 'fix']),
-    }));
+    expect(searchIndexedConversationDocumentsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terms: expect.arrayContaining(['needle', 'release', 'signing', 'fix']),
+      }),
+    );
   });
 
   it('omits missing manual selections after retry and warns', () => {
@@ -208,18 +249,25 @@ describe('buildRelatedConversationPointers', () => {
       limit: 2.5,
     });
 
-    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual([
-      'manual-1',
-      'manual-2',
-      'manual-3',
-      'manual-4',
-    ]);
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['manual-1', 'manual-2', 'manual-3', 'manual-4']);
   });
 
   it('only auto-ranks recent conversations', () => {
-    readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
+    readConversationSummaryMock.mockReturnValue({
+      displaySummary: 'release signing fix',
+      promptSummary: '',
+      keyTerms: [],
+      filesTouched: [],
+    });
     searchIndexedConversationDocumentsMock.mockReturnValue([
-      { sessionId: 'recent', title: 'Release signing recent', cwd: '/repo/a', timestamp: '2026-04-21T10:00:00.000Z', lastActivityAt: '2026-04-21T10:00:00.000Z', searchText: 'release signing fix' },
+      {
+        sessionId: 'recent',
+        title: 'Release signing recent',
+        cwd: '/repo/a',
+        timestamp: '2026-04-21T10:00:00.000Z',
+        lastActivityAt: '2026-04-21T10:00:00.000Z',
+        searchText: 'release signing fix',
+      },
     ]);
 
     const result = buildRelatedConversationPointers({
@@ -230,15 +278,29 @@ describe('buildRelatedConversationPointers', () => {
     });
 
     expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['recent']);
-    expect(searchIndexedConversationDocumentsMock).toHaveBeenCalledWith(expect.objectContaining({
-      recentWindowMs: 3 * 24 * 60 * 60 * 1000,
-    }));
+    expect(searchIndexedConversationDocumentsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recentWindowMs: 3 * 24 * 60 * 60 * 1000,
+      }),
+    );
   });
 
   it('skips auto candidates with malformed activity timestamps', () => {
-    readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
+    readConversationSummaryMock.mockReturnValue({
+      displaySummary: 'release signing fix',
+      promptSummary: '',
+      keyTerms: [],
+      filesTouched: [],
+    });
     searchIndexedConversationDocumentsMock.mockReturnValue([
-      { sessionId: 'valid-time', title: 'Release signing valid', cwd: '/repo/a', timestamp: '2026-04-21T10:00:00.000Z', lastActivityAt: '2026-04-21T10:00:00.000Z', searchText: 'release signing fix' },
+      {
+        sessionId: 'valid-time',
+        title: 'Release signing valid',
+        cwd: '/repo/a',
+        timestamp: '2026-04-21T10:00:00.000Z',
+        lastActivityAt: '2026-04-21T10:00:00.000Z',
+        searchText: 'release signing fix',
+      },
     ]);
 
     const result = buildRelatedConversationPointers({

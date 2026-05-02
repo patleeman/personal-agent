@@ -23,8 +23,7 @@ function compareMentionItems(left: MentionItem, right: MentionItem): number {
     profile: 5,
   };
 
-  return kindOrder[left.kind] - kindOrder[right.kind]
-    || left.id.localeCompare(right.id);
+  return kindOrder[left.kind] - kindOrder[right.kind] || left.id.localeCompare(right.id);
 }
 
 const MENTION_REGEX = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;
@@ -92,26 +91,17 @@ export function buildMentionItems(input: {
   return items.sort(compareMentionItems);
 }
 
-export function filterMentionItems(
-  items: MentionItem[],
-  query: string,
-  options: { limit?: number } = {},
-): MentionItem[] {
+export function filterMentionItems(items: MentionItem[], query: string, options: { limit?: number } = {}): MentionItem[] {
   const normalizedQuery = query.replace(/^@/, '').trim().toLowerCase();
   const filtered = !normalizedQuery
     ? items
     : items.filter((item) => {
-      const haystacks = [
-        item.id,
-        item.label,
-        item.title,
-        item.summary,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .map((value) => value.toLowerCase());
+        const haystacks = [item.id, item.label, item.title, item.summary]
+          .filter((value): value is string => Boolean(value))
+          .map((value) => value.toLowerCase());
 
-      return haystacks.some((value) => value.includes(normalizedQuery));
-    });
+        return haystacks.some((value) => value.includes(normalizedQuery));
+      });
 
   const limit = options.limit;
   if (typeof limit === 'number' && Number.isSafeInteger(limit) && limit >= 0) {

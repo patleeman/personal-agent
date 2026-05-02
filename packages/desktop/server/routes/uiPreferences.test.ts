@@ -17,10 +17,10 @@ vi.mock('../shared/appEvents.js', () => ({
   invalidateAppTopics: vi.fn(),
 }));
 
-import { registerUiPreferenceRoutes } from './uiPreferences.js';
-import * as uiPrefs from '../ui/uiPreferences.js';
-import * as settingsPersistence from '../ui/settingsPersistence.js';
 import * as appEvents from '../shared/appEvents.js';
+import * as settingsPersistence from '../ui/settingsPersistence.js';
+import * as uiPrefs from '../ui/uiPreferences.js';
+import { registerUiPreferenceRoutes } from './uiPreferences.js';
 
 function createMockRouter() {
   return {

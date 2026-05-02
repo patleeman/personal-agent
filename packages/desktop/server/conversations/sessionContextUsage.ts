@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
+
 import {
   buildSessionContext,
   calculateContextTokens,
   estimateTokens,
+  type FileEntry,
   getLatestCompactionEntry,
   migrateSessionEntries,
   parseSessionEntries,
-  type FileEntry,
   type SessionEntry,
 } from '@mariozechner/pi-coding-agent';
 
@@ -163,9 +164,7 @@ function scaleWeightsToSegments(weights: SegmentWeights, totalTokens: number): C
     return [];
   }
 
-  const weightedEntries = SEGMENT_ORDER
-    .map((key) => ({ key, weight: weights[key] }))
-    .filter((entry) => entry.weight > 0);
+  const weightedEntries = SEGMENT_ORDER.map((key) => ({ key, weight: weights[key] })).filter((entry) => entry.weight > 0);
 
   if (weightedEntries.length === 0) {
     return [];

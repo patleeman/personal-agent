@@ -1,10 +1,13 @@
 import { existsSync, statSync } from 'node:fs';
+
+import { type ExtensionFactory, SessionManager } from '@mariozechner/pi-coding-agent';
 import type { Express } from 'express';
-import { SessionManager, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
-import {
-  applyConversationModelPreferencesToSessionManager,
-} from '../conversations/conversationModelPreferences.js';
+
+import { readConversationAutoModeStateFromSessionManager, writeConversationAutoModeState } from '../conversations/conversationAutoMode.js';
+import { isMissingConversationBootstrapState, readConversationBootstrapState } from '../conversations/conversationBootstrap.js';
+import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
+import { applyConversationModelPreferencesToSessionManager } from '../conversations/conversationModelPreferences.js';
+import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
 import {
   parseTailBlocksQuery,
   publishConversationSessionMetaChanged,
@@ -23,33 +26,13 @@ import {
   setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
-import {
-  readSessionBlocks,
-  appendConversationWorkspaceMetadata,
-  renameStoredSession,
-} from '../conversations/sessions.js';
+import { appendConversationWorkspaceMetadata, readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
+import { logError, logSlowConversationPerf, setServerTimingHeaders } from '../middleware/index.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
-import {
-  logError,
-  logSlowConversationPerf,
-  setServerTimingHeaders,
-} from '../middleware/index.js';
-import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
-import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
-import {
-  ensureRequestControlsLocalLiveConversation,
-  writeLiveConversationControlError,
-} from './liveSessions.js';
-import {
-  isMissingConversationBootstrapState,
-  readConversationBootstrapState,
-} from '../conversations/conversationBootstrap.js';
-import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
-import {
-  readConversationAutoModeStateFromSessionManager,
-  writeConversationAutoModeState,
-} from '../conversations/conversationAutoMode.js';
 import { publishAppEvent } from '../shared/appEvents.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
+import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
+import { ensureRequestControlsLocalLiveConversation, writeLiveConversationControlError } from './liveSessions.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation state routes');
@@ -67,7 +50,10 @@ let buildLiveSessionExtensionFactoriesFn: () => ExtensionFactory[] = () => [];
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
 function initializeConversationStateRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
+  context: Pick<
+    ServerRouteContext,
+    'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'
+  >,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
@@ -95,15 +81,14 @@ function resolveConversationSource(conversationId: string) {
 
 function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
   const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-  const parsed = typeof candidate === 'number'
-    ? candidate
-    : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
-      ? Number.parseInt(candidate.trim(), 10)
-      : undefined;
+  const parsed =
+    typeof candidate === 'number'
+      ? candidate
+      : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
+        ? Number.parseInt(candidate.trim(), 10)
+        : undefined;
 
-  return Number.isSafeInteger(parsed) && (parsed as number) >= 0
-    ? parsed as number
-    : undefined;
+  return Number.isSafeInteger(parsed) && (parsed as number) >= 0 ? (parsed as number) : undefined;
 }
 
 function parseTrimmedQueryString(rawValue: unknown): string | undefined {
@@ -118,7 +103,10 @@ function parseTrimmedQueryString(rawValue: unknown): string | undefined {
 
 export function registerConversationStateRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
+  context: Pick<
+    ServerRouteContext,
+    'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'
+  >,
 ): void {
   initializeConversationStateRoutesContext(context);
   router.get('/api/conversations/:id/bootstrap', async (req, res) => {
@@ -129,9 +117,10 @@ export function registerConversationStateRoutes(
       const rawKnownSessionSignature = Array.isArray(req.query.knownSessionSignature)
         ? req.query.knownSessionSignature[0]
         : req.query.knownSessionSignature;
-      const knownSessionSignature = typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
-        ? rawKnownSessionSignature.trim()
-        : undefined;
+      const knownSessionSignature =
+        typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
+          ? rawKnownSessionSignature.trim()
+          : undefined;
       const knownBlockOffset = parseNonNegativeIntegerQuery(req.query.knownBlockOffset);
       const knownTotalBlocks = parseNonNegativeIntegerQuery(req.query.knownTotalBlocks);
       const knownLastBlockId = parseTrimmedQueryString(req.query.knownLastBlockId);
@@ -155,18 +144,26 @@ export function registerConversationStateRoutes(
         : bootstrap.telemetry.sessionDetailReused
           ? 'reuse/signature'
           : 'missing';
-      setServerTimingHeaders(res, [
-        { name: 'remote_sync', durationMs: bootstrap.telemetry.remoteMirror.durationMs, description: bootstrap.telemetry.remoteMirror.status },
-        { name: 'session_read', durationMs: bootstrap.telemetry.sessionRead?.durationMs ?? 0, description: sessionReadDescription },
-        { name: 'total', durationMs },
-      ], {
-        route: 'conversation-bootstrap',
-        conversationId: req.params.id,
-        ...(tailBlocks ? { tailBlocks } : {}),
-        remoteMirror: bootstrap.telemetry.remoteMirror,
-        sessionRead: bootstrap.telemetry.sessionRead,
-        durationMs,
-      });
+      setServerTimingHeaders(
+        res,
+        [
+          {
+            name: 'remote_sync',
+            durationMs: bootstrap.telemetry.remoteMirror.durationMs,
+            description: bootstrap.telemetry.remoteMirror.status,
+          },
+          { name: 'session_read', durationMs: bootstrap.telemetry.sessionRead?.durationMs ?? 0, description: sessionReadDescription },
+          { name: 'total', durationMs },
+        ],
+        {
+          route: 'conversation-bootstrap',
+          conversationId: req.params.id,
+          ...(tailBlocks ? { tailBlocks } : {}),
+          remoteMirror: bootstrap.telemetry.remoteMirror,
+          sessionRead: bootstrap.telemetry.sessionRead,
+          durationMs,
+        },
+      );
       logSlowConversationPerf('conversation bootstrap request', {
         conversationId: req.params.id,
         durationMs,
@@ -294,9 +291,11 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      if ((model !== undefined && model !== null && typeof model !== 'string')
-        || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
-        || (serviceTier !== undefined && serviceTier !== null && typeof serviceTier !== 'string')) {
+      if (
+        (model !== undefined && model !== null && typeof model !== 'string') ||
+        (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string') ||
+        (serviceTier !== undefined && serviceTier !== null && typeof serviceTier !== 'string')
+      ) {
         res.status(400).json({ error: 'model, thinkingLevel, and serviceTier must be strings or null' });
         return;
       }
@@ -345,10 +344,7 @@ export function registerConversationStateRoutes(
       if (writeLiveConversationControlError(res, err)) {
         return;
       }
-      const status = message === 'model required'
-        || message.startsWith('Unknown model:')
-        ? 400
-        : 500;
+      const status = message === 'model required' || message.startsWith('Unknown model:') ? 400 : 500;
       res.status(status).json({ error: message });
     }
   });
@@ -374,11 +370,7 @@ export function registerConversationStateRoutes(
         message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      const status = message === 'Conversation not found.'
-        ? 404
-        : message === 'conversationId required'
-          ? 400
-          : 500;
+      const status = message === 'Conversation not found.' ? 404 : message === 'conversationId required' ? 400 : 500;
       res.status(status).json({ error: message });
     }
   });

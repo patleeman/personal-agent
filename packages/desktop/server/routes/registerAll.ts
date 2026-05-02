@@ -1,7 +1,7 @@
 import type { RegisterServerRoutesInput } from './context.js';
+import { registerConversationRoutes } from './conversations.js';
 import { registerConversationStateRoutes } from './conversationState.js';
 import { registerConversationTitlesRoutes } from './conversationTitles.js';
-import { registerConversationRoutes } from './conversations.js';
 import { registerDaemonRoutes } from './daemon.js';
 import { registerFilePickerRoutes } from './filePicker.js';
 import { registerFolderPickerRoutes } from './folderPicker.js';
@@ -10,12 +10,12 @@ import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerModelRoutes } from './models.js';
 import { registerRunAppRoutes } from './runsApp.js';
 import { registerRunsOpsRoutes } from './runsOps.js';
-import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
 import { registerTranscriptionRoutes } from './transcription.js';
 import { registerUiPreferenceRoutes } from './uiPreferences.js';
+import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerWorkspaceExplorerRoutes } from './workspaceExplorer.js';
 
 export function registerServerRoutes({ app, context }: RegisterServerRoutesInput): void {
@@ -38,7 +38,6 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerConversationStateRoutes(app, context);
 
   registerLiveSessionRoutes(app, context);
-
 
   registerConversationTitlesRoutes(app, context);
 

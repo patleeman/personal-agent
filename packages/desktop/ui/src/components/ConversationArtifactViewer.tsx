@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
 import katex from 'katex';
+import { useEffect, useMemo, useState } from 'react';
+
 import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from '../content/latexArtifacts';
 import type { ConversationArtifactRecord } from '../shared/types';
 import { ErrorState, LoadingState } from './ui';
@@ -128,7 +129,9 @@ function LatexArtifactViewer({ artifact }: { artifact: ConversationArtifactRecor
         </p>
       </div>
 
-      <pre className="min-h-0 overflow-auto rounded-xl border border-border-subtle bg-elevated px-4 py-4 font-mono text-[11px] leading-relaxed text-primary">{artifact.content}</pre>
+      <pre className="min-h-0 overflow-auto rounded-xl border border-border-subtle bg-elevated px-4 py-4 font-mono text-[11px] leading-relaxed text-primary">
+        {artifact.content}
+      </pre>
     </div>
   );
 }

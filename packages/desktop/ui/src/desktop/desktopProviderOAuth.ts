@@ -1,5 +1,5 @@
-import { DESKTOP_PROVIDER_OAUTH_EVENT, getDesktopBridge } from './desktopBridge';
 import type { ProviderOAuthLoginState } from '../shared/types';
+import { DESKTOP_PROVIDER_OAUTH_EVENT, getDesktopBridge } from './desktopBridge';
 
 interface DesktopProviderOAuthEnvelope {
   subscriptionId: string;

@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  logErrorMock,
-  readDaemonStateMock,
-  updateDaemonPowerAndReadStateMock,
-} = vi.hoisted(() => ({
+const { logErrorMock, readDaemonStateMock, updateDaemonPowerAndReadStateMock } = vi.hoisted(() => ({
   logErrorMock: vi.fn(),
   readDaemonStateMock: vi.fn(),
   updateDaemonPowerAndReadStateMock: vi.fn(),
@@ -78,9 +74,12 @@ describe('registerDaemonRoutes', () => {
     await stateHandler({}, failingRes);
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: state failed' });
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'state failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'state failed',
+      }),
+    );
   });
 
   it('updates daemon power state and validates the request body', async () => {

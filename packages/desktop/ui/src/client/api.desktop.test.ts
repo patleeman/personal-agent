@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ConversationBootstrapState } from '../shared/types';
 
 function createBootstrapState(overrides?: Partial<ConversationBootstrapState>): ConversationBootstrapState {
@@ -29,25 +30,37 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to app-protocol API routes when the local desktop bridge omits memory and tools readers', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({
-        profile: 'assistant',
-        agentsMd: [],
-        skills: [{ source: 'global', name: 'checkpoint', description: 'Commit and push the agent\'s current work.', path: '/vault/skills/checkpoint/SKILL.md' }],
-        memoryDocs: [],
-      }))
-      .mockResolvedValueOnce(createJsonResponse({
-        profile: 'assistant',
-        cwd: '/repo',
-        activeTools: [],
-        tools: [],
-        newSessionSystemPrompt: '',
-        newSessionInjectedMessages: [],
-        newSessionToolDefinitions: [],
-        dependentCliTools: [],
-        mcp: { servers: [], missingCli: [] },
-        packageInstall: { available: false, managers: [] },
-      }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          profile: 'assistant',
+          agentsMd: [],
+          skills: [
+            {
+              source: 'global',
+              name: 'checkpoint',
+              description: "Commit and push the agent's current work.",
+              path: '/vault/skills/checkpoint/SKILL.md',
+            },
+          ],
+          memoryDocs: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          profile: 'assistant',
+          cwd: '/repo',
+          activeTools: [],
+          tools: [],
+          newSessionSystemPrompt: '',
+          newSessionInjectedMessages: [],
+          newSessionToolDefinitions: [],
+          dependentCliTools: [],
+          mcp: { servers: [], missingCli: [] },
+          packageInstall: { available: false, managers: [] },
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const getEnvironment = vi.fn().mockResolvedValue({
       isElectron: true,
@@ -105,25 +118,81 @@ describe('api desktop transport', () => {
     const readProviderAuth = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
     const setProviderApiKey = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
     const removeProviderCredential = vi.fn().mockResolvedValue({ providers: [] });
-    const startProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
-    const readProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
-    const submitProviderOAuthLoginInput = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
-    const cancelProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
+    const startProviderOAuthLogin = vi.fn().mockResolvedValue({
+      id: 'login-1',
+      provider: 'openrouter',
+      providerName: 'OpenRouter',
+      status: 'running',
+    });
+    const readProviderOAuthLogin = vi.fn().mockResolvedValue({
+      id: 'login-1',
+      provider: 'openrouter',
+      providerName: 'OpenRouter',
+      status: 'running',
+    });
+    const submitProviderOAuthLoginInput = vi.fn().mockResolvedValue({
+      id: 'login-1',
+      provider: 'openrouter',
+      providerName: 'OpenRouter',
+      status: 'running',
+    });
+    const cancelProviderOAuthLogin = vi.fn().mockResolvedValue({
+      id: 'login-1',
+      provider: 'openrouter',
+      providerName: 'OpenRouter',
+      status: 'cancelled',
+    });
     const markConversationAttention = vi.fn().mockResolvedValue({ ok: true });
-    const readScheduledTasks = vi.fn().mockResolvedValue([{ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt', title: 'Task 1' }]);
-    const readScheduledTaskDetail = vi.fn().mockResolvedValue({ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt body', threadMode: 'dedicated' });
+    const readScheduledTasks = vi.fn().mockResolvedValue([
+      {
+        id: 'task-1',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        prompt: 'Prompt',
+        title: 'Task 1',
+      },
+    ]);
+    const readScheduledTaskDetail = vi.fn().mockResolvedValue({
+      id: 'task-1',
+      scheduleType: 'cron',
+      running: false,
+      enabled: true,
+      prompt: 'Prompt body',
+      threadMode: 'dedicated',
+    });
     const readScheduledTaskLog = vi.fn().mockResolvedValue({ path: '/tasks/task-1.log', log: 'task tail' });
-    const createScheduledTask = vi.fn().mockResolvedValue({ ok: true, task: { id: 'task-2', scheduleType: 'cron', running: false, enabled: true, prompt: 'Created task body', threadMode: 'dedicated' } });
-    const updateScheduledTask = vi.fn().mockResolvedValue({ ok: true, task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body', threadMode: 'dedicated' } });
+    const createScheduledTask = vi.fn().mockResolvedValue({
+      ok: true,
+      task: { id: 'task-2', scheduleType: 'cron', running: false, enabled: true, prompt: 'Created task body', threadMode: 'dedicated' },
+    });
+    const updateScheduledTask = vi.fn().mockResolvedValue({
+      ok: true,
+      task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body', threadMode: 'dedicated' },
+    });
     const runScheduledTask = vi.fn().mockResolvedValue({ ok: true, accepted: true, runId: 'run-from-task' });
-    const readDurableRuns = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', summary: { total: 0, recoveryActions: {}, statuses: {} }, runs: [] });
-    const readDurableRun = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', run: { runId: 'run-1' } });
+    const readDurableRuns = vi.fn().mockResolvedValue({
+      scannedAt: '2026-04-10T11:00:00.000Z',
+      runsRoot: '/runs',
+      summary: { total: 0, recoveryActions: {}, statuses: {} },
+      runs: [],
+    });
+    const readDurableRun = vi.fn().mockResolvedValue({
+      scannedAt: '2026-04-10T11:00:00.000Z',
+      runsRoot: '/runs',
+      run: { runId: 'run-1' },
+    });
     const readDurableRunLog = vi.fn().mockResolvedValue({ path: '/runs/run-1.log', log: 'tail' });
     const cancelDurableRun = vi.fn().mockResolvedValue({ cancelled: true, runId: 'run-1' });
     const markDurableRunAttention = vi.fn().mockResolvedValue({ ok: true });
     const readConversationBootstrap = vi.fn().mockResolvedValue(createBootstrapState());
     const renameConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
-    const changeConversationCwd = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl', cwd: '/next-repo', changed: true });
+    const changeConversationCwd = vi.fn().mockResolvedValue({
+      id: 'live-1',
+      sessionFile: '/tmp/live-1.jsonl',
+      cwd: '/next-repo',
+      changed: true,
+    });
     const recoverConversation = vi.fn().mockResolvedValue({
       conversationId: 'live-1',
       live: true,
@@ -132,11 +201,27 @@ describe('api desktop transport', () => {
       usedFallbackPrompt: true,
     });
     const readLiveSessionForkEntries = vi.fn().mockResolvedValue([{ entryId: 'entry-1', text: 'fork from here' }]);
-    const readConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
-    const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority', hasExplicitServiceTier: true });
+    const readConversationModelPreferences = vi.fn().mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
+    const updateConversationModelPreferences = vi.fn().mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      currentServiceTier: 'priority',
+      hasExplicitServiceTier: true,
+    });
     const readLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
     const readLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
-    const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
+    const readSessionDetail = vi.fn().mockResolvedValue({
+      meta: { id: 'live-1' },
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      contextUsage: null,
+    });
     const readSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
     const createLiveSession = vi.fn().mockResolvedValue({
       id: 'live-1',
@@ -436,15 +521,41 @@ describe('api desktop transport', () => {
     expect(removedProviderCredential).toEqual({ providers: [] });
     expect(startedProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
     expect(providerOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
-    expect(submittedProviderOAuthLoginInput).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
-    expect(cancelledProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
+    expect(submittedProviderOAuthLoginInput).toEqual({
+      id: 'login-1',
+      provider: 'openrouter',
+      providerName: 'OpenRouter',
+      status: 'running',
+    });
+    expect(cancelledProviderOAuthLogin).toEqual({
+      id: 'login-1',
+      provider: 'openrouter',
+      providerName: 'OpenRouter',
+      status: 'cancelled',
+    });
     expect(attentionMarked).toEqual({ ok: true });
     expect(tasks).toEqual([{ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt', title: 'Task 1' }]);
-    expect(taskDetail).toEqual({ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt body', threadMode: 'dedicated' });
+    expect(taskDetail).toEqual({
+      id: 'task-1',
+      scheduleType: 'cron',
+      running: false,
+      enabled: true,
+      prompt: 'Prompt body',
+      threadMode: 'dedicated',
+    });
     expect(taskLog).toEqual({ path: '/tasks/task-1.log', log: 'task tail' });
-    expect(createdTask).toEqual({ ok: true, task: { id: 'task-2', scheduleType: 'cron', running: false, enabled: true, prompt: 'Created task body', threadMode: 'dedicated' } });
-    expect(toggledTask).toEqual({ ok: true, task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body', threadMode: 'dedicated' } });
-    expect(savedTask).toEqual({ ok: true, task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body', threadMode: 'dedicated' } });
+    expect(createdTask).toEqual({
+      ok: true,
+      task: { id: 'task-2', scheduleType: 'cron', running: false, enabled: true, prompt: 'Created task body', threadMode: 'dedicated' },
+    });
+    expect(toggledTask).toEqual({
+      ok: true,
+      task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body', threadMode: 'dedicated' },
+    });
+    expect(savedTask).toEqual({
+      ok: true,
+      task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body', threadMode: 'dedicated' },
+    });
     expect(taskRun).toEqual({ ok: true, accepted: true, runId: 'run-from-task' });
     expect(runs).toMatchObject({ runsRoot: '/runs' });
     expect(durableRun).toMatchObject({ runsRoot: '/runs' });
@@ -461,8 +572,18 @@ describe('api desktop transport', () => {
       replayedPendingOperation: false,
       usedFallbackPrompt: true,
     });
-    expect(modelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
-    expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority', hasExplicitServiceTier: true });
+    expect(modelPreferences).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
+    expect(updatedModelPreferences).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      currentServiceTier: 'priority',
+      hasExplicitServiceTier: true,
+    });
     expect(live).toEqual({ live: true, id: 'live-1' });
     expect(forkEntries).toEqual([{ entryId: 'entry-1', text: 'fork from here' }]);
     expect(liveContext).toEqual({ cwd: '/repo', branch: 'main', git: null });
@@ -572,21 +693,47 @@ describe('api desktop transport', () => {
     const attachments = await api.conversationAttachments('conversation-1');
     const attachment = await api.conversationAttachment('conversation-1', 'attachment-1');
     const createdAttachment = await api.createConversationAttachment('conversation-1', { sourceData: 'source', previewData: 'preview' });
-    const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', { sourceData: 'source', previewData: 'preview' });
+    const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', {
+      sourceData: 'source',
+      previewData: 'preview',
+    });
     const attachmentAsset = await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', 2);
 
     expect(readConversationArtifacts).toHaveBeenCalledWith('conversation-1');
     expect(readConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
     expect(readConversationAttachments).toHaveBeenCalledWith('conversation-1');
     expect(readConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
-    expect(createConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
-    expect(updateConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
-    expect(readConversationAttachmentAsset).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 });
+    expect(createConversationAttachment).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      sourceData: 'source',
+      previewData: 'preview',
+    });
+    expect(updateConversationAttachment).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      attachmentId: 'attachment-1',
+      sourceData: 'source',
+      previewData: 'preview',
+    });
+    expect(readConversationAttachmentAsset).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      attachmentId: 'attachment-1',
+      asset: 'preview',
+      revision: 2,
+    });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(artifacts).toEqual({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] });
-    expect(artifact).toEqual({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } });
+    expect(artifacts).toEqual({
+      conversationId: 'conversation-1',
+      artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }],
+    });
+    expect(artifact).toEqual({
+      conversationId: 'conversation-1',
+      artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' },
+    });
     expect(attachments).toEqual({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
-    expect(attachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } });
+    expect(attachment).toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+    });
     expect(createdAttachment).toEqual({
       conversationId: 'conversation-1',
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
@@ -649,7 +796,12 @@ describe('api desktop transport', () => {
     const cancelled = await api.cancelDeferredResume('conversation-1', 'resume-2');
 
     expect(readConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
-    expect(scheduleConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.', behavior: 'followUp' });
+    expect(scheduleConversationDeferredResume).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      delay: '10m',
+      prompt: 'Resume later.',
+      behavior: 'followUp',
+    });
     expect(fireConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-1' });
     expect(cancelConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-2' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -680,8 +832,16 @@ describe('api desktop transport', () => {
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
-    const readConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    const updateConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+    const readConversationTitleSettings = vi.fn().mockResolvedValue({
+      enabled: true,
+      currentModel: '',
+      effectiveModel: 'openai/gpt-5.4',
+    });
+    const updateConversationTitleSettings = vi.fn().mockResolvedValue({
+      enabled: false,
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      effectiveModel: 'anthropic/claude-sonnet-4-6',
+    });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -703,7 +863,10 @@ describe('api desktop transport', () => {
     const defaultCwd = await api.defaultCwd();
     const savedDefaultCwd = await api.updateDefaultCwd('./repo');
     const conversationTitleSettings = await api.conversationTitleSettings();
-    const savedConversationTitleSettings = await api.updateConversationTitleSettings({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+    const savedConversationTitleSettings = await api.updateConversationTitleSettings({
+      enabled: false,
+      model: 'anthropic/claude-sonnet-4-6',
+    });
 
     expect(readDefaultCwd).toHaveBeenCalledTimes(1);
     expect(updateDefaultCwd).toHaveBeenCalledWith('./repo');
@@ -713,14 +876,29 @@ describe('api desktop transport', () => {
     expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
     expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+    expect(savedConversationTitleSettings).toEqual({
+      enabled: false,
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      effectiveModel: 'anthropic/claude-sonnet-4-6',
+    });
   });
 
   it('uses HTTP for vault files and the desktop bridge for folder picking on the local Electron host', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({
-      root: '/vault',
-      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
+        root: '/vault',
+        files: [
+          {
+            id: 'notes/a.md',
+            kind: 'file',
+            name: 'a.md',
+            path: '/vault/notes/a.md',
+            sizeBytes: 12,
+            updatedAt: '2026-04-18T12:00:00.000Z',
+          },
+        ],
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const readVaultFiles = vi.fn();
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
@@ -747,7 +925,16 @@ describe('api desktop transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vault-files', { method: 'GET', cache: 'no-store' });
     expect(vaultFiles).toEqual({
       root: '/vault',
-      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      files: [
+        {
+          id: 'notes/a.md',
+          kind: 'file',
+          name: 'a.md',
+          path: '/vault/notes/a.md',
+          sizeBytes: 12,
+          updatedAt: '2026-04-18T12:00:00.000Z',
+        },
+      ],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
@@ -871,11 +1058,18 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop operator settings on non-local hosts', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(createJsonResponse({ currentCwd: '', effectiveCwd: '/repo' }))
       .mockResolvedValueOnce(createJsonResponse({ currentCwd: './repo', effectiveCwd: '/repo' }))
       .mockResolvedValueOnce(createJsonResponse({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' }))
-      .mockResolvedValueOnce(createJsonResponse({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' }));
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          enabled: false,
+          currentModel: 'anthropic/claude-sonnet-4-6',
+          effectiveModel: 'anthropic/claude-sonnet-4-6',
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const readDefaultCwd = vi.fn();
     const readConversationTitleSettings = vi.fn();
@@ -897,7 +1091,10 @@ describe('api desktop transport', () => {
     const defaultCwd = await api.defaultCwd();
     const savedDefaultCwd = await api.updateDefaultCwd('./repo');
     const conversationTitleSettings = await api.conversationTitleSettings();
-    const savedConversationTitleSettings = await api.updateConversationTitleSettings({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+    const savedConversationTitleSettings = await api.updateConversationTitleSettings({
+      enabled: false,
+      model: 'anthropic/claude-sonnet-4-6',
+    });
 
     expect(readDefaultCwd).not.toHaveBeenCalled();
     expect(readConversationTitleSettings).not.toHaveBeenCalled();
@@ -916,15 +1113,31 @@ describe('api desktop transport', () => {
     expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
     expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+    expect(savedConversationTitleSettings).toEqual({
+      enabled: false,
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      effectiveModel: 'anthropic/claude-sonnet-4-6',
+    });
   });
 
   it('falls back to HTTP for desktop vault-file and folder-picker bridges on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({
-        root: '/vault',
-        files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
-      }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          root: '/vault',
+          files: [
+            {
+              id: 'notes/a.md',
+              kind: 'file',
+              name: 'a.md',
+              path: '/vault/notes/a.md',
+              sizeBytes: 12,
+              updatedAt: '2026-04-18T12:00:00.000Z',
+            },
+          ],
+        }),
+      )
       .mockResolvedValueOnce(createJsonResponse({ path: '/picked/repo', cancelled: false }));
     vi.stubGlobal('fetch', fetchMock);
     const readVaultFiles = vi.fn();
@@ -957,14 +1170,30 @@ describe('api desktop transport', () => {
     });
     expect(vaultFiles).toEqual({
       root: '/vault',
-      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      files: [
+        {
+          id: 'notes/a.md',
+          kind: 'file',
+          name: 'a.md',
+          path: '/vault/notes/a.md',
+          sizeBytes: 12,
+          updatedAt: '2026-04-18T12:00:00.000Z',
+        },
+      ],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
 
   it('falls back to HTTP for the automation workspace bridge on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: true, presetLibrary: { presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: ['preset-1'] } }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        defaultEnabled: true,
+        presetLibrary: {
+          presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+          defaultPresetIds: ['preset-1'],
+        },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const readConversationPlansWorkspace = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -995,20 +1224,25 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop system admin bridges on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({
-        sessionIds: ['conversation-1'],
-        pinnedSessionIds: ['conversation-2'],
-        archivedSessionIds: ['conversation-3'],
-        workspacePaths: ['/tmp/alpha'],
-      }))
-      .mockResolvedValueOnce(createJsonResponse({
-        ok: true,
-        sessionIds: ['conversation-4'],
-        pinnedSessionIds: ['conversation-5'],
-        archivedSessionIds: ['conversation-6'],
-        workspacePaths: ['/tmp/beta'],
-      }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          sessionIds: ['conversation-1'],
+          pinnedSessionIds: ['conversation-2'],
+          archivedSessionIds: ['conversation-3'],
+          workspacePaths: ['/tmp/alpha'],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          ok: true,
+          sessionIds: ['conversation-4'],
+          pinnedSessionIds: ['conversation-5'],
+          archivedSessionIds: ['conversation-6'],
+          workspacePaths: ['/tmp/beta'],
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const readOpenConversationTabs = vi.fn();
     const updateOpenConversationTabs = vi.fn();
@@ -1058,9 +1292,12 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop runtime status bridges on non-local hosts', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', appRevision: 'rev-2' }))
-      .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }));
+      .mockResolvedValueOnce(
+        createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const readAppStatus = vi.fn();
     const readDaemonState = vi.fn();
@@ -1091,8 +1328,7 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop durable-run attention on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ ok: true }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(createJsonResponse({ ok: true }));
     vi.stubGlobal('fetch', fetchMock);
     const markDurableRunAttention = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -1121,8 +1357,14 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP when the local desktop bridge model read fails', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'http-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }] }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        currentModel: 'http-model',
+        currentThinkingLevel: 'medium',
+        currentServiceTier: '',
+        models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }],
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const readModels = vi.fn().mockRejectedValue(new Error('ipc failed'));
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -1152,8 +1394,14 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP when the local desktop bridge returns an empty model list', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'http-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }] }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        currentModel: 'http-model',
+        currentThinkingLevel: 'medium',
+        currentServiceTier: '',
+        models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }],
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const readModels = vi.fn().mockResolvedValue({
       currentModel: 'gpt-5.4',
@@ -1188,12 +1436,17 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop model and provider settings on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'remote-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [] }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({ currentModel: 'remote-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [] }),
+      )
       .mockResolvedValueOnce(createJsonResponse({ ok: true }))
       .mockResolvedValueOnce(createJsonResponse({ providers: [{ id: 'remote-provider', models: [] }] }))
       .mockResolvedValueOnce(createJsonResponse({ providers: [{ id: 'remote-auth', authType: 'api_key' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ id: 'login-1', provider: 'remote-auth', providerName: 'Remote Auth', status: 'running' }));
+      .mockResolvedValueOnce(
+        createJsonResponse({ id: 'login-1', provider: 'remote-auth', providerName: 'Remote Auth', status: 'running' }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const readModels = vi.fn();
     const readModelProviders = vi.fn();
@@ -1244,20 +1497,49 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop conversation artifact and attachment bridges on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
-      .mockResolvedValueOnce(new Response('preview-bytes', {
-        status: 200,
-        headers: {
-          'Content-Type': 'image/png',
-          'Content-Disposition': 'inline; filename="preview.png"',
-        },
-      }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'conversation-1',
+          artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'conversation-1',
+          attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'conversation-1',
+          attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+          attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'conversation-1',
+          attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
+          attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('preview-bytes', {
+          status: 200,
+          headers: {
+            'Content-Type': 'image/png',
+            'Content-Disposition': 'inline; filename="preview.png"',
+          },
+        }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const readConversationArtifacts = vi.fn();
     const readConversationArtifact = vi.fn();
@@ -1291,7 +1573,10 @@ describe('api desktop transport', () => {
     const attachments = await api.conversationAttachments('conversation-1');
     const attachment = await api.conversationAttachment('conversation-1', 'attachment-1');
     const createdAttachment = await api.createConversationAttachment('conversation-1', { sourceData: 'source', previewData: 'preview' });
-    const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', { sourceData: 'source', previewData: 'preview' });
+    const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', {
+      sourceData: 'source',
+      previewData: 'preview',
+    });
     const attachmentAsset = await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', 2);
 
     expect(readConversationArtifacts).not.toHaveBeenCalled();
@@ -1302,9 +1587,15 @@ describe('api desktop transport', () => {
     expect(updateConversationAttachment).not.toHaveBeenCalled();
     expect(readConversationAttachmentAsset).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversations/conversation-1/artifacts', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/artifacts/artifact-1', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/artifacts/artifact-1', {
+      method: 'GET',
+      cache: 'no-store',
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/conversation-1/attachments', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversations/conversation-1/attachments/attachment-1', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversations/conversation-1/attachments/attachment-1', {
+      method: 'GET',
+      cache: 'no-store',
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/conversations/conversation-1/attachments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1319,12 +1610,29 @@ describe('api desktop transport', () => {
       method: 'GET',
       cache: 'no-store',
     });
-    expect(artifacts).toEqual({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] });
-    expect(artifact).toEqual({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } });
+    expect(artifacts).toEqual({
+      conversationId: 'conversation-1',
+      artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }],
+    });
+    expect(artifact).toEqual({
+      conversationId: 'conversation-1',
+      artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' },
+    });
     expect(attachments).toEqual({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
-    expect(attachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } });
-    expect(createdAttachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
-    expect(updatedAttachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
+    expect(attachment).toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+    });
+    expect(createdAttachment).toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    expect(updatedAttachment).toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
     expect(attachmentAsset).toEqual({
       dataUrl: 'data:image/png;base64,cHJldmlldy1ieXRlcw==',
       mimeType: 'image/png',
@@ -1333,13 +1641,15 @@ describe('api desktop transport', () => {
   });
 
   it('omits unsafe conversation attachment asset revisions from HTTP requests', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response('preview-bytes', {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/png',
-        'Content-Disposition': 'inline; filename="preview.png"',
-      },
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('preview-bytes', {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Content-Disposition': 'inline; filename="preview.png"',
+        },
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
@@ -1423,10 +1733,25 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for desktop conversation deferred-resume bridges on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' }, resumes: [] }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'conversation-1',
+          resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
+          resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'conversation-1',
+          resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' },
+          resumes: [],
+        }),
+      )
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', cancelledId: 'resume-2', resumes: [] }));
     vi.stubGlobal('fetch', fetchMock);
     const readConversationDeferredResumes = vi.fn();
@@ -1459,7 +1784,10 @@ describe('api desktop transport', () => {
     expect(scheduleConversationDeferredResume).not.toHaveBeenCalled();
     expect(fireConversationDeferredResume).not.toHaveBeenCalled();
     expect(cancelConversationDeferredResume).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversations/conversation-1/deferred-resumes', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversations/conversation-1/deferred-resumes', {
+      method: 'GET',
+      cache: 'no-store',
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/deferred-resumes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1476,13 +1804,22 @@ describe('api desktop transport', () => {
       body: undefined,
     });
     expect(resumes).toEqual({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] });
-    expect(scheduled).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }] });
-    expect(fired).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' }, resumes: [] });
+    expect(scheduled).toEqual({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
+    });
+    expect(fired).toEqual({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' },
+      resumes: [],
+    });
     expect(cancelled).toEqual({ conversationId: 'conversation-1', cancelledId: 'resume-2', resumes: [] });
   });
 
   it('falls back to HTTP for desktop session list, meta, and search-index reads on non-local hosts', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(createJsonResponse([{ id: 'conversation-1', title: 'Conversation 1' }]))
       .mockResolvedValueOnce(createJsonResponse({ id: 'conversation-1', title: 'Conversation 1' }))
       .mockResolvedValueOnce(createJsonResponse({ index: { 'conversation-1': 'hello world' } }));
@@ -1529,7 +1866,8 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for conversations marked with any remote identity', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(createJsonResponse({ id: 'conversation-1', title: 'Remote partial', remoteHostId: 'bender' }))
       .mockResolvedValueOnce(createJsonResponse({ ok: true, cwd: '/tmp/remote' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1561,18 +1899,25 @@ describe('api desktop transport', () => {
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse(createBootstrapState({
-        conversationId: 'remote-conversation',
-      })))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          createBootstrapState({
+            conversationId: 'remote-conversation',
+          }),
+        ),
+      )
       .mockResolvedValueOnce(createJsonResponse({ ok: true, title: 'Remote rename' }))
-      .mockResolvedValueOnce(createJsonResponse({
-        conversationId: 'remote-conversation',
-        live: true,
-        recovered: true,
-        replayedPendingOperation: false,
-        usedFallbackPrompt: false,
-      }))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          conversationId: 'remote-conversation',
+          live: true,
+          recovered: true,
+          replayedPendingOperation: false,
+          usedFallbackPrompt: false,
+        }),
+      )
       .mockResolvedValueOnce(createJsonResponse([{ entryId: 'entry-9', text: 'fork remote' }]))
       .mockResolvedValueOnce(createJsonResponse({ ok: true, path: '/tmp/remote-live.html' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1606,38 +1951,22 @@ describe('api desktop transport', () => {
       '/api/conversations/remote-conversation/bootstrap?tailBlocks=5&knownSessionSignature=sig-2',
       { method: 'GET', cache: 'no-store' },
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      '/api/conversations/remote-conversation/title',
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Remote rename', surfaceId: 'surface-1' }),
-      },
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
-      '/api/conversations/remote-conversation/recover',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: undefined,
-      },
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
-      '/api/live-sessions/remote-live/fork-entries',
-      { method: 'GET', cache: 'no-store' },
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
-      '/api/live-sessions/remote-live/export',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outputPath: '/tmp/remote-live.html' }),
-      },
-    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/remote-conversation/title', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Remote rename', surfaceId: 'surface-1' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/remote-conversation/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: undefined,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/live-sessions/remote-live/fork-entries', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/live-sessions/remote-live/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outputPath: '/tmp/remote-live.html' }),
+    });
     expect(result.conversationId).toBe('remote-conversation');
     expect(renamed).toEqual({ ok: true, title: 'Remote rename' });
     expect(recovered).toEqual({

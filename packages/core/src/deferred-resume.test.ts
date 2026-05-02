@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   activateDeferredResume,
   activateDueDeferredResumes,
@@ -44,19 +45,22 @@ describe('deferred resume state', () => {
     const dir = createTempDir('deferred-resume-state-');
     const stateFile = join(dir, 'state.json');
 
-    writeFileSync(stateFile, JSON.stringify({
-      version: 1,
-      resumes: {
-        one: {
-          id: 'one',
-          sessionFile: '/tmp/sessions/1.jsonl',
-          prompt: 'continue',
-          dueAt: '2026-03-08T12:00:00.000Z',
-          createdAt: '2026-03-08T11:50:00.000Z',
-          attempts: 0,
+    writeFileSync(
+      stateFile,
+      JSON.stringify({
+        version: 1,
+        resumes: {
+          one: {
+            id: 'one',
+            sessionFile: '/tmp/sessions/1.jsonl',
+            prompt: 'continue',
+            dueAt: '2026-03-08T12:00:00.000Z',
+            createdAt: '2026-03-08T11:50:00.000Z',
+            attempts: 0,
+          },
         },
-      },
-    }));
+      }),
+    );
 
     const state = loadDeferredResumeState(stateFile);
     expect(state.resumes.one).toMatchObject({
@@ -78,7 +82,9 @@ describe('deferred resume state', () => {
       behavior: 'followUp',
     });
 
-    expect(getDueScheduledSessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl', new Date('2026-03-08T11:59:59.000Z'))).toEqual([]);
+    expect(getDueScheduledSessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl', new Date('2026-03-08T11:59:59.000Z'))).toEqual(
+      [],
+    );
 
     const activatedEarly = activateDeferredResume(state, {
       id: 'resume-1',

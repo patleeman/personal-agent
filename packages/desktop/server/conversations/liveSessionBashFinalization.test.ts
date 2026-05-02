@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
+
 import type { LiveSessionBashFinalizationHost } from './liveSessionBashFinalization.js';
+import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
 
 function createMockEntry(overrides?: Partial<LiveSessionBashFinalizationHost>): LiveSessionBashFinalizationHost {
   return {
@@ -28,7 +29,9 @@ function createMockCallbacks() {
 
 describe('finalizeLiveSessionBashExecution', () => {
   it('returns early when the session is still streaming', () => {
-    const entry = createMockEntry({ session: { isStreaming: true, sessionName: '', getSessionStats: vi.fn() } as unknown as LiveSessionBashFinalizationHost['session'] });
+    const entry = createMockEntry({
+      session: { isStreaming: true, sessionName: '', getSessionStats: vi.fn() } as unknown as LiveSessionBashFinalizationHost['session'],
+    });
     const callbacks = createMockCallbacks();
 
     finalizeLiveSessionBashExecution(entry, 'ls', callbacks);
@@ -41,7 +44,11 @@ describe('finalizeLiveSessionBashExecution', () => {
   it('generates a fallback title when the session has no name and the title is a placeholder', () => {
     const entry = createMockEntry({
       title: 'New conversation',
-      session: { isStreaming: false, sessionName: '', getSessionStats: vi.fn().mockReturnValue({ tokens: 42, cost: 0.01 }) } as unknown as LiveSessionBashFinalizationHost['session'],
+      session: {
+        isStreaming: false,
+        sessionName: '',
+        getSessionStats: vi.fn().mockReturnValue({ tokens: 42, cost: 0.01 }),
+      } as unknown as LiveSessionBashFinalizationHost['session'],
     });
     const callbacks = createMockCallbacks();
 
@@ -54,7 +61,11 @@ describe('finalizeLiveSessionBashExecution', () => {
   it('skips title generation when the session already has a name', () => {
     const entry = createMockEntry({
       title: 'Custom title',
-      session: { isStreaming: false, sessionName: 'My Session', getSessionStats: vi.fn().mockReturnValue({ tokens: 42, cost: 0.01 }) } as unknown as LiveSessionBashFinalizationHost['session'],
+      session: {
+        isStreaming: false,
+        sessionName: 'My Session',
+        getSessionStats: vi.fn().mockReturnValue({ tokens: 42, cost: 0.01 }),
+      } as unknown as LiveSessionBashFinalizationHost['session'],
     });
     const callbacks = createMockCallbacks();
 
@@ -67,7 +78,11 @@ describe('finalizeLiveSessionBashExecution', () => {
   it('skips title generation when the title is not a placeholder', () => {
     const entry = createMockEntry({
       title: 'Debugging auth flow',
-      session: { isStreaming: false, sessionName: '', getSessionStats: vi.fn().mockReturnValue({ tokens: 42, cost: 0.01 }) } as unknown as LiveSessionBashFinalizationHost['session'],
+      session: {
+        isStreaming: false,
+        sessionName: '',
+        getSessionStats: vi.fn().mockReturnValue({ tokens: 42, cost: 0.01 }),
+      } as unknown as LiveSessionBashFinalizationHost['session'],
     });
     const callbacks = createMockCallbacks();
 
@@ -86,14 +101,13 @@ describe('finalizeLiveSessionBashExecution', () => {
 
     finalizeLiveSessionBashExecution(entry, 'ls', callbacks);
 
-    expect(callbacks.broadcast).toHaveBeenCalledWith(
-      entry,
-      { type: 'stats_update', tokens: 150, cost: 0.05 },
-    );
+    expect(callbacks.broadcast).toHaveBeenCalledWith(entry, { type: 'stats_update', tokens: 150, cost: 0.05 });
   });
 
   it('handles session stats errors gracefully without crashing', () => {
-    const getSessionStats = vi.fn().mockImplementation(() => { throw new Error('stats error'); });
+    const getSessionStats = vi.fn().mockImplementation(() => {
+      throw new Error('stats error');
+    });
     const entry = createMockEntry({
       session: { isStreaming: false, sessionName: '', getSessionStats } as unknown as LiveSessionBashFinalizationHost['session'],
     });

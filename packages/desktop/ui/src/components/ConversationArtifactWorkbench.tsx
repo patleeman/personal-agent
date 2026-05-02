@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../client/api';
+
 import { useAppEvents } from '../app/contexts';
+import { api } from '../client/api';
 import type { ConversationArtifactRecord, ConversationArtifactSummary } from '../shared/types';
 import { formatDate } from '../shared/utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';
-import { ErrorState, LoadingState, cx } from './ui';
+import { cx, ErrorState, LoadingState } from './ui';
 
 export function useConversationArtifactSummaries(conversationId: string | null | undefined) {
   const { versions } = useAppEvents();
@@ -24,7 +25,8 @@ export function useConversationArtifactSummaries(conversationId: string | null |
     setLoading(true);
     setError(null);
 
-    api.conversationArtifacts(conversationId)
+    api
+      .conversationArtifacts(conversationId)
       .then((result) => {
         if (!cancelled) {
           setArtifacts(result.artifacts);
@@ -104,13 +106,7 @@ export function ConversationArtifactRailContent({
   );
 }
 
-export function ConversationArtifactWorkbenchPane({
-  conversationId,
-  artifactId,
-}: {
-  conversationId: string;
-  artifactId: string;
-}) {
+export function ConversationArtifactWorkbenchPane({ conversationId, artifactId }: { conversationId: string; artifactId: string }) {
   const { versions } = useAppEvents();
   const [artifact, setArtifact] = useState<ConversationArtifactRecord | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,7 +119,8 @@ export function ConversationArtifactWorkbenchPane({
     setError(null);
     setCopied(false);
 
-    api.conversationArtifact(conversationId, artifactId)
+    api
+      .conversationArtifact(conversationId, artifactId)
       .then((result) => {
         if (!cancelled) {
           setArtifact(result.artifact);
@@ -161,19 +158,27 @@ export function ConversationArtifactWorkbenchPane({
       <div className="shrink-0 border-b border-border-subtle px-4 py-2.5">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="min-w-0 flex flex-1 items-center gap-2.5">
-            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim/80">
-              {artifact?.kind ?? 'artifact'}
-            </span>
+            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim/80">{artifact?.kind ?? 'artifact'}</span>
             <h2
               className="min-w-0 truncate text-[14px] font-medium text-primary"
-              title={artifact ? `${artifact.title} · ${artifact.id} · rev ${artifact.revision} · updated ${formatDate(artifact.updatedAt)}` : artifactId}
+              title={
+                artifact
+                  ? `${artifact.title} · ${artifact.id} · rev ${artifact.revision} · updated ${formatDate(artifact.updatedAt)}`
+                  : artifactId
+              }
             >
               {artifact?.title ?? artifactId}
             </h2>
             {artifact ? <span className="hidden shrink-0 text-[11px] text-dim sm:inline">rev {artifact.revision}</span> : null}
           </div>
           {artifact ? (
-            <button type="button" onClick={() => { void copySource(); }} className="ui-toolbar-button shrink-0 px-2 py-1 text-[10px]">
+            <button
+              type="button"
+              onClick={() => {
+                void copySource();
+              }}
+              className="ui-toolbar-button shrink-0 px-2 py-1 text-[10px]"
+            >
               {copied ? 'copied' : artifact.kind === 'latex' ? 'copy latex' : 'copy source'}
             </button>
           ) : null}

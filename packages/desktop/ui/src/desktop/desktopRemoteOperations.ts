@@ -1,5 +1,5 @@
-import { DESKTOP_REMOTE_OPERATION_EVENT, getDesktopBridge, type DesktopRemoteOperationEnvelope } from './desktopBridge';
 import type { DesktopRemoteOperationStatus } from '../shared/types';
+import { DESKTOP_REMOTE_OPERATION_EVENT, type DesktopRemoteOperationEnvelope, getDesktopBridge } from './desktopBridge';
 
 interface DesktopRemoteOperationsListener {
   onopen?: () => void;

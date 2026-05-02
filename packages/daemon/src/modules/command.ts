@@ -16,11 +16,7 @@ export function normalizeCommandTimeoutMs(value: number | undefined): number {
     : DEFAULT_COMMAND_TIMEOUT_MS;
 }
 
-export async function runCommand(
-  command: string,
-  args: string[],
-  timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
-): Promise<CommandResult> {
+export async function runCommand(command: string, args: string[], timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS): Promise<CommandResult> {
   const normalizedTimeoutMs = normalizeCommandTimeoutMs(timeoutMs);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {

@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
 import { KnowledgePage } from './KnowledgePage.js';

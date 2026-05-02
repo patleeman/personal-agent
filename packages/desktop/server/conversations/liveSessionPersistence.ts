@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync } from 'node:fs';
+
 import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
 
 interface PersistableSessionManager {
@@ -64,9 +65,7 @@ export function resolveLiveSessionFile(
     ensureSessionFileExists(session.sessionManager as SessionManager);
   }
 
-  const managerFile = typeof session.sessionManager?.getSessionFile === 'function'
-    ? session.sessionManager.getSessionFile()?.trim()
-    : '';
+  const managerFile = typeof session.sessionManager?.getSessionFile === 'function' ? session.sessionManager.getSessionFile()?.trim() : '';
   if (managerFile) {
     return managerFile;
   }

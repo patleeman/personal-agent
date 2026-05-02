@@ -391,10 +391,7 @@ export interface CompanionUnsubscribeMessage {
   key?: string;
 }
 
-export type CompanionClientSocketMessage =
-  | CompanionCommandMessage
-  | CompanionSubscribeMessage
-  | CompanionUnsubscribeMessage;
+export type CompanionClientSocketMessage = CompanionCommandMessage | CompanionSubscribeMessage | CompanionUnsubscribeMessage;
 
 export interface CompanionSocketSuccessResponse {
   id: string;

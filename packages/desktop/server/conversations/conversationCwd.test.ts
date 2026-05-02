@@ -2,7 +2,9 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 
 const originalEnv = process.env;
@@ -37,21 +39,25 @@ describe('resolveConversationCwd', () => {
   it('prefers an explicit cwd', () => {
     const repoRoot = createTempRepo();
 
-    expect(resolveConversationCwd({
-      repoRoot,
-      profile: 'datadog',
-      explicitCwd: '../explicit-worktree',
-      defaultCwd: '/tmp/default-cwd',
-    })).toBe(resolve('/tmp/default-cwd', '../explicit-worktree'));
+    expect(
+      resolveConversationCwd({
+        repoRoot,
+        profile: 'datadog',
+        explicitCwd: '../explicit-worktree',
+        defaultCwd: '/tmp/default-cwd',
+      }),
+    ).toBe(resolve('/tmp/default-cwd', '../explicit-worktree'));
   });
 
   it('falls back to the default cwd when no explicit cwd is set', () => {
     const repoRoot = createTempRepo();
 
-    expect(resolveConversationCwd({
-      repoRoot,
-      profile: 'datadog',
-      defaultCwd: '/tmp/default-cwd',
-    })).toBe('/tmp/default-cwd');
+    expect(
+      resolveConversationCwd({
+        repoRoot,
+        profile: 'datadog',
+        defaultCwd: '/tmp/default-cwd',
+      }),
+    ).toBe('/tmp/default-cwd');
   });
 });

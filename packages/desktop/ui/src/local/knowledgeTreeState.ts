@@ -15,11 +15,13 @@ function readStorage(storage?: StorageLike): StorageLike | null {
 }
 
 function normalizeFolderIds(folderIds: Iterable<string>): string[] {
-  return Array.from(new Set(
-    Array.from(folderIds)
-      .map((folderId) => folderId.trim())
-      .filter((folderId) => folderId.length > 0 && folderId.endsWith('/')),
-  )).sort((a, b) => a.localeCompare(b));
+  return Array.from(
+    new Set(
+      Array.from(folderIds)
+        .map((folderId) => folderId.trim())
+        .filter((folderId) => folderId.length > 0 && folderId.endsWith('/')),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
 }
 
 export function readStoredExpandedFolderIds(storage?: StorageLike): Set<string> {
@@ -83,11 +85,11 @@ export function renameExpandedFolderIds(folderIds: ReadonlySet<string>, oldFolde
     return new Set(folderIds);
   }
 
-  return new Set(normalizeFolderIds(
-    Array.from(folderIds, (folderId) => (
-      folderId === oldFolderId || folderId.startsWith(oldFolderId)
-        ? `${newFolderId}${folderId.slice(oldFolderId.length)}`
-        : folderId
-    )),
-  ));
+  return new Set(
+    normalizeFolderIds(
+      Array.from(folderIds, (folderId) =>
+        folderId === oldFolderId || folderId.startsWith(oldFolderId) ? `${newFolderId}${folderId.slice(oldFolderId.length)}` : folderId,
+      ),
+    ),
+  );
 }

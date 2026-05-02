@@ -3,10 +3,8 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createEmptyTaskState,
-  loadTaskState,
-} from './tasks-store.js';
+
+import { createEmptyTaskState, loadTaskState } from './tasks-store.js';
 
 const tempDirs: string[] = [];
 
@@ -57,44 +55,51 @@ describe('tasks-store', () => {
     const dir = createTempDir('tasks-store-load-');
     const path = join(dir, 'task-state.json');
 
-    writeFileSync(path, JSON.stringify({
-      version: 1,
-      tasks: {
-        valid: {
-          id: 'valid',
-          filePath: '/tmp/valid.task.md',
-          scheduleType: 'at',
-          running: true,
-          runningStartedAt: '2026-03-01T00:00:00.000Z',
-          activeRunId: 'run-active',
-          lastRunId: 'run-last',
-          lastStatus: 'success',
-          lastRunAt: '2026-03-01T00:00:00.000Z',
-          lastAttemptCount: 2,
-          oneTimeResolvedStatus: 'failed',
-          oneTimeResolvedAt: '2026-03-01T00:00:00.000Z',
-          oneTimeCompletedAt: '2026-03-01T00:10:00.000Z',
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          version: 1,
+          tasks: {
+            valid: {
+              id: 'valid',
+              filePath: '/tmp/valid.task.md',
+              scheduleType: 'at',
+              running: true,
+              runningStartedAt: '2026-03-01T00:00:00.000Z',
+              activeRunId: 'run-active',
+              lastRunId: 'run-last',
+              lastStatus: 'success',
+              lastRunAt: '2026-03-01T00:00:00.000Z',
+              lastAttemptCount: 2,
+              oneTimeResolvedStatus: 'failed',
+              oneTimeResolvedAt: '2026-03-01T00:00:00.000Z',
+              oneTimeCompletedAt: '2026-03-01T00:10:00.000Z',
+            },
+            malformedMissingId: {
+              filePath: '/tmp/malformed.task.md',
+            },
+            malformedFields: {
+              id: 'malformed',
+              filePath: '/tmp/malformed.task.md',
+              scheduleType: 'invalid',
+              running: 'yes',
+              lastRunAt: 'not-a-date',
+              lastSuccessAt: 'also-not-a-date',
+              lastFailureAt: 'still-not-a-date',
+              lastStatus: 'unexpected',
+              lastError: '',
+              lastAttemptCount: Number.MAX_SAFE_INTEGER + 1,
+              oneTimeResolvedAt: 'bad-time',
+              oneTimeResolvedStatus: 'bad-value',
+              oneTimeCompletedAt: 'bad-completed-time',
+            },
+          },
         },
-        malformedMissingId: {
-          filePath: '/tmp/malformed.task.md',
-        },
-        malformedFields: {
-          id: 'malformed',
-          filePath: '/tmp/malformed.task.md',
-          scheduleType: 'invalid',
-          running: 'yes',
-          lastRunAt: 'not-a-date',
-          lastSuccessAt: 'also-not-a-date',
-          lastFailureAt: 'still-not-a-date',
-          lastStatus: 'unexpected',
-          lastError: '',
-          lastAttemptCount: Number.MAX_SAFE_INTEGER + 1,
-          oneTimeResolvedAt: 'bad-time',
-          oneTimeResolvedStatus: 'bad-value',
-          oneTimeCompletedAt: 'bad-completed-time',
-        },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     const loaded = loadTaskState(path);
 
@@ -135,11 +140,18 @@ describe('tasks-store', () => {
     const dir = createTempDir('tasks-store-last-evaluated-');
     const path = join(dir, 'task-state.json');
 
-    writeFileSync(path, JSON.stringify({
-      version: 1,
-      lastEvaluatedAt: '2026-03-02T10:00:00Z',
-      tasks: {},
-    }, null, 2));
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          version: 1,
+          lastEvaluatedAt: '2026-03-02T10:00:00Z',
+          tasks: {},
+        },
+        null,
+        2,
+      ),
+    );
 
     expect(loadTaskState(path)).toEqual({
       version: 1,
@@ -152,19 +164,26 @@ describe('tasks-store', () => {
     const dir = createTempDir('tasks-store-non-iso-time-');
     const path = join(dir, 'task-state.json');
 
-    writeFileSync(path, JSON.stringify({
-      version: 1,
-      lastEvaluatedAt: '1',
-      tasks: {
-        task: {
-          id: 'task',
-          filePath: '/tmp/task.task.md',
-          scheduleType: 'at',
-          lastRunAt: '1',
-          oneTimeResolvedAt: '1',
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          version: 1,
+          lastEvaluatedAt: '1',
+          tasks: {
+            task: {
+              id: 'task',
+              filePath: '/tmp/task.task.md',
+              scheduleType: 'at',
+              lastRunAt: '1',
+              oneTimeResolvedAt: '1',
+            },
+          },
         },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     expect(loadTaskState(path)).toEqual({
       version: 1,

@@ -1,9 +1,9 @@
 /**
  * Runtime state path resolution
- * 
+ *
  * Provides canonical writable paths for auth data, session data, and cache data.
  * All paths are rooted outside managed repository files by default.
- * 
+ *
  * Environment variables for override:
  * - PERSONAL_AGENT_STATE_ROOT: Override the base state directory
  * - PERSONAL_AGENT_VAULT_ROOT: Override the durable knowledge vault root
@@ -45,9 +45,7 @@ function expandHomePath(pathValue: string): string {
  */
 export function getStateRoot(): string {
   const explicit = process.env.PERSONAL_AGENT_STATE_ROOT;
-  return explicit && explicit.trim().length > 0
-    ? expandHomePath(explicit.trim())
-    : getDefaultStateRoot();
+  return explicit && explicit.trim().length > 0 ? expandHomePath(explicit.trim()) : getDefaultStateRoot();
 }
 
 export function getPiAgentStateDir(stateRoot: string = getStateRoot()): string {
@@ -80,9 +78,7 @@ export function getDefaultConfigRoot(): string {
  */
 export function getConfigRoot(): string {
   const explicit = process.env.PERSONAL_AGENT_CONFIG_ROOT;
-  return explicit && explicit.trim().length > 0
-    ? expandHomePath(explicit.trim())
-    : getDefaultConfigRoot();
+  return explicit && explicit.trim().length > 0 ? expandHomePath(explicit.trim()) : getDefaultConfigRoot();
 }
 
 function getMachineConfigFilePathForRuntimePaths(): string {
@@ -107,12 +103,12 @@ function readMachineConfigRuntimeOverrides(): { vaultRoot?: string; knowledgeBas
     }
 
     const record = parsed as { vaultRoot?: unknown; knowledgeBaseRepoUrl?: unknown };
-    const vaultRoot = typeof record.vaultRoot === 'string' && record.vaultRoot.trim().length > 0
-      ? expandHomePath(record.vaultRoot.trim())
-      : undefined;
-    const knowledgeBaseRepoUrl = typeof record.knowledgeBaseRepoUrl === 'string' && record.knowledgeBaseRepoUrl.trim().length > 0
-      ? record.knowledgeBaseRepoUrl.trim()
-      : undefined;
+    const vaultRoot =
+      typeof record.vaultRoot === 'string' && record.vaultRoot.trim().length > 0 ? expandHomePath(record.vaultRoot.trim()) : undefined;
+    const knowledgeBaseRepoUrl =
+      typeof record.knowledgeBaseRepoUrl === 'string' && record.knowledgeBaseRepoUrl.trim().length > 0
+        ? record.knowledgeBaseRepoUrl.trim()
+        : undefined;
 
     return {
       ...(vaultRoot ? { vaultRoot } : {}),
@@ -173,9 +169,7 @@ export function getDefaultProfilesRoot(): string {
  */
 export function getProfilesRoot(): string {
   const explicit = process.env.PERSONAL_AGENT_PROFILES_ROOT;
-  return explicit && explicit.trim().length > 0
-    ? expandHomePath(explicit.trim())
-    : getDefaultProfilesRoot();
+  return explicit && explicit.trim().length > 0 ? expandHomePath(explicit.trim()) : getDefaultProfilesRoot();
 }
 
 /**
@@ -277,9 +271,7 @@ export function getDefaultLocalProfileDir(): string {
  */
 export function getLocalProfileDir(): string {
   const explicit = process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
-  return explicit && explicit.trim().length > 0
-    ? expandHomePath(explicit.trim())
-    : getDefaultLocalProfileDir();
+  return explicit && explicit.trim().length > 0 ? expandHomePath(explicit.trim()) : getDefaultLocalProfileDir();
 }
 
 /**
@@ -302,7 +294,7 @@ export interface RuntimeStatePaths {
  */
 export function resolveStatePaths(): RuntimeStatePaths {
   const root = getStateRoot();
-  
+
   return {
     root,
     auth: process.env.PERSONAL_AGENT_AUTH_PATH ?? join(root, 'auth'),
@@ -361,10 +353,7 @@ export function isPathInRepo(targetPath: string, repoRoot: string = process.cwd(
  * Validate that state paths are outside the repository
  * Throws if any path would store mutable state in managed repo files
  */
-export function validateStatePathsOutsideRepo(
-  paths: RuntimeStatePaths,
-  repoRoot: string = process.cwd()
-): void {
+export function validateStatePathsOutsideRepo(paths: RuntimeStatePaths, repoRoot: string = process.cwd()): void {
   const violations: string[] = [];
 
   if (isPathInRepo(paths.root, repoRoot)) {
@@ -380,13 +369,13 @@ export function validateStatePathsOutsideRepo(
   if (isPathInRepo(paths.cache, repoRoot)) {
     violations.push(`Cache path "${paths.cache}" is inside repository`);
   }
-  
+
   if (violations.length > 0) {
     throw new Error(
       `Runtime state paths must be outside repository:\n${violations.join('\n')}\n\n` +
-      `Set PERSONAL_AGENT_STATE_ROOT to a directory outside the repo, or ` +
-      `configure individual paths via PERSONAL_AGENT_AUTH_PATH, ` +
-      `PERSONAL_AGENT_SESSION_PATH, PERSONAL_AGENT_CACHE_PATH`
+        `Set PERSONAL_AGENT_STATE_ROOT to a directory outside the repo, or ` +
+        `configure individual paths via PERSONAL_AGENT_AUTH_PATH, ` +
+        `PERSONAL_AGENT_SESSION_PATH, PERSONAL_AGENT_CACHE_PATH`,
     );
   }
 }

@@ -2,6 +2,10 @@ import {
   activateDeferredResume,
   activateDueDeferredResumes,
   createReadyDeferredResume,
+  type DeferredResumeAlertLevel,
+  type DeferredResumeBehavior,
+  type DeferredResumeKind,
+  type DeferredResumeRecord,
   getSessionDeferredResumeEntries,
   loadDeferredResumeState,
   parseDeferredResumeDelayMs,
@@ -10,10 +14,6 @@ import {
   retryDeferredResume,
   saveDeferredResumeState,
   scheduleDeferredResume,
-  type DeferredResumeAlertLevel,
-  type DeferredResumeBehavior,
-  type DeferredResumeKind,
-  type DeferredResumeRecord,
 } from '@personal-agent/core';
 import {
   cancelDeferredResumeConversationRun,
@@ -22,6 +22,7 @@ import {
   resolveDaemonPaths,
   scheduleDeferredResumeConversationRun,
 } from '@personal-agent/daemon';
+
 import { parseFutureHumanDateTime } from './humanDateTime.js';
 
 export const DEFAULT_DEFERRED_RESUME_PROMPT = 'Continue from where you left off and keep going.';
@@ -41,13 +42,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7]) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function normalizeIsoTimestamp(value: string): string | undefined {
@@ -142,10 +145,7 @@ export function listDeferredResumesForSessionFile(sessionFile: string): Deferred
   return getSessionDeferredResumeEntries(state, sessionFile).map(toDeferredResumeSummary);
 }
 
-export function activateDueDeferredResumesForSessionFile(input: {
-  sessionFile: string;
-  at?: Date;
-}): DeferredResumeSummary[] {
+export function activateDueDeferredResumesForSessionFile(input: { sessionFile: string; at?: Date }): DeferredResumeSummary[] {
   const state = loadDeferredResumeState();
   const activated = activateDueDeferredResumes(state, {
     at: input.at,
@@ -159,10 +159,7 @@ export function activateDueDeferredResumesForSessionFile(input: {
   return activated.map(toDeferredResumeSummary);
 }
 
-export function completeDeferredResumeForSessionFile(input: {
-  sessionFile: string;
-  id: string;
-}): DeferredResumeSummary | undefined {
+export function completeDeferredResumeForSessionFile(input: { sessionFile: string; id: string }): DeferredResumeSummary | undefined {
   const state = loadDeferredResumeState();
   const record = state.resumes[input.id];
   if (!record || record.sessionFile !== input.sessionFile) {
@@ -325,10 +322,7 @@ export function createReadyDeferredResumeForSessionFile(input: {
   return toDeferredResumeSummary(record);
 }
 
-export async function cancelDeferredResumeForSessionFile(input: {
-  sessionFile: string;
-  id: string;
-}): Promise<DeferredResumeSummary> {
+export async function cancelDeferredResumeForSessionFile(input: { sessionFile: string; id: string }): Promise<DeferredResumeSummary> {
   const state = loadDeferredResumeState();
   const record = state.resumes[input.id];
   if (!record || record.sessionFile !== input.sessionFile) {

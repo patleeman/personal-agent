@@ -29,12 +29,9 @@ function normalizePendingPromptContextMessages(value: unknown): Array<Pick<Injec
       continue;
     }
 
-    const customType = typeof (message as { customType?: unknown }).customType === 'string'
-      ? (message as { customType: string }).customType.trim()
-      : '';
-    const content = typeof (message as { content?: unknown }).content === 'string'
-      ? (message as { content: string }).content.trim()
-      : '';
+    const customType =
+      typeof (message as { customType?: unknown }).customType === 'string' ? (message as { customType: string }).customType.trim() : '';
+    const content = typeof (message as { content?: unknown }).content === 'string' ? (message as { content: string }).content.trim() : '';
     if (!customType || !content) {
       continue;
     }
@@ -88,11 +85,15 @@ function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentR
       continue;
     }
 
-    const attachmentId = typeof (attachmentRef as { attachmentId?: unknown }).attachmentId === 'string'
-      ? (attachmentRef as { attachmentId: string }).attachmentId.trim()
-      : '';
+    const attachmentId =
+      typeof (attachmentRef as { attachmentId?: unknown }).attachmentId === 'string'
+        ? (attachmentRef as { attachmentId: string }).attachmentId.trim()
+        : '';
     const revision = (attachmentRef as { revision?: unknown }).revision;
-    if (!attachmentId || (revision !== undefined && (!Number.isSafeInteger(revision) || revision <= 0 || revision > MAX_PENDING_ATTACHMENT_REVISION))) {
+    if (
+      !attachmentId ||
+      (revision !== undefined && (!Number.isSafeInteger(revision) || revision <= 0 || revision > MAX_PENDING_ATTACHMENT_REVISION))
+    ) {
       continue;
     }
 
@@ -129,30 +130,29 @@ function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
     return [];
   }
 
-  return value
-    .flatMap((image) => {
-      if (!image || typeof image !== 'object') {
-        return [];
-      }
+  return value.flatMap((image) => {
+    if (!image || typeof image !== 'object') {
+      return [];
+    }
 
-      const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string'
-        ? (image as { mimeType: string }).mimeType.trim()
-        : '';
-      const data = normalizePendingPromptImageData((image as { data?: unknown }).data);
-      if (!mimeType.toLowerCase().startsWith('image/') || !data) {
-        return [];
-      }
-      const previewUrl = normalizePendingPromptImagePreviewUrl((image as { previewUrl?: unknown }).previewUrl);
+    const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string' ? (image as { mimeType: string }).mimeType.trim() : '';
+    const data = normalizePendingPromptImageData((image as { data?: unknown }).data);
+    if (!mimeType.toLowerCase().startsWith('image/') || !data) {
+      return [];
+    }
+    const previewUrl = normalizePendingPromptImagePreviewUrl((image as { previewUrl?: unknown }).previewUrl);
 
-      return [{
+    return [
+      {
         mimeType,
         data,
         ...(typeof (image as { name?: unknown }).name === 'string' && (image as { name: string }).name.trim().length > 0
           ? { name: (image as { name: string }).name.trim() }
           : {}),
         ...(previewUrl ? { previewUrl } : {}),
-      }];
-    });
+      },
+    ];
+  });
 }
 
 function normalizePendingPromptImagePreviewUrl(value: unknown): string | undefined {
@@ -174,11 +174,7 @@ function normalizePendingPromptImagePreviewUrl(value: unknown): string | undefin
   }
   const commaIndex = previewUrl.indexOf(',');
   const base64 = commaIndex >= 0 ? previewUrl.slice(commaIndex + 1).trim() : '';
-  return base64
-    && base64.length % 4 !== 1
-    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)
-    ? previewUrl
-    : undefined;
+  return base64 && base64.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64) ? previewUrl : undefined;
 }
 
 export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';
@@ -198,16 +194,15 @@ function emitPendingConversationPromptChanged(
     return;
   }
 
-  window.dispatchEvent(new CustomEvent<PendingConversationPromptChangedDetail>(
-    PENDING_CONVERSATION_PROMPT_CHANGED_EVENT,
-    {
+  window.dispatchEvent(
+    new CustomEvent<PendingConversationPromptChangedDetail>(PENDING_CONVERSATION_PROMPT_CHANGED_EVENT, {
       detail: {
         sessionId,
         prompt,
         dispatching: isPendingConversationPromptDispatching(sessionId, storage),
       },
-    },
-  ));
+    }),
+  );
 }
 
 function buildPendingConversationPromptStorageKey(sessionId: string): string {
@@ -218,10 +213,7 @@ function buildPendingConversationPromptDispatchingStorageKey(sessionId: string):
   return `pa:reload:conversation:${sessionId}:pending-prompt-dispatching`;
 }
 
-function readPendingConversationPromptDispatchingAt(
-  sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
-): number | null {
+function readPendingConversationPromptDispatchingAt(sessionId: string, storage: StorageLike | null = getSessionStorage()): number | null {
   if (!sessionId) {
     return null;
   }
@@ -260,11 +252,12 @@ export function persistPendingConversationPrompt(
     ...(relatedConversationIds.length > 0 ? { relatedConversationIds } : {}),
   };
 
-  const shouldPersist = nextPrompt.text.trim().length > 0
-    || images.length > 0
-    || attachmentRefs.length > 0
-    || contextMessages.length > 0
-    || relatedConversationIds.length > 0;
+  const shouldPersist =
+    nextPrompt.text.trim().length > 0 ||
+    images.length > 0 ||
+    attachmentRefs.length > 0 ||
+    contextMessages.length > 0 ||
+    relatedConversationIds.length > 0;
   if (!shouldPersist) {
     inMemoryPendingPrompts.delete(sessionId);
   } else {
@@ -310,20 +303,18 @@ export function readPendingConversationPrompt(
       const text = typeof parsed.text === 'string' ? parsed.text : '';
 
       if (
-        text.trim().length === 0
-        && images.length === 0
-        && attachmentRefs.length === 0
-        && contextMessages.length === 0
-        && relatedConversationIds.length === 0
+        text.trim().length === 0 &&
+        images.length === 0 &&
+        attachmentRefs.length === 0 &&
+        contextMessages.length === 0 &&
+        relatedConversationIds.length === 0
       ) {
         return null;
       }
 
       return {
         text,
-        behavior: parsed.behavior === 'steer' || parsed.behavior === 'followUp'
-          ? parsed.behavior
-          : undefined,
+        behavior: parsed.behavior === 'steer' || parsed.behavior === 'followUp' ? parsed.behavior : undefined,
         images,
         attachmentRefs,
         ...(contextMessages.length > 0 ? { contextMessages } : {}),
@@ -347,10 +338,7 @@ export function consumePendingConversationPrompt(
   return prompt;
 }
 
-export function clearPendingConversationPrompt(
-  sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
+export function clearPendingConversationPrompt(sessionId: string, storage: StorageLike | null = getSessionStorage()): void {
   if (!sessionId) {
     return;
   }
@@ -360,10 +348,7 @@ export function clearPendingConversationPrompt(
   emitPendingConversationPromptChanged(sessionId, null, storage);
 }
 
-export function isPendingConversationPromptDispatching(
-  sessionId: string,
-  storage: StorageLike | null = getSessionStorage(),
-): boolean {
+export function isPendingConversationPromptDispatching(sessionId: string, storage: StorageLike | null = getSessionStorage()): boolean {
   if (!sessionId) {
     return false;
   }

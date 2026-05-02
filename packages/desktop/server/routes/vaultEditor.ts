@@ -2,30 +2,30 @@
  * Vault editor routes — file CRUD for the knowledge base UI.
  */
 
-import type { Express, Response } from 'express';
 import {
+  type Dirent,
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
+  type Stats,
   statSync,
   writeFileSync,
-  type Dirent,
-  type Stats,
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import { extension as mimeExtension, lookup as mimeLookup } from 'mime-types';
+
 import { getVaultRoot } from '@personal-agent/core';
+import type { Express, Response } from 'express';
+import { extension as mimeExtension, lookup as mimeLookup } from 'mime-types';
+
 import { logError } from '../middleware/index.js';
 import { importVaultSharedItem } from './vaultShareImport.js';
 
 // ── Path safety ───────────────────────────────────────────────────────────────
 
-const SKIPPED_DIRS = new Set([
-  '.git', '.next', '.obsidian', 'coverage', 'dist', 'dist-server', 'node_modules',
-]);
+const SKIPPED_DIRS = new Set(['.git', '.next', '.obsidian', 'coverage', 'dist', 'dist-server', 'node_modules']);
 
 function getRoot(): string {
   return resolve(getVaultRoot());
@@ -120,10 +120,12 @@ function isVaultShareImportClientError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  return error.message === 'dataBase64 is required for image imports.'
-    || error.message === 'url is required for URL imports.'
-    || error.message === 'mimeType must be an image type for image imports.'
-    || error.message.startsWith('Shared image data ');
+  return (
+    error.message === 'dataBase64 is required for image imports.' ||
+    error.message === 'url is required for URL imports.' ||
+    error.message === 'mimeType must be an image type for image imports.' ||
+    error.message.startsWith('Shared image data ')
+  );
 }
 
 // ── Serialise a single entry ──────────────────────────────────────────────────
@@ -179,7 +181,11 @@ function readDirEntries(root: string, abs: string): VaultEntry[] {
     .flatMap((d) => {
       const childAbs = join(abs, d.name);
       let stats: Stats;
-      try { stats = statSync(childAbs); } catch { return []; }
+      try {
+        stats = statSync(childAbs);
+      } catch {
+        return [];
+      }
       if (!stats.isFile() && !stats.isDirectory()) return [];
       return [entryFromStat(root, childAbs, stats)];
     })
@@ -214,7 +220,11 @@ function collectAllMarkdownFiles(root: string): string[] {
   while (stack.length) {
     const dir = stack.pop() as string;
     let entries: Dirent[];
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue;
       const abs = join(dir, entry.name);
@@ -259,7 +269,11 @@ function searchVaultNotes(root: string, query: string, limit: number): Array<Omi
     const name = basename(filePath);
     const title = name.replace(/\.md$/i, '');
     let content = '';
-    try { content = readFileSync(filePath, 'utf-8'); } catch { continue; }
+    try {
+      content = readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
 
     if (!normalized) {
       results.push({ id, name, title, excerpt: id, score: 1_000 });
@@ -281,11 +295,7 @@ function searchVaultNotes(root: string, query: string, limit: number): Array<Omi
     else if (titleIndex > 0) score += 350;
     if (pathIndex >= 0) score += 200;
     if (contentIndex >= 0) score += 100;
-    const excerpt = contentIndex >= 0
-      ? buildSearchExcerpt(content, contentIndex, normalized.length)
-      : pathIndex >= 0
-        ? id
-        : title;
+    const excerpt = contentIndex >= 0 ? buildSearchExcerpt(content, contentIndex, normalized.length) : pathIndex >= 0 ? id : title;
     results.push({ id, name, title, excerpt, score });
   }
 
@@ -308,7 +318,11 @@ function findBacklinks(targetId: string, root: string): BacklinkResult[] {
     const fileId = relative(root, filePath).replace(/\\/g, '/');
     if (fileId === targetId) continue; // skip the file itself
     let content: string;
-    try { content = readFileSync(filePath, 'utf-8'); } catch { continue; }
+    try {
+      content = readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
     if (!pattern.test(content)) continue;
     pattern.lastIndex = 0;
 
@@ -453,11 +467,14 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         return;
       }
       const root = getRoot();
-      const parentAbs = parentId === null
-        ? root
-        : typeof parentId === 'string'
-        ? (parentId.trim() ? safePath(parentId.trim().replace(/^\/+|\/+$/g, '')) : root)
-        : dirname(abs);
+      const parentAbs =
+        parentId === null
+          ? root
+          : typeof parentId === 'string'
+            ? parentId.trim()
+              ? safePath(parentId.trim().replace(/^\/+|\/+$/g, ''))
+              : root
+            : dirname(abs);
       if (!parentAbs || !existsSync(parentAbs) || !statSync(parentAbs).isDirectory()) {
         res.status(400).json({ error: 'Target folder does not exist' });
         return;
@@ -512,7 +529,10 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/backlinks', (req, res) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      if (!id) { res.status(400).json({ error: 'id is required' }); return; }
+      if (!id) {
+        res.status(400).json({ error: 'id is required' });
+        return;
+      }
       const root = getRoot();
       const targetName = basename(id).replace(/\.md$/i, '');
       res.json({ id, targetName, backlinks: findBacklinks(id, root) });
@@ -539,7 +559,10 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/search', (req, res) => {
     try {
       const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-      if (!q) { res.json({ results: [] }); return; }
+      if (!q) {
+        res.json({ results: [] });
+        return;
+      }
       const limit = parseVaultSearchLimit(req.query.limit);
       const root = getRoot();
       const files = collectAllMarkdownFiles(root);
@@ -550,7 +573,11 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         const id = relative(root, filePath).replace(/\\/g, '/');
         const name = basename(filePath);
         let content: string;
-        try { content = readFileSync(filePath, 'utf-8'); } catch { continue; }
+        try {
+          content = readFileSync(filePath, 'utf-8');
+        } catch {
+          continue;
+        }
         const contentLower = content.toLowerCase();
         const nameLower = name.toLowerCase();
         // Name match scores higher
@@ -560,14 +587,15 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         // Count occurrences
         let count = 0;
         let pos = 0;
-        while ((pos = contentLower.indexOf(lower, pos)) !== -1) { count++; pos += lower.length; }
+        while ((pos = contentLower.indexOf(lower, pos)) !== -1) {
+          count++;
+          pos += lower.length;
+        }
         // Build excerpt around first content match
         const firstIdx = contentLower.indexOf(lower);
         const start = Math.max(0, firstIdx - 60);
         const end = Math.min(content.length, firstIdx + lower.length + 80);
-        let excerpt = firstIdx >= 0
-          ? content.slice(start, end).replace(/\n+/g, ' ').trim()
-          : '';
+        let excerpt = firstIdx >= 0 ? content.slice(start, end).replace(/\n+/g, ' ').trim() : '';
         if (start > 0) excerpt = `…${excerpt}`;
         if (end < content.length) excerpt = `${excerpt}…`;
         results.push({ id, name, excerpt, matchCount: count + (nameMatch ? 100 : 0) });
@@ -587,22 +615,42 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.post('/api/vault/move', (req, res) => {
     try {
       const { id, targetDir } = req.body as { id?: unknown; targetDir?: unknown };
-      if (typeof id !== 'string' || !id.trim()) { res.status(400).json({ error: 'id is required' }); return; }
-      if (typeof targetDir !== 'string') { res.status(400).json({ error: 'targetDir must be a string' }); return; }
+      if (typeof id !== 'string' || !id.trim()) {
+        res.status(400).json({ error: 'id is required' });
+        return;
+      }
+      if (typeof targetDir !== 'string') {
+        res.status(400).json({ error: 'targetDir must be a string' });
+        return;
+      }
       const root = getRoot();
       const srcAbs = safePath(id.trim());
-      if (!srcAbs) { res.status(400).json({ error: 'Invalid source id' }); return; }
-      if (!existsSync(srcAbs)) { res.status(404).json({ error: 'Source not found' }); return; }
-      const destDir = targetDir.trim()
-        ? safePath(targetDir.trim().replace(/\/+$/, ''))
-        : root;
-      if (!destDir) { res.status(400).json({ error: 'Invalid target directory' }); return; }
+      if (!srcAbs) {
+        res.status(400).json({ error: 'Invalid source id' });
+        return;
+      }
+      if (!existsSync(srcAbs)) {
+        res.status(404).json({ error: 'Source not found' });
+        return;
+      }
+      const destDir = targetDir.trim() ? safePath(targetDir.trim().replace(/\/+$/, '')) : root;
+      if (!destDir) {
+        res.status(400).json({ error: 'Invalid target directory' });
+        return;
+      }
       if (!existsSync(destDir) || !statSync(destDir).isDirectory()) {
-        res.status(400).json({ error: 'Target directory does not exist' }); return;
+        res.status(400).json({ error: 'Target directory does not exist' });
+        return;
       }
       const destAbs = join(destDir, basename(srcAbs));
-      if (!isInsideRoot(root, destAbs)) { res.status(400).json({ error: 'Target is outside vault' }); return; }
-      if (existsSync(destAbs)) { res.status(409).json({ error: 'A file with that name already exists there' }); return; }
+      if (!isInsideRoot(root, destAbs)) {
+        res.status(400).json({ error: 'Target is outside vault' });
+        return;
+      }
+      if (existsSync(destAbs)) {
+        res.status(409).json({ error: 'A file with that name already exists there' });
+        return;
+      }
       renameSync(srcAbs, destAbs);
       res.json(entryFromStat(root, destAbs, statSync(destAbs)));
     } catch (err) {
@@ -633,9 +681,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       }
 
       const root = getRoot();
-      const directoryId = typeof payload.directoryId === 'string'
-        ? payload.directoryId.trim().replace(/^\/+|\/+$/g, '')
-        : '';
+      const directoryId = typeof payload.directoryId === 'string' ? payload.directoryId.trim().replace(/^\/+|\/+$/g, '') : '';
       const targetDirAbs = directoryId ? safePath(directoryId) : root;
       if (!targetDirAbs) {
         res.status(400).json({ error: 'Invalid target directory' });
@@ -678,8 +724,14 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.post('/api/vault/image', (req, res) => {
     try {
       const { filename, dataUrl } = req.body as { filename?: unknown; dataUrl?: unknown };
-      if (typeof filename !== 'string' || !filename.trim()) { res.status(400).json({ error: 'filename required' }); return; }
-      if (typeof dataUrl !== 'string' || !dataUrl.trim().toLowerCase().startsWith('data:')) { res.status(400).json({ error: 'dataUrl must be a data: URL' }); return; }
+      if (typeof filename !== 'string' || !filename.trim()) {
+        res.status(400).json({ error: 'filename required' });
+        return;
+      }
+      if (typeof dataUrl !== 'string' || !dataUrl.trim().toLowerCase().startsWith('data:')) {
+        res.status(400).json({ error: 'dataUrl must be a data: URL' });
+        return;
+      }
       const root = getRoot();
       const attachDir = join(root, '_attachments');
       mkdirSync(attachDir, { recursive: true });
@@ -704,8 +756,14 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
       const abs = id ? safePath(id) : null;
-      if (!abs) { res.status(400).json({ error: 'Invalid id' }); return; }
-      if (!existsSync(abs) || !statSync(abs).isFile()) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!abs) {
+        res.status(400).json({ error: 'Invalid id' });
+        return;
+      }
+      if (!existsSync(abs) || !statSync(abs).isFile()) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
       const mime = mimeLookup(abs) || 'application/octet-stream';
       res.setHeader('Content-Type', mime);
       res.setHeader('Cache-Control', 'public, max-age=3600');

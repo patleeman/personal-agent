@@ -1,11 +1,12 @@
 import {
+  type AutomationThreadMode,
   ensureAutomationThread,
   normalizeAutomationThreadModeForSelection,
   resolveAutomationThreadTitle,
   setStoredAutomationThreadBinding,
-  type AutomationThreadMode,
   type StoredAutomation,
 } from '@personal-agent/daemon';
+
 import { resolveConversationSessionFile } from '../conversations/conversationService.js';
 import { readSessionMeta } from '../conversations/sessions.js';
 
@@ -64,10 +65,13 @@ export function resolveScheduledTaskThreadBinding(input: ScheduledTaskThreadInpu
   };
 }
 
-export function applyScheduledTaskThreadBinding(taskId: string, input: ScheduledTaskThreadInput & {
-  cwd?: string | null;
-  dbPath?: string;
-}): StoredAutomation {
+export function applyScheduledTaskThreadBinding(
+  taskId: string,
+  input: ScheduledTaskThreadInput & {
+    cwd?: string | null;
+    dbPath?: string;
+  },
+): StoredAutomation {
   const resolved = resolveScheduledTaskThreadBinding(input);
   const updated = setStoredAutomationThreadBinding(taskId, {
     dbPath: input.dbPath,
@@ -84,9 +88,7 @@ export function applyScheduledTaskThreadBinding(taskId: string, input: Scheduled
 }
 
 export function buildScheduledTaskThreadDetail(task: StoredAutomation): ScheduledTaskThreadDetail {
-  const title = task.threadConversationId
-    ? readSessionMeta(task.threadConversationId)?.title
-    : resolveAutomationThreadTitle(task);
+  const title = task.threadConversationId ? readSessionMeta(task.threadConversationId)?.title : resolveAutomationThreadTitle(task);
 
   return {
     threadMode: task.threadMode,

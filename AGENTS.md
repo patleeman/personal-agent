@@ -11,7 +11,7 @@ personal-agent is a personal AI agent runtime.
 
 ## Always validate your work!
 
-- After you complete a feature, make sure you actually inspect your work. 
+- After you complete a feature, make sure you actually inspect your work.
 - If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `npm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/agent-browser.md` and the agent-browser skill for more information.
 - Make sure the work is complete, to spec, works without bugs, and looks good.
 
@@ -44,6 +44,7 @@ The docs folder is for agents to use and understand how personal-assistant works
 ## Checkpoint when complete
 
 Once you're done with your task, remember to /skill:checkpoint your work. In this repo we commit and push directly to main, no need to create branches.
+
 - I explicitly want targeted checkpoints for the code you modified.
 - If a file has unrelated work mixed in, stage only your hunks. If you cannot do that safely, stop and tell me instead of sweeping unrelated changes into the commit.
 

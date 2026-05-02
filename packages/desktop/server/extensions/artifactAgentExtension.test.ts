@@ -2,8 +2,10 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+
 import { getConversationArtifact, listConversationArtifacts } from '@personal-agent/core';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 
 const tempDirs: string[] = [];
@@ -21,9 +23,11 @@ afterEach(async () => {
 function registerArtifactTool(repoRoot: string, stateRoot: string) {
   let registeredTool:
     | {
-      execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
-      promptGuidelines?: string[];
-    }
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+        promptGuidelines?: string[];
+      }
     | undefined;
 
   createArtifactAgentExtension({
@@ -33,7 +37,9 @@ function registerArtifactTool(repoRoot: string, stateRoot: string) {
   })({
     registerTool: (tool: unknown) => {
       registeredTool = tool as {
-        execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
         promptGuidelines?: string[];
       };
     },
@@ -130,12 +136,14 @@ describe('artifact agent extension', () => {
       openRequested: false,
     });
 
-    expect(getConversationArtifact({
-      stateRoot,
-      profile: 'datadog',
-      conversationId: 'conv-123',
-      artifactId: 'counter-demo',
-    })).toMatchObject({
+    expect(
+      getConversationArtifact({
+        stateRoot,
+        profile: 'datadog',
+        conversationId: 'conv-123',
+        artifactId: 'counter-demo',
+      }),
+    ).toMatchObject({
       title: 'Counter demo v2',
       revision: 2,
       content: '<button>Count twice</button>',
@@ -148,13 +156,19 @@ describe('artifact agent extension', () => {
     const artifactTool = registerArtifactTool(repoRoot, stateRoot);
     const ctx = createToolContext();
 
-    await artifactTool.execute('tool-1', {
-      action: 'save',
-      artifactId: 'diagram',
-      kind: 'mermaid',
-      title: 'Retry diagram',
-      content: 'flowchart TD\nA-->B',
-    }, undefined, undefined, ctx);
+    await artifactTool.execute(
+      'tool-1',
+      {
+        action: 'save',
+        artifactId: 'diagram',
+        kind: 'mermaid',
+        title: 'Retry diagram',
+        content: 'flowchart TD\nA-->B',
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
 
     const list = await artifactTool.execute('tool-2', { action: 'list' }, undefined, undefined, ctx);
     expect(list.content[0]?.text).toContain('diagram [mermaid] Retry diagram');
@@ -179,20 +193,28 @@ describe('artifact agent extension', () => {
 Hello world.
 \end{document}`;
 
-    await artifactTool.execute('tool-1', {
-      action: 'save',
-      artifactId: 'report',
-      kind: 'latex',
-      title: 'Walkthrough report',
-      content: latexDocument,
-    }, undefined, undefined, ctx);
+    await artifactTool.execute(
+      'tool-1',
+      {
+        action: 'save',
+        artifactId: 'report',
+        kind: 'latex',
+        title: 'Walkthrough report',
+        content: latexDocument,
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
 
-    expect(getConversationArtifact({
-      stateRoot,
-      profile: 'datadog',
-      conversationId: 'conv-123',
-      artifactId: 'report',
-    })).toMatchObject({
+    expect(
+      getConversationArtifact({
+        stateRoot,
+        profile: 'datadog',
+        conversationId: 'conv-123',
+        artifactId: 'report',
+      }),
+    ).toMatchObject({
       kind: 'latex',
       title: 'Walkthrough report',
       content: latexDocument,

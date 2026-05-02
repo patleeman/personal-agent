@@ -2,7 +2,10 @@ const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent';
 
 function resolveDesktopReleaseRepoSlug(): string {
   const value = process.env.PERSONAL_AGENT_RELEASE_REPO?.trim() || DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
-  const parts = value.split('/').map((part) => part.trim()).filter((part) => part.length > 0);
+  const parts = value
+    .split('/')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
   if (parts.length !== 2) {
     return DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
   }

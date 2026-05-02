@@ -1,17 +1,8 @@
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { Express, Request, Response } from 'express';
-import type { ServerRouteContext } from './context.js';
-import {
-  prewarmLiveSessionLoader,
-  exportSessionHtml,
-  executeSessionBash,
-  getLiveSessions as getLocalLiveSessions,
-  getLiveSessionForkEntries,
-  isLive as isLocalLive,
-  LiveSessionControlError,
-  subscribe as subscribeLocal,
-  registry as liveRegistry,
-} from '../conversations/liveSessions.js';
+
+import { resolveConversationCwd } from '../conversations/conversationCwd.js';
+import { parseTailBlocksQuery } from '../conversations/conversationService.js';
 import {
   abortLiveSessionCapability,
   branchLiveSessionCapability,
@@ -19,6 +10,7 @@ import {
   createLiveSessionCapability,
   destroyLiveSessionCapability,
   forkLiveSessionCapability,
+  type LiveSessionCapabilityContext,
   LiveSessionCapabilityInputError,
   manageLiveSessionParallelJobCapability,
   reloadLiveSessionCapability,
@@ -28,18 +20,22 @@ import {
   submitLiveSessionPromptCapability,
   summarizeAndForkLiveSessionCapability,
   takeOverLiveSessionCapability,
-  type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
 import {
-  logError,
-  logSlowConversationPerf,
-  setServerTimingHeaders,
-  logWarn,
-} from '../middleware/index.js';
-import { parseTailBlocksQuery } from '../conversations/conversationService.js';
+  executeSessionBash,
+  exportSessionHtml,
+  getLiveSessionForkEntries,
+  getLiveSessions as getLocalLiveSessions,
+  isLive as isLocalLive,
+  LiveSessionControlError,
+  prewarmLiveSessionLoader,
+  registry as liveRegistry,
+  subscribe as subscribeLocal,
+} from '../conversations/liveSessions.js';
 import { readSessionMeta } from '../conversations/sessions.js';
-import { resolveConversationCwd } from '../conversations/conversationCwd.js';
+import { logError, logSlowConversationPerf, logWarn, setServerTimingHeaders } from '../middleware/index.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
+import type { ServerRouteContext } from './context.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('live session routes not initialized');
@@ -91,7 +87,17 @@ let listMemoryDocsFn: () => {
 }[] = () => [];
 
 function initializeLiveSessionRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
+  context: Pick<
+    ServerRouteContext,
+    | 'getCurrentProfile'
+    | 'getRepoRoot'
+    | 'getDefaultWebCwd'
+    | 'buildLiveSessionResourceOptions'
+    | 'buildLiveSessionExtensionFactories'
+    | 'flushLiveDeferredResumes'
+    | 'listTasksForCurrentProfile'
+    | 'listMemoryDocs'
+  >,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
@@ -166,16 +172,19 @@ function readPromptImages(value: unknown): Array<{ data: string; mimeType: strin
 
 export async function handleLiveSessionPrompt(req: Request, res: Response): Promise<void> {
   try {
-    const result = await submitLiveSessionPromptCapability({
-      conversationId: req.params.id,
-      text: typeof req.body?.text === 'string' ? req.body.text : '',
-      behavior: req.body?.behavior,
-      images: readPromptImages(req.body?.images),
-      attachmentRefs: req.body?.attachmentRefs,
-      contextMessages: req.body?.contextMessages,
-      relatedConversationIds: req.body?.relatedConversationIds,
-      surfaceId: readRequestSurfaceId(req.body),
-    }, getLiveSessionCapabilityContext());
+    const result = await submitLiveSessionPromptCapability(
+      {
+        conversationId: req.params.id,
+        text: typeof req.body?.text === 'string' ? req.body.text : '',
+        behavior: req.body?.behavior,
+        images: readPromptImages(req.body?.images),
+        attachmentRefs: req.body?.attachmentRefs,
+        contextMessages: req.body?.contextMessages,
+        relatedConversationIds: req.body?.relatedConversationIds,
+        surfaceId: readRequestSurfaceId(req.body),
+      },
+      getLiveSessionCapabilityContext(),
+    );
     res.json(result);
   } catch (err) {
     logError('request handler error', {
@@ -195,15 +204,18 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
 
 export async function handleLiveSessionParallelPrompt(req: Request, res: Response): Promise<void> {
   try {
-    const result = await submitLiveSessionParallelPromptCapability({
-      conversationId: req.params.id,
-      text: typeof req.body?.text === 'string' ? req.body.text : '',
-      images: readPromptImages(req.body?.images),
-      attachmentRefs: req.body?.attachmentRefs,
-      contextMessages: req.body?.contextMessages,
-      relatedConversationIds: req.body?.relatedConversationIds,
-      surfaceId: readRequestSurfaceId(req.body),
-    }, getLiveSessionCapabilityContext());
+    const result = await submitLiveSessionParallelPromptCapability(
+      {
+        conversationId: req.params.id,
+        text: typeof req.body?.text === 'string' ? req.body.text : '',
+        images: readPromptImages(req.body?.images),
+        attachmentRefs: req.body?.attachmentRefs,
+        contextMessages: req.body?.contextMessages,
+        relatedConversationIds: req.body?.relatedConversationIds,
+        surfaceId: readRequestSurfaceId(req.body),
+      },
+      getLiveSessionCapabilityContext(),
+    );
     res.json(result);
   } catch (err) {
     logError('request handler error', {
@@ -290,14 +302,27 @@ export function writeLiveConversationControlError(res: Response, error: unknown)
 
 export function registerLiveSessionRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
+  context: Pick<
+    ServerRouteContext,
+    | 'getCurrentProfile'
+    | 'getRepoRoot'
+    | 'getDefaultWebCwd'
+    | 'buildLiveSessionResourceOptions'
+    | 'buildLiveSessionExtensionFactories'
+    | 'flushLiveDeferredResumes'
+    | 'listTasksForCurrentProfile'
+    | 'listMemoryDocs'
+  >,
 ): void {
   initializeLiveSessionRoutesContext(context);
 
   router.get('/api/live-sessions/:id', (req, res) => {
     try {
       const live = isLiveSession(req.params.id);
-      if (!live) { res.status(404).json({ live: false }); return; }
+      if (!live) {
+        res.status(404).json({ live: false });
+        return;
+      }
       const entry = getLocalLiveSessions().find((session) => session.id === req.params.id);
       res.json({ live: true, ...entry });
     } catch (err) {
@@ -319,13 +344,16 @@ export function registerLiveSessionRoutes(
         thinkingLevel?: string | null;
         serviceTier?: string | null;
       };
-      const result = await createLiveSessionCapability({
-        cwd: body.cwd,
-        ...(body.workspaceCwd !== undefined ? { workspaceCwd: body.workspaceCwd } : {}),
-        ...(body.model !== undefined ? { model: body.model } : {}),
-        ...(body.thinkingLevel !== undefined ? { thinkingLevel: body.thinkingLevel } : {}),
-        ...(body.serviceTier !== undefined ? { serviceTier: body.serviceTier } : {}),
-      }, getLiveSessionCapabilityContext());
+      const result = await createLiveSessionCapability(
+        {
+          cwd: body.cwd,
+          ...(body.workspaceCwd !== undefined ? { workspaceCwd: body.workspaceCwd } : {}),
+          ...(body.model !== undefined ? { model: body.model } : {}),
+          ...(body.thinkingLevel !== undefined ? { thinkingLevel: body.thinkingLevel } : {}),
+          ...(body.serviceTier !== undefined ? { serviceTier: body.serviceTier } : {}),
+        },
+        getLiveSessionCapabilityContext(),
+      );
       res.json(result);
     } catch (err) {
       logError('request handler error', {
@@ -343,10 +371,13 @@ export function registerLiveSessionRoutes(
   /** Resume an existing session file into a live session */
   router.post('/api/live-sessions/resume', async (req, res) => {
     try {
-      const result = await resumeLiveSessionCapability({
-        sessionFile: typeof req.body?.sessionFile === 'string' ? req.body.sessionFile : '',
-        cwd: typeof req.body?.cwd === 'string' ? req.body.cwd : undefined,
-      }, getLiveSessionCapabilityContext());
+      const result = await resumeLiveSessionCapability(
+        {
+          sessionFile: typeof req.body?.sessionFile === 'string' ? req.body.sessionFile : '',
+          cwd: typeof req.body?.cwd === 'string' ? req.body.cwd : undefined,
+        },
+        getLiveSessionCapabilityContext(),
+      );
       res.json(result);
     } catch (err) {
       logError('request handler error', {
@@ -363,7 +394,10 @@ export function registerLiveSessionRoutes(
 
   router.get('/api/live-sessions/:id/events', (req, res) => {
     const { id } = req.params;
-    if (!isLiveSession(id)) { res.status(404).json({ error: 'Not a live session' }); return; }
+    if (!isLiveSession(id)) {
+      res.status(404).json({ error: 'Not a live session' });
+      return;
+    }
 
     const tailBlocks = parseTailBlocksQuery(req.query.tailBlocks);
     const rawSurfaceId = Array.isArray(req.query.surfaceId) ? req.query.surfaceId[0] : req.query.surfaceId;
@@ -378,12 +412,16 @@ export function registerLiveSessionRoutes(
     res.flushHeaders();
 
     const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15_000);
-    const unsubscribe = subscribeLiveSession(id, (event) => {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-    }, {
-      ...(tailBlocks ? { tailBlocks } : {}),
-      ...(surfaceId ? { surface: { surfaceId, surfaceType } } : {}),
-    });
+    const unsubscribe = subscribeLiveSession(
+      id,
+      (event) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      },
+      {
+        ...(tailBlocks ? { tailBlocks } : {}),
+        ...(surfaceId ? { surface: { surfaceId, surfaceType } } : {}),
+      },
+    );
 
     req.on('close', () => {
       clearInterval(heartbeat);
@@ -480,12 +518,14 @@ export function registerLiveSessionRoutes(
         return;
       }
 
-      res.json(await restoreQueuedLiveSessionMessageCapability({
-        conversationId: req.params.id,
-        behavior,
-        index: index as number,
-        ...(typeof previewId === 'string' ? { previewId } : {}),
-      }));
+      res.json(
+        await restoreQueuedLiveSessionMessageCapability({
+          conversationId: req.params.id,
+          behavior,
+          index: index as number,
+          ...(typeof previewId === 'string' ? { previewId } : {}),
+        }),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
@@ -495,10 +535,10 @@ export function registerLiveSessionRoutes(
       if (writeLiveConversationControlError(res, err)) {
         return;
       }
-      const status = message.includes('Queued prompt changed before it could be restored')
-        || message.includes('Queued prompt restore is unavailable')
-        ? 409
-        : 500;
+      const status =
+        message.includes('Queued prompt changed before it could be restored') || message.includes('Queued prompt restore is unavailable')
+          ? 409
+          : 500;
       res.status(status).json({ error: message });
     }
   });
@@ -507,10 +547,12 @@ export function registerLiveSessionRoutes(
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
       const { customInstructions } = req.body as { customInstructions?: string; surfaceId?: string };
-      res.json(await compactLiveSessionCapability({
-        conversationId: req.params.id,
-        customInstructions: customInstructions?.trim() || undefined,
-      }));
+      res.json(
+        await compactLiveSessionCapability({
+          conversationId: req.params.id,
+          customInstructions: customInstructions?.trim() || undefined,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -583,25 +625,32 @@ export function registerLiveSessionRoutes(
       const liveEntry = liveRegistry.get(id);
       const storedSession = !liveEntry ? readSessionMeta(id) : null;
       const cwd = liveEntry?.cwd ?? storedSession?.cwd;
-      if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
+      if (!cwd) {
+        res.status(404).json({ error: 'Session not found' });
+        return;
+      }
 
       const gitSummaryRead = readGitStatusSummaryWithTelemetry(cwd);
       const gitSummary = gitSummaryRead.summary;
 
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      setServerTimingHeaders(res, [
+      setServerTimingHeaders(
+        res,
+        [
+          {
+            name: 'git',
+            durationMs: gitSummaryRead.telemetry.durationMs,
+            description: `${gitSummaryRead.telemetry.cache}${gitSummaryRead.telemetry.degraded ? '/degraded' : ''}`,
+          },
+          { name: 'total', durationMs },
+        ],
         {
-          name: 'git',
-          durationMs: gitSummaryRead.telemetry.durationMs,
-          description: `${gitSummaryRead.telemetry.cache}${gitSummaryRead.telemetry.degraded ? '/degraded' : ''}`,
+          route: 'live-session-context',
+          conversationId: id,
+          git: gitSummaryRead.telemetry,
+          durationMs,
         },
-        { name: 'total', durationMs },
-      ], {
-        route: 'live-session-context',
-        conversationId: id,
-        git: gitSummaryRead.telemetry,
-        durationMs,
-      });
+      );
       logSlowConversationPerf('live session context request', {
         conversationId: id,
         durationMs,
@@ -614,14 +663,14 @@ export function registerLiveSessionRoutes(
         branch: gitSummary?.branch ?? null,
         git: gitSummary
           ? {
-            changeCount: gitSummary.changeCount,
-            linesAdded: gitSummary.linesAdded,
-            linesDeleted: gitSummary.linesDeleted,
-            changes: gitSummary.changes.map((change) => ({
-              relativePath: change.relativePath,
-              change: change.change,
-            })),
-          }
+              changeCount: gitSummary.changeCount,
+              linesAdded: gitSummary.linesAdded,
+              linesDeleted: gitSummary.linesDeleted,
+              changes: gitSummary.changes.map((change) => ({
+                relativePath: change.relativePath,
+                change: change.change,
+              })),
+            }
           : null,
       });
     } catch (err) {
@@ -653,7 +702,10 @@ export function registerLiveSessionRoutes(
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
       const { entryId } = req.body as { entryId: string; surfaceId?: string };
-      if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
+      if (!entryId) {
+        res.status(400).json({ error: 'entryId required' });
+        return;
+      }
       res.json(await branchLiveSessionCapability({ conversationId: req.params.id, entryId }, getLiveSessionCapabilityContext()));
     } catch (err) {
       logError('request handler error', {
@@ -676,13 +728,21 @@ export function registerLiveSessionRoutes(
         beforeEntry?: boolean;
         surfaceId?: string;
       };
-      if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
-      res.json(await forkLiveSessionCapability({
-        conversationId: req.params.id,
-        entryId,
-        preserveSource,
-        beforeEntry,
-      }, getLiveSessionCapabilityContext()));
+      if (!entryId) {
+        res.status(400).json({ error: 'entryId required' });
+        return;
+      }
+      res.json(
+        await forkLiveSessionCapability(
+          {
+            conversationId: req.params.id,
+            entryId,
+            preserveSource,
+            beforeEntry,
+          },
+          getLiveSessionCapabilityContext(),
+        ),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -711,4 +771,3 @@ export function registerLiveSessionRoutes(
     }
   });
 }
-

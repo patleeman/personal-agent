@@ -1,4 +1,5 @@
-import { Menu, app, type MenuItemConstructorOptions } from 'electron';
+import { app, Menu, type MenuItemConstructorOptions } from 'electron';
+
 import { DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS, type DesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
 
 export interface DesktopApplicationMenuActions {
@@ -267,11 +268,13 @@ export function buildDesktopApplicationMenuTemplate(
 
 export function installDesktopApplicationMenu(actions: DesktopApplicationMenuActions): void {
   const keyboardShortcuts = readDesktopApplicationMenuKeyboardShortcuts?.();
-  const menu = Menu.buildFromTemplate(buildDesktopApplicationMenuTemplate(actions, {
-    platform: process.platform,
-    appName: app.name,
-    ...(keyboardShortcuts ? { keyboardShortcuts } : {}),
-  }));
+  const menu = Menu.buildFromTemplate(
+    buildDesktopApplicationMenuTemplate(actions, {
+      platform: process.platform,
+      appName: app.name,
+      ...(keyboardShortcuts ? { keyboardShortcuts } : {}),
+    }),
+  );
   Menu.setApplicationMenu(menu);
 }
 

@@ -1,13 +1,14 @@
-import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DaemonConfig } from './config.js';
+
 import { loadAutomationRuntimeStateMap } from './automation-store.js';
+import type { DaemonConfig } from './config.js';
+import type { TaskRunRequest, TaskRunResult } from './modules/tasks-runner.js';
 import { resolveDaemonPaths } from './paths.js';
 import { resolveDurableRunsRoot, scanDurableRun } from './runs/store.js';
-import type { TaskRunRequest, TaskRunResult } from './modules/tasks-runner.js';
 
 const tempDirs: string[] = [];
 const originalEnv = { ...process.env };
@@ -92,10 +93,7 @@ async function loadDaemonModules(taskRunnerMock: ReturnType<typeof vi.fn>): Prom
     runTaskInIsolatedPi: taskRunnerMock,
   }));
 
-  const [server, client] = await Promise.all([
-    import('./server.js'),
-    import('./client.js'),
-  ]);
+  const [server, client] = await Promise.all([import('./server.js'), import('./client.js')]);
 
   return { server, client };
 }
@@ -126,13 +124,16 @@ describe('daemon scheduled-task recovery integration', () => {
       PERSONAL_AGENT_STATE_ROOT: stateRoot,
     };
 
-    writeFileSync(taskPath, `---
+    writeFileSync(
+      taskPath,
+      `---
 id: recover-me
 at: "2099-01-01T00:00:00.000Z"
 profile: datadog
 ---
 Recover me after daemon restart
-`);
+`,
+    );
 
     const config = createTestConfig(socketPath, taskDir);
     const taskRunnerMock = vi.fn(async (request: TaskRunRequest) => {
@@ -146,14 +147,20 @@ Recover me after daemon restart
       }
 
       return new Promise<TaskRunResult>((resolve) => {
-        request.signal?.addEventListener('abort', () => {
-          resolve(createTaskRunResult(request, {
-            success: false,
-            cancelled: true,
-            error: 'Task run cancelled during shutdown',
-            outputText: 'cancelled during shutdown',
-          }));
-        }, { once: true });
+        request.signal?.addEventListener(
+          'abort',
+          () => {
+            resolve(
+              createTaskRunResult(request, {
+                success: false,
+                cancelled: true,
+                error: 'Task run cancelled during shutdown',
+                outputText: 'cancelled during shutdown',
+              }),
+            );
+          },
+          { once: true },
+        );
       });
     });
 
@@ -190,10 +197,12 @@ Recover me after daemon restart
     });
 
     taskRunnerMock.mockReset();
-    taskRunnerMock.mockImplementation(async (request: TaskRunRequest) => createTaskRunResult(request, {
-      success: true,
-      outputText: 'recovered successfully',
-    }));
+    taskRunnerMock.mockImplementation(async (request: TaskRunRequest) =>
+      createTaskRunResult(request, {
+        success: true,
+        outputText: 'recovered successfully',
+      }),
+    );
 
     const daemon2 = new server.PersonalAgentDaemon(config);
     await daemon2.start();
@@ -235,10 +244,12 @@ Recover me after daemon restart
 
     await waitForCondition(() => {
       const recoveredTaskState = loadAutomationRuntimeStateMap({ dbPath: join(daemonPaths.root, 'runtime.db') });
-      return recoveredTaskState['recover-me']?.activeRunId === undefined
-        && recoveredTaskState['recover-me']?.lastRunId === recoveredRunId
-        && recoveredTaskState['recover-me']?.oneTimeResolvedStatus === 'success'
-        && recoveredTaskState['recover-me']?.lastStatus === 'success';
+      return (
+        recoveredTaskState['recover-me']?.activeRunId === undefined &&
+        recoveredTaskState['recover-me']?.lastRunId === recoveredRunId &&
+        recoveredTaskState['recover-me']?.oneTimeResolvedStatus === 'success' &&
+        recoveredTaskState['recover-me']?.lastStatus === 'success'
+      );
     });
 
     const recoveredTaskState = loadAutomationRuntimeStateMap({ dbPath: join(daemonPaths.root, 'runtime.db') });

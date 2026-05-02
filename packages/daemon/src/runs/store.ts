@@ -1,6 +1,6 @@
+import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
 import { existsSync, mkdirSync } from 'fs';
 import { basename, dirname, join } from 'path';
-import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
 
 export type DurableRunKind = 'scheduled-task' | 'conversation' | 'workflow' | 'raw-shell' | 'background-run';
 export type DurableRunStatus = 'queued' | 'running' | 'recovering' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
@@ -139,11 +139,11 @@ function toPositiveInteger(value: unknown): number | undefined {
 
 function toRunKind(value: unknown): DurableRunKind | undefined {
   if (
-    value === 'scheduled-task'
-    || value === 'conversation'
-    || value === 'workflow'
-    || value === 'raw-shell'
-    || value === 'background-run'
+    value === 'scheduled-task' ||
+    value === 'conversation' ||
+    value === 'workflow' ||
+    value === 'raw-shell' ||
+    value === 'background-run'
   ) {
     return value;
   }
@@ -153,14 +153,14 @@ function toRunKind(value: unknown): DurableRunKind | undefined {
 
 function toRunStatus(value: unknown): DurableRunStatus | undefined {
   if (
-    value === 'queued'
-    || value === 'running'
-    || value === 'recovering'
-    || value === 'waiting'
-    || value === 'completed'
-    || value === 'failed'
-    || value === 'cancelled'
-    || value === 'interrupted'
+    value === 'queued' ||
+    value === 'running' ||
+    value === 'recovering' ||
+    value === 'waiting' ||
+    value === 'completed' ||
+    value === 'failed' ||
+    value === 'cancelled' ||
+    value === 'interrupted'
   ) {
     return value;
   }
@@ -188,10 +188,10 @@ function parseManifest(value: unknown): DurableRunManifest | undefined {
   const spec = isRecord(value.spec) ? value.spec : {};
   const source = isRecord(value.source)
     ? {
-      type: toString(value.source.type) ?? 'unknown',
-      id: toString(value.source.id),
-      filePath: toString(value.source.filePath),
-    }
+        type: toString(value.source.type) ?? 'unknown',
+        id: toString(value.source.id),
+        filePath: toString(value.source.filePath),
+      }
     : undefined;
 
   if (!id || !kind || !resumePolicy || !createdAt) {
@@ -356,9 +356,7 @@ export function resolveRuntimeDbPath(daemonRoot: string): string {
 }
 
 function resolveRuntimeDbPathFromRunsRoot(runsRoot: string): string {
-  return basename(runsRoot) === 'runs'
-    ? resolveRuntimeDbPath(dirname(runsRoot))
-    : join(runsRoot, 'runtime.db');
+  return basename(runsRoot) === 'runs' ? resolveRuntimeDbPath(dirname(runsRoot)) : join(runsRoot, 'runtime.db');
 }
 
 function parseRunStoragePath(path: string): { runId: string; runsRoot: string; dbPath: string } {
@@ -445,11 +443,15 @@ function selectRunRow(runsRoot: string, runId: string): StoredRunRow | undefined
   }
 
   const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT run_id, manifest_json, status_json, checkpoint_json
     FROM runs
     WHERE run_id = ?
-  `).get(runId) as StoredRunRow | undefined;
+  `,
+    )
+    .get(runId) as StoredRunRow | undefined;
 }
 
 function selectAllRunRows(runsRoot: string): StoredRunRow[] {
@@ -458,45 +460,15 @@ function selectAllRunRows(runsRoot: string): StoredRunRow[] {
   }
 
   const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT run_id, manifest_json, status_json, checkpoint_json
     FROM runs
     ORDER BY run_id ASC
-  `).all() as StoredRunRow[];
-}
-
-function listChildRunIds(runsRoot: string, parentId: string): string[] {
-  if (!runtimeDbExists(runsRoot)) {
-    return [];
-  }
-
-  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
-  const rows = db.prepare(`
-    SELECT run_id
-    FROM runs
-    WHERE parent_id = ?
-    ORDER BY run_id ASC
-  `).all(parentId) as Array<{ run_id: string }>;
-
-  return rows.map((row) => row.run_id);
-}
-
-function deleteRunRows(runsRoot: string, runIds: string[]): void {
-  if (runIds.length === 0 || !runtimeDbExists(runsRoot)) {
-    return;
-  }
-
-  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
-  const deleteEvents = db.prepare('DELETE FROM run_events WHERE run_id = ?');
-  const deleteRun = db.prepare('DELETE FROM runs WHERE run_id = ?');
-  const tx = db.transaction((ids: string[]) => {
-    for (const runId of ids) {
-      deleteEvents.run(runId);
-      deleteRun.run(runId);
-    }
-  });
-
-  tx(runIds);
+  `,
+    )
+    .all() as StoredRunRow[];
 }
 
 function hydrateManifest(row: StoredRunRow | undefined): DurableRunManifest | undefined {
@@ -578,7 +550,8 @@ export function createInitialDurableRunStatus(input: {
 export function saveDurableRunManifest(path: string, manifest: DurableRunManifest): void {
   const { runId, dbPath } = parseRunStoragePath(path);
   const db = openRuntimeDb(dbPath);
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO runs (
       run_id,
       manifest_json,
@@ -612,7 +585,8 @@ export function saveDurableRunManifest(path: string, manifest: DurableRunManifes
       source_type = excluded.source_type,
       source_id = excluded.source_id,
       source_file_path = excluded.source_file_path
-  `).run({
+  `,
+  ).run({
     run_id: runId,
     manifest_json: serializeJson(manifest),
     created_at: manifest.createdAt,
@@ -634,7 +608,8 @@ export function loadDurableRunManifest(path: string): DurableRunManifest | undef
 export function saveDurableRunStatus(path: string, status: DurableRunStatusFile): void {
   const { runId, dbPath } = parseRunStoragePath(path);
   const db = openRuntimeDb(dbPath);
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO runs (
       run_id,
       status_json,
@@ -653,7 +628,8 @@ export function saveDurableRunStatus(path: string, status: DurableRunStatusFile)
       status_status = excluded.status_status,
       status_updated_at = excluded.status_updated_at,
       status_completed_at = excluded.status_completed_at
-  `).run({
+  `,
+  ).run({
     run_id: runId,
     status_json: serializeJson(status),
     status_status: status.status,
@@ -670,7 +646,8 @@ export function loadDurableRunStatus(path: string): DurableRunStatusFile | undef
 export function saveDurableRunCheckpoint(path: string, checkpoint: DurableRunCheckpointFile): void {
   const { runId, dbPath } = parseRunStoragePath(path);
   const db = openRuntimeDb(dbPath);
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO runs (
       run_id,
       checkpoint_json,
@@ -686,7 +663,8 @@ export function saveDurableRunCheckpoint(path: string, checkpoint: DurableRunChe
       checkpoint_json = excluded.checkpoint_json,
       checkpoint_updated_at = excluded.checkpoint_updated_at,
       checkpoint_step = excluded.checkpoint_step
-  `).run({
+  `,
+  ).run({
     run_id: runId,
     checkpoint_json: serializeJson(checkpoint),
     checkpoint_updated_at: checkpoint.updatedAt,
@@ -703,7 +681,8 @@ export async function appendDurableRunEvent(path: string, event: DurableRunEvent
   const { runId, dbPath } = parseRunStoragePath(path);
   const db = openRuntimeDb(dbPath);
   db.prepare('INSERT INTO runs (run_id) VALUES (?) ON CONFLICT(run_id) DO NOTHING').run(runId);
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO run_events (
       run_id,
       timestamp,
@@ -711,13 +690,8 @@ export async function appendDurableRunEvent(path: string, event: DurableRunEvent
       attempt,
       payload_json
     ) VALUES (?, ?, ?, ?, ?)
-  `).run(
-    runId,
-    event.timestamp,
-    event.type,
-    event.attempt ?? null,
-    event.payload ? serializeJson(event.payload) : null,
-  );
+  `,
+  ).run(runId, event.timestamp, event.type, event.attempt ?? null, event.payload ? serializeJson(event.payload) : null);
 }
 
 export function readDurableRunEvents(path: string): DurableRunEvent[] {
@@ -727,22 +701,28 @@ export function readDurableRunEvents(path: string): DurableRunEvent[] {
   }
 
   const db = openRuntimeDb(dbPath);
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT run_id, timestamp, type, attempt, payload_json
     FROM run_events
     WHERE run_id = ?
     ORDER BY seq ASC
-  `).all(runId) as StoredEventRow[];
+  `,
+    )
+    .all(runId) as StoredEventRow[];
 
   return rows
-    .map((row) => parseEvent({
-      version: 1,
-      runId: row.run_id,
-      timestamp: row.timestamp,
-      type: row.type,
-      ...(row.attempt !== null ? { attempt: row.attempt } : {}),
-      ...(row.payload_json ? { payload: parseStoredJson<Record<string, unknown>>(row.payload_json) } : {}),
-    }))
+    .map((row) =>
+      parseEvent({
+        version: 1,
+        runId: row.run_id,
+        timestamp: row.timestamp,
+        type: row.type,
+        ...(row.attempt !== null ? { attempt: row.attempt } : {}),
+        ...(row.payload_json ? { payload: parseStoredJson<Record<string, unknown>>(row.payload_json) } : {}),
+      }),
+    )
     .filter((event): event is DurableRunEvent => event !== undefined);
 }
 
@@ -802,47 +782,46 @@ export function scanDurableRun(runsRoot: string, runId: string): ScannedDurableR
 }
 
 export function scanDurableRunsForRecovery(runsRoot: string): ScannedDurableRun[] {
-  return selectAllRunRows(runsRoot)
-    .map((row) => {
-      const runId = row.run_id;
-      const paths = resolveDurableRunPaths(runsRoot, runId);
-      const manifest = hydrateManifest(row);
-      const status = hydrateStatus(row);
-      const checkpoint = hydrateCheckpoint(row);
-      const result = parseResult(readJsonFile(paths.resultPath));
-      const problems: string[] = [];
+  return selectAllRunRows(runsRoot).map((row) => {
+    const runId = row.run_id;
+    const paths = resolveDurableRunPaths(runsRoot, runId);
+    const manifest = hydrateManifest(row);
+    const status = hydrateStatus(row);
+    const checkpoint = hydrateCheckpoint(row);
+    const result = parseResult(readJsonFile(paths.resultPath));
+    const problems: string[] = [];
 
-      if (!manifest) {
-        problems.push('missing or invalid manifest');
-      }
+    if (!manifest) {
+      problems.push('missing or invalid manifest');
+    }
 
-      if (!status) {
-        problems.push('missing or invalid status');
-      }
+    if (!status) {
+      problems.push('missing or invalid status');
+    }
 
-      if (manifest && manifest.id !== runId) {
-        problems.push(`manifest id mismatch: ${manifest.id}`);
-      }
+    if (manifest && manifest.id !== runId) {
+      problems.push(`manifest id mismatch: ${manifest.id}`);
+    }
 
-      if (status && status.runId !== runId) {
-        problems.push(`status runId mismatch: ${status.runId}`);
-      }
+    if (status && status.runId !== runId) {
+      problems.push(`status runId mismatch: ${status.runId}`);
+    }
 
-      if (checkpoint && checkpoint.runId !== runId) {
-        problems.push(`checkpoint runId mismatch: ${checkpoint.runId}`);
-      }
+    if (checkpoint && checkpoint.runId !== runId) {
+      problems.push(`checkpoint runId mismatch: ${checkpoint.runId}`);
+    }
 
-      return {
-        runId,
-        paths,
-        manifest,
-        status,
-        checkpoint,
-        result,
-        problems,
-        recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
-      } satisfies ScannedDurableRun;
-    });
+    return {
+      runId,
+      paths,
+      manifest,
+      status,
+      checkpoint,
+      result,
+      problems,
+      recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
+    } satisfies ScannedDurableRun;
+  });
 }
 
 export function summarizeScannedDurableRuns(runs: ScannedDurableRun[]): ScannedDurableRunsSummary {
@@ -872,6 +851,3 @@ export function summarizeScannedDurableRuns(runs: ScannedDurableRun[]): ScannedD
     statuses,
   };
 }
-
-
-

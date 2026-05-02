@@ -1,7 +1,9 @@
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { inspectCliBinary } from './cli-binary.js';
 
 function createTempScript(name: string, contents: string): { cwd: string; scriptPath: string } {
@@ -63,10 +65,7 @@ describe('cli binary inspection', () => {
   });
 
   it('surfaces stderr when the version command exits non-zero', () => {
-    const { cwd, scriptPath } = createTempScript(
-      'broken-cli',
-      '#!/bin/sh\necho "broken version" 1>&2\nexit 2\n',
-    );
+    const { cwd, scriptPath } = createTempScript('broken-cli', '#!/bin/sh\necho "broken version" 1>&2\nexit 2\n');
 
     const result = inspectCliBinary({ command: scriptPath, cwd });
     expect(result).toEqual({

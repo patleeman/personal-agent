@@ -1,6 +1,7 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
+
 import type { SseEvent } from './liveSessionEvents.js';
+import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
 
 export interface LiveSessionBashFinalizationHost {
   sessionId: string;

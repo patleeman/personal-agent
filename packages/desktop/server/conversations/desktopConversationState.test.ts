@@ -28,10 +28,8 @@ afterEach(() => {
 
 describe('desktopConversationState reducer', () => {
   it('does not replace same-text user image blocks when image identity differs', async () => {
-    const {
-      applyDesktopConversationStreamEvent,
-      createEmptyDesktopConversationStreamState,
-    } = await import('./desktopConversationState.js');
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
 
     let state = createEmptyDesktopConversationStreamState();
     state = applyDesktopConversationStreamEvent(state, {
@@ -61,10 +59,8 @@ describe('desktopConversationState reducer', () => {
   });
 
   it('updates streaming tool blocks and queue state from live events', async () => {
-    const {
-      applyDesktopConversationStreamEvent,
-      createEmptyDesktopConversationStreamState,
-    } = await import('./desktopConversationState.js');
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
 
     let state = createEmptyDesktopConversationStreamState();
     state = applyDesktopConversationStreamEvent(state, {
@@ -96,18 +92,20 @@ describe('desktopConversationState reducer', () => {
     } as never);
     state = applyDesktopConversationStreamEvent(state, {
       type: 'parallel_state',
-      jobs: [{
-        id: 'parallel-1',
-        prompt: 'Check the docs',
-        childConversationId: 'child-1',
-        status: 'running',
-        imageCount: 1,
-        attachmentRefs: ['diagram (rev 2)'],
-        touchedFiles: ['src/app.ts'],
-        parentTouchedFiles: ['src/app.ts'],
-        overlapFiles: ['src/app.ts'],
-        sideEffects: ['Saved checkpoint abc1234 Keep the fix.'],
-      }],
+      jobs: [
+        {
+          id: 'parallel-1',
+          prompt: 'Check the docs',
+          childConversationId: 'child-1',
+          status: 'running',
+          imageCount: 1,
+          attachmentRefs: ['diagram (rev 2)'],
+          touchedFiles: ['src/app.ts'],
+          parentTouchedFiles: ['src/app.ts'],
+          overlapFiles: ['src/app.ts'],
+          sideEffects: ['Saved checkpoint abc1234 Keep the fix.'],
+        },
+      ],
     } as never);
 
     expect(state.isStreaming).toBe(true);
@@ -145,10 +143,8 @@ describe('desktopConversationState reducer', () => {
   });
 
   it('preserves terminal-style metadata for direct bang bash runs', async () => {
-    const {
-      applyDesktopConversationStreamEvent,
-      createEmptyDesktopConversationStreamState,
-    } = await import('./desktopConversationState.js');
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
 
     let state = createEmptyDesktopConversationStreamState();
     state = applyDesktopConversationStreamEvent(state, {
@@ -199,10 +195,8 @@ describe('desktopConversationState reducer', () => {
   });
 
   it('replaces duplicate user message blocks instead of appending them twice', async () => {
-    const {
-      applyDesktopConversationStreamEvent,
-      createEmptyDesktopConversationStreamState,
-    } = await import('./desktopConversationState.js');
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
 
     let state = createEmptyDesktopConversationStreamState();
     state = applyDesktopConversationStreamEvent(state, {

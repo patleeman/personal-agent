@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
 
 export type TaskRunStatus = 'running' | 'success' | 'failed' | 'skipped';
 
@@ -130,10 +129,7 @@ export function createEmptyTaskState(): TaskStateFile {
   };
 }
 
-export function loadTaskState(
-  path: string,
-  logger?: { warn: (message: string) => void },
-): TaskStateFile {
+export function loadTaskState(path: string, logger?: { warn: (message: string) => void }): TaskStateFile {
   if (!existsSync(path)) {
     return createEmptyTaskState();
   }
@@ -169,9 +165,4 @@ export function loadTaskState(
     logger?.warn(`tasks state load failed at ${path}: ${(error as Error).message}`);
     return createEmptyTaskState();
   }
-}
-
-function saveTaskState(path: string, state: TaskStateFile): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, JSON.stringify(state, null, 2));
 }

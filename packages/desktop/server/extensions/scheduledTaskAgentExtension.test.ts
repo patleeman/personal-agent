@@ -2,10 +2,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { getTaskCallbackBinding } from '@personal-agent/core';
-import { closeAutomationDbs, saveAutomationRuntimeStateMap } from '@personal-agent/daemon';
 import * as daemon from '@personal-agent/daemon';
+import { closeAutomationDbs, saveAutomationRuntimeStateMap } from '@personal-agent/daemon';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
@@ -21,14 +22,22 @@ function createTempDir(prefix: string): string {
 
 function registerScheduledTaskTool() {
   let registeredTool:
-    | { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> }
+    | {
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      }
     | undefined;
 
   createScheduledTaskAgentExtension({
     getCurrentProfile: () => 'assistant',
   })({
     registerTool: (tool: unknown) => {
-      registeredTool = tool as { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> };
+      registeredTool = tool as {
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      };
     },
   } as never);
 
@@ -126,13 +135,15 @@ describe('scheduled task agent extension', () => {
     );
 
     expect(saved.isError).not.toBe(true);
-    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'activity-digest' })).toEqual(expect.objectContaining({
-      conversationId: 'conv-123',
-      deliverOnSuccess: false,
-      deliverOnFailure: true,
-      requireAck: false,
-      autoResumeIfOpen: false,
-    }));
+    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'activity-digest' })).toEqual(
+      expect.objectContaining({
+        conversationId: 'conv-123',
+        deliverOnSuccess: false,
+        deliverOnFailure: true,
+        requireAck: false,
+        autoResumeIfOpen: false,
+      }),
+    );
 
     const fetched = await taskTool.execute('tool-2', {
       action: 'get',
@@ -279,7 +290,6 @@ describe('scheduled task agent extension', () => {
     expect(validated.isError).not.toBe(true);
     expect(validated.content[0]?.text).toContain('Task @daily-status is valid.');
 
-    
     const startScheduledTaskRunSpy = vi.spyOn(daemon, 'startScheduledTaskRun').mockResolvedValue({
       accepted: true,
       runId: 'run-task-123',
@@ -333,7 +343,6 @@ describe('scheduled task agent extension', () => {
       prompt: 'Run me.',
     });
 
-    
     vi.spyOn(daemon, 'startScheduledTaskRun').mockResolvedValue({
       accepted: false,
       reason: 'daemon busy',
@@ -344,7 +353,9 @@ describe('scheduled task agent extension', () => {
     expect(missingConversation.isError).toBe(true);
     expect(missingConversation.content[0]?.text).toContain('deliverResultToConversation requires an active persisted conversation.');
     expect(invalidConversationCallback.isError).toBe(true);
-    expect(invalidConversationCallback.content[0]?.text).toContain('deliverResultToConversation is only supported for background-agent automations.');
+    expect(invalidConversationCallback.content[0]?.text).toContain(
+      'deliverResultToConversation is only supported for background-agent automations.',
+    );
     expect(missingTask.isError).toBe(true);
     expect(missingTask.content[0]?.text).toContain('Task not found: missing-task');
     expect(rejectedRun.isError).toBe(true);

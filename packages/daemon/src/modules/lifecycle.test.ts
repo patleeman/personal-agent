@@ -3,16 +3,17 @@
  * Tests module start/stop failure scenarios and shutdown idempotency
  */
 
-import { mkdtempSync, existsSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { existsSync, mkdtempSync } from 'fs';
 import { rm } from 'fs/promises';
+import { createConnection } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createConnection } from 'net';
-import { randomUUID } from 'crypto';
-import { PersonalAgentDaemon } from '../server.js';
+
 import type { DaemonConfig } from '../config.js';
 import { resolveDaemonPaths } from '../paths.js';
+import { PersonalAgentDaemon } from '../server.js';
 
 const tempDirs: string[] = [];
 
@@ -182,11 +183,7 @@ describe('daemon module lifecycle', () => {
     await daemon.start();
 
     // Trigger multiple concurrent stops
-    const stops = [
-      daemon.stop(),
-      daemon.stop(),
-      daemon.stop(),
-    ];
+    const stops = [daemon.stop(), daemon.stop(), daemon.stop()];
 
     // All should resolve without error
     await expect(Promise.all(stops)).resolves.not.toThrow();

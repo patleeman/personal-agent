@@ -44,8 +44,8 @@ vi.mock('../shared/appEvents.js', () => ({
 }));
 
 import {
-  DurableRunCapabilityInputError,
   cancelDurableRunCapability,
+  DurableRunCapabilityInputError,
   listDurableRunsCapability,
   markDurableRunAttentionCapability,
   readDurableRunCapability,
@@ -73,9 +73,7 @@ describe('durableRunCapability', () => {
   });
 
   it('reads durable run details and validates the id', async () => {
-    getDurableRunMock
-      .mockResolvedValueOnce({ run: { runId: 'run-1' } })
-      .mockResolvedValueOnce(undefined);
+    getDurableRunMock.mockResolvedValueOnce({ run: { runId: 'run-1' } }).mockResolvedValueOnce(undefined);
 
     await expect(readDurableRunCapability('run-1')).resolves.toEqual({ run: { runId: 'run-1' } });
     await expect(readDurableRunCapability('   ')).rejects.toThrow(new DurableRunCapabilityInputError('runId required'));
@@ -91,10 +89,16 @@ describe('durableRunCapability', () => {
     await expect(readDurableRunLogCapability({ runId: 'run-1', tail: 0 })).resolves.toEqual({ path: '/tmp/run-1.log', log: 'tail' });
     expect(getDurableRunLogMock).toHaveBeenCalledWith('run-1', 120);
 
-    await expect(readDurableRunLogCapability({ runId: 'run-1', tail: Number.MAX_SAFE_INTEGER + 1 })).resolves.toEqual({ path: '/tmp/run-1.log', log: 'tail' });
+    await expect(readDurableRunLogCapability({ runId: 'run-1', tail: Number.MAX_SAFE_INTEGER + 1 })).resolves.toEqual({
+      path: '/tmp/run-1.log',
+      log: 'tail',
+    });
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 120);
 
-    await expect(readDurableRunLogCapability({ runId: 'run-1', tail: 5000 })).resolves.toEqual({ path: '/tmp/run-1.log', log: 'tail' });
+    await expect(readDurableRunLogCapability({ runId: 'run-1', tail: 5000 })).resolves.toEqual({
+      path: '/tmp/run-1.log',
+      log: 'tail',
+    });
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 1000);
   });
 

@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { isAbsolute, join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { OAuthClientInformationFull, OAuthClientMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { getMcpServerUrlHash, openRemoteMcpClient, resolveCallbackPort, type McpTransportStrategy } from './mcp-oauth.js';
+
 import { deleteConfigFile } from './mcp-auth-storage.js';
+import { getMcpServerUrlHash, type McpTransportStrategy, openRemoteMcpClient, resolveCallbackPort } from './mcp-oauth.js';
 
 export interface McpServerConfig {
   name: string;
@@ -198,11 +200,7 @@ function synthesizeStaticClientInfo(input: {
   };
 }
 
-function parseMcpRemoteArgs(
-  command: string | undefined,
-  args: string[],
-  baseDir: string,
-): ParsedRemoteConfig | null {
+function parseMcpRemoteArgs(command: string | undefined, args: string[], baseDir: string): ParsedRemoteConfig | null {
   const commandIsRemote = command ? looksLikeMcpRemoteCommand(command) : false;
   const packageIndex = commandIsRemote ? -1 : args.findIndex(looksLikeMcpRemotePackage);
 
@@ -319,11 +317,7 @@ function parseMcpRemoteArgs(
   };
 }
 
-function parseRemoteServerConfig(
-  name: string,
-  value: Record<string, unknown>,
-  baseDir: string,
-): McpServerConfig | null {
+function parseRemoteServerConfig(name: string, value: Record<string, unknown>, baseDir: string): McpServerConfig | null {
   const url = typeof value.url === 'string' ? value.url : undefined;
   if (!url) {
     return null;
@@ -331,33 +325,20 @@ function parseRemoteServerConfig(
 
   const callback = isRecord(value.callback) ? value.callback : undefined;
   const oauth = isRecord(value.oauth) ? value.oauth : undefined;
-  const callbackHost = typeof callback?.host === 'string'
-    ? callback.host
-    : typeof value.callbackHost === 'string'
-      ? value.callbackHost
-      : undefined;
-  const callbackPath = typeof callback?.path === 'string'
-    ? callback.path
-    : typeof value.callbackPath === 'string'
-      ? value.callbackPath
-      : undefined;
-  const callbackPort = typeof callback?.port === 'number'
-    ? callback.port
-    : typeof value.callbackPort === 'number'
-      ? value.callbackPort
-      : undefined;
-  const oauthClientMetadata = parseJsonArg<OAuthClientMetadata>(
-    typeof oauth?.clientMetadataPath === 'string'
-      ? `@${oauth.clientMetadataPath}`
-      : undefined,
-    baseDir,
-  ) ?? (isRecord(oauth?.clientMetadata) ? oauth.clientMetadata as OAuthClientMetadata : undefined);
-  const explicitClientInfo = parseJsonArg<OAuthClientInformationFull>(
-    typeof oauth?.clientInfoPath === 'string'
-      ? `@${oauth.clientInfoPath}`
-      : undefined,
-    baseDir,
-  ) ?? (isRecord(oauth?.clientInfo) ? oauth.clientInfo as OAuthClientInformationFull : undefined);
+  const callbackHost =
+    typeof callback?.host === 'string' ? callback.host : typeof value.callbackHost === 'string' ? value.callbackHost : undefined;
+  const callbackPath =
+    typeof callback?.path === 'string' ? callback.path : typeof value.callbackPath === 'string' ? value.callbackPath : undefined;
+  const callbackPort =
+    typeof callback?.port === 'number' ? callback.port : typeof value.callbackPort === 'number' ? value.callbackPort : undefined;
+  const oauthClientMetadata =
+    parseJsonArg<OAuthClientMetadata>(
+      typeof oauth?.clientMetadataPath === 'string' ? `@${oauth.clientMetadataPath}` : undefined,
+      baseDir,
+    ) ?? (isRecord(oauth?.clientMetadata) ? (oauth.clientMetadata as OAuthClientMetadata) : undefined);
+  const explicitClientInfo =
+    parseJsonArg<OAuthClientInformationFull>(typeof oauth?.clientInfoPath === 'string' ? `@${oauth.clientInfoPath}` : undefined, baseDir) ??
+    (isRecord(oauth?.clientInfo) ? (oauth.clientInfo as OAuthClientInformationFull) : undefined);
   const oauthClientInfo = synthesizeStaticClientInfo({
     clientId: typeof oauth?.clientId === 'string' ? oauth.clientId : undefined,
     clientSecret: typeof oauth?.clientSecret === 'string' ? oauth.clientSecret : undefined,
@@ -380,23 +361,29 @@ function parseRemoteServerConfig(
     url,
     env: normalizeEnvMap(value.env) ?? normalizeEnvMap(value.environment),
     headers,
-    authorizeResource: typeof value.authorizeResource === 'string'
-      ? value.authorizeResource
-      : typeof oauth?.resource === 'string'
-        ? oauth.resource
-        : undefined,
+    authorizeResource:
+      typeof value.authorizeResource === 'string'
+        ? value.authorizeResource
+        : typeof oauth?.resource === 'string'
+          ? oauth.resource
+          : undefined,
     callbackHost,
     callbackPort,
     callbackPath,
-    transportStrategy: value.transport === 'sse-only' || value.transport === 'http-only' || value.transport === 'sse-first' || value.transport === 'http-first'
-      ? value.transport
-      : undefined,
-    ignoreTools,
-    authTimeoutMs: typeof value.authTimeoutMs === 'number'
-      ? value.authTimeoutMs
-      : typeof value.authTimeoutSeconds === 'number'
-        ? value.authTimeoutSeconds * 1000
+    transportStrategy:
+      value.transport === 'sse-only' ||
+      value.transport === 'http-only' ||
+      value.transport === 'sse-first' ||
+      value.transport === 'http-first'
+        ? value.transport
         : undefined,
+    ignoreTools,
+    authTimeoutMs:
+      typeof value.authTimeoutMs === 'number'
+        ? value.authTimeoutMs
+        : typeof value.authTimeoutSeconds === 'number'
+          ? value.authTimeoutSeconds * 1000
+          : undefined,
     oauthClientMetadata,
     oauthClientInfo,
     raw: value,
@@ -413,9 +400,7 @@ function parseServerConfig(name: string, value: unknown, baseDir: string): McpSe
   }
 
   const command = typeof value.command === 'string' ? value.command : undefined;
-  const args = Array.isArray(value.args)
-    ? value.args.filter((entry): entry is string => typeof entry === 'string')
-    : [];
+  const args = Array.isArray(value.args) ? value.args.filter((entry): entry is string => typeof entry === 'string') : [];
   const cwd = typeof value.cwd === 'string' ? value.cwd : undefined;
   const env = normalizeEnvMap(value.env) ?? normalizeEnvMap(value.environment);
   const remoteConfig = parseMcpRemoteArgs(command, args, baseDir);
@@ -444,11 +429,13 @@ function parseServerConfig(name: string, value: unknown, baseDir: string): McpSe
   };
 }
 
-export function resolveMcpConfig(options: {
-  cwd?: string;
-  configPath?: string;
-  env?: NodeJS.ProcessEnv;
-} = {}): {
+export function resolveMcpConfig(
+  options: {
+    cwd?: string;
+    configPath?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): {
   path: string;
   exists: boolean;
   searchedPaths: string[];
@@ -526,11 +513,13 @@ export function readMcpConfigDocument(options: {
   };
 }
 
-export function readMcpConfig(options: {
-  cwd?: string;
-  configPath?: string;
-  env?: NodeJS.ProcessEnv;
-} = {}): McpConfigState {
+export function readMcpConfig(
+  options: {
+    cwd?: string;
+    configPath?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): McpConfigState {
   const resolved = resolveMcpConfig(options);
   if (!resolved.exists) {
     return {
@@ -581,10 +570,7 @@ function formatMcpServerOutput(input: {
   tools: Array<{ name: string; description?: string; inputSchema?: unknown }>;
   withDescriptions?: boolean;
 }): string {
-  const lines = [
-    `Server: ${input.server}`,
-    `Transport: ${input.transport}`,
-  ];
+  const lines = [`Server: ${input.server}`, `Transport: ${input.transport}`];
 
   if (input.commandLine) {
     lines.push(`Command: ${input.commandLine}`);
@@ -602,9 +588,7 @@ function formatMcpServerOutput(input: {
 
     const schema = isRecord(tool.inputSchema) ? tool.inputSchema : undefined;
     const properties = isRecord(schema?.properties) ? schema.properties : {};
-    const required = Array.isArray(schema?.required)
-      ? schema.required.filter((entry): entry is string => typeof entry === 'string')
-      : [];
+    const required = Array.isArray(schema?.required) ? schema.required.filter((entry): entry is string => typeof entry === 'string') : [];
 
     if (Object.keys(properties).length > 0) {
       lines.push('    Parameters:');
@@ -618,12 +602,7 @@ function formatMcpServerOutput(input: {
   return `${lines.join('\n')}\n`;
 }
 
-function formatMcpToolOutput(input: {
-  server: string;
-  tool: string;
-  description?: string;
-  schema?: Record<string, unknown>;
-}): string {
+function formatMcpToolOutput(input: { server: string; tool: string; description?: string; schema?: Record<string, unknown> }): string {
   const lines = [
     `Tool: ${input.tool}`,
     `Server: ${input.server}`,
@@ -668,12 +647,15 @@ function resolveServerCommandLine(server: McpServerConfig): string | undefined {
 }
 
 function createClient(): Client {
-  return new Client({
-    name: 'personal-agent',
-    version: '1.0.0',
-  }, {
-    capabilities: {},
-  });
+  return new Client(
+    {
+      name: 'personal-agent',
+      version: '1.0.0',
+    },
+    {
+      capabilities: {},
+    },
+  );
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -686,23 +668,28 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
       reject(new Error(`${label} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    void promise.then((value) => {
-      clearTimeout(timeout);
-      resolve(value);
-    }).catch((error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
+    void promise
+      .then((value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
   });
 }
 
-async function openMcpClient(server: McpServerConfig, options: {
-  configPath: string;
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  timeoutMs: number;
-  log?: (message: string) => void;
-}): Promise<{
+async function openMcpClient(
+  server: McpServerConfig,
+  options: {
+    configPath: string;
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    timeoutMs: number;
+    log?: (message: string) => void;
+  },
+): Promise<{
   client: Client;
   close: () => Promise<void>;
   transportName: string;
@@ -753,21 +740,25 @@ async function openMcpClient(server: McpServerConfig, options: {
     server.callbackPort,
   );
   const serverUrlHash = getMcpServerUrlHash(server.url, server.authorizeResource, resolvedHeaders);
-  const connection = await withTimeout(openRemoteMcpClient({
-    serverName: server.name,
-    serverUrl: server.url,
-    callbackHost: server.callbackHost ?? 'localhost',
-    callbackPort,
-    callbackPath: server.callbackPath ?? '/oauth/callback',
-    transportStrategy: server.transportStrategy ?? 'http-first',
-    headers: resolvedHeaders,
-    authorizeResource: server.authorizeResource,
-    staticClientMetadata: server.oauthClientMetadata,
-    staticClientInfo: server.oauthClientInfo,
-    authTimeoutMs: server.authTimeoutMs ?? options.timeoutMs,
-    serverUrlHash,
-    log: options.log,
-  }), options.timeoutMs, `Connecting to ${server.name}`);
+  const connection = await withTimeout(
+    openRemoteMcpClient({
+      serverName: server.name,
+      serverUrl: server.url,
+      callbackHost: server.callbackHost ?? 'localhost',
+      callbackPort,
+      callbackPath: server.callbackPath ?? '/oauth/callback',
+      transportStrategy: server.transportStrategy ?? 'http-first',
+      headers: resolvedHeaders,
+      authorizeResource: server.authorizeResource,
+      staticClientMetadata: server.oauthClientMetadata,
+      staticClientInfo: server.oauthClientInfo,
+      authTimeoutMs: server.authTimeoutMs ?? options.timeoutMs,
+      serverUrlHash,
+      log: options.log,
+    }),
+    options.timeoutMs,
+    `Connecting to ${server.name}`,
+  );
 
   return {
     client: connection.client,
@@ -791,7 +782,9 @@ function formatMcpOperationError(error: unknown, server?: McpServerConfig): stri
 
   if (message === 'Incompatible auth server: does not support dynamic client registration' && server?.transport === 'remote') {
     if (server.url === 'https://mcp.slack.com/mcp') {
-      return `${message}. Slack MCP requires a fixed OAuth client. Add oauth.clientId to the slack entry in mcp_servers.json and use callback http://${server.callbackHost ?? 'localhost'}:${server.callbackPort ?? 3118}${server.callbackPath ?? '/callback'}.`;
+      return `${message}. Slack MCP requires a fixed OAuth client. Add oauth.clientId to the slack entry in mcp_servers.json and use callback http://${
+        server.callbackHost ?? 'localhost'
+      }:${server.callbackPort ?? 3118}${server.callbackPath ?? '/callback'}.`;
     }
 
     return `${message}. Add oauth.clientId for the ${server.name} remote MCP server in mcp_servers.json.`;
@@ -979,10 +972,14 @@ export async function callMcpTool(
     });
 
     try {
-      const result = await withTimeout(connection.client.callTool({
-        name: toolName,
-        arguments: isRecord(input) ? input : {},
-      }), timeoutMs, `Calling ${server.name}/${toolName}`);
+      const result = await withTimeout(
+        connection.client.callTool({
+          name: toolName,
+          arguments: isRecord(input) ? input : {},
+        }),
+        timeoutMs,
+        `Calling ${server.name}/${toolName}`,
+      );
       const rawOutput = `${JSON.stringify(result, null, 2)}\n`;
       const stderr = [connection.stderr(), ...stderrLogs].filter(Boolean).join('\n').trim();
 
@@ -1008,15 +1005,17 @@ export async function callMcpTool(
   }
 }
 
-export async function listMcpCatalog(options: {
-  cwd?: string;
-  configPath?: string;
-  env?: NodeJS.ProcessEnv;
-  timeoutMs?: number;
-  withDescriptions?: boolean;
-  probe?: boolean;
-  log?: (message: string) => void;
-} = {}): Promise<{
+export async function listMcpCatalog(
+  options: {
+    cwd?: string;
+    configPath?: string;
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+    withDescriptions?: boolean;
+    probe?: boolean;
+    log?: (message: string) => void;
+  } = {},
+): Promise<{
   config: McpConfigState;
   probed: boolean;
   servers: McpCatalogServerResult[];
@@ -1034,9 +1033,11 @@ export async function listMcpCatalog(options: {
     }
 
     const inspected = await inspectMcpServer(server.name, options);
-    servers.push(inspected.data
-      ? { name: server.name, info: inspected.data }
-      : { name: server.name, error: (inspected.error ?? inspected.stderr) || 'Unknown MCP error' });
+    servers.push(
+      inspected.data
+        ? { name: server.name, info: inspected.data }
+        : { name: server.name, error: (inspected.error ?? inspected.stderr) || 'Unknown MCP error' },
+    );
   }
 
   return { config, probed: probe, servers };

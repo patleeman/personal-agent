@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
 
@@ -99,9 +100,7 @@ describe('KnowledgePage behavior', () => {
   });
 
   it('keeps the editor mounted when switching knowledge files', async () => {
-    const router = createMemoryRouter([
-      { path: '/knowledge', element: <KnowledgePage /> },
-    ], {
+    const router = createMemoryRouter([{ path: '/knowledge', element: <KnowledgePage /> }], {
       initialEntries: ['/knowledge?file=notes/alpha.md'],
     });
 

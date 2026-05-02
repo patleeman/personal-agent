@@ -1,12 +1,10 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
-import {
-  buildTranscriptionSettingsState,
-  readTranscriptionSettings,
-  writeTranscriptionSettings,
-} from './settings.js';
+
+import { buildTranscriptionSettingsState, readTranscriptionSettings, writeTranscriptionSettings } from './settings.js';
 
 describe('transcription settings', () => {
   it('defaults to local Whisper and the base English model', () => {
@@ -35,12 +33,15 @@ describe('transcription settings', () => {
 
   it('migrates old cloud transcription model ids to the local default', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
-    writeFileSync(settingsFile, JSON.stringify({
-      transcription: {
-        provider: 'local-whisper',
-        model: 'gpt-4o-mini-transcribe',
-      },
-    }));
+    writeFileSync(
+      settingsFile,
+      JSON.stringify({
+        transcription: {
+          provider: 'local-whisper',
+          model: 'gpt-4o-mini-transcribe',
+        },
+      }),
+    );
 
     expect(readTranscriptionSettings(settingsFile)).toEqual({
       provider: 'local-whisper',
@@ -50,12 +51,15 @@ describe('transcription settings', () => {
 
   it('does not surface old cloud transcription model ids when dictation is disabled', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
-    writeFileSync(settingsFile, JSON.stringify({
-      transcription: {
-        provider: null,
-        model: 'gpt-4o-mini-transcribe',
-      },
-    }));
+    writeFileSync(
+      settingsFile,
+      JSON.stringify({
+        transcription: {
+          provider: null,
+          model: 'gpt-4o-mini-transcribe',
+        },
+      }),
+    );
 
     expect(readTranscriptionSettings(settingsFile)).toEqual({
       provider: null,
@@ -76,11 +80,13 @@ describe('transcription settings', () => {
     const settingsFile = join(mkdtempSync(join(tmpdir(), 'pa-transcription-')), 'settings.json');
     const state = buildTranscriptionSettingsState(settingsFile);
 
-    expect(state.providers).toEqual([{
-      id: 'local-whisper',
-      label: 'Local Whisper',
-      status: 'implemented',
-      transports: ['file'],
-    }]);
+    expect(state.providers).toEqual([
+      {
+        id: 'local-whisper',
+        label: 'Local Whisper',
+        status: 'implemented',
+        transports: ['file'],
+      },
+    ]);
   });
 });

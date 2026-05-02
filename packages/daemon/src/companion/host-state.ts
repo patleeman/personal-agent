@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { hostname } from 'node:os';
+import { dirname, join } from 'node:path';
 
 interface StoredCompanionHostState {
   hostInstanceId: string;
@@ -18,13 +18,12 @@ function normalizeHostLabel(value: unknown): string {
 }
 
 function normalizeState(value: unknown): StoredCompanionHostState {
-  const candidate = value && typeof value === 'object'
-    ? value as Partial<StoredCompanionHostState>
-    : {};
+  const candidate = value && typeof value === 'object' ? (value as Partial<StoredCompanionHostState>) : {};
 
-  const hostInstanceId = typeof candidate.hostInstanceId === 'string' && candidate.hostInstanceId.trim().length > 0
-    ? candidate.hostInstanceId.trim()
-    : `host_${randomUUID()}`;
+  const hostInstanceId =
+    typeof candidate.hostInstanceId === 'string' && candidate.hostInstanceId.trim().length > 0
+      ? candidate.hostInstanceId.trim()
+      : `host_${randomUUID()}`;
 
   return {
     hostInstanceId,

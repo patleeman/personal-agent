@@ -1,42 +1,30 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
+
 import {
   createVisibleQueueFallbackPreview,
   extractQueuedPromptContent,
+  type InternalAgentQueues,
   isVisibleQueueFallbackPreviewId,
+  type PromptImageAttachment,
+  type QueuedPromptPreview,
   readQueuedPromptPreviews,
   removeQueuedUserMessage,
   resolveInternalQueuedMessages,
-  type InternalAgentQueues,
-  type PromptImageAttachment,
-  type QueuedPromptPreview,
 } from './liveSessionQueue.js';
 
 export interface LiveSessionQueueHost {
-  session: Pick<AgentSession,
-    'agent'
-    | 'getSteeringMessages'
-    | 'getFollowUpMessages'
-    | 'clearQueue'
-    | 'steer'
-    | 'followUp'
-  >;
+  session: Pick<AgentSession, 'agent' | 'getSteeringMessages' | 'getFollowUpMessages' | 'clearQueue' | 'steer' | 'followUp'>;
 }
 
 function readVisibleQueue(host: LiveSessionQueueHost, behavior: 'steer' | 'followUp'): string[] {
-  return (behavior === 'steer'
-    ? host.session.getSteeringMessages()
-    : host.session.getFollowUpMessages()) as string[];
+  return (behavior === 'steer' ? host.session.getSteeringMessages() : host.session.getFollowUpMessages()) as string[];
 }
 
 function readInternalAgentQueues(host: LiveSessionQueueHost): InternalAgentQueues {
   return host.session.agent as unknown as InternalAgentQueues;
 }
 
-async function replayQueues(
-  host: LiveSessionQueueHost,
-  remainingSteering: string[],
-  remainingFollowUp: string[],
-): Promise<void> {
+async function replayQueues(host: LiveSessionQueueHost, remainingSteering: string[], remainingFollowUp: string[]): Promise<void> {
   for (const queuedText of remainingSteering) {
     await host.session.steer(queuedText);
   }
@@ -57,16 +45,12 @@ export async function restoreLiveSessionQueuedMessage(
 
   const visibleQueue = readVisibleQueue(host, behavior);
   const internalAgent = readInternalAgentQueues(host);
-  const internalQueue = resolveInternalQueuedMessages(behavior === 'steer'
-    ? internalAgent.steeringQueue
-    : internalAgent.followUpQueue);
+  const internalQueue = resolveInternalQueuedMessages(behavior === 'steer' ? internalAgent.steeringQueue : internalAgent.followUpQueue);
 
   if (!Array.isArray(internalQueue) || isVisibleQueueFallbackPreviewId(behavior, previewId)) {
     const normalizedPreviewId = previewId?.trim() || '';
     const previews = visibleQueue.map((text, previewIndex) => createVisibleQueueFallbackPreview(behavior, previewIndex, text));
-    const previewIndex = normalizedPreviewId
-      ? previews.findIndex((preview) => preview.id === normalizedPreviewId)
-      : -1;
+    const previewIndex = normalizedPreviewId ? previews.findIndex((preview) => preview.id === normalizedPreviewId) : -1;
     const restoreIndex = previewIndex >= 0 ? previewIndex : index;
 
     if (restoreIndex >= visibleQueue.length) {
@@ -80,21 +64,21 @@ export async function restoreLiveSessionQueuedMessage(
     const cleared = host.session.clearQueue();
     const restoreQueue = behavior === 'steer' ? cleared.steering : cleared.followUp;
     const restoredText = restoreQueue[restoreIndex] ?? visibleQueue[restoreIndex] ?? '';
-    const remainingSteering = behavior === 'steer'
-      ? cleared.steering.filter((_, queueIndex) => queueIndex !== restoreIndex)
-      : cleared.steering;
-    const remainingFollowUp = behavior === 'followUp'
-      ? cleared.followUp.filter((_, queueIndex) => queueIndex !== restoreIndex)
-      : cleared.followUp;
+    const remainingSteering =
+      behavior === 'steer' ? cleared.steering.filter((_, queueIndex) => queueIndex !== restoreIndex) : cleared.steering;
+    const remainingFollowUp =
+      behavior === 'followUp' ? cleared.followUp.filter((_, queueIndex) => queueIndex !== restoreIndex) : cleared.followUp;
 
     await replayQueues(host, remainingSteering, remainingFollowUp);
     return { text: restoredText, images: [] };
   }
 
   const previewIndex = previewId
-    ? readQueuedPromptPreviews(behavior, [...visibleQueue], behavior === 'steer'
-      ? internalAgent.steeringQueue
-      : internalAgent.followUpQueue).findIndex((preview) => preview.id === previewId.trim())
+    ? readQueuedPromptPreviews(
+        behavior,
+        [...visibleQueue],
+        behavior === 'steer' ? internalAgent.steeringQueue : internalAgent.followUpQueue,
+      ).findIndex((preview) => preview.id === previewId.trim())
     : -1;
   const removed = removeQueuedUserMessage(internalQueue, { index, previewId });
   if (!removed) {
@@ -122,9 +106,7 @@ export async function cancelLiveSessionQueuedPrompt(
 
   const visibleQueue = readVisibleQueue(host, behavior);
   const internalAgent = readInternalAgentQueues(host);
-  const queueContainer = behavior === 'steer'
-    ? internalAgent.steeringQueue
-    : internalAgent.followUpQueue;
+  const queueContainer = behavior === 'steer' ? internalAgent.steeringQueue : internalAgent.followUpQueue;
   const internalQueue = resolveInternalQueuedMessages(queueContainer);
   const previews = readQueuedPromptPreviews(behavior, [...visibleQueue], queueContainer);
   const previewIndex = previews.findIndex((preview) => preview.id === normalizedPreviewId);
@@ -140,12 +122,10 @@ export async function cancelLiveSessionQueuedPrompt(
     }
 
     const cleared = host.session.clearQueue();
-    const remainingSteering = behavior === 'steer'
-      ? cleared.steering.filter((_, queueIndex) => queueIndex !== previewIndex)
-      : cleared.steering;
-    const remainingFollowUp = behavior === 'followUp'
-      ? cleared.followUp.filter((_, queueIndex) => queueIndex !== previewIndex)
-      : cleared.followUp;
+    const remainingSteering =
+      behavior === 'steer' ? cleared.steering.filter((_, queueIndex) => queueIndex !== previewIndex) : cleared.steering;
+    const remainingFollowUp =
+      behavior === 'followUp' ? cleared.followUp.filter((_, queueIndex) => queueIndex !== previewIndex) : cleared.followUp;
 
     await replayQueues(host, remainingSteering, remainingFollowUp);
     return cancelledPreview;

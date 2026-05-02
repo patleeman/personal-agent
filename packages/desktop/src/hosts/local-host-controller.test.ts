@@ -125,10 +125,7 @@ describe('LocalHostController', () => {
       daemonHealthy: true,
     });
 
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend);
 
     await expect(controller.getStatus()).resolves.toEqual({
       reachable: true,
@@ -145,10 +142,7 @@ describe('LocalHostController', () => {
       daemonHealthy: false,
     });
 
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend);
 
     await expect(controller.getStatus()).resolves.toEqual({
       reachable: false,
@@ -161,21 +155,21 @@ describe('LocalHostController', () => {
 
   it('routes live-session mutations through the local API module without booting the web child', async () => {
     const invokeDesktopLocalApi = vi.fn().mockResolvedValue({ ok: true, accepted: true });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      invokeDesktopLocalApi,
-    }));
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        invokeDesktopLocalApi,
+      }),
+    );
     const backend = createBackendMock();
 
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
-    await expect(controller.invokeLocalApi('POST', '/api/live-sessions/live-1/prompt', {
-      text: 'hello',
-      surfaceId: 'surface-1',
-    })).resolves.toEqual({ ok: true, accepted: true });
+    await expect(
+      controller.invokeLocalApi('POST', '/api/live-sessions/live-1/prompt', {
+        text: 'hello',
+        surfaceId: 'surface-1',
+      }),
+    ).resolves.toEqual({ ok: true, accepted: true });
 
     expect(loadLocalApi).toHaveBeenCalledTimes(1);
     expect(invokeDesktopLocalApi).toHaveBeenCalledWith({
@@ -191,20 +185,28 @@ describe('LocalHostController', () => {
 
   it('routes desktop runtime status reads through the local API module without loopback proxying', async () => {
     const readDesktopAppStatus = vi.fn().mockResolvedValue({ profile: 'assistant', repoRoot: '/repo' });
-    const readDesktopDaemonState = vi.fn().mockResolvedValue({ service: { running: true }, runtime: { running: true }, warnings: [], log: { lines: [] } });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopAppStatus,
-      readDesktopDaemonState,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const readDesktopDaemonState = vi.fn().mockResolvedValue({
+      service: { running: true },
+      runtime: { running: true },
+      warnings: [],
+      log: { lines: [] },
+    });
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopAppStatus,
+        readDesktopDaemonState,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readAppStatus?.()).resolves.toEqual({ profile: 'assistant', repoRoot: '/repo' });
-    await expect(controller.readDaemonState?.()).resolves.toEqual({ service: { running: true }, runtime: { running: true }, warnings: [], log: { lines: [] } });
+    await expect(controller.readDaemonState?.()).resolves.toEqual({
+      service: { running: true },
+      runtime: { running: true },
+      warnings: [],
+      log: { lines: [] },
+    });
 
     expect(readDesktopAppStatus).toHaveBeenCalledTimes(1);
     expect(readDesktopDaemonState).toHaveBeenCalledTimes(1);
@@ -214,10 +216,7 @@ describe('LocalHostController', () => {
   it('delegates companion network access changes to the local backend', async () => {
     const backend = createBackendMock();
     backend.ensureCompanionNetworkReachable = vi.fn().mockResolvedValue({ changed: true, url: 'http://0.0.0.0:3843' });
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend);
 
     await expect(controller.ensureCompanionNetworkReachable?.()).resolves.toEqual({
       changed: true,
@@ -240,16 +239,14 @@ describe('LocalHostController', () => {
       archivedSessionIds: ['conversation-6'],
       workspacePaths: ['/tmp/beta'],
     });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopOpenConversationTabs,
-      updateDesktopOpenConversationTabs,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopOpenConversationTabs,
+        updateDesktopOpenConversationTabs,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readOpenConversationTabs?.()).resolves.toEqual({
       sessionIds: ['conversation-1'],
@@ -257,7 +254,14 @@ describe('LocalHostController', () => {
       archivedSessionIds: ['conversation-3'],
       workspacePaths: ['/tmp/alpha'],
     });
-    await expect(controller.updateOpenConversationTabs?.({ sessionIds: ['conversation-4'], pinnedSessionIds: ['conversation-5'], archivedSessionIds: ['conversation-6'], workspacePaths: ['/tmp/beta'] })).resolves.toEqual({
+    await expect(
+      controller.updateOpenConversationTabs?.({
+        sessionIds: ['conversation-4'],
+        pinnedSessionIds: ['conversation-5'],
+        archivedSessionIds: ['conversation-6'],
+        workspacePaths: ['/tmp/beta'],
+      }),
+    ).resolves.toEqual({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
@@ -279,21 +283,21 @@ describe('LocalHostController', () => {
     const readDesktopSessions = vi.fn().mockResolvedValue([{ id: 'conversation-1', title: 'Conversation 1' }]);
     const readDesktopSessionMeta = vi.fn().mockResolvedValue({ id: 'conversation-1', title: 'Conversation 1' });
     const readDesktopSessionSearchIndex = vi.fn().mockResolvedValue({ index: { 'conversation-1': 'hello world' } });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopSessions,
-      readDesktopSessionMeta,
-      readDesktopSessionSearchIndex,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopSessions,
+        readDesktopSessionMeta,
+        readDesktopSessionSearchIndex,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readSessions?.()).resolves.toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
     await expect(controller.readSessionMeta?.('conversation-1')).resolves.toEqual({ id: 'conversation-1', title: 'Conversation 1' });
-    await expect(controller.readSessionSearchIndex?.(['conversation-1'])).resolves.toEqual({ index: { 'conversation-1': 'hello world' } });
+    await expect(controller.readSessionSearchIndex?.(['conversation-1'])).resolves.toEqual({
+      index: { 'conversation-1': 'hello world' },
+    });
 
     expect(readDesktopSessions).toHaveBeenCalledTimes(1);
     expect(readDesktopSessionMeta).toHaveBeenCalledWith('conversation-1');
@@ -306,29 +310,43 @@ describe('LocalHostController', () => {
     const updateDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const readDesktopVaultFiles = vi.fn().mockResolvedValue({ root: '/vault', files: [{ id: 'notes/a.md' }] });
     const pickDesktopFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
-    const readDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    const updateDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopDefaultCwd,
-      updateDesktopDefaultCwd,
-      readDesktopVaultFiles,
-      pickDesktopFolder,
-      readDesktopConversationTitleSettings,
-      updateDesktopConversationTitleSettings,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const readDesktopConversationTitleSettings = vi.fn().mockResolvedValue({
+      enabled: true,
+      currentModel: '',
+      effectiveModel: 'openai/gpt-5.4',
+    });
+    const updateDesktopConversationTitleSettings = vi.fn().mockResolvedValue({
+      enabled: false,
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      effectiveModel: 'anthropic/claude-sonnet-4-6',
+    });
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopDefaultCwd,
+        updateDesktopDefaultCwd,
+        readDesktopVaultFiles,
+        pickDesktopFolder,
+        readDesktopConversationTitleSettings,
+        updateDesktopConversationTitleSettings,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readDefaultCwd?.()).resolves.toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     await expect(controller.updateDefaultCwd?.('./repo')).resolves.toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
     await expect(controller.readVaultFiles?.()).resolves.toEqual({ root: '/vault', files: [{ id: 'notes/a.md' }] });
     await expect(controller.pickFolder?.({ cwd: '/repo' })).resolves.toEqual({ path: '/picked/repo', cancelled: false });
-    await expect(controller.readConversationTitleSettings?.()).resolves.toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    await expect(controller.updateConversationTitleSettings?.({ enabled: false, model: 'anthropic/claude-sonnet-4-6' })).resolves.toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+    await expect(controller.readConversationTitleSettings?.()).resolves.toEqual({
+      enabled: true,
+      currentModel: '',
+      effectiveModel: 'openai/gpt-5.4',
+    });
+    await expect(controller.updateConversationTitleSettings?.({ enabled: false, model: 'anthropic/claude-sonnet-4-6' })).resolves.toEqual({
+      enabled: false,
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      effectiveModel: 'anthropic/claude-sonnet-4-6',
+    });
 
     expect(readDesktopDefaultCwd).toHaveBeenCalledTimes(1);
     expect(updateDesktopDefaultCwd).toHaveBeenCalledWith('./repo');
@@ -347,15 +365,13 @@ describe('LocalHostController', () => {
         defaultPresetIds: ['preset-1'],
       },
     });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopConversationPlansWorkspace,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopConversationPlansWorkspace,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readConversationPlansWorkspace?.()).resolves.toEqual({
       defaultEnabled: true,
@@ -401,21 +417,19 @@ describe('LocalHostController', () => {
       mimeType: 'image/png',
       fileName: 'preview.png',
     });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopConversationArtifacts,
-      readDesktopConversationArtifact,
-      readDesktopConversationAttachments,
-      readDesktopConversationAttachment,
-      createDesktopConversationAttachment,
-      updateDesktopConversationAttachment,
-      readDesktopConversationAttachmentAsset,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopConversationArtifacts,
+        readDesktopConversationArtifact,
+        readDesktopConversationAttachments,
+        readDesktopConversationAttachment,
+        createDesktopConversationAttachment,
+        updateDesktopConversationAttachment,
+        readDesktopConversationAttachmentAsset,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readConversationArtifacts?.('conversation-1')).resolves.toEqual({
       conversationId: 'conversation-1',
@@ -429,21 +443,39 @@ describe('LocalHostController', () => {
       conversationId: 'conversation-1',
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    await expect(controller.readConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1' })).resolves.toEqual({
+    await expect(
+      controller.readConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1' }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
     });
-    await expect(controller.createConversationAttachment?.({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' })).resolves.toEqual({
+    await expect(
+      controller.createConversationAttachment?.({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    await expect(controller.updateConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' })).resolves.toEqual({
+    await expect(
+      controller.updateConversationAttachment?.({
+        conversationId: 'conversation-1',
+        attachmentId: 'attachment-1',
+        sourceData: 'source',
+        previewData: 'preview',
+      }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    await expect(controller.readConversationAttachmentAsset?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 })).resolves.toEqual({
+    await expect(
+      controller.readConversationAttachmentAsset?.({
+        conversationId: 'conversation-1',
+        attachmentId: 'attachment-1',
+        asset: 'preview',
+        revision: 2,
+      }),
+    ).resolves.toEqual({
       dataUrl: 'data:image/png;base64,cHJldmlldw==',
       mimeType: 'image/png',
       fileName: 'preview.png',
@@ -453,20 +485,41 @@ describe('LocalHostController', () => {
     expect(readDesktopConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
     expect(readDesktopConversationAttachments).toHaveBeenCalledWith('conversation-1');
     expect(readDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
-    expect(createDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
-    expect(updateDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
-    expect(readDesktopConversationAttachmentAsset).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 });
+    expect(createDesktopConversationAttachment).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      sourceData: 'source',
+      previewData: 'preview',
+    });
+    expect(updateDesktopConversationAttachment).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      attachmentId: 'attachment-1',
+      sourceData: 'source',
+      previewData: 'preview',
+    });
+    expect(readDesktopConversationAttachmentAsset).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      attachmentId: 'attachment-1',
+      asset: 'preview',
+      revision: 2,
+    });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
   it('routes dedicated model and provider capabilities through the local API module without loopback proxying', async () => {
     const unsubscribeProviderOAuth = vi.fn();
-    const readDesktopModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
+    const readDesktopModels = vi.fn().mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      models: [],
+    });
     const updateDesktopModelPreferences = vi.fn().mockResolvedValue({ ok: true });
     const readDesktopModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const saveDesktopModelProvider = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const deleteDesktopModelProvider = vi.fn().mockResolvedValue({ providers: [] });
-    const saveDesktopModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
+    const saveDesktopModelProviderModel = vi.fn().mockResolvedValue({
+      providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }],
+    });
     const deleteDesktopModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const readDesktopProviderAuth = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
     const setDesktopProviderApiKey = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
@@ -476,45 +529,72 @@ describe('LocalHostController', () => {
     const submitDesktopProviderOAuthLoginInput = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'running' });
     const cancelDesktopProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'cancelled' });
     const subscribeDesktopProviderOAuthLogin = vi.fn().mockResolvedValue(unsubscribeProviderOAuth);
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopModels,
-      updateDesktopModelPreferences,
-      readDesktopModelProviders,
-      saveDesktopModelProvider,
-      deleteDesktopModelProvider,
-      saveDesktopModelProviderModel,
-      deleteDesktopModelProviderModel,
-      readDesktopProviderAuth,
-      setDesktopProviderApiKey,
-      removeDesktopProviderCredential,
-      startDesktopProviderOAuthLogin,
-      readDesktopProviderOAuthLogin,
-      submitDesktopProviderOAuthLoginInput,
-      cancelDesktopProviderOAuthLogin,
-      subscribeDesktopProviderOAuthLogin,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopModels,
+        updateDesktopModelPreferences,
+        readDesktopModelProviders,
+        saveDesktopModelProvider,
+        deleteDesktopModelProvider,
+        saveDesktopModelProviderModel,
+        deleteDesktopModelProviderModel,
+        readDesktopProviderAuth,
+        setDesktopProviderApiKey,
+        removeDesktopProviderCredential,
+        startDesktopProviderOAuthLogin,
+        readDesktopProviderOAuthLogin,
+        submitDesktopProviderOAuthLoginInput,
+        cancelDesktopProviderOAuthLogin,
+        subscribeDesktopProviderOAuthLogin,
+      }),
     );
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
     const onState = vi.fn();
 
-    await expect(controller.readModels?.()).resolves.toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
+    await expect(controller.readModels?.()).resolves.toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      models: [],
+    });
     await expect(controller.updateModelPreferences?.({ model: 'gpt-5.4', thinkingLevel: 'medium' })).resolves.toEqual({ ok: true });
     await expect(controller.readModelProviders?.()).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
-    await expect(controller.saveModelProvider?.({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    await expect(controller.saveModelProvider?.({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api' })).resolves.toEqual({
+      providers: [{ id: 'openrouter', models: [] }],
+    });
     await expect(controller.deleteModelProvider?.('openrouter')).resolves.toEqual({ providers: [] });
-    await expect(controller.saveModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
-    await expect(controller.deleteModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    await expect(controller.saveModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({
+      providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }],
+    });
+    await expect(controller.deleteModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({
+      providers: [{ id: 'openrouter', models: [] }],
+    });
     await expect(controller.readProviderAuth?.()).resolves.toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
-    await expect(controller.setProviderApiKey?.({ provider: 'openai', apiKey: 'sk-test' })).resolves.toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    await expect(controller.setProviderApiKey?.({ provider: 'openai', apiKey: 'sk-test' })).resolves.toEqual({
+      providers: [{ id: 'openai', authType: 'api_key' }],
+    });
     await expect(controller.removeProviderCredential?.('openai')).resolves.toEqual({ providers: [] });
-    await expect(controller.startProviderOAuthLogin?.('openrouter')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
-    await expect(controller.readProviderOAuthLogin?.('login-1')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
-    await expect(controller.submitProviderOAuthLoginInput?.({ loginId: 'login-1', value: '123456' })).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
-    await expect(controller.cancelProviderOAuthLogin?.('login-1')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'cancelled' });
+    await expect(controller.startProviderOAuthLogin?.('openrouter')).resolves.toEqual({
+      id: 'login-1',
+      provider: 'openrouter',
+      status: 'running',
+    });
+    await expect(controller.readProviderOAuthLogin?.('login-1')).resolves.toEqual({
+      id: 'login-1',
+      provider: 'openrouter',
+      status: 'running',
+    });
+    await expect(controller.submitProviderOAuthLoginInput?.({ loginId: 'login-1', value: '123456' })).resolves.toEqual({
+      id: 'login-1',
+      provider: 'openrouter',
+      status: 'running',
+    });
+    await expect(controller.cancelProviderOAuthLogin?.('login-1')).resolves.toEqual({
+      id: 'login-1',
+      provider: 'openrouter',
+      status: 'cancelled',
+    });
     await expect(controller.subscribeProviderOAuthLogin?.('login-1', onState)).resolves.toBe(unsubscribeProviderOAuth);
 
     expect(readDesktopModels).toHaveBeenCalledTimes(1);
@@ -538,16 +618,14 @@ describe('LocalHostController', () => {
   it('routes live-session event streams through the local API module without loopback proxying', async () => {
     const unsubscribe = vi.fn();
     const subscribeDesktopLocalApiStream = vi.fn().mockResolvedValue(unsubscribe);
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      subscribeDesktopLocalApiStream,
-    }));
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        subscribeDesktopLocalApiStream,
+      }),
+    );
     const backend = createBackendMock();
 
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
     const onEvent = vi.fn();
 
     await expect(controller.subscribeApiStream('/api/live-sessions/live-1/events?tailBlocks=20', onEvent)).resolves.toBe(unsubscribe);
@@ -558,8 +636,17 @@ describe('LocalHostController', () => {
   });
 
   it('routes dedicated conversation and live-session capabilities through the local API module without loopback proxying', async () => {
-    const readDesktopDurableRuns = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', summary: { total: 0, recoveryActions: {}, statuses: {} }, runs: [] });
-    const readDesktopDurableRun = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', run: { runId: 'run-1' } });
+    const readDesktopDurableRuns = vi.fn().mockResolvedValue({
+      scannedAt: '2026-04-10T11:00:00.000Z',
+      runsRoot: '/runs',
+      summary: { total: 0, recoveryActions: {}, statuses: {} },
+      runs: [],
+    });
+    const readDesktopDurableRun = vi.fn().mockResolvedValue({
+      scannedAt: '2026-04-10T11:00:00.000Z',
+      runsRoot: '/runs',
+      run: { runId: 'run-1' },
+    });
     const readDesktopDurableRunLog = vi.fn().mockResolvedValue({ path: '/runs/run-1.log', log: 'tail' });
     const cancelDesktopDurableRun = vi.fn().mockResolvedValue({ cancelled: true, runId: 'run-1' });
     const markDesktopDurableRunAttention = vi.fn().mockResolvedValue({ ok: true });
@@ -598,7 +685,13 @@ describe('LocalHostController', () => {
     const readDesktopLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
     const readDesktopLiveSessionForkEntries = vi.fn().mockResolvedValue([{ entryId: 'entry-1', text: 'fork from here' }]);
     const readDesktopLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
-    const readDesktopSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
+    const readDesktopSessionDetail = vi.fn().mockResolvedValue({
+      meta: { id: 'live-1' },
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      contextUsage: null,
+    });
     const readDesktopSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
     const createDesktopLiveSession = vi.fn().mockResolvedValue({
       id: 'live-1',
@@ -649,51 +742,55 @@ describe('LocalHostController', () => {
     const destroyDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const branchDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
     const forkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
-    const summarizeAndForkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
+    const summarizeAndForkDesktopLiveSession = vi.fn().mockResolvedValue({
+      newSessionId: 'summary-1',
+      sessionFile: '/tmp/summary-1.jsonl',
+    });
     const abortDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopDurableRuns,
-      readDesktopDurableRun,
-      readDesktopDurableRunLog,
-      cancelDesktopDurableRun,
-      markDesktopDurableRunAttention,
-      readDesktopConversationBootstrap,
-      renameDesktopConversation,
-      readDesktopConversationDeferredResumes,
-      scheduleDesktopConversationDeferredResume,
-      cancelDesktopConversationDeferredResume,
-      fireDesktopConversationDeferredResume,
-      recoverDesktopConversation,
-      readDesktopLiveSession,
-      readDesktopLiveSessionForkEntries,
-      readDesktopLiveSessionContext,
-      readDesktopSessionDetail,
-      readDesktopSessionBlock,
-      createDesktopLiveSession,
-      resumeDesktopLiveSession,
-      submitDesktopLiveSessionPrompt,
-      takeOverDesktopLiveSession,
-      restoreDesktopQueuedLiveSessionMessage,
-      compactDesktopLiveSession,
-      exportDesktopLiveSession,
-      reloadDesktopLiveSession,
-      destroyDesktopLiveSession,
-      branchDesktopLiveSession,
-      forkDesktopLiveSession,
-      summarizeAndForkDesktopLiveSession,
-      abortDesktopLiveSession,
-    }));
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        readDesktopDurableRuns,
+        readDesktopDurableRun,
+        readDesktopDurableRunLog,
+        cancelDesktopDurableRun,
+        markDesktopDurableRunAttention,
+        readDesktopConversationBootstrap,
+        renameDesktopConversation,
+        readDesktopConversationDeferredResumes,
+        scheduleDesktopConversationDeferredResume,
+        cancelDesktopConversationDeferredResume,
+        fireDesktopConversationDeferredResume,
+        recoverDesktopConversation,
+        readDesktopLiveSession,
+        readDesktopLiveSessionForkEntries,
+        readDesktopLiveSessionContext,
+        readDesktopSessionDetail,
+        readDesktopSessionBlock,
+        createDesktopLiveSession,
+        resumeDesktopLiveSession,
+        submitDesktopLiveSessionPrompt,
+        takeOverDesktopLiveSession,
+        restoreDesktopQueuedLiveSessionMessage,
+        compactDesktopLiveSession,
+        exportDesktopLiveSession,
+        reloadDesktopLiveSession,
+        destroyDesktopLiveSession,
+        branchDesktopLiveSession,
+        forkDesktopLiveSession,
+        summarizeAndForkDesktopLiveSession,
+        abortDesktopLiveSession,
+      }),
+    );
     const backend = createBackendMock();
 
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
 
     await expect(controller.readDurableRuns?.()).resolves.toMatchObject({ runsRoot: '/runs' });
     await expect(controller.readDurableRun?.('run-1')).resolves.toMatchObject({ runsRoot: '/runs' });
-    await expect(controller.readDurableRunLog?.({ runId: 'run-1', tail: 25 })).resolves.toEqual({ path: '/runs/run-1.log', log: 'tail' });
+    await expect(controller.readDurableRunLog?.({ runId: 'run-1', tail: 25 })).resolves.toEqual({
+      path: '/runs/run-1.log',
+      log: 'tail',
+    });
     await expect(controller.cancelDurableRun?.('run-1')).resolves.toEqual({ cancelled: true, runId: 'run-1' });
     await expect(controller.markDurableRunAttention?.({ runId: 'run-1', read: false })).resolves.toEqual({ ok: true });
     await expect(controller.readConversationBootstrap?.({ conversationId: 'live-1', tailBlocks: 12 })).resolves.toEqual({
@@ -701,7 +798,9 @@ describe('LocalHostController', () => {
       sessionDetail: null,
       liveSession: { live: true, id: 'live-1' },
     });
-    await expect(controller.renameConversation?.({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' })).resolves.toEqual({
+    await expect(
+      controller.renameConversation?.({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' }),
+    ).resolves.toEqual({
       ok: true,
       title: 'Renamed conversation',
     });
@@ -709,12 +808,21 @@ describe('LocalHostController', () => {
       conversationId: 'conversation-1',
       resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }],
     });
-    await expect(controller.scheduleConversationDeferredResume?.({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.', behavior: 'followUp' })).resolves.toEqual({
+    await expect(
+      controller.scheduleConversationDeferredResume?.({
+        conversationId: 'conversation-1',
+        delay: '10m',
+        prompt: 'Resume later.',
+        behavior: 'followUp',
+      }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
       resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
     });
-    await expect(controller.cancelConversationDeferredResume?.({ conversationId: 'conversation-1', resumeId: 'resume-2' })).resolves.toEqual({
+    await expect(
+      controller.cancelConversationDeferredResume?.({ conversationId: 'conversation-1', resumeId: 'resume-2' }),
+    ).resolves.toEqual({
       conversationId: 'conversation-1',
       cancelledId: 'resume-2',
       resumes: [],
@@ -777,23 +885,43 @@ describe('LocalHostController', () => {
         },
       },
     });
-    await expect(controller.resumeLiveSession?.({ sessionFile: '/tmp/live-1.jsonl', cwd: '/repo' })).resolves.toEqual({ id: 'live-1' });
+    await expect(controller.resumeLiveSession?.({ sessionFile: '/tmp/live-1.jsonl', cwd: '/repo' })).resolves.toEqual({
+      id: 'live-1',
+    });
     await expect(controller.takeOverLiveSession?.({ conversationId: 'live-1', surfaceId: 'surface-1' })).resolves.toEqual({
       controllerSurfaceId: 'surface-1',
     });
-    await expect(controller.submitLiveSessionPrompt?.({
-      conversationId: 'live-1',
-      text: 'hello',
-      surfaceId: 'surface-1',
-    })).resolves.toEqual(expect.objectContaining({ ok: true, delivery: 'started' }));
-    await expect(controller.restoreQueuedLiveSessionMessage?.({ conversationId: 'live-1', behavior: 'followUp', index: 0 })).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
-    await expect(controller.compactLiveSession?.({ conversationId: 'live-1', customInstructions: 'be shorter' })).resolves.toEqual({ ok: true, result: { compacted: true } });
-    await expect(controller.exportLiveSession?.({ conversationId: 'live-1', outputPath: '/tmp/live-1.html' })).resolves.toEqual({ ok: true, path: '/tmp/live-1.html' });
+    await expect(
+      controller.submitLiveSessionPrompt?.({
+        conversationId: 'live-1',
+        text: 'hello',
+        surfaceId: 'surface-1',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ ok: true, delivery: 'started' }));
+    await expect(
+      controller.restoreQueuedLiveSessionMessage?.({ conversationId: 'live-1', behavior: 'followUp', index: 0 }),
+    ).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
+    await expect(controller.compactLiveSession?.({ conversationId: 'live-1', customInstructions: 'be shorter' })).resolves.toEqual({
+      ok: true,
+      result: { compacted: true },
+    });
+    await expect(controller.exportLiveSession?.({ conversationId: 'live-1', outputPath: '/tmp/live-1.html' })).resolves.toEqual({
+      ok: true,
+      path: '/tmp/live-1.html',
+    });
     await expect(controller.reloadLiveSession?.('live-1')).resolves.toEqual({ ok: true });
     await expect(controller.destroyLiveSession?.('live-1')).resolves.toEqual({ ok: true });
-    await expect(controller.branchLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1' })).resolves.toEqual({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
-    await expect(controller.forkLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true, beforeEntry: true })).resolves.toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
-    await expect(controller.summarizeAndForkLiveSession?.('live-1')).resolves.toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
+    await expect(controller.branchLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1' })).resolves.toEqual({
+      newSessionId: 'branch-1',
+      sessionFile: '/tmp/branch-1.jsonl',
+    });
+    await expect(
+      controller.forkLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true, beforeEntry: true }),
+    ).resolves.toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
+    await expect(controller.summarizeAndForkLiveSession?.('live-1')).resolves.toEqual({
+      newSessionId: 'summary-1',
+      sessionFile: '/tmp/summary-1.jsonl',
+    });
     await expect(controller.abortLiveSession?.('live-1')).resolves.toEqual({ ok: true });
 
     expect(readDesktopDurableRuns).toHaveBeenCalledTimes(1);
@@ -802,9 +930,18 @@ describe('LocalHostController', () => {
     expect(cancelDesktopDurableRun).toHaveBeenCalledWith('run-1');
     expect(markDesktopDurableRunAttention).toHaveBeenCalledWith({ runId: 'run-1', read: false });
     expect(readDesktopConversationBootstrap).toHaveBeenCalledWith({ conversationId: 'live-1', tailBlocks: 12 });
-    expect(renameDesktopConversation).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' });
+    expect(renameDesktopConversation).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      name: 'Renamed conversation',
+      surfaceId: 'surface-1',
+    });
     expect(readDesktopConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
-    expect(scheduleDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.', behavior: 'followUp' });
+    expect(scheduleDesktopConversationDeferredResume).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      delay: '10m',
+      prompt: 'Resume later.',
+      behavior: 'followUp',
+    });
     expect(cancelDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-2' });
     expect(fireDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-1' });
     expect(recoverDesktopConversation).toHaveBeenCalledWith('conversation-1');
@@ -841,16 +978,14 @@ describe('LocalHostController', () => {
   it('routes desktop app events through the local API module without loopback proxying', async () => {
     const unsubscribe = vi.fn();
     const subscribeDesktopAppEvents = vi.fn().mockResolvedValue(unsubscribe);
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      subscribeDesktopAppEvents,
-    }));
+    const loadLocalApi = vi.fn().mockResolvedValue(
+      createLocalApiModuleMock({
+        subscribeDesktopAppEvents,
+      }),
+    );
     const backend = createBackendMock();
 
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
-    );
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend, loadLocalApi);
     const onEvent = vi.fn();
 
     await expect(controller.subscribeDesktopAppEvents?.(onEvent)).resolves.toBe(unsubscribe);

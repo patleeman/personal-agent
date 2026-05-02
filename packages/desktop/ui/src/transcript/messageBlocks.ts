@@ -70,17 +70,11 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
   }
 }
 
-export function mergeHydratedHistoricalBlocks(
-  blocks: DisplayBlock[],
-  hydratedBlocks: Record<string, MessageBlock>,
-): MessageBlock[] {
+export function mergeHydratedHistoricalBlocks(blocks: DisplayBlock[], hydratedBlocks: Record<string, MessageBlock>): MessageBlock[] {
   return blocks.map((block) => hydratedBlocks[block.id] ?? displayBlockToMessageBlock(block));
 }
 
-export function mergeHydratedStreamBlocks(
-  blocks: MessageBlock[],
-  hydratedBlocks: Record<string, MessageBlock>,
-): MessageBlock[] {
+export function mergeHydratedStreamBlocks(blocks: MessageBlock[], hydratedBlocks: Record<string, MessageBlock>): MessageBlock[] {
   return blocks.map((block) => {
     const normalizedId = block.id?.trim();
     return normalizedId ? (hydratedBlocks[normalizedId] ?? block) : block;

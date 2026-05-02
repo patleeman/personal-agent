@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import {
-  LiveSessionControlError,
   assertLiveSessionSurfaceCanControl,
   buildLiveSessionPresenceState,
   createLiveSessionPresenceHost,
+  LiveSessionControlError,
   registerLiveSessionSurface,
   removeLiveSessionSurface,
   takeOverLiveSessionSurface,

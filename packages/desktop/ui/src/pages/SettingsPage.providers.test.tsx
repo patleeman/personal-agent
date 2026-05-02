@@ -3,9 +3,10 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useAppEvents, useSseConnection } from '../app/contexts';
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
-import { useAppEvents, useSseConnection } from '../app/contexts';
 import { useTheme } from '../ui-state/theme';
 import { SettingsPage } from './SettingsPage';
 
@@ -419,9 +420,12 @@ describe('SettingsPage provider model editor', () => {
     });
     await flushAsyncWork();
 
-    expect(saveModelProviderModelMock).toHaveBeenCalledWith('anthropic', expect.objectContaining({
-      modelId: 'claude-sonnet-4-7',
-    }));
+    expect(saveModelProviderModelMock).toHaveBeenCalledWith(
+      'anthropic',
+      expect.objectContaining({
+        modelId: 'claude-sonnet-4-7',
+      }),
+    );
   });
 
   it('opens known providers from the preconfigured provider picker', async () => {

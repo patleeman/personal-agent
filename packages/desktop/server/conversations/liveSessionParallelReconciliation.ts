@@ -1,20 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { normalize, relative, resolve } from 'node:path';
+
 import { readGitRepoInfo, readGitStatusSummary } from '../workspace/gitStatus.js';
-import { readSessionBlocksByFile, readSessionMetaByFile, type DisplayBlock } from './sessions.js';
-import {
-  extractTextFromMessageContent,
-  getStableForkBranchEntries,
-  type StableForkBranchEntry,
-} from './liveSessionForking.js';
+import { extractTextFromMessageContent, getStableForkBranchEntries, type StableForkBranchEntry } from './liveSessionForking.js';
 import {
   normalizeParallelPromptList,
+  type ParallelPromptJob,
+  type ParallelPromptJobStatus,
   readPersistedParallelJobs,
   truncateParallelPreviewText,
   writePersistedParallelJobs,
-  type ParallelPromptJob,
-  type ParallelPromptJobStatus,
 } from './liveSessionParallelJobs.js';
+import { type DisplayBlock, readSessionBlocksByFile, readSessionMetaByFile } from './sessions.js';
 
 const PARALLEL_RESULT_CUSTOM_TYPE = 'parallel_result';
 
@@ -47,9 +44,7 @@ export function readImportedParallelChildConversationIds(sessionFile: string): S
           continue;
         }
 
-        const childConversationId = typeof entry.details?.childConversationId === 'string'
-          ? entry.details.childConversationId.trim()
-          : '';
+        const childConversationId = typeof entry.details?.childConversationId === 'string' ? entry.details.childConversationId.trim() : '';
         if (childConversationId) {
           imported.add(childConversationId);
         }
@@ -75,11 +70,7 @@ function normalizeParallelTouchedPath(pathValue: string, input: { cwd?: string; 
   }
 
   if (input.repoRoot) {
-    const absolutePath = normalized.startsWith('/')
-      ? resolve(normalized)
-      : input.cwd
-        ? resolve(input.cwd, normalized)
-        : null;
+    const absolutePath = normalized.startsWith('/') ? resolve(normalized) : input.cwd ? resolve(input.cwd, normalized) : null;
     if (absolutePath) {
       const relativePath = relative(input.repoRoot, absolutePath);
       if (relativePath && !relativePath.startsWith('..')) {
@@ -114,8 +105,8 @@ function collectParallelToolCallPaths(argumentsValue: unknown): string[] {
   ].filter((value): value is string => value.length > 0);
 
   const multiPaths = [args.paths, args.filePaths]
-    .flatMap((value) => Array.isArray(value) ? value : [])
-    .flatMap((value): string[] => typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : []);
+    .flatMap((value) => (Array.isArray(value) ? value : []))
+    .flatMap((value): string[] => (typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : []));
 
   return [...paths, ...multiPaths];
 }
@@ -137,13 +128,13 @@ function collectParallelTouchedFilesFromBranchEntries(
         continue;
       }
 
-      const toolName = typeof (part as { name?: unknown }).name === 'string'
-        ? (part as { name: string }).name.trim()
-        : '';
-      if ((toolName === 'read' && options.includeRead !== false)
-        || toolName === 'edit'
-        || toolName === 'write'
-        || toolName === 'checkpoint') {
+      const toolName = typeof (part as { name?: unknown }).name === 'string' ? (part as { name: string }).name.trim() : '';
+      if (
+        (toolName === 'read' && options.includeRead !== false) ||
+        toolName === 'edit' ||
+        toolName === 'write' ||
+        toolName === 'checkpoint'
+      ) {
         // keep going
       } else {
         continue;
@@ -164,17 +155,11 @@ function collectParallelTouchedFilesFromBranchEntries(
   return touchedFiles;
 }
 
-function readParallelTouchedFilesFromSessionFile(
-  sessionFile: string,
-  options: { cwd?: string; repoRoot?: string } = {},
-): string[] {
+function readParallelTouchedFilesFromSessionFile(sessionFile: string, options: { cwd?: string; repoRoot?: string } = {}): string[] {
   return collectParallelTouchedFilesFromBranchEntries(getStableForkBranchEntries(sessionFile), options);
 }
 
-function readParallelMutatedFilesFromSessionFile(
-  sessionFile: string,
-  options: { cwd?: string; repoRoot?: string } = {},
-): string[] {
+function readParallelMutatedFilesFromSessionFile(sessionFile: string, options: { cwd?: string; repoRoot?: string } = {}): string[] {
   return collectParallelTouchedFilesFromBranchEntries(getStableForkBranchEntries(sessionFile), {
     ...options,
     includeRead: false,
@@ -232,11 +217,7 @@ function isParallelSideEffectBlock(block: Extract<DisplayBlock, { type: 'tool_us
   }
 
   if (block.tool === 'run') {
-    return action === 'start'
-      || action === 'start_agent'
-      || action === 'rerun'
-      || action === 'follow_up'
-      || action === 'cancel';
+    return action === 'start' || action === 'start_agent' || action === 'rerun' || action === 'follow_up' || action === 'cancel';
   }
 
   if (block.tool === 'change_working_directory') {
@@ -284,7 +265,10 @@ export function readParallelCurrentWorktreeDirtyPaths(cwd: string, repoRoot?: st
     return [];
   }
 
-  return normalizeParallelPromptList(summary.changes.map((change) => normalizeParallelComparablePath(change.relativePath)), 256);
+  return normalizeParallelPromptList(
+    summary.changes.map((change) => normalizeParallelComparablePath(change.relativePath)),
+    256,
+  );
 }
 
 function readParentTouchedFilesSinceFork(
@@ -352,9 +336,7 @@ export function readParallelJobCompletionFromSessionFile(
       return {
         hasTerminalReply: true,
         status: 'failed',
-        error: errorMessage && errorMessage.length > 0
-          ? errorMessage
-          : 'The parallel prompt failed before completing.',
+        error: errorMessage && errorMessage.length > 0 ? errorMessage : 'The parallel prompt failed before completing.',
         touchedFiles,
         sideEffects,
       };
@@ -384,7 +366,7 @@ export function reconcileParallelPromptJob(
 ): ParallelPromptJob {
   const parentMeta = readSessionMetaByFile(sessionFile);
   const sourceCwd = parentMeta?.cwd ?? '';
-  const repoRoot = sourceCwd ? (job.repoRoot?.trim() || readGitRepoInfo(sourceCwd)?.root) : job.repoRoot?.trim();
+  const repoRoot = sourceCwd ? job.repoRoot?.trim() || readGitRepoInfo(sourceCwd)?.root : job.repoRoot?.trim();
   const childSession = resolveChildSession(job.childConversationId);
   const childSessionFile = childSession?.sessionFile?.trim() || job.childSessionFile?.trim() || '';
   const updatedAt = new Date().toISOString();
@@ -410,9 +392,10 @@ export function reconcileParallelPromptJob(
   if (childSession?.isStreaming) {
     next.status = 'running';
     next.overlapFiles = readParallelOverlapFiles({
-      mutatingChildFiles: childSessionFile && existsSync(childSessionFile)
-        ? readParallelMutatedFilesFromSessionFile(childSessionFile, { cwd: sourceCwd, repoRoot })
-        : [],
+      mutatingChildFiles:
+        childSessionFile && existsSync(childSessionFile)
+          ? readParallelMutatedFilesFromSessionFile(childSessionFile, { cwd: sourceCwd, repoRoot })
+          : [],
       parentMutatingFiles,
       currentDirtyPaths,
       worktreeDirtyPathsAtStart: next.worktreeDirtyPathsAtStart,

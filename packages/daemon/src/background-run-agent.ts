@@ -26,9 +26,7 @@ function resolveBackgroundAgentCliEntryPath(): string | undefined {
 
 export function buildBackgroundAgentArgv(spec: BackgroundRunAgentSpec): string[] {
   const cliEntryPath = resolveBackgroundAgentCliEntryPath();
-  const argv = cliEntryPath
-    ? [process.execPath, cliEntryPath, '--plain', 'tui']
-    : ['pa', '--plain', 'tui'];
+  const argv = cliEntryPath ? [process.execPath, cliEntryPath, '--plain', 'tui'] : ['pa', '--plain', 'tui'];
 
   if (spec.profile) {
     argv.push('--profile', spec.profile);

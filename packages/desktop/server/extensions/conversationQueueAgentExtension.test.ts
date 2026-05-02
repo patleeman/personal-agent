@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createConversationQueueAgentExtension } from './conversationQueueAgentExtension.js';
 
 const {
@@ -164,11 +165,7 @@ describe('conversation queue agent extension', () => {
       createToolContext(),
     );
 
-    expect(promptSessionMock).toHaveBeenCalledWith(
-      'conv-123',
-      'Check the fresh logs after this reply finishes.',
-      'followUp',
-    );
+    expect(promptSessionMock).toHaveBeenCalledWith('conv-123', 'Check the fresh logs after this reply finishes.', 'followUp');
     expect(result.content[0]?.text).toContain('Queued conversation continuation after the current turn');
     expect(result.details).toMatchObject({
       action: 'add',
@@ -194,7 +191,14 @@ describe('conversation queue agent extension', () => {
     const tool = registerConversationQueueTool();
     const result = await tool.execute(
       'tool-1',
-      { action: 'add', trigger: 'delay', delay: '10m', prompt: 'Check the deployment again.', deliverAs: 'followUp', title: 'Check deployment' },
+      {
+        action: 'add',
+        trigger: 'delay',
+        delay: '10m',
+        prompt: 'Check the deployment again.',
+        deliverAs: 'followUp',
+        title: 'Check deployment',
+      },
       undefined,
       undefined,
       createToolContext(),
@@ -233,13 +237,15 @@ describe('conversation queue agent extension', () => {
     vi.setSystemTime(new Date('2026-04-12T12:00:00Z'));
 
     const tool = registerConversationQueueTool();
-    await expect(tool.execute(
-      'tool-1',
-      { action: 'add', trigger: 'at', at: '9999', prompt: 'Check the deployment again.' },
-      undefined,
-      undefined,
-      createToolContext(),
-    )).rejects.toThrow('Invalid time expression');
+    await expect(
+      tool.execute(
+        'tool-1',
+        { action: 'add', trigger: 'at', at: '9999', prompt: 'Check the deployment again.' },
+        undefined,
+        undefined,
+        createToolContext(),
+      ),
+    ).rejects.toThrow('Invalid time expression');
 
     expect(createStoredAutomationMock).not.toHaveBeenCalled();
   });
@@ -249,13 +255,15 @@ describe('conversation queue agent extension', () => {
     vi.setSystemTime(new Date('2026-04-12T12:00:00Z'));
 
     const tool = registerConversationQueueTool();
-    await expect(tool.execute(
-      'tool-1',
-      { action: 'add', trigger: 'at', at: '2026-02-31T12:30:00.000Z', prompt: 'Check the deployment again.' },
-      undefined,
-      undefined,
-      createToolContext(),
-    )).rejects.toThrow('Invalid time expression');
+    await expect(
+      tool.execute(
+        'tool-1',
+        { action: 'add', trigger: 'at', at: '2026-02-31T12:30:00.000Z', prompt: 'Check the deployment again.' },
+        undefined,
+        undefined,
+        createToolContext(),
+      ),
+    ).rejects.toThrow('Invalid time expression');
 
     expect(createStoredAutomationMock).not.toHaveBeenCalled();
   });
@@ -301,11 +309,13 @@ describe('conversation queue agent extension', () => {
     expect(result.content[0]?.text).toContain('live:followUp:follow-1');
     expect(result.content[0]?.text).toContain('resume-later');
     expect(result.content[0]?.text).toContain('resume-1');
-    expect(result.details?.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'live:steer:steer-1', status: 'queued', trigger: 'after_turn' }),
-      expect.objectContaining({ id: 'resume-later', source: 'automation', status: 'scheduled', trigger: 'time' }),
-      expect.objectContaining({ id: 'resume-1', source: 'deferred-resume', status: 'ready', trigger: 'time' }),
-    ]));
+    expect(result.details?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'live:steer:steer-1', status: 'queued', trigger: 'after_turn' }),
+        expect.objectContaining({ id: 'resume-later', source: 'automation', status: 'scheduled', trigger: 'time' }),
+        expect.objectContaining({ id: 'resume-1', source: 'deferred-resume', status: 'ready', trigger: 'time' }),
+      ]),
+    );
   });
 
   it('cancels queued live prompts, saved automations, and deferred resumes by id', async () => {
@@ -344,13 +354,7 @@ describe('conversation queue agent extension', () => {
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('tasks');
     expect(automationResult.content[0]?.text).toContain('Cancelled queued continuation resume-later.');
 
-    const deferredResult = await tool.execute(
-      'tool-1',
-      { action: 'cancel', id: 'resume-1' },
-      undefined,
-      undefined,
-      createToolContext(),
-    );
+    const deferredResult = await tool.execute('tool-1', { action: 'cancel', id: 'resume-1' }, undefined, undefined, createToolContext());
     expect(cancelDeferredResumeForSessionFileMock).toHaveBeenCalledWith({
       sessionFile: '/tmp/sessions/conv-123.jsonl',
       id: 'resume-1',

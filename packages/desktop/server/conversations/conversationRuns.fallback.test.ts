@@ -25,11 +25,7 @@ vi.mock('@personal-agent/daemon', () => ({
   syncWebLiveConversationRunState: syncWebLiveConversationRunStateMock,
 }));
 
-import {
-  createWebLiveConversationRunId,
-  listRecoverableWebLiveConversationRuns,
-  syncWebLiveConversationRun,
-} from './conversationRuns.js';
+import { createWebLiveConversationRunId, listRecoverableWebLiveConversationRuns, syncWebLiveConversationRun } from './conversationRuns.js';
 
 describe('conversationRuns daemon fallback', () => {
   beforeEach(() => {
@@ -50,21 +46,23 @@ describe('conversationRuns daemon fallback', () => {
     pingDaemonMock.mockResolvedValue(true);
     syncWebLiveConversationRunStateMock.mockResolvedValue({ runId: 'run-daemon' });
 
-    await expect(syncWebLiveConversationRun({
-      conversationId: 'conv-123',
-      sessionFile: '/tmp/conv-123.jsonl',
-      cwd: '/tmp/workspace',
-      title: 'Investigate issue',
-      profile: 'assistant',
-      state: 'running',
-      updatedAt: new Date('2026-03-12T13:00:05.000Z'),
-      lastError: 'transient',
-      pendingOperation: {
-        type: 'prompt',
-        text: 'continue',
-        enqueuedAt: '2026-03-12T13:00:05.000Z',
-      },
-    })).resolves.toEqual({ runId: 'run-daemon' });
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-123',
+        sessionFile: '/tmp/conv-123.jsonl',
+        cwd: '/tmp/workspace',
+        title: 'Investigate issue',
+        profile: 'assistant',
+        state: 'running',
+        updatedAt: new Date('2026-03-12T13:00:05.000Z'),
+        lastError: 'transient',
+        pendingOperation: {
+          type: 'prompt',
+          text: 'continue',
+          enqueuedAt: '2026-03-12T13:00:05.000Z',
+        },
+      }),
+    ).resolves.toEqual({ runId: 'run-daemon' });
 
     expect(syncWebLiveConversationRunStateMock).toHaveBeenCalledWith({
       conversationId: 'conv-123',
@@ -88,13 +86,15 @@ describe('conversationRuns daemon fallback', () => {
     pingDaemonMock.mockResolvedValue(true);
     syncWebLiveConversationRunStateMock.mockResolvedValue({ runId: 'run-daemon' });
 
-    await expect(syncWebLiveConversationRun({
-      conversationId: 'conv-invalid-time',
-      sessionFile: '/tmp/conv-invalid-time.jsonl',
-      cwd: '/tmp/workspace',
-      state: 'running',
-      updatedAt: 'not-a-date',
-    })).resolves.toEqual({ runId: 'run-daemon' });
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-invalid-time',
+        sessionFile: '/tmp/conv-invalid-time.jsonl',
+        cwd: '/tmp/workspace',
+        state: 'running',
+        updatedAt: 'not-a-date',
+      }),
+    ).resolves.toEqual({ runId: 'run-daemon' });
 
     expect(syncWebLiveConversationRunStateMock).toHaveBeenCalledWith({
       conversationId: 'conv-invalid-time',
@@ -108,13 +108,15 @@ describe('conversationRuns daemon fallback', () => {
     pingDaemonMock.mockResolvedValue(true);
     syncWebLiveConversationRunStateMock.mockResolvedValue({ runId: 'run-daemon' });
 
-    await expect(syncWebLiveConversationRun({
-      conversationId: 'conv-non-iso-time',
-      sessionFile: '/tmp/conv-non-iso-time.jsonl',
-      cwd: '/tmp/workspace',
-      state: 'running',
-      updatedAt: '9999',
-    })).resolves.toEqual({ runId: 'run-daemon' });
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-non-iso-time',
+        sessionFile: '/tmp/conv-non-iso-time.jsonl',
+        cwd: '/tmp/workspace',
+        state: 'running',
+        updatedAt: '9999',
+      }),
+    ).resolves.toEqual({ runId: 'run-daemon' });
 
     expect(syncWebLiveConversationRunStateMock).toHaveBeenCalledWith({
       conversationId: 'conv-non-iso-time',
@@ -128,21 +130,25 @@ describe('conversationRuns daemon fallback', () => {
     saveWebLiveConversationRunStateMock.mockResolvedValue({ runId: 'run-local' });
 
     pingDaemonMock.mockResolvedValueOnce(false);
-    await expect(syncWebLiveConversationRun({
-      conversationId: 'conv-124',
-      sessionFile: '/tmp/conv-124.jsonl',
-      cwd: '/tmp/workspace',
-      state: 'waiting',
-    })).resolves.toEqual({ runId: 'run-local' });
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-124',
+        sessionFile: '/tmp/conv-124.jsonl',
+        cwd: '/tmp/workspace',
+        state: 'waiting',
+      }),
+    ).resolves.toEqual({ runId: 'run-local' });
 
     pingDaemonMock.mockRejectedValueOnce(new Error('ECONNREFUSED: daemon unavailable'));
-    await expect(syncWebLiveConversationRun({
-      conversationId: 'conv-125',
-      sessionFile: '/tmp/conv-125.jsonl',
-      cwd: '/tmp/workspace',
-      state: 'waiting',
-      updatedAt: '2026-03-12T13:00:10.000Z',
-    })).resolves.toEqual({ runId: 'run-local' });
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-125',
+        sessionFile: '/tmp/conv-125.jsonl',
+        cwd: '/tmp/workspace',
+        state: 'waiting',
+        updatedAt: '2026-03-12T13:00:10.000Z',
+      }),
+    ).resolves.toEqual({ runId: 'run-local' });
 
     expect(saveWebLiveConversationRunStateMock).toHaveBeenNthCalledWith(1, {
       conversationId: 'conv-124',
@@ -162,12 +168,14 @@ describe('conversationRuns daemon fallback', () => {
   it('rethrows unexpected daemon errors during sync', async () => {
     pingDaemonMock.mockRejectedValue(new Error('permission denied'));
 
-    await expect(syncWebLiveConversationRun({
-      conversationId: 'conv-126',
-      sessionFile: '/tmp/conv-126.jsonl',
-      cwd: '/tmp/workspace',
-      state: 'waiting',
-    })).rejects.toThrow('permission denied');
+    await expect(
+      syncWebLiveConversationRun({
+        conversationId: 'conv-126',
+        sessionFile: '/tmp/conv-126.jsonl',
+        cwd: '/tmp/workspace',
+        state: 'waiting',
+      }),
+    ).rejects.toThrow('permission denied');
 
     expect(saveWebLiveConversationRunStateMock).not.toHaveBeenCalled();
     expect(syncWebLiveConversationRunStateMock).not.toHaveBeenCalled();
@@ -186,9 +194,7 @@ describe('conversationRuns daemon fallback', () => {
   });
 
   it('falls back to local recoverable runs when daemon listing is unavailable', async () => {
-    listRecoverableWebLiveConversationRunsLocalMock.mockReturnValue([
-      { runId: 'conversation-live-local', conversationId: 'local' },
-    ]);
+    listRecoverableWebLiveConversationRunsLocalMock.mockReturnValue([{ runId: 'conversation-live-local', conversationId: 'local' }]);
 
     pingDaemonMock.mockResolvedValueOnce(false);
     await expect(listRecoverableWebLiveConversationRuns()).resolves.toEqual([

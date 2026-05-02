@@ -1,14 +1,7 @@
 /* eslint-env node */
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -114,19 +107,24 @@ export function ensureElectronNativeModules() {
   mkdirSync(nativeModulesDir, { recursive: true });
   writeNativeModulesPackageJson();
 
-  runChecked('npm', [
-    'install',
-    '--prefix', nativeModulesDir,
-    '--workspaces=false',
-    '--no-package-lock',
-    '--ignore-scripts=false',
-    '--build-from-source',
-    '--runtime=electron',
-    `--target=${desiredStamp.electronVersion}`,
-    '--dist-url=https://electronjs.org/headers',
-  ], {
-    env: process.env,
-  });
+  runChecked(
+    'npm',
+    [
+      'install',
+      '--prefix',
+      nativeModulesDir,
+      '--workspaces=false',
+      '--no-package-lock',
+      '--ignore-scripts=false',
+      '--build-from-source',
+      '--runtime=electron',
+      `--target=${desiredStamp.electronVersion}`,
+      '--dist-url=https://electronjs.org/headers',
+    ],
+    {
+      env: process.env,
+    },
+  );
 
   if (!existsSync(nativeBetterSqliteBinary)) {
     throw new Error(`Electron-native better-sqlite3 binary was not produced at ${nativeBetterSqliteBinary}`);

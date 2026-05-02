@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildDesktopQuitConfirmationOptions, confirmDesktopQuit, hasDesktopQuitConfirmationBypassArg, shouldSkipDesktopQuitConfirmation } from './quit.js';
+
+import {
+  buildDesktopQuitConfirmationOptions,
+  confirmDesktopQuit,
+  hasDesktopQuitConfirmationBypassArg,
+  shouldSkipDesktopQuitConfirmation,
+} from './quit.js';
 
 describe('buildDesktopQuitConfirmationOptions', () => {
   it('builds a conservative quit confirmation for the menu bar app', () => {
@@ -15,16 +21,19 @@ describe('buildDesktopQuitConfirmationOptions', () => {
   });
 
   it('mentions an external daemon when the desktop app is attached to one', () => {
-    expect(buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
-      keepsExternalDaemonRunning: true,
-    })).toEqual({
+    expect(
+      buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
+        keepsExternalDaemonRunning: true,
+      }),
+    ).toEqual({
       type: 'question',
       buttons: ['Cancel', 'Quit Personal Agent'],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
       message: 'Quit Personal Agent?',
-      detail: 'Closing the window only hides it. Quitting closes the menu bar app, but an external daemon will keep running for automations until you stop it separately.',
+      detail:
+        'Closing the window only hides it. Quitting closes the menu bar app, but an external daemon will keep running for automations until you stop it separately.',
     });
   });
 
@@ -71,7 +80,9 @@ describe('confirmDesktopQuit', () => {
     };
 
     await expect(confirmDesktopQuit(dialogLike, 'Personal Agent', '/tmp/personal-agent-icon.png')).resolves.toBe(true);
-    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(buildDesktopQuitConfirmationOptions('Personal Agent', '/tmp/personal-agent-icon.png'));
+    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(
+      buildDesktopQuitConfirmationOptions('Personal Agent', '/tmp/personal-agent-icon.png'),
+    );
   });
 
   it('returns false when the user cancels the quit action', async () => {
@@ -87,12 +98,16 @@ describe('confirmDesktopQuit', () => {
       showMessageBox: vi.fn().mockResolvedValue({ response: 0 }),
     };
 
-    await expect(confirmDesktopQuit(dialogLike, 'Personal Agent', undefined, {
-      keepsExternalDaemonRunning: true,
-    })).resolves.toBe(false);
-    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
-      keepsExternalDaemonRunning: true,
-    }));
+    await expect(
+      confirmDesktopQuit(dialogLike, 'Personal Agent', undefined, {
+        keepsExternalDaemonRunning: true,
+      }),
+    ).resolves.toBe(false);
+    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(
+      buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
+        keepsExternalDaemonRunning: true,
+      }),
+    );
   });
 
   it('skips the dialog entirely when the launch disables quit confirmation', async () => {

@@ -81,13 +81,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function normalizeStopReason(value: unknown): string | null {
@@ -114,9 +116,7 @@ export function normalizeConversationAutoModeState(value: unknown): Conversation
 export function readConversationAutoModeStateFromEntries(entries: unknown[]): ConversationAutoModeState {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
-    if (!isRecord(entry)
-      || entry.type !== 'custom'
-      || entry.customType !== CONVERSATION_AUTO_MODE_STATE_CUSTOM_TYPE) {
+    if (!isRecord(entry) || entry.type !== 'custom' || entry.customType !== CONVERSATION_AUTO_MODE_STATE_CUSTOM_TYPE) {
       continue;
     }
 

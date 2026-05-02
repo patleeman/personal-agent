@@ -1,11 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type {
-  CompanionDeviceTokenResult,
-  CompanionPairedDeviceSummary,
-  CompanionPairingCode,
-} from './types.js';
+
+import type { CompanionDeviceTokenResult, CompanionPairedDeviceSummary, CompanionPairingCode } from './types.js';
 
 const PAIRING_CODE_TTL_MS = 10 * 60_000;
 const DEVICE_SESSION_TTL_MS = 30 * 24 * 60 * 60_000;
@@ -112,73 +109,77 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
 
   const pairingCodes = Array.isArray(raw?.pairingCodes)
     ? raw.pairingCodes.flatMap((entry): StoredPairingCode[] => {
-      if (!entry || typeof entry !== 'object') {
-        return [];
-      }
+        if (!entry || typeof entry !== 'object') {
+          return [];
+        }
 
-      const candidate = entry as Partial<StoredPairingCode>;
-      if (
-        typeof candidate.id !== 'string'
-        || typeof candidate.codeHash !== 'string'
-        || typeof candidate.createdAt !== 'string'
-        || typeof candidate.expiresAt !== 'string'
-      ) {
-        return [];
-      }
+        const candidate = entry as Partial<StoredPairingCode>;
+        if (
+          typeof candidate.id !== 'string' ||
+          typeof candidate.codeHash !== 'string' ||
+          typeof candidate.createdAt !== 'string' ||
+          typeof candidate.expiresAt !== 'string'
+        ) {
+          return [];
+        }
 
-      const createdAt = parseTimestamp(candidate.createdAt);
-      const expiresAt = parseTimestamp(candidate.expiresAt);
-      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-      if (!createdAt || !expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
-        return [];
-      }
+        const createdAt = parseTimestamp(candidate.createdAt);
+        const expiresAt = parseTimestamp(candidate.expiresAt);
+        const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+        if (!createdAt || !expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+          return [];
+        }
 
-      return [{
-        id: candidate.id,
-        codeHash: candidate.codeHash,
-        createdAt,
-        expiresAt,
-      }];
-    })
+        return [
+          {
+            id: candidate.id,
+            codeHash: candidate.codeHash,
+            createdAt,
+            expiresAt,
+          },
+        ];
+      })
     : [];
 
   const devices = Array.isArray(raw?.devices)
     ? raw.devices.flatMap((entry): StoredDeviceSession[] => {
-      if (!entry || typeof entry !== 'object') {
-        return [];
-      }
+        if (!entry || typeof entry !== 'object') {
+          return [];
+        }
 
-      const candidate = entry as Partial<StoredDeviceSession>;
-      if (
-        typeof candidate.id !== 'string'
-        || typeof candidate.deviceLabel !== 'string'
-        || typeof candidate.tokenHash !== 'string'
-        || typeof candidate.createdAt !== 'string'
-        || typeof candidate.lastUsedAt !== 'string'
-        || typeof candidate.expiresAt !== 'string'
-      ) {
-        return [];
-      }
+        const candidate = entry as Partial<StoredDeviceSession>;
+        if (
+          typeof candidate.id !== 'string' ||
+          typeof candidate.deviceLabel !== 'string' ||
+          typeof candidate.tokenHash !== 'string' ||
+          typeof candidate.createdAt !== 'string' ||
+          typeof candidate.lastUsedAt !== 'string' ||
+          typeof candidate.expiresAt !== 'string'
+        ) {
+          return [];
+        }
 
-      const createdAt = parseTimestamp(candidate.createdAt);
-      const lastUsedAt = parseTimestamp(candidate.lastUsedAt);
-      const expiresAt = parseTimestamp(candidate.expiresAt);
-      const revokedAt = parseTimestamp(candidate.revokedAt);
-      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-      if (!createdAt || !lastUsedAt || !expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
-        return [];
-      }
+        const createdAt = parseTimestamp(candidate.createdAt);
+        const lastUsedAt = parseTimestamp(candidate.lastUsedAt);
+        const expiresAt = parseTimestamp(candidate.expiresAt);
+        const revokedAt = parseTimestamp(candidate.revokedAt);
+        const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+        if (!createdAt || !lastUsedAt || !expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+          return [];
+        }
 
-      return [{
-        id: candidate.id,
-        deviceLabel: candidate.deviceLabel,
-        tokenHash: candidate.tokenHash,
-        createdAt,
-        lastUsedAt,
-        expiresAt,
-        ...(revokedAt ? { revokedAt } : {}),
-      }];
-    })
+        return [
+          {
+            id: candidate.id,
+            deviceLabel: candidate.deviceLabel,
+            tokenHash: candidate.tokenHash,
+            createdAt,
+            lastUsedAt,
+            expiresAt,
+            ...(revokedAt ? { revokedAt } : {}),
+          },
+        ];
+      })
     : [];
 
   return {
@@ -238,25 +239,29 @@ export function readCompanionDeviceAdminState(stateRoot: string, options?: { now
 }
 
 export function createCompanionPairingCode(stateRoot: string, options?: { now?: Date }): CompanionPairingCode {
-  return updateStore(stateRoot, (store, now) => {
-    const createdAt = toIso(now);
-    const expiresAt = toIso(new Date(now.getTime() + PAIRING_CODE_TTL_MS));
-    const code = generatePairingCode();
-    const id = generateId('pair');
-    store.pairingCodes.unshift({
-      id,
-      codeHash: hashSecret(normalizePairingCodeInput(code)),
-      createdAt,
-      expiresAt,
-    });
+  return updateStore(
+    stateRoot,
+    (store, now) => {
+      const createdAt = toIso(now);
+      const expiresAt = toIso(new Date(now.getTime() + PAIRING_CODE_TTL_MS));
+      const code = generatePairingCode();
+      const id = generateId('pair');
+      store.pairingCodes.unshift({
+        id,
+        codeHash: hashSecret(normalizePairingCodeInput(code)),
+        createdAt,
+        expiresAt,
+      });
 
-    return {
-      id,
-      code,
-      createdAt,
-      expiresAt,
-    };
-  }, options?.now);
+      return {
+        id,
+        code,
+        createdAt,
+        expiresAt,
+      };
+    },
+    options?.now,
+  );
 }
 
 export function pairCompanionDevice(
@@ -264,38 +269,42 @@ export function pairCompanionDevice(
   codeInput: string,
   options?: { deviceLabel?: string; now?: Date },
 ): CompanionDeviceTokenResult {
-  return updateStore(stateRoot, (store, now) => {
-    const normalizedCode = normalizePairingCodeInput(codeInput);
-    if (!normalizedCode) {
-      throw new Error('Pairing code required.');
-    }
+  return updateStore(
+    stateRoot,
+    (store, now) => {
+      const normalizedCode = normalizePairingCodeInput(codeInput);
+      if (!normalizedCode) {
+        throw new Error('Pairing code required.');
+      }
 
-    const codeHash = hashSecret(normalizedCode);
-    const pairingIndex = store.pairingCodes.findIndex((entry) => entry.codeHash === codeHash);
-    if (pairingIndex < 0) {
-      throw new Error('Pairing code is invalid or expired.');
-    }
+      const codeHash = hashSecret(normalizedCode);
+      const pairingIndex = store.pairingCodes.findIndex((entry) => entry.codeHash === codeHash);
+      if (pairingIndex < 0) {
+        throw new Error('Pairing code is invalid or expired.');
+      }
 
-    store.pairingCodes.splice(pairingIndex, 1);
+      store.pairingCodes.splice(pairingIndex, 1);
 
-    const createdAt = toIso(now);
-    const expiresAt = toIso(new Date(now.getTime() + DEVICE_SESSION_TTL_MS));
-    const bearerToken = generateSessionToken();
-    const device: StoredDeviceSession = {
-      id: generateId('device'),
-      deviceLabel: normalizeDeviceLabel(options?.deviceLabel),
-      tokenHash: hashSecret(bearerToken),
-      createdAt,
-      lastUsedAt: createdAt,
-      expiresAt,
-    };
-    store.devices.unshift(device);
+      const createdAt = toIso(now);
+      const expiresAt = toIso(new Date(now.getTime() + DEVICE_SESSION_TTL_MS));
+      const bearerToken = generateSessionToken();
+      const device: StoredDeviceSession = {
+        id: generateId('device'),
+        deviceLabel: normalizeDeviceLabel(options?.deviceLabel),
+        tokenHash: hashSecret(bearerToken),
+        createdAt,
+        lastUsedAt: createdAt,
+        expiresAt,
+      };
+      store.devices.unshift(device);
 
-    return {
-      bearerToken,
-      device: toDeviceSummary(device),
-    } satisfies CompanionDeviceTokenResult;
-  }, options?.now);
+      return {
+        bearerToken,
+        device: toDeviceSummary(device),
+      } satisfies CompanionDeviceTokenResult;
+    },
+    options?.now,
+  );
 }
 
 export function readCompanionDeviceByToken(
@@ -308,35 +317,43 @@ export function readCompanionDeviceByToken(
     return null;
   }
 
-  return updateStore(stateRoot, (store, now) => {
-    const tokenHash = hashSecret(normalizedToken);
-    const device = store.devices.find((entry) => entry.tokenHash === tokenHash && !entry.revokedAt);
-    if (!device) {
-      return null;
-    }
-
-    if (options?.touch !== false) {
-      const lastUsedAtMs = Date.parse(device.lastUsedAt);
-      if (!Number.isFinite(lastUsedAtMs) || now.getTime() - lastUsedAtMs >= DEVICE_SESSION_TOUCH_INTERVAL_MS) {
-        device.lastUsedAt = toIso(now);
-        device.expiresAt = toIso(new Date(now.getTime() + DEVICE_SESSION_TTL_MS));
+  return updateStore(
+    stateRoot,
+    (store, now) => {
+      const tokenHash = hashSecret(normalizedToken);
+      const device = store.devices.find((entry) => entry.tokenHash === tokenHash && !entry.revokedAt);
+      if (!device) {
+        return null;
       }
-    }
 
-    return toDeviceSummary(device);
-  }, options?.now);
+      if (options?.touch !== false) {
+        const lastUsedAtMs = Date.parse(device.lastUsedAt);
+        if (!Number.isFinite(lastUsedAtMs) || now.getTime() - lastUsedAtMs >= DEVICE_SESSION_TOUCH_INTERVAL_MS) {
+          device.lastUsedAt = toIso(now);
+          device.expiresAt = toIso(new Date(now.getTime() + DEVICE_SESSION_TTL_MS));
+        }
+      }
+
+      return toDeviceSummary(device);
+    },
+    options?.now,
+  );
 }
 
 export function revokeCompanionDevice(stateRoot: string, deviceId: string, options?: { now?: Date }): CompanionPairedDeviceSummary | null {
-  return updateStore(stateRoot, (store, now) => {
-    const device = store.devices.find((entry) => entry.id === deviceId && !entry.revokedAt);
-    if (!device) {
-      return null;
-    }
+  return updateStore(
+    stateRoot,
+    (store, now) => {
+      const device = store.devices.find((entry) => entry.id === deviceId && !entry.revokedAt);
+      if (!device) {
+        return null;
+      }
 
-    device.revokedAt = toIso(now);
-    return toDeviceSummary(device);
-  }, options?.now);
+      device.revokedAt = toIso(now);
+      return toDeviceSummary(device);
+    },
+    options?.now,
+  );
 }
 
 export function updateCompanionDeviceLabel(
@@ -345,13 +362,17 @@ export function updateCompanionDeviceLabel(
   deviceLabel: string,
   options?: { now?: Date },
 ): CompanionPairedDeviceSummary | null {
-  return updateStore(stateRoot, (store, _now) => {
-    const device = store.devices.find((entry) => entry.id === deviceId && !entry.revokedAt);
-    if (!device) {
-      return null;
-    }
+  return updateStore(
+    stateRoot,
+    (store, _now) => {
+      const device = store.devices.find((entry) => entry.id === deviceId && !entry.revokedAt);
+      if (!device) {
+        return null;
+      }
 
-    device.deviceLabel = normalizeDeviceLabel(deviceLabel);
-    return toDeviceSummary(device);
-  }, options?.now);
+      device.deviceLabel = normalizeDeviceLabel(deviceLabel);
+      return toDeviceSummary(device);
+    },
+    options?.now,
+  );
 }

@@ -3,17 +3,18 @@
  * Tests queue-full behavior and dropped event accounting
  */
 
+import { randomUUID } from 'crypto';
 import { mkdtempSync } from 'fs';
 import { rm } from 'fs/promises';
+import { createConnection } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createConnection } from 'net';
-import { randomUUID } from 'crypto';
-import { PersonalAgentDaemon } from './server.js';
+
 import type { DaemonConfig } from './config.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent } from './events.js';
+import { PersonalAgentDaemon } from './server.js';
 
 const tempDirs: string[] = [];
 
@@ -282,7 +283,7 @@ describe('EventBus queue behavior', () => {
           type: 'test.event',
           source: 'test',
           payload: {},
-        })
+        }),
       );
     }
 

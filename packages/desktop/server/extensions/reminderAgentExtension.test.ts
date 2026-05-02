@@ -2,9 +2,11 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDeferredResumeState } from '@personal-agent/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createReminderAgentExtension } from './reminderAgentExtension.js';
 
 const tempDirs: string[] = [];
@@ -80,19 +82,21 @@ describe('reminder agent extension', () => {
 
     const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
     const storedReminder = Object.values(state.resumes)[0];
-    expect(storedReminder).toEqual(expect.objectContaining({
-      sessionFile: '/tmp/sessions/conv-123.jsonl',
-      prompt: 'Watch Mosaic and approve the kube changes.',
-      title: 'Watch the prod gates',
-      kind: 'reminder',
-      status: 'scheduled',
-      source: { kind: 'reminder-tool' },
-      delivery: {
-        alertLevel: 'disruptive',
-        autoResumeIfOpen: true,
-        requireAck: true,
-      },
-    }));
+    expect(storedReminder).toEqual(
+      expect.objectContaining({
+        sessionFile: '/tmp/sessions/conv-123.jsonl',
+        prompt: 'Watch Mosaic and approve the kube changes.',
+        title: 'Watch the prod gates',
+        kind: 'reminder',
+        status: 'scheduled',
+        source: { kind: 'reminder-tool' },
+        delivery: {
+          alertLevel: 'disruptive',
+          autoResumeIfOpen: true,
+          requireAck: true,
+        },
+      }),
+    );
   });
 
   it('accepts absolute reminder times', async () => {
@@ -123,16 +127,12 @@ describe('reminder agent extension', () => {
   it('requires a persisted session file', async () => {
     const registeredTool = registerReminderTool();
 
-    await expect(registeredTool.execute(
-      'tool-1',
-      { delay: '10m', prompt: 'Ping me later.' },
-      undefined,
-      undefined,
-      {
+    await expect(
+      registeredTool.execute('tool-1', { delay: '10m', prompt: 'Ping me later.' }, undefined, undefined, {
         sessionManager: {
           getSessionFile: () => undefined,
         },
-      } as ExecuteContext,
-    )).rejects.toThrow('Reminder requires a persisted session file.');
+      } as ExecuteContext),
+    ).rejects.toThrow('Reminder requires a persisted session file.');
   });
 });

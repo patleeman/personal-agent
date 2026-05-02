@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { APP_LAYOUT_MODE_CHANGED_EVENT, createAppLayoutModeChangedEvent, writeAppLayoutMode } from './appLayoutMode';
 
 describe('app layout mode state', () => {

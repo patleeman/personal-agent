@@ -2,7 +2,10 @@ const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent';
 
 function resolveDesktopReleaseRepoSlug(value = process.env.PERSONAL_AGENT_RELEASE_REPO) {
   const normalizedValue = value?.trim() || DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
-  const parts = normalizedValue.split('/').map((part) => part.trim()).filter((part) => part.length > 0);
+  const parts = normalizedValue
+    .split('/')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
   if (parts.length !== 2) {
     return DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
   }
@@ -58,11 +61,7 @@ const electronBuilderConfig = {
     '!node_modules/better-sqlite3/{deps,src}{,/**/*}',
     '!node_modules/better-sqlite3/build/Release/obj{,/**/*}',
   ],
-  asarUnpack: [
-    'node_modules/better-sqlite3/**/*',
-    'node_modules/bindings/**/*',
-    'node_modules/file-uri-to-path/**/*',
-  ],
+  asarUnpack: ['node_modules/better-sqlite3/**/*', 'node_modules/bindings/**/*', 'node_modules/file-uri-to-path/**/*'],
   extraMetadata: {
     main: './dist/main.js',
   },

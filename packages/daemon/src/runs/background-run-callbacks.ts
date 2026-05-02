@@ -1,11 +1,12 @@
-import { existsSync, readFileSync } from 'fs';
 import {
   createReadyDeferredResume,
+  type DeferredResumeAlertLevel,
   loadDeferredResumeState,
   resolveDeferredResumeStateFile,
   saveDeferredResumeState,
-  type DeferredResumeAlertLevel,
 } from '@personal-agent/core';
+import { existsSync, readFileSync } from 'fs';
+
 import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
 import { markDeferredResumeConversationRunReady } from './deferred-resume-conversations.js';
 import {
@@ -44,9 +45,7 @@ function readOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function readAlertLevel(value: unknown): DeferredResumeAlertLevel | undefined {
-  return value === 'none' || value === 'passive' || value === 'disruptive'
-    ? value
-    : undefined;
+  return value === 'none' || value === 'passive' || value === 'disruptive' ? value : undefined;
 }
 
 function sanitizeIdSegment(value: string): string {
@@ -59,11 +58,7 @@ function sanitizeIdSegment(value: string): string {
 }
 
 function readSpec(run: ScannedDurableRun): Record<string, unknown> | undefined {
-  return isRecord(run.manifest?.spec)
-    ? run.manifest.spec
-    : isRecord(run.checkpoint?.payload)
-      ? run.checkpoint.payload
-      : undefined;
+  return isRecord(run.manifest?.spec) ? run.manifest.spec : isRecord(run.checkpoint?.payload) ? run.checkpoint.payload : undefined;
 }
 
 function readMetadata(run: ScannedDurableRun): Record<string, unknown> | undefined {
@@ -83,9 +78,7 @@ function readCheckpointPayload(run: ScannedDurableRun): Record<string, unknown> 
 function readTaskSlug(run: ScannedDurableRun): string {
   const spec = readSpec(run);
   const metadata = readMetadata(run);
-  return readOptionalString(metadata?.taskSlug)
-    ?? readOptionalString(spec?.taskSlug)
-    ?? run.runId;
+  return readOptionalString(metadata?.taskSlug) ?? readOptionalString(spec?.taskSlug) ?? run.runId;
 }
 
 function readTargetCommand(run: ScannedDurableRun): string | undefined {
@@ -110,12 +103,7 @@ function readLogTail(path: string, maxLines: number): string {
   }
 
   try {
-    return readFileSync(path, 'utf-8')
-      .replace(/\r\n/g, '\n')
-      .split('\n')
-      .slice(-maxLines)
-      .join('\n')
-      .trim() || '(empty log)';
+    return readFileSync(path, 'utf-8').replace(/\r\n/g, '\n').split('\n').slice(-maxLines).join('\n').trim() || '(empty log)';
   } catch {
     return '(log unavailable)';
   }
@@ -125,12 +113,7 @@ function buildWakeupPrompt(run: ScannedDurableRun): string {
   const taskSlug = readTaskSlug(run);
   const status = run.status?.status ?? 'unknown';
   const logPath = run.paths.outputLogPath;
-  const lines = [
-    `Background task ${run.runId} has finished.`,
-    `taskSlug=${taskSlug}`,
-    `status=${status}`,
-    `log=${logPath}`,
-  ];
+  const lines = [`Background task ${run.runId} has finished.`, `taskSlug=${taskSlug}`, `status=${status}`, `log=${logPath}`];
 
   const command = readTargetCommand(run);
   if (command) {
@@ -237,9 +220,7 @@ function markBackgroundRunCallbackDelivered(input: {
 }
 
 function shouldDeliverCallbackForStatus(status: string | undefined): boolean {
-  return status === 'completed'
-    || status === 'failed'
-    || status === 'interrupted';
+  return status === 'completed' || status === 'failed' || status === 'interrupted';
 }
 
 export async function deliverBackgroundRunCallbackWakeup(input: {
@@ -272,10 +253,7 @@ export async function deliverBackgroundRunCallbackWakeup(input: {
     };
   }
 
-  const readyAt = run.status?.completedAt
-    ?? run.status?.updatedAt
-    ?? run.manifest?.createdAt
-    ?? new Date().toISOString();
+  const readyAt = run.status?.completedAt ?? run.status?.updatedAt ?? run.manifest?.createdAt ?? new Date().toISOString();
   const createdAt = run.manifest?.createdAt ?? readyAt;
   const prompt = buildWakeupPrompt(run);
   const title = buildWakeupTitle(run);

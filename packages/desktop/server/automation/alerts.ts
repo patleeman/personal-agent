@@ -1,6 +1,8 @@
 import {
   acknowledgeAlert,
+  type AlertRecord,
   countActiveAlerts,
+  type DeferredResumeRecord,
   dismissAlert,
   getAlert,
   listAlerts,
@@ -9,14 +11,8 @@ import {
   readSessionConversationId,
   retryDeferredResume,
   saveDeferredResumeState,
-  type AlertRecord,
-  type DeferredResumeRecord,
 } from '@personal-agent/core';
-import {
-  loadDaemonConfig,
-  markDeferredResumeConversationRunSnoozed,
-  resolveDaemonPaths,
-} from '@personal-agent/daemon';
+import { loadDaemonConfig, markDeferredResumeConversationRunSnoozed, resolveDaemonPaths } from '@personal-agent/daemon';
 
 export interface AlertSummary extends AlertRecord {}
 
@@ -53,13 +49,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7]) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function normalizeIsoTimestamp(value: string): string | undefined {

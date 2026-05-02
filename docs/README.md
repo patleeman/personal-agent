@@ -76,23 +76,23 @@ These live under `internal-skills/` because they describe runtime features rathe
 
 ## Read by question
 
-| Question | Start here | Then read |
-| --- | --- | --- |
-| What durable surface should I use? | [Decision Guide](./decision-guide.md) | feature-specific doc or internal skill |
-| What is the actual state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md) |
-| How does dictation transcription plug in? | [Dictation transcription](./dictation-transcription.md) | [Configuration](./configuration.md) |
-| Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
-| How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
-| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Desktop App](./desktop-app.md), [Command-Line Guide (`pa`)](./command-line.md) |
-| How does the phone app connect? | [iOS Companion](./ios-companion.md) | [Daemon](./daemon.md), [Configuration](./configuration.md) |
-| How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md), [Auto Mode](../internal-skills/auto-mode/INDEX.md) |
-| Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |
-| How do MCP servers fit in? | [MCP](./mcp.md) | `pa mcp help` for exact CLI flags |
-| How do checkpoints and diffs work? | [Checkpoints](./checkpoints.md) | [Conversations](./conversations.md), [Desktop App](./desktop-app.md) |
-| How does knowledge base sync work? | [Knowledge Base Sync](./knowledge-base-sync.md) | [Configuration](./configuration.md) |
-| How do models and providers work? | [Models and Providers](./models-and-providers.md) | [Configuration](./configuration.md) |
-| What extensions are loaded? | [Extensions](./extensions.md) | [Configuration](./configuration.md) |
-| How do I ship the desktop app? | [Release Cycle](./release-cycle.md) | repo `AGENTS.md` release notes |
+| Question                                        | Start here                                              | Then read                                                                                                                                                    |
+| ----------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What durable surface should I use?              | [Decision Guide](./decision-guide.md)                   | feature-specific doc or internal skill                                                                                                                       |
+| What is the actual state model?                 | [How personal-agent works](./how-it-works.md)           | [Configuration](./configuration.md)                                                                                                                          |
+| How does dictation transcription plug in?       | [Dictation transcription](./dictation-transcription.md) | [Configuration](./configuration.md)                                                                                                                          |
+| Where should reusable knowledge live?           | [Knowledge System](./knowledge-system.md)               | [Projects](./projects.md) when structure matters                                                                                                             |
+| How should a conversation keep durable context? | [Conversation Context](./conversation-context.md)       | [Conversations](./conversations.md)                                                                                                                          |
+| How do I operate the app locally?               | [Getting Started](./getting-started.md)                 | [Desktop App](./desktop-app.md), [Command-Line Guide (`pa`)](./command-line.md)                                                                              |
+| How does the phone app connect?                 | [iOS Companion](./ios-companion.md)                     | [Daemon](./daemon.md), [Configuration](./configuration.md)                                                                                                   |
+| How do background jobs and automations work?    | [Daemon](./daemon.md)                                   | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md), [Auto Mode](../internal-skills/auto-mode/INDEX.md) |
+| Where should code for a new feature live?       | [Repo Layout](./repo-layout.md)                         | package-local files it links to                                                                                                                              |
+| How do MCP servers fit in?                      | [MCP](./mcp.md)                                         | `pa mcp help` for exact CLI flags                                                                                                                            |
+| How do checkpoints and diffs work?              | [Checkpoints](./checkpoints.md)                         | [Conversations](./conversations.md), [Desktop App](./desktop-app.md)                                                                                         |
+| How does knowledge base sync work?              | [Knowledge Base Sync](./knowledge-base-sync.md)         | [Configuration](./configuration.md)                                                                                                                          |
+| How do models and providers work?               | [Models and Providers](./models-and-providers.md)       | [Configuration](./configuration.md)                                                                                                                          |
+| What extensions are loaded?                     | [Extensions](./extensions.md)                           | [Configuration](./configuration.md)                                                                                                                          |
+| How do I ship the desktop app?                  | [Release Cycle](./release-cycle.md)                     | repo `AGENTS.md` release notes                                                                                                                               |
 
 ## Rules for agents
 

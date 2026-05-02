@@ -1,11 +1,8 @@
 import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  authStorageCreateMock,
-  getPiAgentRuntimeDirMock,
-  modelRegistryCreateMock,
-} = vi.hoisted(() => ({
+const { authStorageCreateMock, getPiAgentRuntimeDirMock, modelRegistryCreateMock } = vi.hoisted(() => ({
   authStorageCreateMock: vi.fn(),
   getPiAgentRuntimeDirMock: vi.fn(),
   modelRegistryCreateMock: vi.fn(),
@@ -44,10 +41,7 @@ describe('model registry helpers', () => {
     modelRegistryCreateMock.mockReturnValue(registry);
 
     expect(createRuntimeModelRegistry(authStorage as never)).toBe(registry);
-    expect(modelRegistryCreateMock).toHaveBeenCalledWith(
-      authStorage,
-      '/runtime/pi-agent-runtime/models.json',
-    );
+    expect(modelRegistryCreateMock).toHaveBeenCalledWith(authStorage, '/runtime/pi-agent-runtime/models.json');
   });
 
   it('creates a registry beside the provided auth file', () => {
@@ -63,18 +57,13 @@ describe('model registry helpers', () => {
 
     expect(createModelRegistryForAuthFile(authFile)).toBe(registry);
     expect(authStorageCreateMock).toHaveBeenCalledWith(authFile);
-    expect(modelRegistryCreateMock).toHaveBeenCalledWith(
-      authStorage,
-      join('/tmp/profile', 'models.json'),
-    );
+    expect(modelRegistryCreateMock).toHaveBeenCalledWith(authStorage, join('/tmp/profile', 'models.json'));
   });
 
   it('normalizes GPT-5.5 context metadata returned by runtime registries', () => {
     const authStorage = { kind: 'auth-storage' };
     const registry = {
-      getAll: vi.fn(() => [
-        { id: 'gpt-5.5', provider: 'openai-codex', contextWindow: 272_000 },
-      ]),
+      getAll: vi.fn(() => [{ id: 'gpt-5.5', provider: 'openai-codex', contextWindow: 272_000 }]),
       getAvailable: vi.fn(() => [
         { id: 'gpt-5.5', provider: 'openai-codex', contextWindow: 272_000 },
         { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 272_000 },
@@ -90,9 +79,7 @@ describe('model registry helpers', () => {
       { id: 'gpt-5.5', provider: 'openai-codex', contextWindow: 400_000 },
       { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 272_000 },
     ]);
-    expect(created.getAll()).toEqual([
-      { id: 'gpt-5.5', provider: 'openai-codex', contextWindow: 400_000 },
-    ]);
+    expect(created.getAll()).toEqual([{ id: 'gpt-5.5', provider: 'openai-codex', contextWindow: 400_000 }]);
     expect(created.find('openai-codex', 'gpt-5.5')).toEqual({
       id: 'gpt-5.5',
       provider: 'openai-codex',
@@ -103,12 +90,8 @@ describe('model registry helpers', () => {
   it('rejects unsafe context metadata returned by runtime registries', () => {
     const authStorage = { kind: 'auth-storage' };
     const registry = {
-      getAll: vi.fn(() => [
-        { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 },
-      ]),
-      getAvailable: vi.fn(() => [
-        { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 },
-      ]),
+      getAll: vi.fn(() => [{ id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 }]),
+      getAvailable: vi.fn(() => [{ id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 }]),
       find: vi.fn(() => ({ id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 })),
     };
     getPiAgentRuntimeDirMock.mockReturnValue('/runtime/pi-agent-runtime');
@@ -116,12 +99,8 @@ describe('model registry helpers', () => {
 
     const created = createRuntimeModelRegistry(authStorage as never);
 
-    expect(created.getAvailable()).toEqual([
-      { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 128_000 },
-    ]);
-    expect(created.getAll()).toEqual([
-      { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 128_000 },
-    ]);
+    expect(created.getAvailable()).toEqual([{ id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 128_000 }]);
+    expect(created.getAll()).toEqual([{ id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 128_000 }]);
     expect(created.find('openai-codex', 'gpt-5.4')).toEqual({
       id: 'gpt-5.4',
       provider: 'openai-codex',

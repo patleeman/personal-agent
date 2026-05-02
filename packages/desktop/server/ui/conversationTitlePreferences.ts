@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+
 import { readConversationAutoTitleSettings } from '../conversations/conversationAutoTitle.js';
 
 export interface SavedConversationTitlePreferences {

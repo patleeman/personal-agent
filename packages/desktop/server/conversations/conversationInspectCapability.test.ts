@@ -206,7 +206,15 @@ describe('conversationInspectCapability', () => {
       blocks: [
         { type: 'user', id: 'user-1', ts: '2026-04-20T10:00:00.000Z', text: 'Fix the details page.' },
         { type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:01.000Z', text: 'I will inspect SessionDetail first.' },
-        { type: 'tool_use', id: 'tool-1', ts: '2026-04-20T10:00:02.000Z', tool: 'bash', input: { command: 'eslint ModelInfo' }, output: 'SessionDetail imports ModelInfo.', toolCallId: 'call-1' },
+        {
+          type: 'tool_use',
+          id: 'tool-1',
+          ts: '2026-04-20T10:00:02.000Z',
+          tool: 'bash',
+          input: { command: 'eslint ModelInfo' },
+          output: 'SessionDetail imports ModelInfo.',
+          toolCallId: 'call-1',
+        },
       ],
     });
 
@@ -313,9 +321,7 @@ describe('conversationInspectCapability', () => {
       },
     ]);
     readSessionBlocksByFileMock.mockReturnValue({
-      blocks: [
-        { type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:01.000Z', text: 'The deploy\n\nsummary is ready.' },
-      ],
+      blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:01.000Z', text: 'The deploy\n\nsummary is ready.' }],
     });
 
     const result = searchConversationInspectSessions({ query: 'deploy summary' });
@@ -437,14 +443,18 @@ describe('conversationInspectCapability', () => {
     });
 
     expect(result.blocks.map((block) => block.id)).toEqual(['user-1', 'assistant-1']);
-    expect(() => queryConversationInspectBlocks({
-      conversationId: 'conv-roles',
-      types: ['assistant'],
-    })).toThrow('Valid values: user, text, context, summary, tool_use, image, error');
-    expect(() => queryConversationInspectBlocks({
-      conversationId: 'conv-roles',
-      roles: ['bot'],
-    })).toThrow('Valid values: user, assistant, tool, context, summary, image, error');
+    expect(() =>
+      queryConversationInspectBlocks({
+        conversationId: 'conv-roles',
+        types: ['assistant'],
+      }),
+    ).toThrow('Valid values: user, text, context, summary, tool_use, image, error');
+    expect(() =>
+      queryConversationInspectBlocks({
+        conversationId: 'conv-roles',
+        roles: ['bot'],
+      }),
+    ).toThrow('Valid values: user, assistant, tool, context, summary, image, error');
   });
 
   it('supports aroundBlockId windows and rejects conflicting range inputs', () => {
@@ -475,11 +485,13 @@ describe('conversationInspectCapability', () => {
 
     expect(windowed.blocks.map((block) => block.id)).toEqual(['block-2', 'block-3', 'block-4']);
 
-    expect(() => queryConversationInspectBlocks({
-      conversationId: 'conv-3',
-      aroundBlockId: 'block-3',
-      afterBlockId: 'block-1',
-    })).toThrow('aroundBlockId cannot be combined');
+    expect(() =>
+      queryConversationInspectBlocks({
+        conversationId: 'conv-3',
+        aroundBlockId: 'block-3',
+        afterBlockId: 'block-1',
+      }),
+    ).toThrow('aroundBlockId cannot be combined');
   });
 
   it('short-circuits diff reads when the signature is unchanged', () => {
@@ -493,9 +505,7 @@ describe('conversationInspectCapability', () => {
     readConversationSessionSignatureMock.mockReturnValue('sig-1');
     readSessionBlocksByFileMock.mockReturnValue({
       signature: 'sig-1',
-      blocks: [
-        { type: 'text', id: 'block-1', ts: '2026-04-20T10:00:00.000Z', text: 'steady state' },
-      ],
+      blocks: [{ type: 'text', id: 'block-1', ts: '2026-04-20T10:00:00.000Z', text: 'steady state' }],
     });
 
     const result = diffConversationInspectBlocks({
@@ -527,7 +537,15 @@ describe('conversationInspectCapability', () => {
       blocks: [
         { type: 'user', id: 'block-1', ts: '2026-04-20T10:00:00.000Z', text: 'start' },
         { type: 'text', id: 'block-2', ts: '2026-04-20T10:00:01.000Z', text: 'middle' },
-        { type: 'tool_use', id: 'block-3', ts: '2026-04-20T10:00:02.000Z', tool: 'read', input: { path: 'foo.ts' }, output: 'patched', toolCallId: 'call-3' },
+        {
+          type: 'tool_use',
+          id: 'block-3',
+          ts: '2026-04-20T10:00:02.000Z',
+          tool: 'read',
+          input: { path: 'foo.ts' },
+          output: 'patched',
+          toolCallId: 'call-3',
+        },
         { type: 'text', id: 'block-4', ts: '2026-04-20T10:00:03.000Z', text: 'done' },
       ],
     });

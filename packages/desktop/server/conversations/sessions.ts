@@ -14,17 +14,24 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
+
+import { type SessionEntry, SessionManager } from '@mariozechner/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
-import {
-  SessionManager,
-  type SessionEntry,
-} from '@mariozechner/pi-coding-agent';
-import {
-  readSessionContextUsageFromEntries,
-  type SessionContextUsageSnapshot,
-} from './sessionContextUsage.js';
+
+import { readSessionContextUsageFromEntries, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
 
 const DEFAULT_SESSIONS_DIR = getDurableSessionsDir();
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
@@ -142,7 +149,16 @@ interface RawBranchSummary {
   fromId: string;
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawThinkingLevelChange | RawSessionInfo | RawCustomEntry | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
+type RawLine =
+  | RawSessionRecord
+  | RawModelChange
+  | RawThinkingLevelChange
+  | RawSessionInfo
+  | RawCustomEntry
+  | RawMessage
+  | RawCustomMessage
+  | RawCompaction
+  | RawBranchSummary;
 type RawDisplayLine = RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 
 interface TailScanDisplayEntrySummary {
@@ -166,13 +182,13 @@ type TailScanEntrySummary = TailScanDisplayEntrySummary | TailScanLineageSummary
 
 export interface SessionMeta {
   id: string;
-  file: string;          // absolute path
+  file: string; // absolute path
   timestamp: string;
   cwd: string;
   workspaceCwd?: string | null;
-  cwdSlug: string;       // directory name without leading/trailing --
+  cwdSlug: string; // directory name without leading/trailing --
   model: string;
-  title: string;         // session display name or derived fallback title
+  title: string; // session display name or derived fallback title
   messageCount: number;
   isRunning?: boolean;
   isLive?: boolean;
@@ -236,14 +252,36 @@ interface DisplayImage {
 }
 
 export type DisplayBlock =
-  | { type: 'user';     id: string; ts: string; text: string; images?: DisplayImage[] }
-  | { type: 'text';     id: string; ts: string; text: string }
-  | { type: 'context';  id: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
+  | { type: 'user'; id: string; ts: string; text: string; images?: DisplayImage[] }
+  | { type: 'text'; id: string; ts: string; text: string }
+  | { type: 'context'; id: string; ts: string; text: string; customType?: string }
+  | { type: 'summary'; id: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
-  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
-  | { type: 'error';    id: string; ts: string; tool?: string; message: string };
+  | {
+      type: 'tool_use';
+      id: string;
+      ts: string;
+      tool: string;
+      input: Record<string, unknown>;
+      output: string;
+      durationMs?: number;
+      toolCallId: string;
+      details?: unknown;
+      outputDeferred?: boolean;
+    }
+  | {
+      type: 'image';
+      id: string;
+      ts: string;
+      alt: string;
+      src?: string;
+      mimeType?: string;
+      width?: number;
+      height?: number;
+      caption?: string;
+      deferred?: boolean;
+    }
+  | { type: 'error'; id: string; ts: string; tool?: string; message: string };
 
 interface CachedSessionMeta {
   signature: string;
@@ -309,10 +347,7 @@ function parseJsonLine(rawLine: string): RawLine | null {
 }
 
 function isRawDisplayLine(line: RawLine): line is RawDisplayLine {
-  return line.type === 'message'
-    || line.type === 'custom_message'
-    || line.type === 'compaction'
-    || line.type === 'branch_summary';
+  return line.type === 'message' || line.type === 'custom_message' || line.type === 'compaction' || line.type === 'branch_summary';
 }
 
 const SESSION_SUMMARY_SANITIZE_PATTERN = /"(content|data|text|thinking|summary|errorMessage)":"((?:\\.|[^"\\])*)"/g;
@@ -427,12 +462,8 @@ function summarizeTailScanEntry(rawLine: string): TailScanEntrySummary | null {
     return null;
   }
 
-  const id = 'id' in parsed && typeof parsed.id === 'string'
-    ? parsed.id
-    : null;
-  const parentId = 'parentId' in parsed && (typeof parsed.parentId === 'string' || parsed.parentId === null)
-    ? parsed.parentId
-    : undefined;
+  const id = 'id' in parsed && typeof parsed.id === 'string' ? parsed.id : null;
+  const parentId = 'parentId' in parsed && (typeof parsed.parentId === 'string' || parsed.parentId === null) ? parsed.parentId : undefined;
 
   if (!id || parentId === undefined) {
     return null;
@@ -496,9 +527,7 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
   }
 
   const chronologicalDisplayEntries = branchDisplayEntries.slice().reverse();
-  const hiddenEntryIds = collectHiddenTranscriptEntryIds(
-    chronologicalDisplayEntries.map((entry) => entry.displayEntry),
-  );
+  const hiddenEntryIds = collectHiddenTranscriptEntryIds(chronologicalDisplayEntries.map((entry) => entry.displayEntry));
   const visibleEntries = chronologicalDisplayEntries.filter((entry) => !hiddenEntryIds.has(entry.id));
   const totalBlocks = visibleEntries.reduce((sum, entry) => sum + entry.visibleBlockCount, 0);
   const tailBlockLimit = Math.min(tailBlocks, totalBlocks);
@@ -532,7 +561,7 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
 
       const sanitizedLine = sanitizeSessionLineForSummary(rawLine);
       const parsed = parseJsonLine(sanitizedLine) as unknown;
-      if (!parsed || typeof parsed !== 'object' || !(('id' in parsed) && typeof parsed.id === 'string')) {
+      if (!parsed || typeof parsed !== 'object' || !('id' in parsed && typeof parsed.id === 'string')) {
         return retainedIds.size > 0;
       }
 
@@ -558,9 +587,8 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
 
   const rebasedBlocks = rebaseDisplayBlockIds(buildDisplayBlocksFromEntries(detailEntries), droppedVisibleBlockCount);
   const blocksWithAssets = decorateSessionAssetUrls(rebasedBlocks, meta.id);
-  const blocks = droppedVisibleBlockCount > 0
-    ? deferHeavyBlockContent(blocksWithAssets, droppedVisibleBlockCount, totalBlocks)
-    : blocksWithAssets;
+  const blocks =
+    droppedVisibleBlockCount > 0 ? deferHeavyBlockContent(blocksWithAssets, droppedVisibleBlockCount, totalBlocks) : blocksWithAssets;
 
   return {
     meta,
@@ -627,13 +655,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function imageMimeType(block: RawContentBlock): string | undefined {
@@ -683,16 +713,14 @@ function extractUserContent(content: unknown): { text: string; images: DisplayIm
         return [];
       }
 
-      return [{
-        alt: typeof block.name === 'string' && block.name.trim().length > 0
-          ? `Attached image: ${block.name.trim()}`
-          : 'Attached image',
-        src,
-        mimeType,
-        ...(typeof block.name === 'string' && block.name.trim().length > 0
-          ? { caption: block.name.trim() }
-          : {}),
-      }];
+      return [
+        {
+          alt: typeof block.name === 'string' && block.name.trim().length > 0 ? `Attached image: ${block.name.trim()}` : 'Attached image',
+          src,
+          mimeType,
+          ...(typeof block.name === 'string' && block.name.trim().length > 0 ? { caption: block.name.trim() } : {}),
+        },
+      ];
     });
   return { text, images };
 }
@@ -706,16 +734,12 @@ function resolveProviderCompactionLabel(details: unknown): string | undefined {
     return undefined;
   }
 
-  const nativeDetails = isRecord(details.nativeCompaction)
-    ? details.nativeCompaction
-    : details;
+  const nativeDetails = isRecord(details.nativeCompaction) ? details.nativeCompaction : details;
   if (!isRecord(nativeDetails) || nativeDetails.provider !== 'openai-responses-compact') {
     return undefined;
   }
 
-  const modelKey = typeof nativeDetails.modelKey === 'string'
-    ? nativeDetails.modelKey.trim()
-    : '';
+  const modelKey = typeof nativeDetails.modelKey === 'string' ? nativeDetails.modelKey.trim() : '';
   if (modelKey.startsWith('openai-codex:')) {
     return 'Codex compaction';
   }
@@ -728,32 +752,27 @@ function resolveProviderCompactionLabel(details: unknown): string | undefined {
 
 function resolveCompactionSummarySupplement(details: unknown): string | undefined {
   const label = resolveProviderCompactionLabel(details);
-  return label
-    ? `This used ${label} under the hood. Pi kept the text summary for display and portability.`
-    : undefined;
+  return label ? `This used ${label} under the hood. Pi kept the text summary for display and portability.` : undefined;
 }
 
-export function getAssistantErrorDisplayMessage(message: {
-  stopReason?: string;
-  errorMessage?: string;
-}): string | null {
+export function getAssistantErrorDisplayMessage(message: { stopReason?: string; errorMessage?: string }): string | null {
   if (message.stopReason !== 'error') {
     return null;
   }
 
   const errorMessage = message.errorMessage?.trim();
-  return errorMessage && errorMessage.length > 0
-    ? errorMessage
-    : 'The model returned an error before completing its response.';
+  return errorMessage && errorMessage.length > 0 ? errorMessage : 'The model returned an error before completing its response.';
 }
 
 const RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
 const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
-  return message.role === 'custom'
-    && message.display === true
-    && (message.customType === 'referenced_context' || message.customType === CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE);
+  return (
+    message.role === 'custom' &&
+    message.display === true &&
+    (message.customType === 'referenced_context' || message.customType === CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE)
+  );
 }
 
 function formatRelatedThreadsSummaryText(text: string): string {
@@ -763,9 +782,7 @@ function formatRelatedThreadsSummaryText(text: string): string {
   }
 
   const firstConversationIndex = normalized.search(/^Conversation\s+\d+\s+—\s+/m);
-  const displayText = firstConversationIndex >= 0
-    ? normalized.slice(firstConversationIndex).trim()
-    : normalized;
+  const displayText = firstConversationIndex >= 0 ? normalized.slice(firstConversationIndex).trim() : normalized;
 
   return displayText
     .replace(/^Conversation\s+(\d+)\s+—\s+(.+)$/gm, '### Conversation $1 — $2')
@@ -779,7 +796,9 @@ function resolveRelatedThreadsSummaryDetail(text: string): string {
     return 'Selected conversations were summarized and injected before this prompt so this thread could start with reused context.';
   }
 
-  return `${conversationCount} selected conversation${conversationCount === 1 ? '' : 's'} ${conversationCount === 1 ? 'was' : 'were'} summarized and injected before this prompt so this thread could start with reused context.`;
+  return `${conversationCount} selected conversation${conversationCount === 1 ? '' : 's'} ${
+    conversationCount === 1 ? 'was' : 'were'
+  } summarized and injected before this prompt so this thread could start with reused context.`;
 }
 
 function formatRelatedConversationPointersText(text: string): string {
@@ -792,7 +811,9 @@ function resolveRelatedConversationPointersDetail(text: string): string {
     return 'Related conversation pointers were offered before this prompt. Inspect a conversation before relying on its details.';
   }
 
-  return `${pointerCount} related conversation pointer${pointerCount === 1 ? '' : 's'} ${pointerCount === 1 ? 'was' : 'were'} offered before this prompt. Inspect a conversation before relying on its details.`;
+  return `${pointerCount} related conversation pointer${pointerCount === 1 ? '' : 's'} ${
+    pointerCount === 1 ? 'was' : 'were'
+  } offered before this prompt. Inspect a conversation before relying on its details.`;
 }
 
 function normalizeSearchSegment(text: string, maxLength = 360): string {
@@ -801,9 +822,7 @@ function normalizeSearchSegment(text: string, maxLength = 360): string {
     return '';
   }
 
-  return normalized.length > maxLength
-    ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
-    : normalized;
+  return normalized.length > maxLength ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…` : normalized;
 }
 
 function extractSearchTextFromMessage(message: { role: string; content?: unknown }): string {
@@ -831,9 +850,8 @@ function appendSessionSearchSegment(segments: string[], segment: string, remaini
     return remaining;
   }
 
-  const limitedSegment = normalizedSegment.length > remaining
-    ? `${normalizedSegment.slice(0, Math.max(0, remaining - 1)).trimEnd()}…`
-    : normalizedSegment;
+  const limitedSegment =
+    normalizedSegment.length > remaining ? `${normalizedSegment.slice(0, Math.max(0, remaining - 1)).trimEnd()}…` : normalizedSegment;
 
   if (!limitedSegment) {
     return remaining;
@@ -859,24 +877,19 @@ function buildSessionSearchText(entries: SessionEntry[], maxCharacters: number):
   return segments.reverse().join('\n');
 }
 
-const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set([
-  'conversation_automation_item',
-  'conversation_automation_review',
-]);
+const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set(['conversation_automation_item', 'conversation_automation_review']);
 
 function shouldHideTranscriptDescendants(message: DisplayMessageEntryLike['message']): boolean {
-  return message.role === 'custom'
-    && message.display === false
-    && typeof message.customType === 'string'
-    && HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES.has(message.customType);
+  return (
+    message.role === 'custom' &&
+    message.display === false &&
+    typeof message.customType === 'string' &&
+    HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES.has(message.customType)
+  );
 }
 
 function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): Set<string> {
-  const hiddenRoots = new Set(
-    messages
-      .filter((message) => shouldHideTranscriptDescendants(message.message))
-      .map((message) => message.id),
-  );
+  const hiddenRoots = new Set(messages.filter((message) => shouldHideTranscriptDescendants(message.message)).map((message) => message.id));
   if (hiddenRoots.size === 0) {
     return new Set();
   }
@@ -913,10 +926,7 @@ function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): S
   return new Set(messages.filter((message) => isHidden(message.id)).map((message) => message.id));
 }
 
-function buildDisplayBlocksInternal(
-  messages: DisplayMessageEntryLike[],
-  entryAnchorIndexById?: Map<string, number>,
-): DisplayBlock[] {
+function buildDisplayBlocksInternal(messages: DisplayMessageEntryLike[], entryAnchorIndexById?: Map<string, number>): DisplayBlock[] {
   const blocks: DisplayBlock[] = [];
   const toolCallIndex = new Map<string, number>();
   const hiddenTranscriptEntryIds = collectHiddenTranscriptEntryIds(messages);
@@ -943,9 +953,7 @@ function buildDisplayBlocksInternal(
     if (role === 'compactionSummary' || role === 'branchSummary') {
       const normalizedSummary = summary?.trim();
       if (normalizedSummary) {
-        const detail = role === 'compactionSummary'
-          ? resolveCompactionSummarySupplement(details)
-          : undefined;
+        const detail = role === 'compactionSummary' ? resolveCompactionSummarySupplement(details) : undefined;
         recordAnchor();
         blocks.push({
           type: 'summary',
@@ -976,13 +984,13 @@ function buildDisplayBlocksInternal(
     }
 
     if (role === 'custom' && msg.message.customType === RELATED_THREADS_CONTEXT_CUSTOM_TYPE) {
-      const relatedSummaryText = formatRelatedThreadsSummaryText(contentBlocks
-        .flatMap((block) => (
-          block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0
-            ? [block.text.trim()]
-            : []
-        ))
-        .join('\n\n'));
+      const relatedSummaryText = formatRelatedThreadsSummaryText(
+        contentBlocks
+          .flatMap((block) =>
+            block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0 ? [block.text.trim()] : [],
+          )
+          .join('\n\n'),
+      );
       if (relatedSummaryText) {
         recordAnchor();
         blocks.push({
@@ -999,13 +1007,13 @@ function buildDisplayBlocksInternal(
     }
 
     if (role === 'custom' && msg.message.customType === RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE) {
-      const pointerText = formatRelatedConversationPointersText(contentBlocks
-        .flatMap((block) => (
-          block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0
-            ? [block.text.trim()]
-            : []
-        ))
-        .join('\n\n'));
+      const pointerText = formatRelatedConversationPointersText(
+        contentBlocks
+          .flatMap((block) =>
+            block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0 ? [block.text.trim()] : [],
+          )
+          .join('\n\n'),
+      );
       if (pointerText) {
         recordAnchor();
         blocks.push({
@@ -1050,9 +1058,7 @@ function buildDisplayBlocksInternal(
             alt: 'Injected context image',
             src,
             mimeType,
-            ...(typeof block.name === 'string' && block.name.trim().length > 0
-              ? { caption: block.name.trim() }
-              : {}),
+            ...(typeof block.name === 'string' && block.name.trim().length > 0 ? { caption: block.name.trim() } : {}),
           });
         }
       }
@@ -1160,15 +1166,17 @@ function buildDisplayBlocksInternal(
 
           const imageIndex = resultImageIndex;
           resultImageIndex += 1;
-          return [{
-            type: 'image' as const,
-            id: `${baseId}-i${imageIndex}`,
-            ts,
-            alt: toolName ? `${toolName} image result` : 'Tool image result',
-            src,
-            mimeType,
-            caption: toolName,
-          }];
+          return [
+            {
+              type: 'image' as const,
+              id: `${baseId}-i${imageIndex}`,
+              ts,
+              alt: toolName ? `${toolName} image result` : 'Tool image result',
+              src,
+              mimeType,
+              caption: toolName,
+            },
+          ];
         });
       blocks.push(...resultImages);
     }
@@ -1209,9 +1217,7 @@ function rebaseDisplayBlockIds(blocks: DisplayBlock[], blockOffset: number): Dis
       case 'error':
         return { ...block, id: rewriteIndexedBlockId(block.id, 'e', absoluteIndex) };
       case 'image':
-        return block.alt === 'Injected context image'
-          ? { ...block, id: rewriteIndexedBlockId(block.id, 'i', absoluteIndex) }
-          : block;
+        return block.alt === 'Injected context image' ? { ...block, id: rewriteIndexedBlockId(block.id, 'i', absoluteIndex) } : block;
       default:
         return block;
     }
@@ -1267,7 +1273,7 @@ function deferHeavyBlockContent(blocks: DisplayBlock[], blockOffset: number, tot
     if (block.type === 'user' && block.images?.some((image) => image.src)) {
       return {
         ...block,
-        images: block.images.map((image) => image.src ? { ...image, src: undefined, deferred: true } : image),
+        images: block.images.map((image) => (image.src ? { ...image, src: undefined, deferred: true } : image)),
       };
     }
 
@@ -1326,10 +1332,7 @@ function buildSessionInfoRecord(name: string): string {
 
 function slugToCwd(slug: string): string {
   // slug: --Users-user-personal-personal-agent-- → /Users/user/personal/personal-agent
-  return slug
-    .replace(/^--/, '')
-    .replace(/--$/, '')
-    .replace(/-/g, '/');
+  return slug.replace(/^--/, '').replace(/--$/, '').replace(/-/g, '/');
 }
 
 function getFileSignature(filePath: string): string | null {
@@ -1422,9 +1425,7 @@ function readCurrentSessionLeafId(filePath: string): string | null {
         continue;
       }
 
-      const id = typeof line.id === 'string' && line.id.trim().length > 0
-        ? line.id.trim()
-        : null;
+      const id = typeof line.id === 'string' && line.id.trim().length > 0 ? line.id.trim() : null;
       if (id) {
         leafId = id;
       }
@@ -1449,44 +1450,49 @@ export function appendConversationWorkspaceMetadata(input: {
   const metadataId = randomUUID();
   const metadataParentId = readCurrentSessionLeafId(input.sessionFile);
 
-  appendFileSync(input.sessionFile, `${JSON.stringify({
-    type: 'custom',
-    id: metadataId,
-    parentId: metadataParentId,
-    timestamp,
-    customType: CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE,
-    data: {
-      ...(cwd ? { cwd } : {}),
-      ...(input.workspaceCwd !== undefined ? { workspaceCwd: workspaceCwd || null } : {}),
-    },
-  })}\n`, 'utf-8');
+  appendFileSync(
+    input.sessionFile,
+    `${JSON.stringify({
+      type: 'custom',
+      id: metadataId,
+      parentId: metadataParentId,
+      timestamp,
+      customType: CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE,
+      data: {
+        ...(cwd ? { cwd } : {}),
+        ...(input.workspaceCwd !== undefined ? { workspaceCwd: workspaceCwd || null } : {}),
+      },
+    })}\n`,
+    'utf-8',
+  );
 
   if (!input.visibleMessage) {
     return;
   }
 
-  const previousLabel = input.previousWorkspaceCwd === null
-    ? 'Chats'
-    : (input.previousCwd?.trim() || input.previousWorkspaceCwd?.trim() || 'previous workspace');
-  const nextLabel = input.workspaceCwd === null
-    ? 'Chats'
-    : (cwd || workspaceCwd || 'new workspace');
+  const previousLabel =
+    input.previousWorkspaceCwd === null ? 'Chats' : input.previousCwd?.trim() || input.previousWorkspaceCwd?.trim() || 'previous workspace';
+  const nextLabel = input.workspaceCwd === null ? 'Chats' : cwd || workspaceCwd || 'new workspace';
 
-  appendFileSync(input.sessionFile, `${JSON.stringify({
-    type: 'custom_message',
-    id: randomUUID(),
-    parentId: metadataId,
-    timestamp,
-    customType: CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE,
-    content: `Working directory changed from ${previousLabel} to ${nextLabel}.`,
-    display: true,
-    details: {
-      ...(input.previousCwd ? { previousCwd: input.previousCwd } : {}),
-      ...(input.previousWorkspaceCwd !== undefined ? { previousWorkspaceCwd: input.previousWorkspaceCwd } : {}),
-      ...(cwd ? { cwd } : {}),
-      ...(input.workspaceCwd !== undefined ? { workspaceCwd: workspaceCwd || null } : {}),
-    },
-  })}\n`, 'utf-8');
+  appendFileSync(
+    input.sessionFile,
+    `${JSON.stringify({
+      type: 'custom_message',
+      id: randomUUID(),
+      parentId: metadataId,
+      timestamp,
+      customType: CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE,
+      content: `Working directory changed from ${previousLabel} to ${nextLabel}.`,
+      display: true,
+      details: {
+        ...(input.previousCwd ? { previousCwd: input.previousCwd } : {}),
+        ...(input.previousWorkspaceCwd !== undefined ? { previousWorkspaceCwd: input.previousWorkspaceCwd } : {}),
+        ...(cwd ? { cwd } : {}),
+        ...(input.workspaceCwd !== undefined ? { workspaceCwd: workspaceCwd || null } : {}),
+      },
+    })}\n`,
+    'utf-8',
+  );
 }
 
 function readSourceRunIdFromSessionFilePath(filePath: string): string | undefined {
@@ -1589,28 +1595,34 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
 
   const parentSessionFile = normalizeOptionalPath(sessionRecord.parentSession);
   const sourceRunId = readSourceRunIdFromSessionFilePath(filePath);
-  const remoteHostId = typeof sessionRecord.remoteHostId === 'string' && sessionRecord.remoteHostId.trim().length > 0
-    ? sessionRecord.remoteHostId.trim()
-    : null;
-  const remoteHostLabel = typeof sessionRecord.remoteHostLabel === 'string' && sessionRecord.remoteHostLabel.trim().length > 0
-    ? sessionRecord.remoteHostLabel.trim()
-    : null;
-  const remoteConversationId = typeof sessionRecord.remoteConversationId === 'string' && sessionRecord.remoteConversationId.trim().length > 0
-    ? sessionRecord.remoteConversationId.trim()
-    : null;
+  const remoteHostId =
+    typeof sessionRecord.remoteHostId === 'string' && sessionRecord.remoteHostId.trim().length > 0
+      ? sessionRecord.remoteHostId.trim()
+      : null;
+  const remoteHostLabel =
+    typeof sessionRecord.remoteHostLabel === 'string' && sessionRecord.remoteHostLabel.trim().length > 0
+      ? sessionRecord.remoteHostLabel.trim()
+      : null;
+  const remoteConversationId =
+    typeof sessionRecord.remoteConversationId === 'string' && sessionRecord.remoteConversationId.trim().length > 0
+      ? sessionRecord.remoteConversationId.trim()
+      : null;
 
   const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
-  const inferredLegacyWorkspaceMetadata = workspaceMetadata?.workspaceCwd === null && legacyToolWorkspaceMetadata
-    ? legacyToolWorkspaceMetadata
-    : null;
+  const inferredLegacyWorkspaceMetadata =
+    workspaceMetadata?.workspaceCwd === null && legacyToolWorkspaceMetadata ? legacyToolWorkspaceMetadata : null;
   const cwd = inferredLegacyWorkspaceMetadata?.cwd ?? workspaceMetadata?.cwd ?? headerCwd;
-  const workspaceCwd = inferredLegacyWorkspaceMetadata?.workspaceCwd ?? (workspaceMetadata && 'workspaceCwd' in workspaceMetadata
-    ? workspaceMetadata.workspaceCwd === null
-      ? isNeutralChatWorkspaceCwd(cwd) ? null : undefined
-      : workspaceMetadata.workspaceCwd
-    : isNeutralChatWorkspaceCwd(cwd)
-      ? null
-      : undefined);
+  const workspaceCwd =
+    inferredLegacyWorkspaceMetadata?.workspaceCwd ??
+    (workspaceMetadata && 'workspaceCwd' in workspaceMetadata
+      ? workspaceMetadata.workspaceCwd === null
+        ? isNeutralChatWorkspaceCwd(cwd)
+          ? null
+          : undefined
+        : workspaceMetadata.workspaceCwd
+      : isNeutralChatWorkspaceCwd(cwd)
+        ? null
+        : undefined);
 
   return {
     id: sessionRecord.id,
@@ -1661,26 +1673,24 @@ function loadPersistentSessionIndexEntry(value: unknown): PersistentSessionIndex
     return null;
   }
   if (
-    typeof meta.id !== 'string'
-    || typeof meta.timestamp !== 'string'
-    || typeof meta.cwd !== 'string'
-    || typeof meta.cwdSlug !== 'string'
-    || typeof meta.model !== 'string'
-    || typeof meta.title !== 'string'
-    || typeof meta.messageCount !== 'number'
+    typeof meta.id !== 'string' ||
+    typeof meta.timestamp !== 'string' ||
+    typeof meta.cwd !== 'string' ||
+    typeof meta.cwdSlug !== 'string' ||
+    typeof meta.model !== 'string' ||
+    typeof meta.title !== 'string' ||
+    typeof meta.messageCount !== 'number'
   ) {
     return null;
   }
 
-  const remoteHostId = typeof meta.remoteHostId === 'string' && meta.remoteHostId.trim().length > 0
-    ? meta.remoteHostId.trim()
-    : undefined;
-  const remoteHostLabel = typeof meta.remoteHostLabel === 'string' && meta.remoteHostLabel.trim().length > 0
-    ? meta.remoteHostLabel.trim()
-    : undefined;
-  const remoteConversationId = typeof meta.remoteConversationId === 'string' && meta.remoteConversationId.trim().length > 0
-    ? meta.remoteConversationId.trim()
-    : undefined;
+  const remoteHostId = typeof meta.remoteHostId === 'string' && meta.remoteHostId.trim().length > 0 ? meta.remoteHostId.trim() : undefined;
+  const remoteHostLabel =
+    typeof meta.remoteHostLabel === 'string' && meta.remoteHostLabel.trim().length > 0 ? meta.remoteHostLabel.trim() : undefined;
+  const remoteConversationId =
+    typeof meta.remoteConversationId === 'string' && meta.remoteConversationId.trim().length > 0
+      ? meta.remoteConversationId.trim()
+      : undefined;
   const workspaceCwd = Object.prototype.hasOwnProperty.call(meta, 'workspaceCwd')
     ? meta.workspaceCwd === null
       ? null
@@ -2148,11 +2158,14 @@ function rewriteStoredSessionHeader(filePath: string, transform: (header: RawSes
   writeFileSync(filePath, `${lines.filter((line) => line.length > 0).join('\n')}\n`, 'utf-8');
 }
 
-export function setStoredSessionRemoteTargetByFile(filePath: string, input: {
-  remoteHostId: string;
-  remoteHostLabel?: string;
-  remoteConversationId: string;
-}): SessionMeta {
+export function setStoredSessionRemoteTargetByFile(
+  filePath: string,
+  input: {
+    remoteHostId: string;
+    remoteHostLabel?: string;
+    remoteConversationId: string;
+  },
+): SessionMeta {
   const remoteHostId = input.remoteHostId.trim();
   const remoteConversationId = input.remoteConversationId.trim();
   const remoteHostLabel = input.remoteHostLabel?.trim() || undefined;
@@ -2203,9 +2216,7 @@ function resolveTailBlockLimit(tailBlocks: number | undefined, totalBlocks: numb
 }
 
 function normalizeTailBlockRequest(tailBlocks: number | undefined): number | undefined {
-  return typeof tailBlocks === 'number' && Number.isSafeInteger(tailBlocks) && tailBlocks > 0
-    ? Math.min(1000, tailBlocks)
-    : undefined;
+  return typeof tailBlocks === 'number' && Number.isSafeInteger(tailBlocks) && tailBlocks > 0 ? Math.min(1000, tailBlocks) : undefined;
 }
 
 function buildSessionDetailCacheKey(filePath: string, tailBlocks?: number): string {
@@ -2240,9 +2251,7 @@ export function readSessionBlocksByFileWithTelemetry(
     sessionDetailCache.delete(cacheKey);
     sessionDetailCache.set(cacheKey, cachedDetail);
     return {
-      detail: cachedDetail.detail.signature === signature
-        ? cachedDetail.detail
-        : { ...cachedDetail.detail, signature },
+      detail: cachedDetail.detail.signature === signature ? cachedDetail.detail : { ...cachedDetail.detail, signature },
       telemetry: {
         cache: 'hit',
         loader: cachedDetail.detail.contextUsage === null && typeof requestedTailBlocks === 'number' ? 'fast-tail' : 'full',
@@ -2258,9 +2267,10 @@ export function readSessionBlocksByFileWithTelemetry(
   const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
   if (!meta) return { detail: null, telemetry: null };
 
-  const fastTailDetail = typeof requestedTailBlocks === 'number' && requestedTailBlocks > 0
-    ? tryReadSessionTailBlocksByFile(meta.file, meta, requestedTailBlocks)
-    : null;
+  const fastTailDetail =
+    typeof requestedTailBlocks === 'number' && requestedTailBlocks > 0
+      ? tryReadSessionTailBlocksByFile(meta.file, meta, requestedTailBlocks)
+      : null;
   if (fastTailDetail) {
     const detail = {
       ...fastTailDetail,
@@ -2289,9 +2299,7 @@ export function readSessionBlocksByFileWithTelemetry(
   const tailBlockLimit = resolveTailBlockLimit(requestedTailBlocks, totalBlocks);
   const blockOffset = tailBlockLimit === null ? 0 : Math.max(0, totalBlocks - tailBlockLimit);
   const slicedBlocks = blockOffset > 0 ? allBlocks.slice(blockOffset) : allBlocks;
-  const blocks = blockOffset > 0
-    ? deferHeavyBlockContent(slicedBlocks, blockOffset, totalBlocks)
-    : slicedBlocks;
+  const blocks = blockOffset > 0 ? deferHeavyBlockContent(slicedBlocks, blockOffset, totalBlocks) : slicedBlocks;
 
   const detail = {
     meta,
@@ -2329,12 +2337,10 @@ export function buildAppendOnlySessionDetailResponse(input: {
   knownTotalBlocks?: number;
   knownLastBlockId?: string;
 }): SessionDetailAppendOnlyResponse | null {
-  const knownBlockOffset = Number.isSafeInteger(input.knownBlockOffset) && typeof input.knownBlockOffset === 'number'
-    ? Math.max(0, input.knownBlockOffset)
-    : null;
-  const knownTotalBlocks = Number.isSafeInteger(input.knownTotalBlocks) && typeof input.knownTotalBlocks === 'number'
-    ? Math.max(0, input.knownTotalBlocks)
-    : null;
+  const knownBlockOffset =
+    Number.isSafeInteger(input.knownBlockOffset) && typeof input.knownBlockOffset === 'number' ? Math.max(0, input.knownBlockOffset) : null;
+  const knownTotalBlocks =
+    Number.isSafeInteger(input.knownTotalBlocks) && typeof input.knownTotalBlocks === 'number' ? Math.max(0, input.knownTotalBlocks) : null;
 
   if (knownBlockOffset === null || knownTotalBlocks === null) {
     return null;
@@ -2346,9 +2352,7 @@ export function buildAppendOnlySessionDetailResponse(input: {
 
   if (input.detail.blockOffset < knownTotalBlocks) {
     const knownLastVisibleIndex = knownTotalBlocks - input.detail.blockOffset - 1;
-    const currentKnownLastBlock = knownLastVisibleIndex >= 0
-      ? input.detail.blocks[knownLastVisibleIndex]
-      : undefined;
+    const currentKnownLastBlock = knownLastVisibleIndex >= 0 ? input.detail.blocks[knownLastVisibleIndex] : undefined;
     const knownLastBlockId = normalizeKnownBlockId(input.knownLastBlockId);
     if (!knownLastBlockId || currentKnownLastBlock?.id !== knownLastBlockId) {
       return null;
@@ -2414,7 +2418,9 @@ function buildSessionImageAsset(block: RawContentBlock): { mimeType: string; dat
   };
 }
 
-function buildSessionImageAssets(blocks: RawContentBlock[]): Array<{ block: RawContentBlock; asset: { mimeType: string; data: Buffer; fileName?: string } }> {
+function buildSessionImageAssets(
+  blocks: RawContentBlock[],
+): Array<{ block: RawContentBlock; asset: { mimeType: string; data: Buffer; fileName?: string } }> {
   return blocks.flatMap((block) => {
     if (block.type !== 'image') {
       return [];
@@ -2467,4 +2473,3 @@ export function readSessionImageAsset(
 
   return null;
 }
-

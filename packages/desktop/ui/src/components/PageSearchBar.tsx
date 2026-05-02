@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { cx, IconButton, Keycap } from './ui';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
@@ -132,9 +133,7 @@ function shouldSkipTextNode(node: Text): boolean {
 function collectTextSegments(root: HTMLElement): { rawText: string; segments: TextSegment[] } {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      return node instanceof Text && !shouldSkipTextNode(node)
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_REJECT;
+      return node instanceof Text && !shouldSkipTextNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });
 
@@ -225,9 +224,8 @@ export function findPageSearchRanges(root: HTMLElement, query: string): Range[] 
     }
 
     const rawStart = normalizedToRaw[matchIndex];
-    const rawEnd = matchIndex + normalizedQuery.length < normalizedToRaw.length
-      ? normalizedToRaw[matchIndex + normalizedQuery.length]
-      : rawText.length;
+    const rawEnd =
+      matchIndex + normalizedQuery.length < normalizedToRaw.length ? normalizedToRaw[matchIndex + normalizedQuery.length] : rawText.length;
 
     if (rawStart != null) {
       const startBoundary = findSegmentBoundary(segments, rawStart, 'start');
@@ -321,10 +319,18 @@ function isMacPlatform(): boolean {
 
 function ChevronIcon({ direction }: { direction: 'up' | 'down' }) {
   return (
-    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {direction === 'up'
-        ? <path d="m18 15-6-6-6 6" />
-        : <path d="m6 9 6 6 6-6" />}
+    <svg
+      aria-hidden="true"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {direction === 'up' ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
     </svg>
   );
 }
@@ -360,7 +366,7 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
   const openSearch = useCallback(() => {
     const selectedText = readSelectedSearchText();
     setOpen(true);
-    setQuery((current) => current.trim().length > 0 || open ? current : selectedText);
+    setQuery((current) => (current.trim().length > 0 || open ? current : selectedText));
     if (!open) {
       setActiveIndex(0);
     }
@@ -374,16 +380,19 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
     clearHighlights();
   }, []);
 
-  const moveToMatch = useCallback((delta: number) => {
-    if (matchesCount === 0) {
-      return;
-    }
+  const moveToMatch = useCallback(
+    (delta: number) => {
+      if (matchesCount === 0) {
+        return;
+      }
 
-    setActiveIndex((current) => {
-      const nextIndex = (current + delta + matchesCount) % matchesCount;
-      return nextIndex;
-    });
-  }, [matchesCount]);
+      setActiveIndex((current) => {
+        const nextIndex = (current + delta + matchesCount) % matchesCount;
+        return nextIndex;
+      });
+    },
+    [matchesCount],
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -523,8 +532,22 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
   return (
     <div className={cx('pointer-events-none fixed right-4 z-40', topClassName)} data-page-search-ignore="true">
       <div className="pointer-events-auto ui-context-menu-shell flex min-w-[19rem] items-center gap-2 px-2.5 py-2 shadow-2xl">
-        <label className="ui-input-shell flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 focus-within:border-accent/50 focus-within:bg-base/90" aria-label="Page search">
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-dim">
+        <label
+          className="ui-input-shell flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 focus-within:border-accent/50 focus-within:bg-base/90"
+          aria-label="Page search"
+        >
+          <svg
+            aria-hidden="true"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0 text-dim"
+          >
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-3.5-3.5" />
           </svg>
@@ -589,14 +612,18 @@ export function PageSearchBar({ rootRef, desktopShell = false }: PageSearchProps
           <Keycap>G</Keycap>
         </div>
 
-        <IconButton
-          type="button"
-          onClick={closeSearch}
-          aria-label="Close page search"
-          title="Close"
-          className="h-7 w-7 rounded-md"
-        >
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <IconButton type="button" onClick={closeSearch} aria-label="Close page search" title="Close" className="h-7 w-7 rounded-md">
+          <svg
+            aria-hidden="true"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M18 6 6 18" />
             <path d="m6 6 12 12" />
           </svg>

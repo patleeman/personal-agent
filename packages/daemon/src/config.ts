@@ -1,11 +1,6 @@
+import { getDurableTasksDir, getMachineConfigFilePath, readMachineConfigSection, updateMachineConfigSection } from '@personal-agent/core';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
-import {
-  getDurableTasksDir,
-  getMachineConfigFilePath,
-  readMachineConfigSection,
-  updateMachineConfigSection,
-} from '@personal-agent/core';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -204,18 +199,22 @@ export function loadDaemonConfig(): DaemonConfig {
 }
 
 export function writeDaemonPowerConfig(input: { keepAwake: boolean }, filePath = getDaemonConfigFilePath()): DaemonConfig {
-  updateMachineConfigSection('daemon', (currentSection) => {
-    const current = currentSection ?? {};
-    const currentPower = isRecord(current.power) ? current.power : {};
+  updateMachineConfigSection(
+    'daemon',
+    (currentSection) => {
+      const current = currentSection ?? {};
+      const currentPower = isRecord(current.power) ? current.power : {};
 
-    return {
-      ...current,
-      power: {
-        ...currentPower,
-        keepAwake: input.keepAwake,
-      },
-    };
-  }, { filePath });
+      return {
+        ...current,
+        power: {
+          ...currentPower,
+          keepAwake: input.keepAwake,
+        },
+      };
+    },
+    { filePath },
+  );
 
   return loadDaemonConfig();
 }

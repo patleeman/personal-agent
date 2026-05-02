@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
+
 import {
-  getConversationCommitCheckpoint,
-  listConversationCommitCheckpoints,
   type ConversationCommitCheckpointFile,
   type ConversationCommitCheckpointRecord,
+  getConversationCommitCheckpoint,
+  listConversationCommitCheckpoints,
 } from '@personal-agent/core';
+
 import { readSessionMeta } from './sessions.js';
 
 interface GitHubRepoRef {
@@ -154,11 +156,8 @@ function parseDiffSections(rawPatch: string): ConversationCommitCheckpointFile[]
     const nextPath = stripGitDiffPrefix(match[2] ?? '', 'b/');
     let path = nextPath === '/dev/null' ? originalPath : nextPath;
     let previousPath: string | undefined;
-    let status: ConversationCommitCheckpointFile['status'] = originalPath === '/dev/null'
-      ? 'added'
-      : nextPath === '/dev/null'
-        ? 'deleted'
-        : 'modified';
+    let status: ConversationCommitCheckpointFile['status'] =
+      originalPath === '/dev/null' ? 'added' : nextPath === '/dev/null' ? 'deleted' : 'modified';
     let additions = 0;
     let deletions = 0;
 
@@ -221,11 +220,7 @@ function annotateStoredCheckpoint(record: ConversationCommitCheckpointRecord): R
   };
 }
 
-function findSavedConversationCheckpointId(options: {
-  profile: string;
-  conversationId: string;
-  checkpointId: string;
-}): string | null {
+function findSavedConversationCheckpointId(options: { profile: string; conversationId: string; checkpointId: string }): string | null {
   const exact = getConversationCommitCheckpoint(options);
   if (exact) {
     return exact.id;
@@ -254,10 +249,14 @@ function findSavedConversationCheckpointId(options: {
     return candidates.some((candidate) => candidate.trim().toLowerCase().startsWith(normalizedInput));
   });
 
-  return prefixMatches.length === 1 ? prefixMatches[0]?.id ?? null : null;
+  return prefixMatches.length === 1 ? (prefixMatches[0]?.id ?? null) : null;
 }
 
-function buildGitCommitCheckpointRecord(cwd: string, commitHashInput: string, conversationId: string): ReviewableConversationCommitCheckpointRecord | null {
+function buildGitCommitCheckpointRecord(
+  cwd: string,
+  commitHashInput: string,
+  conversationId: string,
+): ReviewableConversationCommitCheckpointRecord | null {
   const resolvedCommit = runGit(cwd, ['rev-parse', '--verify', `${commitHashInput}^{commit}`]);
   if (typeof resolvedCommit !== 'string') {
     return null;
@@ -274,7 +273,16 @@ function buildGitCommitCheckpointRecord(cwd: string, commitHashInput: string, co
   }
 
   const metadata = parseCommitMetadata(rawMetadata);
-  const rawPatchResult = runGit(cwd, ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha]);
+  const rawPatchResult = runGit(cwd, [
+    'show',
+    '--format=',
+    '--patch',
+    '--find-renames',
+    '--find-copies',
+    '--no-color',
+    '--unified=3',
+    commitSha,
+  ]);
   const rawPatch = typeof rawPatchResult === 'string' ? rawPatchResult : '';
   const files = parseDiffSections(rawPatch);
   const linesAdded = files.reduce((sum, file) => sum + file.additions, 0);
@@ -377,14 +385,15 @@ async function fetchGitHubPullRequest(repo: GitHubRepoRef, commitSha: string): P
       return null;
     }
 
-    const payload = await response.json() as Array<{
+    const payload = (await response.json()) as Array<{
       html_url?: string;
       title?: string;
       number?: number;
       state?: string;
     }>;
-    const pullRequest = payload.find((item) => item.state === 'open' && typeof item.html_url === 'string')
-      ?? payload.find((item) => typeof item.html_url === 'string');
+    const pullRequest =
+      payload.find((item) => item.state === 'open' && typeof item.html_url === 'string') ??
+      payload.find((item) => typeof item.html_url === 'string');
     if (!pullRequest?.html_url) {
       return null;
     }
@@ -401,7 +410,9 @@ async function fetchGitHubPullRequest(repo: GitHubRepoRef, commitSha: string): P
   }
 }
 
-async function readGitHubInfoForCheckpoint(checkpoint: ConversationCommitCheckpointRecord): Promise<ConversationCheckpointReviewContextResult['github']> {
+async function readGitHubInfoForCheckpoint(
+  checkpoint: ConversationCommitCheckpointRecord,
+): Promise<ConversationCheckpointReviewContextResult['github']> {
   const remoteUrl = runGit(checkpoint.cwd, ['remote', 'get-url', 'origin']);
   if (typeof remoteUrl !== 'string') {
     return null;
@@ -419,11 +430,13 @@ async function readGitHubInfoForCheckpoint(checkpoint: ConversationCommitCheckpo
     provider: 'github',
     repoUrl: repo.repoUrl,
     commitUrl,
-    ...(pullRequest ? {
-      pullRequestUrl: pullRequest.url,
-      pullRequestTitle: pullRequest.title,
-      pullRequestNumber: pullRequest.number,
-    } : {}),
+    ...(pullRequest
+      ? {
+          pullRequestUrl: pullRequest.url,
+          pullRequestTitle: pullRequest.title,
+          pullRequestNumber: pullRequest.number,
+        }
+      : {}),
   };
 }
 

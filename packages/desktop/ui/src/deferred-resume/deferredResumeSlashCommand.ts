@@ -10,9 +10,7 @@ interface DeferredResumeSlashCommand {
   behavior?: 'followUp';
 }
 
-type DeferredResumeSlashParseResult =
-  | { kind: 'command'; command: DeferredResumeSlashCommand }
-  | { kind: 'invalid'; message: string };
+type DeferredResumeSlashParseResult = { kind: 'command'; command: DeferredResumeSlashCommand } | { kind: 'invalid'; message: string };
 
 export function parseDeferredResumeSlashCommand(input: string): DeferredResumeSlashParseResult | null {
   const parsed = parseSlashInput(input.trim());
@@ -32,9 +30,7 @@ export function parseDeferredResumeSlashCommand(input: string): DeferredResumeSl
   }
 
   const firstRestToken = restTokens[0]?.trim().toLowerCase();
-  const behavior = firstRestToken === '--follow-up' || firstRestToken === '--followup'
-    ? 'followUp' as const
-    : undefined;
+  const behavior = firstRestToken === '--follow-up' || firstRestToken === '--followup' ? ('followUp' as const) : undefined;
   const promptTokens = behavior ? restTokens.slice(1) : restTokens;
   const prompt = promptTokens.join(' ').trim();
   return {

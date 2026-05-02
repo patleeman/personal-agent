@@ -1,6 +1,7 @@
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { existsSync } from 'node:fs';
+
 import type {
   DesktopApiStreamEvent,
   DesktopConversationStateBridgeEvent,
@@ -96,10 +97,7 @@ export interface LocalApiModule {
   readDesktopProviderOAuthLogin(loginId: string): Promise<unknown>;
   submitDesktopProviderOAuthLoginInput(input: { loginId: string; value: string }): Promise<unknown>;
   cancelDesktopProviderOAuthLogin(loginId: string): Promise<unknown>;
-  subscribeDesktopProviderOAuthLogin(
-    loginId: string,
-    onState: (state: unknown) => void,
-  ): Promise<() => void>;
+  subscribeDesktopProviderOAuthLogin(loginId: string, onState: (state: unknown) => void): Promise<() => void>;
   markDesktopConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;
   readDesktopScheduledTasks(): Promise<unknown>;
   readDesktopScheduledTaskDetail(taskId: string): Promise<unknown>;
@@ -142,16 +140,8 @@ export interface LocalApiModule {
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }): Promise<unknown>;
-  renameDesktopConversation(input: {
-    conversationId: string;
-    name: string;
-    surfaceId?: string;
-  }): Promise<{ ok: true; title: string }>;
-  changeDesktopConversationCwd(input: {
-    conversationId: string;
-    cwd: string;
-    surfaceId?: string;
-  }): Promise<unknown>;
+  renameDesktopConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
+  changeDesktopConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }): Promise<unknown>;
   readDesktopConversationDeferredResumes(conversationId: string): Promise<unknown>;
   scheduleDesktopConversationDeferredResume(input: {
     conversationId: string;
@@ -159,14 +149,8 @@ export interface LocalApiModule {
     prompt?: string;
     behavior?: 'steer' | 'followUp';
   }): Promise<unknown>;
-  cancelDesktopConversationDeferredResume(input: {
-    conversationId: string;
-    resumeId: string;
-  }): Promise<unknown>;
-  fireDesktopConversationDeferredResume(input: {
-    conversationId: string;
-    resumeId: string;
-  }): Promise<unknown>;
+  cancelDesktopConversationDeferredResume(input: { conversationId: string; resumeId: string }): Promise<unknown>;
+  fireDesktopConversationDeferredResume(input: { conversationId: string; resumeId: string }): Promise<unknown>;
   recoverDesktopConversation(conversationId: string): Promise<unknown>;
   readDesktopConversationModelPreferences(conversationId: string): Promise<unknown>;
   updateDesktopConversationModelPreferences(input: {
@@ -224,10 +208,7 @@ export interface LocalApiModule {
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }): Promise<unknown>;
-  readDesktopSessionBlock(input: {
-    sessionId: string;
-    blockId: string;
-  }): Promise<unknown>;
+  readDesktopSessionBlock(input: { sessionId: string; blockId: string }): Promise<unknown>;
   createDesktopLiveSession(input: {
     cwd?: string;
     workspaceCwd?: string | null;
@@ -283,59 +264,40 @@ export interface LocalApiModule {
     ok: true;
     status: 'imported' | 'queued' | 'skipped' | 'cancelled';
   }>;
-  takeOverDesktopLiveSession(input: {
-    conversationId: string;
-    surfaceId: string;
-  }): Promise<unknown>;
+  takeOverDesktopLiveSession(input: { conversationId: string; surfaceId: string }): Promise<unknown>;
   restoreDesktopQueuedLiveSessionMessage(input: {
     conversationId: string;
     behavior: 'steer' | 'followUp';
     index: number;
     previewId?: string;
   }): Promise<{ ok: true; text: string; images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }> }>;
-  compactDesktopLiveSession(input: {
-    conversationId: string;
-    customInstructions?: string;
-  }): Promise<{ ok: true; result: unknown }>;
-  exportDesktopLiveSession(input: {
-    conversationId: string;
-    outputPath?: string;
-  }): Promise<{ ok: true; path: string }>;
-  reloadDesktopLiveSession(input: {
-    conversationId: string;
-  }): Promise<{ ok: true }>;
+  compactDesktopLiveSession(input: { conversationId: string; customInstructions?: string }): Promise<{ ok: true; result: unknown }>;
+  exportDesktopLiveSession(input: { conversationId: string; outputPath?: string }): Promise<{ ok: true; path: string }>;
+  reloadDesktopLiveSession(input: { conversationId: string }): Promise<{ ok: true }>;
   destroyDesktopLiveSession(conversationId: string): Promise<{ ok: true }>;
-  branchDesktopLiveSession(input: {
-    conversationId: string;
-    entryId: string;
-  }): Promise<{ newSessionId: string; sessionFile: string }>;
+  branchDesktopLiveSession(input: { conversationId: string; entryId: string }): Promise<{ newSessionId: string; sessionFile: string }>;
   forkDesktopLiveSession(input: {
     conversationId: string;
     entryId: string;
     preserveSource?: boolean;
     beforeEntry?: boolean;
   }): Promise<{ newSessionId: string; sessionFile: string }>;
-  summarizeAndForkDesktopLiveSession(input: {
-    conversationId: string;
-  }): Promise<{ newSessionId: string; sessionFile: string }>;
+  summarizeAndForkDesktopLiveSession(input: { conversationId: string }): Promise<{ newSessionId: string; sessionFile: string }>;
   abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }>;
   subscribeDesktopConversationState(
     input: DesktopConversationStateSubscriptionRequest,
     onEvent: (event: DesktopConversationStateBridgeEvent) => void,
   ): Promise<() => void>;
-  subscribeDesktopLocalApiStream(
-    path: string,
-    onEvent: (event: DesktopApiStreamEvent) => void,
-  ): Promise<() => void>;
-  subscribeDesktopAppEvents(
-    onEvent: (event: DesktopAppBridgeEvent) => void,
-  ): Promise<() => void>;
-  setDesktopWorkbenchBrowserToolHost?(host: {
-    isActive(conversationId: string): Promise<boolean>;
-    snapshot(conversationId: string): Promise<unknown>;
-    screenshot(conversationId: string): Promise<unknown>;
-    cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
-  } | null): void;
+  subscribeDesktopLocalApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;
+  subscribeDesktopAppEvents(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void>;
+  setDesktopWorkbenchBrowserToolHost?(
+    host: {
+      isActive(conversationId: string): Promise<boolean>;
+      snapshot(conversationId: string): Promise<unknown>;
+      screenshot(conversationId: string): Promise<unknown>;
+      cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
+    } | null,
+  ): void;
 }
 
 export type LocalApiModuleLoader = () => Promise<LocalApiModule>;
@@ -364,12 +326,14 @@ function resolveRepoLocalApiModuleFilePath(repoRoot?: string | null): string | n
   return resolve(resolvedRepoRoot, 'packages', 'desktop', 'server', 'dist', 'app', 'localApi.js');
 }
 
-export function resolveLocalApiModuleUrl(input: {
-  currentDir?: string;
-  isPackaged?: boolean;
-  appPath?: string;
-  repoRoot?: string;
-} = {}): string {
+export function resolveLocalApiModuleUrl(
+  input: {
+    currentDir?: string;
+    isPackaged?: boolean;
+    appPath?: string;
+    repoRoot?: string;
+  } = {},
+): string {
   const currentDir = input.currentDir ?? dirname(fileURLToPath(import.meta.url));
   const envRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
   const envAppPath = process.env.PERSONAL_AGENT_DESKTOP_APP_PATH?.trim();
@@ -388,9 +352,7 @@ export function resolveLocalApiModuleUrl(input: {
   const existingPath = [packagedPath, devPath, repoPath]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .find((filePath) => existsSync(filePath));
-  const fallbackPath = (input.appPath ?? envAppPath)
-    ? packagedPath
-    : devPath;
+  const fallbackPath = (input.appPath ?? envAppPath) ? packagedPath : devPath;
 
   return pathToFileURL(existingPath ?? fallbackPath).href;
 }

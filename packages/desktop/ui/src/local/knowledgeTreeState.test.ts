@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   addExpandedFolderId,
   collapseExpandedFolderIds,
@@ -18,7 +19,7 @@ function createStorage(): Storage {
       map.clear();
     },
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     key(index) {
       return [...map.keys()][index] ?? null;

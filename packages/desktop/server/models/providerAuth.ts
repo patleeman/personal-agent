@@ -1,5 +1,6 @@
-import { AuthStorage, type OAuthCredential } from '@mariozechner/pi-coding-agent';
 import type { OAuthPrompt } from '@mariozechner/pi-ai';
+import { AuthStorage, type OAuthCredential } from '@mariozechner/pi-coding-agent';
+
 import { createModelRegistryForAuthFile } from './modelRegistry.js';
 
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
@@ -155,7 +156,10 @@ function readModelCounts(authFile: string): Map<string, number> {
   return counts;
 }
 
-function deriveAuthType(authStorage: AuthStorage, provider: string): {
+function deriveAuthType(
+  authStorage: AuthStorage,
+  provider: string,
+): {
   authType: ProviderAuthType;
   hasStoredCredential: boolean;
 } {
@@ -387,44 +391,48 @@ export function startProviderOAuthLogin(authFile: string, providerInput: string)
 
   oauthLoginRuns.set(run.id, run);
 
-  void authStorage.login(provider, {
-    onAuth: (info) => {
-      run.authUrl = info.url;
-      run.authInstructions = typeof info.instructions === 'string' ? info.instructions : '';
-      run.updatedAt = nowIso();
-      notifyOAuthLoginListeners(run);
-    },
-    onPrompt: async (prompt) => {
-      const state = toPromptState(prompt, false);
-      return createPromptAwaiter(run, state);
-    },
-    onProgress: (message) => {
-      appendProgress(run, message);
-    },
-    onManualCodeInput: async () => createPromptAwaiter(run, {
-      message: 'Paste redirect URL below, or complete login in your browser.',
-      placeholder: 'https://localhost:1455/auth/callback?code=...',
-      allowEmpty: false,
-      manualCode: true,
-    }),
-    signal: run.abortController.signal,
-  }).then(() => {
-    const credential = authStorage.get(provider);
-    if (!isOAuthCredential(credential)) {
-      finalizeOAuthLogin(run, 'failed', `OAuth login for ${provider} did not persist credentials.`);
-      return;
-    }
+  void authStorage
+    .login(provider, {
+      onAuth: (info) => {
+        run.authUrl = info.url;
+        run.authInstructions = typeof info.instructions === 'string' ? info.instructions : '';
+        run.updatedAt = nowIso();
+        notifyOAuthLoginListeners(run);
+      },
+      onPrompt: async (prompt) => {
+        const state = toPromptState(prompt, false);
+        return createPromptAwaiter(run, state);
+      },
+      onProgress: (message) => {
+        appendProgress(run, message);
+      },
+      onManualCodeInput: async () =>
+        createPromptAwaiter(run, {
+          message: 'Paste redirect URL below, or complete login in your browser.',
+          placeholder: 'https://localhost:1455/auth/callback?code=...',
+          allowEmpty: false,
+          manualCode: true,
+        }),
+      signal: run.abortController.signal,
+    })
+    .then(() => {
+      const credential = authStorage.get(provider);
+      if (!isOAuthCredential(credential)) {
+        finalizeOAuthLogin(run, 'failed', `OAuth login for ${provider} did not persist credentials.`);
+        return;
+      }
 
-    finalizeOAuthLogin(run, 'completed', '');
-  }).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    if (run.abortController.signal.aborted || message === 'Login cancelled') {
-      finalizeOAuthLogin(run, 'cancelled', '');
-      return;
-    }
+      finalizeOAuthLogin(run, 'completed', '');
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (run.abortController.signal.aborted || message === 'Login cancelled') {
+        finalizeOAuthLogin(run, 'cancelled', '');
+        return;
+      }
 
-    finalizeOAuthLogin(run, 'failed', message);
-  });
+      finalizeOAuthLogin(run, 'failed', message);
+    });
 
   return toPublicLoginState(run);
 }

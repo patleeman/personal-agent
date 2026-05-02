@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { MessageBlock } from '../../shared/types';
 import { buildChatRenderItems } from './transcriptItems.js';
 
@@ -7,8 +8,24 @@ describe('chat transcript items', () => {
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-12T18:00:00.000Z', text: 'Check the transcript layout' },
       { type: 'thinking', ts: '2026-03-12T18:00:01.000Z', text: 'Plan the work' },
-      { type: 'tool_use', ts: '2026-03-12T18:00:02.000Z', tool: 'bash', input: { command: 'pwd' }, output: '/repo', durationMs: 1100, status: 'ok' },
-      { type: 'tool_use', ts: '2026-03-12T18:00:03.000Z', tool: 'read', input: { path: 'ChatView.tsx' }, output: '...', durationMs: 900, status: 'ok' },
+      {
+        type: 'tool_use',
+        ts: '2026-03-12T18:00:02.000Z',
+        tool: 'bash',
+        input: { command: 'pwd' },
+        output: '/repo',
+        durationMs: 1100,
+        status: 'ok',
+      },
+      {
+        type: 'tool_use',
+        ts: '2026-03-12T18:00:03.000Z',
+        tool: 'read',
+        input: { path: 'ChatView.tsx' },
+        output: '...',
+        durationMs: 900,
+        status: 'ok',
+      },
       { type: 'text', ts: '2026-03-12T18:00:04.000Z', text: 'Here is the result.' },
     ];
 
@@ -38,7 +55,14 @@ describe('chat transcript items', () => {
   it('keeps artifact tool blocks visible as standalone message items', () => {
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-12T18:00:00.000Z', text: 'Show me the mockup' },
-      { type: 'tool_use', ts: '2026-03-12T18:00:01.000Z', tool: 'artifact', input: { action: 'save' }, output: 'Saved artifact', status: 'ok' },
+      {
+        type: 'tool_use',
+        ts: '2026-03-12T18:00:01.000Z',
+        tool: 'artifact',
+        input: { action: 'save' },
+        output: 'Saved artifact',
+        status: 'ok',
+      },
       { type: 'text', ts: '2026-03-12T18:00:02.000Z', text: 'Opened the artifact.' },
     ];
 
@@ -111,5 +135,4 @@ describe('chat transcript items', () => {
       },
     });
   });
-
 });

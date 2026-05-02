@@ -160,8 +160,10 @@ export function buildSlashMenuItems(query: string, skills: MemorySkillItem[]): S
   const commandQuery = parsedInput?.command ?? query;
   const normalized = normalizeSlashQuery(commandQuery);
 
-  const commandItems: SlashMenuItem[] = BASE_SLASH_COMMANDS
-    .map((command) => ({ command, score: normalized.length === 0 ? 0 : fuzzyScore(normalized, command.cmd.slice(1)) }))
+  const commandItems: SlashMenuItem[] = BASE_SLASH_COMMANDS.map((command) => ({
+    command,
+    score: normalized.length === 0 ? 0 : fuzzyScore(normalized, command.cmd.slice(1)),
+  }))
     .filter((entry) => normalized.length === 0 || entry.score !== null)
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.command.cmd.localeCompare(right.command.cmd))
     .map(({ command }) => ({
@@ -176,26 +178,26 @@ export function buildSlashMenuItems(query: string, skills: MemorySkillItem[]): S
 
   const explicitSkillQuery = getExplicitSkillFilterQuery(query);
   const skillQuery = explicitSkillQuery ?? (normalized.length > 0 ? normalized : null);
-  const skillItems: SlashMenuItem[] = skillQuery === null
-    ? []
-    : [...skills]
-      .map((skill) => ({
-        skill,
-        score: scoreSkill(skillQuery, skill, normalized, explicitSkillQuery !== null),
-      }))
-      .filter((entry) => entry.score !== null)
-      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.skill.name.localeCompare(right.skill.name))
-      .map(({ skill }) => ({
-        key: `skill:${skill.name}`,
-        insertText: `/skill:${skill.name} `,
-        displayCmd: `/skill:${skill.name}`,
-        icon: '✦',
-        desc: skill.description,
-        section: 'Skills',
-        source: skill.source,
-        kind: 'skill',
-      }));
+  const skillItems: SlashMenuItem[] =
+    skillQuery === null
+      ? []
+      : [...skills]
+          .map((skill) => ({
+            skill,
+            score: scoreSkill(skillQuery, skill, normalized, explicitSkillQuery !== null),
+          }))
+          .filter((entry) => entry.score !== null)
+          .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.skill.name.localeCompare(right.skill.name))
+          .map(({ skill }) => ({
+            key: `skill:${skill.name}`,
+            insertText: `/skill:${skill.name} `,
+            displayCmd: `/skill:${skill.name}`,
+            icon: '✦',
+            desc: skill.description,
+            section: 'Skills',
+            source: skill.source,
+            kind: 'skill',
+          }));
 
   return [...commandItems, ...skillItems];
 }
-

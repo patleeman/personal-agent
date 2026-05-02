@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { VaultFileTree } from './VaultFileTree';
-import { emitKBEvent } from './knowledgeEvents';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
 import type { VaultEntry, VaultFileListResult } from '../../shared/types';
+import { emitKBEvent } from './knowledgeEvents';
+import { VaultFileTree } from './VaultFileTree';
 
 const apiMocks = vi.hoisted(() => ({
   createFolder: vi.fn(),
@@ -50,7 +51,7 @@ function createStorage(): Storage {
       map.clear();
     },
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     key(index) {
       return [...map.keys()][index] ?? null;
@@ -442,8 +443,9 @@ describe('VaultFileTree', () => {
     contextMenu(getButton(container, 'notes'));
     await flushAsyncWork();
 
-    const newFileItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
-      .find((button) => button.textContent?.includes('New File'));
+    const newFileItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((button) =>
+      button.textContent?.includes('New File'),
+    );
     expect(newFileItem).toBeTruthy();
 
     click(newFileItem!);
@@ -456,8 +458,9 @@ describe('VaultFileTree', () => {
     }
     fillInput(input, 'idea');
 
-    const submit = [...container.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent === 'New file' && button.type === 'submit');
+    const submit = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'New file' && button.type === 'submit',
+    );
     expect(submit).toBeTruthy();
 
     click(submit!);

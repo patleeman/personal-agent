@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { basename, join } from 'path';
 import { parseDocument, stringify } from 'yaml';
+
+import { getMemoryDocsDir, type ResolveMemoryDocsOptions } from './memory-docs.js';
 import { createUnifiedNode, loadUnifiedNodes, type UnifiedNodeRecord } from './nodes.js';
 import { getVaultRoot } from './runtime/paths.js';
-import { getMemoryDocsDir, type ResolveMemoryDocsOptions } from './memory-docs.js';
 
 const FRONTMATTER_DELIMITER = '---';
 const MEMORY_DOC_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -52,8 +53,7 @@ interface MemoryFrontmatterSection {
   body: string;
 }
 
-export interface LoadMemoryDocsOptions extends ResolveMemoryDocsOptions {
-}
+export interface LoadMemoryDocsOptions extends ResolveMemoryDocsOptions {}
 
 export interface LoadMemoryDocsResult {
   memoryDir: string;
@@ -212,7 +212,10 @@ function splitFrontmatter(rawContent: string): MemoryFrontmatterSection {
 
   return {
     attributes: parseFrontmatterYaml(lines.slice(1, endIndex).join('\n')),
-    body: lines.slice(endIndex + 1).join('\n').trim(),
+    body: lines
+      .slice(endIndex + 1)
+      .join('\n')
+      .trim(),
   };
 }
 
@@ -308,19 +311,18 @@ function parseReferenceFile(filePath: string, rootDir: string): ParsedMemoryRefe
   const metadata = normalizeMetadata(attributes.metadata);
   const body = parsed?.body ?? rawContent.trim();
   const id = readOptionalString(attributes.id) ?? basename(filePath, '.md');
-  const title = readOptionalString(attributes.title)
-    ?? readOptionalString(attributes.name)
-    ?? readOptionalString(metadata.title)
-    ?? extractMarkdownTitle(body)
-    ?? humanizeId(id);
-  const summary = readOptionalString(attributes.summary)
-    ?? readOptionalString(attributes.description)
-    ?? extractFirstParagraph(body)
-    ?? '';
-  const updated = readOptionalString(attributes.updatedAt)
-    ?? readOptionalString(attributes.updated)
-    ?? readOptionalString(metadata.updated)
-    ?? currentDateYyyyMmDd();
+  const title =
+    readOptionalString(attributes.title) ??
+    readOptionalString(attributes.name) ??
+    readOptionalString(metadata.title) ??
+    extractMarkdownTitle(body) ??
+    humanizeId(id);
+  const summary = readOptionalString(attributes.summary) ?? readOptionalString(attributes.description) ?? extractFirstParagraph(body) ?? '';
+  const updated =
+    readOptionalString(attributes.updatedAt) ??
+    readOptionalString(attributes.updated) ??
+    readOptionalString(metadata.updated) ??
+    currentDateYyyyMmDd();
 
   return {
     filePath,
@@ -439,9 +441,7 @@ export function collectMemoryDocReferenceErrors(docs: ParsedMemoryDoc[]): Memory
   }
 
   return errors.sort((left, right) => {
-    return left.id.localeCompare(right.id)
-      || left.field.localeCompare(right.field)
-      || left.targetId.localeCompare(right.targetId);
+    return left.id.localeCompare(right.id) || left.field.localeCompare(right.field) || left.targetId.localeCompare(right.targetId);
   });
 }
 
@@ -501,10 +501,14 @@ export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDoc
 }
 
 export function normalizeCsvValues(rawValues: string[]): string[] {
-  return [...new Set(rawValues
-    .flatMap((value) => String(value).split(','))
-    .map((value) => value.trim().toLowerCase())
-    .filter((value) => value.length > 0))];
+  return [
+    ...new Set(
+      rawValues
+        .flatMap((value) => String(value).split(','))
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => value.length > 0),
+    ),
+  ];
 }
 
 export function currentDateYyyyMmDd(now = new Date()): string {
@@ -540,16 +544,19 @@ export function buildMemoryDocTemplate(options: {
     ...(normalizedRole ? [`role:${normalizedRole === 'hub' ? 'structure' : normalizedRole}`] : []),
   ];
 
-  return stringifyFrontmatter({
-    id: options.id,
-    title: options.title,
-    summary: options.summary,
-    ...(description ? { description } : {}),
-    status: options.status?.trim() || 'active',
-    updatedAt: options.updated?.trim() || currentDateYyyyMmDd(),
-    tags,
-    ...(Object.keys(links).length > 0 ? { links } : {}),
-  }, `# ${options.title}\n\n${options.summary}`);
+  return stringifyFrontmatter(
+    {
+      id: options.id,
+      title: options.title,
+      summary: options.summary,
+      ...(description ? { description } : {}),
+      status: options.status?.trim() || 'active',
+      updatedAt: options.updated?.trim() || currentDateYyyyMmDd(),
+      tags,
+      ...(Object.keys(links).length > 0 ? { links } : {}),
+    },
+    `# ${options.title}\n\n${options.summary}`,
+  );
 }
 
 export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMemoryDocsOptions = {}): CreateMemoryDocResult {
@@ -567,23 +574,26 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
 
   const { memoryDir, vaultRoot } = resolveMemoryContext(options);
   const role = input.role?.trim().toLowerCase();
-  const created = createUnifiedNode({
-    id,
-    title,
-    summary,
-    description: input.description?.trim() || undefined,
-    status: input.status?.trim() || 'active',
-    tags: [
-      'type:note',
-      ...(input.type?.trim() ? [`noteType:${input.type.trim()}`] : []),
-      ...(input.area?.trim() ? [`area:${input.area.trim()}`] : []),
-      ...(role ? [`role:${role === 'hub' ? 'structure' : role}`] : []),
-    ],
-    parent: input.parent?.trim() || undefined,
-    related: input.related,
-    updatedAt: input.updated?.trim() || currentDateYyyyMmDd(),
-    force: input.force,
-  }, { vaultRoot });
+  const created = createUnifiedNode(
+    {
+      id,
+      title,
+      summary,
+      description: input.description?.trim() || undefined,
+      status: input.status?.trim() || 'active',
+      tags: [
+        'type:note',
+        ...(input.type?.trim() ? [`noteType:${input.type.trim()}`] : []),
+        ...(input.area?.trim() ? [`area:${input.area.trim()}`] : []),
+        ...(role ? [`role:${role === 'hub' ? 'structure' : role}`] : []),
+      ],
+      parent: input.parent?.trim() || undefined,
+      related: input.related,
+      updatedAt: input.updated?.trim() || currentDateYyyyMmDd(),
+      force: input.force,
+    },
+    { vaultRoot },
+  );
 
   const doc = mapUnifiedNodeToMemoryDoc(created.node);
   return {

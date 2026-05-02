@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { describeInlineRunStatus, inferStatusFromLinkedRunDetail } from './linkedRunStatus.js';
 
 describe('linkedRunStatus', () => {

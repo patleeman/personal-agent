@@ -1,5 +1,7 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react';
 import '@excalidraw/excalidraw/index.css';
+
+import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react';
+
 import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
 import { buildDrawingFileNames, serializeExcalidrawScene } from '../content/excalidrawUtils';
 import { useTheme } from '../ui-state/theme';
@@ -155,7 +157,9 @@ export function ExcalidrawEditorModal({
     <div
       className="ui-overlay-backdrop"
       style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(2px)' }}
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
       <div
         role="dialog"
@@ -177,17 +181,14 @@ export function ExcalidrawEditorModal({
           />
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="ui-toolbar-button px-2 py-1 text-[10px]"
-              disabled={saving}
-            >
+            <button type="button" onClick={onClose} className="ui-toolbar-button px-2 py-1 text-[10px]" disabled={saving}>
               Cancel
             </button>
             <button
               type="button"
-              onClick={() => { void handleSave(); }}
+              onClick={() => {
+                void handleSave();
+              }}
               className="ui-pill ui-pill-solid-accent whitespace-nowrap px-2.5 py-1 text-[11px]"
               disabled={saving || !LoadedExcalidraw || loadError !== null}
             >
@@ -208,22 +209,26 @@ export function ExcalidrawEditorModal({
                   theme={excalidrawTheme}
                   UIOptions={EMBEDDED_UI_OPTIONS}
                   renderTopRightUI={() => null}
-                  initialData={initialScene ? {
-                    elements: [...initialScene.elements],
-                    appState: {
-                      ...initialScene.appState,
-                      theme: excalidrawTheme,
-                      openMenu: null,
-                      openSidebar: null,
-                    },
-                    files: initialScene.files,
-                  } : {
-                    appState: {
-                      theme: excalidrawTheme,
-                      openMenu: null,
-                      openSidebar: null,
-                    },
-                  }}
+                  initialData={
+                    initialScene
+                      ? {
+                          elements: [...initialScene.elements],
+                          appState: {
+                            ...initialScene.appState,
+                            theme: excalidrawTheme,
+                            openMenu: null,
+                            openSidebar: null,
+                          },
+                          files: initialScene.files,
+                        }
+                      : {
+                          appState: {
+                            theme: excalidrawTheme,
+                            openMenu: null,
+                            openSidebar: null,
+                          },
+                        }
+                  }
                   onChange={(elements, appState, files) => {
                     sceneRef.current = {
                       elements: [...elements],
@@ -235,9 +240,7 @@ export function ExcalidrawEditorModal({
               </div>
             </ExcalidrawErrorBoundary>
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-dim">
-              Loading Excalidraw…
-            </div>
+            <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-dim">Loading Excalidraw…</div>
           )}
         </div>
       </div>

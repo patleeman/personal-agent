@@ -1,13 +1,14 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../client/api';
-import { ensureConversationTabOpen } from '../session/sessionTabs';
-import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
-import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
+
 import { useAppData, useSseConnection } from '../app/contexts';
-import { useApi } from '../hooks/useApi';
 import { getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention } from '../automation/runPresentation';
 import { formatTaskNextRunCountdown, formatTaskSchedule, getNextTaskRunAt } from '../automation/taskSchedule';
+import { api } from '../client/api';
+import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
+import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
+import { useApi } from '../hooks/useApi';
+import { ensureConversationTabOpen } from '../session/sessionTabs';
 import type { DurableRunRecord, ScheduledTaskDetail, ScheduledTaskSummary } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 
@@ -103,13 +104,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 export function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
@@ -147,9 +150,7 @@ function runStatusText(run: DurableRunRecord): { text: string; cls: string } {
     return { text: 'Running', cls: 'text-accent' };
   }
   if (status === 'completed') {
-    return runNeedsAttention(run)
-      ? { text: 'Needs review', cls: 'text-warning' }
-      : { text: 'Completed', cls: 'text-success' };
+    return runNeedsAttention(run) ? { text: 'Needs review', cls: 'text-warning' } : { text: 'Completed', cls: 'text-success' };
   }
   if (status === 'failed' || status === 'interrupted') return { text: 'Failed', cls: 'text-danger' };
   if (status === 'cancelled') return { text: 'Cancelled', cls: 'text-dim' };
@@ -210,7 +211,13 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
+      style={{
+        background: 'rgb(0 0 0 / 0.58)',
+        backdropFilter: 'blur(10px)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.75rem',
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -248,7 +255,13 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
+      style={{
+        background: 'rgb(0 0 0 / 0.58)',
+        backdropFilter: 'blur(10px)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.75rem',
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -289,7 +302,13 @@ function DeleteTaskModal({
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
+      style={{
+        background: 'rgb(0 0 0 / 0.58)',
+        backdropFilter: 'blur(10px)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.75rem',
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !deleting) onCancel();
       }}
@@ -304,11 +323,18 @@ function DeleteTaskModal({
           <div className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Delete automation</p>
             <h2 className="text-[20px] font-semibold tracking-tight text-primary">Delete {title}?</h2>
-            <p className="text-[14px] leading-6 text-secondary">This removes the schedule. Past runs and existing thread history stay put.</p>
+            <p className="text-[14px] leading-6 text-secondary">
+              This removes the schedule. Past runs and existing thread history stay put.
+            </p>
           </div>
           {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onCancel} disabled={deleting} className="text-[13px] text-secondary transition-colors hover:text-primary disabled:opacity-50">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={deleting}
+              className="text-[13px] text-secondary transition-colors hover:text-primary disabled:opacity-50"
+            >
               Cancel
             </button>
             <ToolbarButton onClick={onConfirm} disabled={deleting} className="text-danger hover:text-danger">
@@ -351,13 +377,7 @@ function CurrentAutomationRow({ task }: { task: ScheduledTaskSummary }) {
   );
 }
 
-function AutomationsOverview({
-  tasks,
-  onCreate,
-}: {
-  tasks: ScheduledTaskSummary[];
-  onCreate: () => void;
-}) {
+function AutomationsOverview({ tasks, onCreate }: { tasks: ScheduledTaskSummary[]; onCreate: () => void }) {
   const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
   const enabledCount = tasks.filter((task) => task.enabled).length;
   const attentionCount = tasks.filter((task) => isFailedTaskStatus(task.lastStatus)).length;
@@ -377,11 +397,11 @@ function AutomationsOverview({
         <AppPageIntro
           title="Automations"
           summary={pageMeta}
-          actions={(
+          actions={
             <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none" onClick={onCreate}>
               + New automation
             </ToolbarButton>
-          )}
+          }
         />
 
         <section className="max-w-4xl">
@@ -406,7 +426,11 @@ function PromptBody({ value }: { value: string }) {
     <div className="space-y-3 whitespace-pre-wrap break-words text-[14px] leading-7 text-secondary">
       {lines.map((line, index) => {
         if (line.startsWith('## ') || line.startsWith('# ')) {
-          return <p key={index} className="pt-2 text-[16px] font-semibold tracking-tight text-primary">{line.replace(/^#+\s/, '')}</p>;
+          return (
+            <p key={index} className="pt-2 text-[16px] font-semibold tracking-tight text-primary">
+              {line.replace(/^#+\s/, '')}
+            </p>
+          );
         }
         if (line.trim() === '') return <div key={index} className="h-1" />;
         return <p key={index}>{line}</p>;
@@ -477,25 +501,29 @@ function AutomationDetailView({
   const nowMs = useAutomationClock();
 
   const detail = data;
-  const effectiveSummary = summary ?? (detail ? {
-    id: detail.id,
-    title: detail.title,
-    filePath: detail.filePath,
-    scheduleType: detail.scheduleType,
-    targetType: detail.targetType,
-    running: detail.running,
-    enabled: detail.enabled,
-    cron: detail.cron,
-    at: detail.at,
-    prompt: detail.prompt,
-    model: detail.model,
-    cwd: detail.cwd,
-    threadConversationId: detail.threadConversationId,
-    threadTitle: detail.threadTitle,
-    lastStatus: detail.lastStatus,
-    lastRunAt: detail.lastRunAt,
-    lastSuccessAt: detail.lastSuccessAt,
-  } satisfies ScheduledTaskSummary : null);
+  const effectiveSummary =
+    summary ??
+    (detail
+      ? ({
+          id: detail.id,
+          title: detail.title,
+          filePath: detail.filePath,
+          scheduleType: detail.scheduleType,
+          targetType: detail.targetType,
+          running: detail.running,
+          enabled: detail.enabled,
+          cron: detail.cron,
+          at: detail.at,
+          prompt: detail.prompt,
+          model: detail.model,
+          cwd: detail.cwd,
+          threadConversationId: detail.threadConversationId,
+          threadTitle: detail.threadTitle,
+          lastStatus: detail.lastStatus,
+          lastRunAt: detail.lastRunAt,
+          lastSuccessAt: detail.lastSuccessAt,
+        } satisfies ScheduledTaskSummary)
+      : null);
 
   const title = detail?.title ?? effectiveSummary?.title ?? id ?? 'Automation';
   const status = effectiveSummary ? statusText(effectiveSummary) : { text: 'Unknown', cls: 'text-dim' };
@@ -512,8 +540,12 @@ function AutomationDetailView({
   const latestRun = taskRuns[0];
   const latestRunStatus = latestRun ? runStatusText(latestRun) : null;
   const latestRunMoment = latestRun ? getRunMoment(latestRun) : null;
-  const latestRunFailed = latestRun ? runNeedsAttention(latestRun) || latestRun.status?.status === 'failed' || latestRun.status?.status === 'interrupted' : isFailedTaskStatus(effectiveSummary?.lastStatus);
-  const lastRunLabel = effectiveSummary.lastRunAt ? `${isFailedTaskStatus(effectiveSummary.lastStatus) ? 'Failed' : 'Ran'} ${timeAgo(effectiveSummary.lastRunAt)}` : '—';
+  const latestRunFailed = latestRun
+    ? runNeedsAttention(latestRun) || latestRun.status?.status === 'failed' || latestRun.status?.status === 'interrupted'
+    : isFailedTaskStatus(effectiveSummary?.lastStatus);
+  const lastRunLabel = effectiveSummary.lastRunAt
+    ? `${isFailedTaskStatus(effectiveSummary.lastStatus) ? 'Failed' : 'Ran'} ${timeAgo(effectiveSummary.lastRunAt)}`
+    : '—';
   const modelLabel = detail?.model ?? effectiveSummary.model ?? 'Default';
   const threadLabel = detail?.threadTitle ?? effectiveSummary.threadTitle ?? formatThreadModeLabel(detail?.threadMode);
   const timeoutLabel = formatSeconds(detail?.timeoutSeconds);
@@ -535,10 +567,7 @@ function AutomationDetailView({
     setRunningNow(true);
     try {
       await api.runTaskNow(id);
-      const [refreshedDetail] = await Promise.all([
-        refetch({ resetLoading: false }),
-        onRefreshTasks(),
-      ]);
+      const [refreshedDetail] = await Promise.all([refetch({ resetLoading: false }), onRefreshTasks()]);
 
       const threadConversationId = refreshedDetail?.threadConversationId ?? detail?.threadConversationId;
       if (threadConversationId) {
@@ -558,10 +587,7 @@ function AutomationDetailView({
     setToggling(true);
     try {
       await api.setTaskEnabled(id, !effectiveSummary.enabled);
-      await Promise.all([
-        refetch({ resetLoading: false }),
-        onRefreshTasks(),
-      ]);
+      await Promise.all([refetch({ resetLoading: false }), onRefreshTasks()]);
     } catch (nextError) {
       console.error(nextError);
     } finally {
@@ -610,7 +636,11 @@ function AutomationDetailView({
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[88rem]" contentClassName="space-y-8">
           <div className="space-y-5">
-            <button type="button" onClick={onBack} className="text-[13px] text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
+            <button
+              type="button"
+              onClick={onBack}
+              className="text-[13px] text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+            >
               ← Automations
             </button>
 
@@ -632,12 +662,25 @@ function AutomationDetailView({
               </div>
 
               <div className="flex shrink-0 flex-wrap gap-2">
-                <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>Refresh</ToolbarButton>
+                <ToolbarButton
+                  onClick={() => {
+                    void refetch({ resetLoading: false });
+                    void onRefreshTasks();
+                  }}
+                >
+                  Refresh
+                </ToolbarButton>
                 <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
                 <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
                   {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
                 </ToolbarButton>
-                <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
+                <ToolbarButton
+                  onClick={() => {
+                    void handleRunNow();
+                  }}
+                  disabled={runningNow || effectiveSummary.running}
+                  className="text-accent"
+                >
                   {runningNow ? 'Running…' : 'Run now'}
                 </ToolbarButton>
               </div>
@@ -647,7 +690,11 @@ function AutomationDetailView({
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="min-w-0 space-y-8">
               <section className="grid border-y border-border-subtle md:grid-cols-5">
-                <SummaryCell label="Last run" value={lastRunLabel} className={isFailedTaskStatus(effectiveSummary.lastStatus) ? 'text-danger' : ''} />
+                <SummaryCell
+                  label="Last run"
+                  value={lastRunLabel}
+                  className={isFailedTaskStatus(effectiveSummary.lastStatus) ? 'text-danger' : ''}
+                />
                 <SummaryCell label="Next run" value={nextRunLabel} />
                 <SummaryCell label="Schedule" value={scheduleLabel} />
                 <SummaryCell label="Target" value={targetLabel} />
@@ -666,14 +713,30 @@ function AutomationDetailView({
                         {latestRunMoment?.at ? `Started ${timeAgo(latestRunMoment.at)}` : 'No start timestamp'}
                         <span className="mx-2 text-dim">·</span>
                         Duration {latestRun ? formatRunDuration(latestRun) : '—'}
-                        {latestRunStatus && <><span className="mx-2 text-dim">·</span><span className={latestRunStatus.cls}>{latestRunStatus.text}</span></>}
+                        {latestRunStatus && (
+                          <>
+                            <span className="mx-2 text-dim">·</span>
+                            <span className={latestRunStatus.cls}>{latestRunStatus.text}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
-                      <ToolbarButton className="text-danger" onClick={() => { if (latestRun) window.open(getRunLogsPath(latestRun), '_blank'); }} disabled={!latestRun}>
+                      <ToolbarButton
+                        className="text-danger"
+                        onClick={() => {
+                          if (latestRun) window.open(getRunLogsPath(latestRun), '_blank');
+                        }}
+                        disabled={!latestRun}
+                      >
                         Inspect logs
                       </ToolbarButton>
-                      <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running}>
+                      <ToolbarButton
+                        onClick={() => {
+                          void handleRunNow();
+                        }}
+                        disabled={runningNow || effectiveSummary.running}
+                      >
                         Rerun
                       </ToolbarButton>
                     </div>
@@ -683,8 +746,18 @@ function AutomationDetailView({
 
               <DetailSection title="Prompt">
                 <div className="mb-3 flex justify-end gap-5 text-[13px] text-secondary">
-                  <button type="button" onClick={() => { void handleCopyPrompt(); }} className="transition-colors hover:text-primary">Copy</button>
-                  <button type="button" onClick={onOpenEdit} className="transition-colors hover:text-primary">Edit</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleCopyPrompt();
+                    }}
+                    className="transition-colors hover:text-primary"
+                  >
+                    Copy
+                  </button>
+                  <button type="button" onClick={onOpenEdit} className="transition-colors hover:text-primary">
+                    Edit
+                  </button>
                 </div>
                 <div className="rounded-lg border border-border-subtle bg-surface/35 px-4 py-3 font-mono text-[13px] leading-6 text-secondary">
                   {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p>No prompt configured.</p>}
@@ -710,15 +783,41 @@ function AutomationDetailView({
                         const moment = getRunMoment(run);
                         const isBad = runStatus.cls === 'text-danger';
                         return (
-                          <div key={run.runId} className="grid min-w-[58rem] grid-cols-[7rem_minmax(12rem,1fr)_7rem_6rem_minmax(10rem,1fr)_6rem] items-center gap-0 px-4 py-3 text-[13px]">
-                            <div className={`flex items-center gap-2 ${runStatus.cls}`}><span className={`h-2 w-2 rounded-full ${isBad ? 'bg-danger' : runStatus.cls === 'text-success' ? 'bg-success' : 'bg-secondary'}`} />{runStatus.text}</div>
+                          <div
+                            key={run.runId}
+                            className="grid min-w-[58rem] grid-cols-[7rem_minmax(12rem,1fr)_7rem_6rem_minmax(10rem,1fr)_6rem] items-center gap-0 px-4 py-3 text-[13px]"
+                          >
+                            <div className={`flex items-center gap-2 ${runStatus.cls}`}>
+                              <span
+                                className={`h-2 w-2 rounded-full ${
+                                  isBad ? 'bg-danger' : runStatus.cls === 'text-success' ? 'bg-success' : 'bg-secondary'
+                                }`}
+                              />
+                              {runStatus.text}
+                            </div>
                             <div className="truncate text-primary">{run.runId}</div>
                             <div className="text-secondary">{moment.at ? timeAgo(moment.at) : '—'}</div>
                             <div className="text-secondary">{formatRunDuration(run)}</div>
                             <div className={isBad ? 'truncate text-danger' : 'truncate text-secondary'}>{runResultText(run)}</div>
                             <div className="flex gap-2 text-accent">
-                              <button type="button" onClick={() => window.open(getRunLogsPath(run), '_blank')} className="hover:text-primary">Logs</button>
-                              {isBad && <button type="button" onClick={() => { void handleRunNow(); }} className="hover:text-primary">Rerun</button>}
+                              <button
+                                type="button"
+                                onClick={() => window.open(getRunLogsPath(run), '_blank')}
+                                className="hover:text-primary"
+                              >
+                                Logs
+                              </button>
+                              {isBad && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleRunNow();
+                                  }}
+                                  className="hover:text-primary"
+                                >
+                                  Rerun
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -748,10 +847,18 @@ function AutomationDetailView({
               </RailSection>
               <RailSection title="Alerts">
                 <RailLine label="Notifications">{effectiveSummary.enabled ? 'On failure' : 'Disabled'}</RailLine>
-                <RailLine label="Last notification">{isFailedTaskStatus(effectiveSummary.lastStatus) && effectiveSummary.lastRunAt ? timeAgo(effectiveSummary.lastRunAt) : '—'}</RailLine>
+                <RailLine label="Last notification">
+                  {isFailedTaskStatus(effectiveSummary.lastStatus) && effectiveSummary.lastRunAt
+                    ? timeAgo(effectiveSummary.lastRunAt)
+                    : '—'}
+                </RailLine>
               </RailSection>
               <RailSection title="Danger zone">
-                <button type="button" onClick={() => setDeleteModalOpen(true)} className="mt-2 text-[13px] text-danger transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
+                <button
+                  type="button"
+                  onClick={() => setDeleteModalOpen(true)}
+                  className="mt-2 text-[13px] text-danger transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+                >
                   Delete automation
                 </button>
               </RailSection>
@@ -768,7 +875,9 @@ function AutomationDetailView({
           onCancel={() => {
             if (!deleting) setDeleteModalOpen(false);
           }}
-          onConfirm={() => { void handleDelete(); }}
+          onConfirm={() => {
+            void handleDelete();
+          }}
         />
       )}
     </>
@@ -789,9 +898,10 @@ export function TasksPage() {
   const { status: sseStatus } = useSseConnection();
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const isLoading = tasks === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
-  const visibleError = tasks === null && sseStatus === 'offline'
-    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest automations.'
-    : refreshError;
+  const visibleError =
+    tasks === null && sseStatus === 'offline'
+      ? (refreshError ?? 'Live updates are offline. Use refresh to load the latest automations.')
+      : refreshError;
   const selectedTask = tasks?.find((task) => task.id === selectedId) ?? null;
 
   const refreshTasks = useCallback(async () => {
@@ -810,11 +920,7 @@ export function TasksPage() {
   }, [refreshTasks, sseStatus, tasks]);
 
   const params = new URLSearchParams(location.search);
-  const composerMode = selectedId && params.get('edit') === '1'
-    ? 'edit'
-    : params.get('new') === '1'
-      ? 'create'
-      : null;
+  const composerMode = selectedId && params.get('edit') === '1' ? 'edit' : params.get('new') === '1' ? 'create' : null;
 
   function closeComposer() {
     if (selectedId) {
@@ -828,11 +934,17 @@ export function TasksPage() {
     <div className="flex h-full flex-col">
       {isLoading && <LoadingState label="Loading automations…" className="px-8 py-12" />}
       {visibleError && <ErrorState message={`Failed to load automations: ${visibleError}`} className="px-8 py-12" />}
-      {tasks && (
-        selectedId
-          ? <AutomationDetailView summary={selectedTask} onBack={() => navigate('/automations')} onOpenEdit={() => navigate(`/automations/${encodeURIComponent(selectedId)}?edit=1`)} onRefreshTasks={() => refreshTasks()} />
-          : <AutomationsOverview tasks={tasks} onCreate={() => navigate('/automations?new=1')} />
-      )}
+      {tasks &&
+        (selectedId ? (
+          <AutomationDetailView
+            summary={selectedTask}
+            onBack={() => navigate('/automations')}
+            onOpenEdit={() => navigate(`/automations/${encodeURIComponent(selectedId)}?edit=1`)}
+            onRefreshTasks={() => refreshTasks()}
+          />
+        ) : (
+          <AutomationsOverview tasks={tasks} onCreate={() => navigate('/automations?new=1')} />
+        ))}
       {composerMode === 'create' && <CreateTaskModal onClose={closeComposer} />}
       {composerMode === 'edit' && selectedId && <EditTaskModal id={selectedId} onClose={closeComposer} />}
     </div>

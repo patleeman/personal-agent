@@ -1,10 +1,11 @@
 /**
  * Daemon routes
- * 
+ *
  * Handles daemon service lifecycle management (install, start, stop, restart, uninstall).
  */
 
 import type { Express } from 'express';
+
 import { readDaemonState, updateDaemonPowerAndReadState } from '../automation/daemon.js';
 import { logError } from '../middleware/index.js';
 
@@ -34,9 +35,11 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post' | 'pat
 
   router.patch('/api/daemon/power', async (req, res) => {
     try {
-      res.json(await updateDaemonPowerAndReadState({
-        keepAwake: readBooleanBodyField((req as { body?: unknown }).body, 'keepAwake'),
-      }));
+      res.json(
+        await updateDaemonPowerAndReadState({
+          keepAwake: readBooleanBodyField((req as { body?: unknown }).body, 'keepAwake'),
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -46,4 +49,3 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post' | 'pat
     }
   });
 }
-

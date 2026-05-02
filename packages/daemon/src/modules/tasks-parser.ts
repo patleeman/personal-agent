@@ -98,13 +98,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function toTaskIdFromFile(filePath: string): string {
@@ -172,7 +174,10 @@ function splitFrontmatter(content: string): FrontmatterSection {
   }
 
   const rawFrontmatter = lines.slice(1, endIndex).join('\n');
-  const body = lines.slice(endIndex + 1).join('\n').trim();
+  const body = lines
+    .slice(endIndex + 1)
+    .join('\n')
+    .trim();
 
   return {
     attributes: parseFrontmatterYaml(rawFrontmatter),
@@ -398,13 +403,14 @@ export function cronMatches(expression: ParsedCronExpression, at: Date): boolean
   const domMatch = expression.dayOfMonth.values.has(dayOfMonth);
   const dowMatch = expression.dayOfWeek.values.has(dayOfWeek);
 
-  const dayMatches = expression.dayOfMonth.wildcard && expression.dayOfWeek.wildcard
-    ? true
-    : expression.dayOfMonth.wildcard
-      ? dowMatch
-      : expression.dayOfWeek.wildcard
-        ? domMatch
-        : (domMatch || dowMatch);
+  const dayMatches =
+    expression.dayOfMonth.wildcard && expression.dayOfWeek.wildcard
+      ? true
+      : expression.dayOfMonth.wildcard
+        ? dowMatch
+        : expression.dayOfWeek.wildcard
+          ? domMatch
+          : domMatch || dowMatch;
 
   return dayMatches;
 }
@@ -439,23 +445,23 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
 
   const schedule: ParsedTaskSchedule = cron
     ? {
-      type: 'cron',
-      expression: cron,
-      parsed: parseCronExpression(cron),
-    }
-    : (() => {
-      const atValue = at as string;
-      const normalizedAt = normalizeIsoTimestamp(atValue);
-      if (!normalizedAt) {
-        throw new Error(`Invalid at timestamp: ${atValue}`);
+        type: 'cron',
+        expression: cron,
+        parsed: parseCronExpression(cron),
       }
+    : (() => {
+        const atValue = at as string;
+        const normalizedAt = normalizeIsoTimestamp(atValue);
+        if (!normalizedAt) {
+          throw new Error(`Invalid at timestamp: ${atValue}`);
+        }
 
-      return {
-        type: 'at' as const,
-        at: normalizedAt,
-        atMs: Date.parse(normalizedAt),
-      };
-    })();
+        return {
+          type: 'at' as const,
+          at: normalizedAt,
+          atMs: Date.parse(normalizedAt),
+        };
+      })();
 
   const profile = readOptionalString(section.attributes, 'profile') ?? DEFAULT_PROFILE;
 

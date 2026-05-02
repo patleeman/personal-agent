@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../client/api';
+
 import { useAppEvents } from '../app/contexts';
+import { api } from '../client/api';
 import type { ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, UncommittedDiffResult } from '../shared/types';
 import { formatDate } from '../shared/utils';
 import { CheckpointDiffSection, fileDisplayPath } from './checkpoints/CheckpointDiffView';
-import { ErrorState, LoadingState, cx } from './ui';
+import { cx, ErrorState, LoadingState } from './ui';
 
 type DiffViewMode = 'unified' | 'split';
 
-type DiffRailFile = Pick<ConversationCommitCheckpointRecord['files'][number], 'path' | 'previousPath' | 'status' | 'additions' | 'deletions'>;
+type DiffRailFile = Pick<
+  ConversationCommitCheckpointRecord['files'][number],
+  'path' | 'previousPath' | 'status' | 'additions' | 'deletions'
+>;
 
 function fileName(path: string): string {
   return path.split('/').filter(Boolean).at(-1) ?? path;
@@ -19,19 +23,15 @@ function parentPath(path: string): string {
   return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
 }
 
-function DiffViewToggle({
-  currentView,
-  onChange,
-}: {
-  currentView: DiffViewMode;
-  onChange: (nextView: DiffViewMode) => void;
-}) {
+function DiffViewToggle({ currentView, onChange }: { currentView: DiffViewMode; onChange: (nextView: DiffViewMode) => void }) {
   return (
     <div className="ui-segmented-control" role="tablist" aria-label="Diff view">
-      {([
-        ['split', 'Split'],
-        ['unified', 'Unified'],
-      ] as Array<[DiffViewMode, string]>).map(([value, label]) => (
+      {(
+        [
+          ['split', 'Split'],
+          ['unified', 'Unified'],
+        ] as Array<[DiffViewMode, string]>
+      ).map(([value, label]) => (
         <button
           key={value}
           type="button"
@@ -67,7 +67,8 @@ function useUncommittedDiff(cwd: string | null | undefined) {
     setLoading(true);
     setError(null);
 
-    api.workspaceUncommittedDiff(cwd)
+    api
+      .workspaceUncommittedDiff(cwd)
       .then((data) => {
         if (!cancelled) {
           setResult(data);
@@ -111,7 +112,8 @@ export function useConversationCheckpointSummaries(conversationId: string | null
     setLoading(true);
     setError(null);
 
-    api.conversationCheckpoints(conversationId)
+    api
+      .conversationCheckpoints(conversationId)
       .then((result) => {
         if (!cancelled) {
           setCheckpoints([...result.checkpoints].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
@@ -165,14 +167,16 @@ export function ConversationDiffRailContent({
       return;
     }
 
-    Promise.all(missing.map(async (checkpoint) => {
-      try {
-        const result = await api.conversationCheckpoint(checkpoint.conversationId, checkpoint.id);
-        return [checkpoint.id, result.checkpoint.files.map(({ patch: _patch, ...file }) => file)] as const;
-      } catch {
-        return [checkpoint.id, []] as const;
-      }
-    })).then((entries) => {
+    Promise.all(
+      missing.map(async (checkpoint) => {
+        try {
+          const result = await api.conversationCheckpoint(checkpoint.conversationId, checkpoint.id);
+          return [checkpoint.id, result.checkpoint.files.map(({ patch: _patch, ...file }) => file)] as const;
+        } catch {
+          return [checkpoint.id, []] as const;
+        }
+      }),
+    ).then((entries) => {
       if (cancelled) {
         return;
       }
@@ -258,43 +262,74 @@ export function ConversationDiffRailContent({
                 )}
                 title={checkpoint.shortSha}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-dim" aria-hidden="true">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mt-0.5 shrink-0 text-dim"
+                  aria-hidden="true"
+                >
                   <path d="m8.5 5.5 5 6.5-5 6.5" />
                 </svg>
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="shrink-0 font-mono text-[11px] text-steel">{checkpoint.shortSha}</span>
-                    <span className="shrink-0 text-[10px] text-dim">{checkpoint.fileCount} file{checkpoint.fileCount === 1 ? '' : 's'}</span>
+                    <span className="shrink-0 text-[10px] text-dim">
+                      {checkpoint.fileCount} file{checkpoint.fileCount === 1 ? '' : 's'}
+                    </span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-[10px] text-dim">
-                    <span className="font-mono tabular-nums"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
+                    <span className="font-mono tabular-nums">
+                      <span className="text-success">+{checkpoint.linesAdded}</span>{' '}
+                      <span className="text-danger">-{checkpoint.linesDeleted}</span>
+                    </span>
                   </div>
                 </div>
               </button>
               <div className="pb-1 pl-7 pr-1">
-                {files ? files.slice(0, 12).map((file) => (
-                  <button
-                    key={`${checkpoint.id}:${file.path}:${file.previousPath ?? ''}`}
-                    type="button"
-                    onClick={() => {
-                      if (checkpoint.id === activeCheckpointId && onScrollToFile) {
-                        onScrollToFile(file.path);
-                      } else {
-                        onOpenCheckpoint(checkpoint.id);
-                      }
-                    }}
-                    className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
-                    title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-dim group-hover:text-secondary" aria-hidden="true">
-                      <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
-                      <path d="M14.25 3.75V6.75h3" />
-                    </svg>
-                    <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
-                    <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums"><span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span></span>
-                  </button>
-                )) : (
+                {files ? (
+                  files.slice(0, 12).map((file) => (
+                    <button
+                      key={`${checkpoint.id}:${file.path}:${file.previousPath ?? ''}`}
+                      type="button"
+                      onClick={() => {
+                        if (checkpoint.id === activeCheckpointId && onScrollToFile) {
+                          onScrollToFile(file.path);
+                        } else {
+                          onOpenCheckpoint(checkpoint.id);
+                        }
+                      }}
+                      className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
+                      title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="shrink-0 text-dim group-hover:text-secondary"
+                        aria-hidden="true"
+                      >
+                        <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
+                        <path d="M14.25 3.75V6.75h3" />
+                      </svg>
+                      <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
+                      <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
+                      <span className="shrink-0 font-mono text-[10px] tabular-nums">
+                        <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
+                      </span>
+                    </button>
+                  ))
+                ) : (
                   <div className="px-2 py-1.5 text-[11px] text-dim">Loading files…</div>
                 )}
                 {files && files.length > 12 ? <div className="px-2 py-1 text-[10px] text-dim">+{files.length - 12} more files</div> : null}
@@ -334,20 +369,32 @@ function UncommittedRailEntry({
         )}
         title={result.branch ?? 'Uncommitted changes'}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-dim" aria-hidden="true">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="mt-0.5 shrink-0 text-dim"
+          aria-hidden="true"
+        >
           <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 1 1 3.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
         </svg>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className={cx(
-              'shrink-0 text-[11px] font-medium',
-              selected ? 'text-accent' : 'text-secondary',
-            )}>Uncommitted</span>
-            <span className="shrink-0 text-[10px] text-dim">{result.changeCount} file{result.changeCount === 1 ? '' : 's'}</span>
+            <span className={cx('shrink-0 text-[11px] font-medium', selected ? 'text-accent' : 'text-secondary')}>Uncommitted</span>
+            <span className="shrink-0 text-[10px] text-dim">
+              {result.changeCount} file{result.changeCount === 1 ? '' : 's'}
+            </span>
           </div>
           <div className="mt-0.5 flex items-center gap-2 text-[10px] text-dim">
             {result.branch ? <span className="truncate">{result.branch}</span> : null}
-            <span className="font-mono tabular-nums"><span className="text-success">+{result.linesAdded}</span> <span className="text-danger">-{result.linesDeleted}</span></span>
+            <span className="font-mono tabular-nums">
+              <span className="text-success">+{result.linesAdded}</span> <span className="text-danger">-{result.linesDeleted}</span>
+            </span>
           </div>
         </div>
       </button>
@@ -361,13 +408,26 @@ function UncommittedRailEntry({
               className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
               title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-dim group-hover:text-secondary" aria-hidden="true">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 text-dim group-hover:text-secondary"
+                aria-hidden="true"
+              >
                 <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
                 <path d="M14.25 3.75V6.75h3" />
               </svg>
               <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
               <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
-              <span className="shrink-0 font-mono text-[10px] tabular-nums"><span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span></span>
+              <span className="shrink-0 font-mono text-[10px] tabular-nums">
+                <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
+              </span>
             </button>
           ))}
           {files.length > 12 ? <div className="px-2 py-1 text-[10px] text-dim">+{files.length - 12} more files</div> : null}
@@ -424,7 +484,8 @@ export function ConversationCheckpointWorkbenchPane({
     setLoading(true);
     setError(null);
 
-    api.conversationCheckpoint(conversationId, checkpointId)
+    api
+      .conversationCheckpoint(conversationId, checkpointId)
       .then((result) => {
         if (!cancelled) {
           setCheckpoint(result.checkpoint);
@@ -511,7 +572,7 @@ export function ConversationCheckpointWorkbenchPane({
       }
 
       if (nextPath) {
-        setActiveFilePath((current) => current === nextPath ? current : nextPath);
+        setActiveFilePath((current) => (current === nextPath ? current : nextPath));
       }
     };
 
@@ -576,11 +637,22 @@ export function ConversationCheckpointWorkbenchPane({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-secondary">
-              {checkpoint ? <span className="font-mono text-steel">{checkpoint.shortSha}</span> : <span className="ui-section-label">Diff</span>}
+              {checkpoint ? (
+                <span className="font-mono text-steel">{checkpoint.shortSha}</span>
+              ) : (
+                <span className="ui-section-label">Diff</span>
+              )}
               {checkpointSubtitle ? <span className="truncate">{checkpointSubtitle}</span> : null}
-              {checkpoint ? <span className="font-mono tabular-nums"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span> : null}
+              {checkpoint ? (
+                <span className="font-mono tabular-nums">
+                  <span className="text-success">+{checkpoint.linesAdded}</span>{' '}
+                  <span className="text-danger">-{checkpoint.linesDeleted}</span>
+                </span>
+              ) : null}
             </div>
-            <h2 className="mt-1 truncate text-[17px] font-semibold text-primary" title={checkpoint?.subject ?? checkpointId}>{checkpoint?.subject ?? checkpointId}</h2>
+            <h2 className="mt-1 truncate text-[17px] font-semibold text-primary" title={checkpoint?.subject ?? checkpointId}>
+              {checkpoint?.subject ?? checkpointId}
+            </h2>
           </div>
           <DiffViewToggle currentView={diffView} onChange={setDiffView} />
         </div>
@@ -595,7 +667,9 @@ export function ConversationCheckpointWorkbenchPane({
           ) : (
             <div ref={viewerScrollRef} className="h-full overflow-auto overscroll-contain bg-base">
               {checkpoint.files.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">No changed files were captured for this diff.</div>
+                <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">
+                  No changed files were captured for this diff.
+                </div>
               ) : (
                 <div className="mx-auto max-w-[1500px] px-5 py-4">
                   {checkpoint.files.map((file) => (
@@ -624,7 +698,7 @@ export function ConversationCheckpointWorkbenchPane({
                     />
                   ))}
                 </div>
-              )
+              )}
             </div>
           )}
         </div>
@@ -646,7 +720,6 @@ function UncommittedDiffPaneView({
 }) {
   const { result, loading, error } = useUncommittedDiff(workspaceCwd);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const viewerScrollRef = useRef<HTMLDivElement | null>(null);
   const fileSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -656,19 +729,6 @@ function UncommittedDiffPaneView({
   useEffect(() => {
     setActiveFilePath((current) => current ?? files[0]?.path ?? null);
   }, [files]);
-
-  // Keep only the active file expanded by default; allow manual toggle
-  useEffect(() => {
-    if (!selectedFilePath) {
-      return;
-    }
-    setExpandedFiles((current) => {
-      if (current.size === 1 && current.has(selectedFilePath)) {
-        return current;
-      }
-      return new Set([selectedFilePath]);
-    });
-  }, [selectedFilePath]);
 
   useEffect(() => {
     if (!files.length) {
@@ -707,7 +767,7 @@ function UncommittedDiffPaneView({
       }
 
       if (nextPath) {
-        setActiveFilePath((current) => current === nextPath ? current : nextPath);
+        setActiveFilePath((current) => (current === nextPath ? current : nextPath));
       }
     };
 
@@ -753,7 +813,9 @@ function UncommittedDiffPaneView({
         <div className="max-w-sm">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Uncommitted changes</p>
           <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a local conversation</h2>
-          <p className="mt-2 text-[13px] leading-6 text-secondary">Uncommitted changes are shown for local conversations with a git workspace.</p>
+          <p className="mt-2 text-[13px] leading-6 text-secondary">
+            Uncommitted changes are shown for local conversations with a git workspace.
+          </p>
         </div>
       </div>
     );
@@ -775,7 +837,11 @@ function UncommittedDiffPaneView({
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-secondary">
               <span className="ui-section-label">Uncommitted</span>
               {result?.branch ? <span className="truncate font-mono text-steel">{result.branch}</span> : null}
-              {result ? <span className="font-mono tabular-nums"><span className="text-success">+{result.linesAdded}</span> <span className="text-danger">-{result.linesDeleted}</span></span> : null}
+              {result ? (
+                <span className="font-mono tabular-nums">
+                  <span className="text-success">+{result.linesAdded}</span> <span className="text-danger">-{result.linesDeleted}</span>
+                </span>
+              ) : null}
             </div>
             <h2 className="mt-1 text-[17px] font-semibold text-primary">Uncommitted changes</h2>
           </div>
@@ -795,23 +861,11 @@ function UncommittedDiffPaneView({
                     key={`${file.path}:${file.previousPath ?? ''}`}
                     file={file}
                     active={selectedFilePath === file.path}
-                    collapsed={!expandedFiles.has(file.path)}
                     view={diffView}
                     stickyHeader
                     showActiveBadge
                     registerSection={(node) => {
                       fileSectionRefs.current[file.path] = node;
-                    }}
-                    onToggleCollapse={() => {
-                      setExpandedFiles((current) => {
-                        const next = new Set(current);
-                        if (next.has(file.path)) {
-                          next.delete(file.path);
-                        } else {
-                          next.add(file.path);
-                        }
-                        return next;
-                      });
                     }}
                   />
                 ))}

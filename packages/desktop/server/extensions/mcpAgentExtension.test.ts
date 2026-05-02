@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createMcpAgentExtension } from './mcpAgentExtension.js';
 
 type ExtensionAPI = ReturnType<typeof createMcpAgentExtension> extends (api: infer A) => unknown ? A : never;
@@ -55,17 +56,23 @@ describe('mcpAgentExtension', () => {
         servers: [
           {
             name: 'filesystem',
-            info: { transport: 'stdio', toolCount: 3, tools: [
-              { name: 'read', description: 'Read a file' },
-              { name: 'write', description: 'Write a file' },
-              { name: 'list', description: 'List directory' },
-            ]},
+            info: {
+              transport: 'stdio',
+              toolCount: 3,
+              tools: [
+                { name: 'read', description: 'Read a file' },
+                { name: 'write', description: 'Write a file' },
+                { name: 'list', description: 'List directory' },
+              ],
+            },
           },
           {
             name: 'github',
-            info: { transport: 'stdio', toolCount: 1, tools: [
-              { name: 'search', description: 'Search code' },
-            ]},
+            info: {
+              transport: 'stdio',
+              toolCount: 1,
+              tools: [{ name: 'search', description: 'Search code' }],
+            },
           },
         ],
       });
@@ -83,9 +90,7 @@ describe('mcpAgentExtension', () => {
     it('shows error for servers that failed to probe', async () => {
       vi.mocked(core.listMcpCatalog).mockResolvedValue({
         config: { path: '/fake/mcp/config.json' },
-        servers: [
-          { name: 'broken-server', error: 'connection refused' },
-        ],
+        servers: [{ name: 'broken-server', error: 'connection refused' }],
       });
 
       const handler = buildHandler();
@@ -99,10 +104,15 @@ describe('mcpAgentExtension', () => {
   describe('action: info', () => {
     it('returns server info when no tool is specified', async () => {
       vi.mocked(core.inspectMcpServer).mockResolvedValue({
-        data: { server: 'filesystem', transport: 'stdio', toolCount: 2, tools: [
-          { name: 'read', description: 'Read file' },
-          { name: 'write', description: 'Write file' },
-        ]},
+        data: {
+          server: 'filesystem',
+          transport: 'stdio',
+          toolCount: 2,
+          tools: [
+            { name: 'read', description: 'Read file' },
+            { name: 'write', description: 'Write file' },
+          ],
+        },
       });
 
       const handler = buildHandler();
@@ -116,7 +126,12 @@ describe('mcpAgentExtension', () => {
 
     it('returns tool info when tool is specified', async () => {
       vi.mocked(core.inspectMcpTool).mockResolvedValue({
-        data: { server: 'filesystem', tool: 'read', description: 'Read a file', schema: { type: 'object', properties: { path: { type: 'string' } } } },
+        data: {
+          server: 'filesystem',
+          tool: 'read',
+          description: 'Read a file',
+          schema: { type: 'object', properties: { path: { type: 'string' } } },
+        },
       });
 
       const handler = buildHandler();
@@ -304,9 +319,7 @@ describe('mcpAgentExtension', () => {
       const ext = createMcpAgentExtension();
       const result = ext(api);
 
-      expect(api.registerTool).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'mcp' }),
-      );
+      expect(api.registerTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'mcp' }));
       expect(result).toBe(api);
       expect(registeredHandler()).toBeDefined();
     });

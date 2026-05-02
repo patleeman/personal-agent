@@ -2,36 +2,31 @@
  * App memory routes
  */
 
-import type { Express, Request } from 'express';
-import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync } from 'node:fs';
+
 import { getDurableAgentFilePath, getProfilesRoot, getVaultRoot } from '@personal-agent/core';
 import { listProfiles, resolveResourceProfile } from '@personal-agent/core';
-import {
-  buildRecentReadUsage,
-  listMemoryDocs,
-  listSkillsForProfile,
-  normalizeMemoryPath,
-} from '../knowledge/memoryDocs.js';
+import type { Express, Request } from 'express';
+
+import { buildRecentReadUsage, listMemoryDocs, listSkillsForProfile, normalizeMemoryPath } from '../knowledge/memoryDocs.js';
 import { logError } from '../middleware/index.js';
 import { readVaultFilesCapability } from '../workspace/workspaceDesktopCapability.js';
+import type { ServerRouteContext } from './context.js';
 
-let _getCurrentProfile: () => string = () => { throw new Error('not initialized'); };
+let _getCurrentProfile: () => string = () => {
+  throw new Error('not initialized');
+};
 let _repoRoot = process.cwd();
 
 const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 
-function initializeMemoryRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot'>,
-): void {
+function initializeMemoryRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot'>): void {
   _getCurrentProfile = context.getCurrentProfile;
   _repoRoot = context.getRepoRoot();
 }
 
 function resolveRequestedProfileFromQuery(req: Request): string {
-  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string'
-    ? req.query[VIEW_PROFILE_QUERY_PARAM].trim()
-    : '';
+  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string' ? req.query[VIEW_PROFILE_QUERY_PARAM].trim() : '';
 
   if (!requestedProfile) {
     return _getCurrentProfile();
@@ -78,10 +73,7 @@ export function registerMemoryNotesRoutes(
       }));
       const skills = listSkillsForProfile(profile);
       const memoryDocs = listMemoryDocs();
-      const usageByPath = buildRecentReadUsage([
-        ...skills.map((item) => item.path),
-        ...memoryDocs.map((item) => item.path),
-      ]);
+      const usageByPath = buildRecentReadUsage([...skills.map((item) => item.path), ...memoryDocs.map((item) => item.path)]);
 
       for (const skill of skills) {
         const usage = usageByPath.get(normalizeMemoryPath(skill.path));

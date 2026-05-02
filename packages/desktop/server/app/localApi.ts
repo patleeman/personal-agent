@@ -2,20 +2,29 @@ import { EventEmitter } from 'node:events';
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   getPiAgentRuntimeDir,
   getStateRoot,
-  saveConversationCommitCheckpoint,
   readKnowledgeBaseState,
+  saveConversationCommitCheckpoint,
   startKnowledgeBaseSyncLoop,
   subscribeKnowledgeBaseState,
   syncKnowledgeBaseNow,
   updateKnowledgeBase,
 } from '@personal-agent/core';
 import { ensureAutomationThread } from '@personal-agent/daemon';
+import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
+
 import { readDaemonState } from '../automation/daemon.js';
-import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
-import { buildScheduledTaskThreadDetail } from '../automation/scheduledTaskThreads.js';
+import {
+  cancelDurableRunCapability,
+  listDurableRunsCapability,
+  markDurableRunAttentionCapability,
+  readDurableRunCapability,
+  readDurableRunLogCapability,
+} from '../automation/durableRunCapability.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
   createScheduledTaskCapability,
@@ -26,13 +35,76 @@ import {
   runScheduledTaskCapability,
   updateScheduledTaskCapability,
 } from '../automation/scheduledTaskCapability.js';
+import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
+import { buildScheduledTaskThreadDetail } from '../automation/scheduledTaskThreads.js';
 import {
-  cancelDurableRunCapability,
-  listDurableRunsCapability,
-  markDurableRunAttentionCapability,
-  readDurableRunCapability,
-  readDurableRunLogCapability,
-} from '../automation/durableRunCapability.js';
+  createConversationAttachmentCapability,
+  readConversationArtifactCapability,
+  readConversationArtifactsCapability,
+  readConversationAttachmentCapability,
+  readConversationAttachmentDownloadCapability,
+  readConversationAttachmentsCapability,
+  readConversationCommitCheckpointCapability,
+  readConversationCommitCheckpointsCapability,
+  updateConversationAttachmentCapability,
+} from '../conversations/conversationAssetsCapability.js';
+import { isMissingConversationBootstrapState, readConversationBootstrapState } from '../conversations/conversationBootstrap.js';
+import {
+  createConversationCheckpointCommit,
+  normalizeCheckpointPaths,
+  readRequiredCheckpointString,
+} from '../conversations/conversationCheckpointCommit.js';
+import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
+import {
+  cancelConversationDeferredResumeCapability,
+  fireConversationDeferredResumeCapability,
+  readConversationDeferredResumesCapability,
+  scheduleConversationDeferredResumeCapability,
+} from '../conversations/conversationDeferredResumeCapability.js';
+import { applyConversationModelPreferencesToSessionManager } from '../conversations/conversationModelPreferences.js';
+import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
+import {
+  publishConversationSessionMetaChanged,
+  readConversationModelPreferenceStateById,
+  readConversationSessionSignature,
+  readSessionDetailForRoute,
+  resolveConversationSessionFile,
+  toggleConversationAttention,
+} from '../conversations/conversationService.js';
+import {
+  inlineConversationBootstrapAssetsCapability,
+  inlineConversationSessionDetailAppendOnlyAssetsCapability,
+  inlineConversationSessionDetailAssetsCapability,
+  readConversationSessionBlockWithInlineAssetsCapability,
+} from '../conversations/conversationSessionAssetCapability.js';
+import {
+  readConversationSessionMetaCapability,
+  readConversationSessionsCapability,
+  readConversationSessionSearchIndexCapability,
+} from '../conversations/conversationSessionCapability.js';
+import {
+  applyDesktopConversationStreamEvent,
+  type DesktopConversationState,
+  readDesktopConversationState,
+} from '../conversations/desktopConversationState.js';
+import { createLiveDeferredResumeFlusher } from '../conversations/liveDeferredResumes.js';
+import {
+  abortLiveSessionCapability,
+  branchLiveSessionCapability,
+  compactLiveSessionCapability,
+  createLiveSessionCapability,
+  destroyLiveSessionCapability,
+  forkLiveSessionCapability,
+  type LiveSessionCapabilityContext,
+  manageLiveSessionParallelJobCapability,
+  reloadLiveSessionCapability,
+  restoreQueuedLiveSessionMessageCapability,
+  resumeLiveSessionCapability,
+  submitLiveSessionParallelPromptCapability,
+  submitLiveSessionPromptCapability,
+  summarizeAndForkLiveSessionCapability,
+  takeOverLiveSessionCapability,
+} from '../conversations/liveSessionCapability.js';
 import {
   exportSessionHtml,
   getLiveSessionForkEntries,
@@ -46,49 +118,28 @@ import {
   subscribe as subscribeLiveSession,
 } from '../conversations/liveSessions.js';
 import {
-  isMissingConversationBootstrapState,
-  readConversationBootstrapState,
-} from '../conversations/conversationBootstrap.js';
+  createSessionFromExisting,
+  destroySession,
+  getAvailableModelObjects,
+  updateLiveSessionModelPreferences,
+} from '../conversations/liveSessions.js';
 import {
-  readConversationSessionMetaCapability,
-  readConversationSessionSearchIndexCapability,
-  readConversationSessionsCapability,
-} from '../conversations/conversationSessionCapability.js';
-import {
-  inlineConversationBootstrapAssetsCapability,
-  inlineConversationSessionDetailAssetsCapability,
-  inlineConversationSessionDetailAppendOnlyAssetsCapability,
-  readConversationSessionBlockWithInlineAssetsCapability,
-} from '../conversations/conversationSessionAssetCapability.js';
-import { SessionManager } from '@mariozechner/pi-coding-agent';
-import {
-  publishConversationSessionMetaChanged,
-  readConversationModelPreferenceStateById,
-  readConversationSessionSignature,
-  readSessionDetailForRoute,
-  resolveConversationSessionFile,
-  toggleConversationAttention,
-} from '../conversations/conversationService.js';
-import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
-import {
-  buildAppendOnlySessionDetailResponse,
   appendConversationWorkspaceMetadata,
+  buildAppendOnlySessionDetailResponse,
   readSessionBlocks,
   readSessionMeta,
   renameStoredSession,
 } from '../conversations/sessions.js';
-import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
+import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserAgentExtension.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
-import { readVaultFilesCapability, pickFolderCapability } from '../workspace/workspaceDesktopCapability.js';
-import type { ServerRouteContext } from '../routes/context.js';
-import {
-  getProviderOAuthLoginState,
-  subscribeProviderOAuthLogin,
-} from '../models/providerAuth.js';
+import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
+import { readModelState } from '../models/modelState.js';
+import { getProviderOAuthLoginState, subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 import {
   cancelProviderOAuthLoginCapability,
   deleteModelProviderCapability,
   deleteModelProviderModelCapability,
+  type ProviderDesktopCapabilityContext,
   readModelProvidersCapability,
   readProviderAuthCapability,
   readProviderOAuthLoginCapability,
@@ -98,88 +149,22 @@ import {
   setProviderApiKeyCapability,
   startProviderOAuthLoginCapability,
   submitProviderOAuthLoginInputCapability,
-  type ProviderDesktopCapabilityContext,
 } from '../models/providerDesktopCapability.js';
-import { readModelState } from '../models/modelState.js';
+import type { ServerRouteContext } from '../routes/context.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
 import { invalidateAppTopics, subscribeAppEvents } from '../shared/appEvents.js';
-import {
-  readSavedConversationTitlePreferences,
-  writeSavedConversationTitlePreferences,
-} from '../ui/conversationTitlePreferences.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
-import {
-  readSavedDefaultCwdPreferences,
-  writeSavedDefaultCwdPreference,
-} from '../ui/defaultCwdPreferences.js';
+import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from '../ui/conversationTitlePreferences.js';
+import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
-import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
-import {
-  abortLiveSessionCapability,
-  branchLiveSessionCapability,
-  compactLiveSessionCapability,
-  createLiveSessionCapability,
-  destroyLiveSessionCapability,
-  forkLiveSessionCapability,
-  reloadLiveSessionCapability,
-  restoreQueuedLiveSessionMessageCapability,
-  resumeLiveSessionCapability,
-  manageLiveSessionParallelJobCapability,
-  submitLiveSessionParallelPromptCapability,
-  submitLiveSessionPromptCapability,
-  summarizeAndForkLiveSessionCapability,
-  takeOverLiveSessionCapability,
-  type LiveSessionCapabilityContext,
-} from '../conversations/liveSessionCapability.js';
-import {
-  applyDesktopConversationStreamEvent,
-  readDesktopConversationState,
-  type DesktopConversationState,
-} from '../conversations/desktopConversationState.js';
-import {
-  createSessionFromExisting,
-  destroySession,
-  getAvailableModelObjects,
-  updateLiveSessionModelPreferences,
-} from '../conversations/liveSessions.js';
-import {
-  applyConversationModelPreferencesToSessionManager,
-} from '../conversations/conversationModelPreferences.js';
-import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
-import {
-  cancelConversationDeferredResumeCapability,
-  fireConversationDeferredResumeCapability,
-  readConversationDeferredResumesCapability,
-  scheduleConversationDeferredResumeCapability,
-} from '../conversations/conversationDeferredResumeCapability.js';
-import {
-  createConversationAttachmentCapability,
-  readConversationArtifactCapability,
-  readConversationArtifactsCapability,
-  readConversationAttachmentCapability,
-  readConversationAttachmentDownloadCapability,
-  readConversationAttachmentsCapability,
-  readConversationCommitCheckpointCapability,
-  readConversationCommitCheckpointsCapability,
-  updateConversationAttachmentCapability,
-} from '../conversations/conversationAssetsCapability.js';
-import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
-import { createLiveDeferredResumeFlusher } from '../conversations/liveDeferredResumes.js';
+import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
+import { pickFolderCapability, readVaultFilesCapability } from '../workspace/workspaceDesktopCapability.js';
 import { startConversationRecovery, startDeferredResumeLoop } from './bootstrap.js';
+import { type DesktopLocalApiStreamEvent, subscribeDesktopLocalApiStreamByUrl } from './localApiStreams.js';
 import { createProfileState } from './profileState.js';
-import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserAgentExtension.js';
 import { createServerRouteContext } from './routeContext.js';
-import {
-  createConversationCheckpointCommit,
-  normalizeCheckpointPaths,
-  readRequiredCheckpointString,
-} from '../conversations/conversationCheckpointCommit.js';
-import {
-  subscribeDesktopLocalApiStreamByUrl,
-  type DesktopLocalApiStreamEvent,
-} from './localApiStreams.js';
 
 type RouteHandler = (req: LocalApiRequest, res: LocalApiResponse) => unknown;
 
@@ -218,11 +203,7 @@ export type DesktopConversationStateBridgeEvent =
   | { type: 'error'; message: string }
   | { type: 'close' };
 
-type DesktopAppBridgeEvent =
-  | { type: 'open' }
-  | { type: 'event'; event: unknown }
-  | { type: 'error'; message: string }
-  | { type: 'close' };
+type DesktopAppBridgeEvent = { type: 'open' } | { type: 'event'; event: unknown } | { type: 'error'; message: string } | { type: 'close' };
 
 export function setDesktopWorkbenchBrowserToolHost(host: WorkbenchBrowserToolHost | null): void {
   setWorkbenchBrowserToolHost(host);
@@ -379,9 +360,7 @@ function buildQueryObject(searchParams: URLSearchParams): Record<string, string 
       continue;
     }
 
-    query[key] = Array.isArray(existing)
-      ? [...existing, value]
-      : [existing, value];
+    query[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
   }
 
   return query;
@@ -395,9 +374,7 @@ function createLocalApiRequest(input: {
   headers?: Record<string, string>;
 }): LocalApiRequest {
   const request = new EventEmitter() as LocalApiRequest;
-  const normalizedHeaders = Object.fromEntries(
-    Object.entries(input.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
-  );
+  const normalizedHeaders = Object.fromEntries(Object.entries(input.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
   request.method = input.method;
   request.path = input.url.pathname;
   request.url = `${input.url.pathname}${input.url.search}`;
@@ -413,16 +390,23 @@ function createLocalApiRequest(input: {
   return request;
 }
 
-function createRouteCollector(routes: RegisteredRoute[]): Pick<{ get: unknown; put: unknown; post: unknown; patch: unknown; delete: unknown; use: unknown }, 'get' | 'put' | 'post' | 'patch' | 'delete' | 'use'> {
-  const register = (method: RegisteredRoute['method']) => (path: string, ...handlers: RouteHandler[]) => {
-    const handler = handlers[handlers.length - 1];
-    if (!handler) {
-      return;
-    }
+function createRouteCollector(
+  routes: RegisteredRoute[],
+): Pick<
+  { get: unknown; put: unknown; post: unknown; patch: unknown; delete: unknown; use: unknown },
+  'get' | 'put' | 'post' | 'patch' | 'delete' | 'use'
+> {
+  const register =
+    (method: RegisteredRoute['method']) =>
+    (path: string, ...handlers: RouteHandler[]) => {
+      const handler = handlers[handlers.length - 1];
+      if (!handler) {
+        return;
+      }
 
-    const { pattern, keys } = buildRoutePattern(path);
-    routes.push({ method, path, pattern, keys, handler });
-  };
+      const { pattern, keys } = buildRoutePattern(path);
+      routes.push({ method, path, pattern, keys, handler });
+    };
 
   return {
     get: register('GET'),
@@ -481,14 +465,10 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     getSavedUiPreferences: () => readSavedUiPreferences(settingsFile),
     listTasksForCurrentProfile: () => {
       const loaded = loadScheduledTasksForProfile(profileState.getCurrentProfile());
-      const runtimeById = new Map(
-        loaded.runtimeEntries.flatMap((task) => task.id ? [[task.id, task] as const] : []),
-      );
+      const runtimeById = new Map(loaded.runtimeEntries.flatMap((task) => (task.id ? [[task.id, task] as const] : [])));
 
       return loaded.tasks.map((task) => {
-        const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId
-          ? ensureAutomationThread(task.id)
-          : task;
+        const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId ? ensureAutomationThread(task.id) : task;
         const runtime = loaded.runtimeState[task.id] ?? runtimeById.get(task.id);
         const threadDetail = buildScheduledTaskThreadDetail(taskWithThread);
         return {
@@ -513,20 +493,22 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
         };
       });
     },
-    listMemoryDocs: () => listMemoryDocs().map((doc) => ({
-      id: doc.id,
-      title: doc.title,
-      summary: doc.summary,
-      description: doc.description,
-      path: doc.path,
-      updated: doc.updated,
-    })),
-    listSkillsForCurrentProfile: () => listSkillsForProfile(profileState.getCurrentProfile()).map((skill) => ({
-      name: skill.name,
-      source: skill.source,
-      description: skill.description,
-      path: skill.path,
-    })),
+    listMemoryDocs: () =>
+      listMemoryDocs().map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        summary: doc.summary,
+        description: doc.description,
+        path: doc.path,
+        updated: doc.updated,
+      })),
+    listSkillsForCurrentProfile: () =>
+      listSkillsForProfile(profileState.getCurrentProfile()).map((skill) => ({
+        name: skill.name,
+        source: skill.source,
+        description: skill.description,
+        path: skill.path,
+      })),
     listProfileAgentItems: () => [],
     withTemporaryProfileAgentDir: profileState.withTemporaryProfileAgentDir,
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
@@ -729,9 +711,7 @@ async function buildDesktopAppEventsForTopics(topics: readonly string[]): Promis
   return events;
 }
 
-export async function subscribeDesktopAppEvents(
-  onEvent: (event: DesktopAppBridgeEvent) => void,
-): Promise<() => void> {
+export async function subscribeDesktopAppEvents(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void> {
   await getLocalRoutes();
 
   let closed = false;
@@ -809,8 +789,10 @@ function shouldRefreshDesktopConversationStateForAppEvent(
     return topics.includes('sessions') || topics.includes('sessionFiles');
   }
 
-  if ((event.type === 'live_title' || event.type === 'session_meta_changed' || event.type === 'session_file_changed')
-    && typeof event.sessionId === 'string') {
+  if (
+    (event.type === 'live_title' || event.type === 'session_meta_changed' || event.type === 'session_file_changed') &&
+    typeof event.sessionId === 'string'
+  ) {
     return event.sessionId === conversationId;
   }
 
@@ -818,9 +800,7 @@ function shouldRefreshDesktopConversationStateForAppEvent(
 }
 
 export function normalizeDesktopLocalApiTailBlocks(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(1000, value)
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(1000, value) : undefined;
 }
 
 export async function subscribeDesktopConversationState(
@@ -894,41 +874,41 @@ export async function subscribeDesktopConversationState(
       return;
     }
 
-    liveUnsubscribe = subscribeLiveSession(conversationId, (event) => {
-      if (closed) {
-        return;
-      }
+    liveUnsubscribe = subscribeLiveSession(
+      conversationId,
+      (event) => {
+        if (closed) {
+          return;
+        }
 
-      currentState = {
-        ...currentState,
-        liveSession: currentState.liveSession.live
-          ? {
-              ...currentState.liveSession,
-              ...(event.type === 'title_update' ? { title: event.title } : {}),
-            }
-          : currentState.liveSession,
-        stream: applyDesktopConversationStreamEvent(currentState.stream, event),
-      };
-
-      if (currentState.liveSession.live) {
         currentState = {
           ...currentState,
-          liveSession: {
-            ...currentState.liveSession,
-            isStreaming: currentState.stream.isStreaming,
-          },
+          liveSession: currentState.liveSession.live
+            ? {
+                ...currentState.liveSession,
+                ...(event.type === 'title_update' ? { title: event.title } : {}),
+              }
+            : currentState.liveSession,
+          stream: applyDesktopConversationStreamEvent(currentState.stream, event),
         };
-      }
 
-      emitState(currentState);
-    }, {
-      ...(tailBlocks !== undefined
-        ? { tailBlocks }
-        : {}),
-      ...(input.surfaceId && input.surfaceType
-        ? { surface: { surfaceId: input.surfaceId, surfaceType: input.surfaceType } }
-        : {}),
-    });
+        if (currentState.liveSession.live) {
+          currentState = {
+            ...currentState,
+            liveSession: {
+              ...currentState.liveSession,
+              isStreaming: currentState.stream.isStreaming,
+            },
+          };
+        }
+
+        emitState(currentState);
+      },
+      {
+        ...(tailBlocks !== undefined ? { tailBlocks } : {}),
+        ...(input.surfaceId && input.surfaceType ? { surface: { surfaceId: input.surfaceId, surfaceType: input.surfaceType } } : {}),
+      },
+    );
   };
 
   const refreshState = async () => {
@@ -948,7 +928,9 @@ export async function subscribeDesktopConversationState(
   syncLiveSubscription();
 
   appUnsubscribe = subscribeAppEvents((event) => {
-    if (!shouldRefreshDesktopConversationStateForAppEvent(conversationId, event as { type?: string; topics?: unknown; sessionId?: unknown })) {
+    if (
+      !shouldRefreshDesktopConversationStateForAppEvent(conversationId, event as { type?: string; topics?: unknown; sessionId?: unknown })
+    ) {
       return;
     }
 
@@ -1098,15 +1080,22 @@ export async function updateDesktopModelPreferences(input: {
   }
 
   const models = readModelState(DEFAULT_RUNTIME_SETTINGS_FILE).models;
-  persistSettingsWrite((settingsFile) => {
-    writeSavedModelPreferences({
-      model: input.model,
-      thinkingLevel: input.thinkingLevel,
-      serviceTier: input.serviceTier,
-    }, settingsFile, models);
-  }, {
-    runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
-  });
+  persistSettingsWrite(
+    (settingsFile) => {
+      writeSavedModelPreferences(
+        {
+          model: input.model,
+          thinkingLevel: input.thinkingLevel,
+          serviceTier: input.serviceTier,
+        },
+        settingsFile,
+        models,
+      );
+    },
+    {
+      runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+    },
+  );
   return { ok: true as const };
 }
 
@@ -1115,13 +1104,12 @@ export async function readDesktopDefaultCwd() {
 }
 
 export async function updateDesktopDefaultCwd(cwd: string | null) {
-  const state = persistSettingsWrite((settingsFile) => writeSavedDefaultCwdPreference(
-    { cwd },
-    settingsFile,
-    { baseDir: process.cwd(), validate: true },
-  ), {
-    runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
-  });
+  const state = persistSettingsWrite(
+    (settingsFile) => writeSavedDefaultCwdPreference({ cwd }, settingsFile, { baseDir: process.cwd(), validate: true }),
+    {
+      runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+    },
+  );
   return state;
 }
 
@@ -1159,19 +1147,15 @@ export async function readDesktopConversationTitleSettings() {
   return readSavedConversationTitlePreferences(DEFAULT_RUNTIME_SETTINGS_FILE);
 }
 
-export async function updateDesktopConversationTitleSettings(input: {
-  enabled?: boolean;
-  model?: string | null;
-}) {
+export async function updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }) {
   const { enabled, model } = input;
   if (typeof enabled !== 'boolean' && typeof model !== 'string' && model !== null) {
     throw new Error('enabled or model required');
   }
 
-  return persistSettingsWrite(
-    (settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile),
-    { runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE },
-  );
+  return persistSettingsWrite((settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile), {
+    runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+  });
 }
 
 export async function readDesktopConversationPlansWorkspace() {
@@ -1219,12 +1203,16 @@ export async function updateDesktopOpenConversationTabs(input: {
 
   const context = await getLocalServerRouteContext();
   const saved = persistSettingsWrite(
-    (settingsFile) => writeSavedUiPreferences({
-      openConversationIds: sessionIds,
-      pinnedConversationIds: pinnedSessionIds,
-      archivedConversationIds: archivedSessionIds,
-      workspacePaths,
-    }, settingsFile),
+    (settingsFile) =>
+      writeSavedUiPreferences(
+        {
+          openConversationIds: sessionIds,
+          pinnedConversationIds: pinnedSessionIds,
+          archivedConversationIds: archivedSessionIds,
+          workspacePaths,
+        },
+        settingsFile,
+      ),
     { runtimeSettingsFile: context.getSettingsFile() },
   );
 
@@ -1290,15 +1278,8 @@ export async function saveDesktopModelProviderModel(input: {
   return saveModelProviderModelCapability(await getLocalProviderDesktopCapabilityContext(), input);
 }
 
-export async function deleteDesktopModelProviderModel(input: {
-  provider: string;
-  modelId: string;
-}) {
-  return deleteModelProviderModelCapability(
-    await getLocalProviderDesktopCapabilityContext(),
-    input.provider,
-    input.modelId,
-  );
+export async function deleteDesktopModelProviderModel(input: { provider: string; modelId: string }) {
+  return deleteModelProviderModelCapability(await getLocalProviderDesktopCapabilityContext(), input.provider, input.modelId);
 }
 
 export async function setDesktopProviderApiKey(input: { provider: string; apiKey: string }) {
@@ -1325,10 +1306,7 @@ export async function cancelDesktopProviderOAuthLogin(loginId: string) {
   return cancelProviderOAuthLoginCapability(loginId);
 }
 
-export async function subscribeDesktopProviderOAuthLogin(
-  loginId: string,
-  onState: (state: unknown) => void,
-): Promise<() => void> {
+export async function subscribeDesktopProviderOAuthLogin(loginId: string, onState: (state: unknown) => void): Promise<() => void> {
   await getLocalRoutes();
   const normalizedLoginId = loginId.trim();
   if (!normalizedLoginId) {
@@ -1475,10 +1453,7 @@ export async function readDesktopDurableRun(runId: string) {
   return readDurableRunCapability(runId);
 }
 
-export async function readDesktopDurableRunLog(input: {
-  runId: string;
-  tail?: number;
-}) {
+export async function readDesktopDurableRunLog(input: { runId: string; tail?: number }) {
   return readDurableRunLogCapability(input);
 }
 
@@ -1537,11 +1512,7 @@ export async function renameDesktopConversation(input: {
   return { ok: true, title: renamed.title };
 }
 
-export async function changeDesktopConversationCwd(input: {
-  conversationId: string;
-  cwd: string;
-  surfaceId?: string;
-}) {
+export async function changeDesktopConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }) {
   await getLocalRoutes();
 
   const conversationId = input.conversationId.trim();
@@ -1588,9 +1559,10 @@ export async function changeDesktopConversationCwd(input: {
   appendConversationWorkspaceMetadata({
     sessionFile: result.sessionFile,
     previousCwd: currentCwd,
-    previousWorkspaceCwd: sessionDetail?.meta && Object.prototype.hasOwnProperty.call(sessionDetail.meta, 'workspaceCwd')
-      ? sessionDetail.meta.workspaceCwd ?? null
-      : currentCwd,
+    previousWorkspaceCwd:
+      sessionDetail?.meta && Object.prototype.hasOwnProperty.call(sessionDetail.meta, 'workspaceCwd')
+        ? (sessionDetail.meta.workspaceCwd ?? null)
+        : currentCwd,
     cwd: nextCwd,
     workspaceCwd: nextCwd,
     visibleMessage: true,
@@ -1604,11 +1576,7 @@ export async function changeDesktopConversationCwd(input: {
   return { id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true };
 }
 
-export async function createDesktopConversationCheckpoint(input: {
-  conversationId: string;
-  message: string;
-  paths: string[];
-}) {
+export async function createDesktopConversationCheckpoint(input: { conversationId: string; message: string; paths: string[] }) {
   const context = await getLocalServerRouteContext();
   const conversationId = input.conversationId.trim();
   const session = readConversationSessionMetaCapability(conversationId);
@@ -1645,10 +1613,7 @@ export async function readDesktopConversationArtifacts(conversationId: string) {
   return readConversationArtifactsCapability(context.getCurrentProfile(), conversationId);
 }
 
-export async function readDesktopConversationArtifact(input: {
-  conversationId: string;
-  artifactId: string;
-}) {
+export async function readDesktopConversationArtifact(input: { conversationId: string; artifactId: string }) {
   const context = await getLocalServerRouteContext();
   return readConversationArtifactCapability(context.getCurrentProfile(), input);
 }
@@ -1658,10 +1623,7 @@ export async function readDesktopConversationCheckpoints(conversationId: string)
   return readConversationCommitCheckpointsCapability(context.getCurrentProfile(), conversationId);
 }
 
-export async function readDesktopConversationCheckpoint(input: {
-  conversationId: string;
-  checkpointId: string;
-}) {
+export async function readDesktopConversationCheckpoint(input: { conversationId: string; checkpointId: string }) {
   const context = await getLocalServerRouteContext();
   return readConversationCommitCheckpointCapability(context.getCurrentProfile(), input);
 }
@@ -1671,10 +1633,7 @@ export async function readDesktopConversationAttachments(conversationId: string)
   return readConversationAttachmentsCapability(context.getCurrentProfile(), conversationId);
 }
 
-export async function readDesktopConversationAttachment(input: {
-  conversationId: string;
-  attachmentId: string;
-}) {
+export async function readDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }) {
   const context = await getLocalServerRouteContext();
   return readConversationAttachmentCapability(context.getCurrentProfile(), input);
 }
@@ -1741,17 +1700,11 @@ export async function scheduleDesktopConversationDeferredResume(input: {
   return scheduleConversationDeferredResumeCapability(input);
 }
 
-export async function cancelDesktopConversationDeferredResume(input: {
-  conversationId: string;
-  resumeId: string;
-}) {
+export async function cancelDesktopConversationDeferredResume(input: { conversationId: string; resumeId: string }) {
   return cancelConversationDeferredResumeCapability(input);
 }
 
-export async function fireDesktopConversationDeferredResume(input: {
-  conversationId: string;
-  resumeId: string;
-}) {
+export async function fireDesktopConversationDeferredResume(input: { conversationId: string; resumeId: string }) {
   const context = await getLocalLiveSessionCapabilityContext();
   return fireConversationDeferredResumeCapability({
     ...input,
@@ -1804,9 +1757,11 @@ export async function updateDesktopConversationModelPreferences(input: {
     throw new Error('model, thinkingLevel, or serviceTier required');
   }
 
-  if ((model !== undefined && model !== null && typeof model !== 'string')
-    || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
-    || (serviceTier !== undefined && serviceTier !== null && typeof serviceTier !== 'string')) {
+  if (
+    (model !== undefined && model !== null && typeof model !== 'string') ||
+    (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string') ||
+    (serviceTier !== undefined && serviceTier !== null && typeof serviceTier !== 'string')
+  ) {
     throw new Error('model, thinkingLevel, and serviceTier must be strings or null');
   }
 
@@ -1931,14 +1886,15 @@ export async function readDesktopSessionDetail(input: {
     throw new Error('Session not found');
   }
 
-  const appendOnly = input.knownSessionSignature && sessionRead.detail.signature && input.knownSessionSignature !== sessionRead.detail.signature
-    ? buildAppendOnlySessionDetailResponse({
-        detail: sessionRead.detail,
-        knownBlockOffset: input.knownBlockOffset,
-        knownTotalBlocks: input.knownTotalBlocks,
-        knownLastBlockId: input.knownLastBlockId,
-      })
-    : null;
+  const appendOnly =
+    input.knownSessionSignature && sessionRead.detail.signature && input.knownSessionSignature !== sessionRead.detail.signature
+      ? buildAppendOnlySessionDetailResponse({
+          detail: sessionRead.detail,
+          knownBlockOffset: input.knownBlockOffset,
+          knownTotalBlocks: input.knownTotalBlocks,
+          knownLastBlockId: input.knownLastBlockId,
+        })
+      : null;
 
   if (appendOnly) {
     return inlineConversationSessionDetailAppendOnlyAssetsCapability(sessionId, appendOnly);
@@ -1947,10 +1903,7 @@ export async function readDesktopSessionDetail(input: {
   return inlineConversationSessionDetailAssetsCapability(sessionId, sessionRead.detail);
 }
 
-export async function readDesktopSessionBlock(input: {
-  sessionId: string;
-  blockId: string;
-}) {
+export async function readDesktopSessionBlock(input: { sessionId: string; blockId: string }) {
   await getLocalRoutes();
 
   const result = readConversationSessionBlockWithInlineAssetsCapability(input.sessionId, input.blockId);
@@ -2120,10 +2073,7 @@ export async function manageDesktopLiveSessionParallelJob(input: {
   return manageLiveSessionParallelJobCapability(input);
 }
 
-export async function takeOverDesktopLiveSession(input: {
-  conversationId: string;
-  surfaceId: string;
-}) {
+export async function takeOverDesktopLiveSession(input: { conversationId: string; surfaceId: string }) {
   return takeOverLiveSessionCapability(input);
 }
 
@@ -2136,10 +2086,7 @@ export async function restoreDesktopQueuedLiveSessionMessage(input: {
   return restoreQueuedLiveSessionMessageCapability(input);
 }
 
-export async function compactDesktopLiveSession(input: {
-  conversationId: string;
-  customInstructions?: string;
-}) {
+export async function compactDesktopLiveSession(input: { conversationId: string; customInstructions?: string }) {
   return compactLiveSessionCapability(input);
 }
 
@@ -2158,9 +2105,7 @@ export async function exportDesktopLiveSession(input: {
   return { ok: true, path };
 }
 
-export async function reloadDesktopLiveSession(input: {
-  conversationId: string;
-}) {
+export async function reloadDesktopLiveSession(input: { conversationId: string }) {
   return reloadLiveSessionCapability(input);
 }
 
@@ -2168,10 +2113,7 @@ export async function destroyDesktopLiveSession(conversationId: string): Promise
   return destroyLiveSessionCapability({ conversationId });
 }
 
-export async function branchDesktopLiveSession(input: {
-  conversationId: string;
-  entryId: string;
-}) {
+export async function branchDesktopLiveSession(input: { conversationId: string; entryId: string }) {
   return branchLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
@@ -2184,9 +2126,7 @@ export async function forkDesktopLiveSession(input: {
   return forkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
-export async function summarizeAndForkDesktopLiveSession(input: {
-  conversationId: string;
-}) {
+export async function summarizeAndForkDesktopLiveSession(input: { conversationId: string }) {
   return summarizeAndForkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
@@ -2198,15 +2138,11 @@ export async function forkDesktopConversation(input: {
   serviceTier?: string | null;
 }): Promise<{ id: string; sessionFile: string }> {
   const source = resolveDesktopConversationSource(input.conversationId);
-  return createSessionFromExisting(
-    source.sessionFile,
-    input.cwd?.trim() || source.cwd,
-    {
-      ...(input.model !== undefined ? { initialModel: input.model } : {}),
-      ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
-      ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
-    },
-  );
+  return createSessionFromExisting(source.sessionFile, input.cwd?.trim() || source.cwd, {
+    ...(input.model !== undefined ? { initialModel: input.model } : {}),
+    ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
+    ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
+  });
 }
 
 export async function rollbackDesktopConversation(input: {

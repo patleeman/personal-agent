@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  renderSystemPromptTemplateMock,
-} = vi.hoisted(() => ({
+const { renderSystemPromptTemplateMock } = vi.hoisted(() => ({
   renderSystemPromptTemplateMock: vi.fn(),
 }));
 

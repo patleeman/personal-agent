@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { resolveCompactionSummaryDetail, resolveCompactionSummaryLabel } from './MessageBlocks.js';
 
 describe('MessageBlocks summary helpers', () => {
@@ -15,6 +16,8 @@ describe('MessageBlocks summary helpers', () => {
   });
 
   it('appends extra detail when present', () => {
-    expect(resolveCompactionSummaryDetail('Manual compaction', 'Extra note.')).toBe('You explicitly summarized older turns to shrink the active context window. Extra note.');
+    expect(resolveCompactionSummaryDetail('Manual compaction', 'Extra note.')).toBe(
+      'You explicitly summarized older turns to shrink the active context window. Extra note.',
+    );
   });
 });

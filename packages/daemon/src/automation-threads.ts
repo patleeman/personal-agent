@@ -1,10 +1,12 @@
 import { existsSync } from 'node:fs';
-import { getDurableSessionsDir, listStoredSessions, resolveNeutralChatCwd } from '@personal-agent/core';
+
 import { SessionManager } from '@mariozechner/pi-coding-agent';
+import { getDurableSessionsDir, listStoredSessions, resolveNeutralChatCwd } from '@personal-agent/core';
+
 import {
+  type AutomationThreadMode,
   getStoredAutomation,
   setStoredAutomationThreadBinding,
-  type AutomationThreadMode,
   type StoredAutomation,
 } from './automation-store.js';
 
@@ -33,11 +35,10 @@ function resolveStoredSessionsRoot(stateRoot?: string): string {
   return getDurableSessionsDir(stateRoot);
 }
 
-function resolveExistingSessionFile(input: {
-  stateRoot?: string;
-  conversationId?: string;
+function resolveExistingSessionFile(input: { stateRoot?: string; conversationId?: string; sessionFile?: string }): {
   sessionFile?: string;
-}): { sessionFile?: string; conversationId?: string } {
+  conversationId?: string;
+} {
   const directSessionFile = readOptionalString(input.sessionFile);
   if (directSessionFile && existsSync(directSessionFile)) {
     const manager = SessionManager.open(directSessionFile);
@@ -52,8 +53,9 @@ function resolveExistingSessionFile(input: {
     return {};
   }
 
-  const match = listStoredSessions({ sessionsDir: resolveStoredSessionsRoot(input.stateRoot) })
-    .find((session) => session.id === conversationId);
+  const match = listStoredSessions({ sessionsDir: resolveStoredSessionsRoot(input.stateRoot) }).find(
+    (session) => session.id === conversationId,
+  );
   if (!match) {
     return {
       conversationId,

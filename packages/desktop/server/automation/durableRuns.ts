@@ -1,23 +1,25 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+
 import {
   cancelDurableRun as cancelDurableRunFromDaemon,
-  rerunDurableRun as rerunDurableRunFromDaemon,
+  type CancelDurableRunResult,
   followUpDurableRun as followUpDurableRunFromDaemon,
+  type FollowUpDurableRunResult,
   getDurableRun as getDurableRunFromDaemon,
+  type GetDurableRunResult,
   listDurableRuns as listDurableRunsFromDaemon,
+  type ListDurableRunsResult,
   pingDaemon,
+  type ReplayDurableRunResult,
+  rerunDurableRun as rerunDurableRunFromDaemon,
   resolveDaemonPaths,
   resolveDurableRunsRoot,
   scanDurableRun,
   scanDurableRunsForRecovery,
-  summarizeScannedDurableRuns,
-  type CancelDurableRunResult,
-  type GetDurableRunResult,
-  type ListDurableRunsResult,
   type ScannedDurableRun,
-  type ReplayDurableRunResult,
-  type FollowUpDurableRunResult,
+  summarizeScannedDurableRuns,
 } from '@personal-agent/daemon';
+
 import { decorateDurableRunAttention, decorateDurableRunsAttention } from './durableRunAttention.js';
 
 const LIST_DURABLE_RUNS_CACHE_TTL_MS = 10_000;
@@ -29,14 +31,12 @@ export interface DurableRunsListTelemetry {
   runCount: number;
 }
 
-let durableRunsListCache:
-  | {
-      expiresAt: number;
-      value: (ListDurableRunsResult & { runsRoot: string }) | null;
-      promise: Promise<ListDurableRunsResult & { runsRoot: string }> | null;
-      source: DurableRunsListTelemetry['source'] | null;
-    }
-  | null = null;
+let durableRunsListCache: {
+  expiresAt: number;
+  value: (ListDurableRunsResult & { runsRoot: string }) | null;
+  promise: Promise<ListDurableRunsResult & { runsRoot: string }> | null;
+  source: DurableRunsListTelemetry['source'] | null;
+} | null = null;
 
 export function clearDurableRunsListCache(): void {
   durableRunsListCache = null;
@@ -48,11 +48,13 @@ function isDaemonUnavailable(error: unknown): boolean {
   }
 
   const message = error.message.toLowerCase();
-  return message.includes('enoent')
-    || message.includes('econnrefused')
-    || message.includes('timed out')
-    || message.includes('closed without response')
-    || message.includes('unknown request type');
+  return (
+    message.includes('enoent') ||
+    message.includes('econnrefused') ||
+    message.includes('timed out') ||
+    message.includes('closed without response') ||
+    message.includes('unknown request type')
+  );
 }
 
 function isRunNotFound(error: unknown): boolean {
@@ -76,9 +78,7 @@ function decorateRun<T extends ScannedDurableRun>(run: T) {
 }
 
 export function normalizeDurableRunLogTail(value: number | undefined): number {
-  return Number.isSafeInteger(value) && (value as number) > 0
-    ? Math.min(1000, value as number)
-    : 120;
+  return Number.isSafeInteger(value) && (value as number) > 0 ? Math.min(1000, value as number) : 120;
 }
 
 function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 64 * 1024): string {
@@ -99,12 +99,7 @@ function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 6
     fd = openSync(filePath, 'r');
     readSync(fd, buffer, 0, readLength, stats.size - readLength);
 
-    return buffer
-      .toString('utf-8')
-      .split(/\r?\n/)
-      .slice(-maxLines)
-      .join('\n')
-      .trim();
+    return buffer.toString('utf-8').split(/\r?\n/).slice(-maxLines).join('\n').trim();
   } catch {
     return '';
   } finally {
@@ -309,10 +304,16 @@ export async function getDurableRun(runId: string): Promise<(GetDurableRunResult
   };
 }
 
-export async function getDurableRunSnapshot(runId: string, tail = 120): Promise<{
-  detail: GetDurableRunResult & { runsRoot: string };
-  log: { path: string; log: string };
-} | undefined> {
+export async function getDurableRunSnapshot(
+  runId: string,
+  tail = 120,
+): Promise<
+  | {
+      detail: GetDurableRunResult & { runsRoot: string };
+      log: { path: string; log: string };
+    }
+  | undefined
+> {
   const detail = await getDurableRun(runId);
   if (!detail) {
     return undefined;

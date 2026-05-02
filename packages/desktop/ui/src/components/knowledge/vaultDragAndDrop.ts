@@ -1,7 +1,5 @@
 import type { VaultEntry } from '../../shared/types';
 
-const VAULT_ENTRY_DRAG_TYPE = 'application/x-personal-agent-vault-entry';
-
 export function normalizeVaultDir(dir: string): string {
   const trimmed = dir.trim().replace(/\\/g, '/').replace(/^\/+/, '');
   if (!trimmed) {
@@ -12,9 +10,7 @@ export function normalizeVaultDir(dir: string): string {
 }
 
 export function getVaultEntryParentDir(entry: Pick<VaultEntry, 'id' | 'kind'>): string {
-  const rawId = entry.kind === 'folder'
-    ? entry.id.replace(/\/+$/, '')
-    : entry.id;
+  const rawId = entry.kind === 'folder' ? entry.id.replace(/\/+$/, '') : entry.id;
   const parts = rawId.split('/');
   parts.pop();
   return parts.length > 0 ? `${parts.join('/')}/` : '';

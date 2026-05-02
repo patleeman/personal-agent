@@ -97,4 +97,3 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
 
   return { data, loading, refreshing, error, refetch: runFetch, replaceData };
 }
-

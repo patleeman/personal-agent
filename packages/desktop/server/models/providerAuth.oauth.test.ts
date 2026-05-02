@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type MockCredential =
-  | { type: 'api_key'; key: string }
-  | { type: 'oauth'; accessToken?: string };
+type MockCredential = { type: 'api_key'; key: string } | { type: 'oauth'; accessToken?: string };
 
 type MockOAuthProvider = {
   id: string;
@@ -21,7 +19,10 @@ type MockLoginHandlers = {
 const mockState = vi.hoisted(() => ({
   credentialStoreByFile: new Map<string, Map<string, MockCredential>>(),
   envAuthProvidersByFile: new Map<string, Set<string>>(),
-  loginImplementationsByKey: new Map<string, (handlers: MockLoginHandlers, storage: { set: (provider: string, credential: MockCredential) => void }) => Promise<void>>(),
+  loginImplementationsByKey: new Map<
+    string,
+    (handlers: MockLoginHandlers, storage: { set: (provider: string, credential: MockCredential) => void }) => Promise<void>
+  >(),
   modelEntriesByFile: new Map<string, Array<{ provider?: unknown }>>(),
   oauthProvidersByFile: new Map<string, MockOAuthProvider[]>(),
 }));
@@ -287,11 +288,7 @@ describe('providerAuth OAuth helpers', () => {
       status: 'completed',
       error: '',
       prompt: null,
-      progress: [
-        'first progress',
-        'prompt:123456',
-        'manual:https://localhost:1455/auth/callback?code=abc',
-      ],
+      progress: ['first progress', 'prompt:123456', 'manual:https://localhost:1455/auth/callback?code=abc'],
     });
     expect(loginListener).toHaveBeenCalled();
 
@@ -300,11 +297,7 @@ describe('providerAuth OAuth helpers', () => {
   });
 
   it('cancels earlier running logins for the same provider and supports explicit cancellation', async () => {
-    const {
-      cancelProviderOAuthLogin,
-      getProviderOAuthLoginState,
-      startProviderOAuthLogin,
-    } = await loadProviderAuth();
+    const { cancelProviderOAuthLogin, getProviderOAuthLoginState, startProviderOAuthLogin } = await loadProviderAuth();
     const authFile = '/tmp/provider-auth.json';
 
     setOAuthProviders(authFile, [{ id: 'openrouter', name: 'OpenRouter' }]);
@@ -332,12 +325,8 @@ describe('providerAuth OAuth helpers', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-09T18:00:00.000Z'));
 
-    const {
-      cancelProviderOAuthLogin,
-      getProviderOAuthLoginState,
-      startProviderOAuthLogin,
-      submitProviderOAuthLoginInput,
-    } = await loadProviderAuth();
+    const { cancelProviderOAuthLogin, getProviderOAuthLoginState, startProviderOAuthLogin, submitProviderOAuthLoginInput } =
+      await loadProviderAuth();
     const authFile = '/tmp/provider-auth.json';
 
     setOAuthProviders(authFile, [
@@ -366,7 +355,9 @@ describe('providerAuth OAuth helpers', () => {
       status: 'failed',
       error: 'OAuth login for missing-credential did not persist credentials.',
     });
-    expect(() => submitProviderOAuthLoginInput(missingCredentialRun.id, 'value')).toThrow(`OAuth login is not running: ${missingCredentialRun.id}`);
+    expect(() => submitProviderOAuthLoginInput(missingCredentialRun.id, 'value')).toThrow(
+      `OAuth login is not running: ${missingCredentialRun.id}`,
+    );
 
     const networkFailureRun = startProviderOAuthLogin(authFile, 'network-failure');
     await flushAsyncWork();

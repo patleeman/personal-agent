@@ -20,16 +20,12 @@ interface RunHeadline {
 
 export function getRunResultSummary(run: DurableRunRecord): string | undefined {
   const result = run.result;
-  const summary = typeof result?.summary === 'string' && result.summary.trim().length > 0
-    ? result.summary.trim()
-    : undefined;
+  const summary = typeof result?.summary === 'string' && result.summary.trim().length > 0 ? result.summary.trim() : undefined;
   if (summary) {
     return summary;
   }
 
-  const error = typeof result?.error === 'string' && result.error.trim().length > 0
-    ? result.error.trim()
-    : undefined;
+  const error = typeof result?.error === 'string' && result.error.trim().length > 0 ? result.error.trim() : undefined;
   if (error) {
     return error;
   }
@@ -56,14 +52,15 @@ export function isRunActive(run: DurableRunRecord | null | undefined): boolean {
 
 export function runNeedsAttention(run: DurableRunRecord, options?: { includeDismissed?: boolean }): boolean {
   const status = run.status?.status;
-  const needsAttention = run.problems.length > 0
-    || run.recoveryAction === 'resume'
-    || run.recoveryAction === 'rerun'
-    || run.recoveryAction === 'attention'
-    || run.recoveryAction === 'invalid'
-    || status === 'failed'
-    || status === 'interrupted'
-    || status === 'recovering';
+  const needsAttention =
+    run.problems.length > 0 ||
+    run.recoveryAction === 'resume' ||
+    run.recoveryAction === 'rerun' ||
+    run.recoveryAction === 'attention' ||
+    run.recoveryAction === 'invalid' ||
+    status === 'failed' ||
+    status === 'interrupted' ||
+    status === 'recovering';
 
   return options?.includeDismissed ? needsAttention : needsAttention && !run.attentionDismissed;
 }
@@ -120,53 +117,65 @@ function readMetadataCheckpoint(run: DurableRunRecord, key: string): string | un
 }
 
 export function getRunTaskSlug(run: DurableRunRecord): string | undefined {
-  return readMetadataSpec(run, 'taskSlug')
-    ?? readMetadataCheckpoint(run, 'taskSlug')
-    ?? readSpec(run, 'taskSlug')
-    ?? readCheckpoint(run, 'taskSlug');
+  return (
+    readMetadataSpec(run, 'taskSlug') ??
+    readMetadataCheckpoint(run, 'taskSlug') ??
+    readSpec(run, 'taskSlug') ??
+    readCheckpoint(run, 'taskSlug')
+  );
 }
 
 export function getRunTargetPrompt(run: DurableRunRecord): string | undefined {
-  return readTargetSpec(run, 'prompt')
-    ?? readTargetCheckpoint(run, 'prompt')
-    ?? readNestedSpec(run, 'agent', 'prompt')
-    ?? readNestedCheckpoint(run, 'agent', 'prompt')
-    ?? readSpec(run, 'prompt')
-    ?? readCheckpoint(run, 'prompt');
+  return (
+    readTargetSpec(run, 'prompt') ??
+    readTargetCheckpoint(run, 'prompt') ??
+    readNestedSpec(run, 'agent', 'prompt') ??
+    readNestedCheckpoint(run, 'agent', 'prompt') ??
+    readSpec(run, 'prompt') ??
+    readCheckpoint(run, 'prompt')
+  );
 }
 
 export function getRunTargetCommand(run: DurableRunRecord): string | undefined {
-  return readTargetSpec(run, 'command')
-    ?? readTargetCheckpoint(run, 'command')
-    ?? readSpec(run, 'shellCommand')
-    ?? readCheckpoint(run, 'shellCommand');
+  return (
+    readTargetSpec(run, 'command') ??
+    readTargetCheckpoint(run, 'command') ??
+    readSpec(run, 'shellCommand') ??
+    readCheckpoint(run, 'shellCommand')
+  );
 }
 
 export function getRunWorkingDirectory(run: DurableRunRecord): string | undefined {
-  return readTargetSpec(run, 'cwd')
-    ?? readTargetCheckpoint(run, 'cwd')
-    ?? readMetadataSpec(run, 'cwd')
-    ?? readMetadataCheckpoint(run, 'cwd')
-    ?? readSpec(run, 'cwd')
-    ?? readCheckpoint(run, 'cwd');
+  return (
+    readTargetSpec(run, 'cwd') ??
+    readTargetCheckpoint(run, 'cwd') ??
+    readMetadataSpec(run, 'cwd') ??
+    readMetadataCheckpoint(run, 'cwd') ??
+    readSpec(run, 'cwd') ??
+    readCheckpoint(run, 'cwd')
+  );
 }
 
 export function getRunTargetModel(run: DurableRunRecord): string | undefined {
-  return readTargetSpec(run, 'model')
-    ?? readTargetCheckpoint(run, 'model')
-    ?? readNestedSpec(run, 'agent', 'model')
-    ?? readNestedCheckpoint(run, 'agent', 'model')
-    ?? readSpec(run, 'model')
-    ?? readCheckpoint(run, 'model');
+  return (
+    readTargetSpec(run, 'model') ??
+    readTargetCheckpoint(run, 'model') ??
+    readNestedSpec(run, 'agent', 'model') ??
+    readNestedCheckpoint(run, 'agent', 'model') ??
+    readSpec(run, 'model') ??
+    readCheckpoint(run, 'model')
+  );
 }
 
 export function getRunTargetProfile(run: DurableRunRecord): string | undefined {
-  return readTargetSpec(run, 'profile')
-    ?? readTargetCheckpoint(run, 'profile')
-    ?? readNestedSpec(run, 'agent', 'profile')
-    ?? readNestedCheckpoint(run, 'agent', 'profile')
-    ?? readSpec(run, 'profile')
-    ?? readCheckpoint(run, 'profile');
+  return (
+    readTargetSpec(run, 'profile') ??
+    readTargetCheckpoint(run, 'profile') ??
+    readNestedSpec(run, 'agent', 'profile') ??
+    readNestedCheckpoint(run, 'agent', 'profile') ??
+    readSpec(run, 'profile') ??
+    readCheckpoint(run, 'profile')
+  );
 }
 
 function excerpt(value: string | undefined, maxLength = 88): string | undefined {
@@ -255,10 +264,7 @@ function tokenizeShell(command: string): ShellToken[] {
 }
 
 function shellTokenValue(token: string): string {
-  if (
-    (token.startsWith('"') && token.endsWith('"'))
-    || (token.startsWith("'") && token.endsWith("'"))
-  ) {
+  if ((token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'"))) {
     return token.slice(1, -1);
   }
 
@@ -300,27 +306,20 @@ function stripLeadingShellEnvironment(command: string | undefined): string | und
         break;
       }
 
-      if (
-        token === '-u'
-        || token === '--unset'
-        || token === '-C'
-        || token === '--chdir'
-        || token === '-S'
-        || token === '--split-string'
-      ) {
+      if (token === '-u' || token === '--unset' || token === '-C' || token === '--chdir' || token === '-S' || token === '--split-string') {
         index += 2;
         continue;
       }
 
       if (
-        token === '-i'
-        || token === '--ignore-environment'
-        || token === '-0'
-        || token === '--null'
-        || token.startsWith('--unset=')
-        || token.startsWith('--chdir=')
-        || (token.startsWith('-u') && token.length > 2)
-        || (token.startsWith('-C') && token.length > 2)
+        token === '-i' ||
+        token === '--ignore-environment' ||
+        token === '-0' ||
+        token === '--null' ||
+        token.startsWith('--unset=') ||
+        token.startsWith('--chdir=') ||
+        (token.startsWith('-u') && token.length > 2) ||
+        (token.startsWith('-C') && token.length > 2)
       ) {
         index += 1;
         continue;
@@ -367,9 +366,9 @@ function excerptShellCommand(command: string | undefined, maxLength = 88): strin
 
 export function getRunTaskId(run: DurableRunRecord): string | undefined {
   return run.manifest?.source?.type === 'scheduled-task'
-    ? run.manifest.source.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId')
+    ? (run.manifest.source.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId'))
     : run.manifest?.kind === 'scheduled-task'
-      ? run.manifest?.source?.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId')
+      ? (run.manifest?.source?.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId'))
       : undefined;
 }
 
@@ -413,14 +412,20 @@ function runTranscriptSession(run: DurableRunRecord, lookups: RunPresentationLoo
 
 function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookups): { title?: string; conversationId?: string } {
   const sourceType = run.manifest?.source?.type;
-  const isConversationRun = run.manifest?.kind === 'conversation'
-    || sourceType === 'web-live-session'
-    || sourceType === 'deferred-resume';
+  const isConversationRun = run.manifest?.kind === 'conversation' || sourceType === 'web-live-session' || sourceType === 'deferred-resume';
 
   if (isConversationRun) {
-    const conversationId = sourceType === 'web-live-session'
-      ? run.manifest?.source?.id ?? readTargetSpec(run, 'conversationId') ?? readSpec(run, 'conversationId') ?? readTargetCheckpoint(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
-      : readTargetCheckpoint(run, 'conversationId') ?? readCheckpoint(run, 'conversationId') ?? readTargetSpec(run, 'conversationId') ?? readSpec(run, 'conversationId');
+    const conversationId =
+      sourceType === 'web-live-session'
+        ? (run.manifest?.source?.id ??
+          readTargetSpec(run, 'conversationId') ??
+          readSpec(run, 'conversationId') ??
+          readTargetCheckpoint(run, 'conversationId') ??
+          readCheckpoint(run, 'conversationId'))
+        : (readTargetCheckpoint(run, 'conversationId') ??
+          readCheckpoint(run, 'conversationId') ??
+          readTargetSpec(run, 'conversationId') ??
+          readSpec(run, 'conversationId'));
     const title = readCheckpoint(run, 'title') ?? readMetadataCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
 
     return {
@@ -457,10 +462,10 @@ function getRunCategory(run: DurableRunRecord): RunCategory {
   }
 
   if (
-    run.manifest?.kind === 'background-run'
-    || run.manifest?.source?.type === 'background-run'
-    || run.manifest?.kind === 'raw-shell'
-    || run.manifest?.kind === 'workflow'
+    run.manifest?.kind === 'background-run' ||
+    run.manifest?.source?.type === 'background-run' ||
+    run.manifest?.kind === 'raw-shell' ||
+    run.manifest?.kind === 'workflow'
   ) {
     return 'background';
   }
@@ -506,18 +511,15 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const task = taskById(lookups, taskId);
     const title = task?.title ?? excerpt(task?.prompt) ?? taskId ?? run.runId;
     const kindLabel = task?.targetType === 'conversation' ? 'Thread automation' : 'Automation execution';
-    const summary = task?.title && taskId && task.title !== taskId
-      ? `${kindLabel} · ${task.title}`
-      : taskId ? `${kindLabel} · ${taskId}` : kindLabel;
+    const summary =
+      task?.title && taskId && task.title !== taskId ? `${kindLabel} · ${task.title}` : taskId ? `${kindLabel} · ${taskId}` : kindLabel;
     return { title, summary };
   }
 
   if (run.manifest?.source?.type === 'web-live-session') {
     const { title, conversationId } = conversationLabel(run, lookups);
     const headline = title ?? conversationId ?? run.runId;
-    const summary = conversationId && headline !== conversationId
-      ? `Conversation session · ${conversationId}`
-      : 'Conversation session';
+    const summary = conversationId && headline !== conversationId ? `Conversation session · ${conversationId}` : 'Conversation session';
     return { title: headline, summary };
   }
 
@@ -528,9 +530,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const target = title ?? conversationId;
     const headline = prompt ?? target ?? deferredResumeId ?? run.runId;
     const suffix = conversationId ?? deferredResumeId;
-    const summary = suffix && headline !== suffix
-      ? `Wakeup · ${suffix}`
-      : 'Wakeup';
+    const summary = suffix && headline !== suffix ? `Wakeup · ${suffix}` : 'Wakeup';
     return { title: headline, summary };
   }
 
@@ -540,11 +540,12 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const taskSlug = getRunTaskSlug(run);
     const headline = agentPrompt ?? shellCommand ?? taskSlug ?? run.runId;
     const kindLabel = agentPrompt ? 'Agent task' : shellCommand ? 'Shell command' : 'Agent task';
-    const summary = taskSlug && headline !== taskSlug
-      ? `${kindLabel} · ${taskSlug}`
-      : shellCommand && headline !== shellCommand
-        ? `${kindLabel} · ${shellCommand}`
-        : kindLabel;
+    const summary =
+      taskSlug && headline !== taskSlug
+        ? `${kindLabel} · ${taskSlug}`
+        : shellCommand && headline !== shellCommand
+          ? `${kindLabel} · ${shellCommand}`
+          : kindLabel;
     return { title: headline, summary };
   }
 
@@ -588,9 +589,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
         label: 'Automation',
         value: task?.title ?? taskId,
         to: `/automations/${encodeURIComponent(taskId)}`,
-        detail: task?.title && task.title !== taskId
-          ? taskId
-          : excerpt(task?.prompt) ?? task?.filePath ?? run.manifest?.source?.filePath,
+        detail: task?.title && task.title !== taskId ? taskId : (excerpt(task?.prompt) ?? task?.filePath ?? run.manifest?.source?.filePath),
       });
     }
   }
@@ -675,10 +674,7 @@ export function listRecentConversationBackgroundRuns(input: {
     .slice(0, input.limit ?? 5);
 }
 
-export function getRunPrimaryConnection(
-  run: DurableRunRecord,
-  lookups: RunPresentationLookups = {},
-): RunConnection | undefined {
+export function getRunPrimaryConnection(run: DurableRunRecord, lookups: RunPresentationLookups = {}): RunConnection | undefined {
   return getRunConnections(run, lookups).find((connection) => connection.label !== 'Source file' && connection.to);
 }
 

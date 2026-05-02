@@ -1,10 +1,22 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
-import { createWorkspaceFolder, deleteWorkspacePath, listWorkspaceDirectory, moveWorkspacePath, readWorkspaceDiffOverlay, readWorkspaceFile, renameWorkspacePath, writeWorkspaceFile, __workspaceExplorerInternals } from './workspaceExplorer.js';
+
+import {
+  __workspaceExplorerInternals,
+  createWorkspaceFolder,
+  deleteWorkspacePath,
+  listWorkspaceDirectory,
+  moveWorkspacePath,
+  readWorkspaceDiffOverlay,
+  readWorkspaceFile,
+  renameWorkspacePath,
+  writeWorkspaceFile,
+} from './workspaceExplorer.js';
 
 function git(args: string[], cwd: string): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -54,27 +66,16 @@ describe('workspace explorer', () => {
   });
 
   it('builds overlay decorations for additions and virtual deleted blocks', () => {
-    const parsed = __workspaceExplorerInternals.parseDiffOverlay([
-      '@@ -1,3 +1,3 @@',
-      ' keep',
-      '-old',
-      '+new',
-      ' tail',
-    ].join('\n'));
+    const parsed = __workspaceExplorerInternals.parseDiffOverlay(['@@ -1,3 +1,3 @@', ' keep', '-old', '+new', ' tail'].join('\n'));
 
     expect(parsed.addedLines).toEqual([2]);
     expect(parsed.deletedBlocks).toEqual([{ afterLine: 1, lines: ['old'] }]);
   });
 
   it('ignores malformed diff hunk line numbers', () => {
-    const parsed = __workspaceExplorerInternals.parseDiffOverlay([
-      `@@ -1,1 +${Number.MAX_SAFE_INTEGER + 1},1 @@`,
-      '+unsafe',
-      '@@ -1,1 +2abc,1 @@',
-      '+partial',
-      '@@ -1,1 +2,1 @@',
-      '+valid',
-    ].join('\n'));
+    const parsed = __workspaceExplorerInternals.parseDiffOverlay(
+      [`@@ -1,1 +${Number.MAX_SAFE_INTEGER + 1},1 @@`, '+unsafe', '@@ -1,1 +2abc,1 @@', '+partial', '@@ -1,1 +2,1 @@', '+valid'].join('\n'),
+    );
 
     expect(parsed.addedLines).toEqual([2]);
   });

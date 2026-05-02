@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext } from 'react';
 
 export interface DesktopRightRailControl {
   railOpen: boolean;
@@ -12,7 +12,3 @@ interface DesktopChromeContextValue {
 export const DesktopChromeContext = createContext<DesktopChromeContextValue>({
   setRightRailControl: () => {},
 });
-
-function useDesktopChrome() {
-  return useContext(DesktopChromeContext);
-}

@@ -84,8 +84,7 @@ export function appendComposerHistory(scope: string | null | undefined, value: s
   }
 
   const resolvedStorage = getComposerHistoryStorage(storage);
-  const nextEntries = [...readComposerHistory(scope, resolvedStorage), normalized]
-    .slice(-MAX_COMPOSER_HISTORY_ENTRIES);
+  const nextEntries = [...readComposerHistory(scope, resolvedStorage), normalized].slice(-MAX_COMPOSER_HISTORY_ENTRIES);
 
   if (!resolvedStorage) {
     return nextEntries;

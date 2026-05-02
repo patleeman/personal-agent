@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { DesktopTopBar, readBrowserNavigationState } from './DesktopTopBar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -33,9 +34,7 @@ describe('DesktopTopBar', () => {
   });
 
   it('ignores unsafe persisted browser navigation indexes', () => {
-    const storage = new Map<string, string>([
-      ['__pa_nav_max_idx__', String(Number.MAX_SAFE_INTEGER + 1)],
-    ]);
+    const storage = new Map<string, string>([['__pa_nav_max_idx__', String(Number.MAX_SAFE_INTEGER + 1)]]);
     vi.stubGlobal('window', {
       history: { state: { idx: 0 } },
       sessionStorage: {
@@ -48,9 +47,7 @@ describe('DesktopTopBar', () => {
   });
 
   it('ignores absurd persisted browser navigation indexes', () => {
-    const storage = new Map<string, string>([
-      ['__pa_nav_max_idx__', String(Number.MAX_SAFE_INTEGER)],
-    ]);
+    const storage = new Map<string, string>([['__pa_nav_max_idx__', String(Number.MAX_SAFE_INTEGER)]]);
     vi.stubGlobal('window', {
       history: { state: { idx: 0 } },
       sessionStorage: {
@@ -77,9 +74,7 @@ describe('DesktopTopBar', () => {
   });
 
   it('ignores malformed persisted browser navigation indexes', () => {
-    const storage = new Map<string, string>([
-      ['__pa_nav_max_idx__', '1e3'],
-    ]);
+    const storage = new Map<string, string>([['__pa_nav_max_idx__', '1e3']]);
     vi.stubGlobal('window', {
       history: { state: { idx: 0 } },
       sessionStorage: {
@@ -127,15 +122,18 @@ describe('DesktopTopBar', () => {
   });
 
   it('keeps the panel toggles on the outside edges of the top bar controls', () => {
-    const html = renderTopBar({
-      isElectron: true,
-      activeHostId: 'local',
-      activeHostLabel: 'Local',
-      activeHostKind: 'local',
-      activeHostSummary: 'Local runtime is healthy.',
-      launchMode: 'normal',
-      launchLabel: null,
-    }, { showRailToggle: true, railOpen: true });
+    const html = renderTopBar(
+      {
+        isElectron: true,
+        activeHostId: 'local',
+        activeHostLabel: 'Local',
+        activeHostKind: 'local',
+        activeHostSummary: 'Local runtime is healthy.',
+        launchMode: 'normal',
+        launchLabel: null,
+      },
+      { showRailToggle: true, railOpen: true },
+    );
 
     expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
     expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
@@ -144,15 +142,18 @@ describe('DesktopTopBar', () => {
   });
 
   it('shows the view mode switcher in the top-right controls', () => {
-    const html = renderTopBar({
-      isElectron: true,
-      activeHostId: 'local',
-      activeHostLabel: 'Local',
-      activeHostKind: 'local',
-      activeHostSummary: 'Local runtime is healthy.',
-      launchMode: 'normal',
-      launchLabel: null,
-    }, { layoutMode: 'workbench' });
+    const html = renderTopBar(
+      {
+        isElectron: true,
+        activeHostId: 'local',
+        activeHostLabel: 'Local',
+        activeHostKind: 'local',
+        activeHostSummary: 'Local runtime is healthy.',
+        launchMode: 'normal',
+        launchLabel: null,
+      },
+      { layoutMode: 'workbench' },
+    );
 
     expect(html).toContain('aria-label="Workbench"');
     expect(html).toContain('aria-label="Compact"');
@@ -161,15 +162,18 @@ describe('DesktopTopBar', () => {
   });
 
   it('keeps zen windows focused by hiding sidebar controls and marking zen active', () => {
-    const html = renderTopBar({
-      isElectron: true,
-      activeHostId: 'local',
-      activeHostLabel: 'Local',
-      activeHostKind: 'local',
-      activeHostSummary: 'Local runtime is healthy.',
-      launchMode: 'normal',
-      launchLabel: null,
-    }, { zenMode: true });
+    const html = renderTopBar(
+      {
+        isElectron: true,
+        activeHostId: 'local',
+        activeHostLabel: 'Local',
+        activeHostKind: 'local',
+        activeHostSummary: 'Local runtime is healthy.',
+        launchMode: 'normal',
+        launchLabel: null,
+      },
+      { zenMode: true },
+    );
 
     expect(html).toContain('aria-label="Zen"');
     expect(html).not.toContain('Hide sidebar');

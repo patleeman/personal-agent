@@ -1,20 +1,10 @@
-import {
-  closeSync,
-  existsSync,
-  openSync,
-  readSync,
-  statSync,
-} from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  getDaemonStatus,
-  loadDaemonConfig,
-  pingDaemon,
-  resolveDaemonPaths,
-  setDaemonPowerKeepAwake,
-} from '@personal-agent/daemon';
-import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
+
 import { getStateRoot } from '@personal-agent/core';
+import { getDaemonStatus, loadDaemonConfig, pingDaemon, resolveDaemonPaths, setDaemonPowerKeepAwake } from '@personal-agent/daemon';
+
+import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
 
 interface LogTail {
   path?: string;
@@ -176,4 +166,3 @@ export async function updateDaemonPowerAndReadState(input: { keepAwake: boolean 
   await setDaemonPowerKeepAwake(input.keepAwake, config);
   return readDaemonState();
 }
-

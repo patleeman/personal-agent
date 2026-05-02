@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 const MAX_BROWSER_STATE_ENTRIES = 200;
@@ -51,9 +52,10 @@ function normalizeEntry(value: unknown): StoredWorkbenchBrowserEntry | null {
   const candidate = value as Record<string, unknown>;
   const sessionKey = typeof candidate.sessionKey === 'string' ? normalizeSessionKey(candidate.sessionKey) : '';
   const url = normalizeHttpUrl(candidate.url);
-  const updatedAt = typeof candidate.updatedAt === 'string' && !Number.isNaN(Date.parse(candidate.updatedAt))
-    ? new Date(Date.parse(candidate.updatedAt)).toISOString()
-    : new Date(0).toISOString();
+  const updatedAt =
+    typeof candidate.updatedAt === 'string' && !Number.isNaN(Date.parse(candidate.updatedAt))
+      ? new Date(Date.parse(candidate.updatedAt)).toISOString()
+      : new Date(0).toISOString();
   if (!sessionKey || !url) {
     return null;
   }
@@ -70,17 +72,17 @@ function normalizeState(value: unknown): StoredWorkbenchBrowserState {
   const seen = new Set<string>();
   const entries = Array.isArray(candidate.entries)
     ? candidate.entries
-      .map((entry) => normalizeEntry(entry))
-      .filter((entry): entry is StoredWorkbenchBrowserEntry => entry !== null)
-      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-      .filter((entry) => {
-        if (seen.has(entry.sessionKey)) {
-          return false;
-        }
-        seen.add(entry.sessionKey);
-        return true;
-      })
-      .slice(0, MAX_BROWSER_STATE_ENTRIES)
+        .map((entry) => normalizeEntry(entry))
+        .filter((entry): entry is StoredWorkbenchBrowserEntry => entry !== null)
+        .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+        .filter((entry) => {
+          if (seen.has(entry.sessionKey)) {
+            return false;
+          }
+          seen.add(entry.sessionKey);
+          return true;
+        })
+        .slice(0, MAX_BROWSER_STATE_ENTRIES)
     : [];
   return { version: 1, entries };
 }

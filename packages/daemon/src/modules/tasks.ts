@@ -1,6 +1,3 @@
-import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join, resolve } from 'path';
 import {
   createReadyDeferredResume,
   getTaskCallbackBinding,
@@ -8,7 +5,10 @@ import {
   resolveDeferredResumeStateFile,
   saveDeferredResumeState,
 } from '@personal-agent/core';
-import type { TasksModuleConfig } from '../config.js';
+import { randomUUID } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join, resolve } from 'path';
+
 import {
   appendAutomationActivityEntry,
   deleteStoredAutomation,
@@ -22,12 +22,9 @@ import {
   type StoredAutomation,
 } from '../automation-store.js';
 import { ensureAutomationThread } from '../automation-threads.js';
-import {
-  surfaceReadyDeferredResume,
-} from '../conversation-wakeups.js';
-import {
-  markDeferredResumeConversationRunReady,
-} from '../runs/deferred-resume-conversations.js';
+import type { TasksModuleConfig } from '../config.js';
+import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
+import { markDeferredResumeConversationRunReady } from '../runs/deferred-resume-conversations.js';
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
@@ -40,18 +37,10 @@ import {
   saveDurableRunStatus,
   scanDurableRun,
 } from '../runs/store.js';
-import type { DaemonModule } from './types.js';
-import {
-  cronMatches,
-  type ParsedCronExpression,
-  type ParsedTaskDefinition,
-} from './tasks-parser.js';
-import {
-  createEmptyTaskState,
-  type TaskRuntimeState,
-  type TaskStateFile,
-} from './tasks-store.js';
+import { cronMatches, type ParsedCronExpression, type ParsedTaskDefinition } from './tasks-parser.js';
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
+import { createEmptyTaskState, type TaskRuntimeState, type TaskStateFile } from './tasks-store.js';
+import type { DaemonModule } from './types.js';
 
 const MISSED_RUN_EXAMPLE_LIMIT = 5;
 interface MissedTaskRunSummary {
@@ -108,12 +97,7 @@ function toRunIdTimestamp(value: string): string {
 }
 
 function createScheduledTaskRunId(taskId: string, startedAt: string): string {
-  return [
-    'task',
-    sanitizeActivityIdSegment(taskId),
-    toRunIdTimestamp(startedAt),
-    randomUUID().slice(0, 8),
-  ].join('-');
+  return ['task', sanitizeActivityIdSegment(taskId), toRunIdTimestamp(startedAt), randomUUID().slice(0, 8)].join('-');
 }
 
 function writeJsonFile(path: string, value: unknown): void {
@@ -156,11 +140,7 @@ function formatTaskSchedule(task: ParsedTaskDefinition): string {
   return `at ${task.schedule.at}`;
 }
 
-function summarizeMissedCronRuns(
-  expression: ParsedCronExpression,
-  evaluatedAt: Date,
-  currentTime: Date,
-): MissedTaskRunSummary | undefined {
+function summarizeMissedCronRuns(expression: ParsedCronExpression, evaluatedAt: Date, currentTime: Date): MissedTaskRunSummary | undefined {
   const firstCandidate = toNextMinuteStart(evaluatedAt);
   const currentMinuteStart = toMinuteStart(currentTime);
 
@@ -200,11 +180,7 @@ function summarizeMissedCronRuns(
   };
 }
 
-function resolveCatchUpScheduledAt(
-  task: StoredAutomation,
-  missedRuns: MissedTaskRunSummary,
-  currentTime: Date,
-): string | undefined {
+function resolveCatchUpScheduledAt(task: StoredAutomation, missedRuns: MissedTaskRunSummary, currentTime: Date): string | undefined {
   if (!task.catchUpWindowSeconds || task.catchUpWindowSeconds <= 0) {
     return undefined;
   }
@@ -215,9 +191,7 @@ function resolveCatchUpScheduledAt(
   }
 
   const ageMs = currentTime.getTime() - lastScheduledAtMs;
-  return ageMs <= task.catchUpWindowSeconds * 1000
-    ? missedRuns.lastScheduledAt
-    : undefined;
+  return ageMs <= task.catchUpWindowSeconds * 1000 ? missedRuns.lastScheduledAt : undefined;
 }
 
 function toMissedTaskActivitySummary(taskId: string, missedRunCount: number): string {
@@ -228,10 +202,7 @@ function toMissedTaskActivitySummary(taskId: string, missedRunCount: number): st
   return `Scheduled task ${taskId} missed ${missedRunCount} runs while the daemon was offline.`;
 }
 
-function toMissedTaskActivityDetails(input: {
-  task: ParsedTaskDefinition;
-  missedRuns: MissedTaskRunSummary;
-}): string {
+function toMissedTaskActivityDetails(input: { task: ParsedTaskDefinition; missedRuns: MissedTaskRunSummary }): string {
   const sections = [
     'Reason:\nDaemon was not running during the scheduled task window.',
     `Task:\n${input.task.title ?? input.task.id}`,
@@ -251,13 +222,15 @@ function toMissedTaskActivityDetails(input: {
       exampleLines.push(`- … ${remainingCount} more`);
     }
 
-    sections.push([
-      'Missed runs:',
-      `Count: ${input.missedRuns.count}`,
-      `First: ${input.missedRuns.firstScheduledAt}`,
-      `Last: ${input.missedRuns.lastScheduledAt}`,
-      ...(exampleLines.length > 0 ? ['', 'Examples:', ...exampleLines] : []),
-    ].join('\n'));
+    sections.push(
+      [
+        'Missed runs:',
+        `Count: ${input.missedRuns.count}`,
+        `First: ${input.missedRuns.firstScheduledAt}`,
+        `Last: ${input.missedRuns.lastScheduledAt}`,
+        ...(exampleLines.length > 0 ? ['', 'Examples:', ...exampleLines] : []),
+      ].join('\n'),
+    );
   }
 
   sections.push('Next step:\nRun the task manually if it is still needed.');
@@ -286,10 +259,7 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
   return created;
 }
 
-export function createTasksModule(
-  config: TasksModuleConfig,
-  dependencies: TasksModuleDependencies = {},
-): DaemonModule {
+export function createTasksModule(config: TasksModuleConfig, dependencies: TasksModuleDependencies = {}): DaemonModule {
   const now = () => resolveValidNow(dependencies.now?.() ?? new Date());
   const runTask = dependencies.runTask ?? ((request: TaskRunRequest) => runTaskInIsolatedPi(request));
 
@@ -367,7 +337,10 @@ export function createTasksModule(
   const deliverTaskCallbackWakeup = async (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
+    context: {
+      logger: { info: (message: string) => void; warn: (message: string) => void };
+      paths: { root: string; stateRoot: string };
+    },
     details: {
       finishedAt: string;
       outputText?: string;
@@ -392,9 +365,7 @@ export function createTasksModule(
       status,
     ].join('-');
     const notifyLevel = status === 'success' ? binding.notifyOnSuccess : binding.notifyOnFailure;
-    const title = status === 'success'
-      ? `Scheduled task @${task.id} completed`
-      : `Scheduled task @${task.id} failed`;
+    const title = status === 'success' ? `Scheduled task @${task.id} completed` : `Scheduled task @${task.id} failed`;
     const deferredResumeStateFile = resolveDeferredResumeStateFile(context.paths.stateRoot);
     const deferredState = loadDeferredResumeState(deferredResumeStateFile);
     const entry = createReadyDeferredResume(deferredState, {
@@ -443,31 +414,40 @@ export function createTasksModule(
 
   const writeMissedTaskActivity = (
     task: StoredAutomation,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
+    context: {
+      logger: { info: (message: string) => void; warn: (message: string) => void };
+      paths: { root: string; stateRoot: string };
+    },
     details: {
       detectedAt: string;
       missedRuns: MissedTaskRunSummary;
       outcome: 'skipped' | 'catch-up-started';
     },
   ): void => {
-    context.logger.info([
-      toMissedTaskActivitySummary(task.id, details.missedRuns.count),
-      `detectedAt=${details.detectedAt}`,
-      `window=${details.missedRuns.firstScheduledAt}..${details.missedRuns.lastScheduledAt}`,
-      `outcome=${details.outcome}`,
-      `details=${JSON.stringify(toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }))}`,
-    ].join(' '));
+    context.logger.info(
+      [
+        toMissedTaskActivitySummary(task.id, details.missedRuns.count),
+        `detectedAt=${details.detectedAt}`,
+        `window=${details.missedRuns.firstScheduledAt}..${details.missedRuns.lastScheduledAt}`,
+        `outcome=${details.outcome}`,
+        `details=${JSON.stringify(toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }))}`,
+      ].join(' '),
+    );
 
     try {
-      appendAutomationActivityEntry(task.id, {
-        kind: 'missed',
-        createdAt: details.detectedAt,
-        count: details.missedRuns.count,
-        firstScheduledAt: details.missedRuns.firstScheduledAt,
-        lastScheduledAt: details.missedRuns.lastScheduledAt,
-        exampleScheduledAt: details.missedRuns.exampleScheduledAt,
-        outcome: details.outcome,
-      }, { dbPath: runtimeDbPath });
+      appendAutomationActivityEntry(
+        task.id,
+        {
+          kind: 'missed',
+          createdAt: details.detectedAt,
+          count: details.missedRuns.count,
+          firstScheduledAt: details.missedRuns.firstScheduledAt,
+          lastScheduledAt: details.missedRuns.lastScheduledAt,
+          exampleScheduledAt: details.missedRuns.exampleScheduledAt,
+          outcome: details.outcome,
+        },
+        { dbPath: runtimeDbPath },
+      );
     } catch (error) {
       context.logger.warn(`failed to record missed task activity id=${task.id}: ${(error as Error).message}`);
     }
@@ -486,40 +466,46 @@ export function createTasksModule(
     mkdirSync(runPaths.root, { recursive: true, mode: 0o700 });
     mkdirSync(attemptsRoot, { recursive: true, mode: 0o700 });
 
-    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
-      id: runId,
-      kind: 'scheduled-task',
-      resumePolicy: 'rerun',
-      createdAt: startedAt,
-      spec: {
-        taskId: task.id,
-        title: task.title ?? task.id,
-        filePath: task.filePath.startsWith('/__automations__/') ? undefined : task.filePath,
-        profile: task.profile,
-        scheduleType: task.schedule.type,
-        schedule: formatTaskSchedule(task),
-        targetType: task.targetType,
-        ...(task.conversationBehavior ? { conversationBehavior: task.conversationBehavior } : {}),
-        cwd: task.cwd,
-        modelRef: task.modelRef,
-        ...(task.threadConversationId ? { threadConversationId: task.threadConversationId } : {}),
-        ...(task.threadSessionFile ? { threadSessionFile: task.threadSessionFile } : {}),
-      },
-      source: {
-        type: 'scheduled-task',
-        id: task.id,
-        ...(task.filePath.startsWith('/__automations__/') ? {} : { filePath: task.filePath }),
-      },
-    }));
+    saveDurableRunManifest(
+      runPaths.manifestPath,
+      createDurableRunManifest({
+        id: runId,
+        kind: 'scheduled-task',
+        resumePolicy: 'rerun',
+        createdAt: startedAt,
+        spec: {
+          taskId: task.id,
+          title: task.title ?? task.id,
+          filePath: task.filePath.startsWith('/__automations__/') ? undefined : task.filePath,
+          profile: task.profile,
+          scheduleType: task.schedule.type,
+          schedule: formatTaskSchedule(task),
+          targetType: task.targetType,
+          ...(task.conversationBehavior ? { conversationBehavior: task.conversationBehavior } : {}),
+          cwd: task.cwd,
+          modelRef: task.modelRef,
+          ...(task.threadConversationId ? { threadConversationId: task.threadConversationId } : {}),
+          ...(task.threadSessionFile ? { threadSessionFile: task.threadSessionFile } : {}),
+        },
+        source: {
+          type: 'scheduled-task',
+          id: task.id,
+          ...(task.filePath.startsWith('/__automations__/') ? {} : { filePath: task.filePath }),
+        },
+      }),
+    );
 
-    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
-      runId,
-      status: 'running',
-      createdAt: startedAt,
-      updatedAt: startedAt,
-      activeAttempt: 0,
-      startedAt,
-    }));
+    saveDurableRunStatus(
+      runPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId,
+        status: 'running',
+        createdAt: startedAt,
+        updatedAt: startedAt,
+        activeAttempt: 0,
+        startedAt,
+      }),
+    );
 
     saveDurableRunCheckpoint(runPaths.checkpointPath, {
       version: 1,
@@ -552,7 +538,11 @@ export function createTasksModule(
   const executeTaskRun = async (
     task: StoredAutomation,
     record: TaskRuntimeState,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
+    context: {
+      logger: { info: (message: string) => void; warn: (message: string) => void };
+      publish: (type: string, payload?: Record<string, unknown>) => boolean;
+      paths: { root: string; stateRoot: string };
+    },
     controller: AbortController,
     options: { runIdOverride?: string } = {},
   ): Promise<void> => {
@@ -570,14 +560,17 @@ export function createTasksModule(
         break;
       }
 
-      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
-        runId: durableRun.runId,
-        status: 'running',
-        createdAt: startedAt,
-        updatedAt: now().toISOString(),
-        activeAttempt: attempt,
-        startedAt,
-      }));
+      saveDurableRunStatus(
+        durableRun.runPaths.statusPath,
+        createInitialDurableRunStatus({
+          runId: durableRun.runId,
+          status: 'running',
+          createdAt: startedAt,
+          updatedAt: now().toISOString(),
+          activeAttempt: attempt,
+          startedAt,
+        }),
+      );
 
       await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
         version: 1,
@@ -608,7 +601,7 @@ export function createTasksModule(
         version: 1,
         runId: durableRun.runId,
         updatedAt: result.endedAt,
-        step: result.success ? 'completed' : (result.cancelled ? 'interrupted' : 'attempt-failed'),
+        step: result.success ? 'completed' : result.cancelled ? 'interrupted' : 'attempt-failed',
         payload: {
           attempt,
           success: result.success,
@@ -622,9 +615,7 @@ export function createTasksModule(
         version: 1,
         runId: durableRun.runId,
         timestamp: result.endedAt,
-        type: result.success
-          ? 'run.attempt.completed'
-          : (result.cancelled ? 'run.interrupted' : 'run.attempt.failed'),
+        type: result.success ? 'run.attempt.completed' : result.cancelled ? 'run.interrupted' : 'run.attempt.failed',
         attempt,
         payload: {
           taskId: runnableTask.id,
@@ -670,7 +661,11 @@ export function createTasksModule(
         : finalResult?.cancelled
           ? 'Task cancelled.'
           : finalResult?.outputText?.trim()
-            ? finalResult.outputText.trim().split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1)
+            ? finalResult.outputText
+                .trim()
+                .split(/\r?\n/)
+                .filter((line) => line.trim().length > 0)
+                .at(-1)
             : finalResult?.success
               ? 'Task completed successfully.'
               : 'Task finished.',
@@ -692,15 +687,18 @@ export function createTasksModule(
         record.oneTimeCompletedAt = finishedAt;
       }
 
-      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
-        runId: durableRun.runId,
-        status: 'completed',
-        createdAt: startedAt,
-        updatedAt: finishedAt,
-        activeAttempt: record.lastAttemptCount ?? 0,
-        startedAt,
-        completedAt: finishedAt,
-      }));
+      saveDurableRunStatus(
+        durableRun.runPaths.statusPath,
+        createInitialDurableRunStatus({
+          runId: durableRun.runId,
+          status: 'completed',
+          createdAt: startedAt,
+          updatedAt: finishedAt,
+          activeAttempt: record.lastAttemptCount ?? 0,
+          startedAt,
+          completedAt: finishedAt,
+        }),
+      );
 
       await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
         version: 1,
@@ -732,15 +730,18 @@ export function createTasksModule(
       record.lastError = finalResult.error ?? 'Task run cancelled';
       state.skippedRuns += 1;
 
-      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
-        runId: durableRun.runId,
-        status: 'interrupted',
-        createdAt: startedAt,
-        updatedAt: finishedAt,
-        activeAttempt: record.lastAttemptCount ?? 0,
-        startedAt,
-        lastError: record.lastError,
-      }));
+      saveDurableRunStatus(
+        durableRun.runPaths.statusPath,
+        createInitialDurableRunStatus({
+          runId: durableRun.runId,
+          status: 'interrupted',
+          createdAt: startedAt,
+          updatedAt: finishedAt,
+          activeAttempt: record.lastAttemptCount ?? 0,
+          startedAt,
+          lastError: record.lastError,
+        }),
+      );
     } else {
       record.activeRunId = undefined;
       record.lastStatus = 'failed';
@@ -753,16 +754,19 @@ export function createTasksModule(
         record.oneTimeResolvedStatus = 'failed';
       }
 
-      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
-        runId: durableRun.runId,
-        status: 'failed',
-        createdAt: startedAt,
-        updatedAt: finishedAt,
-        activeAttempt: record.lastAttemptCount ?? 0,
-        startedAt,
-        completedAt: finishedAt,
-        lastError: record.lastError,
-      }));
+      saveDurableRunStatus(
+        durableRun.runPaths.statusPath,
+        createInitialDurableRunStatus({
+          runId: durableRun.runId,
+          status: 'failed',
+          createdAt: startedAt,
+          updatedAt: finishedAt,
+          activeAttempt: record.lastAttemptCount ?? 0,
+          startedAt,
+          completedAt: finishedAt,
+          lastError: record.lastError,
+        }),
+      );
 
       await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
         version: 1,
@@ -793,13 +797,16 @@ export function createTasksModule(
         logPath: finalResult?.logPath,
       });
     }
-
   };
 
   const startTaskRun = (
     task: StoredAutomation,
     record: TaskRuntimeState,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
+    context: {
+      logger: { info: (message: string) => void; warn: (message: string) => void };
+      publish: (type: string, payload?: Record<string, unknown>) => boolean;
+      paths: { root: string; stateRoot: string };
+    },
     options: { runIdOverride?: string } = {},
   ): void => {
     const controller = new AbortController();
@@ -837,14 +844,14 @@ export function createTasksModule(
 
   const handleRequestedTaskRun = async (
     payload: Record<string, unknown>,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
+    context: {
+      logger: { info: (message: string) => void; warn: (message: string) => void };
+      publish: (type: string, payload?: Record<string, unknown>) => boolean;
+      paths: { root: string; stateRoot: string };
+    },
   ): Promise<void> => {
-    const taskId = typeof payload.taskId === 'string' && payload.taskId.trim().length > 0
-      ? payload.taskId.trim()
-      : undefined;
-    const runIdOverride = typeof payload.runId === 'string' && payload.runId.trim().length > 0
-      ? payload.runId.trim()
-      : undefined;
+    const taskId = typeof payload.taskId === 'string' && payload.taskId.trim().length > 0 ? payload.taskId.trim() : undefined;
+    const runIdOverride = typeof payload.runId === 'string' && payload.runId.trim().length > 0 ? payload.runId.trim() : undefined;
 
     if (!taskId) {
       context.logger.warn('ignoring requested task run without taskId');
@@ -891,13 +898,11 @@ export function createTasksModule(
     }
   };
 
-  const recoverInterruptedTaskRuns = async (
-    context: {
-      logger: { info: (message: string) => void; warn: (message: string) => void };
-      publish: (type: string, payload?: Record<string, unknown>) => boolean;
-      paths: { root: string; stateRoot: string };
-    },
-  ): Promise<void> => {
+  const recoverInterruptedTaskRuns = async (context: {
+    logger: { info: (message: string) => void; warn: (message: string) => void };
+    publish: (type: string, payload?: Record<string, unknown>) => boolean;
+    paths: { root: string; stateRoot: string };
+  }): Promise<void> => {
     const recoveryTime = now();
     const recoveryIso = recoveryTime.toISOString();
     ensureLegacyTaskImports({
@@ -907,7 +912,6 @@ export function createTasksModule(
     });
 
     for (const task of listStoredAutomations({ dbPath: runtimeDbPath })) {
-
       const record = ensureTaskRecord(taskState, task);
       if (!task.enabled || !record.activeRunId || activeRuns.has(task.key)) {
         continue;
@@ -918,9 +922,7 @@ export function createTasksModule(
       }
 
       const scannedRun = scanDurableRun(durableRunsRoot, record.activeRunId);
-      const shouldRecover = Boolean(
-        scannedRun && (scannedRun.recoveryAction === 'rerun' || scannedRun.recoveryAction === 'resume'),
-      );
+      const shouldRecover = Boolean(scannedRun && (scannedRun.recoveryAction === 'rerun' || scannedRun.recoveryAction === 'resume'));
 
       if (!shouldRecover) {
         continue;
@@ -935,9 +937,7 @@ export function createTasksModule(
       record.running = true;
       record.runningStartedAt = recoveryIso;
 
-      context.logger.info(
-        `recovering task id=${task.id} priorRun=${record.activeRunId} action=${scannedRun?.recoveryAction ?? 'unknown'}`,
-      );
+      context.logger.info(`recovering task id=${task.id} priorRun=${record.activeRunId} action=${scannedRun?.recoveryAction ?? 'unknown'}`);
       startTaskRun(task, record, context);
     }
   };
@@ -981,13 +981,11 @@ export function createTasksModule(
     }
   };
 
-  const runTick = async (
-    context: {
-      logger: { info: (message: string) => void; warn: (message: string) => void };
-      publish: (type: string, payload?: Record<string, unknown>) => boolean;
-      paths: { root: string; stateRoot: string };
-    },
-  ): Promise<void> => {
+  const runTick = async (context: {
+    logger: { info: (message: string) => void; warn: (message: string) => void };
+    publish: (type: string, payload?: Record<string, unknown>) => boolean;
+    paths: { root: string; stateRoot: string };
+  }): Promise<void> => {
     if (tickInProgress || stopping) {
       return;
     }
@@ -1019,12 +1017,8 @@ export function createTasksModule(
 
       reconcileDeletedTaskState(activeTaskKeys);
 
-      const lastEvaluatedAtMs = taskState.lastEvaluatedAt
-        ? Date.parse(taskState.lastEvaluatedAt)
-        : Number.NaN;
-      const lastEvaluatedAt = Number.isFinite(lastEvaluatedAtMs)
-        ? new Date(lastEvaluatedAtMs)
-        : undefined;
+      const lastEvaluatedAtMs = taskState.lastEvaluatedAt ? Date.parse(taskState.lastEvaluatedAt) : Number.NaN;
+      const lastEvaluatedAt = Number.isFinite(lastEvaluatedAtMs) ? new Date(lastEvaluatedAtMs) : undefined;
       const minuteKey = toMinuteKey(tickTime);
       for (const task of parsedTasks) {
         const record = ensureTaskRecord(taskState, task);
@@ -1079,11 +1073,7 @@ export function createTasksModule(
           const missedRuns = summarizeMissedCronRuns(task.schedule.parsed, lastEvaluatedAt, tickTime);
           if (missedRuns) {
             const catchUpScheduledAt = resolveCatchUpScheduledAt(task, missedRuns, tickTime);
-            if (
-              catchUpScheduledAt
-              && !dueThisMinute
-              && !activeRuns.has(task.key)
-            ) {
+            if (catchUpScheduledAt && !dueThisMinute && !activeRuns.has(task.key)) {
               writeMissedTaskActivity(task, context, {
                 detectedAt: nowIso,
                 missedRuns,

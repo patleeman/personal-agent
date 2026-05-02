@@ -2,14 +2,16 @@ import { Buffer } from 'node:buffer';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
-import type { HostApiDispatchResult } from './hosts/types.js';
-import type { HostManager } from './hosts/host-manager.js';
+
 import {
   continueConversationInHost,
   dispatchConversationExecutionRequest,
   subscribeConversationExecutionApiStream,
 } from './conversation-execution.js';
+import type { HostManager } from './hosts/host-manager.js';
+import type { HostApiDispatchResult } from './hosts/types.js';
 
 function jsonResult(body: unknown, statusCode = 200): HostApiDispatchResult {
   return {
@@ -144,10 +146,12 @@ describe('conversation-execution remote routing', () => {
         ensureHostRunning: vi.fn().mockResolvedValue(undefined),
       } as unknown as HostManager;
 
-      await expect(continueConversationInHost(hostManager, {
-        conversationId: 'local-conversation',
-        hostId: 'bender',
-      })).resolves.toEqual({
+      await expect(
+        continueConversationInHost(hostManager, {
+          conversationId: 'local-conversation',
+          hostId: 'bender',
+        }),
+      ).resolves.toEqual({
         conversationId: 'local-conversation',
         remoteHostId: 'bender',
         remoteHostLabel: 'Bender',
@@ -186,10 +190,12 @@ describe('conversation-execution remote routing', () => {
         getHostController: vi.fn(() => localController),
       } as unknown as HostManager;
 
-      await expect(continueConversationInHost(hostManager, {
-        conversationId: 'local-conversation',
-        hostId: 'bender',
-      })).rejects.toThrow(`Conversation session file is invalid (expected a file, got a directory): ${sessionDir}`);
+      await expect(
+        continueConversationInHost(hostManager, {
+          conversationId: 'local-conversation',
+          hostId: 'bender',
+        }),
+      ).rejects.toThrow(`Conversation session file is invalid (expected a file, got a directory): ${sessionDir}`);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -209,16 +215,20 @@ describe('conversation-execution remote routing', () => {
       conversationId: 'local-conversation',
       name: 'Ship this fix',
     });
-    expect(remoteController.dispatchApiRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'PATCH',
-      path: '/api/conversations/remote-conversation/title',
-      body: { name: 'Ship this fix' },
-    }));
-    expect(remoteController.dispatchApiRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'POST',
-      path: '/api/live-sessions/remote-conversation/prompt',
-      body: { text: 'Ship this fix' },
-    }));
+    expect(remoteController.dispatchApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'PATCH',
+        path: '/api/conversations/remote-conversation/title',
+        body: { name: 'Ship this fix' },
+      }),
+    );
+    expect(remoteController.dispatchApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/live-sessions/remote-conversation/prompt',
+        body: { text: 'Ship this fix' },
+      }),
+    );
   });
 
   it('does not title remote conversations from malformed prompt images', async () => {
@@ -227,24 +237,39 @@ describe('conversation-execution remote routing', () => {
     await dispatchConversationExecutionRequest(hostManager, {
       method: 'POST',
       path: '/api/live-sessions/local-conversation/prompt',
-      body: { images: [null, { data: '', mimeType: '' }, { data: '   ', mimeType: 'image/png' }, { data: 'not-valid-base64!', mimeType: 'image/png' }, { data: 'aGVsbG8=', mimeType: 'text/plain' }] },
+      body: {
+        images: [
+          null,
+          { data: '', mimeType: '' },
+          { data: '   ', mimeType: 'image/png' },
+          {
+            data: 'not-valid-base64!',
+            mimeType: 'image/png',
+          },
+          { data: 'aGVsbG8=', mimeType: 'text/plain' },
+        ],
+      },
     });
 
     expect(localController.renameConversation).not.toHaveBeenCalled();
-    expect(remoteController.dispatchApiRequest).not.toHaveBeenCalledWith(expect.objectContaining({
-      method: 'PATCH',
-      path: '/api/conversations/remote-conversation/title',
-    }));
+    expect(remoteController.dispatchApiRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'PATCH',
+        path: '/api/conversations/remote-conversation/title',
+      }),
+    );
   });
 
   it('syncs remote title_update stream events back into the local conversation title', async () => {
     const { hostManager, localController, remoteController } = createHostManagerMock();
 
     let streamHandler: ((event: { type: 'message'; data?: string }) => void) | null = null;
-    remoteController.subscribeApiStream.mockImplementation((_path: string, handler: (event: { type: 'message'; data?: string }) => void) => {
-      streamHandler = handler;
-      return Promise.resolve(() => undefined);
-    });
+    remoteController.subscribeApiStream.mockImplementation(
+      (_path: string, handler: (event: { type: 'message'; data?: string }) => void) => {
+        streamHandler = handler;
+        return Promise.resolve(() => undefined);
+      },
+    );
 
     const forwardedEvents: Array<{ type: string; data?: string }> = [];
     const unsubscribe = await subscribeConversationExecutionApiStream(
@@ -275,23 +300,25 @@ describe('conversation-execution remote routing', () => {
       });
     });
 
-    expect(forwardedEvents).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'message' }),
-    ]));
+    expect(forwardedEvents).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'message' })]));
   });
 
   it('rewrites remote cwd-change responses back to the local conversation id and updates local session mapping', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'pa-conversation-execution-'));
     const sessionFile = join(tempRoot, 'local-conversation.jsonl');
-    writeFileSync(sessionFile, `${JSON.stringify({
-      type: 'session',
-      id: 'local-conversation',
-      timestamp: '2026-04-17T00:00:00.000Z',
-      cwd: '/repo/current',
-      remoteHostId: 'bender',
-      remoteHostLabel: 'Bender',
-      remoteConversationId: 'remote-conversation',
-    })}\n`, 'utf-8');
+    writeFileSync(
+      sessionFile,
+      `${JSON.stringify({
+        type: 'session',
+        id: 'local-conversation',
+        timestamp: '2026-04-17T00:00:00.000Z',
+        cwd: '/repo/current',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-conversation',
+      })}\n`,
+      'utf-8',
+    );
 
     try {
       const localController = {
@@ -310,12 +337,14 @@ describe('conversation-execution remote routing', () => {
         dispatchApiRequest: vi.fn().mockImplementation(({ method, path, body }: { method: string; path: string; body?: unknown }) => {
           if (method === 'POST' && path === '/api/conversations/remote-conversation/cwd') {
             expect(body).toEqual({ cwd: '/repo/next' });
-            return Promise.resolve(jsonResult({
-              id: 'remote-conversation-2',
-              sessionFile: '/sessions/remote-conversation-2.jsonl',
-              cwd: '/repo/next',
-              changed: true,
-            }));
+            return Promise.resolve(
+              jsonResult({
+                id: 'remote-conversation-2',
+                sessionFile: '/sessions/remote-conversation-2.jsonl',
+                cwd: '/repo/next',
+                changed: true,
+              }),
+            );
           }
 
           throw new Error(`Unexpected remote request: ${method} ${path}`);

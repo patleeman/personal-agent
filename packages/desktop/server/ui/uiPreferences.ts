@@ -45,13 +45,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -167,15 +169,13 @@ function normalizeSavedUiPreferences(input: {
 }): SavedUiPreferences {
   const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
   const pinnedIdSet = new Set(pinnedConversationIds);
-  const openConversationIds = normalizeConversationIds(input.openConversationIds)
-    .filter((id) => !pinnedIdSet.has(id));
+  const openConversationIds = normalizeConversationIds(input.openConversationIds).filter((id) => !pinnedIdSet.has(id));
   const workspaceIdSet = new Set([...openConversationIds, ...pinnedConversationIds]);
 
   return {
     openConversationIds,
     pinnedConversationIds,
-    archivedConversationIds: normalizeConversationIds(input.archivedConversationIds)
-      .filter((id) => !workspaceIdSet.has(id)),
+    archivedConversationIds: normalizeConversationIds(input.archivedConversationIds).filter((id) => !workspaceIdSet.has(id)),
     workspacePaths: normalizeWorkspacePaths(input.workspacePaths),
     nodeBrowserViews: normalizeNodeBrowserViews(input.nodeBrowserViews),
   };
@@ -221,7 +221,8 @@ export function writeSavedUiPreferences(
   const next = normalizeSavedUiPreferences({
     openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
     pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
-    archivedConversationIds: input.archivedConversationIds !== undefined ? (input.archivedConversationIds ?? []) : current.archivedConversationIds,
+    archivedConversationIds:
+      input.archivedConversationIds !== undefined ? (input.archivedConversationIds ?? []) : current.archivedConversationIds,
     workspacePaths: input.workspacePaths !== undefined ? (input.workspacePaths ?? []) : current.workspacePaths,
     nodeBrowserViews: input.nodeBrowserViews !== undefined ? (input.nodeBrowserViews ?? []) : current.nodeBrowserViews,
   });

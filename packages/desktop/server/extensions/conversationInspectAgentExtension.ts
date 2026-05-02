@@ -1,20 +1,21 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { Type } from '@sinclair/typebox';
+
 import {
   CONVERSATION_INSPECT_ACTION_VALUES,
   CONVERSATION_INSPECT_BLOCK_TYPE_VALUES,
   CONVERSATION_INSPECT_ORDER_VALUES,
   CONVERSATION_INSPECT_ROLE_VALUES,
-  CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
   CONVERSATION_INSPECT_SCOPE_VALUES,
+  CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
   diffConversationInspectBlocks,
   formatConversationInspectDiffResult,
   formatConversationInspectOutlineResult,
   formatConversationInspectQueryResult,
   formatConversationInspectSearchResult,
   formatConversationInspectSessionList,
-  outlineConversationInspectSession,
   listConversationInspectSessions,
+  outlineConversationInspectSession,
   queryConversationInspectBlocks,
   readWindowConversationInspectBlocks,
   searchConversationInspectSessions,
@@ -25,32 +26,55 @@ const ConversationInspectToolParams = Type.Object({
   conversationId: Type.Optional(Type.String({ description: 'Conversation id for query/diff actions.' })),
   scope: Type.Optional(Type.String({ description: `List scope. Valid values: ${CONVERSATION_INSPECT_SCOPE_VALUES.join(', ')}.` })),
   cwd: Type.Optional(Type.String({ description: 'Optional cwd filter for list actions.' })),
-  query: Type.Optional(Type.String({ description: 'Query string for list/search actions. List matches metadata; search matches visible transcript text.' })),
+  query: Type.Optional(
+    Type.String({ description: 'Query string for list/search actions. List matches metadata; search matches visible transcript text.' }),
+  ),
   includeCurrent: Type.Optional(Type.Boolean({ description: 'Whether list should include the current conversation. Defaults to false.' })),
-  types: Type.Optional(Type.Array(
-    Type.String({ minLength: 1 }),
-    { description: `Optional structural transcript block types to include. Valid values: ${CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.join(', ')}. Use roles for user/assistant filtering.`, minItems: 1 },
-  )),
-  roles: Type.Optional(Type.Array(
-    Type.String({ minLength: 1 }),
-    { description: `Optional conversational roles to include. Valid values: ${CONVERSATION_INSPECT_ROLE_VALUES.join(', ')}. assistant maps to text blocks; tool maps to tool_use blocks.`, minItems: 1 },
-  )),
-  tools: Type.Optional(Type.Array(
-    Type.String({ minLength: 1 }),
-    { description: 'Optional tool names to match for tool_use/error blocks.', minItems: 1 },
-  )),
+  types: Type.Optional(
+    Type.Array(Type.String({ minLength: 1 }), {
+      description: `Optional structural transcript block types to include. Valid values: ${CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.join(
+        ', ',
+      )}. Use roles for user/assistant filtering.`,
+      minItems: 1,
+    }),
+  ),
+  roles: Type.Optional(
+    Type.Array(Type.String({ minLength: 1 }), {
+      description: `Optional conversational roles to include. Valid values: ${CONVERSATION_INSPECT_ROLE_VALUES.join(
+        ', ',
+      )}. assistant maps to text blocks; tool maps to tool_use blocks.`,
+      minItems: 1,
+    }),
+  ),
+  tools: Type.Optional(
+    Type.Array(Type.String({ minLength: 1 }), { description: 'Optional tool names to match for tool_use/error blocks.', minItems: 1 }),
+  ),
   text: Type.Optional(Type.String({ description: 'Case-insensitive transcript text filter.' })),
-  searchMode: Type.Optional(Type.String({ description: `How query/text matching works. Valid values: ${CONVERSATION_INSPECT_SEARCH_MODE_VALUES.join(', ')}. Default phrase; allTerms/anyTerm split on whitespace.` })),
+  searchMode: Type.Optional(
+    Type.String({
+      description: `How query/text matching works. Valid values: ${CONVERSATION_INSPECT_SEARCH_MODE_VALUES.join(
+        ', ',
+      )}. Default phrase; allTerms/anyTerm split on whitespace.`,
+    }),
+  ),
   afterBlockId: Type.Optional(Type.String({ description: 'Only include transcript blocks after this block id.' })),
   beforeBlockId: Type.Optional(Type.String({ description: 'Only include transcript blocks before this block id.' })),
   aroundBlockId: Type.Optional(Type.String({ description: 'Restrict query results to a context window around this block id.' })),
   knownSignature: Type.Optional(Type.String({ description: 'Last seen conversation signature for diff checks.' })),
-  order: Type.Optional(Type.String({ description: `Block order for query results. Valid values: ${CONVERSATION_INSPECT_ORDER_VALUES.join(', ')}.` })),
+  order: Type.Optional(
+    Type.String({ description: `Block order for query results. Valid values: ${CONVERSATION_INSPECT_ORDER_VALUES.join(', ')}.` }),
+  ),
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 200, description: 'Maximum items to return.' })),
   window: Type.Optional(Type.Number({ minimum: 1, maximum: 50, description: 'Context window size for aroundBlockId queries.' })),
-  includeAroundMatches: Type.Optional(Type.Boolean({ description: 'When searching or querying with filters, include surrounding context blocks around each match using window.' })),
+  includeAroundMatches: Type.Optional(
+    Type.Boolean({
+      description: 'When searching or querying with filters, include surrounding context blocks around each match using window.',
+    }),
+  ),
   maxCharactersPerBlock: Type.Optional(Type.Number({ minimum: 1, maximum: 20000, description: 'Character cap per returned block.' })),
-  maxSnippetCharacters: Type.Optional(Type.Number({ minimum: 1, maximum: 2000, description: 'Character cap per returned search snippet.' })),
+  maxSnippetCharacters: Type.Optional(
+    Type.Number({ minimum: 1, maximum: 2000, description: 'Character cap per returned search snippet.' }),
+  ),
 });
 
 export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) => void {
@@ -197,7 +221,11 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
           }
 
           default:
-            throw new Error(`Unsupported conversation_inspect action ${JSON.stringify(params.action)}. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.`);
+            throw new Error(
+              `Unsupported conversation_inspect action ${JSON.stringify(params.action)}. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(
+                ', ',
+              )}.`,
+            );
         }
       },
     });

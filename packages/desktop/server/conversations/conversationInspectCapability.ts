@@ -1,4 +1,5 @@
 import { sep } from 'node:path';
+
 import {
   listConversationSessionsSnapshot,
   readConversationSessionMeta,
@@ -6,7 +7,7 @@ import {
   resolveConversationSessionFile,
 } from './conversationService.js';
 import { readConversationSummary } from './conversationSummaries.js';
-import { readSessionBlocksByFile, type DisplayBlock } from './sessions.js';
+import { type DisplayBlock, readSessionBlocksByFile } from './sessions.js';
 
 export const CONVERSATION_INSPECT_SCOPE_VALUES = ['all', 'live', 'running', 'archived'] as const;
 export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'search', 'query', 'diff', 'outline', 'read_window'] as const;
@@ -59,8 +60,23 @@ export type InspectableConversationBlock =
   | (InspectableBlockBase & { type: 'user'; text: string; truncated?: boolean })
   | (InspectableBlockBase & { type: 'text'; text: string; truncated?: boolean })
   | (InspectableBlockBase & { type: 'context'; text: string; customType?: string; truncated?: boolean })
-  | (InspectableBlockBase & { type: 'summary'; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string; truncated?: boolean })
-  | (InspectableBlockBase & { type: 'tool_use'; tool: string; toolCallId: string; durationMs?: number; input: string; output: string; truncated?: boolean })
+  | (InspectableBlockBase & {
+      type: 'summary';
+      kind: 'compaction' | 'branch' | 'related';
+      title: string;
+      text: string;
+      detail?: string;
+      truncated?: boolean;
+    })
+  | (InspectableBlockBase & {
+      type: 'tool_use';
+      tool: string;
+      toolCallId: string;
+      durationMs?: number;
+      input: string;
+      output: string;
+      truncated?: boolean;
+    })
   | (InspectableBlockBase & { type: 'image'; alt: string; caption?: string })
   | (InspectableBlockBase & { type: 'error'; tool?: string; message: string; truncated?: boolean });
 
@@ -149,11 +165,12 @@ function readOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number, max: number): number {
-  const parsed = typeof value === 'number' && Number.isSafeInteger(value)
-    ? value
-    : typeof value === 'string' && /^\d+$/.test(value.trim())
-      ? Number.parseInt(value.trim(), 10)
-      : Number.NaN;
+  const parsed =
+    typeof value === 'number' && Number.isSafeInteger(value)
+      ? value
+      : typeof value === 'string' && /^\d+$/.test(value.trim())
+        ? Number.parseInt(value.trim(), 10)
+        : Number.NaN;
 
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     return fallback;
@@ -169,7 +186,9 @@ function normalizeScope(value: unknown): ConversationInspectScope {
   if (value === 'all' || value === 'live' || value === 'running' || value === 'archived') {
     return value;
   }
-  throw new ConversationInspectCapabilityInputError(`Invalid scope ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_SCOPE_VALUES.join(', ')}.`);
+  throw new ConversationInspectCapabilityInputError(
+    `Invalid scope ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_SCOPE_VALUES.join(', ')}.`,
+  );
 }
 
 function normalizeOrder(value: unknown): ConversationInspectOrder {
@@ -179,7 +198,9 @@ function normalizeOrder(value: unknown): ConversationInspectOrder {
   if (value === 'asc' || value === 'desc') {
     return value;
   }
-  throw new ConversationInspectCapabilityInputError(`Invalid order ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_ORDER_VALUES.join(', ')}.`);
+  throw new ConversationInspectCapabilityInputError(
+    `Invalid order ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_ORDER_VALUES.join(', ')}.`,
+  );
 }
 
 function normalizeSearchMode(value: unknown): ConversationInspectSearchMode {
@@ -189,7 +210,9 @@ function normalizeSearchMode(value: unknown): ConversationInspectSearchMode {
   if (value === 'phrase' || value === 'allTerms' || value === 'anyTerm') {
     return value;
   }
-  throw new ConversationInspectCapabilityInputError(`Invalid searchMode ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_SEARCH_MODE_VALUES.join(', ')}.`);
+  throw new ConversationInspectCapabilityInputError(
+    `Invalid searchMode ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_SEARCH_MODE_VALUES.join(', ')}.`,
+  );
 }
 
 function normalizeBlockTypes(value: unknown): ConversationInspectBlockType[] {
@@ -207,7 +230,11 @@ function normalizeBlockTypes(value: unknown): ConversationInspectBlockType[] {
       continue;
     }
     if (!allowed.has(type)) {
-      throw new ConversationInspectCapabilityInputError(`Invalid types value ${JSON.stringify(type)}. Valid values: ${CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.join(', ')}. Tip: use roles:["assistant"] for assistant messages; block type "text" is assistant text.`);
+      throw new ConversationInspectCapabilityInputError(
+        `Invalid types value ${JSON.stringify(type)}. Valid values: ${CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.join(
+          ', ',
+        )}. Tip: use roles:["assistant"] for assistant messages; block type "text" is assistant text.`,
+      );
     }
 
     seen.add(type);
@@ -232,7 +259,9 @@ function normalizeRoles(value: unknown): ConversationInspectRole[] {
       continue;
     }
     if (!allowed.has(role)) {
-      throw new ConversationInspectCapabilityInputError(`Invalid roles value ${JSON.stringify(role)}. Valid values: ${CONVERSATION_INSPECT_ROLE_VALUES.join(', ')}.`);
+      throw new ConversationInspectCapabilityInputError(
+        `Invalid roles value ${JSON.stringify(role)}. Valid values: ${CONVERSATION_INSPECT_ROLE_VALUES.join(', ')}.`,
+      );
     }
 
     seen.add(role);
@@ -349,9 +378,7 @@ function matchesSearchText(text: string, query: string, mode: ConversationInspec
   if (terms.length === 0) {
     return false;
   }
-  return mode === 'allTerms'
-    ? terms.every((term) => haystack.includes(term))
-    : terms.some((term) => haystack.includes(term));
+  return mode === 'allTerms' ? terms.every((term) => haystack.includes(term)) : terms.some((term) => haystack.includes(term));
 }
 
 function sanitizeBlock(block: DisplayBlock, index: number, maxCharactersPerBlock: number): InspectableConversationBlock | null {
@@ -493,18 +520,18 @@ function matchesCwdFilter(sessionCwd: string, cwdFilter: string | undefined): bo
     return true;
   }
 
-  return sessionCwd === cwdFilter
-    || sessionCwd.startsWith(`${cwdFilter}${sep}`)
-    || sessionCwd.includes(cwdFilter);
+  return sessionCwd === cwdFilter || sessionCwd.startsWith(`${cwdFilter}${sep}`) || sessionCwd.includes(cwdFilter);
 }
 
-function collectInspectableSessions(input: {
-  scope?: unknown;
-  cwd?: unknown;
-  query?: unknown;
-  includeCurrent?: unknown;
-  currentConversationId?: string;
-} = {}): { scope: ConversationInspectScope; sessions: ConversationInspectSessionRecord[] } {
+function collectInspectableSessions(
+  input: {
+    scope?: unknown;
+    cwd?: unknown;
+    query?: unknown;
+    includeCurrent?: unknown;
+    currentConversationId?: string;
+  } = {},
+): { scope: ConversationInspectScope; sessions: ConversationInspectSessionRecord[] } {
   const scope = normalizeScope(input.scope);
   const cwd = readOptionalString(input.cwd);
   const query = readOptionalString(input.query)?.toLowerCase();
@@ -542,9 +569,9 @@ function collectInspectableSessions(input: {
         return true;
       }
 
-      return session.id.toLowerCase().includes(query)
-        || session.title.toLowerCase().includes(query)
-        || session.cwd.toLowerCase().includes(query);
+      return (
+        session.id.toLowerCase().includes(query) || session.title.toLowerCase().includes(query) || session.cwd.toLowerCase().includes(query)
+      );
     })
     .sort((left, right) => {
       if (left.isRunning !== right.isRunning) {
@@ -646,18 +673,21 @@ function findBlockIndex(blocks: DisplayBlock[], blockId: string, label: 'afterBl
   return index;
 }
 
-function applyBlockFilters(blocks: DisplayBlock[], input: {
-  afterBlockId?: string;
-  beforeBlockId?: string;
-  aroundBlockId?: string;
-  window: number;
-  types: ConversationInspectBlockType[];
-  roles: ConversationInspectRole[];
-  tools: string[];
-  text?: string;
-  searchMode: ConversationInspectSearchMode;
-  includeAroundMatches: boolean;
-}): Array<{ block: DisplayBlock; index: number }> {
+function applyBlockFilters(
+  blocks: DisplayBlock[],
+  input: {
+    afterBlockId?: string;
+    beforeBlockId?: string;
+    aroundBlockId?: string;
+    window: number;
+    types: ConversationInspectBlockType[];
+    roles: ConversationInspectRole[];
+    tools: string[];
+    text?: string;
+    searchMode: ConversationInspectSearchMode;
+    includeAroundMatches: boolean;
+  },
+): Array<{ block: DisplayBlock; index: number }> {
   if (input.aroundBlockId && (input.afterBlockId || input.beforeBlockId)) {
     throw new ConversationInspectCapabilityInputError('aroundBlockId cannot be combined with afterBlockId or beforeBlockId.');
   }
@@ -720,28 +750,31 @@ function applyBlockFilters(blocks: DisplayBlock[], input: {
         includedIndexes.add(index);
       }
     }
-    indexed = blocks
-      .map((block, index) => ({ block, index }))
-      .filter((entry) => includedIndexes.has(entry.index));
+    indexed = blocks.map((block, index) => ({ block, index })).filter((entry) => includedIndexes.has(entry.index));
   }
 
   return indexed;
 }
 
-function sanitizeBlocks(entries: Array<{ block: DisplayBlock; index: number }>, maxCharactersPerBlock: number): InspectableConversationBlock[] {
+function sanitizeBlocks(
+  entries: Array<{ block: DisplayBlock; index: number }>,
+  maxCharactersPerBlock: number,
+): InspectableConversationBlock[] {
   return entries
     .map(({ block, index }) => sanitizeBlock(block, index, maxCharactersPerBlock))
     .filter((block): block is InspectableConversationBlock => Boolean(block));
 }
 
-export function listConversationInspectSessions(input: {
-  scope?: unknown;
-  cwd?: unknown;
-  query?: unknown;
-  limit?: unknown;
-  includeCurrent?: unknown;
-  currentConversationId?: string;
-} = {}): ListConversationInspectResult {
+export function listConversationInspectSessions(
+  input: {
+    scope?: unknown;
+    cwd?: unknown;
+    query?: unknown;
+    limit?: unknown;
+    includeCurrent?: unknown;
+    currentConversationId?: string;
+  } = {},
+): ListConversationInspectResult {
   const limit = normalizePositiveInteger(input.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
   const { scope, sessions } = collectInspectableSessions(input);
   const returned = sessions.slice(0, limit).map(({ file: _file, ...session }) => session);
@@ -768,20 +801,22 @@ export function formatConversationInspectSessionList(result: ListConversationIns
   ].join('\n');
 }
 
-export function searchConversationInspectSessions(input: {
-  query?: unknown;
-  searchMode?: unknown;
-  scope?: unknown;
-  cwd?: unknown;
-  limit?: unknown;
-  window?: unknown;
-  includeAroundMatches?: unknown;
-  includeCurrent?: unknown;
-  currentConversationId?: string;
-  maxSnippetCharacters?: unknown;
-  maxCharactersPerBlock?: unknown;
-  stopAfterLimit?: unknown;
-} = {}): SearchConversationInspectResult {
+export function searchConversationInspectSessions(
+  input: {
+    query?: unknown;
+    searchMode?: unknown;
+    scope?: unknown;
+    cwd?: unknown;
+    limit?: unknown;
+    window?: unknown;
+    includeAroundMatches?: unknown;
+    includeCurrent?: unknown;
+    currentConversationId?: string;
+    maxSnippetCharacters?: unknown;
+    maxCharactersPerBlock?: unknown;
+    stopAfterLimit?: unknown;
+  } = {},
+): SearchConversationInspectResult {
   const query = readOptionalString(input.query);
   if (!query) {
     throw new ConversationInspectCapabilityInputError('query is required.');
@@ -826,8 +861,8 @@ export function searchConversationInspectSessions(input: {
 
     const contextEntries = includeAroundMatches
       ? detail.blocks
-        .map((block, index) => ({ block, index }))
-        .slice(Math.max(0, matchEntry.index - window), Math.min(detail.blocks.length, matchEntry.index + window + 1))
+          .map((block, index) => ({ block, index }))
+          .slice(Math.max(0, matchEntry.index - window), Math.min(detail.blocks.length, matchEntry.index + window + 1))
       : [];
 
     matches.push({
@@ -863,15 +898,24 @@ export function formatConversationInspectSearchResult(result: SearchConversation
   }
 
   return [
-    `Transcript search (${result.returnedCount}/${result.totalMatching}) for ${JSON.stringify(result.query)} mode=${result.mode} scope=${result.scope}:`,
+    `Transcript search (${result.returnedCount}/${result.totalMatching}) for ${JSON.stringify(
+      result.query,
+    )} mode=${result.mode} scope=${result.scope}:`,
     ...result.matches.flatMap((match) => {
-      const header = `- ${match.conversationId} [${match.isRunning ? 'running' : match.isLive ? 'live' : 'archived'}] ${match.title} · ${match.cwd} · block ${match.blockId} (${match.blockType})\n  ${match.snippet}`;
+      const header = `- ${match.conversationId} [${
+        match.isRunning ? 'running' : match.isLive ? 'live' : 'archived'
+      }] ${match.title} · ${match.cwd} · block ${match.blockId} (${match.blockType})\n  ${match.snippet}`;
       if (!match.contextBlocks || match.contextBlocks.length === 0) {
         return [header];
       }
       return [
         header,
-        ...match.contextBlocks.map((block) => formatInspectableBlock(block).split('\n').map((line) => `  ${line}`).join('\n')),
+        ...match.contextBlocks.map((block) =>
+          formatInspectableBlock(block)
+            .split('\n')
+            .map((line) => `  ${line}`)
+            .join('\n'),
+        ),
       ];
     }),
   ].join('\n');
@@ -916,9 +960,7 @@ export function queryConversationInspectBlocks(input: {
     includeAroundMatches: readOptionalBoolean(input.includeAroundMatches) ?? false,
   });
 
-  const ordered = order === 'desc'
-    ? [...filtered].reverse()
-    : filtered;
+  const ordered = order === 'desc' ? [...filtered].reverse() : filtered;
   const returned = ordered.slice(0, limit);
   const sanitized = sanitizeBlocks(returned, maxCharactersPerBlock);
 
@@ -948,7 +990,7 @@ export function formatConversationInspectQueryResult(result: QueryConversationIn
     `signature: ${result.signature ?? 'none'}`,
     `blocks: ${result.returnedBlocks}/${result.matchingBlocks} matched (total ${result.totalBlocks}, order ${result.order})`,
     '',
-    ...result.blocks.flatMap((block, index) => index === 0 ? [formatInspectableBlock(block)] : ['', formatInspectableBlock(block)]),
+    ...result.blocks.flatMap((block, index) => (index === 0 ? [formatInspectableBlock(block)] : ['', formatInspectableBlock(block)])),
   ].join('\n');
 }
 
@@ -989,9 +1031,7 @@ export function outlineConversationInspectSession(input: {
   const summary = readConversationSummary(resolved.conversationId);
   const anchors: ConversationInspectOutlineAnchor[] = [];
   const seen = new Set<string>();
-  const userBlocks = resolved.blocks
-    .map((block, index) => ({ block, index }))
-    .filter((entry) => entry.block.type === 'user');
+  const userBlocks = resolved.blocks.map((block, index) => ({ block, index })).filter((entry) => entry.block.type === 'user');
 
   const firstUser = userBlocks[0];
   if (firstUser) {
@@ -1101,9 +1141,7 @@ export function diffConversationInspectBlocks(input: {
     includeAroundMatches: false,
   });
 
-  const returned = filtered.length > limit
-    ? filtered.slice(filtered.length - limit)
-    : filtered;
+  const returned = filtered.length > limit ? filtered.slice(filtered.length - limit) : filtered;
   const sanitized = sanitizeBlocks(returned, maxCharactersPerBlock);
 
   return {
@@ -1136,6 +1174,6 @@ export function formatConversationInspectDiffResult(result: DiffConversationInsp
     `signature: ${result.signature ?? 'none'}`,
     `diff blocks: ${result.returnedBlocks}/${result.matchingBlocks} matched (total ${result.totalBlocks})`,
     '',
-    ...result.blocks.flatMap((block, index) => index === 0 ? [formatInspectableBlock(block)] : ['', formatInspectableBlock(block)]),
+    ...result.blocks.flatMap((block, index) => (index === 0 ? [formatInspectableBlock(block)] : ['', formatInspectableBlock(block)])),
   ].join('\n');
 }

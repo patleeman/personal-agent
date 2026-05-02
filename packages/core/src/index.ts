@@ -1,9 +1,9 @@
 /**
  * Core personal agent library
- * 
+ *
  * Provides profile management, validation, and merge engine
  * for layered configuration (shared < datadog < local).
- * 
+ *
  * Runtime state management for auth, sessions, and cache
  * ensures mutable data stays outside managed repository files.
  */
@@ -88,10 +88,9 @@ export * from './memory-store.js';
 export * from './nodes.js';
 
 // Profile/resource resolution helpers
-export * from './resources.js';
 export * from './prompt-catalog.js';
+export * from './resources.js';
 export * from './system-prompt-template.js';
 
 // Codex compatibility transport helpers
 export * from './codex-compat.js';
-

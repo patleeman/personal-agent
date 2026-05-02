@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const setContentSpy = vi.hoisted(() => vi.fn());
 const focusSpy = vi.hoisted(() => vi.fn());

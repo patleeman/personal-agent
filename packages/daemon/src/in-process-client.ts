@@ -1,20 +1,20 @@
 import type { DaemonConfig } from './config.js';
+import type { PersonalAgentDaemon } from './server.js';
 import type {
+  CancelDurableRunResult,
   DaemonEvent,
   DaemonStatus,
-  ListDurableRunsResult,
+  FollowUpDurableRunResult,
   GetDurableRunResult,
-  StartScheduledTaskRunResult,
+  ListDurableRunsResult,
+  ListRecoverableWebLiveConversationRunsResult,
+  ReplayDurableRunResult,
   StartBackgroundRunRequestInput,
   StartBackgroundRunResult,
-  CancelDurableRunResult,
-  ReplayDurableRunResult,
-  FollowUpDurableRunResult,
+  StartScheduledTaskRunResult,
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
-  ListRecoverableWebLiveConversationRunsResult,
 } from './types.js';
-import type { PersonalAgentDaemon } from './server.js';
 
 export interface DaemonClientTransport {
   ping(config?: DaemonConfig): Promise<boolean>;
@@ -29,7 +29,10 @@ export interface DaemonClientTransport {
   cancelDurableRun(runId: string, config?: DaemonConfig): Promise<CancelDurableRunResult>;
   rerunDurableRun(runId: string, config?: DaemonConfig): Promise<ReplayDurableRunResult>;
   followUpDurableRun(runId: string, prompt?: string, config?: DaemonConfig): Promise<FollowUpDurableRunResult>;
-  syncWebLiveConversationRunState(input: SyncWebLiveConversationRunRequestInput, config?: DaemonConfig): Promise<SyncWebLiveConversationRunResult>;
+  syncWebLiveConversationRunState(
+    input: SyncWebLiveConversationRunRequestInput,
+    config?: DaemonConfig,
+  ): Promise<SyncWebLiveConversationRunResult>;
   listRecoverableWebLiveConversationRuns(config?: DaemonConfig): Promise<ListRecoverableWebLiveConversationRunsResult>;
   emitEvent(event: DaemonEvent, config?: DaemonConfig): Promise<boolean>;
 }
@@ -86,4 +89,3 @@ export function createInProcessDaemonClient(daemon: PersonalAgentDaemon): Daemon
     emitEvent: async (event) => daemon.publishEvent(event),
   };
 }
-

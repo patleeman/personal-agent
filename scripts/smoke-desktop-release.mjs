@@ -2,9 +2,9 @@
 /* eslint-env node */
 
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
@@ -136,7 +136,10 @@ async function waitForLoadedBody(cdp, child, logs, label, timeoutMs = 30_000) {
     const body = String(result?.result?.value ?? '').trim();
     lastBody = body;
 
-    if (body.length > 0 && !/startup error|open logs\s+try again|could not load|was compiled against a different node\.js version/i.test(body)) {
+    if (
+      body.length > 0 &&
+      !/startup error|open logs\s+try again|could not load|was compiled against a different node\.js version/i.test(body)
+    ) {
       return body;
     }
 
@@ -168,15 +171,15 @@ async function main() {
   const companionPort = await allocatePort();
   const stdoutChunks = [];
   const stderrChunks = [];
-  const renderLogs = () => [
-    stdoutChunks.length ? `stdout:\n${tail(stdoutChunks.join(''))}` : '',
-    stderrChunks.length ? `stderr:\n${tail(stderrChunks.join(''))}` : '',
-  ].filter(Boolean).join('\n\n');
+  const renderLogs = () =>
+    [
+      stdoutChunks.length ? `stdout:\n${tail(stdoutChunks.join(''))}` : '',
+      stderrChunks.length ? `stderr:\n${tail(stderrChunks.join(''))}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
-  const child = spawn(executablePath, [
-    `--remote-debugging-port=${debugPort}`,
-    '--no-quit-confirmation',
-  ], {
+  const child = spawn(executablePath, [`--remote-debugging-port=${debugPort}`, '--no-quit-confirmation'], {
     env: {
       ...process.env,
       PERSONAL_AGENT_STATE_ROOT: stateRoot,
@@ -212,7 +215,11 @@ async function main() {
       }
     }
 
-    const preserve = ['1', 'true', 'yes'].includes(String(process.env.PERSONAL_AGENT_RELEASE_PRESERVE_SMOKE_STATE ?? '').trim().toLowerCase());
+    const preserve = ['1', 'true', 'yes'].includes(
+      String(process.env.PERSONAL_AGENT_RELEASE_PRESERVE_SMOKE_STATE ?? '')
+        .trim()
+        .toLowerCase(),
+    );
     if (!preserve) {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -220,5 +227,5 @@ async function main() {
 }
 
 main().catch((error) => {
-  fail(error instanceof Error ? error.stack ?? error.message : String(error));
+  fail(error instanceof Error ? (error.stack ?? error.message) : String(error));
 });

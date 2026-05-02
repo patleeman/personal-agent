@@ -1,12 +1,10 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+
 import { getPiAgentRuntimeDir, openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+
 import { readConversationSummary } from './conversationSummaries.js';
-import {
-  listSessions,
-  readSessionSearchText,
-  type SessionMeta,
-} from './sessions.js';
+import { listSessions, readSessionSearchText, type SessionMeta } from './sessions.js';
 
 const SEARCH_INDEX_SCHEMA_VERSION = 1;
 const DEFAULT_MAX_INDEX_BATCH = 12;
@@ -94,11 +92,15 @@ function normalizeActivityAt(meta: SessionMeta): string {
 }
 
 function readIndexedRow(sessionId: string): ConversationSearchIndexRow | null {
-  const row = getDb().prepare(`
+  const row = getDb()
+    .prepare(
+      `
     SELECT session_id, file_signature, title, cwd, timestamp, last_activity_at, updated_at
     FROM conversation_search_index
     WHERE session_id = ?
-  `).get(sessionId) as ConversationSearchIndexRow | undefined;
+  `,
+    )
+    .get(sessionId) as ConversationSearchIndexRow | undefined;
   return row ?? null;
 }
 
@@ -114,7 +116,9 @@ function buildSearchText(meta: SessionMeta): string {
     summary?.keyTerms.join(' '),
     summary?.filesTouched.join(' '),
     transcriptText,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function upsertSearchDocument(meta: SessionMeta, signature: string, searchText: string): void {
@@ -122,7 +126,9 @@ function upsertSearchDocument(meta: SessionMeta, signature: string, searchText: 
   const lastActivityAt = normalizeActivityAt(meta);
   const updatedAt = new Date().toISOString();
   const write = database.transaction(() => {
-    database.prepare(`
+    database
+      .prepare(
+        `
       INSERT INTO conversation_search_index (session_id, file_signature, title, cwd, timestamp, last_activity_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id) DO UPDATE SET
@@ -132,9 +138,13 @@ function upsertSearchDocument(meta: SessionMeta, signature: string, searchText: 
         timestamp = excluded.timestamp,
         last_activity_at = excluded.last_activity_at,
         updated_at = excluded.updated_at
-    `).run(meta.id, signature, meta.title, meta.cwd, meta.timestamp, lastActivityAt, updatedAt);
+    `,
+      )
+      .run(meta.id, signature, meta.title, meta.cwd, meta.timestamp, lastActivityAt, updatedAt);
     database.prepare('DELETE FROM conversation_search_index_fts WHERE session_id = ?').run(meta.id);
-    database.prepare('INSERT INTO conversation_search_index_fts (session_id, title, search_text) VALUES (?, ?, ?)').run(meta.id, meta.title, searchText);
+    database
+      .prepare('INSERT INTO conversation_search_index_fts (session_id, title, search_text) VALUES (?, ?, ?)')
+      .run(meta.id, meta.title, searchText);
   });
   write();
 }
@@ -146,16 +156,27 @@ function needsIndex(meta: SessionMeta): boolean {
   }
 
   const row = readIndexedRow(meta.id);
-  return !row || row.file_signature !== signature || row.title !== meta.title || row.cwd !== meta.cwd || row.last_activity_at !== normalizeActivityAt(meta);
+  return (
+    !row ||
+    row.file_signature !== signature ||
+    row.title !== meta.title ||
+    row.cwd !== meta.cwd ||
+    row.last_activity_at !== normalizeActivityAt(meta)
+  );
 }
 
-export function indexConversationSearchBatch(options: { maxSessions?: number; maxDurationMs?: number } = {}): { indexed: number; remaining: number } {
-  const maxSessions = Number.isSafeInteger(options.maxSessions) && options.maxSessions !== undefined && options.maxSessions > 0
-    ? options.maxSessions
-    : DEFAULT_MAX_INDEX_BATCH;
-  const maxDurationMs = Number.isSafeInteger(options.maxDurationMs) && options.maxDurationMs !== undefined && options.maxDurationMs > 0
-    ? options.maxDurationMs
-    : DEFAULT_MAX_INDEX_DURATION_MS;
+export function indexConversationSearchBatch(options: { maxSessions?: number; maxDurationMs?: number } = {}): {
+  indexed: number;
+  remaining: number;
+} {
+  const maxSessions =
+    Number.isSafeInteger(options.maxSessions) && options.maxSessions !== undefined && options.maxSessions > 0
+      ? options.maxSessions
+      : DEFAULT_MAX_INDEX_BATCH;
+  const maxDurationMs =
+    Number.isSafeInteger(options.maxDurationMs) && options.maxDurationMs !== undefined && options.maxDurationMs > 0
+      ? options.maxDurationMs
+      : DEFAULT_MAX_INDEX_DURATION_MS;
   const started = Date.now();
   let indexed = 0;
   let remaining = 0;
@@ -233,7 +254,9 @@ export function searchIndexedConversationDocuments(input: {
 
   const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
   const minActivityAt = new Date(nowMs - input.recentWindowMs).toISOString();
-  const rows = getDb().prepare(`
+  const rows = getDb()
+    .prepare(
+      `
     SELECT i.session_id AS sessionId,
       i.title AS title,
       i.cwd AS cwd,
@@ -249,7 +272,9 @@ export function searchIndexedConversationDocuments(input: {
       i.last_activity_at DESC,
       bm25(conversation_search_index_fts)
     LIMIT ?
-  `).all(ftsQuery, minActivityAt, input.currentConversationId ?? '', input.currentCwd ?? '', input.limit) as Array<{
+  `,
+    )
+    .all(ftsQuery, minActivityAt, input.currentConversationId ?? '', input.currentCwd ?? '', input.limit) as Array<{
     sessionId: string;
     title: string;
     cwd: string;

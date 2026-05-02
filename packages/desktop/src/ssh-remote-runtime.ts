@@ -1,17 +1,19 @@
+import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Socket } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { ChildProcess } from 'node:child_process';
+
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
+
 import { getAvailableTcpPort } from './backend/ports.js';
 import { applyRemoteMetadataToSessionContent, stripRemoteMetadataFromSessionContent } from './conversation-session-header.js';
-import { ensurePiReleaseBinary } from './pi-release-cache.js';
-import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
-import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
-import { downloadFileOverScp, runSshCommand, spawnSshTunnel, uploadDirectoryOverScp, uploadFileOverScp } from './system-ssh.js';
 import type { DesktopRemoteOperationStatus } from './hosts/types.js';
+import { ensurePiReleaseBinary } from './pi-release-cache.js';
+import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
+import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
+import { downloadFileOverScp, runSshCommand, spawnSshTunnel, uploadDirectoryOverScp, uploadFileOverScp } from './system-ssh.js';
 
 export interface RemoteDirectoryEntry {
   name: string;
@@ -127,12 +129,14 @@ function isHelperRuntimeInfo(value: unknown): value is HelperRuntimeInfo {
   }
 
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.port === 'number'
-    && typeof candidate.cwd === 'string'
-    && typeof candidate.sessionFile === 'string'
-    && typeof candidate.helperVersion === 'string'
-    && typeof candidate.pid === 'number'
-    && typeof candidate.startedAt === 'string';
+  return (
+    typeof candidate.port === 'number' &&
+    typeof candidate.cwd === 'string' &&
+    typeof candidate.sessionFile === 'string' &&
+    typeof candidate.helperVersion === 'string' &&
+    typeof candidate.pid === 'number' &&
+    typeof candidate.startedAt === 'string'
+  );
 }
 
 export class SshRemoteConversationRuntime {
@@ -143,10 +147,13 @@ export class SshRemoteConversationRuntime {
   private connectingPromise: Promise<void> | null = null;
   private currentConversationId: string | null = null;
   private nextRequestId = 1;
-  private readonly pendingRequests = new Map<string, {
-    resolve: (value: unknown) => void;
-    reject: (error: Error) => void;
-  }>();
+  private readonly pendingRequests = new Map<
+    string,
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+    }
+  >();
   private readonly eventSubscribers = new Set<(event: Record<string, unknown>) => void>();
   private buffer = '';
 
@@ -200,12 +207,7 @@ export class SshRemoteConversationRuntime {
         status: 'running',
         message: `Loading ${pathLabel} on ${this.hostLabel}…`,
       });
-      const command = [
-        `${renderRemotePathForShell(remoteHelperPath)}`,
-        'list-dir',
-        '--path',
-        quoteForShell(normalizedPath),
-      ].join(' ');
+      const command = [`${renderRemotePathForShell(remoteHelperPath)}`, 'list-dir', '--path', quoteForShell(normalizedPath)].join(' ');
       const output = runSshCommand(this.sshTarget, renderRemoteCommand(command)).trim();
       this.emitStatus({
         ...context,
@@ -325,10 +327,14 @@ export class SshRemoteConversationRuntime {
       const launchCommand = [
         `${renderRemotePathForShell(remoteHelperPath)}`,
         'launch',
-        '--run-dir', renderRemotePathForShell(remoteRunDir),
-        '--pi', renderRemotePathForShell(remotePiPath),
-        '--session', renderRemotePathForShell(remoteSessionFile),
-        '--cwd', quoteForShell(normalizedCwd),
+        '--run-dir',
+        renderRemotePathForShell(remoteRunDir),
+        '--pi',
+        renderRemotePathForShell(remotePiPath),
+        '--session',
+        renderRemotePathForShell(remoteSessionFile),
+        '--cwd',
+        quoteForShell(normalizedCwd),
         ...(remoteAgentDir ? ['--agent-dir', renderRemotePathForShell(remoteAgentDir)] : []),
       ].join(' ');
       const output = runSshCommand(this.sshTarget, renderRemoteCommand(launchCommand)).trim();
@@ -416,7 +422,7 @@ export class SshRemoteConversationRuntime {
         status: 'running',
         message: `Restarting remote runtime on ${this.hostLabel}…`,
       });
-      const response = await this.requestHelper({ type: 'restart', cwd }) as unknown;
+      const response = (await this.requestHelper({ type: 'restart', cwd })) as unknown;
       if (!isHelperRuntimeInfo(response)) {
         throw new Error(`Remote runtime for ${this.hostLabel} returned malformed restart info.`);
       }
@@ -454,10 +460,7 @@ export class SshRemoteConversationRuntime {
     }
   }
 
-  async syncRemoteSessionToLocal(input: {
-    conversationId: string;
-    localFilePath: string;
-  }): Promise<void> {
+  async syncRemoteSessionToLocal(input: { conversationId: string; localFilePath: string }): Promise<void> {
     const remoteSessionFile = buildRemoteSessionFile(input.conversationId);
     const tempDir = mkdtempSync(join(tmpdir(), 'personal-agent-remote-session-'));
     const tempFile = join(tempDir, 'session.jsonl');
@@ -533,7 +536,9 @@ export class SshRemoteConversationRuntime {
     const remoteBundleParentDir = dirname(remoteDir);
     runSshCommand(
       this.sshTarget,
-      `mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)} && test -x ${renderRemotePathForShell(remoteBinary)} && test -f ${renderRemotePathForShell(remotePackageJson)} || true`,
+      `mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)} && test -x ${renderRemotePathForShell(remoteBinary)} && test -f ${renderRemotePathForShell(
+        remotePackageJson,
+      )} || true`,
     );
     try {
       runSshCommand(
@@ -548,7 +553,10 @@ export class SshRemoteConversationRuntime {
         status: 'running',
         message: `Copying Pi to ${this.hostLabel}…`,
       });
-      runSshCommand(this.sshTarget, `rm -rf ${renderRemotePathForShell(remoteDir)} && mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)}`);
+      runSshCommand(
+        this.sshTarget,
+        `rm -rf ${renderRemotePathForShell(remoteDir)} && mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)}`,
+      );
       uploadDirectoryOverScp({ target: this.sshTarget, localPath: localBundleDir, remotePath: remoteBundleParentDir });
       runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
@@ -581,7 +589,10 @@ export class SshRemoteConversationRuntime {
   ): Promise<void> {
     const remoteDir = buildRemoteHelperDir(version, platform);
     const remoteBinary = buildRemoteHelperPath(version, platform);
-    runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteDir)} && test -x ${renderRemotePathForShell(remoteBinary)} || true`);
+    runSshCommand(
+      this.sshTarget,
+      `mkdir -p ${renderRemotePathForShell(remoteDir)} && test -x ${renderRemotePathForShell(remoteBinary)} || true`,
+    );
     try {
       runSshCommand(this.sshTarget, `test -x ${renderRemotePathForShell(remoteBinary)}`);
       return;

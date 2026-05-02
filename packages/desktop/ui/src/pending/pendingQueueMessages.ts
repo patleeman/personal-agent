@@ -1,5 +1,5 @@
-import type { PendingConversationPrompt } from './pendingConversationPrompt';
 import type { MessageBlock, QueuedPromptPreview } from '../shared/types';
+import type { PendingConversationPrompt } from './pendingConversationPrompt';
 
 export interface ConversationPendingQueueItem {
   id: string;
@@ -54,9 +54,8 @@ export function resolveRestoredQueuedPromptComposerUpdate(input: {
   noticeText: string;
 } {
   const hasRestoredText = input.restoredText.trim().length > 0;
-  const restoredFileCount = Number.isSafeInteger(input.restoredFileCount) && input.restoredFileCount <= 100
-    ? Math.max(0, input.restoredFileCount)
-    : 0;
+  const restoredFileCount =
+    Number.isSafeInteger(input.restoredFileCount) && input.restoredFileCount <= 100 ? Math.max(0, input.restoredFileCount) : 0;
   const parts = [
     hasRestoredText ? 'text' : null,
     restoredFileCount > 0 ? `${restoredFileCount} image${restoredFileCount === 1 ? '' : 's'}` : null,
@@ -65,9 +64,7 @@ export function resolveRestoredQueuedPromptComposerUpdate(input: {
   return {
     hasRestoredText,
     hasContent: hasRestoredText || restoredFileCount > 0,
-    nextInput: hasRestoredText
-      ? [input.restoredText, input.currentInput].filter((value) => value.trim().length > 0).join('\n\n')
-      : null,
+    nextInput: hasRestoredText ? [input.restoredText, input.currentInput].filter((value) => value.trim().length > 0).join('\n\n') : null,
     noticeText: `Restored queued ${parts.join(' + ')} to the composer.`,
   };
 }
@@ -95,17 +92,18 @@ export function appendPendingInitialPromptBlock(
 
   const existingMessages = messages ?? [];
   const lastMessage = existingMessages[existingMessages.length - 1];
-  const lastImages = lastMessage?.type === 'user' ? lastMessage.images ?? [] : [];
-  const imagesMatch = lastImages.length === images.length
-    && images.every((image, index) => {
+  const lastImages = lastMessage?.type === 'user' ? (lastMessage.images ?? []) : [];
+  const imagesMatch =
+    lastImages.length === images.length &&
+    images.every((image, index) => {
       const lastImage = lastImages[index];
-      return lastImage?.src === image.src
-        && (lastImage?.mimeType?.trim().toLowerCase() || '') === image.mimeType.trim().toLowerCase()
-        && lastImage?.caption === image.caption;
+      return (
+        lastImage?.src === image.src &&
+        (lastImage?.mimeType?.trim().toLowerCase() || '') === image.mimeType.trim().toLowerCase() &&
+        lastImage?.caption === image.caption
+      );
     });
-  const alreadyVisible = lastMessage?.type === 'user'
-    && lastMessage.text === text
-    && imagesMatch;
+  const alreadyVisible = lastMessage?.type === 'user' && lastMessage.text === text && imagesMatch;
 
   if (alreadyVisible) {
     return existingMessages;
@@ -140,9 +138,5 @@ function safePendingImagePreviewUrl(previewUrl: string | undefined): string | un
   }
   const commaIndex = normalized.indexOf(',');
   const base64 = commaIndex >= 0 ? normalized.slice(commaIndex + 1).trim() : '';
-  return base64
-    && base64.length % 4 !== 1
-    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)
-    ? normalized
-    : undefined;
+  return base64 && base64.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64) ? normalized : undefined;
 }

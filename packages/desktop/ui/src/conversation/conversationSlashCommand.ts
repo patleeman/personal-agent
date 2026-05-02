@@ -19,9 +19,7 @@ export type ConversationSlashCommand =
   | { action: 'summarize' }
   | { action: 'think'; topic?: string };
 
-type ConversationSlashParseResult =
-  | { kind: 'command'; command: ConversationSlashCommand }
-  | { kind: 'invalid'; message: string };
+type ConversationSlashParseResult = { kind: 'command'; command: ConversationSlashCommand } | { kind: 'invalid'; message: string };
 
 function parseNoArgCommand(command: ConversationSlashCommand['action'], argument: string, usage: string): ConversationSlashParseResult {
   if (argument.length > 0) {

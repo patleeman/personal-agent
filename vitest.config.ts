@@ -12,11 +12,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['vitest.setup.ts'],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/.taskfactory/**',
-    ],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.taskfactory/**'],
     coverage: {
       include: [
         'packages/*/src/**/*.ts',
@@ -35,5 +31,5 @@ export default defineConfig({
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
     },
-  }
+  },
 });

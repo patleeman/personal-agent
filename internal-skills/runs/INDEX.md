@@ -32,6 +32,7 @@ Good fits:
 - looping agents that schedule their own next iteration
 
 Do not use runs for:
+
 - task-file-based automation — use [Scheduled Tasks](../scheduled-tasks/INDEX.md)
 - direct human reminders — use reminders/alerts
 - pure "continue this conversation later" wakeups with no background job — use `conversation_queue`
@@ -104,14 +105,14 @@ For looping agents (self-scheduling):
 
 ## Trigger options for agent runs
 
-| Flag | Example | Description |
-|------|---------|-------------|
-| `--defer` | `1h`, `30m`, `2h30m` | Delay before running |
-| `--cron` | `"0 9 * * 1-5"` | Recurring schedule |
-| `--at` | `"2026-04-01T09:00"` | One-time timestamp |
-| `--loop` | | Enable looping mode |
-| `--loop-delay` | `1h` | Delay between iterations |
-| `--loop-max-iterations` | `10` | Stop after N iterations |
+| Flag                    | Example              | Description              |
+| ----------------------- | -------------------- | ------------------------ |
+| `--defer`               | `1h`, `30m`, `2h30m` | Delay before running     |
+| `--cron`                | `"0 9 * * 1-5"`      | Recurring schedule       |
+| `--at`                  | `"2026-04-01T09:00"` | One-time timestamp       |
+| `--loop`                |                      | Enable looping mode      |
+| `--loop-delay`          | `1h`                 | Delay between iterations |
+| `--loop-max-iterations` | `10`                 | Stop after N iterations  |
 
 ## Core actions
 
@@ -182,12 +183,12 @@ If the outcome should eventually drive user attention, pair that behavior with t
 
 ## Choosing the right tool
 
-| Tool | Use case | Example |
-|------|----------|----------|
-| `run` | Ad-hoc prompts that start now, plus loop mode | "start a code review now" |
-| `conversation_queue` | Continue same conversation later | "resume this thread in 30m" |
-| `scheduled_task` | Persistent task definitions / automations | "morning report every weekday" |
-| `reminder` | Direct human reminders | "remind me tomorrow" |
+| Tool                 | Use case                                      | Example                        |
+| -------------------- | --------------------------------------------- | ------------------------------ |
+| `run`                | Ad-hoc prompts that start now, plus loop mode | "start a code review now"      |
+| `conversation_queue` | Continue same conversation later              | "resume this thread in 30m"    |
+| `scheduled_task`     | Persistent task definitions / automations     | "morning report every weekday" |
+| `reminder`           | Direct human reminders                        | "remind me tomorrow"           |
 
 For "run this prompt later," use `run` with `--defer` to create a saved automation.
 For "run this every hour," use `run` with `--cron` to create a saved automation.

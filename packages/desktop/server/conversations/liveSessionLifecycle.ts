@@ -19,7 +19,9 @@ export function notifyLiveSessionLifecycleHandlers(event: LiveSessionLifecycleEv
   for (const handler of lifecycleHandlers) {
     Promise.resolve(handler(event)).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[${new Date().toISOString()}] [web] [error] live session lifecycle handler failed conversationId=${event.conversationId} trigger=${event.trigger} message=${message}`);
+      console.error(
+        `[${new Date().toISOString()}] [web] [error] live session lifecycle handler failed conversationId=${event.conversationId} trigger=${event.trigger} message=${message}`,
+      );
     });
   }
 }

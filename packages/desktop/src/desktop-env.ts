@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app } from 'electron';
+
 import { getStateRoot } from '@personal-agent/core';
+import { app } from 'electron';
 
 export interface DesktopRuntimePaths {
   repoRoot: string;
@@ -92,25 +93,31 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
 
   mkdirSync(desktopLogsDir, { recursive: true, mode: 0o700 });
 
-  const nodeCommand = isPackaged
-    ? execPath
-    : env.PERSONAL_AGENT_NODE_PATH?.trim() || 'node';
+  const nodeCommand = isPackaged ? execPath : env.PERSONAL_AGENT_NODE_PATH?.trim() || 'node';
   const desktopNativeModulesDir = isPackaged
     ? resolve(repoRoot, 'app.asar.unpacked')
     : env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR?.trim() || undefined;
 
-  const daemonEntryFile = resolveExistingFile('daemon entry file', isPackaged
-    ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
-    : [resolve(repoRoot, 'packages', 'daemon', 'dist', 'index.js')]);
-  const webDistDir = resolveExistingFile('desktop renderer dist directory', isPackaged
-    ? [resolve(appRoot, 'ui', 'dist')]
-    : [resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist')]);
-  const trayTemplateIconFile = resolveExistingFile('desktop tray icon', isPackaged
-    ? [resolve(appRoot, 'assets', 'iconTemplate.png')]
-    : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png')]);
-  const colorIconFile = resolveExistingFile('desktop color icon', isPackaged
-    ? [resolve(appRoot, 'assets', 'icon.png')]
-    : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon.png')]);
+  const daemonEntryFile = resolveExistingFile(
+    'daemon entry file',
+    isPackaged
+      ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
+      : [resolve(repoRoot, 'packages', 'daemon', 'dist', 'index.js')],
+  );
+  const webDistDir = resolveExistingFile(
+    'desktop renderer dist directory',
+    isPackaged ? [resolve(appRoot, 'ui', 'dist')] : [resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist')],
+  );
+  const trayTemplateIconFile = resolveExistingFile(
+    'desktop tray icon',
+    isPackaged
+      ? [resolve(appRoot, 'assets', 'iconTemplate.png')]
+      : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png')],
+  );
+  const colorIconFile = resolveExistingFile(
+    'desktop color icon',
+    isPackaged ? [resolve(appRoot, 'assets', 'icon.png')] : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon.png')],
+  );
 
   return {
     repoRoot,

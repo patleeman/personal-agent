@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { captureDesktopScreenshot } from './screenshot.js';
 
 function createMissingFileError() {
@@ -53,13 +54,15 @@ describe('captureDesktopScreenshot', () => {
   });
 
   it('surfaces a screen-recording permission hint when macOS rejects capture', async () => {
-    await expect(captureDesktopScreenshot({
-      platform: 'darwin',
-      tmpdir: () => '/tmp',
-      mkdtemp: vi.fn().mockResolvedValue('/tmp/personal-agent-screenshot-permission'),
-      readFile: vi.fn().mockRejectedValue(createMissingFileError()),
-      rm: vi.fn().mockResolvedValue(undefined),
-      runInteractiveScreencapture: vi.fn().mockResolvedValue({ code: 2, signal: null, stderr: 'permission denied' }),
-    })).rejects.toThrow('Enable Screen Recording for Personal Agent');
+    await expect(
+      captureDesktopScreenshot({
+        platform: 'darwin',
+        tmpdir: () => '/tmp',
+        mkdtemp: vi.fn().mockResolvedValue('/tmp/personal-agent-screenshot-permission'),
+        readFile: vi.fn().mockRejectedValue(createMissingFileError()),
+        rm: vi.fn().mockResolvedValue(undefined),
+        runInteractiveScreencapture: vi.fn().mockResolvedValue({ code: 2, signal: null, stderr: 'permission denied' }),
+      }),
+    ).rejects.toThrow('Enable Screen Recording for Personal Agent');
   });
 });

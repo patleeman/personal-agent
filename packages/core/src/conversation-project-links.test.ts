@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   addConversationProjectLink,
   getConversationProjectLink,
@@ -29,14 +30,16 @@ function createTempDir(prefix: string): string {
 describe('conversation link paths', () => {
   it('resolves the profile-scoped conversations directory under local runtime state', () => {
     const stateRoot = createTempDir('personal-agent-conversation-links-state-');
-    expect(resolveProfileConversationLinksDir({ stateRoot, profile: 'assistant' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-project-links', 'assistant'));
+    expect(resolveProfileConversationLinksDir({ stateRoot, profile: 'assistant' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-project-links', 'assistant'),
+    );
   });
 
   it('resolves a conversation link path under local runtime state', () => {
     const stateRoot = createTempDir('personal-agent-conversation-links-state-');
-    expect(resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-project-links', 'assistant', 'conv-123.json'));
+    expect(resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-project-links', 'assistant', 'conv-123.json'),
+    );
   });
 
   it('rejects invalid conversation ids', () => {
@@ -72,18 +75,35 @@ describe('conversation project links', () => {
   it('adds links idempotently and keeps the file on disk', () => {
     const stateRoot = createTempDir('personal-agent-conversation-links-state-');
 
-    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'desktop-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
-    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'desktop-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
-    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'artifact-model', updatedAt: '2026-03-10T20:02:00.000Z' });
+    addConversationProjectLink({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      projectId: 'desktop-ui',
+      updatedAt: '2026-03-10T20:00:00.000Z',
+    });
+    addConversationProjectLink({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      projectId: 'desktop-ui',
+      updatedAt: '2026-03-10T20:01:00.000Z',
+    });
+    addConversationProjectLink({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      projectId: 'artifact-model',
+      updatedAt: '2026-03-10T20:02:00.000Z',
+    });
 
     const path = resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' });
     expect(existsSync(path)).toBe(true);
-    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
-      .toEqual({
-        conversationId: 'conv-123',
-        updatedAt: '2026-03-10T20:02:00.000Z',
-        relatedProjectIds: ['desktop-ui', 'artifact-model'],
-      });
+    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' })).toEqual({
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-10T20:02:00.000Z',
+      relatedProjectIds: ['desktop-ui', 'artifact-model'],
+    });
   });
 
   it('removes a project link and leaves an empty durable record when none remain', () => {
@@ -110,8 +130,7 @@ describe('conversation project links', () => {
       updatedAt: '2026-03-10T20:05:00.000Z',
       relatedProjectIds: [],
     });
-    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
-      .toEqual(updated);
+    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' })).toEqual(updated);
   });
 
   it('returns null instead of throwing when a conversation link file is malformed', () => {

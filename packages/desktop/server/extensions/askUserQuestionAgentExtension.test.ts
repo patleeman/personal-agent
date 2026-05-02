@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { Value } from '@sinclair/typebox/value';
+import { describe, expect, it } from 'vitest';
+
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 
 function createToolContext(conversationId = 'conv-123') {
@@ -25,10 +26,10 @@ function createToolContext(conversationId = 'conv-123') {
 function registerAskUserQuestionTool() {
   let registeredTool:
     | {
-      parameters: object;
-      promptGuidelines?: string[];
-      execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
-    }
+        parameters: object;
+        promptGuidelines?: string[];
+        execute: (...args: unknown[]) => Promise<{ content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      }
     | undefined;
 
   createAskUserQuestionAgentExtension()({
@@ -54,13 +55,17 @@ describe('ask user question agent extension', () => {
     const guidelines = tool.promptGuidelines?.join('\n') ?? '';
 
     expect(Value.Check(tool.parameters as never, { question: 'Which environment should I use?' })).toBe(true);
-    expect(Value.Check(tool.parameters as never, {
-      questions: [{
-        label: 'Which environment should I use?',
-        style: 'radio',
-        options: ['staging', 'prod'],
-      }],
-    })).toBe(true);
+    expect(
+      Value.Check(tool.parameters as never, {
+        questions: [
+          {
+            label: 'Which environment should I use?',
+            style: 'radio',
+            options: ['staging', 'prod'],
+          },
+        ],
+      }),
+    ).toBe(true);
     expect(guidelines).toContain('questions[]');
     expect(guidelines).toContain('radio');
     expect(guidelines).toContain('check style');
@@ -144,16 +149,18 @@ describe('ask user question agent extension', () => {
     );
 
     expect(result.details).toMatchObject({
-      questions: [{
-        id: 'question-1',
-        label: 'Which environment should I deploy to?',
-        details: 'Pick one target so I can continue.',
-        style: 'radio',
-        options: [
-          { value: 'staging', label: 'staging' },
-          { value: 'prod', label: 'prod' },
-        ],
-      }],
+      questions: [
+        {
+          id: 'question-1',
+          label: 'Which environment should I deploy to?',
+          details: 'Pick one target so I can continue.',
+          style: 'radio',
+          options: [
+            { value: 'staging', label: 'staging' },
+            { value: 'prod', label: 'prod' },
+          ],
+        },
+      ],
     });
   });
 
@@ -161,18 +168,22 @@ describe('ask user question agent extension', () => {
     const tool = registerAskUserQuestionTool();
     const ctx = createToolContext();
 
-    await expect(tool.execute(
-      'tool-3',
-      {
-        questions: [{
-          label: 'Missing options',
-          style: 'radio',
-          options: [],
-        }],
-      },
-      undefined,
-      undefined,
-      ctx,
-    )).rejects.toThrow('questions[0] requires at least one option.');
+    await expect(
+      tool.execute(
+        'tool-3',
+        {
+          questions: [
+            {
+              label: 'Missing options',
+              style: 'radio',
+              options: [],
+            },
+          ],
+        },
+        undefined,
+        undefined,
+        ctx,
+      ),
+    ).rejects.toThrow('questions[0] requires at least one option.');
   });
 });

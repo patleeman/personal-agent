@@ -1,18 +1,21 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ConversationComposerInputControls } from './ConversationComposerInputControls';
+
 import type { ModelInfo } from '../../shared/types';
+import { ConversationComposerInputControls } from './ConversationComposerInputControls';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
-const models: ModelInfo[] = [{
-  id: 'model-a',
-  provider: 'Provider A',
-  name: 'Model A',
-  context: 128000,
-  supportedServiceTiers: ['priority'],
-}];
+const models: ModelInfo[] = [
+  {
+    id: 'model-a',
+    provider: 'Provider A',
+    name: 'Model A',
+    context: 128000,
+    supportedServiceTiers: ['priority'],
+  },
+];
 
 function renderControls(overrides: Partial<React.ComponentProps<typeof ConversationComposerInputControls>> = {}) {
   return renderToString(

@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+
 import { useAppData } from '../app/contexts';
 import { api, vaultApi } from '../client/api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
   COMMAND_PALETTE_SCOPE_SECTIONS,
   COMMAND_PALETTE_SECTION_LABELS,
+  type CommandPaletteItem,
+  type CommandPaletteScope,
+  type CommandPaletteSection,
   isCommandPaletteThreadDataLoading,
   resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
   selectCommandPaletteScopedItems,
   shouldBootstrapCommandPaletteThreads,
-  type CommandPaletteItem,
-  type CommandPaletteScope,
-  type CommandPaletteSection,
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
@@ -69,17 +70,15 @@ function fileLocation(id: string): string | undefined {
   return parts.length > 0 ? parts.join('/') : undefined;
 }
 
-function buildConversationItems(
-  section: 'open' | 'archived',
-  sessions: ScopedSessionMeta[],
-): CommandPaletteItem<CommandPaletteAction>[] {
-  const orderedSessions = section === 'archived'
-    ? [...sessions].sort((left, right) => {
-      const leftTimestamp = left.lastActivityAt ?? left.timestamp;
-      const rightTimestamp = right.lastActivityAt ?? right.timestamp;
-      return rightTimestamp.localeCompare(leftTimestamp);
-    })
-    : sessions;
+function buildConversationItems(section: 'open' | 'archived', sessions: ScopedSessionMeta[]): CommandPaletteItem<CommandPaletteAction>[] {
+  const orderedSessions =
+    section === 'archived'
+      ? [...sessions].sort((left, right) => {
+          const leftTimestamp = left.lastActivityAt ?? left.timestamp;
+          const rightTimestamp = right.lastActivityAt ?? right.timestamp;
+          return rightTimestamp.localeCompare(leftTimestamp);
+        })
+      : sessions;
 
   return orderedSessions.map((session, index) => {
     const timestamp = session.lastActivityAt ?? session.timestamp;
@@ -109,9 +108,10 @@ function buildConversationItems(
       meta: metaParts.join(' · '),
       keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug],
       order: index,
-      action: section === 'archived'
-        ? { kind: 'restoreArchivedConversation', conversationId: session.id }
-        : { kind: 'navigate', to: `/conversations/${encodeURIComponent(session.id)}` },
+      action:
+        section === 'archived'
+          ? { kind: 'restoreArchivedConversation', conversationId: session.id }
+          : { kind: 'navigate', to: `/conversations/${encodeURIComponent(session.id)}` },
     };
   });
 }
@@ -144,10 +144,13 @@ function buildFileSearchItems(results: VaultSearchResult[]): CommandPaletteItem<
   }));
 }
 
-function buildConversationContentSearchItems(results: ConversationContentSearchMatch[], query: string): CommandPaletteItem<CommandPaletteAction>[] {
+function buildConversationContentSearchItems(
+  results: ConversationContentSearchMatch[],
+  query: string,
+): CommandPaletteItem<CommandPaletteAction>[] {
   return results.map((result, index) => ({
     id: `conversation-search:${result.conversationId}:${result.blockId}`,
-    section: result.isLive ? 'open' as const : 'archived' as const,
+    section: result.isLive ? ('open' as const) : ('archived' as const),
     title: result.title,
     subtitle: result.cwd,
     meta: excerpt(result.snippet, 160),
@@ -191,14 +194,7 @@ export function CommandPalette() {
   const requestedThreadBootstrapRef = useRef(false);
   const macPlatform = useMemo(() => isMacPlatform(), []);
   const { sessions } = useAppData();
-  const {
-    pinnedSessions,
-    tabs,
-    archivedSessions,
-    openSession,
-    loading: sessionsLoading,
-    refetch,
-  } = useConversations();
+  const { pinnedSessions, tabs, archivedSessions, openSession, loading: sessionsLoading, refetch } = useConversations();
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<CommandPaletteScope>('threads');
   const [query, setQuery] = useState('');
@@ -217,21 +213,12 @@ export function CommandPalette() {
   const [vaultSearchError, setVaultSearchError] = useState<string | null>(null);
 
   const openThreadSessions = useMemo(
-    () => [
-      ...pinnedSessions.map((session) => ({ ...session, pinned: true } satisfies ScopedSessionMeta)),
-      ...tabs,
-    ],
+    () => [...pinnedSessions.map((session) => ({ ...session, pinned: true }) satisfies ScopedSessionMeta), ...tabs],
     [pinnedSessions, tabs],
   );
 
-  const openConversationItems = useMemo(
-    () => buildConversationItems('open', openThreadSessions),
-    [openThreadSessions],
-  );
-  const archivedConversationItems = useMemo(
-    () => buildConversationItems('archived', archivedSessions),
-    [archivedSessions],
-  );
+  const openConversationItems = useMemo(() => buildConversationItems('open', openThreadSessions), [openThreadSessions]);
+  const archivedConversationItems = useMemo(() => buildConversationItems('archived', archivedSessions), [archivedSessions]);
   const fileItems = useMemo(() => buildFileItems(vaultFiles), [vaultFiles]);
   const searchedFileItems = useMemo(() => buildFileSearchItems(vaultSearchResults), [vaultSearchResults]);
   const searchedConversationItems = useMemo(
@@ -251,19 +238,14 @@ export function CommandPalette() {
   }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedConversationItems, searchedFileItems]);
 
   const emptyQueryLimits = useMemo(
-    () => (scope === 'threads' && query.trim().length === 0
-      ? { archived: archivedVisibleLimit }
-      : undefined),
+    () => (scope === 'threads' && query.trim().length === 0 ? { archived: archivedVisibleLimit } : undefined),
     [archivedVisibleLimit, query, scope],
   );
   const groups = useMemo(
     () => searchCommandPaletteItems(allItems, { query, scope, emptyQueryLimits }),
     [allItems, emptyQueryLimits, query, scope],
   );
-  const visibleItems = useMemo(
-    () => groups.flatMap((group) => group.items),
-    [groups],
-  );
+  const visibleItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
 
   const closePalette = useCallback(() => {
     setOpen(false);
@@ -309,12 +291,14 @@ export function CommandPalette() {
       requestedThreadBootstrapRef.current = false;
     }
 
-    if (!shouldBootstrapCommandPaletteThreads({
-      open,
-      scope,
-      sessions,
-      alreadyRequested: requestedThreadBootstrapRef.current,
-    })) {
+    if (
+      !shouldBootstrapCommandPaletteThreads({
+        open,
+        scope,
+        sessions,
+        alreadyRequested: requestedThreadBootstrapRef.current,
+      })
+    ) {
       return;
     }
 
@@ -346,25 +330,26 @@ export function CommandPalette() {
     }
 
     const offHandlers = [
-      onKBEvent('kb:entries-changed', () => { void loadVaultFiles(); }),
-      onKBEvent('kb:file-created', () => { void loadVaultFiles(); }),
-      onKBEvent('kb:file-renamed', () => { void loadVaultFiles(); }),
-      onKBEvent('kb:file-deleted', () => { void loadVaultFiles(); }),
+      onKBEvent('kb:entries-changed', () => {
+        void loadVaultFiles();
+      }),
+      onKBEvent('kb:file-created', () => {
+        void loadVaultFiles();
+      }),
+      onKBEvent('kb:file-renamed', () => {
+        void loadVaultFiles();
+      }),
+      onKBEvent('kb:file-deleted', () => {
+        void loadVaultFiles();
+      }),
     ];
 
     return () => offHandlers.forEach((off) => off());
   }, [loadVaultFiles, open]);
 
-  const archivedGroup = useMemo(
-    () => groups.find((group) => group.section === 'archived') ?? null,
-    [groups],
-  );
+  const archivedGroup = useMemo(() => groups.find((group) => group.section === 'archived') ?? null, [groups]);
   const canLoadMoreArchivedThreads = Boolean(
-    open
-    && scope === 'threads'
-    && query.trim().length === 0
-    && archivedGroup
-    && archivedGroup.total > archivedGroup.items.length,
+    open && scope === 'threads' && query.trim().length === 0 && archivedGroup && archivedGroup.total > archivedGroup.items.length,
   );
 
   useEffect(() => {
@@ -384,13 +369,9 @@ export function CommandPalette() {
     setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
   }, [canLoadMoreArchivedThreads, groups]);
 
-  const shouldSearchFilesByContent = open
-    && scope === 'search'
-    && query.trim().length > 0;
+  const shouldSearchFilesByContent = open && scope === 'search' && query.trim().length > 0;
 
-  const shouldSearchConversationsByContent = open
-    && (scope === 'threads' || scope === 'search')
-    && query.trim().length > 0;
+  const shouldSearchConversationsByContent = open && (scope === 'threads' || scope === 'search') && query.trim().length > 0;
 
   useEffect(() => {
     if (!shouldSearchConversationsByContent) {
@@ -405,7 +386,8 @@ export function CommandPalette() {
     setConversationContentSearchError(null);
 
     const handle = window.setTimeout(() => {
-      void api.conversationContentSearch(query.trim(), CONVERSATION_CONTENT_SEARCH_LIMIT)
+      void api
+        .conversationContentSearch(query.trim(), CONVERSATION_CONTENT_SEARCH_LIMIT)
         .then((result) => {
           if (cancelled) {
             return;
@@ -445,7 +427,8 @@ export function CommandPalette() {
     setVaultSearchError(null);
 
     const handle = window.setTimeout(() => {
-      void vaultApi.search(query.trim(), FILE_SEARCH_LIMIT)
+      void vaultApi
+        .search(query.trim(), FILE_SEARCH_LIMIT)
         .then((result) => {
           if (cancelled) {
             return;
@@ -472,44 +455,49 @@ export function CommandPalette() {
     };
   }, [query, shouldSearchFilesByContent]);
 
-  const activateItem = useCallback(async (item: CommandPaletteItem<CommandPaletteAction>) => {
-    if (item.disabled) {
-      return;
-    }
-
-    setActionError(null);
-    setBusyItemId(item.id);
-
-    try {
-      switch (item.action.kind) {
-        case 'navigate':
-          navigate(item.action.to);
-          closePalette();
-          return;
-        case 'restoreArchivedConversation':
-          openSession(item.action.conversationId);
-          navigate(`/conversations/${encodeURIComponent(item.action.conversationId)}`);
-          closePalette();
-          return;
-        case 'openFile':
-          navigate(buildCommandPaletteFileOpenRoute({
-            pathname: location.pathname,
-            search: location.search,
-            hash: location.hash,
-            layoutMode: readAppLayoutMode(),
-            fileId: item.action.fileId,
-          }));
-          closePalette();
-          return;
-        default:
-          return;
+  const activateItem = useCallback(
+    async (item: CommandPaletteItem<CommandPaletteAction>) => {
+      if (item.disabled) {
+        return;
       }
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusyItemId(null);
-    }
-  }, [closePalette, location.hash, location.pathname, location.search, navigate, openSession]);
+
+      setActionError(null);
+      setBusyItemId(item.id);
+
+      try {
+        switch (item.action.kind) {
+          case 'navigate':
+            navigate(item.action.to);
+            closePalette();
+            return;
+          case 'restoreArchivedConversation':
+            openSession(item.action.conversationId);
+            navigate(`/conversations/${encodeURIComponent(item.action.conversationId)}`);
+            closePalette();
+            return;
+          case 'openFile':
+            navigate(
+              buildCommandPaletteFileOpenRoute({
+                pathname: location.pathname,
+                search: location.search,
+                hash: location.hash,
+                layoutMode: readAppLayoutMode(),
+                fileId: item.action.fileId,
+              }),
+            );
+            closePalette();
+            return;
+          default:
+            return;
+        }
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setBusyItemId(null);
+      }
+    },
+    [closePalette, location.hash, location.pathname, location.search, navigate, openSession],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -584,9 +572,7 @@ export function CommandPalette() {
         const scopeValues = COMMAND_PALETTE_SCOPE_OPTIONS.map((option) => option.value);
         const currentIndex = scopeValues.indexOf(scope);
         const direction = event.shiftKey ? -1 : 1;
-        const nextIndex = currentIndex === -1
-          ? 0
-          : (currentIndex + direction + scopeValues.length) % scopeValues.length;
+        const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + scopeValues.length) % scopeValues.length;
         const nextScope = scopeValues[nextIndex];
         setScope(nextScope);
         setCursor(0);
@@ -678,11 +664,7 @@ export function CommandPalette() {
     return [...sections];
   }, [conversationContentSearchLoading, fileItems.length, scope, sessions, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
   const showSectionHeaders = groups.length > 1;
-  const searchPlaceholder = scope === 'threads'
-    ? 'Search threads…'
-    : scope === 'files'
-      ? 'Open files…'
-      : 'Search threads and files…';
+  const searchPlaceholder = scope === 'threads' ? 'Search threads…' : scope === 'files' ? 'Open files…' : 'Search threads and files…';
 
   if (!open) {
     return null;
@@ -734,9 +716,7 @@ export function CommandPalette() {
                   }}
                   className={cx(
                     'rounded-md px-2.5 py-1 text-[11px] transition-colors',
-                    scope === option.value
-                      ? 'bg-surface text-primary'
-                      : 'text-dim hover:bg-surface/60 hover:text-secondary',
+                    scope === option.value ? 'bg-surface text-primary' : 'text-dim hover:bg-surface/60 hover:text-secondary',
                   )}
                 >
                   {option.label}
@@ -796,7 +776,10 @@ export function CommandPalette() {
               {showSectionHeaders && (
                 <div className="px-2.5 pb-1 flex items-center gap-2">
                   <p className="ui-section-label">{group.label}</p>
-                  <span className="ui-section-count">{group.items.length}{group.total > group.items.length ? `/${group.total}` : ''}</span>
+                  <span className="ui-section-count">
+                    {group.items.length}
+                    {group.total > group.items.length ? `/${group.total}` : ''}
+                  </span>
                 </div>
               )}
 
@@ -813,7 +796,9 @@ export function CommandPalette() {
                     data-command-palette-idx={itemIndex}
                     type="button"
                     onMouseEnter={() => setCursor(itemIndex)}
-                    onClick={() => { void activateItem(item); }}
+                    onClick={() => {
+                      void activateItem(item);
+                    }}
                     disabled={item.disabled || isBusy}
                     className={cx(
                       'group flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed',
@@ -832,13 +817,13 @@ export function CommandPalette() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] leading-snug text-primary">{item.title}</p>
                       {secondaryText && (
-                        <p className="mt-0.5 truncate text-[11px] text-secondary" title={secondaryText}>{secondaryText}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-secondary" title={secondaryText}>
+                          {secondaryText}
+                        </p>
                       )}
                     </div>
 
-                    {isBusy && (
-                      <span className="mt-0.5 shrink-0 text-[10px] text-dim/60 font-mono">…</span>
-                    )}
+                    {isBusy && <span className="mt-0.5 shrink-0 text-[10px] text-dim/60 font-mono">…</span>}
                   </button>
                 );
               })}
@@ -878,9 +863,13 @@ export function CommandPalette() {
             </section>
           )}
 
-          {visibleCount === 0 && loadingSections.length === 0 && !(conversationContentSearchError && (scope === 'threads' || scope === 'search')) && !(vaultFilesError && (scope === 'files' || scope === 'search')) && !(vaultSearchError && scope === 'search') && (
-            <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
-          )}
+          {visibleCount === 0 &&
+            loadingSections.length === 0 &&
+            !(conversationContentSearchError && (scope === 'threads' || scope === 'search')) &&
+            !(vaultFilesError && (scope === 'files' || scope === 'search')) &&
+            !(vaultSearchError && scope === 'search') && (
+              <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
+            )}
         </div>
       </div>
     </div>

@@ -1,8 +1,10 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { completeSimple, type Api, type Model } from '@mariozechner/pi-ai';
+
+import { type Api, completeSimple, type Model } from '@mariozechner/pi-ai';
 import { AuthStorage } from '@mariozechner/pi-coding-agent';
 import { getPiAgentRuntimeDir, openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
 import { logWarn } from '../shared/logging.js';
 import { readConversationAutoTitleSettings } from './conversationAutoTitle.js';
@@ -179,7 +181,9 @@ function rowToRecord(row: StoredConversationSummaryRow): ConversationSummaryReco
   };
 }
 
-export function buildConversationSummaryFingerprint(meta: Pick<SessionMeta, 'file' | 'messageCount' | 'lastActivityAt' | 'timestamp'>): string | null {
+export function buildConversationSummaryFingerprint(
+  meta: Pick<SessionMeta, 'file' | 'messageCount' | 'lastActivityAt' | 'timestamp'>,
+): string | null {
   if (!meta.file || !existsSync(meta.file)) {
     return null;
   }
@@ -198,7 +202,9 @@ export function readConversationSummary(sessionId: string): ConversationSummaryR
     return null;
   }
 
-  const row = getDb().prepare('SELECT * FROM conversation_summaries WHERE session_id = ?').get(normalizedSessionId) as StoredConversationSummaryRow | undefined;
+  const row = getDb().prepare('SELECT * FROM conversation_summaries WHERE session_id = ?').get(normalizedSessionId) as
+    | StoredConversationSummaryRow
+    | undefined;
   return row ? rowToRecord(row) : null;
 }
 
@@ -214,7 +220,9 @@ export function readConversationSummaries(sessionIds: string[]): Record<string, 
 }
 
 function saveConversationSummary(record: ConversationSummaryRecord): void {
-  getDb().prepare(`
+  getDb()
+    .prepare(
+      `
     INSERT INTO conversation_summaries (
       session_id,
       fingerprint,
@@ -241,20 +249,22 @@ function saveConversationSummary(record: ConversationSummaryRecord): void {
       key_terms_json = excluded.key_terms_json,
       files_touched_json = excluded.files_touched_json,
       updated_at = excluded.updated_at
-  `).run(
-    record.sessionId,
-    record.fingerprint,
-    record.title,
-    record.cwd,
-    record.displaySummary,
-    record.outcome,
-    record.status,
-    record.promptSummary,
-    record.searchText,
-    JSON.stringify(record.keyTerms),
-    JSON.stringify(record.filesTouched),
-    record.updatedAt,
-  );
+  `,
+    )
+    .run(
+      record.sessionId,
+      record.fingerprint,
+      record.title,
+      record.cwd,
+      record.displaySummary,
+      record.outcome,
+      record.status,
+      record.promptSummary,
+      record.searchText,
+      JSON.stringify(record.keyTerms),
+      JSON.stringify(record.filesTouched),
+      record.updatedAt,
+    );
 }
 
 function isSummaryFresh(meta: SessionMeta): boolean {
@@ -267,19 +277,25 @@ function isSummaryFresh(meta: SessionMeta): boolean {
 }
 
 function readSummaryAttempt(sessionId: string): StoredConversationSummaryAttemptRow | null {
-  const row = getDb().prepare('SELECT * FROM conversation_summary_attempts WHERE session_id = ?').get(sessionId) as StoredConversationSummaryAttemptRow | undefined;
+  const row = getDb().prepare('SELECT * FROM conversation_summary_attempts WHERE session_id = ?').get(sessionId) as
+    | StoredConversationSummaryAttemptRow
+    | undefined;
   return row ?? null;
 }
 
 function recordSummaryAttempt(sessionId: string, fingerprint: string, error = ''): void {
-  getDb().prepare(`
+  getDb()
+    .prepare(
+      `
     INSERT INTO conversation_summary_attempts (session_id, fingerprint, attempted_at, error)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(session_id) DO UPDATE SET
       fingerprint = excluded.fingerprint,
       attempted_at = excluded.attempted_at,
       error = excluded.error
-  `).run(sessionId, fingerprint, new Date().toISOString(), error.slice(0, 1_000));
+  `,
+    )
+    .run(sessionId, fingerprint, new Date().toISOString(), error.slice(0, 1_000));
 }
 
 function clearSummaryAttempt(sessionId: string): void {
@@ -313,10 +329,12 @@ function isSummaryAttemptCoolingDown(meta: SessionMeta, nowMs = Date.now()): boo
 
 function resolveSummaryModel(models: Model<Api>[]): Model<Api> | null {
   const settings = readConversationAutoTitleSettings(resolveSettingsFile());
-  return models.find((model) => model.provider === settings.provider && model.id === settings.model)
-    ?? models.find((model) => model.provider === 'openai-codex' && model.id === 'gpt-5.4-mini')
-    ?? models[0]
-    ?? null;
+  return (
+    models.find((model) => model.provider === settings.provider && model.id === settings.model) ??
+    models.find((model) => model.provider === 'openai-codex' && model.id === 'gpt-5.4-mini') ??
+    models[0] ??
+    null
+  );
 }
 
 function extractAssistantText(content: unknown): string {
@@ -327,13 +345,20 @@ function extractAssistantText(content: unknown): string {
     return '';
   }
   return content
-    .filter((block): block is { type: string; text?: string } => Boolean(block) && typeof block === 'object' && (block as { type?: unknown }).type === 'text')
+    .filter(
+      (block): block is { type: string; text?: string } =>
+        Boolean(block) && typeof block === 'object' && (block as { type?: unknown }).type === 'text',
+    )
     .map((block) => block.text ?? '')
     .join('\n');
 }
 
 function extractJsonObject(text: string): Record<string, unknown> | null {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
   const start = trimmed.indexOf('{');
   const end = trimmed.lastIndexOf('}');
   if (start === -1 || end === -1 || end <= start) {
@@ -342,14 +367,18 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
 
   try {
     const parsed = JSON.parse(trimmed.slice(start, end + 1)) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
   }
 }
 
 function buildFallbackRecord(meta: SessionMeta, fingerprint: string, sourceText: string): ConversationSummaryRecord {
-  const firstLine = sourceText.split('\n').map((line) => line.trim()).find(Boolean) ?? meta.title;
+  const firstLine =
+    sourceText
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean) ?? meta.title;
   const displaySummary = firstLine.length > 180 ? `${firstLine.slice(0, 177).trimEnd()}…` : firstLine;
   return {
     sessionId: meta.id,
@@ -379,15 +408,9 @@ function buildRecordFromModel(meta: SessionMeta, fingerprint: string, sourceText
   const keyTerms = normalizeStringArray(parsed.keyTerms, 12);
   const filesTouched = normalizeStringArray(parsed.filesTouched, 12);
   const status = normalizeStatus(parsed.status);
-  const searchText = [
-    meta.title,
-    meta.cwd,
-    displaySummary,
-    outcome,
-    promptSummary,
-    keyTerms.join(' '),
-    filesTouched.join(' '),
-  ].filter(Boolean).join('\n');
+  const searchText = [meta.title, meta.cwd, displaySummary, outcome, promptSummary, keyTerms.join(' '), filesTouched.join(' ')]
+    .filter(Boolean)
+    .join('\n');
 
   return {
     sessionId: meta.id,
@@ -436,30 +459,34 @@ async function generateConversationSummary(meta: SessionMeta): Promise<Conversat
         'Return only strict JSON. No markdown. No commentary.',
         'Optimize for ranking, human scanning, and concise prompt injection.',
       ].join('\n'),
-      messages: [{
-        role: 'user',
-        timestamp: Date.now(),
-        content: [{
-          type: 'text',
-          text: [
-            'Summarize this conversation into this JSON shape:',
-            '{',
-            '  "displaySummary": "one short row subtitle, <= 160 chars",',
-            '  "outcome": "last meaningful outcome or current state, <= 220 chars",',
-            '  "status": "done | blocked | in_progress | needs_user | unknown",',
-            '  "promptSummary": "concise reusable context for a future agent, <= 1200 chars",',
-            '  "keyTerms": ["searchable terms, features, concepts"],',
-            '  "filesTouched": ["repo-relative or absolute file paths mentioned as changed or central"]',
-            '}',
-            '',
-            `Conversation title: ${meta.title}`,
-            `Workspace: ${meta.cwd}`,
-            '',
-            'Transcript/search text:',
-            sourceText,
-          ].join('\n'),
-        }],
-      }],
+      messages: [
+        {
+          role: 'user',
+          timestamp: Date.now(),
+          content: [
+            {
+              type: 'text',
+              text: [
+                'Summarize this conversation into this JSON shape:',
+                '{',
+                '  "displaySummary": "one short row subtitle, <= 160 chars",',
+                '  "outcome": "last meaningful outcome or current state, <= 220 chars",',
+                '  "status": "done | blocked | in_progress | needs_user | unknown",',
+                '  "promptSummary": "concise reusable context for a future agent, <= 1200 chars",',
+                '  "keyTerms": ["searchable terms, features, concepts"],',
+                '  "filesTouched": ["repo-relative or absolute file paths mentioned as changed or central"]',
+                '}',
+                '',
+                `Conversation title: ${meta.title}`,
+                `Workspace: ${meta.cwd}`,
+                '',
+                'Transcript/search text:',
+                sourceText,
+              ].join('\n'),
+            },
+          ],
+        },
+      ],
     },
     {
       apiKey: authResult.apiKey,
@@ -543,9 +570,7 @@ function isClosedSession(session: SessionMeta): boolean {
 }
 
 export function queueConversationSummaryBackfill(sessions: SessionMeta[], limit = MAX_BACKFILL_PER_CALL): void {
-  const normalizedLimit = Number.isSafeInteger(limit) && limit > 0
-    ? Math.min(MAX_BACKFILL_LOOP_LIMIT, limit)
-    : MAX_BACKFILL_PER_CALL;
+  const normalizedLimit = Number.isSafeInteger(limit) && limit > 0 ? Math.min(MAX_BACKFILL_LOOP_LIMIT, limit) : MAX_BACKFILL_PER_CALL;
   let queued = 0;
   for (const session of sessions) {
     if (!isClosedSession(session)) {
@@ -565,20 +590,23 @@ export function queueConversationSummaryBackfill(sessions: SessionMeta[], limit 
   }
 }
 
-export function normalizeConversationSummaryBackfillLoopOptions(input: {
-  initialDelayMs?: number;
-  intervalMs?: number;
-  limit?: number;
-}): { initialDelayMs: number; intervalMs: number; limit: number } {
-  const initialDelayMs = Number.isSafeInteger(input.initialDelayMs) && (input.initialDelayMs as number) >= 0
-    ? Math.min(MAX_BACKFILL_LOOP_INITIAL_DELAY_MS, input.initialDelayMs as number)
-    : DEFAULT_BACKFILL_INITIAL_DELAY_MS;
-  const intervalMs = Number.isSafeInteger(input.intervalMs) && (input.intervalMs as number) >= 5_000
-    ? Math.min(MAX_BACKFILL_LOOP_INTERVAL_MS, input.intervalMs as number)
-    : DEFAULT_BACKFILL_INTERVAL_MS;
-  const limit = Number.isSafeInteger(input.limit) && (input.limit as number) > 0
-    ? Math.min(MAX_BACKFILL_LOOP_LIMIT, input.limit as number)
-    : MAX_BACKFILL_PER_CALL;
+export function normalizeConversationSummaryBackfillLoopOptions(input: { initialDelayMs?: number; intervalMs?: number; limit?: number }): {
+  initialDelayMs: number;
+  intervalMs: number;
+  limit: number;
+} {
+  const initialDelayMs =
+    Number.isSafeInteger(input.initialDelayMs) && (input.initialDelayMs as number) >= 0
+      ? Math.min(MAX_BACKFILL_LOOP_INITIAL_DELAY_MS, input.initialDelayMs as number)
+      : DEFAULT_BACKFILL_INITIAL_DELAY_MS;
+  const intervalMs =
+    Number.isSafeInteger(input.intervalMs) && (input.intervalMs as number) >= 5_000
+      ? Math.min(MAX_BACKFILL_LOOP_INTERVAL_MS, input.intervalMs as number)
+      : DEFAULT_BACKFILL_INTERVAL_MS;
+  const limit =
+    Number.isSafeInteger(input.limit) && (input.limit as number) > 0
+      ? Math.min(MAX_BACKFILL_LOOP_LIMIT, input.limit as number)
+      : MAX_BACKFILL_PER_CALL;
   return { initialDelayMs, intervalMs, limit };
 }
 

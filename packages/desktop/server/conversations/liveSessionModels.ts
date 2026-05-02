@@ -1,12 +1,21 @@
-import { type AgentSession, type ModelRegistry, type SessionManager } from '@mariozechner/pi-coding-agent';
-import { stream, streamSimple, type Api, type Context, type Model, type ProviderStreamOptions, type SimpleStreamOptions } from '@mariozechner/pi-ai';
 import {
+  type Api,
+  type Context,
+  type Model,
+  type ProviderStreamOptions,
+  type SimpleStreamOptions,
+  stream,
+  streamSimple,
+} from '@mariozechner/pi-ai';
+import { type AgentSession, type ModelRegistry, type SessionManager } from '@mariozechner/pi-coding-agent';
+
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
+import { modelSupportsServiceTier } from '../models/modelServiceTiers.js';
+import {
+  type ConversationModelPreferenceState,
   readConversationModelPreferenceSnapshot,
   resolveConversationModelPreferenceState,
-  type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
-import { modelSupportsServiceTier } from '../models/modelServiceTiers.js';
-import { readSavedModelPreferences } from '../models/modelPreferences.js';
 
 export function resolveConversationPreferenceStateForSession(
   settingsFile: string,
@@ -30,10 +39,7 @@ export function buildConversationServiceTierPreferenceInput(
   return state.currentServiceTier || null;
 }
 
-function buildServiceTierAwareStreamFn(
-  modelRegistry: ModelRegistry,
-  serviceTier: string,
-) {
+function buildServiceTierAwareStreamFn(modelRegistry: ModelRegistry, serviceTier: string) {
   return async (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
     const auth = await modelRegistry.getApiKeyAndHeaders(model);
     if (!auth.ok) {
@@ -50,9 +56,10 @@ function buildServiceTierAwareStreamFn(
       return streamSimple(model, context, mergedOptions);
     }
 
-    const reasoningEffort = typeof (options as { reasoning?: unknown } | undefined)?.reasoning === 'string'
-      ? (options as { reasoning: string }).reasoning
-      : undefined;
+    const reasoningEffort =
+      typeof (options as { reasoning?: unknown } | undefined)?.reasoning === 'string'
+        ? (options as { reasoning: string }).reasoning
+        : undefined;
 
     return stream(model, context, {
       ...mergedOptions,
@@ -62,10 +69,7 @@ function buildServiceTierAwareStreamFn(
   };
 }
 
-export function applyLiveSessionServiceTier(
-  session: AgentSession,
-  serviceTier: string,
-): void {
+export function applyLiveSessionServiceTier(session: AgentSession, serviceTier: string): void {
   session.agent.streamFn = buildServiceTierAwareStreamFn(session.modelRegistry, serviceTier);
 }
 

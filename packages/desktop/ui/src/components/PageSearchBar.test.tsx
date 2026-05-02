@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import React, { act, useRef, useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { PageSearchBar, findPageSearchRanges } from './PageSearchBar';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { findPageSearchRanges, PageSearchBar } from './PageSearchBar';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -30,10 +31,14 @@ function renderHarness() {
     return (
       <>
         <div ref={rootRef}>
-          <p>Alpha <strong>Beta</strong></p>
+          <p>
+            Alpha <strong>Beta</strong>
+          </p>
           <p>alpha beta</p>
           {showExtraMatch ? <p>Later alpha beta addition</p> : null}
-          <button type="button" onClick={() => setShowExtraMatch(true)}>Add match</button>
+          <button type="button" onClick={() => setShowExtraMatch(true)}>
+            Add match
+          </button>
         </div>
         <PageSearchBar rootRef={rootRef} />
       </>
@@ -57,7 +62,8 @@ describe('PageSearchBar', () => {
       value: vi.fn(),
     });
 
-    window.requestAnimationFrame = ((callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
     window.cancelAnimationFrame = ((handle: number) => window.clearTimeout(handle)) as typeof window.cancelAnimationFrame;
   });
 

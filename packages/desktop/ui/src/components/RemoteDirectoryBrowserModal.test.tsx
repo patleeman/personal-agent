@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import { RemoteDirectoryBrowserModal } from './RemoteDirectoryBrowserModal';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DesktopRemoteDirectoryListing } from '../shared/types';
+import { RemoteDirectoryBrowserModal } from './RemoteDirectoryBrowserModal';
 
 const apiMocks = vi.hoisted(() => ({
   remoteDirectory: vi.fn(),
@@ -25,9 +26,7 @@ const LISTINGS: Record<string, DesktopRemoteDirectoryListing> = {
   [PARENT_PATH]: {
     path: PARENT_PATH,
     parent: '/Users/patrick',
-    entries: [
-      { name: 'personal-agent', path: ROOT_PATH, isDir: true, isHidden: false },
-    ],
+    entries: [{ name: 'personal-agent', path: ROOT_PATH, isDir: true, isHidden: false }],
   },
   [ROOT_PATH]: {
     path: ROOT_PATH,
@@ -40,9 +39,7 @@ const LISTINGS: Record<string, DesktopRemoteDirectoryListing> = {
   [DOCS_PATH]: {
     path: DOCS_PATH,
     parent: ROOT_PATH,
-    entries: [
-      { name: 'architecture', path: `${DOCS_PATH}/architecture`, isDir: true, isHidden: false },
-    ],
+    entries: [{ name: 'architecture', path: `${DOCS_PATH}/architecture`, isDir: true, isHidden: false }],
   },
   [PACKAGES_PATH]: {
     path: PACKAGES_PATH,

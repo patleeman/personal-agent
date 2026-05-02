@@ -1,8 +1,6 @@
+import { DefaultResourceLoader, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
-import {
-  DefaultResourceLoader,
-  type ExtensionFactory,
-} from '@mariozechner/pi-coding-agent';
+
 import { logWarn } from '../shared/logging.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
@@ -30,10 +28,9 @@ const prewarmedLiveSessionLoaders = new Map<string, PrewarmedLiveSessionLoaderEn
 const inflightLiveSessionLoaderWarmups = new Map<string, Promise<DefaultResourceLoader>>();
 
 function normalizeLiveSessionLoaderPaths(paths: string[] | undefined): string[] {
-  return [...new Set((paths ?? [])
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0))]
-    .sort((left, right) => left.localeCompare(right));
+  return [...new Set((paths ?? []).map((value) => value.trim()).filter((value) => value.length > 0))].sort((left, right) =>
+    left.localeCompare(right),
+  );
 }
 
 function buildLiveSessionLoaderCacheKey(cwd: string, options: LiveSessionLoaderOptions = {}): string {
@@ -77,7 +74,7 @@ function readPrewarmedLiveSessionLoader(cacheKey: string): DefaultResourceLoader
     return undefined;
   }
 
-  if ((Date.now() - cached.warmedAtMs) > PREWARMED_LIVE_SESSION_LOADERS_TTL_MS) {
+  if (Date.now() - cached.warmedAtMs > PREWARMED_LIVE_SESSION_LOADERS_TTL_MS) {
     prewarmedLiveSessionLoaders.delete(cacheKey);
     return undefined;
   }
@@ -100,7 +97,7 @@ export function clearPrewarmedLiveSessionLoaders(): void {
 export async function prewarmLiveSessionLoader(cwd: string, options: LiveSessionLoaderOptions = {}): Promise<void> {
   const cacheKey = buildLiveSessionLoaderCacheKey(cwd, options);
   const cached = prewarmedLiveSessionLoaders.get(cacheKey);
-  if (cached && (Date.now() - cached.warmedAtMs) <= PREWARMED_LIVE_SESSION_LOADERS_TTL_MS) {
+  if (cached && Date.now() - cached.warmedAtMs <= PREWARMED_LIVE_SESSION_LOADERS_TTL_MS) {
     return;
   }
 

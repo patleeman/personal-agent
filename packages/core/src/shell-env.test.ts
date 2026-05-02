@@ -2,7 +2,9 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { clearResolvedChildProcessEnvCache, hydrateProcessEnvFromShell, resolveChildProcessEnv } from './shell-env.js';
 
 const START = '__PERSONAL_AGENT_ENV_START__';
@@ -19,13 +21,15 @@ function renderEnvEntries(entries: string[] = []): string {
   return entries.map((entry) => `printf '%s\\0' ${JSON.stringify(entry)}`).join('\n');
 }
 
-function createFakeInteractiveShell(options: {
-  prefix?: string;
-  entries?: string[];
-  entriesByArg?: Record<string, string[]>;
-  exitCode?: number;
-  counterFile?: string;
-} = {}): string {
+function createFakeInteractiveShell(
+  options: {
+    prefix?: string;
+    entries?: string[];
+    entriesByArg?: Record<string, string[]>;
+    exitCode?: number;
+    counterFile?: string;
+  } = {},
+): string {
   const shellDir = createTempDir('shell-env-');
   const shellPath = join(shellDir, 'zsh');
   const defaultEntries = renderEnvEntries(options.entries ?? []);
@@ -33,7 +37,9 @@ function createFakeInteractiveShell(options: {
     .map(([arg, entries]) => `${JSON.stringify(arg)})\n${renderEnvEntries(entries)}\n;;`)
     .join('\n');
   const counterScript = options.counterFile
-    ? `count=0\nif [ -f ${JSON.stringify(options.counterFile)} ]; then count=$(cat ${JSON.stringify(options.counterFile)}); fi\ncount=$((count + 1))\nprintf '%s' "$count" > ${JSON.stringify(options.counterFile)}\n`
+    ? `count=0\nif [ -f ${JSON.stringify(options.counterFile)} ]; then count=$(cat ${JSON.stringify(
+        options.counterFile,
+      )}); fi\ncount=$((count + 1))\nprintf '%s' "$count" > ${JSON.stringify(options.counterFile)}\n`
     : '';
 
   const script = [
@@ -44,7 +50,9 @@ function createFakeInteractiveShell(options: {
     entriesByArg ? ['case "$1" in', entriesByArg, `*)\n${defaultEntries}\n;;`, 'esac'].join('\n') : defaultEntries,
     `printf '%s\\0' ${JSON.stringify(END)}`,
     `exit ${String(options.exitCode ?? 0)}`,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   writeFileSync(shellPath, script, 'utf-8');
   chmodSync(shellPath, 0o755);
@@ -63,11 +71,7 @@ describe('resolveChildProcessEnv', () => {
   it('hydrates child env from the interactive shell and preserves base-only variables', () => {
     const shellPath = createFakeInteractiveShell({
       prefix: 'startup noise\n',
-      entries: [
-        'PATH=/opt/homebrew/bin:/usr/bin',
-        'FROM_SHELL=1',
-        'SHARED=from-shell',
-      ],
+      entries: ['PATH=/opt/homebrew/bin:/usr/bin', 'FROM_SHELL=1', 'SHARED=from-shell'],
     });
 
     const baseEnv = {
@@ -92,15 +96,8 @@ describe('resolveChildProcessEnv', () => {
   it('uses the login + interactive zsh env so login PATH entries are available', () => {
     const shellPath = createFakeInteractiveShell({
       entriesByArg: {
-        '-ic': [
-          'PATH=/usr/bin',
-          'FROM_RC=1',
-        ],
-        '-ilc': [
-          'PATH=/opt/homebrew/bin:/usr/bin',
-          'FROM_LOGIN=1',
-          'FROM_RC=1',
-        ],
+        '-ic': ['PATH=/usr/bin', 'FROM_RC=1'],
+        '-ilc': ['PATH=/opt/homebrew/bin:/usr/bin', 'FROM_LOGIN=1', 'FROM_RC=1'],
       },
     });
     const baseEnv = {
@@ -136,10 +133,7 @@ describe('resolveChildProcessEnv', () => {
 
   it('hydrates a target env object in place using the resolved shell env', () => {
     const shellPath = createFakeInteractiveShell({
-      entries: [
-        'PATH=/opt/homebrew/bin:/usr/bin',
-        'FROM_SHELL=1',
-      ],
+      entries: ['PATH=/opt/homebrew/bin:/usr/bin', 'FROM_SHELL=1'],
     });
     const targetEnv = {
       SHELL: shellPath,

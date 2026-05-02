@@ -1,5 +1,6 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { Type } from '@sinclair/typebox';
+
 import {
   CONVERSATION_AUTO_MODE_CONTROL_TOOL,
   CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
@@ -18,27 +19,24 @@ const AutoModeControlToolNames = [CONVERSATION_AUTO_MODE_CONTROL_TOOL] as const;
 const AutoModeControlToolNameSet = new Set<string>(AutoModeControlToolNames);
 
 const ConversationAutoControlParams = Type.Object({
-  action: Type.Union([
-    Type.Literal('continue'),
-    Type.Literal('stop'),
-  ], {
-    description: 'Use "continue" when meaningful work remains and auto mode should keep going, or "stop" only when the task is complete, blocked, or needs user input.',
+  action: Type.Union([Type.Literal('continue'), Type.Literal('stop')], {
+    description:
+      'Use "continue" when meaningful work remains and auto mode should keep going, or "stop" only when the task is complete, blocked, or needs user input.',
   }),
-  reason: Type.Optional(Type.String({
-    description: 'Required when stopping. Keep it short and human-readable, for example "done", "needs user input", or "blocked on tests".',
-  })),
+  reason: Type.Optional(
+    Type.String({
+      description:
+        'Required when stopping. Keep it short and human-readable, for example "done", "needs user input", or "blocked on tests".',
+    }),
+  ),
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function resolveCurrentTurnSourceCustomType(sessionManager: {
-  getBranch?: () => unknown[];
-}): string | null {
-  const branch = typeof sessionManager.getBranch === 'function'
-    ? sessionManager.getBranch()
-    : [];
+function resolveCurrentTurnSourceCustomType(sessionManager: { getBranch?: () => unknown[] }): string | null {
+  const branch = typeof sessionManager.getBranch === 'function' ? sessionManager.getBranch() : [];
 
   for (let index = branch.length - 1; index >= 0; index -= 1) {
     const entry = branch[index];
@@ -158,12 +156,12 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           : state;
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: nextState.stopReason
-              ? `Stopped auto mode: ${nextState.stopReason}.`
-              : 'Stopped auto mode.',
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: nextState.stopReason ? `Stopped auto mode: ${nextState.stopReason}.` : 'Stopped auto mode.',
+            },
+          ],
           details: {
             enabled: nextState.enabled,
             action: 'stop',

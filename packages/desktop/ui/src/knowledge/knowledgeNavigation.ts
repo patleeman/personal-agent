@@ -4,10 +4,7 @@ export interface KnowledgeSearchNavigateOptions {
   replace?: boolean;
 }
 
-export type SetKnowledgeSearchParams = (
-  nextInit?: URLSearchParamsInit,
-  navigateOptions?: KnowledgeSearchNavigateOptions,
-) => void;
+export type SetKnowledgeSearchParams = (nextInit?: URLSearchParamsInit, navigateOptions?: KnowledgeSearchNavigateOptions) => void;
 
 export function navigateKnowledgeFile(
   setSearchParams: SetKnowledgeSearchParams,

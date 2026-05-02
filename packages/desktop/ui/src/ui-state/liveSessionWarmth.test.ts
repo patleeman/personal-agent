@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
+import type { StreamState } from '../hooks/useSessionStream';
 import {
   clearWarmLiveSessionState,
   listWarmLiveSessionStateIds,
   readWarmLiveSessionState,
   writeWarmLiveSessionState,
 } from './liveSessionWarmth';
-import type { StreamState } from '../hooks/useSessionStream';
 
 function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
   return {
@@ -53,4 +54,3 @@ describe('liveSessionWarmth', () => {
     expect(readWarmLiveSessionState(sessionId)).toBeNull();
   });
 });
-

@@ -12,8 +12,6 @@ These are built-in runtime guides, not user-authored workflow skills. Use them w
 - [Async Attention and Wakeups](./async-attention/INDEX.md)
 - [Scheduled Tasks](./scheduled-tasks/INDEX.md)
 - [Runs](./runs/INDEX.md)
-- [Reminders and Notification Delivery](./alerts/INDEX.md)
-- [Shared Inbox Removal](./inbox/INDEX.md)
 - [Skills and Runtime Capabilities](./skills-and-capabilities/INDEX.md)
 
 ## How to use this folder

@@ -1,4 +1,5 @@
-import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, createElement, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+
 import { THEME_STORAGE_KEY } from '../local/localSettings';
 
 type Theme = 'light' | 'dark';
@@ -61,10 +62,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
   const [systemTheme, setSystemTheme] = useState<Theme>(() => readSystemTheme());
 
-  const theme = useMemo(
-    () => resolveThemePreference(themePreference, systemTheme),
-    [systemTheme, themePreference],
-  );
+  const theme = useMemo(() => resolveThemePreference(themePreference, systemTheme), [systemTheme, themePreference]);
 
   useEffect(() => {
     applyTheme(theme);
@@ -101,22 +99,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
   }, [themePreference]);
 
-  const setThemePreference = useCallback((nextThemePreference: ThemePreference) => {
-    const nextSystemTheme = nextThemePreference === 'system' ? readSystemTheme() : systemTheme;
-    const nextTheme = resolveThemePreference(nextThemePreference, nextSystemTheme);
+  const setThemePreference = useCallback(
+    (nextThemePreference: ThemePreference) => {
+      const nextSystemTheme = nextThemePreference === 'system' ? readSystemTheme() : systemTheme;
+      const nextTheme = resolveThemePreference(nextThemePreference, nextSystemTheme);
 
-    setThemePreferenceState(nextThemePreference);
-    if (nextThemePreference === 'system') {
-      setSystemTheme(nextSystemTheme);
-    }
-    applyTheme(nextTheme);
+      setThemePreferenceState(nextThemePreference);
+      if (nextThemePreference === 'system') {
+        setSystemTheme(nextSystemTheme);
+      }
+      applyTheme(nextTheme);
 
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, nextThemePreference);
-    } catch {
-      // Ignore storage failures.
-    }
-  }, [systemTheme]);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, nextThemePreference);
+      } catch {
+        // Ignore storage failures.
+      }
+    },
+    [systemTheme],
+  );
 
   const toggle = useCallback(() => {
     setThemePreference(theme === 'light' ? 'dark' : 'light');

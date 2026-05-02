@@ -1,9 +1,11 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { SessionManager } from '@mariozechner/pi-coding-agent';
+
 import type { Model } from '@mariozechner/pi-ai';
+import { SessionManager } from '@mariozechner/pi-coding-agent';
+import { describe, expect, it } from 'vitest';
+
 import {
   applyConversationModelPreferencesToSessionManager,
   modelSupportsServiceTiers,
@@ -46,11 +48,15 @@ describe('conversationModelPreferences', () => {
     const sessionManager = createSessionManager();
     const snapshot = readConversationModelPreferenceSnapshot(sessionManager);
 
-    const state = resolveConversationModelPreferenceState(snapshot, {
-      currentModel: 'gpt-5.4',
-      currentThinkingLevel: 'high',
-      currentServiceTier: 'priority',
-    }, []);
+    const state = resolveConversationModelPreferenceState(
+      snapshot,
+      {
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'priority',
+      },
+      [],
+    );
 
     expect(state).toEqual({
       currentModel: 'gpt-5.4',

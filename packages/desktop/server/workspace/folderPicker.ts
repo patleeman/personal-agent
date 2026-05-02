@@ -46,9 +46,8 @@ export function buildFolderPickerInvocation(input: {
   const prompt = input.prompt ?? 'Choose working directory';
   const directoryExists = input.directoryExists ?? existsSync;
   const normalizedInitialDirectory = normalizeInitialDirectory(input.initialDirectory);
-  const initialDirectory = normalizedInitialDirectory && directoryExists(normalizedInitialDirectory)
-    ? normalizedInitialDirectory
-    : undefined;
+  const initialDirectory =
+    normalizedInitialDirectory && directoryExists(normalizedInitialDirectory) ? normalizedInitialDirectory : undefined;
   const hasCommand = input.hasCommand ?? ((command: string) => spawnSync('which', [command], { stdio: 'ignore' }).status === 0);
 
   if (platform === 'darwin') {
@@ -56,16 +55,13 @@ export function buildFolderPickerInvocation(input: {
     const args = initialDirectory
       ? [
           '-e',
-          `set chosenFolder to choose folder with prompt "${promptLiteral}" default location POSIX file "${escapeAppleScriptString(ensureTrailingSlash(initialDirectory))}"`,
+          `set chosenFolder to choose folder with prompt "${promptLiteral}" default location POSIX file "${escapeAppleScriptString(
+            ensureTrailingSlash(initialDirectory),
+          )}"`,
           '-e',
           'POSIX path of chosenFolder',
         ]
-      : [
-          '-e',
-          `set chosenFolder to choose folder with prompt "${promptLiteral}"`,
-          '-e',
-          'POSIX path of chosenFolder',
-        ];
+      : ['-e', `set chosenFolder to choose folder with prompt "${promptLiteral}"`, '-e', 'POSIX path of chosenFolder'];
 
     return { command: 'osascript', args };
   }
@@ -86,12 +82,7 @@ export function buildFolderPickerInvocation(input: {
     if (hasCommand('kdialog')) {
       return {
         command: 'kdialog',
-        args: [
-          '--getexistingdirectory',
-          initialDirectory ?? '',
-          '--title',
-          prompt,
-        ],
+        args: ['--getexistingdirectory', initialDirectory ?? '', '--title', prompt],
       };
     }
 
@@ -146,10 +137,12 @@ export function interpretFolderPickerProcessResult(result: FolderPickerProcessRe
   throw new Error(stderr || `Folder picker exited with status ${result.status ?? 'unknown'}.`);
 }
 
-export function pickFolder(input: {
-  initialDirectory?: string;
-  prompt?: string;
-} = {}): FolderPickerResult {
+export function pickFolder(
+  input: {
+    initialDirectory?: string;
+    prompt?: string;
+  } = {},
+): FolderPickerResult {
   const invocation = buildFolderPickerInvocation(input);
   const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf-8',

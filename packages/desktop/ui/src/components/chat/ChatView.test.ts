@@ -1,6 +1,7 @@
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext } from '../../app/contexts.js';
 import { ChatView } from './ChatView.js';
 
@@ -17,30 +18,38 @@ function renderAssistantText(
     onOpenCheckpoint?: (checkpointId: string) => void;
   },
 ) {
-  return renderToStaticMarkup(createElement(ChatView, {
-    messages: [{
-      type: 'text',
-      ts: '2026-03-11T18:00:00.000Z',
-      text,
-    }],
-    onOpenFilePath: options?.onOpenFilePath,
-    onOpenCheckpoint: options?.onOpenCheckpoint,
-  }));
+  return renderToStaticMarkup(
+    createElement(ChatView, {
+      messages: [
+        {
+          type: 'text',
+          ts: '2026-03-11T18:00:00.000Z',
+          text,
+        },
+      ],
+      onOpenFilePath: options?.onOpenFilePath,
+      onOpenCheckpoint: options?.onOpenCheckpoint,
+    }),
+  );
 }
 
 describe('chat view streaming disclosure', () => {
   it('auto-opens running tool blocks inside internal-work clusters', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'bash',
-        input: { command: 'sleep 1' },
-        output: '',
-        status: 'running',
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'sleep 1' },
+            output: '',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('Working');
     expect(html).toContain('running…');
@@ -48,32 +57,38 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('only auto-opens the tail thinking block while the stream is active', () => {
-    const tailHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'thinking',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'Working through the request…\nSecond line stays hidden unless the block opens.',
-      }],
-      isStreaming: true,
-    }));
-    const nonTailHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [
-        {
-          type: 'thinking',
-          ts: '2026-03-11T18:00:00.000Z',
-          text: 'Working through the request…\nSecond line stays hidden unless the block opens.',
-        },
-        {
-          type: 'tool_use',
-          ts: '2026-03-11T18:00:01.000Z',
-          tool: 'bash',
-          input: { command: 'pwd' },
-          output: '/repo',
-          status: 'ok',
-        },
-      ],
-      isStreaming: true,
-    }));
+    const tailHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'thinking',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Working through the request…\nSecond line stays hidden unless the block opens.',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
+    const nonTailHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'thinking',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Working through the request…\nSecond line stays hidden unless the block opens.',
+          },
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:01.000Z',
+            tool: 'bash',
+            input: { command: 'pwd' },
+            output: '/repo',
+            status: 'ok',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(tailHtml).toContain('Second line stays hidden unless the block opens.');
     expect(nonTailHtml).not.toContain('Second line stays hidden unless the block opens.');
@@ -81,18 +96,33 @@ describe('chat view streaming disclosure', () => {
 
   it('derives the live status label from the current tail block in the rendered chat view', () => {
     const workingHtml = renderToStaticMarkup(createElement(ChatView, { messages: [], isStreaming: true }));
-    const thinkingHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Working through the request…' }],
-      isStreaming: true,
-    }));
-    const toolHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'tool_use', ts: '2026-03-11T18:00:00.000Z', tool: 'bash', input: { command: 'sleep 1' }, output: '', status: 'running' }],
-      isStreaming: true,
-    }));
-    const textHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Half-finished response' }],
-      isStreaming: true,
-    }));
+    const thinkingHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Working through the request…' }],
+        isStreaming: true,
+      }),
+    );
+    const toolHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'sleep 1' },
+            output: '',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
+    const textHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Half-finished response' }],
+        isStreaming: true,
+      }),
+    );
 
     expect(workingHtml).toContain('Working…');
     expect(thinkingHtml).toContain('Working');
@@ -103,64 +133,84 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders a pending status indicator immediately even before live streaming starts', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Most recent assistant reply' }],
-      pendingStatusLabel: 'Resuming…',
-      isStreaming: false,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Most recent assistant reply' }],
+        pendingStatusLabel: 'Resuming…',
+        isStreaming: false,
+      }),
+    );
 
     expect(html).toContain('Resuming…');
   });
 
   it('renders the compaction status indicator even when the latest block is from the assistant', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Most recent assistant reply' }],
-      isCompacting: true,
-      isStreaming: false,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Most recent assistant reply' }],
+        isCompacting: true,
+        isStreaming: false,
+      }),
+    );
 
     expect(html).toContain('Compacting context…');
   });
 
   it('auto-opens the internal-work cluster while live or when a running step remains', () => {
-    const liveHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Thinking…' }],
-      isStreaming: true,
-    }));
-    const runningHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'tool_use', ts: '2026-03-11T18:00:00.000Z', tool: 'bash', input: { command: 'sleep 1' }, output: '', status: 'running' }],
-      isStreaming: false,
-    }));
-    const idleHtml = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Thinking…' }],
-      isStreaming: false,
-    }));
+    const liveHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Thinking…' }],
+        isStreaming: true,
+      }),
+    );
+    const runningHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'sleep 1' },
+            output: '',
+            status: 'running',
+          },
+        ],
+        isStreaming: false,
+      }),
+    );
+    const idleHtml = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Thinking…' }],
+        isStreaming: false,
+      }),
+    );
 
     expect(liveHtml).toContain('▲ hide');
     expect(runningHtml).toContain('▲ hide');
     expect(idleHtml).toContain('▼ show');
   });
 
-
   it('renders rich markdown structures in assistant messages', () => {
-    const html = renderAssistantText([
-      '# Preview title',
-      '',
-      'Paragraph with **bold**, `inline code`, and a [link](https://example.com).',
-      '',
-      '- Bullet one',
-      '  - Nested bullet',
-      '',
-      '> Quoted note',
-      '',
-      '| A | B |',
-      '| --- | --- |',
-      '| 1 | 2 |',
-      '',
-      '```ts',
-      'const value = 1;',
-      '```',
-    ].join('\n'));
+    const html = renderAssistantText(
+      [
+        '# Preview title',
+        '',
+        'Paragraph with **bold**, `inline code`, and a [link](https://example.com).',
+        '',
+        '- Bullet one',
+        '  - Nested bullet',
+        '',
+        '> Quoted note',
+        '',
+        '| A | B |',
+        '| --- | --- |',
+        '| 1 | 2 |',
+        '',
+        '```ts',
+        'const value = 1;',
+        '```',
+      ].join('\n'),
+    );
 
     expect(html).toContain('<h1');
     expect(html).toContain('<ul');
@@ -173,13 +223,16 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('does not auto-link file paths inside assistant message text', () => {
-    const html = renderAssistantText([
-      'Touch packages/desktop/ui/src/app/App.tsx next.',
-      '',
-      '`packages/desktop/ui/src/app/main.tsx`',
-      '',
-      '[relative file](packages/desktop/ui/src/content/latexArtifacts.ts)',
-    ].join('\n'), { onOpenFilePath: () => undefined });
+    const html = renderAssistantText(
+      [
+        'Touch packages/desktop/ui/src/app/App.tsx next.',
+        '',
+        '`packages/desktop/ui/src/app/main.tsx`',
+        '',
+        '[relative file](packages/desktop/ui/src/content/latexArtifacts.ts)',
+      ].join('\n'),
+      { onOpenFilePath: () => undefined },
+    );
 
     expect(html).toContain('packages/desktop/ui/src/app/App.tsx');
     expect(html).toContain('packages/desktop/ui/src/app/main.tsx');
@@ -190,10 +243,7 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders commit hashes as clickable transcript controls when a checkpoint opener is available', () => {
-    const html = renderAssistantText(
-      'Checkpoint saved: `93f02a21` and plain 93f02a21.',
-      { onOpenCheckpoint: () => undefined },
-    );
+    const html = renderAssistantText('Checkpoint saved: `93f02a21` and plain 93f02a21.', { onOpenCheckpoint: () => undefined });
 
     expect(html).toContain('aria-label="Open diff for commit 93f02a21"');
     expect(html.match(/Open diff for commit 93f02a21/g)).toHaveLength(2);
@@ -223,13 +273,17 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders markdown formatting in user messages', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'user',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: '# Checklist\n\n- **One**\n- `Two`',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: '# Checklist\n\n- **One**\n- `Two`',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('<h1');
     expect(html).toContain('<ul');
@@ -238,15 +292,19 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders transcript images as inspectable buttons', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'image',
-        ts: '2026-03-11T18:00:00.000Z',
-        alt: 'Build screenshot',
-        caption: 'Latest desktop build',
-        src: 'data:image/png;base64,abc123',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'image',
+            ts: '2026-03-11T18:00:00.000Z',
+            alt: 'Build screenshot',
+            caption: 'Latest desktop build',
+            src: 'data:image/png;base64,abc123',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('Inspect image');
     expect(html).toContain('aria-label="Inspect image: Latest desktop build"');
@@ -254,18 +312,24 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders user attachment images as inspectable buttons', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'user',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: '',
-        images: [{
-          alt: 'Shared screenshot',
-          caption: 'Before refactor',
-          src: 'data:image/png;base64,xyz789',
-        }],
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: '',
+            images: [
+              {
+                alt: 'Shared screenshot',
+                caption: 'Before refactor',
+                src: 'data:image/png;base64,xyz789',
+              },
+            ],
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('Inspect image');
     expect(html).toContain('aria-label="Inspect image: Before refactor"');
@@ -273,17 +337,21 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders mentioned runs as left-aligned action rows with a human-readable title', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'bash',
-        input: { command: 'npm --prefix packages/desktop run start' },
-        output: 'Inspect runId=run-continuous-conversations-next-chunk-ui-2026-03-25T00-53-25-347Z-903aa31b',
-        status: 'running',
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'npm --prefix packages/desktop run start' },
+            output: 'Inspect runId=run-continuous-conversations-next-chunk-ui-2026-03-25T00-53-25-347Z-903aa31b',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('Continuous conversations next chunk ui');
     expect(html).toContain('agent task');
@@ -292,29 +360,33 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('shows run tool previews and linked run metadata for started agent runs', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'run',
-        input: {
-          action: 'start_agent',
-          taskSlug: 'ui-polish',
-          prompt: 'Inspect git diff',
-          cwd: '/Users/patrick/workingdir/personal-agent',
-        },
-        output: 'Started durable agent run run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b for ui-polish.',
-        status: 'running',
-        details: {
-          action: 'start_agent',
-          runId: 'run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b',
-          taskSlug: 'ui-polish',
-          cwd: '/Users/patrick/workingdir/personal-agent',
-          model: 'openai-codex/gpt-5.4',
-        },
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'run',
+            input: {
+              action: 'start_agent',
+              taskSlug: 'ui-polish',
+              prompt: 'Inspect git diff',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+            },
+            output: 'Started durable agent run run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b for ui-polish.',
+            status: 'running',
+            details: {
+              action: 'start_agent',
+              runId: 'run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b',
+              taskSlug: 'ui-polish',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+              model: 'openai-codex/gpt-5.4',
+            },
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('start_agent Inspect git diff');
     expect(html).toContain('Inspect git diff');
@@ -325,22 +397,26 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('uses run tool input context even when the persisted step lacks structured run details', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'run',
-        input: {
-          action: 'start',
-          taskSlug: 'ui-preview-check',
-          command: 'printf ok',
-          cwd: '/Users/patrick/workingdir/personal-agent',
-        },
-        output: 'Started durable run run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b for ui-preview-check.',
-        status: 'running',
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'run',
+            input: {
+              action: 'start',
+              taskSlug: 'ui-preview-check',
+              command: 'printf ok',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+            },
+            output: 'Started durable run run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b for ui-preview-check.',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('start printf ok');
     expect(html).toContain('printf ok');
@@ -350,26 +426,30 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('surfaces linked run cards even when an internal-work cluster is collapsed', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'run',
-        input: {
-          action: 'start_agent',
-          prompt: 'Inspect git diff',
-        },
-        output: 'Started durable agent run run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b for ui-polish.',
-        status: 'ok',
-        details: {
-          action: 'start_agent',
-          runId: 'run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b',
-          prompt: 'Inspect git diff',
-          status: 'running',
-        },
-      }],
-      isStreaming: false,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'run',
+            input: {
+              action: 'start_agent',
+              prompt: 'Inspect git diff',
+            },
+            output: 'Started durable agent run run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b for ui-polish.',
+            status: 'ok',
+            details: {
+              action: 'start_agent',
+              runId: 'run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b',
+              prompt: 'Inspect git diff',
+              status: 'running',
+            },
+          },
+        ],
+        isStreaming: false,
+      }),
+    );
 
     expect(html).toContain('Internal work');
     expect(html).toContain('background work');
@@ -378,77 +458,85 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('resolves legacy linked run ids to current durable run records using task slug', () => {
-    const html = renderToStaticMarkup(createElement(AppDataContext.Provider, {
-      value: {
-        projects: null,
-        sessions: null,
-        tasks: null,
-        runs: {
-          scannedAt: '2026-03-11T18:00:10.000Z',
-          runsRoot: '/tmp/runs',
-          summary: {
-            total: 1,
-            recoveryActions: {},
-            statuses: { running: 1 },
-          },
-          runs: [
-            {
-              runId: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
-              paths: {
-                root: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
-                manifestPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/manifest.json',
-                statusPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/status.json',
-                checkpointPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/checkpoint.json',
-                eventsPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/events.jsonl',
-                outputLogPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/output.log',
-                resultPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/result.json',
+    const html = renderToStaticMarkup(
+      createElement(
+        AppDataContext.Provider,
+        {
+          value: {
+            projects: null,
+            sessions: null,
+            tasks: null,
+            runs: {
+              scannedAt: '2026-03-11T18:00:10.000Z',
+              runsRoot: '/tmp/runs',
+              summary: {
+                total: 1,
+                recoveryActions: {},
+                statuses: { running: 1 },
               },
-              manifest: {
-                version: 1,
-                id: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
-                kind: 'background-run',
-                resumePolicy: 'continue',
-                createdAt: '2026-04-14T01:23:19.371Z',
-                spec: {
-                  metadata: {
-                    taskSlug: 'ui-preview-check',
+              runs: [
+                {
+                  runId: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                  paths: {
+                    root: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                    manifestPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/manifest.json',
+                    statusPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/status.json',
+                    checkpointPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/checkpoint.json',
+                    eventsPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/events.jsonl',
+                    outputLogPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/output.log',
+                    resultPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/result.json',
                   },
+                  manifest: {
+                    version: 1,
+                    id: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                    kind: 'background-run',
+                    resumePolicy: 'continue',
+                    createdAt: '2026-04-14T01:23:19.371Z',
+                    spec: {
+                      metadata: {
+                        taskSlug: 'ui-preview-check',
+                      },
+                    },
+                    source: {
+                      type: 'tool',
+                      id: 'conv-123',
+                    },
+                  },
+                  status: {
+                    version: 1,
+                    runId: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                    status: 'running',
+                    createdAt: '2026-04-14T01:23:19.371Z',
+                    updatedAt: '2026-04-14T01:24:01.000Z',
+                    activeAttempt: 1,
+                    startedAt: '2026-04-14T01:23:19.900Z',
+                  },
+                  problems: [],
+                  recoveryAction: 'none',
                 },
-                source: {
-                  type: 'tool',
-                  id: 'conv-123',
-                },
-              },
-              status: {
-                version: 1,
-                runId: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
-                status: 'running',
-                createdAt: '2026-04-14T01:23:19.371Z',
-                updatedAt: '2026-04-14T01:24:01.000Z',
-                activeAttempt: 1,
-                startedAt: '2026-04-14T01:23:19.900Z',
-              },
-              problems: [],
-              recoveryAction: 'none',
+              ],
+            },
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          },
+        },
+        createElement(ChatView, {
+          messages: [
+            {
+              type: 'tool_use',
+              ts: '2026-04-14T01:24:05.000Z',
+              tool: 'bash',
+              input: { command: 'echo run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b' },
+              output: 'run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b',
+              status: 'ok',
             },
           ],
-        },
-        setProjects: () => {},
-        setSessions: () => {},
-        setTasks: () => {},
-        setRuns: () => {},
-      },
-    }, createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-04-14T01:24:05.000Z',
-        tool: 'bash',
-        input: { command: 'echo run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b' },
-        output: 'run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b',
-        status: 'ok',
-      }],
-      isStreaming: false,
-    })));
+          isStreaming: false,
+        }),
+      ),
+    );
 
     expect(html).toContain('ui-preview-check');
     expect(html).toContain('running');
@@ -463,23 +551,27 @@ describe('chat view streaming disclosure', () => {
       source: 'tool',
     }));
 
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'run',
-        input: { action: 'list' },
-        output: '',
-        status: 'running',
-        details: {
-          action: 'list',
-          runCount: listedRuns.length,
-          runIds: listedRuns.map((run) => run.runId),
-          runs: listedRuns,
-        },
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'run',
+            input: { action: 'list' },
+            output: '',
+            status: 'running',
+            details: {
+              action: 'list',
+              runCount: listedRuns.length,
+              runIds: listedRuns.map((run) => run.runId),
+              runs: listedRuns,
+            },
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('listed executions');
     expect(html).toContain('Showing 5 of 7 executions returned by the tool.');
@@ -492,18 +584,22 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders tool input and output as plain text without file path buttons', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'bash',
-        input: { command: 'cat packages/desktop/ui/src/app/App.tsx' },
-        output: 'Updated packages/desktop/ui/src/app/App.tsx',
-        status: 'running',
-      }],
-      isStreaming: true,
-      onOpenFilePath: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'cat packages/desktop/ui/src/app/App.tsx' },
+            output: 'Updated packages/desktop/ui/src/app/App.tsx',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+        onOpenFilePath: () => undefined,
+      }),
+    );
 
     expect(html).toContain('cat packages/desktop/ui/src/app/App.tsx');
     expect(html).toContain('Updated packages/desktop/ui/src/app/App.tsx');
@@ -512,24 +608,26 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('shows a clean preview for collapsed thinking steps inside an open internal-work cluster', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [
-        {
-          type: 'thinking',
-          ts: '2026-03-11T18:00:00.000Z',
-          text: '**Investigate the render path first.**\nThen patch the collapsed header.',
-        },
-        {
-          type: 'tool_use',
-          ts: '2026-03-11T18:00:01.000Z',
-          tool: 'bash',
-          input: { command: 'echo done' },
-          output: '',
-          status: 'running',
-        },
-      ],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'thinking',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: '**Investigate the render path first.**\nThen patch the collapsed header.',
+          },
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:01.000Z',
+            tool: 'bash',
+            input: { command: 'echo done' },
+            output: '',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('Investigate the render path first.');
     expect(html).not.toContain('**Investigate the render path first.**');
@@ -538,17 +636,19 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('shows only the latest 5 internal-work steps by default and summarizes older ones above', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: Array.from({ length: 7 }, (_, index) => ({
-        type: 'tool_use' as const,
-        ts: `2026-03-11T18:00:0${index}.000Z`,
-        tool: 'bash',
-        input: { command: `echo step-${index + 1}` },
-        output: '',
-        status: index === 6 ? 'running' as const : 'ok' as const,
-      })),
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: Array.from({ length: 7 }, (_, index) => ({
+          type: 'tool_use' as const,
+          ts: `2026-03-11T18:00:0${index}.000Z`,
+          tool: 'bash',
+          input: { command: `echo step-${index + 1}` },
+          output: '',
+          status: index === 6 ? ('running' as const) : ('ok' as const),
+        })),
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('7 steps');
     expect(html).toContain('2 earlier steps summarized above.');
@@ -563,50 +663,58 @@ describe('chat view streaming disclosure', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-11T18:00:03.000Z'));
 
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'thinking',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'a'.repeat(48),
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'thinking',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'a'.repeat(48),
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html).toContain('tok/s');
     expect(html).toContain('~4.0 tok/s');
   });
 
   it('renders ask_user_question tool calls as questionnaire cards with navigation and submit', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'ask_user_question',
-        input: {},
-        details: {
-          action: 'ask_user_question',
-          conversationId: 'conv-123',
-          details: 'Pick the configuration before I continue.',
-          questions: [
-            {
-              id: 'target',
-              label: 'Which environment should I use?',
-              style: 'radio',
-              options: ['staging', 'prod'],
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'ask_user_question',
+            input: {},
+            details: {
+              action: 'ask_user_question',
+              conversationId: 'conv-123',
+              details: 'Pick the configuration before I continue.',
+              questions: [
+                {
+                  id: 'target',
+                  label: 'Which environment should I use?',
+                  style: 'radio',
+                  options: ['staging', 'prod'],
+                },
+                {
+                  id: 'notify',
+                  label: 'Which notifications should I enable?',
+                  style: 'check',
+                  options: ['Email', 'Telegram'],
+                },
+              ],
             },
-            {
-              id: 'notify',
-              label: 'Which notifications should I enable?',
-              style: 'check',
-              options: ['Email', 'Telegram'],
-            },
-          ],
-        },
-        output: 'Asked the user 2 questions.',
-        status: 'ok',
-      }],
-      onSubmitAskUserQuestion: () => undefined,
-    }));
+            output: 'Asked the user 2 questions.',
+            status: 'ok',
+          },
+        ],
+        onSubmitAskUserQuestion: () => undefined,
+      }),
+    );
 
     expect(html).toContain('Questions for you');
     expect(html).toContain('Pick the configuration before I continue.');
@@ -622,37 +730,41 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders pending ask_user_question tool calls as compact transcript summaries in composer mode', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'ask_user_question',
-        input: {},
-        details: {
-          action: 'ask_user_question',
-          conversationId: 'conv-123',
-          details: 'Pick the configuration before I continue.',
-          questions: [
-            {
-              id: 'target',
-              label: 'Which environment should I use?',
-              style: 'radio',
-              options: ['staging', 'prod'],
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'ask_user_question',
+            input: {},
+            details: {
+              action: 'ask_user_question',
+              conversationId: 'conv-123',
+              details: 'Pick the configuration before I continue.',
+              questions: [
+                {
+                  id: 'target',
+                  label: 'Which environment should I use?',
+                  style: 'radio',
+                  options: ['staging', 'prod'],
+                },
+                {
+                  id: 'notify',
+                  label: 'Which notifications should I enable?',
+                  style: 'check',
+                  options: ['Email', 'Telegram'],
+                },
+              ],
             },
-            {
-              id: 'notify',
-              label: 'Which notifications should I enable?',
-              style: 'check',
-              options: ['Email', 'Telegram'],
-            },
-          ],
-        },
-        output: 'Asked the user 2 questions.',
-        status: 'ok',
-      }],
-      askUserQuestionDisplayMode: 'composer',
-      onSubmitAskUserQuestion: () => undefined,
-    }));
+            output: 'Asked the user 2 questions.',
+            status: 'ok',
+          },
+        ],
+        askUserQuestionDisplayMode: 'composer',
+        onSubmitAskUserQuestion: () => undefined,
+      }),
+    );
 
     expect(html).toContain('Questions for you');
     expect(html).toContain('Which environment should I use?');
@@ -663,27 +775,33 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders check-style ask_user_question options as checkboxes', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'ask_user_question',
-        input: {},
-        details: {
-          action: 'ask_user_question',
-          conversationId: 'conv-123',
-          questions: [{
-            id: 'notify',
-            label: 'Which notifications should I enable?',
-            style: 'check',
-            options: ['Email', 'Telegram'],
-          }],
-        },
-        output: 'Asked the user a question.',
-        status: 'ok',
-      }],
-      onSubmitAskUserQuestion: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'ask_user_question',
+            input: {},
+            details: {
+              action: 'ask_user_question',
+              conversationId: 'conv-123',
+              questions: [
+                {
+                  id: 'notify',
+                  label: 'Which notifications should I enable?',
+                  style: 'check',
+                  options: ['Email', 'Telegram'],
+                },
+              ],
+            },
+            output: 'Asked the user a question.',
+            status: 'ok',
+          },
+        ],
+        onSubmitAskUserQuestion: () => undefined,
+      }),
+    );
 
     expect(html).toContain('Question for you');
     expect(html).toContain('Which notifications should I enable?');
@@ -692,59 +810,65 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders a next button for non-final checkbox questions', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'ask_user_question',
-        input: {},
-        details: {
-          action: 'ask_user_question',
-          conversationId: 'conv-123',
-          questions: [
-            {
-              id: 'notify',
-              label: 'Which notifications should I enable?',
-              style: 'check',
-              options: ['Email', 'Telegram'],
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'ask_user_question',
+            input: {},
+            details: {
+              action: 'ask_user_question',
+              conversationId: 'conv-123',
+              questions: [
+                {
+                  id: 'notify',
+                  label: 'Which notifications should I enable?',
+                  style: 'check',
+                  options: ['Email', 'Telegram'],
+                },
+                {
+                  id: 'target',
+                  label: 'Which environment should I use?',
+                  style: 'radio',
+                  options: ['staging', 'prod'],
+                },
+              ],
             },
-            {
-              id: 'target',
-              label: 'Which environment should I use?',
-              style: 'radio',
-              options: ['staging', 'prod'],
-            },
-          ],
-        },
-        output: 'Asked the user 2 questions.',
-        status: 'ok',
-      }],
-      onSubmitAskUserQuestion: () => undefined,
-    }));
+            output: 'Asked the user 2 questions.',
+            status: 'ok',
+          },
+        ],
+        onSubmitAskUserQuestion: () => undefined,
+      }),
+    );
 
     expect(html).toContain('Next →');
   });
 
   it('shows the first user reply on answered question cards', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [
-        {
-          type: 'tool_use',
-          ts: '2026-03-11T18:00:00.000Z',
-          tool: 'ask_user_question',
-          input: {
-            question: 'Which environment should I use?',
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'ask_user_question',
+            input: {
+              question: 'Which environment should I use?',
+            },
+            output: 'Asked the user: Which environment should I use?',
+            status: 'ok',
           },
-          output: 'Asked the user: Which environment should I use?',
-          status: 'ok',
-        },
-        {
-          type: 'user',
-          ts: '2026-03-11T18:00:05.000Z',
-          text: 'Use staging for this deploy.',
-        },
-      ],
-    }));
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:05.000Z',
+            text: 'Use staging for this deploy.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('answered');
     expect(html).toContain('Your reply');
@@ -753,20 +877,22 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders markdown footnotes with isolated ids per message', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [
-        {
-          type: 'text',
-          ts: '2026-03-11T18:00:00.000Z',
-          text: 'First answer.[^1]\n\n[^1]: Alpha reference',
-        },
-        {
-          type: 'text',
-          ts: '2026-03-11T18:01:00.000Z',
-          text: 'Second answer.[^1]\n\n[^1]: Beta reference',
-        },
-      ],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'First answer.[^1]\n\n[^1]: Alpha reference',
+          },
+          {
+            type: 'text',
+            ts: '2026-03-11T18:01:00.000Z',
+            text: 'Second answer.[^1]\n\n[^1]: Beta reference',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('class="footnotes"');
     expect(html).toContain('Alpha reference');
@@ -778,110 +904,136 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders a rewind action for user messages when rewinding is available', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'user',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'Try a different approach',
-      }],
-      onRewindMessage: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Try a different approach',
+          },
+        ],
+        onRewindMessage: () => undefined,
+      }),
+    );
 
     expect(html).toContain('↩ rewind');
   });
 
   it('renders rewind and fork actions for assistant messages when both are available', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'text',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'Assistant output to branch from',
-      }],
-      onRewindMessage: () => undefined,
-      onForkMessage: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Assistant output to branch from',
+          },
+        ],
+        onRewindMessage: () => undefined,
+        onForkMessage: () => undefined,
+      }),
+    );
 
     expect(html).toContain('↩ rewind');
     expect(html).toContain('⑂ fork');
   });
 
   it('renders a copy action for assistant messages', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'text',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'Assistant output to copy',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Assistant output to copy',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('⎘ copy');
   });
 
   it('uses absolute message ids when a transcript window starts mid-conversation', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'text',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'Windowed conversation block',
-      }],
-      messageIndexOffset: 7,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Windowed conversation block',
+          },
+        ],
+        messageIndexOffset: 7,
+      }),
+    );
 
     expect(html).toContain('id="msg-7"');
     expect(html).toContain('data-message-index="7"');
   });
 
   it('marks exactly one tail transcript item as the scroll anchor', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [
-        {
-          type: 'text',
-          ts: '2026-03-11T18:00:00.000Z',
-          text: 'Earlier assistant message',
-        },
-        {
-          type: 'text',
-          ts: '2026-03-11T18:01:00.000Z',
-          text: 'Latest assistant message',
-        },
-      ],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Earlier assistant message',
+          },
+          {
+            type: 'text',
+            ts: '2026-03-11T18:01:00.000Z',
+            text: 'Latest assistant message',
+          },
+        ],
+      }),
+    );
 
     expect(html.match(/data-chat-tail="1"/g)).toHaveLength(1);
   });
 
   it('marks a tail trace cluster as the scroll anchor too', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'bash',
-        input: { command: 'echo tail' },
-        output: '',
-        status: 'running',
-      }],
-      isStreaming: true,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'echo tail' },
+            output: '',
+            status: 'running',
+          },
+        ],
+        isStreaming: true,
+      }),
+    );
 
     expect(html.match(/data-chat-tail="1"/g)).toHaveLength(1);
   });
 
   it('renders skill invocations as disclosure cards instead of raw wrapper markup', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'user',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: [
-          '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/INDEX.md">',
-          'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
-          '',
-          '# Checkpoint',
-          '',
-          'Create a focused commit for the agent\'s current work.',
-          '</skill>',
-        ].join('\n'),
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: [
+              '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/INDEX.md">',
+              'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
+              '',
+              '# Checkpoint',
+              '',
+              "Create a focused commit for the agent's current work.",
+              '</skill>',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('checkpoint');
     expect(html).toContain('References resolve relative to /state/profiles/shared/agent/skills/checkpoint');
@@ -890,15 +1042,19 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders compaction summaries as system events instead of assistant bubbles', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'summary',
-        ts: '2026-03-11T18:00:00.000Z',
-        kind: 'compaction',
-        title: 'Compaction summary',
-        text: '## Goal\nKeep the compacted context visible.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'summary',
+            ts: '2026-03-11T18:00:00.000Z',
+            kind: 'compaction',
+            title: 'Compaction summary',
+            text: '## Goal\nKeep the compacted context visible.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('data-summary-kind="compaction"');
     expect(html).toContain('Context compacted');
@@ -910,14 +1066,18 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders injected context blocks with dedicated reminder styling', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'context',
-        ts: '2026-03-11T18:00:00.000Z',
-        customType: 'referenced_context',
-        text: 'Conversation automation context:\n\n- Review the agent reminders before stopping.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'context',
+            ts: '2026-03-11T18:00:00.000Z',
+            customType: 'referenced_context',
+            text: 'Conversation automation context:\n\n- Review the agent reminders before stopping.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('Injected context');
     expect(html).toContain('data-context-type="referenced_context"');
@@ -927,45 +1087,51 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('marks the transcript container as a selection context-menu surface', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'text',
-        id: 'assistant-1',
-        ts: '2026-03-11T18:00:00.000Z',
-        text: 'Assistant reply body.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            id: 'assistant-1',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Assistant reply body.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('data-chat-transcript-panel="1"');
   });
 
   it('marks assistant-facing transcript blocks as reply-selectable scopes', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [
-        {
-          type: 'text',
-          id: 'assistant-1',
-          ts: '2026-03-11T18:00:00.000Z',
-          text: 'Assistant reply body.',
-        },
-        {
-          type: 'context',
-          id: 'context-1',
-          ts: '2026-03-11T18:01:00.000Z',
-          customType: 'referenced_context',
-          text: 'Injected context body.',
-        },
-        {
-          type: 'summary',
-          id: 'summary-1',
-          ts: '2026-03-11T18:02:00.000Z',
-          kind: 'branch',
-          title: 'Branch summary',
-          text: 'Summary body.',
-        },
-      ],
-      onReplyToSelection: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'text',
+            id: 'assistant-1',
+            ts: '2026-03-11T18:00:00.000Z',
+            text: 'Assistant reply body.',
+          },
+          {
+            type: 'context',
+            id: 'context-1',
+            ts: '2026-03-11T18:01:00.000Z',
+            customType: 'referenced_context',
+            text: 'Injected context body.',
+          },
+          {
+            type: 'summary',
+            id: 'summary-1',
+            ts: '2026-03-11T18:02:00.000Z',
+            kind: 'branch',
+            title: 'Branch summary',
+            text: 'Summary body.',
+          },
+        ],
+        onReplyToSelection: () => undefined,
+      }),
+    );
 
     const scopeMatches = html.match(/data-selection-reply-scope="assistant-message"/g) ?? [];
     expect(scopeMatches).toHaveLength(3);
@@ -978,31 +1144,39 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders specific compaction kinds when the summary title provides one', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'summary',
-        ts: '2026-03-11T18:00:00.000Z',
-        kind: 'compaction',
-        title: 'Overflow recovery compaction',
-        text: '## Goal\nRetry after compaction.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'summary',
+            ts: '2026-03-11T18:00:00.000Z',
+            kind: 'compaction',
+            title: 'Overflow recovery compaction',
+            text: '## Goal\nRetry after compaction.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('Overflow recovery compaction');
     expect(html).toContain('interrupted turn could retry automatically');
   });
 
   it('renders Codex compaction detail when the summary metadata provides it', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'summary',
-        ts: '2026-03-11T18:00:00.000Z',
-        kind: 'compaction',
-        title: 'Overflow recovery compaction',
-        text: '## Goal\nRetry after compaction.',
-        detail: 'This used Codex compaction under the hood. Pi kept the text summary for display and portability.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'summary',
+            ts: '2026-03-11T18:00:00.000Z',
+            kind: 'compaction',
+            title: 'Overflow recovery compaction',
+            text: '## Goal\nRetry after compaction.',
+            detail: 'This used Codex compaction under the hood. Pi kept the text summary for display and portability.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('Overflow recovery compaction');
     expect(html).toContain('interrupted turn could retry automatically');
@@ -1010,15 +1184,19 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('collapses long compaction summaries to a short preview by default', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'summary',
-        ts: '2026-03-11T18:00:00.000Z',
-        kind: 'compaction',
-        title: 'Compaction summary',
-        text: '## Goal\nFirst item.\nSecond item.\nThird item.\nFourth item.\nFifth item.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'summary',
+            ts: '2026-03-11T18:00:00.000Z',
+            kind: 'compaction',
+            title: 'Compaction summary',
+            text: '## Goal\nFirst item.\nSecond item.\nThird item.\nFourth item.\nFifth item.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('Show summary');
     expect(html).toContain('Goal');
@@ -1029,16 +1207,21 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders reused thread summaries as collapsed transcript events', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'summary',
-        ts: '2026-03-11T18:00:00.000Z',
-        kind: 'related',
-        title: 'Reused thread summaries',
-        detail: '2 selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
-        text: '### Conversation 1 — Release signing\n- Workspace: `/repo/a`\n- Created: 2026-04-10T10:00:00.000Z\nKeep the notarization mapping fix.\n\n### Conversation 2 — Auto mode wakeups\n- Workspace: `/repo/b`\n- Created: 2026-04-11T10:00:00.000Z\nWakeups use durable run callbacks.',
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'summary',
+            ts: '2026-03-11T18:00:00.000Z',
+            kind: 'related',
+            title: 'Reused thread summaries',
+            detail:
+              '2 selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
+            text: '### Conversation 1 — Release signing\n- Workspace: `/repo/a`\n- Created: 2026-04-10T10:00:00.000Z\nKeep the notarization mapping fix.\n\n### Conversation 2 — Auto mode wakeups\n- Workspace: `/repo/b`\n- Created: 2026-04-11T10:00:00.000Z\nWakeups use durable run callbacks.',
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('data-summary-kind="related"');
     expect(html).toContain('Reused thread summaries');
@@ -1050,21 +1233,25 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders terminal-style bang command output outside internal-work clusters', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'bash',
-        input: { command: 'npm run release:publish' },
-        output: '/bin/bash: npm: command not found',
-        status: 'error',
-        details: {
-          displayMode: 'terminal',
-          exitCode: 127,
-          excludeFromContext: true,
-        },
-      }],
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'npm run release:publish' },
+            output: '/bin/bash: npm: command not found',
+            status: 'error',
+            details: {
+              displayMode: 'terminal',
+              exitCode: 127,
+              excludeFromContext: true,
+            },
+          },
+        ],
+      }),
+    );
 
     expect(html).toContain('npm run release:publish');
     expect(html).toContain('/bin/bash: npm: command not found');
@@ -1075,33 +1262,41 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders a continue action for the tail internal-work cluster when recovery is available', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'tool_use',
-        ts: '2026-03-11T18:00:00.000Z',
-        tool: 'bash',
-        input: { command: 'sleep 1' },
-        output: 'timed out',
-        status: 'error',
-      }],
-      onResumeConversation: () => undefined,
-      resumeConversationTitle: 'Continue the interrupted turn.',
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'tool_use',
+            ts: '2026-03-11T18:00:00.000Z',
+            tool: 'bash',
+            input: { command: 'sleep 1' },
+            output: 'timed out',
+            status: 'error',
+          },
+        ],
+        onResumeConversation: () => undefined,
+        resumeConversationTitle: 'Continue the interrupted turn.',
+      }),
+    );
 
     expect(html).toContain('continue');
     expect(html).toContain('Internal work');
   });
 
   it('renders a continue action for a tail error trace when recovery is available', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: [{
-        type: 'error',
-        ts: '2026-03-11T18:00:00.000Z',
-        message: 'The model returned an error before completing its response.',
-      }],
-      onResumeConversation: () => undefined,
-      resumeConversationTitle: 'Ask the agent to continue from the last error.',
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: [
+          {
+            type: 'error',
+            ts: '2026-03-11T18:00:00.000Z',
+            message: 'The model returned an error before completing its response.',
+          },
+        ],
+        onResumeConversation: () => undefined,
+        resumeConversationTitle: 'Ask the agent to continue from the last error.',
+      }),
+    );
 
     expect(html).toContain('continue');
     expect(html).toContain('Internal work');
@@ -1146,7 +1341,9 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('keeps knowledge base paths as plain inline code without file opening', () => {
-    const html = renderAssistantText('Open `/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md` next.');
+    const html = renderAssistantText(
+      'Open `/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md` next.',
+    );
 
     expect(html).toContain('<code');
     expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo/skills/checkpoint/SKILL.md');
@@ -1154,38 +1351,41 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('links knowledge base paths in prose without swallowing trailing punctuation', () => {
-    const html = renderAssistantText(
-      'Read /runtime/knowledge-base/repo/projects/Personal/Plan.md, then continue.',
-      { onOpenFilePath: () => undefined },
-    );
+    const html = renderAssistantText('Read /runtime/knowledge-base/repo/projects/Personal/Plan.md, then continue.', {
+      onOpenFilePath: () => undefined,
+    });
 
     expect(html).toContain('href="/knowledge?file=projects%2FPersonal%2FPlan.md"');
     expect(html).toContain('/runtime/knowledge-base/repo/projects/Personal/Plan.md</a>, then continue.');
   });
 
   it('defers content-visibility on the initial render of long conversations', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: Array.from({ length: 130 }, (_, index) => ({
-        type: 'text' as const,
-        ts: `2026-03-11T18:00:${String(index).padStart(2, '0')}.000Z`,
-        text: `Long conversation block ${index + 1}`,
-      })),
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: Array.from({ length: 130 }, (_, index) => ({
+          type: 'text' as const,
+          ts: `2026-03-11T18:00:${String(index).padStart(2, '0')}.000Z`,
+          text: `Long conversation block ${index + 1}`,
+        })),
+      }),
+    );
 
     expect(html).not.toMatch(/content-visibility/i);
   });
 
   it('positions the windowing badge below sticky history controls when given a top offset', () => {
-    const html = renderToStaticMarkup(createElement(ChatView, {
-      messages: Array.from({ length: 96 }, (_, index) => ({
-        type: 'text' as const,
-        ts: `2026-03-11T18:01:${String(index).padStart(2, '0')}.000Z`,
-        text: `Windowed block ${index + 1}`,
-      })),
-      performanceMode: 'aggressive',
-      scrollContainerRef: { current: null },
-      windowingBadgeTopOffset: 56,
-    }));
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: Array.from({ length: 96 }, (_, index) => ({
+          type: 'text' as const,
+          ts: `2026-03-11T18:01:${String(index).padStart(2, '0')}.000Z`,
+          text: `Windowed block ${index + 1}`,
+        })),
+        performanceMode: 'aggressive',
+        scrollContainerRef: { current: null },
+        windowingBadgeTopOffset: 56,
+      }),
+    );
 
     expect(html).toContain('windowing');
     expect(html).toContain('style="top:56px"');

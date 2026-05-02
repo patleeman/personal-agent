@@ -1,7 +1,9 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   applyDesktopRuntimeEnvironmentOverrides,
   resolveDesktopRuntimeEnvironmentOverrides,
@@ -15,20 +17,30 @@ describe('desktop runtime environment overrides', () => {
   });
 
   it('isolates testing launches onto a separate state root and companion port', () => {
-    expect(resolveDesktopRuntimeEnvironmentOverrides({
-      PERSONAL_AGENT_DESKTOP_VARIANT: 'testing',
-    }, { defaultStateRoot: '/state/personal-agent' })).toEqual({
+    expect(
+      resolveDesktopRuntimeEnvironmentOverrides(
+        {
+          PERSONAL_AGENT_DESKTOP_VARIANT: 'testing',
+        },
+        { defaultStateRoot: '/state/personal-agent' },
+      ),
+    ).toEqual({
       stateRoot: '/state/personal-agent-testing',
       companionPort: String(TESTING_DESKTOP_COMPANION_PORT),
     });
   });
 
   it('respects explicit user overrides in testing launches', () => {
-    expect(resolveDesktopRuntimeEnvironmentOverrides({
-      PERSONAL_AGENT_DESKTOP_VARIANT: 'testing',
-      PERSONAL_AGENT_STATE_ROOT: '/custom/state',
-      PERSONAL_AGENT_COMPANION_PORT: '4949',
-    }, { defaultStateRoot: '/state/personal-agent' })).toEqual({});
+    expect(
+      resolveDesktopRuntimeEnvironmentOverrides(
+        {
+          PERSONAL_AGENT_DESKTOP_VARIANT: 'testing',
+          PERSONAL_AGENT_STATE_ROOT: '/custom/state',
+          PERSONAL_AGENT_COMPANION_PORT: '4949',
+        },
+        { defaultStateRoot: '/state/personal-agent' },
+      ),
+    ).toEqual({});
   });
 
   it('applies testing overrides directly onto the process environment', () => {

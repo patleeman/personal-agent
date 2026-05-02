@@ -2,8 +2,9 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesktopConnectionsSettingsPanel, DesktopKeyboardShortcutsSettingsSection } from './SettingsPage';
+
 import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
+import { DesktopConnectionsSettingsPanel, DesktopKeyboardShortcutsSettingsSection } from './SettingsPage';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -28,7 +29,6 @@ const DEFAULT_KEYBOARD_SHORTCUTS = {
   toggleSidebar: 'CommandOrControl+/',
   toggleRightRail: 'CommandOrControl+\\',
 };
-
 
 const mountedRoots: Root[] = [];
 const mocks = vi.hoisted(() => ({
@@ -256,13 +256,15 @@ describe('DesktopKeyboardShortcutsSettingsSection', () => {
     await flushAsyncWork();
 
     act(() => {
-      shortcutButton.dispatchEvent(new KeyboardEvent('keydown', {
-        bubbles: true,
-        key: 'k',
-        code: 'KeyK',
-        metaKey: true,
-        altKey: true,
-      }));
+      shortcutButton.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          key: 'k',
+          code: 'KeyK',
+          metaKey: true,
+          altKey: true,
+        }),
+      );
     });
     await flushAsyncWork();
 

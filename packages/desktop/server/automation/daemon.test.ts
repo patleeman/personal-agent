@@ -1,22 +1,19 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  getDaemonStatusMock,
-  loadDaemonConfigMock,
-  pingDaemonMock,
-  resolveDaemonPathsMock,
-  setDaemonPowerKeepAwakeMock,
-} = vi.hoisted(() => ({
-  getDaemonStatusMock: vi.fn(),
-  loadDaemonConfigMock: vi.fn(),
-  pingDaemonMock: vi.fn(),
-  resolveDaemonPathsMock: vi.fn(),
-  setDaemonPowerKeepAwakeMock: vi.fn(),
-}));
+const { getDaemonStatusMock, loadDaemonConfigMock, pingDaemonMock, resolveDaemonPathsMock, setDaemonPowerKeepAwakeMock } = vi.hoisted(
+  () => ({
+    getDaemonStatusMock: vi.fn(),
+    loadDaemonConfigMock: vi.fn(),
+    pingDaemonMock: vi.fn(),
+    resolveDaemonPathsMock: vi.fn(),
+    setDaemonPowerKeepAwakeMock: vi.fn(),
+  }),
+);
 
 vi.mock('@personal-agent/daemon', () => ({
   getDaemonStatus: getDaemonStatusMock,
@@ -26,10 +23,7 @@ vi.mock('@personal-agent/daemon', () => ({
   setDaemonPowerKeepAwake: setDaemonPowerKeepAwakeMock,
 }));
 
-import {
-  readDaemonState,
-  updateDaemonPowerAndReadState,
-} from './daemon.js';
+import { readDaemonState, updateDaemonPowerAndReadState } from './daemon.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -115,9 +109,7 @@ describe('automation daemon', () => {
     pingDaemonMock.mockResolvedValue(false);
 
     const state = await readDaemonState();
-    expect(state.warnings).toEqual([
-      'Daemon runtime is not responding on the local socket.',
-    ]);
+    expect(state.warnings).toEqual(['Daemon runtime is not responding on the local socket.']);
     expect(state.runtime).toEqual({
       running: false,
       socketPath: '/tmp/runtime.sock',
@@ -145,7 +137,10 @@ describe('automation daemon', () => {
     await expect(updateDaemonPowerAndReadState({ keepAwake: true })).resolves.toMatchObject({
       power: { keepAwake: true, supported: true, active: true },
     });
-    expect(setDaemonPowerKeepAwakeMock).toHaveBeenCalledWith(true, { power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
+    expect(setDaemonPowerKeepAwakeMock).toHaveBeenCalledWith(true, {
+      power: { keepAwake: false },
+      ipc: { socketPath: join(dir, 'daemon.sock') },
+    });
   });
 
   it('reports inspection failures and tolerates unreadable log files', async () => {
@@ -158,9 +153,7 @@ describe('automation daemon', () => {
     pingDaemonMock.mockRejectedValue(new Error('runtime failed'));
 
     const state = await readDaemonState();
-    expect(state.warnings).toEqual([
-      'Could not inspect daemon runtime: runtime failed',
-    ]);
+    expect(state.warnings).toEqual(['Could not inspect daemon runtime: runtime failed']);
     expect(state.service).toMatchObject({
       platform: 'desktop',
       identifier: 'desktop-local-daemon',

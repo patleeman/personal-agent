@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import type { MessageBlock } from '../../shared/types';
 import {
+  type AskUserQuestionAnswers,
+  type AskUserQuestionPresentation,
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionNavigationHotkey,
   resolveAskUserQuestionOptionHotkey,
   shouldAdvanceAskUserQuestionAfterSelection,
-  type AskUserQuestionAnswers,
-  type AskUserQuestionPresentation,
 } from '../../transcript/askUserQuestions';
-import type { MessageBlock } from '../../shared/types';
-import { Pill, SurfacePanel, cx } from '../ui';
+import { cx, Pill, SurfacePanel } from '../ui';
 
 export interface AskUserQuestionState {
   status: 'pending' | 'answered' | 'superseded';
@@ -77,9 +78,7 @@ function isValidAskUserQuestionAnswerImage(image: NonNullable<Extract<MessageBlo
   }
   const commaIndex = src.indexOf(',');
   const base64 = commaIndex >= 0 ? src.slice(commaIndex + 1).trim() : '';
-  return Boolean(base64)
-    && base64.length % 4 !== 1
-    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
+  return Boolean(base64) && base64.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
 }
 
 export function AskUserQuestionToolBlock({
@@ -97,13 +96,8 @@ export function AskUserQuestionToolBlock({
 }) {
   const isRunning = block.status === 'running' || !!block.running;
   const answerPreview = summarizeAskUserQuestionAnswer(state.answerBlock);
-  const statusLabel = state.status === 'answered'
-    ? 'answered'
-    : state.status === 'superseded'
-      ? 'replaced'
-      : isRunning
-        ? 'asking…'
-        : 'waiting';
+  const statusLabel =
+    state.status === 'answered' ? 'answered' : state.status === 'superseded' ? 'replaced' : isRunning ? 'asking…' : 'waiting';
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const [answers, setAnswers] = useState<AskUserQuestionAnswers>({});
@@ -111,10 +105,7 @@ export function AskUserQuestionToolBlock({
   const questionTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
-  const questionIdsKey = useMemo(
-    () => presentation.questions.map((question) => question.id).join('|'),
-    [presentation.questions],
-  );
+  const questionIdsKey = useMemo(() => presentation.questions.map((question) => question.id).join('|'), [presentation.questions]);
 
   useEffect(() => {
     setActiveQuestionIndex(0);
@@ -127,10 +118,7 @@ export function AskUserQuestionToolBlock({
   const isActiveCheckQuestion = activeQuestion?.style === 'check';
   const isLastQuestion = activeQuestionIndex >= presentation.questions.length - 1;
   const canAdvanceToNextQuestion = Boolean(
-    activeQuestion
-    && isActiveCheckQuestion
-    && !isLastQuestion
-    && (answers[activeQuestion.id]?.length ?? 0) > 0,
+    activeQuestion && isActiveCheckQuestion && !isLastQuestion && (answers[activeQuestion.id]?.length ?? 0) > 0,
   );
 
   useEffect(() => {
@@ -167,23 +155,26 @@ export function AskUserQuestionToolBlock({
     });
   }, []);
 
-  const activateQuestion = useCallback((index: number, options?: { focus?: 'tab' | 'option' }) => {
-    const nextIndex = Math.max(0, Math.min(index, presentation.questions.length - 1));
-    const nextQuestion = presentation.questions[nextIndex];
-    const nextOptionIndex = resolveAskUserQuestionDefaultOptionIndex(nextQuestion, answers);
-    setActiveQuestionIndex(nextIndex);
-    setActiveOptionIndex(nextOptionIndex >= 0 ? nextOptionIndex : 0);
+  const activateQuestion = useCallback(
+    (index: number, options?: { focus?: 'tab' | 'option' }) => {
+      const nextIndex = Math.max(0, Math.min(index, presentation.questions.length - 1));
+      const nextQuestion = presentation.questions[nextIndex];
+      const nextOptionIndex = resolveAskUserQuestionDefaultOptionIndex(nextQuestion, answers);
+      setActiveQuestionIndex(nextIndex);
+      setActiveOptionIndex(nextOptionIndex >= 0 ? nextOptionIndex : 0);
 
-    if (options?.focus === 'tab') {
-      focusQuestionTab(nextIndex);
-    } else if (options?.focus === 'option') {
-      if (nextOptionIndex >= 0) {
-        focusOption(nextOptionIndex);
-      } else {
+      if (options?.focus === 'tab') {
         focusQuestionTab(nextIndex);
+      } else if (options?.focus === 'option') {
+        if (nextOptionIndex >= 0) {
+          focusOption(nextOptionIndex);
+        } else {
+          focusQuestionTab(nextIndex);
+        }
       }
-    }
-  }, [answers, focusOption, focusQuestionTab, presentation.questions]);
+    },
+    [answers, focusOption, focusQuestionTab, presentation.questions],
+  );
 
   const advanceToNextQuestion = useCallback(() => {
     if (!canAdvanceToNextQuestion) {
@@ -205,239 +196,270 @@ export function AskUserQuestionToolBlock({
     }
   }, [answers, canSubmit, onSubmit, presentation]);
 
-  const advanceAfterAnswer = useCallback((questionIndex: number, nextAnswers: AskUserQuestionAnswers) => {
-    const nextQuestionIndex = questionIndex + 1;
-    if (nextQuestionIndex < presentation.questions.length) {
-      const nextQuestion = presentation.questions[nextQuestionIndex];
-      const nextOptionIndex = resolveAskUserQuestionDefaultOptionIndex(nextQuestion, nextAnswers);
-      setActiveQuestionIndex(nextQuestionIndex);
-      setActiveOptionIndex(nextOptionIndex >= 0 ? nextOptionIndex : 0);
-      if (nextOptionIndex >= 0) {
-        focusOption(nextOptionIndex);
-      } else {
-        focusQuestionTab(nextQuestionIndex);
+  const advanceAfterAnswer = useCallback(
+    (questionIndex: number, nextAnswers: AskUserQuestionAnswers) => {
+      const nextQuestionIndex = questionIndex + 1;
+      if (nextQuestionIndex < presentation.questions.length) {
+        const nextQuestion = presentation.questions[nextQuestionIndex];
+        const nextOptionIndex = resolveAskUserQuestionDefaultOptionIndex(nextQuestion, nextAnswers);
+        setActiveQuestionIndex(nextQuestionIndex);
+        setActiveOptionIndex(nextOptionIndex >= 0 ? nextOptionIndex : 0);
+        if (nextOptionIndex >= 0) {
+          focusOption(nextOptionIndex);
+        } else {
+          focusQuestionTab(nextQuestionIndex);
+        }
+        return;
       }
-      return;
-    }
 
-    if (isAskUserQuestionComplete(presentation, nextAnswers)) {
-      focusSubmitButton();
-    }
-  }, [focusOption, focusQuestionTab, focusSubmitButton, presentation]);
-
-  const applyRadioAnswer = useCallback((questionIndex: number, value: string) => {
-    const question = presentation.questions[questionIndex];
-    if (!question) {
-      return;
-    }
-
-    const nextValues = [value];
-    const nextAnswers = {
-      ...answers,
-      [question.id]: nextValues,
-    };
-    setAnswers(nextAnswers);
-    if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
-      advanceAfterAnswer(questionIndex, nextAnswers);
-    }
-  }, [advanceAfterAnswer, answers, presentation.questions]);
-
-  const applyCheckAnswer = useCallback((questionIndex: number, value: string) => {
-    const question = presentation.questions[questionIndex];
-    if (!question) {
-      return;
-    }
-
-    const currentValues = answers[question.id] ?? [];
-    const alreadySelected = currentValues.includes(value);
-    const nextValues = alreadySelected
-      ? currentValues.filter((candidate) => candidate !== value)
-      : [...currentValues, value];
-    const nextAnswers = {
-      ...answers,
-      [question.id]: nextValues,
-    };
-
-    setAnswers(nextAnswers);
-    if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
-      advanceAfterAnswer(questionIndex, nextAnswers);
-    }
-  }, [advanceAfterAnswer, answers, presentation.questions]);
-
-  const handleOptionSelect = useCallback((questionIndex: number, optionIndex: number) => {
-    const question = presentation.questions[questionIndex];
-    const option = question?.options[optionIndex];
-    if (!question || !option || submitting) {
-      return;
-    }
-
-    setActiveOptionIndex(optionIndex);
-    if (question.style === 'check') {
-      applyCheckAnswer(questionIndex, option.value);
-      return;
-    }
-
-    applyRadioAnswer(questionIndex, option.value);
-  }, [applyCheckAnswer, applyRadioAnswer, presentation.questions, submitting]);
-
-  const handleQuestionTabKeyDown = useCallback((index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey)) {
-      event.preventDefault();
-      activateQuestion(Math.max(0, index - 1), { focus: 'tab' });
-      return;
-    }
-
-    if (event.key === 'ArrowRight' || (event.key === 'Tab' && !event.shiftKey)) {
-      event.preventDefault();
-      if (index >= presentation.questions.length - 1) {
+      if (isAskUserQuestionComplete(presentation, nextAnswers)) {
         focusSubmitButton();
-      } else {
-        activateQuestion(index + 1, { focus: 'tab' });
       }
-      return;
-    }
+    },
+    [focusOption, focusQuestionTab, focusSubmitButton, presentation],
+  );
 
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      if (activeQuestion?.options.length) {
-        focusOption(activeOptionIndex);
+  const applyRadioAnswer = useCallback(
+    (questionIndex: number, value: string) => {
+      const question = presentation.questions[questionIndex];
+      if (!question) {
+        return;
       }
-      return;
-    }
 
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      if (activeQuestion?.options.length) {
-        focusOption(activeOptionIndex);
+      const nextValues = [value];
+      const nextAnswers = {
+        ...answers,
+        [question.id]: nextValues,
+      };
+      setAnswers(nextAnswers);
+      if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
+        advanceAfterAnswer(questionIndex, nextAnswers);
       }
-      return;
-    }
+    },
+    [advanceAfterAnswer, answers, presentation.questions],
+  );
 
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.currentTarget.blur();
-    }
-  }, [activateQuestion, activeOptionIndex, activeQuestion?.options.length, focusOption, focusSubmitButton, presentation.questions.length]);
-
-  const handleSubmitKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey)) {
-      event.preventDefault();
-      activateQuestion(presentation.questions.length - 1, { focus: 'tab' });
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      if (activeQuestion?.options.length) {
-        focusOption(activeOptionIndex);
+  const applyCheckAnswer = useCallback(
+    (questionIndex: number, value: string) => {
+      const question = presentation.questions[questionIndex];
+      if (!question) {
+        return;
       }
-      return;
-    }
 
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      void submitIfReady();
-      return;
-    }
+      const currentValues = answers[question.id] ?? [];
+      const alreadySelected = currentValues.includes(value);
+      const nextValues = alreadySelected ? currentValues.filter((candidate) => candidate !== value) : [...currentValues, value];
+      const nextAnswers = {
+        ...answers,
+        [question.id]: nextValues,
+      };
 
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.currentTarget.blur();
-    }
-  }, [activateQuestion, activeOptionIndex, activeQuestion?.options.length, focusOption, presentation.questions.length, submitIfReady]);
-
-  const handleOptionKeyDown = useCallback((optionIndex: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (!activeQuestion) {
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      const nextIndex = moveAskUserQuestionIndex(optionIndex, activeQuestion.options.length, 1);
-      setActiveOptionIndex(nextIndex);
-      focusOption(nextIndex);
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      const nextIndex = moveAskUserQuestionIndex(optionIndex, activeQuestion.options.length, -1);
-      setActiveOptionIndex(nextIndex);
-      focusOption(nextIndex);
-      return;
-    }
-
-    if (event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey)) {
-      event.preventDefault();
-      activateQuestion(Math.max(0, activeQuestionIndex - 1), { focus: 'tab' });
-      return;
-    }
-
-    if (event.key === 'ArrowRight' || (event.key === 'Tab' && !event.shiftKey)) {
-      event.preventDefault();
-      if (activeQuestionIndex >= presentation.questions.length - 1) {
-        focusSubmitButton();
-      } else {
-        activateQuestion(activeQuestionIndex + 1, { focus: 'tab' });
+      setAnswers(nextAnswers);
+      if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
+        advanceAfterAnswer(questionIndex, nextAnswers);
       }
-      return;
-    }
+    },
+    [advanceAfterAnswer, answers, presentation.questions],
+  );
 
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      handleOptionSelect(activeQuestionIndex, optionIndex);
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.currentTarget.blur();
-    }
-  }, [activeQuestion, activeQuestionIndex, activateQuestion, focusOption, focusSubmitButton, handleOptionSelect, presentation.questions.length]);
-
-  const handlePanelHotkeys = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.defaultPrevented || submitting || event.altKey || event.ctrlKey || event.metaKey) {
-      return;
-    }
-
-    const optionHotkeyIndex = resolveAskUserQuestionOptionHotkey(event.key);
-    if (activeQuestion && optionHotkeyIndex >= 0 && optionHotkeyIndex < activeQuestion.options.length) {
-      event.preventDefault();
-      handleOptionSelect(activeQuestionIndex, optionHotkeyIndex);
-      return;
-    }
-
-    const questionDirection = resolveAskUserQuestionNavigationHotkey(event.key);
-    if (questionDirection === 0) {
-      return;
-    }
-
-    event.preventDefault();
-    if (questionDirection > 0) {
-      if (activeQuestionIndex >= presentation.questions.length - 1) {
-        focusSubmitButton();
-      } else {
-        activateQuestion(activeQuestionIndex + 1, { focus: 'option' });
+  const handleOptionSelect = useCallback(
+    (questionIndex: number, optionIndex: number) => {
+      const question = presentation.questions[questionIndex];
+      const option = question?.options[optionIndex];
+      if (!question || !option || submitting) {
+        return;
       }
-      return;
-    }
 
-    activateQuestion(Math.max(0, activeQuestionIndex - 1), { focus: 'option' });
-  }, [activeQuestion, activeQuestionIndex, activateQuestion, focusSubmitButton, handleOptionSelect, presentation.questions.length, submitting]);
+      setActiveOptionIndex(optionIndex);
+      if (question.style === 'check') {
+        applyCheckAnswer(questionIndex, option.value);
+        return;
+      }
 
-  const statusTone = state.status === 'answered'
-    ? 'success'
-    : state.status === 'superseded'
-      ? 'muted'
-      : 'warning';
+      applyRadioAnswer(questionIndex, option.value);
+    },
+    [applyCheckAnswer, applyRadioAnswer, presentation.questions, submitting],
+  );
+
+  const handleQuestionTabKeyDown = useCallback(
+    (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey)) {
+        event.preventDefault();
+        activateQuestion(Math.max(0, index - 1), { focus: 'tab' });
+        return;
+      }
+
+      if (event.key === 'ArrowRight' || (event.key === 'Tab' && !event.shiftKey)) {
+        event.preventDefault();
+        if (index >= presentation.questions.length - 1) {
+          focusSubmitButton();
+        } else {
+          activateQuestion(index + 1, { focus: 'tab' });
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (activeQuestion?.options.length) {
+          focusOption(activeOptionIndex);
+        }
+        return;
+      }
+
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        if (activeQuestion?.options.length) {
+          focusOption(activeOptionIndex);
+        }
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+    },
+    [activateQuestion, activeOptionIndex, activeQuestion?.options.length, focusOption, focusSubmitButton, presentation.questions.length],
+  );
+
+  const handleSubmitKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey)) {
+        event.preventDefault();
+        activateQuestion(presentation.questions.length - 1, { focus: 'tab' });
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (activeQuestion?.options.length) {
+          focusOption(activeOptionIndex);
+        }
+        return;
+      }
+
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        void submitIfReady();
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+    },
+    [activateQuestion, activeOptionIndex, activeQuestion?.options.length, focusOption, presentation.questions.length, submitIfReady],
+  );
+
+  const handleOptionKeyDown = useCallback(
+    (optionIndex: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (!activeQuestion) {
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        const nextIndex = moveAskUserQuestionIndex(optionIndex, activeQuestion.options.length, 1);
+        setActiveOptionIndex(nextIndex);
+        focusOption(nextIndex);
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        const nextIndex = moveAskUserQuestionIndex(optionIndex, activeQuestion.options.length, -1);
+        setActiveOptionIndex(nextIndex);
+        focusOption(nextIndex);
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' || (event.key === 'Tab' && event.shiftKey)) {
+        event.preventDefault();
+        activateQuestion(Math.max(0, activeQuestionIndex - 1), { focus: 'tab' });
+        return;
+      }
+
+      if (event.key === 'ArrowRight' || (event.key === 'Tab' && !event.shiftKey)) {
+        event.preventDefault();
+        if (activeQuestionIndex >= presentation.questions.length - 1) {
+          focusSubmitButton();
+        } else {
+          activateQuestion(activeQuestionIndex + 1, { focus: 'tab' });
+        }
+        return;
+      }
+
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handleOptionSelect(activeQuestionIndex, optionIndex);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+    },
+    [
+      activeQuestion,
+      activeQuestionIndex,
+      activateQuestion,
+      focusOption,
+      focusSubmitButton,
+      handleOptionSelect,
+      presentation.questions.length,
+    ],
+  );
+
+  const handlePanelHotkeys = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.defaultPrevented || submitting || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      const optionHotkeyIndex = resolveAskUserQuestionOptionHotkey(event.key);
+      if (activeQuestion && optionHotkeyIndex >= 0 && optionHotkeyIndex < activeQuestion.options.length) {
+        event.preventDefault();
+        handleOptionSelect(activeQuestionIndex, optionHotkeyIndex);
+        return;
+      }
+
+      const questionDirection = resolveAskUserQuestionNavigationHotkey(event.key);
+      if (questionDirection === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      if (questionDirection > 0) {
+        if (activeQuestionIndex >= presentation.questions.length - 1) {
+          focusSubmitButton();
+        } else {
+          activateQuestion(activeQuestionIndex + 1, { focus: 'option' });
+        }
+        return;
+      }
+
+      activateQuestion(Math.max(0, activeQuestionIndex - 1), { focus: 'option' });
+    },
+    [
+      activeQuestion,
+      activeQuestionIndex,
+      activateQuestion,
+      focusSubmitButton,
+      handleOptionSelect,
+      presentation.questions.length,
+      submitting,
+    ],
+  );
+
+  const statusTone = state.status === 'answered' ? 'success' : state.status === 'superseded' ? 'muted' : 'warning';
 
   return (
     <SurfacePanel
       muted
-      className={cx(
-        'px-3 py-2.5 text-[12px] transition-colors',
-        state.status === 'pending' && 'border-warning/25 bg-warning/5',
-      )}
+      className={cx('px-3 py-2.5 text-[12px] transition-colors', state.status === 'pending' && 'border-warning/25 bg-warning/5')}
       onKeyDownCapture={mode === 'inline' ? handlePanelHotkeys : undefined}
     >
       <div className="flex items-start gap-2.5">
@@ -449,7 +471,9 @@ export function AskUserQuestionToolBlock({
             <span className="text-[13px] font-medium text-primary">
               {presentation.questions.length === 1 ? 'Question for you' : 'Questions for you'}
             </span>
-            <Pill tone={statusTone} className="px-2.5 py-0.5 text-[12px]">{statusLabel}</Pill>
+            <Pill tone={statusTone} className="px-2.5 py-0.5 text-[12px]">
+              {statusLabel}
+            </Pill>
             {mode === 'inline' && state.status === 'pending' && presentation.questions.length > 1 && (
               <span className="text-[12px] uppercase tracking-[0.12em] text-dim/65">
                 {answeredCount}/{presentation.questions.length} answered
@@ -488,7 +512,9 @@ export function AskUserQuestionToolBlock({
                     return (
                       <button
                         key={question.id}
-                        ref={(node) => { questionTabRefs.current[index] = node; }}
+                        ref={(node) => {
+                          questionTabRefs.current[index] = node;
+                        }}
                         type="button"
                         role="tab"
                         aria-selected={active}
@@ -497,14 +523,13 @@ export function AskUserQuestionToolBlock({
                         onKeyDown={(event) => handleQuestionTabKeyDown(index, event)}
                         className={cx(
                           'ui-action-button min-w-0 px-2 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
-                          active
-                            ? 'text-primary hover:text-primary'
-                            : answered
-                              ? 'text-secondary'
-                              : 'text-dim',
+                          active ? 'text-primary hover:text-primary' : answered ? 'text-secondary' : 'text-dim',
                         )}
                       >
-                        <span aria-hidden="true" className={cx('shrink-0 text-[12px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                        <span
+                          aria-hidden="true"
+                          className={cx('shrink-0 text-[12px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}
+                        >
                           {answered ? '✓' : active ? '•' : '○'}
                         </span>
                         <span className="truncate">{question.label}</span>
@@ -530,7 +555,9 @@ export function AskUserQuestionToolBlock({
                         ref={submitButtonRef}
                         type="button"
                         disabled={!canSubmit || submitting}
-                        onClick={() => { void submitIfReady(); }}
+                        onClick={() => {
+                          void submitIfReady();
+                        }}
                         onKeyDown={handleSubmitKeyDown}
                         className={cx(
                           'ui-action-button px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
@@ -544,7 +571,11 @@ export function AskUserQuestionToolBlock({
                 </div>
 
                 {activeQuestion && (
-                  <div id={`ask-user-question-panel-${activeQuestion.id}`} role="tabpanel" className="mt-3 border-t border-border-subtle pt-3">
+                  <div
+                    id={`ask-user-question-panel-${activeQuestion.id}`}
+                    role="tabpanel"
+                    className="mt-3 border-t border-border-subtle pt-3"
+                  >
                     {presentation.questions.length > 1 && (
                       <p className="text-[12px] uppercase tracking-[0.12em] text-dim/65">
                         Question {activeQuestionIndex + 1} of {presentation.questions.length}
@@ -564,13 +595,13 @@ export function AskUserQuestionToolBlock({
                         {activeQuestion.options.map((option, optionIndex) => {
                           const selectedValues = answers[activeQuestion.id] ?? [];
                           const checked = selectedValues.includes(option.value);
-                          const indicator = activeQuestion.style === 'check'
-                            ? (checked ? '☑' : '☐')
-                            : (checked ? '◉' : '◯');
+                          const indicator = activeQuestion.style === 'check' ? (checked ? '☑' : '☐') : checked ? '◉' : '◯';
                           return (
                             <button
                               key={`${activeQuestion.id}:${option.value}`}
-                              ref={(node) => { optionRefs.current[optionIndex] = node; }}
+                              ref={(node) => {
+                                optionRefs.current[optionIndex] = node;
+                              }}
                               type="button"
                               role={activeQuestion.style === 'check' ? 'checkbox' : 'radio'}
                               aria-checked={checked}
@@ -584,7 +615,10 @@ export function AskUserQuestionToolBlock({
                                 submitting && 'cursor-default opacity-60',
                               )}
                             >
-                              <span className={cx('mt-0.5 w-5 shrink-0 text-[12px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                              <span
+                                className={cx('mt-0.5 w-5 shrink-0 text-[12px]', checked ? 'text-accent' : 'text-dim')}
+                                aria-hidden="true"
+                              >
                                 {indicator}
                               </span>
                               <span className="min-w-0 flex-1">
@@ -623,4 +657,3 @@ export function AskUserQuestionToolBlock({
     </SurfacePanel>
   );
 }
-

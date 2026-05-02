@@ -1,4 +1,4 @@
-import { loadDurableRunAttentionState, type DurableRunAttentionStateDocument } from '@personal-agent/core';
+import { type DurableRunAttentionStateDocument, loadDurableRunAttentionState } from '@personal-agent/core';
 import type { ScannedDurableRun } from '@personal-agent/daemon';
 
 interface DurableRunAttentionCandidate extends Pick<ScannedDurableRun, 'runId' | 'status' | 'problems' | 'recoveryAction'> {}
@@ -6,14 +6,16 @@ interface DurableRunAttentionCandidate extends Pick<ScannedDurableRun, 'runId' |
 export function durableRunNeedsAttention(run: DurableRunAttentionCandidate): boolean {
   const status = run.status?.status;
 
-  return run.problems.length > 0
-    || run.recoveryAction === 'resume'
-    || run.recoveryAction === 'rerun'
-    || run.recoveryAction === 'attention'
-    || run.recoveryAction === 'invalid'
-    || status === 'failed'
-    || status === 'interrupted'
-    || status === 'recovering';
+  return (
+    run.problems.length > 0 ||
+    run.recoveryAction === 'resume' ||
+    run.recoveryAction === 'rerun' ||
+    run.recoveryAction === 'attention' ||
+    run.recoveryAction === 'invalid' ||
+    status === 'failed' ||
+    status === 'interrupted' ||
+    status === 'recovering'
+  );
 }
 
 export function getDurableRunAttentionSignature(run: DurableRunAttentionCandidate): string | null {
@@ -39,8 +41,7 @@ export function decorateDurableRunAttention<T extends DurableRunAttentionCandida
   attentionSignature: string | null;
 } {
   const attentionSignature = getDurableRunAttentionSignature(run);
-  const attentionDismissed = attentionSignature !== null
-    && state.runs[run.runId]?.attentionSignature === attentionSignature;
+  const attentionDismissed = attentionSignature !== null && state.runs[run.runId]?.attentionSignature === attentionSignature;
 
   return {
     ...run,
@@ -52,9 +53,11 @@ export function decorateDurableRunAttention<T extends DurableRunAttentionCandida
 export function decorateDurableRunsAttention<T extends DurableRunAttentionCandidate>(
   runs: T[],
   state: DurableRunAttentionStateDocument = loadDurableRunAttentionState(),
-): Array<T & {
-  attentionDismissed: boolean;
-  attentionSignature: string | null;
-}> {
+): Array<
+  T & {
+    attentionDismissed: boolean;
+    attentionSignature: string | null;
+  }
+> {
   return runs.map((run) => decorateDurableRunAttention(run, state));
 }

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildDesktopStartupErrorPageDataUrl,
-  buildDesktopStartupErrorPageHtml,
-} from './startup-error-page.js';
+
+import { buildDesktopStartupErrorPageDataUrl, buildDesktopStartupErrorPageHtml } from './startup-error-page.js';
 
 describe('startup error page helpers', () => {
   it('renders the error details, logs path, and desktop actions', () => {

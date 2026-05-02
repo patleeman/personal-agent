@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, type AboutPanelOptionsOptions } from 'electron';
+
+import { type AboutPanelOptionsOptions, app } from 'electron';
 
 export interface DesktopAboutVersions {
   applicationVersion: string;
@@ -29,14 +30,13 @@ function readVersionFromPackageJson(candidates: string[]): string | null {
 
 export function resolveDesktopAboutVersionsForPaths(currentDir: string, cwd = process.cwd()): DesktopAboutVersions {
   const packageDir = resolve(currentDir, '..');
-  const applicationVersion = readVersionFromPackageJson([
-    resolve(packageDir, 'package.json'),
-  ]) ?? 'Unknown';
-  const piVersion = readVersionFromPackageJson([
-    resolve(packageDir, 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
-    resolve(packageDir, '..', '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
-    resolve(cwd, 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
-  ]) ?? 'Unknown';
+  const applicationVersion = readVersionFromPackageJson([resolve(packageDir, 'package.json')]) ?? 'Unknown';
+  const piVersion =
+    readVersionFromPackageJson([
+      resolve(packageDir, 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
+      resolve(packageDir, '..', '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
+      resolve(cwd, 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
+    ]) ?? 'Unknown';
 
   return {
     applicationVersion,
@@ -59,9 +59,11 @@ export function buildDesktopAboutPanelOptions(input: {
 export function applyDesktopAboutPanelOptions(currentDir = dirname(fileURLToPath(import.meta.url))): void {
   const versions = resolveDesktopAboutVersionsForPaths(currentDir);
 
-  app.setAboutPanelOptions(buildDesktopAboutPanelOptions({
-    applicationName: app.name || 'Personal Agent',
-    applicationVersion: versions.applicationVersion === 'Unknown' ? app.getVersion() : versions.applicationVersion,
-    piVersion: versions.piVersion,
-  }));
+  app.setAboutPanelOptions(
+    buildDesktopAboutPanelOptions({
+      applicationName: app.name || 'Personal Agent',
+      applicationVersion: versions.applicationVersion === 'Unknown' ? app.getVersion() : versions.applicationVersion,
+      piVersion: versions.piVersion,
+    }),
+  );
 }

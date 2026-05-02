@@ -64,10 +64,9 @@ function looksLikeSourceOnlyLatexFragment(content: string): boolean {
 
 function isStandaloneMathEnvironment(content: string): boolean {
   const trimmed = normalizeTrimmedContent(content);
-  return STANDALONE_MATH_ENVIRONMENTS.some((environment) => (
-    trimmed.startsWith(`\\begin{${environment}}`)
-    && trimmed.endsWith(`\\end{${environment}}`)
-  ));
+  return STANDALONE_MATH_ENVIRONMENTS.some(
+    (environment) => trimmed.startsWith(`\\begin{${environment}}`) && trimmed.endsWith(`\\end{${environment}}`),
+  );
 }
 
 function shouldRenderLatexMathPreview(content: string): boolean {
@@ -100,7 +99,5 @@ function shouldRenderLatexMathPreview(content: string): boolean {
 }
 
 export function getLatexArtifactDisplayMode(content: string): LatexArtifactDisplayMode {
-  return shouldRenderLatexMathPreview(content)
-    ? 'math-preview-and-source'
-    : 'source';
+  return shouldRenderLatexMathPreview(content) ? 'math-preview-and-source' : 'source';
 }

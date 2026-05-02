@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createRunAgentExtension } from './runAgentExtension.js';
 
 const {
@@ -68,7 +69,11 @@ vi.mock('@personal-agent/core', async (importOriginal) => {
 
 function registerRunTool() {
   let registeredTool:
-    | { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> }
+    | {
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      }
     | undefined;
 
   createRunAgentExtension({
@@ -77,7 +82,11 @@ function registerRunTool() {
     profilesRoot: '/profiles',
   })({
     registerTool: (tool: unknown) => {
-      registeredTool = tool as { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> };
+      registeredTool = tool as {
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      };
     },
   } as never);
 
@@ -147,12 +156,14 @@ describe('run agent extension', () => {
       action: 'list',
       runCount: 1,
       runIds: ['run-123'],
-      runs: [{
-        runId: 'run-123',
-        status: 'running',
-        kind: 'background-run',
-        source: 'tool',
-      }],
+      runs: [
+        {
+          runId: 'run-123',
+          status: 'running',
+          kind: 'background-run',
+          source: 'tool',
+        },
+      ],
     });
   });
 
@@ -173,9 +184,27 @@ describe('run agent extension', () => {
 
     const runTool = registerRunTool();
     const detail = await runTool.execute('tool-1', { action: 'get', runId: 'run-123' }, undefined, undefined, createToolContext());
-    const logs = await runTool.execute('tool-2', { action: 'logs', runId: 'run-123', tail: 5_000 }, undefined, undefined, createToolContext());
-    const fractionalLogs = await runTool.execute('tool-3', { action: 'logs', runId: 'run-123', tail: 5.5 }, undefined, undefined, createToolContext());
-    const unsafeLogs = await runTool.execute('tool-4', { action: 'logs', runId: 'run-123', tail: Number.MAX_SAFE_INTEGER + 1 }, undefined, undefined, createToolContext());
+    const logs = await runTool.execute(
+      'tool-2',
+      { action: 'logs', runId: 'run-123', tail: 5_000 },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    const fractionalLogs = await runTool.execute(
+      'tool-3',
+      { action: 'logs', runId: 'run-123', tail: 5.5 },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    const unsafeLogs = await runTool.execute(
+      'tool-4',
+      { action: 'logs', runId: 'run-123', tail: Number.MAX_SAFE_INTEGER + 1 },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
 
     expect(detail.isError).not.toBe(true);
     expect(detail.content[0]?.text).toContain('source: tool (conv-123)');
@@ -594,7 +623,10 @@ describe('run agent extension', () => {
     );
 
     expect(result.isError).not.toBe(true);
-    expect(followUpDurableRunMock).toHaveBeenCalledWith('run-original-123', 'Continue from the failed migration step and finish validation.');
+    expect(followUpDurableRunMock).toHaveBeenCalledWith(
+      'run-original-123',
+      'Continue from the failed migration step and finish validation.',
+    );
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
     expect(result.content[0]?.text).toContain('Started follow-up run run-followup-123 from run-original-123');
   });

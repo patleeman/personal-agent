@@ -1,6 +1,74 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContentSearchResult, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationSummaryRecord, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionInstallResult, TranscriptionModelStatus, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, UncommittedDiffResult, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultSearchResponse, VaultShareImportResult, VaultTreeResult, WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceFileContent } from '../shared/types';
-import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
+import type {
+  AppStatus,
+  ConversationArtifactRecord,
+  ConversationArtifactSummary,
+  ConversationAttachmentAssetData,
+  ConversationAttachmentRecord,
+  ConversationAttachmentSummary,
+  ConversationAutomationWorkspaceState,
+  ConversationAutoModeState,
+  ConversationBootstrapState,
+  ConversationCheckpointReviewContext,
+  ConversationCommitCheckpointRecord,
+  ConversationCommitCheckpointSummary,
+  ConversationContentSearchResult,
+  ConversationContextDocRef,
+  ConversationCwdChangeResult,
+  ConversationRecoveryResult,
+  ConversationSummaryRecord,
+  ConversationTitleSettingsState,
+  DaemonState,
+  DefaultCwdState,
+  DeferredResumeSummary,
+  DesktopEnvironmentState,
+  DesktopRemoteDirectoryListing,
+  DisplayBlock,
+  DurableRunDetailResult,
+  DurableRunListResult,
+  FilePickerResult,
+  FolderPickerResult,
+  InjectedPromptMessage,
+  InstructionFilesState,
+  KnowledgeBaseState,
+  LiveSessionContext,
+  LiveSessionCreateResult,
+  LiveSessionExportResult,
+  LiveSessionForkEntry,
+  LiveSessionMeta,
+  LiveSessionPresenceState,
+  MemoryData,
+  ModelProviderState,
+  ModelState,
+  PromptAttachmentRefInput,
+  PromptImageInput,
+  ProviderAuthState,
+  ProviderOAuthLoginState,
+  ScheduledTaskDetail,
+  ScheduledTaskSummary,
+  SessionDetailResult,
+  SessionMeta,
+  SkillFoldersState,
+  ToolsState,
+  TranscriptionInstallResult,
+  TranscriptionModelStatus,
+  TranscriptionProviderId,
+  TranscriptionResult,
+  TranscriptionSettingsState,
+  UncommittedDiffResult,
+  VaultBacklinksResult,
+  VaultEntry,
+  VaultFileContent,
+  VaultFileListResult,
+  VaultImageUploadResult,
+  VaultSearchResponse,
+  VaultShareImportResult,
+  VaultTreeResult,
+  WorkspaceDiffOverlay,
+  WorkspaceDirectoryListing,
+  WorkspaceFileContent,
+} from '../shared/types';
+import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
 // ── Retry helpers for transient network errors (e.g. server restarts) ────────
@@ -80,7 +148,7 @@ async function del<T>(path: string): Promise<T> {
 
 async function readApiError(res: Response): Promise<string> {
   try {
-    const data = await res.json() as { error?: string };
+    const data = (await res.json()) as { error?: string };
     if (typeof data.error === 'string' && data.error.trim().length > 0) {
       return data.error;
     }
@@ -180,7 +248,7 @@ async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {
 }
 
 async function shouldUseDesktopLocalConversationCapabilities(conversationId: string): Promise<boolean> {
-  if (!getDesktopBridge() || !await shouldUseDesktopLocalCapabilities()) {
+  if (!getDesktopBridge() || !(await shouldUseDesktopLocalCapabilities())) {
     return false;
   }
 
@@ -193,69 +261,64 @@ async function shouldUseDesktopLocalConversationCapabilities(conversationId: str
 }
 
 function normalizeTailBlocksParam(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(1000, value)
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(1000, value) : undefined;
 }
 
 export function normalizeDurableRunLogTailParam(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(1000, value)
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(1000, value) : undefined;
 }
 
 export function normalizeConversationContentSearchLimit(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(100, value)
-    : 80;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(100, value) : 80;
 }
 
 export function normalizeVaultSearchLimit(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(50, value)
-    : 20;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(50, value) : 20;
 }
 
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
-  status:       async () => {
+  status: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readAppStatus();
     }
     return get<AppStatus>('/status');
   },
-  daemon:       async () => {
+  daemon: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readDaemonState();
     }
     return get<DaemonState>('/daemon');
   },
   updateDaemonPower: async (input: { keepAwake: boolean }) => patch<DaemonState>('/daemon/power', input),
-  sessions:     async () => {
+  sessions: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readSessions();
     }
     return get<SessionMeta[]>('/sessions');
   },
-  sessionMeta:  async (id: string) => {
+  sessionMeta: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readSessionMeta(id);
     }
     return get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`);
   },
-  sessionDetail: async (id: string, options?: {
-    tailBlocks?: number;
-    knownSessionSignature?: string;
-    knownBlockOffset?: number;
-    knownTotalBlocks?: number;
-    knownLastBlockId?: string;
-  }) => {
+  sessionDetail: async (
+    id: string,
+    options?: {
+      tailBlocks?: number;
+      knownSessionSignature?: string;
+      knownBlockOffset?: number;
+      knownTotalBlocks?: number;
+      knownLastBlockId?: string;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readSessionDetail({ sessionId: id, ...options });
     }
 
@@ -282,21 +345,24 @@ export const api = {
   },
   sessionBlock: async (id: string, blockId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readSessionBlock({ sessionId: id, blockId });
     }
     return get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`);
   },
   sessionSearchIndex: async (sessionIds: string[]) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readSessionSearchIndex(sessionIds);
     }
     return post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds });
   },
-  conversationContentSearch: async (query: string, limit = 80) => post<ConversationContentSearchResult>('/sessions/search', { query, limit: normalizeConversationContentSearchLimit(limit) }),
-  conversationSummaries: async (sessionIds: string[]) => post<{ summaries: Record<string, ConversationSummaryRecord> }>('/conversation-summaries', { sessionIds }),
-  warmRelatedConversationPointers: async (input: { prompt: string; currentConversationId?: string; currentCwd?: string | null }) => post<{ ok: boolean; pointerCount: number }>('/related-conversation-pointers/warm', input),
+  conversationContentSearch: async (query: string, limit = 80) =>
+    post<ConversationContentSearchResult>('/sessions/search', { query, limit: normalizeConversationContentSearchLimit(limit) }),
+  conversationSummaries: async (sessionIds: string[]) =>
+    post<{ summaries: Record<string, ConversationSummaryRecord> }>('/conversation-summaries', { sessionIds }),
+  warmRelatedConversationPointers: async (input: { prompt: string; currentConversationId?: string; currentCwd?: string | null }) =>
+    post<{ ok: boolean; pointerCount: number }>('/related-conversation-pointers/warm', input),
   skillFolders: async () => get<SkillFoldersState>('/skill-folders'),
   updateSkillFolders: async (skillDirs: string[]) => patch<SkillFoldersState>('/skill-folders', { skillDirs }),
   instructions: async () => get<InstructionFilesState>('/instructions'),
@@ -305,7 +371,7 @@ export const api = {
   // ── Models ────────────────────────────────────────────────────────────────
   models: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       try {
         const result = await desktopBridge.readModels();
         if (result && result.models && result.models.length > 0) {
@@ -320,22 +386,25 @@ export const api = {
   },
   modelProviders: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readModelProviders();
     }
     return get<ModelProviderState>('/model-providers');
   },
-  saveModelProvider: async (provider: string, input: {
-    baseUrl?: string;
-    api?: string;
-    apiKey?: string;
-    authHeader?: boolean;
-    headers?: Record<string, string>;
-    compat?: Record<string, unknown>;
-    modelOverrides?: Record<string, unknown>;
-  }) => {
+  saveModelProvider: async (
+    provider: string,
+    input: {
+      baseUrl?: string;
+      api?: string;
+      apiKey?: string;
+      authHeader?: boolean;
+      headers?: Record<string, string>;
+      compat?: Record<string, unknown>;
+      modelOverrides?: Record<string, unknown>;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.saveModelProvider({ provider, ...input });
     }
 
@@ -343,32 +412,35 @@ export const api = {
   },
   deleteModelProvider: async (provider: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.deleteModelProvider(provider);
     }
 
     return del<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}`);
   },
-  saveModelProviderModel: async (provider: string, input: {
-    modelId: string;
-    name?: string;
-    api?: string;
-    baseUrl?: string;
-    reasoning?: boolean;
-    input?: Array<'text' | 'image'>;
-    contextWindow?: number;
-    maxTokens?: number;
-    headers?: Record<string, string>;
-    cost?: {
-      input?: number;
-      output?: number;
-      cacheRead?: number;
-      cacheWrite?: number;
-    };
-    compat?: Record<string, unknown>;
-  }) => {
+  saveModelProviderModel: async (
+    provider: string,
+    input: {
+      modelId: string;
+      name?: string;
+      api?: string;
+      baseUrl?: string;
+      reasoning?: boolean;
+      input?: Array<'text' | 'image'>;
+      contextWindow?: number;
+      maxTokens?: number;
+      headers?: Record<string, string>;
+      cost?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+      };
+      compat?: Record<string, unknown>;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.saveModelProviderModel({ provider, ...input });
     }
 
@@ -376,7 +448,7 @@ export const api = {
   },
   deleteModelProviderModel: async (provider: string, modelId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.deleteModelProviderModel({ provider, modelId });
     }
 
@@ -384,7 +456,7 @@ export const api = {
   },
   defaultCwd: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readDefaultCwd();
     }
 
@@ -399,7 +471,7 @@ export const api = {
   tools: async (options?: { profile?: string }) => get<ToolsState>(withViewProfile('/tools', options?.profile)),
   setModel: async (model: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateModelPreferences({ model });
     }
 
@@ -407,7 +479,7 @@ export const api = {
   },
   updateModelPreferences: async (input: { model?: string; thinkingLevel?: string; serviceTier?: string }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateModelPreferences(input);
     }
 
@@ -415,7 +487,7 @@ export const api = {
   },
   updateDefaultCwd: async (cwd: string | null) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateDefaultCwd(cwd);
     }
 
@@ -448,14 +520,14 @@ export const api = {
   },
   providerAuth: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readProviderAuth();
     }
     return get<ProviderAuthState>('/provider-auth');
   },
   setProviderApiKey: async (provider: string, apiKey: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.setProviderApiKey({ provider, apiKey });
     }
 
@@ -463,7 +535,7 @@ export const api = {
   },
   removeProviderCredential: async (provider: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.removeProviderCredential(provider);
     }
 
@@ -471,7 +543,7 @@ export const api = {
   },
   startProviderOAuthLogin: async (provider: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.startProviderOAuthLogin(provider);
     }
 
@@ -479,14 +551,14 @@ export const api = {
   },
   providerOAuthLogin: async (loginId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readProviderOAuthLogin(loginId);
     }
     return get<ProviderOAuthLoginState | null>(`/provider-auth/oauth/${encodeURIComponent(loginId)}`);
   },
   submitProviderOAuthLoginInput: async (loginId: string, value: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.submitProviderOAuthLoginInput({ loginId, value });
     }
 
@@ -494,7 +566,7 @@ export const api = {
   },
   cancelProviderOAuthLogin: async (loginId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.cancelProviderOAuthLogin(loginId);
     }
 
@@ -502,7 +574,7 @@ export const api = {
   },
   conversationTitleSettings: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationTitleSettings();
     }
 
@@ -510,7 +582,7 @@ export const api = {
   },
   updateConversationTitleSettings: async (input: { enabled?: boolean; model?: string | null }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateConversationTitleSettings(input);
     }
 
@@ -518,11 +590,13 @@ export const api = {
   },
   openConversationTabs: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readOpenConversationTabs();
     }
 
-    return get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/ui/open-conversations');
+    return get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>(
+      '/ui/open-conversations',
+    );
   },
   setOpenConversationTabs: async (
     sessionIds?: string[] | null,
@@ -537,11 +611,14 @@ export const api = {
       ...(workspacePaths !== undefined ? { workspacePaths } : {}),
     };
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateOpenConversationTabs(request);
     }
 
-    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/ui/open-conversations', request);
+    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>(
+      '/ui/open-conversations',
+      request,
+    );
   },
   savedWorkspacePaths: async () => {
     const { workspacePaths } = await api.openConversationTabs();
@@ -555,14 +632,14 @@ export const api = {
   // ── Tasks ─────────────────────────────────────────────────────────────────
   tasks: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readScheduledTasks();
     }
     return get<ScheduledTaskSummary[]>('/tasks');
   },
   taskDetail: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readScheduledTaskDetail(id);
     }
     return get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`);
@@ -583,7 +660,7 @@ export const api = {
     threadConversationId?: string | null;
   }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.createScheduledTask(input);
     }
 
@@ -591,29 +668,32 @@ export const api = {
   },
   setTaskEnabled: async (id: string, enabled: boolean) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateScheduledTask({ taskId: id, enabled });
     }
 
     return patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, { enabled });
   },
-  saveTask: async (id: string, input: {
-    title?: string;
-    enabled?: boolean;
-    cron?: string | null;
-    at?: string | null;
-    model?: string | null;
-    thinkingLevel?: string | null;
-    cwd?: string | null;
-    timeoutSeconds?: number | null;
-    catchUpWindowSeconds?: number | null;
-    prompt?: string;
-    targetType?: 'background-agent' | 'conversation' | null;
-    threadMode?: 'dedicated' | 'existing' | 'none' | null;
-    threadConversationId?: string | null;
-  }) => {
+  saveTask: async (
+    id: string,
+    input: {
+      title?: string;
+      enabled?: boolean;
+      cron?: string | null;
+      at?: string | null;
+      model?: string | null;
+      thinkingLevel?: string | null;
+      cwd?: string | null;
+      timeoutSeconds?: number | null;
+      catchUpWindowSeconds?: number | null;
+      prompt?: string;
+      targetType?: 'background-agent' | 'conversation' | null;
+      threadMode?: 'dedicated' | 'existing' | 'none' | null;
+      threadConversationId?: string | null;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateScheduledTask({ taskId: id, ...input });
     }
 
@@ -621,14 +701,14 @@ export const api = {
   },
   taskLog: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readScheduledTaskLog(id);
     }
     return get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`);
   },
   deleteTask: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.deleteScheduledTask(id);
     }
 
@@ -636,7 +716,7 @@ export const api = {
   },
   runTaskNow: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.runScheduledTask(id);
     }
 
@@ -644,30 +724,32 @@ export const api = {
   },
   runs: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readDurableRuns();
     }
     return get<DurableRunListResult>('/runs');
   },
   durableRun: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readDurableRun(id);
     }
     return get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`);
   },
   durableRunLog: async (id: string, tail?: number) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readDurableRunLog({ runId: id, tail });
     }
 
     const normalizedTail = normalizeDurableRunLogTailParam(tail);
-    return get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${normalizedTail ? `?tail=${encodeURIComponent(String(normalizedTail))}` : ''}`);
+    return get<{ log: string; path: string }>(
+      `/runs/${encodeURIComponent(id)}/log${normalizedTail ? `?tail=${encodeURIComponent(String(normalizedTail))}` : ''}`,
+    );
   },
   markDurableRunAttentionRead: async (id: string, read = true) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.markDurableRunAttention({ runId: id, read });
     }
 
@@ -675,7 +757,7 @@ export const api = {
   },
   cancelDurableRun: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.cancelDurableRun(id);
     }
 
@@ -684,14 +766,15 @@ export const api = {
 
   // ── Workspace helpers ────────────────────────────────────────────────────
   pickFolder: async (input?: string | { cwd?: string | null; prompt?: string | null }) => {
-    const request = typeof input === 'string'
-      ? { cwd: input }
-      : {
-          ...(input?.cwd !== undefined ? { cwd: input.cwd } : {}),
-          ...(typeof input?.prompt === 'string' && input.prompt.trim().length > 0 ? { prompt: input.prompt.trim() } : {}),
-        };
+    const request =
+      typeof input === 'string'
+        ? { cwd: input }
+        : {
+            ...(input?.cwd !== undefined ? { cwd: input.cwd } : {}),
+            ...(typeof input?.prompt === 'string' && input.prompt.trim().length > 0 ? { prompt: input.prompt.trim() } : {}),
+          };
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.pickFolder(request);
     }
 
@@ -699,7 +782,7 @@ export const api = {
   },
   remoteDirectory: async (hostId: string, path?: string | null) => {
     const desktopBridge = getDesktopBridge();
-    if (!desktopBridge || !await shouldUseDesktopLocalCapabilities()) {
+    if (!desktopBridge || !(await shouldUseDesktopLocalCapabilities())) {
       throw new Error('Remote directory browsing is only available in the desktop app.');
     }
 
@@ -708,11 +791,11 @@ export const api = {
   pickFiles: async (cwd?: string) => post<FilePickerResult>('/file-picker', cwd !== undefined ? { cwd } : {}),
 
   // ── Memory browser ────────────────────────────────────────────────────────
-  memory:         (options?: { profile?: string }) => getMemoryData(options),
+  memory: (options?: { profile?: string }) => getMemoryData(options),
 
   markConversationAttentionRead: async (id: string, read = true) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.markConversationAttention({ conversationId: id, read });
     }
 
@@ -722,14 +805,14 @@ export const api = {
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSession: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readLiveSession(id);
     }
     return get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`);
   },
   liveSessionContext: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readLiveSessionContext(id);
     }
     return get<LiveSessionContext>(`/live-sessions/${id}/context`);
@@ -755,8 +838,7 @@ export const api = {
     put<WorkspaceFileContent>('/workspace/file', { cwd, path, content }),
   createWorkspaceFile: async (cwd: string, path: string, content = '') =>
     put<WorkspaceFileContent>('/workspace/file', { cwd, path, content }),
-  createWorkspaceFolder: async (cwd: string, path: string) =>
-    post<WorkspaceEntry>('/workspace/folder', { cwd, path }),
+  createWorkspaceFolder: async (cwd: string, path: string) => post<WorkspaceEntry>('/workspace/folder', { cwd, path }),
   deleteWorkspacePath: async (cwd: string, path: string) => {
     const params = new URLSearchParams({ cwd, path });
     return del<{ ok: boolean }>(`/workspace/path?${params.toString()}`);
@@ -765,15 +847,18 @@ export const api = {
     post<WorkspaceEntry>('/workspace/rename', { cwd, path, newName }),
   moveWorkspacePath: async (cwd: string, path: string, targetDir: string) =>
     post<WorkspaceEntry>('/workspace/move', { cwd, path, targetDir }),
-  conversationBootstrap: async (id: string, options?: {
-    tailBlocks?: number;
-    knownSessionSignature?: string;
-    knownBlockOffset?: number;
-    knownTotalBlocks?: number;
-    knownLastBlockId?: string;
-  }) => {
+  conversationBootstrap: async (
+    id: string,
+    options?: {
+      tailBlocks?: number;
+      knownSessionSignature?: string;
+      knownBlockOffset?: number;
+      knownTotalBlocks?: number;
+      knownLastBlockId?: string;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationBootstrap({ conversationId: id, ...options });
     }
 
@@ -800,7 +885,7 @@ export const api = {
   },
   conversationPlansWorkspace: async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationPlansWorkspace();
     }
 
@@ -808,7 +893,7 @@ export const api = {
   },
   conversationArtifacts: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationArtifacts(id);
     }
 
@@ -816,45 +901,63 @@ export const api = {
   },
   conversationArtifact: async (id: string, artifactId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationArtifact({ conversationId: id, artifactId });
     }
 
-    return get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`);
+    return get<{ conversationId: string; artifact: ConversationArtifactRecord }>(
+      `/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`,
+    );
   },
-  conversationCheckpoints: async (id: string) => get<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>(`/conversations/${encodeURIComponent(id)}/checkpoints`),
-  conversationCheckpoint: async (id: string, checkpointId: string) => get<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}`),
+  conversationCheckpoints: async (id: string) =>
+    get<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>(
+      `/conversations/${encodeURIComponent(id)}/checkpoints`,
+    ),
+  conversationCheckpoint: async (id: string, checkpointId: string) =>
+    get<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(
+      `/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}`,
+    ),
   conversationCheckpointReviewContext: async (id: string, checkpointId: string) => {
-    return get<ConversationCheckpointReviewContext>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/review-context`);
+    return get<ConversationCheckpointReviewContext>(
+      `/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/review-context`,
+    );
   },
-  createConversationCheckpointComment: async (
-    id: string,
-    checkpointId: string,
-    input: { body: string; filePath?: string },
-  ) => {
-    return post<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/comments`, input);
+  createConversationCheckpointComment: async (id: string, checkpointId: string, input: { body: string; filePath?: string }) => {
+    return post<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(
+      `/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/comments`,
+      input,
+    );
   },
   conversationContextDocs: async (id: string) => {
-    return get<{ conversationId: string; attachedContextDocs: ConversationContextDocRef[] }>(`/conversations/${encodeURIComponent(id)}/context-docs`);
+    return get<{ conversationId: string; attachedContextDocs: ConversationContextDocRef[] }>(
+      `/conversations/${encodeURIComponent(id)}/context-docs`,
+    );
   },
   updateConversationContextDocs: async (id: string, docs: ConversationContextDocRef[]) => {
-    return patch<{ conversationId: string; attachedContextDocs: ConversationContextDocRef[] }>(`/conversations/${encodeURIComponent(id)}/context-docs`, { docs });
+    return patch<{ conversationId: string; attachedContextDocs: ConversationContextDocRef[] }>(
+      `/conversations/${encodeURIComponent(id)}/context-docs`,
+      { docs },
+    );
   },
   conversationAttachments: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationAttachments(id);
     }
 
-    return get<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>(`/conversations/${encodeURIComponent(id)}/attachments`);
+    return get<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>(
+      `/conversations/${encodeURIComponent(id)}/attachments`,
+    );
   },
   conversationAttachment: async (id: string, attachmentId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationAttachment({ conversationId: id, attachmentId });
     }
 
-    return get<{ conversationId: string; attachment: ConversationAttachmentRecord }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`);
+    return get<{ conversationId: string; attachment: ConversationAttachmentRecord }>(
+      `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`,
+    );
   },
   conversationAttachmentAsset: async (
     id: string,
@@ -863,7 +966,7 @@ export const api = {
     revision?: number,
   ): Promise<ConversationAttachmentAssetData> => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationAttachmentAsset({ conversationId: id, attachmentId, asset, revision });
     }
 
@@ -871,7 +974,11 @@ export const api = {
     if (typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0) {
       params.set('revision', String(revision));
     }
-    const requestPath = buildApiPath(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}/download/${asset}${params.toString() ? `?${params.toString()}` : ''}`);
+    const requestPath = buildApiPath(
+      `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}/download/${asset}${
+        params.toString() ? `?${params.toString()}` : ''
+      }`,
+    );
     const response = await fetchWithRetry(requestPath, { method: 'GET', cache: 'no-store' });
     recordApiTiming(requestPath, response);
     if (!response.ok) {
@@ -887,19 +994,22 @@ export const api = {
       fileName,
     };
   },
-  createConversationAttachment: async (id: string, input: {
-    kind?: 'excalidraw';
-    title?: string;
-    sourceData: string;
-    sourceName?: string;
-    sourceMimeType?: string;
-    previewData: string;
-    previewName?: string;
-    previewMimeType?: string;
-    note?: string;
-  }) => {
+  createConversationAttachment: async (
+    id: string,
+    input: {
+      kind?: 'excalidraw';
+      title?: string;
+      sourceData: string;
+      sourceName?: string;
+      sourceMimeType?: string;
+      previewData: string;
+      previewName?: string;
+      previewMimeType?: string;
+      note?: string;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.createConversationAttachment({ conversationId: id, ...input });
     }
 
@@ -909,18 +1019,22 @@ export const api = {
       attachments: ConversationAttachmentSummary[];
     }>(`/conversations/${encodeURIComponent(id)}/attachments`, input);
   },
-  updateConversationAttachment: async (id: string, attachmentId: string, input: {
-    title?: string;
-    sourceData: string;
-    sourceName?: string;
-    sourceMimeType?: string;
-    previewData: string;
-    previewName?: string;
-    previewMimeType?: string;
-    note?: string;
-  }) => {
+  updateConversationAttachment: async (
+    id: string,
+    attachmentId: string,
+    input: {
+      title?: string;
+      sourceData: string;
+      sourceName?: string;
+      sourceMimeType?: string;
+      previewData: string;
+      previewName?: string;
+      previewMimeType?: string;
+      note?: string;
+    },
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateConversationAttachment({ conversationId: id, attachmentId, ...input });
     }
 
@@ -932,7 +1046,7 @@ export const api = {
   },
   deferredResumes: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationDeferredResumes(id);
     }
 
@@ -940,31 +1054,41 @@ export const api = {
   },
   scheduleDeferredResume: async (id: string, input: { delay: string; prompt?: string; behavior?: 'steer' | 'followUp' }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.scheduleConversationDeferredResume({ conversationId: id, ...input });
     }
 
-    return requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes`, input);
+    return requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>(
+      'POST',
+      `/conversations/${encodeURIComponent(id)}/deferred-resumes`,
+      input,
+    );
   },
   fireDeferredResumeNow: async (id: string, resumeId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.fireConversationDeferredResume({ conversationId: id, resumeId });
     }
 
-    return requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`);
+    return requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>(
+      'POST',
+      `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`,
+    );
   },
   cancelDeferredResume: async (id: string, resumeId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.cancelConversationDeferredResume({ conversationId: id, resumeId });
     }
 
-    return requestJson<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`);
+    return requestJson<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>(
+      'DELETE',
+      `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`,
+    );
   },
   changeConversationCwd: async (id: string, cwd: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.changeConversationCwd({
         conversationId: id,
         cwd,
@@ -972,14 +1096,17 @@ export const api = {
       });
     }
 
-    return requestJson<ConversationCwdChangeResult>('POST', `/conversations/${encodeURIComponent(id)}/cwd`, { cwd, ...(surfaceId ? { surfaceId } : {}) });
+    return requestJson<ConversationCwdChangeResult>('POST', `/conversations/${encodeURIComponent(id)}/cwd`, {
+      cwd,
+      ...(surfaceId ? { surfaceId } : {}),
+    });
   },
   duplicateConversation: async (id: string) => {
     return requestJson<{ newSessionId: string; sessionFile: string }>('POST', `/conversations/${encodeURIComponent(id)}/duplicate`);
   },
   renameConversation: async (id: string, name: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.renameConversation({
         conversationId: id,
         name,
@@ -987,24 +1114,36 @@ export const api = {
       });
     }
 
-    return patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name, ...(surfaceId ? { surfaceId } : {}) });
+    return patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, {
+      name,
+      ...(surfaceId ? { surfaceId } : {}),
+    });
   },
   conversationAutoMode: async (id: string) => {
     return get<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`);
   },
   updateConversationAutoMode: async (id: string, input: { enabled: boolean }, surfaceId?: string) => {
-    return patch<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
+    return patch<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`, {
+      ...input,
+      ...(surfaceId ? { surfaceId } : {}),
+    });
   },
   conversationModelPreferences: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readConversationModelPreferences({ conversationId: id });
     }
-    return get<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>(`/conversations/${encodeURIComponent(id)}/model-preferences`);
+    return get<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>(
+      `/conversations/${encodeURIComponent(id)}/model-preferences`,
+    );
   },
-  updateConversationModelPreferences: async (id: string, input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }, surfaceId?: string) => {
+  updateConversationModelPreferences: async (
+    id: string,
+    input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null },
+    surfaceId?: string,
+  ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.updateConversationModelPreferences({
         conversationId: id,
         ...input,
@@ -1012,11 +1151,14 @@ export const api = {
       });
     }
 
-    return patch<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
+    return patch<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>(
+      `/conversations/${encodeURIComponent(id)}/model-preferences`,
+      { ...input, ...(surfaceId ? { surfaceId } : {}) },
+    );
   },
   recoverConversation: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.recoverConversation(id);
     }
 
@@ -1024,7 +1166,7 @@ export const api = {
   },
   continueConversationInHost: async (id: string, hostId: string, cwd?: string | null) => {
     const desktopBridge = getDesktopBridge();
-    if (!desktopBridge || !await shouldUseDesktopLocalCapabilities()) {
+    if (!desktopBridge || !(await shouldUseDesktopLocalCapabilities())) {
       throw new Error('Continue in is only available in the desktop app.');
     }
 
@@ -1037,7 +1179,7 @@ export const api = {
     options?: { workspaceCwd?: string | null; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null },
   ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.createLiveSession({
         cwd,
         ...(options?.workspaceCwd !== undefined ? { workspaceCwd: options.workspaceCwd } : {}),
@@ -1059,7 +1201,7 @@ export const api = {
 
   resumeSession: async (sessionFile: string, cwd?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.resumeLiveSession({ sessionFile, ...(cwd ? { cwd } : {}) });
     }
 
@@ -1077,7 +1219,7 @@ export const api = {
     relatedConversationIds?: string[],
   ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.submitLiveSessionPrompt({
         conversationId: id,
         text,
@@ -1090,26 +1232,29 @@ export const api = {
       });
     }
 
-    return post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued'; relatedConversationPointerWarnings?: string[] }>(`/live-sessions/${id}/prompt`, {
-      text,
-      behavior,
-      ...(surfaceId ? { surfaceId } : {}),
-      images: images?.map((image) => ({
-        type: 'image' as const,
-        data: image.data,
-        mimeType: image.mimeType,
-        ...(image.name ? { name: image.name } : {}),
-      })),
-      attachmentRefs: attachmentRefs?.map((attachmentRef) => ({
-        attachmentId: attachmentRef.attachmentId,
-        ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
-      })),
-      contextMessages: contextMessages?.map((message) => ({
-        customType: message.customType,
-        content: message.content,
-      })),
-      relatedConversationIds,
-    });
+    return post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued'; relatedConversationPointerWarnings?: string[] }>(
+      `/live-sessions/${id}/prompt`,
+      {
+        text,
+        behavior,
+        ...(surfaceId ? { surfaceId } : {}),
+        images: images?.map((image) => ({
+          type: 'image' as const,
+          data: image.data,
+          mimeType: image.mimeType,
+          ...(image.name ? { name: image.name } : {}),
+        })),
+        attachmentRefs: attachmentRefs?.map((attachmentRef) => ({
+          attachmentId: attachmentRef.attachmentId,
+          ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
+        })),
+        contextMessages: contextMessages?.map((message) => ({
+          customType: message.customType,
+          content: message.content,
+        })),
+        relatedConversationIds,
+      },
+    );
   },
   parallelPromptSession: async (
     id: string,
@@ -1121,7 +1266,7 @@ export const api = {
     relatedConversationIds?: string[],
   ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.submitLiveSessionParallelPrompt({
         conversationId: id,
         text,
@@ -1133,7 +1278,13 @@ export const api = {
       });
     }
 
-    return post<{ ok: boolean; accepted: boolean; jobId: string; childConversationId: string; relatedConversationPointerWarnings?: string[] }>(`/live-sessions/${id}/parallel-prompt`, {
+    return post<{
+      ok: boolean;
+      accepted: boolean;
+      jobId: string;
+      childConversationId: string;
+      relatedConversationPointerWarnings?: string[];
+    }>(`/live-sessions/${id}/parallel-prompt`, {
       text,
       ...(surfaceId ? { surfaceId } : {}),
       images: images?.map((image) => ({
@@ -1153,14 +1304,9 @@ export const api = {
       relatedConversationIds,
     });
   },
-  manageParallelPromptJob: async (
-    id: string,
-    jobId: string,
-    action: 'importNow' | 'skip' | 'cancel',
-    surfaceId?: string,
-  ) => {
+  manageParallelPromptJob: async (id: string, jobId: string, action: 'importNow' | 'skip' | 'cancel', surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.manageLiveSessionParallelJob({
         conversationId: id,
         jobId,
@@ -1169,10 +1315,13 @@ export const api = {
       });
     }
 
-    return post<{ ok: true; status: 'imported' | 'queued' | 'skipped' | 'cancelled' }>(`/live-sessions/${id}/parallel-jobs/${encodeURIComponent(jobId)}`, {
-      action,
-      ...(surfaceId ? { surfaceId } : {}),
-    });
+    return post<{ ok: true; status: 'imported' | 'queued' | 'skipped' | 'cancelled' }>(
+      `/live-sessions/${id}/parallel-jobs/${encodeURIComponent(jobId)}`,
+      {
+        action,
+        ...(surfaceId ? { surfaceId } : {}),
+      },
+    );
   },
   executeLiveSessionBash: async (id: string, command: string, options?: { excludeFromContext?: boolean }) => {
     return post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/bash`, {
@@ -1186,7 +1335,7 @@ export const api = {
     surfaceId?: string,
   ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.restoreQueuedLiveSessionMessage({
         conversationId: id,
         ...input,
@@ -1200,7 +1349,7 @@ export const api = {
   },
   takeoverLiveSession: async (id: string, surfaceId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.takeOverLiveSession({ conversationId: id, surfaceId });
     }
 
@@ -1208,15 +1357,18 @@ export const api = {
   },
   compactSession: async (id: string, customInstructions?: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.compactLiveSession({ conversationId: id, ...(customInstructions ? { customInstructions } : {}) });
     }
 
-    return post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions, ...(surfaceId ? { surfaceId } : {}) });
+    return post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, {
+      customInstructions,
+      ...(surfaceId ? { surfaceId } : {}),
+    });
   },
   summarizeAndForkSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.summarizeAndForkLiveSession(id);
     }
 
@@ -1224,7 +1376,7 @@ export const api = {
   },
   reloadSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.reloadLiveSession(id);
     }
 
@@ -1232,7 +1384,7 @@ export const api = {
   },
   exportSession: async (id: string, outputPath?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.exportLiveSession({
         conversationId: id,
         ...(outputPath ? { outputPath } : {}),
@@ -1243,7 +1395,7 @@ export const api = {
   },
   abortSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.abortLiveSession(id);
     }
 
@@ -1252,7 +1404,7 @@ export const api = {
 
   destroySession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.destroyLiveSession(id);
     }
 
@@ -1261,22 +1413,25 @@ export const api = {
 
   forkEntries: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.readLiveSessionForkEntries(id);
     }
     return get<LiveSessionForkEntry[]>(`/live-sessions/${id}/fork-entries`);
   },
   branchSession: async (id: string, entryId: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.branchLiveSession({ conversationId: id, entryId });
     }
 
-    return post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/branch`, { entryId, ...(surfaceId ? { surfaceId } : {}) });
+    return post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/branch`, {
+      entryId,
+      ...(surfaceId ? { surfaceId } : {}),
+    });
   },
   forkSession: async (id: string, entryId: string, options?: { preserveSource?: boolean; beforeEntry?: boolean }, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
       return desktopBridge.forkLiveSession({
         conversationId: id,
         entryId,
@@ -1297,35 +1452,26 @@ export const api = {
 // ── Vault editor ─────────────────────────────────────────────────────────────
 
 export const vaultApi = {
-  tree: (dir?: string) =>
-    get<VaultTreeResult>(`/vault/tree${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`),
+  tree: (dir?: string) => get<VaultTreeResult>(`/vault/tree${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`),
 
-  readFile: (id: string) =>
-    get<VaultFileContent>(`/vault/file?id=${encodeURIComponent(id)}`),
+  readFile: (id: string) => get<VaultFileContent>(`/vault/file?id=${encodeURIComponent(id)}`),
 
-  writeFile: (id: string, content: string) =>
-    put<VaultEntry>('/vault/file', { id, content }),
+  writeFile: (id: string, content: string) => put<VaultEntry>('/vault/file', { id, content }),
 
-  deleteFile: (id: string) =>
-    del<{ ok: boolean }>(`/vault/file?id=${encodeURIComponent(id)}`),
+  deleteFile: (id: string) => del<{ ok: boolean }>(`/vault/file?id=${encodeURIComponent(id)}`),
 
-  rename: (id: string, newName: string) =>
-    post<VaultEntry>('/vault/rename', { id, newName }),
+  rename: (id: string, newName: string) => post<VaultEntry>('/vault/rename', { id, newName }),
 
-  createFolder: (id: string) =>
-    post<VaultEntry>('/vault/folder', { id }),
+  createFolder: (id: string) => post<VaultEntry>('/vault/folder', { id }),
 
-  backlinks: (id: string) =>
-    get<VaultBacklinksResult>(`/vault/backlinks?id=${encodeURIComponent(id)}`),
+  backlinks: (id: string) => get<VaultBacklinksResult>(`/vault/backlinks?id=${encodeURIComponent(id)}`),
 
   search: (q: string, limit = 20) =>
     get<VaultSearchResponse>(`/vault/search?q=${encodeURIComponent(q)}&limit=${normalizeVaultSearchLimit(limit)}`),
 
-  move: (id: string, targetDir: string) =>
-    post<VaultEntry>('/vault/move', { id, targetDir }),
+  move: (id: string, targetDir: string) => post<VaultEntry>('/vault/move', { id, targetDir }),
 
-  uploadImage: (filename: string, dataUrl: string) =>
-    post<VaultImageUploadResult>('/vault/image', { filename, dataUrl }),
+  uploadImage: (filename: string, dataUrl: string) => post<VaultImageUploadResult>('/vault/image', { filename, dataUrl }),
 
   importUrl: (input: { url: string; title?: string; directoryId?: string; sourceApp?: string }) =>
     post<VaultShareImportResult>('/vault/share-import', {

@@ -2,7 +2,7 @@ import type { DesktopApiStreamEvent } from './types.js';
 
 async function readStreamError(response: Response): Promise<string> {
   try {
-    const data = await response.json() as { error?: string };
+    const data = (await response.json()) as { error?: string };
     if (typeof data.error === 'string' && data.error.trim().length > 0) {
       return data.error;
     }
@@ -13,11 +13,7 @@ async function readStreamError(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`;
 }
 
-export async function proxyApiStream(
-  baseUrl: string,
-  path: string,
-  onEvent: (event: DesktopApiStreamEvent) => void,
-): Promise<() => void> {
+export async function proxyApiStream(baseUrl: string, path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
   const abortController = new AbortController();
   const response = await fetch(new URL(path, baseUrl), {
     headers: { Accept: 'text/event-stream' },

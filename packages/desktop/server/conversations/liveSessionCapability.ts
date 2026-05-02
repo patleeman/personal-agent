@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs';
+
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import {
-  resolveConversationAttachmentPromptFiles,
-} from '@personal-agent/core';
+import { resolveConversationAttachmentPromptFiles } from '@personal-agent/core';
 import {
   listPendingBackgroundRunResults,
   loadDaemonConfig,
@@ -10,7 +9,7 @@ import {
   resolveDaemonPaths,
   resolveDurableRunsRoot,
 } from '@personal-agent/daemon';
-import type { MemoryDocSummary } from '../routes/context.js';
+
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedTasksContext,
@@ -20,10 +19,11 @@ import {
   resolvePromptReferences,
 } from '../knowledge/promptReferences.js';
 import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
-import {
-  buildAttachedConversationContextDocsContext,
-  readConversationContextDocs,
-} from './conversationContextDocs.js';
+import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
+import type { MemoryDocSummary } from '../routes/context.js';
+import { buildAttachedConversationContextDocsContext, readConversationContextDocs } from './conversationContextDocs.js';
+import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
+import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { queueConversationSummaryRefresh } from './conversationSummaries.js';
 import {
   abortSession as abortLocalSession,
@@ -33,27 +33,21 @@ import {
   destroySession as destroyLiveSession,
   forkSession as forkLiveSession,
   isLive as isLocalLive,
+  manageParallelPromptJob,
+  type PromptImageAttachment,
   queuePromptContext,
   registry as liveRegistry,
   reloadSessionResources as reloadLiveSessionResources,
   restoreQueuedMessage as restoreQueuedLiveSessionMessage,
   resumeSession as resumeLocalSession,
-  manageParallelPromptJob,
   startParallelPromptSession,
   submitPromptSession as submitLocalPromptSession,
   summarizeAndForkSession as summarizeAndForkLiveSession,
   takeOverSessionControl,
-  type PromptImageAttachment,
 } from './liveSessions.js';
+import { buildRelatedConversationPointers, readCachedRelatedConversationPointers } from './relatedConversationPointers.js';
 import { readSessionBlocks, readSessionMeta } from './sessions.js';
-import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
-import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { appendConversationWorkspaceMetadata } from './sessions.js';
-import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
-import {
-  buildRelatedConversationPointers,
-  readCachedRelatedConversationPointers,
-} from './relatedConversationPointers.js';
 
 export interface LiveSessionCapabilityContext {
   getCurrentProfile: () => string;
@@ -206,10 +200,7 @@ export interface SummarizeAndForkLiveSessionCapabilityInput {
 
 export class LiveSessionCapabilityInputError extends Error {}
 
-function buildLiveSessionOptions(
-  context: LiveSessionCapabilityContext,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function buildLiveSessionOptions(context: LiveSessionCapabilityContext, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     ...context.buildLiveSessionResourceOptions(context.getCurrentProfile()),
     extensionFactories: context.buildLiveSessionExtensionFactories(),
@@ -232,11 +223,7 @@ function buildBackgroundRunHiddenContext(entries: Array<{ prompt: string }>): st
 
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
-    lines.push(
-      '',
-      entries.length === 1 ? 'Completion:' : `Completion ${index + 1}:`,
-      entry.prompt,
-    );
+    lines.push('', entries.length === 1 ? 'Completion:' : `Completion ${index + 1}:`, entry.prompt);
   }
 
   return lines.join('\n');
@@ -261,20 +248,29 @@ function normalizePromptAttachmentRefs(value: unknown): PromptAttachmentRefInput
       continue;
     }
 
-    const attachmentId = typeof (candidate as { attachmentId?: unknown }).attachmentId === 'string'
-      ? (candidate as { attachmentId: string }).attachmentId.trim()
-      : '';
+    const attachmentId =
+      typeof (candidate as { attachmentId?: unknown }).attachmentId === 'string'
+        ? (candidate as { attachmentId: string }).attachmentId.trim()
+        : '';
     if (!attachmentId) {
       continue;
     }
 
     const revisionCandidate = (candidate as { revision?: unknown }).revision;
-    if (revisionCandidate !== undefined && (!Number.isSafeInteger(revisionCandidate) || (revisionCandidate as number) <= 0 || (revisionCandidate as number) > MAX_PROMPT_ATTACHMENT_REVISION)) {
+    if (
+      revisionCandidate !== undefined &&
+      (!Number.isSafeInteger(revisionCandidate) ||
+        (revisionCandidate as number) <= 0 ||
+        (revisionCandidate as number) > MAX_PROMPT_ATTACHMENT_REVISION)
+    ) {
       continue;
     }
-    const revision = Number.isSafeInteger(revisionCandidate) && (revisionCandidate as number) > 0 && (revisionCandidate as number) <= MAX_PROMPT_ATTACHMENT_REVISION
-      ? revisionCandidate as number
-      : undefined;
+    const revision =
+      Number.isSafeInteger(revisionCandidate) &&
+      (revisionCandidate as number) > 0 &&
+      (revisionCandidate as number) <= MAX_PROMPT_ATTACHMENT_REVISION
+        ? (revisionCandidate as number)
+        : undefined;
 
     const dedupeKey = `${attachmentId}:${String(revision ?? 'latest')}`;
     if (seen.has(dedupeKey)) {
@@ -304,12 +300,10 @@ function normalizePromptContextMessages(value: unknown): Array<{ customType: str
       continue;
     }
 
-    const customType = typeof (candidate as { customType?: unknown }).customType === 'string'
-      ? (candidate as { customType: string }).customType.trim()
-      : '';
-    const content = typeof (candidate as { content?: unknown }).content === 'string'
-      ? (candidate as { content: string }).content.trim()
-      : '';
+    const customType =
+      typeof (candidate as { customType?: unknown }).customType === 'string' ? (candidate as { customType: string }).customType.trim() : '';
+    const content =
+      typeof (candidate as { content?: unknown }).content === 'string' ? (candidate as { content: string }).content.trim() : '';
     if (!customType || !content) {
       continue;
     }
@@ -344,29 +338,28 @@ function normalizePromptImages(value: unknown): PromptImageAttachment[] | undefi
     return undefined;
   }
 
-  const images = value
-    .flatMap((image) => {
-      if (!image || typeof image !== 'object') {
-        return [];
-      }
+  const images = value.flatMap((image) => {
+    if (!image || typeof image !== 'object') {
+      return [];
+    }
 
-      const data = normalizeBase64ImageData((image as { data?: unknown }).data);
-      const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string'
-        ? (image as { mimeType: string }).mimeType.trim()
-        : '';
-      if (!data || !mimeType.toLowerCase().startsWith('image/')) {
-        return [];
-      }
+    const data = normalizeBase64ImageData((image as { data?: unknown }).data);
+    const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string' ? (image as { mimeType: string }).mimeType.trim() : '';
+    if (!data || !mimeType.toLowerCase().startsWith('image/')) {
+      return [];
+    }
 
-      return [{
+    return [
+      {
         type: 'image' as const,
         data,
         mimeType,
         ...(typeof (image as { name?: unknown }).name === 'string' && (image as { name: string }).name.trim().length > 0
           ? { name: (image as { name: string }).name.trim() }
           : {}),
-      }];
-    });
+      },
+    ];
+  });
 
   return images.length > 0 ? images : undefined;
 }
@@ -375,9 +368,7 @@ function normalizePromptBehavior(value: unknown): 'steer' | 'followUp' | undefin
   return value === 'steer' || value === 'followUp' ? value : undefined;
 }
 
-function buildConversationAttachmentsContext(
-  attachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>,
-): string {
+function buildConversationAttachmentsContext(attachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>): string {
   if (attachments.length === 0) {
     return '';
   }
@@ -412,11 +403,8 @@ function buildCreatedLiveSessionBootstrap(
 
   const now = new Date().toISOString();
   const title = liveEntry.title.trim() || 'New Conversation';
-  const model = typeof liveEntry.session.model?.id === 'string'
-    ? liveEntry.session.model.id
-    : '';
-  const hasPendingHiddenTurn = liveEntry.pendingHiddenTurnCustomTypes.length > 0
-    || liveEntry.activeHiddenTurnCustomType !== null;
+  const model = typeof liveEntry.session.model?.id === 'string' ? liveEntry.session.model.id : '';
+  const hasPendingHiddenTurn = liveEntry.pendingHiddenTurnCustomTypes.length > 0 || liveEntry.activeHiddenTurnCustomType !== null;
   const isRunning = liveEntry.session.isStreaming || hasPendingHiddenTurn;
 
   return {
@@ -453,10 +441,7 @@ function buildCreatedLiveSessionBootstrap(
   };
 }
 
-async function ensureConversationPromptTargetLive(
-  conversationId: string,
-  context: LiveSessionCapabilityContext,
-): Promise<string> {
+async function ensureConversationPromptTargetLive(conversationId: string, context: LiveSessionCapabilityContext): Promise<string> {
   if (isLocalLive(conversationId)) {
     return conversationId;
   }
@@ -486,15 +471,18 @@ export async function createLiveSessionCapability(
       })
     : resolveNeutralChatCwd(profile);
 
-  const created = await createLocalSession(cwd, buildLiveSessionOptions(context, {
-    ...(input.model !== undefined ? { initialModel: input.model } : {}),
-    ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
-    ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
-  }));
+  const created = await createLocalSession(
+    cwd,
+    buildLiveSessionOptions(context, {
+      ...(input.model !== undefined ? { initialModel: input.model } : {}),
+      ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
+      ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
+    }),
+  );
   appendConversationWorkspaceMetadata({
     sessionFile: created.sessionFile,
     cwd,
-    workspaceCwd: input.workspaceCwd !== undefined ? input.workspaceCwd : (hasExplicitCwd ? cwd : null),
+    workspaceCwd: input.workspaceCwd !== undefined ? input.workspaceCwd : hasExplicitCwd ? cwd : null,
   });
   const bootstrap = buildCreatedLiveSessionBootstrap(created.id, created.sessionFile);
 
@@ -513,9 +501,7 @@ export async function resumeLiveSessionCapability(
     throw new LiveSessionCapabilityInputError('sessionFile required');
   }
 
-  const cwd = typeof input.cwd === 'string' && input.cwd.trim().length > 0
-    ? input.cwd.trim()
-    : undefined;
+  const cwd = typeof input.cwd === 'string' && input.cwd.trim().length > 0 ? input.cwd.trim() : undefined;
 
   const result = await resumeLocalSession(sessionFile, {
     ...buildLiveSessionOptions(context),
@@ -546,12 +532,14 @@ interface PreparedLiveSessionPrompt {
 
 function hasConversationTranscriptContent(conversationId: string): boolean {
   const liveEntry = liveRegistry.get(conversationId);
-  const liveSession = liveEntry?.session as {
-    isStreaming?: boolean;
-    state?: { messages?: unknown[] };
-    getSteeringMessages?: () => unknown[];
-    getFollowUpMessages?: () => unknown[];
-  } | undefined;
+  const liveSession = liveEntry?.session as
+    | {
+        isStreaming?: boolean;
+        state?: { messages?: unknown[] };
+        getSteeringMessages?: () => unknown[];
+        getFollowUpMessages?: () => unknown[];
+      }
+    | undefined;
   if (liveSession?.isStreaming) {
     return true;
   }
@@ -597,8 +585,9 @@ function buildPromptContextMessagesForSubmit(input: {
   }
 
   try {
-    const hasSelectedRelatedConversations = Array.isArray(input.selectedSessionIds)
-      && input.selectedSessionIds.some((value) => typeof value === 'string' && value.trim().length > 0);
+    const hasSelectedRelatedConversations =
+      Array.isArray(input.selectedSessionIds) &&
+      input.selectedSessionIds.some((value) => typeof value === 'string' && value.trim().length > 0);
     const pointers = hasSelectedRelatedConversations
       ? buildRelatedConversationPointers({
           prompt: input.prompt,
@@ -607,11 +596,11 @@ function buildPromptContextMessagesForSubmit(input: {
           selectedSessionIds: input.selectedSessionIds,
           includeAuto: false,
         })
-      : readCachedRelatedConversationPointers({
+      : (readCachedRelatedConversationPointers({
           prompt: input.prompt,
           currentConversationId: input.conversationId,
           currentCwd: input.currentCwd,
-        }) ?? { contextMessages: [], pointers: [], warnings: [] };
+        }) ?? { contextMessages: [], pointers: [], warnings: [] });
 
     return {
       contextMessages: [...contextMessages, ...pointers.contextMessages],
@@ -654,16 +643,12 @@ async function prepareLiveSessionPrompt(
     throw new LiveSessionCapabilityInputError('text, images, or attachmentRefs required');
   }
 
-  const surfaceId = typeof input.surfaceId === 'string' && input.surfaceId.trim().length > 0
-    ? input.surfaceId.trim()
-    : undefined;
+  const surfaceId = typeof input.surfaceId === 'string' && input.surfaceId.trim().length > 0 ? input.surfaceId.trim() : undefined;
 
   const currentProfile = context.getCurrentProfile();
   const mentionIds = extractMentionIds(text);
   const hasPromptMentions = mentionIds.length > 0;
-  const tasks = hasPromptMentions
-    ? context.listTasksForCurrentProfile()
-    : [];
+  const tasks = hasPromptMentions ? context.listTasksForCurrentProfile() : [];
   const memoryDocs = hasPromptMentions
     ? context.listMemoryDocs().map((doc) => ({
         ...doc,
@@ -685,24 +670,21 @@ async function prepareLiveSessionPrompt(
         memoryDocIds: [],
         skillNames: [],
       };
-  const expandedNodeReferences = promptReferences.projectIds.length > 0
-    || promptReferences.memoryDocIds.length > 0
-    || promptReferences.skillNames.length > 0
-    ? expandPromptReferencesWithNodeGraph({
-        projectIds: promptReferences.projectIds,
-        memoryDocIds: promptReferences.memoryDocIds,
-        skillNames: promptReferences.skillNames,
-      })
-    : {
-        projectIds: promptReferences.projectIds,
-        memoryDocIds: promptReferences.memoryDocIds,
-        skillNames: promptReferences.skillNames,
-      };
+  const expandedNodeReferences =
+    promptReferences.projectIds.length > 0 || promptReferences.memoryDocIds.length > 0 || promptReferences.skillNames.length > 0
+      ? expandPromptReferencesWithNodeGraph({
+          projectIds: promptReferences.projectIds,
+          memoryDocIds: promptReferences.memoryDocIds,
+          skillNames: promptReferences.skillNames,
+        })
+      : {
+          projectIds: promptReferences.projectIds,
+          memoryDocIds: promptReferences.memoryDocIds,
+          skillNames: promptReferences.skillNames,
+        };
   const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
   const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
-  const referencedVaultFiles = hasPromptMentions
-    ? resolveMentionedVaultFiles(text)
-    : [];
+  const referencedVaultFiles = hasPromptMentions ? resolveMentionedVaultFiles(text) : [];
 
   let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
   if (normalizedAttachmentRefs.length > 0) {
@@ -732,8 +714,7 @@ async function prepareLiveSessionPrompt(
     ...referencedMemoryDocs.map((doc) => doc.path),
     ...referencedVaultFiles.map((file) => file.path),
   ]);
-  const attachedConversationContextDocs = readConversationContextDocs(conversationId)
-    .filter((doc) => !referencedPaths.has(doc.path));
+  const attachedConversationContextDocs = readConversationContextDocs(conversationId).filter((doc) => !referencedPaths.has(doc.path));
 
   const queuedContextBlocks = [
     attachedConversationContextDocs.length > 0 ? buildAttachedConversationContextDocsContext(attachedConversationContextDocs) : '',
@@ -748,10 +729,12 @@ async function prepareLiveSessionPrompt(
   const normalizedContextMessages = [
     ...promptContextMessages,
     ...(queuedContextBlocks.length > 0
-      ? [{
-          customType: 'referenced_context',
-          content: hiddenContext,
-        }]
+      ? [
+          {
+            customType: 'referenced_context',
+            content: hiddenContext,
+          },
+        ]
       : []),
   ];
 
@@ -812,9 +795,7 @@ export async function submitLiveSessionPromptCapability(
         type: 'prompt',
         text: prepared.text,
         ...(behavior ? { behavior } : {}),
-        ...(prepared.promptImages && prepared.promptImages.length > 0
-          ? { images: prepared.promptImages }
-          : {}),
+        ...(prepared.promptImages && prepared.promptImages.length > 0 ? { images: prepared.promptImages } : {}),
         ...(promptContextMessages.length > 0
           ? {
               contextMessages: promptContextMessages,
@@ -835,46 +816,48 @@ export async function submitLiveSessionPromptCapability(
   const promptPromise = submittedPrompt.completion;
   const daemonRunsRoot = resolveDurableRunsRoot(resolveDaemonRoot());
 
-  void promptPromise.then(async () => {
-    if (!prepared.sourceSessionFile || prepared.backgroundRunContextEntries.length === 0) {
-      return;
-    }
-
-    try {
-      const deliveredIds = markBackgroundRunResultsDelivered({
-        runsRoot: daemonRunsRoot,
-        sessionFile: prepared.sourceSessionFile,
-        resultIds: prepared.backgroundRunContextEntries.map((entry) => entry.id),
-      });
-      if (deliveredIds.length > 0) {
-        invalidateAppTopics('runs');
+  void promptPromise
+    .then(async () => {
+      if (!prepared.sourceSessionFile || prepared.backgroundRunContextEntries.length === 0) {
+        return;
       }
-    } catch (error) {
-      logWarn('background run context completion error', {
-        sessionId: prepared.conversationId,
+
+      try {
+        const deliveredIds = markBackgroundRunResultsDelivered({
+          runsRoot: daemonRunsRoot,
+          sessionFile: prepared.sourceSessionFile,
+          resultIds: prepared.backgroundRunContextEntries.map((entry) => entry.id),
+        });
+        if (deliveredIds.length > 0) {
+          invalidateAppTopics('runs');
+        }
+      } catch (error) {
+        logWarn('background run context completion error', {
+          sessionId: prepared.conversationId,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    })
+    .catch(async (error: unknown) => {
+      if (recoveredLiveEntry?.session.sessionFile) {
+        await syncWebLiveConversationRun({
+          conversationId: liveConversationId,
+          sessionFile: recoveredLiveEntry.session.sessionFile,
+          cwd: recoveredLiveEntry.cwd,
+          title: recoveredLiveEntry.title,
+          profile: prepared.currentProfile,
+          state: 'failed',
+          lastError: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      logError('live prompt error', {
+        sessionId: liveConversationId,
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-    }
-  }).catch(async (error: unknown) => {
-    if (recoveredLiveEntry?.session.sessionFile) {
-      await syncWebLiveConversationRun({
-        conversationId: liveConversationId,
-        sessionFile: recoveredLiveEntry.session.sessionFile,
-        cwd: recoveredLiveEntry.cwd,
-        title: recoveredLiveEntry.title,
-        profile: prepared.currentProfile,
-        state: 'failed',
-        lastError: error instanceof Error ? error.message : String(error),
-      });
-    }
-
-    logError('live prompt error', {
-      sessionId: liveConversationId,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
     });
-  });
 
   return {
     ok: true,
@@ -988,18 +971,11 @@ export async function restoreQueuedLiveSessionMessageCapability(
     throw new LiveSessionCapabilityInputError('index must be a non-negative integer');
   }
 
-  const restored = await restoreQueuedLiveSessionMessage(
-    conversationId,
-    input.behavior,
-    input.index,
-    input.previewId,
-  );
+  const restored = await restoreQueuedLiveSessionMessage(conversationId, input.behavior, input.index, input.previewId);
   return { ok: true, ...restored };
 }
 
-export async function compactLiveSessionCapability(
-  input: CompactLiveSessionCapabilityInput,
-): Promise<{ ok: true; result: unknown }> {
+export async function compactLiveSessionCapability(input: CompactLiveSessionCapabilityInput): Promise<{ ok: true; result: unknown }> {
   const conversationId = input.conversationId.trim();
   if (!conversationId) {
     throw new LiveSessionCapabilityInputError('conversationId required');
@@ -1009,9 +985,7 @@ export async function compactLiveSessionCapability(
   return { ok: true, result };
 }
 
-export async function reloadLiveSessionCapability(
-  input: ReloadLiveSessionCapabilityInput,
-): Promise<{ ok: true }> {
+export async function reloadLiveSessionCapability(input: ReloadLiveSessionCapabilityInput): Promise<{ ok: true }> {
   const conversationId = input.conversationId.trim();
   if (!conversationId) {
     throw new LiveSessionCapabilityInputError('conversationId required');
@@ -1021,9 +995,7 @@ export async function reloadLiveSessionCapability(
   return { ok: true };
 }
 
-export async function destroyLiveSessionCapability(
-  input: DestroyLiveSessionCapabilityInput,
-): Promise<{ ok: true }> {
+export async function destroyLiveSessionCapability(input: DestroyLiveSessionCapabilityInput): Promise<{ ok: true }> {
   const conversationId = input.conversationId.trim();
   if (!conversationId) {
     throw new LiveSessionCapabilityInputError('conversationId required');
@@ -1087,9 +1059,7 @@ export async function summarizeAndForkLiveSessionCapability(
   return summarizeAndForkLiveSession(conversationId, buildLiveSessionOptions(context));
 }
 
-export async function abortLiveSessionCapability(input: {
-  conversationId: string;
-}): Promise<{ ok: true }> {
+export async function abortLiveSessionCapability(input: { conversationId: string }): Promise<{ ok: true }> {
   const conversationId = input.conversationId.trim();
   if (!conversationId) {
     throw new LiveSessionCapabilityInputError('conversationId required');

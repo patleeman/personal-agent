@@ -56,18 +56,18 @@ When `pa` launches Pi or the desktop app creates a live session, the runtime is 
 
 ## Durable surfaces
 
-| Surface | Purpose | Home |
-| --- | --- | --- |
-| conversation | active execution | session state |
-| doc | reusable knowledge | `<vault-root>` |
-| skill | reusable workflow | `<vault-root>/skills/` |
-| attached context doc | durable thread-scoped knowledge | conversation state + `<vault-root>` refs |
-| project | durable structured ongoing work | `<vault-root>/projects/` |
-| run | detached work started now | daemon state |
-| scheduled task / automation | saved later or recurring work | daemon state |
-| reminder | tell-me-later wakeup | reminder + wakeup state |
-| conversation artifact | rendered output tied to one thread | conversation artifact state |
-| project artifact | durable deliverable tied to a project | `<vault-root>/projects/<projectId>/artifacts/` |
+| Surface                     | Purpose                               | Home                                           |
+| --------------------------- | ------------------------------------- | ---------------------------------------------- |
+| conversation                | active execution                      | session state                                  |
+| doc                         | reusable knowledge                    | `<vault-root>`                                 |
+| skill                       | reusable workflow                     | `<vault-root>/skills/`                         |
+| attached context doc        | durable thread-scoped knowledge       | conversation state + `<vault-root>` refs       |
+| project                     | durable structured ongoing work       | `<vault-root>/projects/`                       |
+| run                         | detached work started now             | daemon state                                   |
+| scheduled task / automation | saved later or recurring work         | daemon state                                   |
+| reminder                    | tell-me-later wakeup                  | reminder + wakeup state                        |
+| conversation artifact       | rendered output tied to one thread    | conversation artifact state                    |
+| project artifact            | durable deliverable tied to a project | `<vault-root>/projects/<projectId>/artifacts/` |
 
 ## Supported operator surfaces
 

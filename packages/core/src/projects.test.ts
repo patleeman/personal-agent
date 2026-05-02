@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   createProjectScaffold,
   listAllProjectIds,
@@ -14,8 +15,8 @@ import {
   resolveProjectPaths,
   resolveProjectRepoRoot,
   resolveProjectTaskPath,
-  validateTaskId,
   validateProjectId,
+  validateTaskId,
 } from './projects.js';
 
 const originalEnv = process.env;
@@ -135,20 +136,22 @@ describe('listResolvedProjectRepoRoots', () => {
       description: 'Beta objective',
     });
 
-    writeFileSync(first.paths.documentFile, readFileSync(first.paths.documentFile, 'utf-8').replace(
-      '  - type:project\n',
-      '  - type:project\n  - cwd:../workspace/alpha\n',
-    ));
-    writeFileSync(second.paths.documentFile, readFileSync(second.paths.documentFile, 'utf-8').replace(
-      '  - type:project\n',
-      '  - type:project\n  - cwd:../workspace/alpha\n',
-    ));
+    writeFileSync(
+      first.paths.documentFile,
+      readFileSync(first.paths.documentFile, 'utf-8').replace('  - type:project\n', '  - type:project\n  - cwd:../workspace/alpha\n'),
+    );
+    writeFileSync(
+      second.paths.documentFile,
+      readFileSync(second.paths.documentFile, 'utf-8').replace('  - type:project\n', '  - type:project\n  - cwd:../workspace/alpha\n'),
+    );
 
-    expect(listResolvedProjectRepoRoots({
-      repoRoot: repo,
-      profile: 'datadog',
-      projectIds: ['alpha', 'beta'],
-    })).toEqual([join(repo, '..', 'workspace', 'alpha')]);
+    expect(
+      listResolvedProjectRepoRoots({
+        repoRoot: repo,
+        profile: 'datadog',
+        projectIds: ['alpha', 'beta'],
+      }),
+    ).toEqual([join(repo, '..', 'workspace', 'alpha')]);
   });
 
   it('resolves repo roots for referenced projects owned by another profile', () => {
@@ -161,16 +164,21 @@ describe('listResolvedProjectRepoRoots', () => {
       description: 'Shared objective',
     });
 
-    writeFileSync(project.paths.documentFile, readFileSync(project.paths.documentFile, 'utf-8').replace(
-      '  - type:project\n',
-      '  - type:project\n  - cwd:../workspace/shared-objective\n',
-    ));
+    writeFileSync(
+      project.paths.documentFile,
+      readFileSync(project.paths.documentFile, 'utf-8').replace(
+        '  - type:project\n',
+        '  - type:project\n  - cwd:../workspace/shared-objective\n',
+      ),
+    );
 
-    expect(listResolvedProjectRepoRoots({
-      repoRoot: repo,
-      profile: 'datadog',
-      projectIds: ['shared-objective'],
-    })).toEqual([join(repo, '..', 'workspace', 'shared-objective')]);
+    expect(
+      listResolvedProjectRepoRoots({
+        repoRoot: repo,
+        profile: 'datadog',
+        projectIds: ['shared-objective'],
+      }),
+    ).toEqual([join(repo, '..', 'workspace', 'shared-objective')]);
   });
 });
 
@@ -211,13 +219,15 @@ describe('createProjectScaffold', () => {
   it('rejects empty titles', () => {
     const repo = createTempRepo();
 
-    expect(() => createProjectScaffold({
-      repoRoot: repo,
-      profile: 'datadog',
-      projectId: 'artifact-model',
-      title: '   ',
-      description: 'Non-empty description',
-    })).toThrow('Project title must not be empty');
+    expect(() =>
+      createProjectScaffold({
+        repoRoot: repo,
+        profile: 'datadog',
+        projectId: 'artifact-model',
+        title: '   ',
+        description: 'Non-empty description',
+      }),
+    ).toThrow('Project title must not be empty');
   });
 
   it('rejects duplicate creation by default', () => {
@@ -231,13 +241,15 @@ describe('createProjectScaffold', () => {
       description: 'Initial objective',
     });
 
-    expect(() => createProjectScaffold({
-      repoRoot: repo,
-      profile: 'datadog',
-      projectId: 'artifact-model',
-      title: 'Updated objective',
-      description: 'Updated objective',
-    })).toThrow('Project already exists');
+    expect(() =>
+      createProjectScaffold({
+        repoRoot: repo,
+        profile: 'datadog',
+        projectId: 'artifact-model',
+        title: 'Updated objective',
+        description: 'Updated objective',
+      }),
+    ).toThrow('Project already exists');
   });
 
   it('allows overwriting an existing scaffold when requested', () => {

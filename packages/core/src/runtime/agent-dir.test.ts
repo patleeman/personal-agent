@@ -2,7 +2,9 @@ import { existsSync, lstatSync, mkdirSync, readlinkSync, symlinkSync, writeFileS
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { preparePiAgentDir } from './agent-dir.js';
 import { getDurablePiAgentDir, getDurableSessionsDir, type RuntimeStatePaths } from './paths.js';
 

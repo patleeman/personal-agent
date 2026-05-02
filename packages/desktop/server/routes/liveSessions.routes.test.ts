@@ -149,7 +149,6 @@ vi.mock('../conversations/liveSessions.js', () => ({
   takeOverSessionControl: takeOverSessionControlMock,
 }));
 
-
 vi.mock('../middleware/index.js', () => ({
   invalidateAppTopics: invalidateAppTopicsMock,
   logError: logErrorMock,
@@ -200,11 +199,7 @@ vi.mock('../workspace/gitStatus.js', () => ({
   readGitStatusSummaryWithTelemetry: readGitStatusSummaryWithTelemetryMock,
 }));
 
-import {
-  handleLiveSessionPrompt,
-  registerLiveSessionRoutes,
-  writeLiveConversationControlError,
-} from './liveSessions.js';
+import { handleLiveSessionPrompt, registerLiveSessionRoutes, writeLiveConversationControlError } from './liveSessions.js';
 
 type Handler = (req: unknown, res: unknown) => Promise<void> | void;
 
@@ -371,7 +366,9 @@ describe('live session routes', () => {
     markBackgroundRunResultsDeliveredMock.mockReturnValue([]);
     parseTailBlocksQueryMock.mockReturnValue(undefined);
     extractMentionIdsMock.mockReturnValue([]);
-    pickPromptReferencesInOrderMock.mockImplementation((ids: string[], entries: Array<{ id?: string }>) => entries.filter((entry) => entry.id && ids.includes(entry.id)));
+    pickPromptReferencesInOrderMock.mockImplementation((ids: string[], entries: Array<{ id?: string }>) =>
+      entries.filter((entry) => entry.id && ids.includes(entry.id)),
+    );
     readGitStatusSummaryWithTelemetryMock.mockReturnValue({
       summary: {
         branch: 'main',
@@ -418,10 +415,13 @@ describe('live session routes', () => {
     submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
 
     const promptRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-plain' },
-      body: { text: 'Please continue.' },
-    }), promptRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-plain' },
+        body: { text: 'Please continue.' },
+      }),
+      promptRes,
+    );
     await Promise.resolve();
 
     expect(listTasksForCurrentProfile).not.toHaveBeenCalled();
@@ -452,23 +452,24 @@ describe('live session routes', () => {
     });
 
     const promptRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-empty' },
-      body: {
-        relatedConversationIds: ['related-1'],
-        text: 'Start from this context.',
-      },
-    }), promptRes);
-
-    expect(buildRelatedConversationPointersMock).toHaveBeenCalledWith(expect.objectContaining({
-      currentConversationId: 'live-empty',
-      selectedSessionIds: ['related-1'],
-    }));
-    expect(queuePromptContextMock).toHaveBeenCalledWith(
-      'live-empty',
-      'related_conversation_pointers',
-      'Pointer list.',
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-empty' },
+        body: {
+          relatedConversationIds: ['related-1'],
+          text: 'Start from this context.',
+        },
+      }),
+      promptRes,
     );
+
+    expect(buildRelatedConversationPointersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentConversationId: 'live-empty',
+        selectedSessionIds: ['related-1'],
+      }),
+    );
+    expect(queuePromptContextMock).toHaveBeenCalledWith('live-empty', 'related_conversation_pointers', 'Pointer list.');
     expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
   });
 
@@ -487,13 +488,16 @@ describe('live session routes', () => {
     });
 
     const promptRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-empty' },
-      body: {
-        relatedConversationIds: ['related-1'],
-        text: 'Second turn.',
-      },
-    }), promptRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-empty' },
+        body: {
+          relatedConversationIds: ['related-1'],
+          text: 'Second turn.',
+        },
+      }),
+      promptRes,
+    );
 
     expect(buildRelatedConversationPointersMock).not.toHaveBeenCalled();
     expect(queuePromptContextMock).not.toHaveBeenCalled();
@@ -514,13 +518,16 @@ describe('live session routes', () => {
     });
 
     const promptRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-running' },
-      body: {
-        relatedConversationIds: ['related-1'],
-        text: 'One more thing.',
-      },
-    }), promptRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-running' },
+        body: {
+          relatedConversationIds: ['related-1'],
+          text: 'One more thing.',
+        },
+      }),
+      promptRes,
+    );
 
     expect(buildRelatedConversationPointersMock).not.toHaveBeenCalled();
     expect(queuePromptContextMock).not.toHaveBeenCalled();
@@ -546,35 +553,58 @@ describe('live session routes', () => {
     expect(blankTextRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
     const invalidImageRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-1' },
-      body: { images: [null, { mimeType: '', data: '' }, { mimeType: 'image/png', data: '   ' }, { mimeType: 'image/png', data: 'not-valid-base64!' }, { mimeType: 'text/plain', data: 'aGVsbG8=' }] },
-    }), invalidImageRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-1' },
+        body: {
+          images: [
+            null,
+            { mimeType: '', data: '' },
+            { mimeType: 'image/png', data: '   ' },
+            {
+              mimeType: 'image/png',
+              data: 'not-valid-base64!',
+            },
+            { mimeType: 'text/plain', data: 'aGVsbG8=' },
+          ],
+        },
+      }),
+      invalidImageRes,
+    );
     expect(invalidImageRes.status).toHaveBeenCalledWith(400);
     expect(invalidImageRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
     const unsafeAttachmentRefRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-1' },
-      body: { attachmentRefs: [{ attachmentId: 'att-1', revision: Number.MAX_SAFE_INTEGER + 1 }] },
-    }), unsafeAttachmentRefRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { attachmentRefs: [{ attachmentId: 'att-1', revision: Number.MAX_SAFE_INTEGER + 1 }] },
+      }),
+      unsafeAttachmentRefRes,
+    );
     expect(unsafeAttachmentRefRes.status).toHaveBeenCalledWith(400);
     expect(unsafeAttachmentRefRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
     const absurdAttachmentRefRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-1' },
-      body: { attachmentRefs: [{ attachmentId: 'att-1', revision: Number.MAX_SAFE_INTEGER }] },
-    }), absurdAttachmentRefRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { attachmentRefs: [{ attachmentId: 'att-1', revision: Number.MAX_SAFE_INTEGER }] },
+      }),
+      absurdAttachmentRefRes,
+    );
     expect(absurdAttachmentRefRes.status).toHaveBeenCalledWith(400);
     expect(absurdAttachmentRefRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
     isLiveMock.mockReturnValueOnce(true);
     const invalidBehaviorRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-1' },
-      body: { text: 'hello', behavior: 'bogus' },
-    }), invalidBehaviorRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { text: 'hello', behavior: 'bogus' },
+      }),
+      invalidBehaviorRes,
+    );
     expect(invalidBehaviorRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
     expect(submitLocalPromptSessionMock).toHaveBeenCalledWith('live-1', 'hello', undefined, undefined, undefined);
     submitLocalPromptSessionMock.mockClear();
@@ -584,10 +614,13 @@ describe('live session routes', () => {
     });
 
     const badAttachmentRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'live-1' },
-      body: { text: 'hello', attachmentRefs: [{ attachmentId: 'att-1' }] },
-    }), badAttachmentRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { text: 'hello', attachmentRefs: [{ attachmentId: 'att-1' }] },
+      }),
+      badAttachmentRes,
+    );
     expect(badAttachmentRes.status).toHaveBeenCalledWith(400);
     expect(badAttachmentRes.json).toHaveBeenCalledWith({ error: 'Attachment not found' });
 
@@ -623,28 +656,29 @@ describe('live session routes', () => {
     });
 
     const promptRes = createResponse();
-    await handleLiveSessionPrompt(createRequest({
-      params: { id: 'stored-session' },
-      body: {
-        attachmentRefs: [{ attachmentId: 'att-1', revision: 2 }],
-        behavior: 'followUp',
-        contextMessages: [{
-          customType: 'related_threads_context',
-          content: 'Summaries from selected threads.',
-        }],
-        surfaceId: 'surface-1',
-        text: 'Please continue.',
-      },
-    }), promptRes);
+    await handleLiveSessionPrompt(
+      createRequest({
+        params: { id: 'stored-session' },
+        body: {
+          attachmentRefs: [{ attachmentId: 'att-1', revision: 2 }],
+          behavior: 'followUp',
+          contextMessages: [
+            {
+              customType: 'related_threads_context',
+              content: 'Summaries from selected threads.',
+            },
+          ],
+          surfaceId: 'surface-1',
+          text: 'Please continue.',
+        },
+      }),
+      promptRes,
+    );
     await Promise.resolve();
     await Promise.resolve();
 
     expect(flushLiveDeferredResumes).toHaveBeenCalled();
-    expect(queuePromptContextMock).not.toHaveBeenCalledWith(
-      'live-resumed',
-      'related_threads_context',
-      'Summaries from selected threads.',
-    );
+    expect(queuePromptContextMock).not.toHaveBeenCalledWith('live-resumed', 'related_threads_context', 'Summaries from selected threads.');
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'live-resumed',
       'referenced_context',
@@ -660,20 +694,22 @@ describe('live session routes', () => {
       'referenced_context',
       expect.stringContaining('Referenced conversation attachments:'),
     );
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'live-resumed',
-      pendingOperation: expect.objectContaining({
-        behavior: 'followUp',
-        contextMessages: expect.not.arrayContaining([
-          expect.objectContaining({
-            customType: 'related_threads_context',
-          }),
-        ]),
-        text: 'Please continue.',
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'live-resumed',
+        pendingOperation: expect.objectContaining({
+          behavior: 'followUp',
+          contextMessages: expect.not.arrayContaining([
+            expect.objectContaining({
+              customType: 'related_threads_context',
+            }),
+          ]),
+          text: 'Please continue.',
+        }),
+        profile: 'assistant',
+        state: 'running',
       }),
-      profile: 'assistant',
-      state: 'running',
-    }));
+    );
     expect(submitLocalPromptSessionMock).toHaveBeenCalledWith('live-resumed', 'Please continue.', 'followUp', undefined, 'surface-1');
     expect(markBackgroundRunResultsDeliveredMock).toHaveBeenCalledWith({
       resultIds: ['result-1'],
@@ -728,9 +764,12 @@ describe('live session routes', () => {
     });
 
     const createRes = createResponse();
-    await postHandler('/api/live-sessions')(createRequest({
-      body: { cwd: '/explicit', model: 'gpt-4o', thinkingLevel: 'high' },
-    }), createRes);
+    await postHandler('/api/live-sessions')(
+      createRequest({
+        body: { cwd: '/explicit', model: 'gpt-4o', thinkingLevel: 'high' },
+      }),
+      createRes,
+    );
     expect(resolveConversationCwdMock).toHaveBeenCalledWith({
       defaultCwd: '/default-cwd',
       explicitCwd: '/explicit',
@@ -841,13 +880,19 @@ describe('live session routes', () => {
 
     isLiveMock.mockReturnValue(false);
     const notLocalRes = createResponse();
-    postHandler('/api/live-sessions/:id/takeover')(createRequest({ params: { id: 'remote-1' }, body: { surfaceId: 'surface-1' } }), notLocalRes);
+    postHandler('/api/live-sessions/:id/takeover')(
+      createRequest({ params: { id: 'remote-1' }, body: { surfaceId: 'surface-1' } }),
+      notLocalRes,
+    );
     expect(notLocalRes.status).toHaveBeenCalledWith(400);
     expect(notLocalRes.json).toHaveBeenCalledWith({ error: 'Takeover is only available for local live conversations right now.' });
 
     isLiveMock.mockReturnValue(true);
     const takeoverRes = createResponse();
-    postHandler('/api/live-sessions/:id/takeover')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: ' surface-1 ' } }), takeoverRes);
+    postHandler('/api/live-sessions/:id/takeover')(
+      createRequest({ params: { id: 'live-1' }, body: { surfaceId: ' surface-1 ' } }),
+      takeoverRes,
+    );
     expect(takeOverSessionControlMock).toHaveBeenCalledWith('live-1', 'surface-1');
     expect(takeoverRes.json).toHaveBeenCalledWith({ ok: true, surfaceId: 'surface-1' });
 
@@ -855,7 +900,10 @@ describe('live session routes', () => {
       throw new LiveSessionControlErrorClass('Already controlled elsewhere');
     });
     const conflictRes = createResponse();
-    postHandler('/api/live-sessions/:id/takeover')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-2' } }), conflictRes);
+    postHandler('/api/live-sessions/:id/takeover')(
+      createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-2' } }),
+      conflictRes,
+    );
     expect(conflictRes.status).toHaveBeenCalledWith(409);
     expect(conflictRes.json).toHaveBeenCalledWith({ error: 'Already controlled elsewhere' });
   });
@@ -869,91 +917,127 @@ describe('live session routes', () => {
     });
 
     const badBehaviorRes = createResponse();
-    await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
-      params: { id: 'live-1' },
-      body: { behavior: 'invalid', index: 0 },
-    }), badBehaviorRes);
+    await postHandler('/api/live-sessions/:id/dequeue')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { behavior: 'invalid', index: 0 },
+      }),
+      badBehaviorRes,
+    );
     expect(badBehaviorRes.status).toHaveBeenCalledWith(400);
     expect(badBehaviorRes.json).toHaveBeenCalledWith({ error: 'behavior must be "steer" or "followUp"' });
 
     const badIndexRes = createResponse();
-    await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
-      params: { id: 'live-1' },
-      body: { behavior: 'steer', index: -1 },
-    }), badIndexRes);
+    await postHandler('/api/live-sessions/:id/dequeue')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { behavior: 'steer', index: -1 },
+      }),
+      badIndexRes,
+    );
     expect(badIndexRes.status).toHaveBeenCalledWith(400);
     expect(badIndexRes.json).toHaveBeenCalledWith({ error: 'index must be a non-negative integer' });
 
     const unsafeIndexRes = createResponse();
-    await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
-      params: { id: 'live-1' },
-      body: { behavior: 'steer', index: Number.MAX_SAFE_INTEGER + 1 },
-    }), unsafeIndexRes);
+    await postHandler('/api/live-sessions/:id/dequeue')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { behavior: 'steer', index: Number.MAX_SAFE_INTEGER + 1 },
+      }),
+      unsafeIndexRes,
+    );
     expect(unsafeIndexRes.status).toHaveBeenCalledWith(400);
     expect(unsafeIndexRes.json).toHaveBeenCalledWith({ error: 'index must be a non-negative integer' });
 
     const dequeueRes = createResponse();
-    await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
-      params: { id: 'live-1' },
-      body: { behavior: 'followUp', index: 0, previewId: 'preview-1', surfaceId: 'surface-1' },
-    }), dequeueRes);
+    await postHandler('/api/live-sessions/:id/dequeue')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { behavior: 'followUp', index: 0, previewId: 'preview-1', surfaceId: 'surface-1' },
+      }),
+      dequeueRes,
+    );
     expect(restoreQueuedMessageMock).toHaveBeenCalledWith('live-1', 'followUp', 0, 'preview-1');
     expect(dequeueRes.json).toHaveBeenCalledWith({ ok: true, restoredIndex: 0 });
 
     restoreQueuedMessageMock.mockRejectedValueOnce(new Error('Queued prompt restore is unavailable'));
     const dequeueConflictRes = createResponse();
-    await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
-      params: { id: 'live-1' },
-      body: { behavior: 'steer', index: 1 },
-    }), dequeueConflictRes);
+    await postHandler('/api/live-sessions/:id/dequeue')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { behavior: 'steer', index: 1 },
+      }),
+      dequeueConflictRes,
+    );
     expect(dequeueConflictRes.status).toHaveBeenCalledWith(409);
     expect(dequeueConflictRes.json).toHaveBeenCalledWith({ error: 'Queued prompt restore is unavailable' });
 
     const missingBashCommandRes = createResponse();
-    await postHandler('/api/live-sessions/:id/bash')(createRequest({
-      params: { id: 'live-1' },
-      body: {},
-    }), missingBashCommandRes);
+    await postHandler('/api/live-sessions/:id/bash')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: {},
+      }),
+      missingBashCommandRes,
+    );
     expect(missingBashCommandRes.status).toHaveBeenCalledWith(400);
     expect(missingBashCommandRes.json).toHaveBeenCalledWith({ error: 'command required' });
 
     const bashRes = createResponse();
-    await postHandler('/api/live-sessions/:id/bash')(createRequest({
-      params: { id: 'live-1' },
-      body: { command: '  git status  ', excludeFromContext: true },
-    }), bashRes);
+    await postHandler('/api/live-sessions/:id/bash')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { command: '  git status  ', excludeFromContext: true },
+      }),
+      bashRes,
+    );
     expect(executeSessionBashMock).toHaveBeenCalledWith('live-1', 'git status', { excludeFromContext: true });
     expect(bashRes.json).toHaveBeenCalledWith({ ok: true, result: { exitCode: 0, output: 'ok' } });
 
     executeSessionBashMock.mockRejectedValueOnce(new Error('A bash command is already running.'));
     const bashConflictRes = createResponse();
-    await postHandler('/api/live-sessions/:id/bash')(createRequest({
-      params: { id: 'live-1' },
-      body: { command: 'pwd' },
-    }), bashConflictRes);
+    await postHandler('/api/live-sessions/:id/bash')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { command: 'pwd' },
+      }),
+      bashConflictRes,
+    );
     expect(bashConflictRes.status).toHaveBeenCalledWith(409);
     expect(bashConflictRes.json).toHaveBeenCalledWith({ error: 'A bash command is already running.' });
 
     const compactRes = createResponse();
-    await postHandler('/api/live-sessions/:id/compact')(createRequest({
-      params: { id: 'live-1' },
-      body: { customInstructions: '  Keep this short.  ', surfaceId: 'surface-1' },
-    }), compactRes);
+    await postHandler('/api/live-sessions/:id/compact')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { customInstructions: '  Keep this short.  ', surfaceId: 'surface-1' },
+      }),
+      compactRes,
+    );
     expect(compactSessionMock).toHaveBeenCalledWith('live-1', 'Keep this short.');
     expect(compactRes.json).toHaveBeenCalledWith({ ok: true, result: 'compacted' });
 
     const reloadRes = createResponse();
-    await postHandler('/api/live-sessions/:id/reload')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }), reloadRes);
+    await postHandler('/api/live-sessions/:id/reload')(
+      createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }),
+      reloadRes,
+    );
     expect(reloadSessionResourcesMock).toHaveBeenCalledWith('live-1');
     expect(reloadRes.json).toHaveBeenCalledWith({ ok: true });
 
     const exportRes = createResponse();
-    await postHandler('/api/live-sessions/:id/export')(createRequest({ params: { id: 'live-1' }, body: { outputPath: ' /tmp/export.html ' } }), exportRes);
+    await postHandler('/api/live-sessions/:id/export')(
+      createRequest({ params: { id: 'live-1' }, body: { outputPath: ' /tmp/export.html ' } }),
+      exportRes,
+    );
     expect(exportSessionHtmlMock).toHaveBeenCalledWith('live-1', '/tmp/export.html');
     expect(exportRes.json).toHaveBeenCalledWith({ ok: true, path: '/tmp/export.html' });
 
     const abortRes = createResponse();
-    await postHandler('/api/live-sessions/:id/abort')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }), abortRes);
+    await postHandler('/api/live-sessions/:id/abort')(
+      createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }),
+      abortRes,
+    );
     expect(abortLocalSessionMock).toHaveBeenCalledWith('live-1');
     expect(abortRes.json).toHaveBeenCalledWith({ ok: true });
 
@@ -970,11 +1054,15 @@ describe('live session routes', () => {
     });
     const contextRes = createResponse();
     getHandler('/api/live-sessions/:id/context')(createRequest({ params: { id: 'live-1' } }), contextRes);
-    expect(setServerTimingHeadersMock).toHaveBeenCalledWith(contextRes, expect.arrayContaining([
-      expect.objectContaining({ description: 'hit' }),
-      expect.objectContaining({ name: 'total' }),
-    ]), expect.objectContaining({ route: 'live-session-context' }));
-    expect(logSlowConversationPerfMock).toHaveBeenCalledWith('live session context request', expect.objectContaining({ conversationId: 'live-1' }));
+    expect(setServerTimingHeadersMock).toHaveBeenCalledWith(
+      contextRes,
+      expect.arrayContaining([expect.objectContaining({ description: 'hit' }), expect.objectContaining({ name: 'total' })]),
+      expect.objectContaining({ route: 'live-session-context' }),
+    );
+    expect(logSlowConversationPerfMock).toHaveBeenCalledWith(
+      'live session context request',
+      expect.objectContaining({ conversationId: 'live-1' }),
+    );
     expect(contextRes.json).toHaveBeenCalledWith({
       branch: 'main',
       cwd: '/repo/worktree',
@@ -987,7 +1075,10 @@ describe('live session routes', () => {
     });
 
     const summarizeRes = createResponse();
-    await postHandler('/api/live-sessions/:id/summarize-fork')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }), summarizeRes);
+    await postHandler('/api/live-sessions/:id/summarize-fork')(
+      createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }),
+      summarizeRes,
+    );
     expect(summarizeAndForkSessionMock).toHaveBeenCalledWith('live-1', {
       additionalExtensionPaths: ['extensions'],
       extensionFactories: ['factory'],
@@ -1000,10 +1091,13 @@ describe('live session routes', () => {
     expect(missingEntryIdRes.json).toHaveBeenCalledWith({ error: 'entryId required' });
 
     const branchRes = createResponse();
-    await postHandler('/api/live-sessions/:id/branch')(createRequest({
-      params: { id: 'live-1' },
-      body: { entryId: 'entry-1', surfaceId: 'surface-1' },
-    }), branchRes);
+    await postHandler('/api/live-sessions/:id/branch')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { entryId: 'entry-1', surfaceId: 'surface-1' },
+      }),
+      branchRes,
+    );
     expect(branchSessionMock).toHaveBeenCalledWith('live-1', 'entry-1', {
       additionalExtensionPaths: ['extensions'],
       extensionFactories: ['factory'],
@@ -1011,10 +1105,13 @@ describe('live session routes', () => {
     expect(branchRes.json).toHaveBeenCalledWith({ id: 'branch-1' });
 
     const forkRes = createResponse();
-    await postHandler('/api/live-sessions/:id/fork')(createRequest({
-      params: { id: 'live-1' },
-      body: { entryId: 'entry-2', preserveSource: true, beforeEntry: true, surfaceId: 'surface-1' },
-    }), forkRes);
+    await postHandler('/api/live-sessions/:id/fork')(
+      createRequest({
+        params: { id: 'live-1' },
+        body: { entryId: 'entry-2', preserveSource: true, beforeEntry: true, surfaceId: 'surface-1' },
+      }),
+      forkRes,
+    );
     expect(forkSessionMock).toHaveBeenCalledWith('live-1', 'entry-2', {
       additionalExtensionPaths: ['extensions'],
       extensionFactories: ['factory'],

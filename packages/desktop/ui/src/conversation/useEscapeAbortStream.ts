@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 
 export function hasBlockingConversationOverlay(): boolean {
   return Boolean(
-    document.querySelector('.ui-overlay-backdrop')
-    || document.querySelector('[role="dialog"]')
-    || document.querySelector('[data-modal="true"]'),
+    document.querySelector('.ui-overlay-backdrop') ||
+    document.querySelector('[role="dialog"]') ||
+    document.querySelector('[data-modal="true"]'),
   );
 }
 

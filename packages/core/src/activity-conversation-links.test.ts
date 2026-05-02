@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   clearActivityConversationLinks,
   getActivityConversationLink,
@@ -26,14 +27,16 @@ function createTempDir(prefix: string): string {
 describe('activity conversation link paths', () => {
   it('resolves the profile-scoped activity conversations directory under local runtime state', () => {
     const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
-    expect(resolveProfileActivityConversationLinksDir({ stateRoot, profile: 'assistant' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'activity-conversation-links', 'assistant'));
+    expect(resolveProfileActivityConversationLinksDir({ stateRoot, profile: 'assistant' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'activity-conversation-links', 'assistant'),
+    );
   });
 
   it('resolves an activity conversation link path under local runtime state', () => {
     const stateRoot = createTempDir('personal-agent-activity-conversation-links-state-');
-    expect(resolveActivityConversationLinkPath({ stateRoot, profile: 'assistant', activityId: 'daily-report' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'activity-conversation-links', 'assistant', 'daily-report.json'));
+    expect(resolveActivityConversationLinkPath({ stateRoot, profile: 'assistant', activityId: 'daily-report' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'activity-conversation-links', 'assistant', 'daily-report.json'),
+    );
   });
 });
 
@@ -49,12 +52,11 @@ describe('activity conversation links', () => {
       updatedAt: '2026-03-12T11:00:00.000Z',
     });
 
-    expect(getActivityConversationLink({ stateRoot, profile: 'assistant', activityId: 'daily-report' }))
-      .toEqual({
-        activityId: 'daily-report',
-        updatedAt: '2026-03-12T11:00:00.000Z',
-        relatedConversationIds: ['conv-123', 'conv-456'],
-      });
+    expect(getActivityConversationLink({ stateRoot, profile: 'assistant', activityId: 'daily-report' })).toEqual({
+      activityId: 'daily-report',
+      updatedAt: '2026-03-12T11:00:00.000Z',
+      relatedConversationIds: ['conv-123', 'conv-456'],
+    });
   });
 
   it('clears the durable link file when no conversation ids remain', () => {

@@ -1,16 +1,7 @@
 /* eslint-env node */
 
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureElectronNativeModules, readElectronNativeModulesDir } from './ensure-electron-native-modules.mjs';
@@ -128,23 +119,20 @@ function ensureMacDevAppBundle() {
   }
 
   const desktopPackage = readJson(desktopPackageJson);
-  const baseProductName = typeof desktopPackage.productName === 'string' && desktopPackage.productName.trim().length > 0
-    ? desktopPackage.productName.trim()
-    : 'Personal Agent';
+  const baseProductName =
+    typeof desktopPackage.productName === 'string' && desktopPackage.productName.trim().length > 0
+      ? desktopPackage.productName.trim()
+      : 'Personal Agent';
   const productName = `${baseProductName}${testingProductSuffix}`;
-  const appVersion = typeof desktopPackage.version === 'string' && desktopPackage.version.trim().length > 0
-    ? desktopPackage.version.trim()
-    : '0.0.0';
+  const appVersion =
+    typeof desktopPackage.version === 'string' && desktopPackage.version.trim().length > 0 ? desktopPackage.version.trim() : '0.0.0';
   const appBundlePath = resolve(macDevAppDir, `${productName}.app`);
   const executablePath = resolve(appBundlePath, 'Contents', 'MacOS', productName);
   const stampPath = resolve(macDevAppDir, 'stamp.json');
   const desiredStamp = createMacDevAppStamp(productName, appVersion);
   const existingStamp = readExistingStamp(stampPath);
 
-  if (
-    existsSync(executablePath)
-    && JSON.stringify(existingStamp) === JSON.stringify(desiredStamp)
-  ) {
+  if (existsSync(executablePath) && JSON.stringify(existingStamp) === JSON.stringify(desiredStamp)) {
     return {
       appBundlePath,
       executablePath,

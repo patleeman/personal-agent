@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { formatWorkspaceEntrySize } from './WorkspaceExplorer.js';
 
 describe('formatWorkspaceEntrySize', () => {

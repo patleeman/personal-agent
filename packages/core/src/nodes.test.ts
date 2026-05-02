@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   createUnifiedNode,
   deleteUnifiedNode,
@@ -46,16 +47,19 @@ describe('unified nodes', () => {
     const stateRoot = createTempStateRoot();
     const vaultRoot = join(stateRoot, 'sync');
 
-    const created = createUnifiedNode({
-      id: 'sample-node',
-      title: 'Sample Node',
-      summary: 'Sample node summary.',
-      description: 'Agent guidance.',
-      tags: ['type:note', 'profile:assistant', 'area:test'],
-      parent: 'parent-node',
-      related: ['sibling-node'],
-      relationships: [{ type: 'depends-on', targetId: 'sibling-node' }],
-    }, { vaultRoot });
+    const created = createUnifiedNode(
+      {
+        id: 'sample-node',
+        title: 'Sample Node',
+        summary: 'Sample node summary.',
+        description: 'Agent guidance.',
+        tags: ['type:note', 'profile:assistant', 'area:test'],
+        parent: 'parent-node',
+        related: ['sibling-node'],
+        relationships: [{ type: 'depends-on', targetId: 'sibling-node' }],
+      },
+      { vaultRoot },
+    );
 
     expect(created.node.kinds).toEqual(['note']);
     expect(created.node.links.parent).toBe('parent-node');
@@ -63,23 +67,29 @@ describe('unified nodes', () => {
     expect(created.node.tags).toContain('parent:parent-node');
     expect(created.node.tags).toContain('status:active');
 
-    const updated = updateUnifiedNode({
-      id: 'sample-node',
-      title: 'Renamed Node',
-      addTags: ['team:platform'],
-      removeTags: ['area:test'],
-      body: '# Renamed Node\n\nUpdated body.',
-    }, { vaultRoot });
+    const updated = updateUnifiedNode(
+      {
+        id: 'sample-node',
+        title: 'Renamed Node',
+        addTags: ['team:platform'],
+        removeTags: ['area:test'],
+        body: '# Renamed Node\n\nUpdated body.',
+      },
+      { vaultRoot },
+    );
 
     expect(updated.title).toBe('Renamed Node');
     expect(updated.tags).toContain('team:platform');
     expect(updated.tags).not.toContain('area:test');
 
-    const retagged = tagUnifiedNode({
-      id: 'sample-node',
-      add: ['lang:typescript'],
-      remove: ['team:platform'],
-    }, { vaultRoot });
+    const retagged = tagUnifiedNode(
+      {
+        id: 'sample-node',
+        add: ['lang:typescript'],
+        remove: ['team:platform'],
+      },
+      { vaultRoot },
+    );
 
     expect(retagged.tags).toContain('lang:typescript');
     expect(retagged.tags).not.toContain('team:platform');
@@ -98,7 +108,9 @@ describe('unified nodes', () => {
     const stateRoot = createTempStateRoot();
     const vaultRoot = join(stateRoot, 'sync');
 
-    writeFile(join(stateRoot, 'sync', 'notes', 'desktop.md'), `---
+    writeFile(
+      join(stateRoot, 'sync', 'notes', 'desktop.md'),
+      `---
 id: desktop
 kind: note
 title: Desktop Notes
@@ -114,9 +126,12 @@ links:
 # Desktop
 
 Ubuntu workstation details.
-`);
+`,
+    );
 
-    writeFile(join(stateRoot, 'sync', '_skills', 'agent-browser', 'SKILL.md'), `---
+    writeFile(
+      join(stateRoot, 'sync', '_skills', 'agent-browser', 'SKILL.md'),
+      `---
 name: agent-browser
 description: Automate browsers.
 profiles:
@@ -126,9 +141,12 @@ profiles:
 # agent-browser
 
 Use the browser automation helper.
-`);
+`,
+    );
 
-    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'project.md'), `---
+    writeFile(
+      join(stateRoot, 'sync', 'projects', 'ship-it', 'project.md'),
+      `---
 id: ship-it
 kind: project
 title: Ship It
@@ -142,8 +160,11 @@ updatedAt: 2026-04-01T01:00:00.000Z
 # Ship It
 
 Ship the feature.
-`);
-    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'state.yaml'), `id: ship-it
+`,
+    );
+    writeFile(
+      join(stateRoot, 'sync', 'projects', 'ship-it', 'state.yaml'),
+      `id: ship-it
 ownerProfile: assistant
 createdAt: 2026-04-01T00:00:00.000Z
 updatedAt: 2026-04-01T01:00:00.000Z
@@ -171,8 +192,11 @@ plan:
     - id: build-it
       title: Build it
       status: pending
-`);
-    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'notes', 'scratch.md'), `---
+`,
+    );
+    writeFile(
+      join(stateRoot, 'sync', 'projects', 'ship-it', 'notes', 'scratch.md'),
+      `---
 id: ship-it-scratch
 kind: note
 title: Scratch
@@ -181,7 +205,8 @@ status: active
 ---
 
 # Scratch
-`);
+`,
+    );
 
     const migration = migrateLegacyNodes({ vaultRoot });
     expect(migration.created).toEqual([]);
@@ -206,7 +231,9 @@ status: active
     const stateRoot = createTempStateRoot();
     const vaultRoot = join(stateRoot, 'sync');
 
-    writeFile(join(stateRoot, 'sync', 'notes', 'shared-topic.md'), `---
+    writeFile(
+      join(stateRoot, 'sync', 'notes', 'shared-topic.md'),
+      `---
 id: shared-topic
 kind: note
 title: Shared Topic
@@ -220,9 +247,12 @@ links:
 # Shared Topic
 
 Note body.
-`);
+`,
+    );
 
-    writeFile(join(stateRoot, 'sync', 'projects', 'shared-topic', 'project.md'), `---
+    writeFile(
+      join(stateRoot, 'sync', 'projects', 'shared-topic', 'project.md'),
+      `---
 id: shared-topic
 kind: project
 title: Shared Topic
@@ -236,8 +266,11 @@ updatedAt: 2026-04-01T01:00:00.000Z
 # Shared Topic
 
 Project body.
-`);
-    writeFile(join(stateRoot, 'sync', 'projects', 'shared-topic', 'state.yaml'), `id: shared-topic
+`,
+    );
+    writeFile(
+      join(stateRoot, 'sync', 'projects', 'shared-topic', 'state.yaml'),
+      `id: shared-topic
 ownerProfile: assistant
 createdAt: 2026-04-01T00:00:00.000Z
 updatedAt: 2026-04-01T01:00:00.000Z
@@ -253,7 +286,8 @@ recentProgress: []
 plan:
   milestones: []
   tasks: []
-`);
+`,
+    );
 
     const migration = migrateLegacyNodes({ vaultRoot });
     expect(migration.created).toEqual([]);
@@ -265,19 +299,17 @@ plan:
     expect(loaded.nodes.map((node) => node.id)).toEqual(['shared-topic', 'shared-topic']);
 
     const lint = lintUnifiedNodes({ vaultRoot });
-    expect(lint.duplicateIds).toEqual([
-      expect.objectContaining({ id: 'shared-topic' }),
-    ]);
-    expect(lint.referenceErrors).toEqual([
-      expect.objectContaining({ id: 'shared-topic', field: 'related', targetId: 'missing-node' }),
-    ]);
+    expect(lint.duplicateIds).toEqual([expect.objectContaining({ id: 'shared-topic' })]);
+    expect(lint.referenceErrors).toEqual([expect.objectContaining({ id: 'shared-topic', field: 'related', targetId: 'missing-node' })]);
   });
 
   it('parses typed relationships from frontmatter objects', () => {
     const stateRoot = createTempStateRoot();
     const vaultRoot = join(stateRoot, 'sync');
 
-    writeFile(join(stateRoot, 'sync', 'notes', 'graph-node.md'), `---
+    writeFile(
+      join(stateRoot, 'sync', 'notes', 'graph-node.md'),
+      `---
 id: graph-node
 title: Graph Node
 summary: Node with explicit relationships.
@@ -295,7 +327,8 @@ links:
 # Graph Node
 
 Tracks graph relationships.
-`);
+`,
+    );
 
     const loaded = loadUnifiedNodes({ vaultRoot });
     expect(loaded.nodes[0]?.links.relationships).toEqual([

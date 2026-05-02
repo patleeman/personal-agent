@@ -1,28 +1,29 @@
+import { openSqliteDatabase } from '@personal-agent/core';
 import { existsSync, mkdtempSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { openSqliteDatabase } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  type DurableRunCheckpointFile,
   listDurableRunIds,
-  resolveDurableRunsRoot,
-  resolveDurableRunPaths,
-  resolveRuntimeDbPath,
   loadDurableRunCheckpoint,
   loadDurableRunManifest,
   loadDurableRunStatus,
   readDurableRunEvents,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  resolveRuntimeDbPath,
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
   scanDurableRun,
   scanDurableRunsForRecovery,
   summarizeScannedDurableRuns,
-  type DurableRunCheckpointFile,
 } from './store.js';
 
 const tempDirs: string[] = [];
@@ -62,50 +63,62 @@ describe('durable run store', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-12T18:00:00.000Z'));
 
-    expect(createDurableRunManifest({
-      id: 'run-invalid-manifest-time',
-      kind: 'workflow',
-      resumePolicy: 'continue',
-      createdAt: 'not-a-date',
-    }).createdAt).toBe('2026-03-12T18:00:00.000Z');
+    expect(
+      createDurableRunManifest({
+        id: 'run-invalid-manifest-time',
+        kind: 'workflow',
+        resumePolicy: 'continue',
+        createdAt: 'not-a-date',
+      }).createdAt,
+    ).toBe('2026-03-12T18:00:00.000Z');
 
-    expect(createInitialDurableRunStatus({
-      runId: 'run-invalid-status-time',
-      createdAt: 'not-a-date',
-      updatedAt: 'also-not-a-date',
-      startedAt: 'bad-start',
-      completedAt: 'bad-complete',
-    })).toEqual(expect.objectContaining({
-      createdAt: '2026-03-12T18:00:00.000Z',
-      updatedAt: '2026-03-12T18:00:00.000Z',
-      startedAt: undefined,
-      completedAt: undefined,
-    }));
+    expect(
+      createInitialDurableRunStatus({
+        runId: 'run-invalid-status-time',
+        createdAt: 'not-a-date',
+        updatedAt: 'also-not-a-date',
+        startedAt: 'bad-start',
+        completedAt: 'bad-complete',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        createdAt: '2026-03-12T18:00:00.000Z',
+        updatedAt: '2026-03-12T18:00:00.000Z',
+        startedAt: undefined,
+        completedAt: undefined,
+      }),
+    );
   });
 
   it('falls back to the current clock for non-ISO run record timestamps', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-12T18:00:00.000Z'));
 
-    expect(createDurableRunManifest({
-      id: 'run-non-iso-manifest-time',
-      kind: 'workflow',
-      resumePolicy: 'continue',
-      createdAt: '1',
-    }).createdAt).toBe('2026-03-12T18:00:00.000Z');
+    expect(
+      createDurableRunManifest({
+        id: 'run-non-iso-manifest-time',
+        kind: 'workflow',
+        resumePolicy: 'continue',
+        createdAt: '1',
+      }).createdAt,
+    ).toBe('2026-03-12T18:00:00.000Z');
 
-    expect(createInitialDurableRunStatus({
-      runId: 'run-non-iso-status-time',
-      createdAt: '1',
-      updatedAt: '1',
-      startedAt: '1',
-      completedAt: '1',
-    })).toEqual(expect.objectContaining({
-      createdAt: '2026-03-12T18:00:00.000Z',
-      updatedAt: '2026-03-12T18:00:00.000Z',
-      startedAt: undefined,
-      completedAt: undefined,
-    }));
+    expect(
+      createInitialDurableRunStatus({
+        runId: 'run-non-iso-status-time',
+        createdAt: '1',
+        updatedAt: '1',
+        startedAt: '1',
+        completedAt: '1',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        createdAt: '2026-03-12T18:00:00.000Z',
+        updatedAt: '2026-03-12T18:00:00.000Z',
+        startedAt: undefined,
+        completedAt: undefined,
+      }),
+    );
   });
 
   it('resolves the durable runs root under the daemon root', () => {
@@ -240,24 +253,32 @@ describe('durable run store', () => {
     const runsRoot = createTempDir('durable-runs-store-scan-one-');
     const paths = resolveDurableRunPaths(runsRoot, 'run-one');
 
-    saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
-      id: 'run-one',
-      kind: 'conversation',
-      resumePolicy: 'continue',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-one',
-      status: 'running',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 1,
-    }));
+    saveDurableRunManifest(
+      paths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-one',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      paths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-one',
+        status: 'running',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 1,
+      }),
+    );
 
-    expect(scanDurableRun(runsRoot, 'run-one')).toEqual(expect.objectContaining({
-      runId: 'run-one',
-      recoveryAction: 'resume',
-      problems: [],
-    }));
+    expect(scanDurableRun(runsRoot, 'run-one')).toEqual(
+      expect.objectContaining({
+        runId: 'run-one',
+        recoveryAction: 'resume',
+        problems: [],
+      }),
+    );
     expect(scanDurableRun(runsRoot, 'missing')).toBeUndefined();
   });
 
@@ -265,46 +286,64 @@ describe('durable run store', () => {
     const runsRoot = createTempDir('durable-runs-store-scan-kinds-');
 
     const continuePaths = resolveDurableRunPaths(runsRoot, 'run-continue');
-    saveDurableRunManifest(continuePaths.manifestPath, createDurableRunManifest({
-      id: 'run-continue',
-      kind: 'conversation',
-      resumePolicy: 'continue',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(continuePaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-continue',
-      status: 'running',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 2,
-    }));
+    saveDurableRunManifest(
+      continuePaths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-continue',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      continuePaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-continue',
+        status: 'running',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 2,
+      }),
+    );
 
     const rerunPaths = resolveDurableRunPaths(runsRoot, 'run-rerun');
-    saveDurableRunManifest(rerunPaths.manifestPath, createDurableRunManifest({
-      id: 'run-rerun',
-      kind: 'scheduled-task',
-      resumePolicy: 'rerun',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(rerunPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-rerun',
-      status: 'interrupted',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 1,
-    }));
+    saveDurableRunManifest(
+      rerunPaths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-rerun',
+        kind: 'scheduled-task',
+        resumePolicy: 'rerun',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      rerunPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-rerun',
+        status: 'interrupted',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 1,
+      }),
+    );
 
     const attentionPaths = resolveDurableRunPaths(runsRoot, 'run-manual');
-    saveDurableRunManifest(attentionPaths.manifestPath, createDurableRunManifest({
-      id: 'run-manual',
-      kind: 'background-run',
-      resumePolicy: 'manual',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(attentionPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-manual',
-      status: 'waiting',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 0,
-    }));
+    saveDurableRunManifest(
+      attentionPaths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-manual',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      attentionPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-manual',
+        status: 'waiting',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 0,
+      }),
+    );
 
     expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
       expect.objectContaining({ runId: 'run-continue', recoveryAction: 'resume' }),
@@ -347,42 +386,51 @@ describe('durable run store', () => {
     const [scan] = scanDurableRunsForRecovery(runsRoot);
     expect(scan?.runId).toBe('run-bad');
     expect(scan?.recoveryAction).toBe('invalid');
-    expect(scan?.problems).toEqual([
-      'missing or invalid manifest',
-      'missing or invalid status',
-    ]);
+    expect(scan?.problems).toEqual(['missing or invalid manifest', 'missing or invalid status']);
   });
 
   it('summarizes scanned durable runs by recovery action and status', () => {
     const runsRoot = createTempDir('durable-runs-store-summary-');
 
     const resumePaths = resolveDurableRunPaths(runsRoot, 'resume-run');
-    saveDurableRunManifest(resumePaths.manifestPath, createDurableRunManifest({
-      id: 'resume-run',
-      kind: 'conversation',
-      resumePolicy: 'continue',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(resumePaths.statusPath, createInitialDurableRunStatus({
-      runId: 'resume-run',
-      status: 'running',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 1,
-    }));
+    saveDurableRunManifest(
+      resumePaths.manifestPath,
+      createDurableRunManifest({
+        id: 'resume-run',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      resumePaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'resume-run',
+        status: 'running',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 1,
+      }),
+    );
 
     const rerunPaths = resolveDurableRunPaths(runsRoot, 'rerun-run');
-    saveDurableRunManifest(rerunPaths.manifestPath, createDurableRunManifest({
-      id: 'rerun-run',
-      kind: 'scheduled-task',
-      resumePolicy: 'rerun',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(rerunPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'rerun-run',
-      status: 'interrupted',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 1,
-    }));
+    saveDurableRunManifest(
+      rerunPaths.manifestPath,
+      createDurableRunManifest({
+        id: 'rerun-run',
+        kind: 'scheduled-task',
+        resumePolicy: 'rerun',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      rerunPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'rerun-run',
+        status: 'interrupted',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 1,
+      }),
+    );
 
     expect(summarizeScannedDurableRuns(scanDurableRunsForRecovery(runsRoot))).toEqual({
       total: 2,

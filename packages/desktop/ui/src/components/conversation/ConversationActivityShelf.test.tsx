@@ -1,8 +1,9 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ConversationActivityShelf } from './ConversationActivityShelf';
+
 import type { DeferredResumeSummary, DurableRunRecord } from '../../shared/types';
+import { ConversationActivityShelf } from './ConversationActivityShelf';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 

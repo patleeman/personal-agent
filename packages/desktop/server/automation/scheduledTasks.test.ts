@@ -1,8 +1,10 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   buildScheduledTaskMarkdown,
   getScheduledTaskStateFilePath,
@@ -44,7 +46,10 @@ describe('scheduledTasks', () => {
     const dir = createTempDir();
     const filePath = join(dir, 'demo.task.md');
 
-    writeFileSync(filePath, `---\nenabled: false\ncron: "0 9 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\n---\nSummarize the last run.\nInclude the top blockers.\n`);
+    writeFileSync(
+      filePath,
+      `---\nenabled: false\ncron: "0 9 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\n---\nSummarize the last run.\nInclude the top blockers.\n`,
+    );
 
     expect(readScheduledTaskFileMetadata(filePath)).toEqual({
       id: 'demo',
@@ -67,7 +72,10 @@ describe('scheduledTasks', () => {
     const dir = createTempDir();
     const filePath = join(dir, 'one-off.task.md');
 
-    writeFileSync(filePath, `---\ntitle: "Nightly cleanup"\nat: "2026-04-10T01:00:00.000Z"\nprofile: "assistant"\nthinking: "medium"\n---\nRun cleanup.\n`);
+    writeFileSync(
+      filePath,
+      `---\ntitle: "Nightly cleanup"\nat: "2026-04-10T01:00:00.000Z"\nprofile: "assistant"\nthinking: "medium"\n---\nRun cleanup.\n`,
+    );
 
     expect(readScheduledTaskFileMetadata(filePath)).toEqual({
       id: 'one-off',
@@ -87,107 +95,133 @@ describe('scheduledTasks', () => {
   });
 
   it('builds canonical task markdown for recurring tasks', () => {
-    expect(buildScheduledTaskMarkdown({
-      taskId: 'daily-status',
-      profile: 'assistant',
-      enabled: true,
-      cron: '11 */4 * * *',
-      model: 'openai-codex/gpt-5.4',
-      cwd: '~/agent-workspace',
-      timeoutSeconds: 900,
-      catchUpWindowSeconds: 300,
-      prompt: 'Run maintenance.',
-    })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\ncatchUpWindowSeconds: 300\n---\nRun maintenance.\n`);
+    expect(
+      buildScheduledTaskMarkdown({
+        taskId: 'daily-status',
+        profile: 'assistant',
+        enabled: true,
+        cron: '11 */4 * * *',
+        model: 'openai-codex/gpt-5.4',
+        cwd: '~/agent-workspace',
+        timeoutSeconds: 900,
+        catchUpWindowSeconds: 300,
+        prompt: 'Run maintenance.',
+      }),
+    ).toBe(
+      `---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\ncatchUpWindowSeconds: 300\n---\nRun maintenance.\n`,
+    );
   });
 
   it('builds one-off task markdown and rejects invalid schedule or prompt input', () => {
-    expect(buildScheduledTaskMarkdown({
-      taskId: 'one-off-status',
-      profile: 'assistant',
-      title: '  One-off status  ',
-      enabled: false,
-      at: '2026-04-10T09:30:00.000Z',
-      thinkingLevel: 'medium',
-      prompt: '  Send one update.  ',
-    })).toBe(`---\nid: "one-off-status"\ntitle: "One-off status"\nenabled: false\nat: "2026-04-10T09:30:00.000Z"\nprofile: "assistant"\nthinking: "medium"\n---\nSend one update.\n`);
+    expect(
+      buildScheduledTaskMarkdown({
+        taskId: 'one-off-status',
+        profile: 'assistant',
+        title: '  One-off status  ',
+        enabled: false,
+        at: '2026-04-10T09:30:00.000Z',
+        thinkingLevel: 'medium',
+        prompt: '  Send one update.  ',
+      }),
+    ).toBe(
+      `---\nid: "one-off-status"\ntitle: "One-off status"\nenabled: false\nat: "2026-04-10T09:30:00.000Z"\nprofile: "assistant"\nthinking: "medium"\n---\nSend one update.\n`,
+    );
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'missing-schedule',
-      profile: 'assistant',
-      enabled: true,
-      prompt: 'Run maintenance.',
-    })).toThrow('Provide exactly one of cron or at.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'missing-schedule',
+        profile: 'assistant',
+        enabled: true,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('Provide exactly one of cron or at.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'duplicate-schedule',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      at: '2026-04-10T09:30:00.000Z',
-      prompt: 'Run maintenance.',
-    })).toThrow('Provide exactly one of cron or at.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'duplicate-schedule',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        at: '2026-04-10T09:30:00.000Z',
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('Provide exactly one of cron or at.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'blank-prompt',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      prompt: '   ',
-    })).toThrow('prompt is required.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'blank-prompt',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        prompt: '   ',
+      }),
+    ).toThrow('prompt is required.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'fractional-timeout',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: 1.5,
-      prompt: 'Run maintenance.',
-    })).toThrow('timeoutSeconds must be a positive integer.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'fractional-timeout',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: 1.5,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('timeoutSeconds must be a positive integer.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'fractional-catch-up',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      catchUpWindowSeconds: 1.5,
-      prompt: 'Run maintenance.',
-    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'fractional-catch-up',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        catchUpWindowSeconds: 1.5,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('catchUpWindowSeconds must be a positive integer.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'unsafe-timeout',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
-      prompt: 'Run maintenance.',
-    })).toThrow('timeoutSeconds must be a positive integer.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'unsafe-timeout',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('timeoutSeconds must be a positive integer.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'huge-timeout',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: Number.MAX_SAFE_INTEGER,
-      prompt: 'Run maintenance.',
-    })).toThrow('timeoutSeconds must be a positive integer.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'huge-timeout',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: Number.MAX_SAFE_INTEGER,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('timeoutSeconds must be a positive integer.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'unsafe-catch-up',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
-      prompt: 'Run maintenance.',
-    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'unsafe-catch-up',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('catchUpWindowSeconds must be a positive integer.');
 
-    expect(() => buildScheduledTaskMarkdown({
-      taskId: 'huge-catch-up',
-      profile: 'assistant',
-      enabled: true,
-      cron: '0 * * * *',
-      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
-      prompt: 'Run maintenance.',
-    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+    expect(() =>
+      buildScheduledTaskMarkdown({
+        taskId: 'huge-catch-up',
+        profile: 'assistant',
+        enabled: true,
+        cron: '0 * * * *',
+        catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('catchUpWindowSeconds must be a positive integer.');
   });
 
   it('lists nested task definition files and exposes runtime state from the automation database', () => {
@@ -212,17 +246,20 @@ describe('scheduledTasks', () => {
 
     const daemonDir = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'daemon');
     mkdirSync(daemonDir, { recursive: true });
-    writeFileSync(join(daemonDir, 'task-state.json'), JSON.stringify({
-      tasks: {
-        [runtimeFilePath]: {
-          id: 'runtime',
-          filePath: runtimeFilePath,
-          running: true,
-          lastStatus: 'success',
-          lastAttemptCount: 3,
+    writeFileSync(
+      join(daemonDir, 'task-state.json'),
+      JSON.stringify({
+        tasks: {
+          [runtimeFilePath]: {
+            id: 'runtime',
+            filePath: runtimeFilePath,
+            running: true,
+            lastStatus: 'success',
+            lastAttemptCount: 3,
+          },
         },
-      },
-    }));
+      }),
+    );
 
     loadScheduledTasksForProfile('assistant');
 
@@ -249,25 +286,26 @@ describe('scheduledTasks', () => {
 
     const daemonDir = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'daemon');
     mkdirSync(daemonDir, { recursive: true });
-    writeFileSync(join(daemonDir, 'task-state.json'), JSON.stringify({
-      tasks: {
-        [validFilePath]: {
-          id: 'daily',
-          filePath: validFilePath,
-          running: true,
-          lastStatus: 'success',
-          lastAttemptCount: 2,
+    writeFileSync(
+      join(daemonDir, 'task-state.json'),
+      JSON.stringify({
+        tasks: {
+          [validFilePath]: {
+            id: 'daily',
+            filePath: validFilePath,
+            running: true,
+            lastStatus: 'success',
+            lastAttemptCount: 2,
+          },
         },
-      },
-    }));
+      }),
+    );
 
     const loaded = loadScheduledTasksForProfile('assistant');
 
     expect(loaded.taskDir).toBe(tasksDir);
     expect(loaded.tasks.map((task) => task.id)).toEqual(['daily']);
-    expect(loaded.parseErrors).toEqual([
-      expect.objectContaining({ filePath: invalidFilePath, error: expect.any(String) }),
-    ]);
+    expect(loaded.parseErrors).toEqual([expect.objectContaining({ filePath: invalidFilePath, error: expect.any(String) })]);
     expect(loaded.runtimeEntries).toEqual([
       expect.objectContaining({
         id: 'daily',

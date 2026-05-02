@@ -2,11 +2,9 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
-import {
-  OPEN_SESSION_IDS_STORAGE_KEY,
-  PINNED_SESSION_IDS_STORAGE_KEY,
-} from '../local/localSettings.js';
+import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings.js';
 import type { SessionMeta } from '../shared/types';
 import { Sidebar } from './Sidebar.js';
 
@@ -78,16 +76,18 @@ describe('Sidebar draft route listing', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            projects: [],
-            sessions: [createSession()],
-            tasks: null,
-            runs: null,
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
+          <AppDataContext.Provider
+            value={{
+              projects: [],
+              sessions: [createSession()],
+              tasks: null,
+              runs: null,
+              setProjects: () => {},
+              setSessions: () => {},
+              setTasks: () => {},
+              setRuns: () => {},
+            }}
+          >
             <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
               <Sidebar />
             </LiveTitlesContext.Provider>

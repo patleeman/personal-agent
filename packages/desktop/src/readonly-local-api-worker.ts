@@ -1,5 +1,6 @@
 import { parentPort } from 'node:worker_threads';
-import { loadRawLocalApiModule, type DesktopLocalApiDispatchResult } from './local-api-module.js';
+
+import { type DesktopLocalApiDispatchResult, loadRawLocalApiModule } from './local-api-module.js';
 
 interface ReadonlyLocalApiWorkerRequest {
   id: number;

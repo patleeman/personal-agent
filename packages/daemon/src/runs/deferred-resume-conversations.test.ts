@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   cancelDeferredResumeConversationRun,
   completeDeferredResumeConversationRun,
@@ -214,7 +215,9 @@ describe('deferred resume conversation durable runs', () => {
       }),
     });
 
-    const eventTypes = readDurableRunEvents(resolveDurableRunPaths(resolveDurableRunsRoot(daemonRoot), runId).eventsPath).map((event) => event.type);
+    const eventTypes = readDurableRunEvents(resolveDurableRunPaths(resolveDurableRunsRoot(daemonRoot), runId).eventsPath).map(
+      (event) => event.type,
+    );
     expect(eventTypes).toEqual([
       'run.created',
       'conversation.deferred_resume.scheduled',
@@ -271,26 +274,33 @@ describe('deferred resume conversation durable runs', () => {
     const sessionDir = join(daemonRoot, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     const sessionFile = join(sessionDir, 'conv-invalid-time.jsonl');
-    writeFileSync(sessionFile, '{"type":"session","id":"conv-invalid-time","timestamp":"2026-03-12T14:00:00.000Z","cwd":"/tmp/workspace"}\n');
-
-    await expect(scheduleDeferredResumeConversationRun({
-      daemonRoot,
-      deferredResumeId: 'resume_invalid_time',
+    writeFileSync(
       sessionFile,
-      prompt: 'come back later',
-      dueAt: 'not-a-date',
-      createdAt: '2026-03-12T14:00:00.000Z',
-    })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+      '{"type":"session","id":"conv-invalid-time","timestamp":"2026-03-12T14:00:00.000Z","cwd":"/tmp/workspace"}\n',
+    );
 
-    await expect(markDeferredResumeConversationRunReady({
-      daemonRoot,
-      deferredResumeId: 'resume_invalid_time',
-      sessionFile,
-      prompt: 'come back later',
-      dueAt: '2026-03-12T14:10:00.000Z',
-      createdAt: '2026-03-12T14:00:00.000Z',
-      readyAt: 'not-a-date',
-    })).rejects.toThrow('Deferred resume run updatedAt must be a valid timestamp.');
+    await expect(
+      scheduleDeferredResumeConversationRun({
+        daemonRoot,
+        deferredResumeId: 'resume_invalid_time',
+        sessionFile,
+        prompt: 'come back later',
+        dueAt: 'not-a-date',
+        createdAt: '2026-03-12T14:00:00.000Z',
+      }),
+    ).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+
+    await expect(
+      markDeferredResumeConversationRunReady({
+        daemonRoot,
+        deferredResumeId: 'resume_invalid_time',
+        sessionFile,
+        prompt: 'come back later',
+        dueAt: '2026-03-12T14:10:00.000Z',
+        createdAt: '2026-03-12T14:00:00.000Z',
+        readyAt: 'not-a-date',
+      }),
+    ).rejects.toThrow('Deferred resume run updatedAt must be a valid timestamp.');
   });
 
   it('rejects non-ISO deferred resume run timestamps with field errors', async () => {
@@ -298,24 +308,31 @@ describe('deferred resume conversation durable runs', () => {
     const sessionDir = join(daemonRoot, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     const sessionFile = join(sessionDir, 'conv-non-iso-time.jsonl');
-    writeFileSync(sessionFile, '{"type":"session","id":"conv-non-iso-time","timestamp":"2026-03-12T14:00:00.000Z","cwd":"/tmp/workspace"}\n');
-
-    await expect(scheduleDeferredResumeConversationRun({
-      daemonRoot,
-      deferredResumeId: 'resume_non_iso_time',
+    writeFileSync(
       sessionFile,
-      prompt: 'come back later',
-      dueAt: '9999',
-      createdAt: '2026-03-12T14:00:00.000Z',
-    })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+      '{"type":"session","id":"conv-non-iso-time","timestamp":"2026-03-12T14:00:00.000Z","cwd":"/tmp/workspace"}\n',
+    );
 
-    await expect(scheduleDeferredResumeConversationRun({
-      daemonRoot,
-      deferredResumeId: 'resume_overflowed_time',
-      sessionFile,
-      prompt: 'come back later',
-      dueAt: '2026-02-31T14:10:00.000Z',
-      createdAt: '2026-03-12T14:00:00.000Z',
-    })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+    await expect(
+      scheduleDeferredResumeConversationRun({
+        daemonRoot,
+        deferredResumeId: 'resume_non_iso_time',
+        sessionFile,
+        prompt: 'come back later',
+        dueAt: '9999',
+        createdAt: '2026-03-12T14:00:00.000Z',
+      }),
+    ).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+
+    await expect(
+      scheduleDeferredResumeConversationRun({
+        daemonRoot,
+        deferredResumeId: 'resume_overflowed_time',
+        sessionFile,
+        prompt: 'come back later',
+        dueAt: '2026-02-31T14:10:00.000Z',
+        createdAt: '2026-03-12T14:00:00.000Z',
+      }),
+    ).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
   });
 });

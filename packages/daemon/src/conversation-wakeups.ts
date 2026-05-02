@@ -1,13 +1,13 @@
 import {
+  type AlertRecord,
   createProjectActivityEntry,
+  type DeferredResumeRecord,
   getAlert,
   getConversationProjectLink,
   readSessionConversationId,
   setActivityConversationLinks,
   upsertAlert,
   writeProfileActivityEntry,
-  type AlertRecord,
-  type DeferredResumeRecord,
 } from '@personal-agent/core';
 
 function sanitizeIdSegment(value: string): string {
@@ -31,13 +31,9 @@ function firstPromptLine(prompt: string): string {
 function buildWakeupSummary(record: DeferredResumeRecord): string {
   switch (record.kind) {
     case 'reminder':
-      return record.title?.trim().length
-        ? `${record.title.trim()} is due.`
-        : 'Reminder is due.';
+      return record.title?.trim().length ? `${record.title.trim()} is due.` : 'Reminder is due.';
     case 'task-callback':
-      return record.title?.trim().length
-        ? record.title.trim()
-        : 'Scheduled task result is ready.';
+      return record.title?.trim().length ? record.title.trim() : 'Scheduled task result is ready.';
     default:
       return 'Deferred resume fired. Open the conversation to continue.';
   }
@@ -59,17 +55,11 @@ function buildWakeupDetails(record: DeferredResumeRecord): string {
 function buildAlertTitle(record: DeferredResumeRecord): string {
   switch (record.kind) {
     case 'reminder':
-      return record.title?.trim().length
-        ? record.title.trim()
-        : 'Reminder due';
+      return record.title?.trim().length ? record.title.trim() : 'Reminder due';
     case 'task-callback':
-      return record.title?.trim().length
-        ? record.title.trim()
-        : 'Scheduled task update';
+      return record.title?.trim().length ? record.title.trim() : 'Scheduled task update';
     default:
-      return record.title?.trim().length
-        ? record.title.trim()
-        : 'Conversation wakeup ready';
+      return record.title?.trim().length ? record.title.trim() : 'Conversation wakeup ready';
   }
 }
 
@@ -79,9 +69,7 @@ function buildAlertBody(record: DeferredResumeRecord): string {
     return line.length > 0 ? line : buildWakeupSummary(record);
   }
 
-  return record.prompt.trim().length > 0
-    ? firstPromptLine(record.prompt)
-    : 'Open the conversation to continue.';
+  return record.prompt.trim().length > 0 ? firstPromptLine(record.prompt) : 'Open the conversation to continue.';
 }
 
 export function buildDeferredResumeActivityId(record: DeferredResumeRecord): string {
@@ -123,10 +111,12 @@ function shouldRefreshExistingAlert(existing: AlertRecord, next: AlertRecord): b
     return true;
   }
 
-  return existing.createdAt !== next.createdAt
-    || existing.title !== next.title
-    || existing.body !== next.body
-    || existing.activityId !== next.activityId;
+  return (
+    existing.createdAt !== next.createdAt ||
+    existing.title !== next.title ||
+    existing.body !== next.body ||
+    existing.activityId !== next.activityId
+  );
 }
 
 export function surfaceReadyDeferredResume(input: {

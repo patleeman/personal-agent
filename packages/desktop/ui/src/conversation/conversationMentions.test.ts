@@ -1,39 +1,47 @@
 import { describe, expect, it } from 'vitest';
+
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems } from './conversationMentions';
 
 describe('conversationMentions', () => {
   it('builds task, note, folder, and file mentions without skills or profiles', () => {
     const items = buildMentionItems({
-      tasks: [{
-        id: 'daily-review',
-        filePath: '/tmp/daily-review.task.md',
-        scheduleType: 'cron',
-        running: false,
-        enabled: true,
-        prompt: 'Review today.',
-      }],
-      memoryDocs: [{
-        id: 'project-state-model',
-        title: 'Project State Model',
-        summary: 'How project state is stored.',
-        tags: ['architecture'],
-        path: '/tmp/project-state-model.md',
-      }],
-      vaultFiles: [{
-        id: 'notes/reference/',
-        kind: 'folder',
-        name: 'reference',
-        path: '/tmp/notes/reference',
-        sizeBytes: 0,
-        updatedAt: '2026-03-11T11:59:00.000Z',
-      }, {
-        id: 'notes/reference/INDEX.md',
-        kind: 'file',
-        name: 'INDEX.md',
-        path: '/tmp/notes/reference/INDEX.md',
-        sizeBytes: 42,
-        updatedAt: '2026-03-11T12:00:00.000Z',
-      }],
+      tasks: [
+        {
+          id: 'daily-review',
+          filePath: '/tmp/daily-review.task.md',
+          scheduleType: 'cron',
+          running: false,
+          enabled: true,
+          prompt: 'Review today.',
+        },
+      ],
+      memoryDocs: [
+        {
+          id: 'project-state-model',
+          title: 'Project State Model',
+          summary: 'How project state is stored.',
+          tags: ['architecture'],
+          path: '/tmp/project-state-model.md',
+        },
+      ],
+      vaultFiles: [
+        {
+          id: 'notes/reference/',
+          kind: 'folder',
+          name: 'reference',
+          path: '/tmp/notes/reference',
+          sizeBytes: 0,
+          updatedAt: '2026-03-11T11:59:00.000Z',
+        },
+        {
+          id: 'notes/reference/INDEX.md',
+          kind: 'file',
+          name: 'INDEX.md',
+          path: '/tmp/notes/reference/INDEX.md',
+          sizeBytes: 42,
+          updatedAt: '2026-03-11T12:00:00.000Z',
+        },
+      ],
     });
 
     expect(items.map((item) => `${item.kind}:${item.id}`)).toEqual([
@@ -46,29 +54,35 @@ describe('conversationMentions', () => {
 
   it('filters mentions by id, title, or summary text', () => {
     const items = buildMentionItems({
-      tasks: [{
-        id: 'daily-review',
-        filePath: '/tmp/daily-review.task.md',
-        scheduleType: 'cron',
-        running: false,
-        enabled: true,
-        prompt: 'Review today.',
-      }],
-      memoryDocs: [{
-        id: 'project-state-model',
-        title: 'Project State Model',
-        summary: 'How project state is stored.',
-        tags: ['architecture'],
-        path: '/tmp/project-state-model.md',
-      }],
-      vaultFiles: [{
-        id: 'notes/reference/INDEX.md',
-        kind: 'file',
-        name: 'INDEX.md',
-        path: '/tmp/notes/reference/INDEX.md',
-        sizeBytes: 42,
-        updatedAt: '2026-03-11T12:00:00.000Z',
-      }],
+      tasks: [
+        {
+          id: 'daily-review',
+          filePath: '/tmp/daily-review.task.md',
+          scheduleType: 'cron',
+          running: false,
+          enabled: true,
+          prompt: 'Review today.',
+        },
+      ],
+      memoryDocs: [
+        {
+          id: 'project-state-model',
+          title: 'Project State Model',
+          summary: 'How project state is stored.',
+          tags: ['architecture'],
+          path: '/tmp/project-state-model.md',
+        },
+      ],
+      vaultFiles: [
+        {
+          id: 'notes/reference/INDEX.md',
+          kind: 'file',
+          name: 'INDEX.md',
+          path: '/tmp/notes/reference/INDEX.md',
+          sizeBytes: 42,
+          updatedAt: '2026-03-11T12:00:00.000Z',
+        },
+      ],
     });
 
     expect(filterMentionItems(items, '@daily').map((item) => item.id)).toEqual(['@daily-review']);
@@ -100,42 +114,47 @@ describe('conversationMentions', () => {
 
   it('resolves mentioned items in encounter order for path-style file and folder references', () => {
     const items = buildMentionItems({
-      tasks: [{
-        id: 'daily-review',
-        filePath: '/tmp/daily-review.task.md',
-        scheduleType: 'cron',
-        running: false,
-        enabled: true,
-        prompt: 'Review today.',
-      }],
-      memoryDocs: [{
-        id: 'project-state-model',
-        title: 'Project State Model',
-        summary: 'How project state is stored.',
-        tags: ['architecture'],
-        path: '/tmp/project-state-model.md',
-      }],
-      vaultFiles: [{
-        id: 'notes/reference/',
-        kind: 'folder',
-        name: 'reference',
-        path: '/tmp/notes/reference',
-        sizeBytes: 0,
-        updatedAt: '2026-03-11T11:59:00.000Z',
-      }, {
-        id: 'notes/reference/INDEX.md',
-        kind: 'file',
-        name: 'INDEX.md',
-        path: '/tmp/notes/reference/INDEX.md',
-        sizeBytes: 42,
-        updatedAt: '2026-03-11T12:00:00.000Z',
-      }],
+      tasks: [
+        {
+          id: 'daily-review',
+          filePath: '/tmp/daily-review.task.md',
+          scheduleType: 'cron',
+          running: false,
+          enabled: true,
+          prompt: 'Review today.',
+        },
+      ],
+      memoryDocs: [
+        {
+          id: 'project-state-model',
+          title: 'Project State Model',
+          summary: 'How project state is stored.',
+          tags: ['architecture'],
+          path: '/tmp/project-state-model.md',
+        },
+      ],
+      vaultFiles: [
+        {
+          id: 'notes/reference/',
+          kind: 'folder',
+          name: 'reference',
+          path: '/tmp/notes/reference',
+          sizeBytes: 0,
+          updatedAt: '2026-03-11T11:59:00.000Z',
+        },
+        {
+          id: 'notes/reference/INDEX.md',
+          kind: 'file',
+          name: 'INDEX.md',
+          path: '/tmp/notes/reference/INDEX.md',
+          sizeBytes: 42,
+          updatedAt: '2026-03-11T12:00:00.000Z',
+        },
+      ],
     });
 
-    expect(resolveMentionItems('Use @notes/reference/ with @notes/reference/INDEX.md and @project-state-model.', items).map((item) => item.id)).toEqual([
-      '@notes/reference/',
-      '@notes/reference/INDEX.md',
-      '@project-state-model',
-    ]);
+    expect(
+      resolveMentionItems('Use @notes/reference/ with @notes/reference/INDEX.md and @project-state-model.', items).map((item) => item.id),
+    ).toEqual(['@notes/reference/', '@notes/reference/INDEX.md', '@project-state-model']);
   });
 });

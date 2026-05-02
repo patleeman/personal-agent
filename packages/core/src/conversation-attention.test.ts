@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   ensureConversationAttentionBaselines,
   loadConversationAttentionState,
@@ -28,8 +29,9 @@ function createTempStateRoot(): string {
 describe('conversation attention storage', () => {
   it('resolves the profile-scoped attention state path', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveConversationAttentionStatePath({ stateRoot, profile: 'assistant' }))
-      .toBe(join(stateRoot, 'sync', 'pi-agent', 'state', 'conversation-attention', 'assistant.json'));
+    expect(resolveConversationAttentionStatePath({ stateRoot, profile: 'assistant' })).toBe(
+      join(stateRoot, 'sync', 'pi-agent', 'state', 'conversation-attention', 'assistant.json'),
+    );
   });
 
   it('creates baseline records from current message counts', () => {
@@ -39,9 +41,7 @@ describe('conversation attention storage', () => {
       stateRoot,
       profile: 'assistant',
       updatedAt: '2026-03-12T12:00:00.000Z',
-      conversations: [
-        { conversationId: 'conv-123', messageCount: 5 },
-      ],
+      conversations: [{ conversationId: 'conv-123', messageCount: 5 }],
     });
 
     expect(document.conversations['conv-123']).toEqual({
@@ -51,26 +51,32 @@ describe('conversation attention storage', () => {
       updatedAt: '2026-03-12T12:00:00.000Z',
     });
 
-    expect(readFileSync(resolveConversationAttentionStatePath({ stateRoot, profile: 'assistant' }), 'utf-8'))
-      .toContain('"conv-123"');
+    expect(readFileSync(resolveConversationAttentionStatePath({ stateRoot, profile: 'assistant' }), 'utf-8')).toContain('"conv-123"');
   });
 
   it('migrates legacy local attention state into the synced path', () => {
     const stateRoot = createTempStateRoot();
     const legacyPath = join(stateRoot, 'pi-agent', 'state', 'conversation-attention', 'assistant.json');
     mkdirSync(join(stateRoot, 'pi-agent', 'state', 'conversation-attention'), { recursive: true });
-    writeFileSync(legacyPath, `${JSON.stringify({
-      version: 1,
-      profile: 'assistant',
-      conversations: {
-        'conv-legacy': {
-          conversationId: 'conv-legacy',
-          acknowledgedMessageCount: 4,
-          readAt: '2026-03-12T12:05:00.000Z',
-          updatedAt: '2026-03-12T12:05:00.000Z',
+    writeFileSync(
+      legacyPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          profile: 'assistant',
+          conversations: {
+            'conv-legacy': {
+              conversationId: 'conv-legacy',
+              acknowledgedMessageCount: 4,
+              readAt: '2026-03-12T12:05:00.000Z',
+              updatedAt: '2026-03-12T12:05:00.000Z',
+            },
+          },
         },
-      },
-    }, null, 2)}\n`);
+        null,
+        2,
+      )}\n`,
+    );
 
     expect(loadConversationAttentionState({ stateRoot, profile: 'assistant' })).toEqual({
       version: 1,
@@ -85,8 +91,7 @@ describe('conversation attention storage', () => {
       },
     });
 
-    expect(readFileSync(resolveConversationAttentionStatePath({ stateRoot, profile: 'assistant' }), 'utf-8'))
-      .toContain('"conv-legacy"');
+    expect(readFileSync(resolveConversationAttentionStatePath({ stateRoot, profile: 'assistant' }), 'utf-8')).toContain('"conv-legacy"');
   });
 
   it('marks conversations read and unread', () => {
@@ -96,9 +101,7 @@ describe('conversation attention storage', () => {
       stateRoot,
       profile: 'assistant',
       updatedAt: '2026-03-12T12:00:00.000Z',
-      conversations: [
-        { conversationId: 'conv-123', messageCount: 5 },
-      ],
+      conversations: [{ conversationId: 'conv-123', messageCount: 5 }],
     });
 
     markConversationAttentionUnread({
@@ -108,14 +111,13 @@ describe('conversation attention storage', () => {
       updatedAt: '2026-03-12T12:05:00.000Z',
     });
 
-    expect(loadConversationAttentionState({ stateRoot, profile: 'assistant' }).conversations['conv-123'])
-      .toEqual({
-        conversationId: 'conv-123',
-        acknowledgedMessageCount: 5,
-        readAt: '1970-01-01T00:00:00.000Z',
-        updatedAt: '2026-03-12T12:05:00.000Z',
-        forcedUnread: true,
-      });
+    expect(loadConversationAttentionState({ stateRoot, profile: 'assistant' }).conversations['conv-123']).toEqual({
+      conversationId: 'conv-123',
+      acknowledgedMessageCount: 5,
+      readAt: '1970-01-01T00:00:00.000Z',
+      updatedAt: '2026-03-12T12:05:00.000Z',
+      forcedUnread: true,
+    });
 
     markConversationAttentionRead({
       stateRoot,
@@ -125,13 +127,12 @@ describe('conversation attention storage', () => {
       updatedAt: '2026-03-12T12:10:00.000Z',
     });
 
-    expect(loadConversationAttentionState({ stateRoot, profile: 'assistant' }).conversations['conv-123'])
-      .toEqual({
-        conversationId: 'conv-123',
-        acknowledgedMessageCount: 9,
-        readAt: '2026-03-12T12:10:00.000Z',
-        updatedAt: '2026-03-12T12:10:00.000Z',
-      });
+    expect(loadConversationAttentionState({ stateRoot, profile: 'assistant' }).conversations['conv-123']).toEqual({
+      conversationId: 'conv-123',
+      acknowledgedMessageCount: 9,
+      readAt: '2026-03-12T12:10:00.000Z',
+      updatedAt: '2026-03-12T12:10:00.000Z',
+    });
   });
 });
 
@@ -246,20 +247,22 @@ describe('conversation attention merges', () => {
   });
 
   it('rejects merges across different profiles', () => {
-    expect(() => mergeConversationAttentionStateDocuments({
-      documents: [
-        {
-          version: 1,
-          profile: 'assistant',
-          conversations: {},
-        },
-        {
-          version: 1,
-          profile: 'datadog',
-          conversations: {},
-        },
-      ],
-    })).toThrow('different profiles');
+    expect(() =>
+      mergeConversationAttentionStateDocuments({
+        documents: [
+          {
+            version: 1,
+            profile: 'assistant',
+            conversations: {},
+          },
+          {
+            version: 1,
+            profile: 'datadog',
+            conversations: {},
+          },
+        ],
+      }),
+    ).toThrow('different profiles');
   });
 });
 

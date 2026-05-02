@@ -1,21 +1,16 @@
 import { EventEmitter } from 'node:events';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  cancelDurableRunMock,
-  getDurableRunLogMock,
-  getDurableRunMock,
-  invalidateAppTopicsMock,
-  listDurableRunsMock,
-  logErrorMock,
-} = vi.hoisted(() => ({
-  cancelDurableRunMock: vi.fn(),
-  getDurableRunLogMock: vi.fn(),
-  getDurableRunMock: vi.fn(),
-  invalidateAppTopicsMock: vi.fn(),
-  listDurableRunsMock: vi.fn(),
-  logErrorMock: vi.fn(),
-}));
+const { cancelDurableRunMock, getDurableRunLogMock, getDurableRunMock, invalidateAppTopicsMock, listDurableRunsMock, logErrorMock } =
+  vi.hoisted(() => ({
+    cancelDurableRunMock: vi.fn(),
+    getDurableRunLogMock: vi.fn(),
+    getDurableRunMock: vi.fn(),
+    invalidateAppTopicsMock: vi.fn(),
+    listDurableRunsMock: vi.fn(),
+    logErrorMock: vi.fn(),
+  }));
 
 vi.mock('../automation/durableRuns.js', () => ({
   cancelDurableRun: cancelDurableRunMock,
@@ -100,9 +95,12 @@ describe('registerRunRoutes', () => {
     const failingRes = createJsonResponse();
     await listHandler({}, failingRes);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'list failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'list failed',
+      }),
+    );
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: list failed' });
   });

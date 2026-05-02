@@ -1,7 +1,9 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import gptApplyPatchExtension, { syncToolSelection } from './index';
 
 type ToolDefinition = {
@@ -112,7 +114,7 @@ describe('gpt apply_patch extension', () => {
     await writeFile(join(dir, 'src', 'app.ts'), '', 'utf8');
 
     const tool = harness.getTool('apply_patch');
-    const result = await tool.execute(
+    const result = (await tool.execute(
       'tool-call-1',
       {
         input: `*** Begin Patch
@@ -126,7 +128,7 @@ describe('gpt apply_patch extension', () => {
       undefined,
       undefined,
       { cwd: dir },
-    ) as {
+    )) as {
       content: Array<{ type: 'text'; text: string }>;
       details: { added: string[]; modified: string[]; deleted: string[] };
     };

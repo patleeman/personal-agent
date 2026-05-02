@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Point auth dir to a temp directory for all tests
@@ -27,14 +28,14 @@ afterEach(() => {
 });
 
 import {
-  writeJsonFile,
-  readJsonFile,
-  writeTextFile,
-  readTextFile,
-  deleteConfigFile,
-  createLockfile,
   checkLockfile,
+  createLockfile,
+  deleteConfigFile,
   deleteLockfile,
+  readJsonFile,
+  readTextFile,
+  writeJsonFile,
+  writeTextFile,
 } from './mcp-auth-storage.js';
 
 const SCHEMA = {

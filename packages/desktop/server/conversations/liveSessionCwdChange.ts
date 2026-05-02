@@ -74,7 +74,12 @@ export async function applyPendingLiveSessionWorkingDirectoryChange<TEntry exten
   entry: TEntry;
   pendingChanges: Map<string, PendingConversationWorkingDirectoryChange>;
   resolveSessionFile: (entry: TEntry) => string | undefined;
-  changeSessionWorkingDirectory: (entry: TEntry, sessionFile: string, cwd: string, options: LiveSessionLoaderOptions) => Promise<{ id: string; sessionFile: string }>;
+  changeSessionWorkingDirectory: (
+    entry: TEntry,
+    sessionFile: string,
+    cwd: string,
+    options: LiveSessionLoaderOptions,
+  ) => Promise<{ id: string; sessionFile: string }>;
   promptSession: (sessionId: string, prompt: string) => Promise<unknown>;
   broadcast: (entry: TEntry, event: SseEvent) => void;
 }): Promise<void> {

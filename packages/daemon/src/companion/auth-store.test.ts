@@ -1,14 +1,16 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   createCompanionPairingCode,
   pairCompanionDevice,
   readCompanionDeviceAdminState,
   readCompanionDeviceByToken,
-  revokeCompanionDevice,
   resolveCompanionAuthStateFile,
+  revokeCompanionDevice,
   updateCompanionDeviceLabel,
 } from './auth-store.js';
 
@@ -36,12 +38,16 @@ describe('companion auth store', () => {
     });
 
     expect(paired.bearerToken).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(readCompanionDeviceByToken(stateRoot, paired.bearerToken, {
-      now: new Date('2026-04-18T10:02:00.000Z'),
-    })).toEqual(expect.objectContaining({
-      id: paired.device.id,
-      deviceLabel: 'User iPhone',
-    }));
+    expect(
+      readCompanionDeviceByToken(stateRoot, paired.bearerToken, {
+        now: new Date('2026-04-18T10:02:00.000Z'),
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        id: paired.device.id,
+        deviceLabel: 'User iPhone',
+      }),
+    );
   });
 
   it('lists, renames, and revokes paired devices', () => {
@@ -59,9 +65,11 @@ describe('companion auth store', () => {
     });
     expect(revoked?.revokedAt).toBe('2026-04-18T10:30:00.000Z');
     expect(readCompanionDeviceAdminState(stateRoot).devices).toEqual([]);
-    expect(readCompanionDeviceByToken(stateRoot, paired.bearerToken, {
-      now: new Date('2026-04-18T10:31:00.000Z'),
-    })).toBeNull();
+    expect(
+      readCompanionDeviceByToken(stateRoot, paired.bearerToken, {
+        now: new Date('2026-04-18T10:31:00.000Z'),
+      }),
+    ).toBeNull();
   });
 
   it('falls back to the current clock for invalid Date inputs', () => {
@@ -81,51 +89,71 @@ describe('companion auth store', () => {
     const stateRoot = createTempDir('pa-companion-auth-');
     const authFile = resolveCompanionAuthStateFile(stateRoot);
     mkdirSync(join(stateRoot, 'companion'), { recursive: true });
-    writeFileSync(authFile, JSON.stringify({
-      pairingCodes: [{
-        id: 'pair-1',
-        codeHash: 'hash',
-        createdAt: 'not-a-date',
-        expiresAt: '2026-04-18T10:10:00.000Z',
-      }],
-      devices: [{
-        id: 'device-1',
-        deviceLabel: 'Phone',
-        tokenHash: 'hash',
-        createdAt: 'bad-created',
-        lastUsedAt: 'bad-last-used',
-        expiresAt: '2026-05-18T10:10:00.000Z',
-      }],
-    }), 'utf-8');
+    writeFileSync(
+      authFile,
+      JSON.stringify({
+        pairingCodes: [
+          {
+            id: 'pair-1',
+            codeHash: 'hash',
+            createdAt: 'not-a-date',
+            expiresAt: '2026-04-18T10:10:00.000Z',
+          },
+        ],
+        devices: [
+          {
+            id: 'device-1',
+            deviceLabel: 'Phone',
+            tokenHash: 'hash',
+            createdAt: 'bad-created',
+            lastUsedAt: 'bad-last-used',
+            expiresAt: '2026-05-18T10:10:00.000Z',
+          },
+        ],
+      }),
+      'utf-8',
+    );
 
-    expect(readCompanionDeviceAdminState(stateRoot, {
-      now: new Date('2026-04-18T10:00:00.000Z'),
-    })).toEqual({ pendingPairings: [], devices: [] });
+    expect(
+      readCompanionDeviceAdminState(stateRoot, {
+        now: new Date('2026-04-18T10:00:00.000Z'),
+      }),
+    ).toEqual({ pendingPairings: [], devices: [] });
   });
 
   it('drops persisted auth entries with non-ISO lifecycle timestamps', () => {
     const stateRoot = createTempDir('pa-companion-auth-');
     const authFile = resolveCompanionAuthStateFile(stateRoot);
     mkdirSync(join(stateRoot, 'companion'), { recursive: true });
-    writeFileSync(authFile, JSON.stringify({
-      pairingCodes: [{
-        id: 'pair-1',
-        codeHash: 'hash',
-        createdAt: '1',
-        expiresAt: '2026-04-18T10:10:00.000Z',
-      }],
-      devices: [{
-        id: 'device-1',
-        deviceLabel: 'Phone',
-        tokenHash: 'hash',
-        createdAt: '2026-04-18T10:00:00.000Z',
-        lastUsedAt: '1',
-        expiresAt: '2026-05-18T10:10:00.000Z',
-      }],
-    }), 'utf-8');
+    writeFileSync(
+      authFile,
+      JSON.stringify({
+        pairingCodes: [
+          {
+            id: 'pair-1',
+            codeHash: 'hash',
+            createdAt: '1',
+            expiresAt: '2026-04-18T10:10:00.000Z',
+          },
+        ],
+        devices: [
+          {
+            id: 'device-1',
+            deviceLabel: 'Phone',
+            tokenHash: 'hash',
+            createdAt: '2026-04-18T10:00:00.000Z',
+            lastUsedAt: '1',
+            expiresAt: '2026-05-18T10:10:00.000Z',
+          },
+        ],
+      }),
+      'utf-8',
+    );
 
-    expect(readCompanionDeviceAdminState(stateRoot, {
-      now: new Date('2026-04-18T10:00:00.000Z'),
-    })).toEqual({ pendingPairings: [], devices: [] });
+    expect(
+      readCompanionDeviceAdminState(stateRoot, {
+        now: new Date('2026-04-18T10:00:00.000Z'),
+      }),
+    ).toEqual({ pendingPairings: [], devices: [] });
   });
 });

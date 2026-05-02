@@ -9,12 +9,7 @@ export interface CliBinaryState {
   error?: string;
 }
 
-export function inspectCliBinary(options: {
-  command: string;
-  cwd?: string;
-  timeoutMs?: number;
-  versionArgs?: string[];
-}): CliBinaryState {
+export function inspectCliBinary(options: { command: string; cwd?: string; timeoutMs?: number; versionArgs?: string[] }): CliBinaryState {
   const command = options.command.trim();
   if (command.length === 0) {
     return {
@@ -26,9 +21,7 @@ export function inspectCliBinary(options: {
 
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const timeoutMs = options.timeoutMs ?? 5_000;
-  const versionArgs = options.versionArgs && options.versionArgs.length > 0
-    ? options.versionArgs
-    : ['--version'];
+  const versionArgs = options.versionArgs && options.versionArgs.length > 0 ? options.versionArgs : ['--version'];
   const versionResult = spawnSync(command, versionArgs, {
     cwd,
     encoding: 'utf-8',
@@ -39,10 +32,9 @@ export function inspectCliBinary(options: {
     return {
       available: false,
       command,
-      error: versionResult.error?.message
-        ?? (versionResult.stderr.trim()
-          || versionResult.stdout.trim()
-          || `Command exited with code ${versionResult.status ?? -1}`),
+      error:
+        versionResult.error?.message ??
+        (versionResult.stderr.trim() || versionResult.stdout.trim() || `Command exited with code ${versionResult.status ?? -1}`),
     };
   }
 

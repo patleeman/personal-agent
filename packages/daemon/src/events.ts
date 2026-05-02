@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+
 import type { DaemonEvent, DaemonEventInput } from './types.js';
 
 export const DAEMON_EVENT_VERSION = 1;

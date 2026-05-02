@@ -1,21 +1,22 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedSkillsContext,
   buildReferencedTasksContext,
   extractMentionIds,
   pickPromptReferencesInOrder,
-  resolvePromptReferences,
   type PromptReferenceMemoryDoc,
   type PromptReferenceSkill,
   type PromptReferenceTask,
+  resolvePromptReferences,
 } from './promptReferences.js';
 
 const TASKS: PromptReferenceTask[] = [
   {
     id: 'daily-review',
     filePath: '/repo/profiles/datadog/agent/tasks/daily-review.task.md',
-    prompt: 'Review today\'s items.',
+    prompt: "Review today's items.",
     enabled: true,
     running: false,
     cron: '0 9 * * *',
@@ -61,13 +62,15 @@ describe('promptReferences', () => {
   });
 
   it('resolves project, task, and note node mentions independently', () => {
-    expect(resolvePromptReferences({
-      text: 'Use @desktop-ui with @memory-maintenance and @project-state-model.',
-      availableProjectIds: ['desktop-ui', 'artifact-model'],
-      tasks: TASKS,
-      memoryDocs: MEMORY_DOCS,
-      skills: [],
-    })).toEqual({
+    expect(
+      resolvePromptReferences({
+        text: 'Use @desktop-ui with @memory-maintenance and @project-state-model.',
+        availableProjectIds: ['desktop-ui', 'artifact-model'],
+        tasks: TASKS,
+        memoryDocs: MEMORY_DOCS,
+        skills: [],
+      }),
+    ).toEqual({
       projectIds: ['desktop-ui'],
       taskIds: ['memory-maintenance'],
       memoryDocIds: ['project-state-model'],
@@ -76,13 +79,15 @@ describe('promptReferences', () => {
   });
 
   it('ignores email-style @ tokens and resolves skill mentions independently', () => {
-    expect(resolvePromptReferences({
-      text: 'Contact foo@bar.com, then use @backfill-tests with @backfill-tests again.',
-      availableProjectIds: [],
-      tasks: TASKS,
-      memoryDocs: MEMORY_DOCS,
-      skills: SKILLS,
-    })).toEqual({
+    expect(
+      resolvePromptReferences({
+        text: 'Contact foo@bar.com, then use @backfill-tests with @backfill-tests again.',
+        availableProjectIds: [],
+        tasks: TASKS,
+        memoryDocs: MEMORY_DOCS,
+        skills: SKILLS,
+      }),
+    ).toEqual({
       projectIds: [],
       taskIds: [],
       memoryDocIds: [],
@@ -105,7 +110,7 @@ describe('promptReferences', () => {
     expect(context).toContain('cron: 0 9 * * *');
     expect(context).toContain('at: 2026-04-01T09:00:00Z');
     expect(context).toContain('status: enabled, last status success');
-    expect(context).toContain('prompt: Review today\'s items.');
+    expect(context).toContain("prompt: Review today's items.");
     expect(context).toContain('status: disabled, running');
   });
 

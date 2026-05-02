@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+
 import { cx } from '../ui';
 
 export function MessageActions({
@@ -18,11 +19,14 @@ export function MessageActions({
   const copyResetTimeoutRef = useRef<number | null>(null);
   const canCopy = !isUser && typeof copyText === 'string' && copyText.length > 0;
 
-  useEffect(() => () => {
-    if (copyResetTimeoutRef.current !== null) {
-      window.clearTimeout(copyResetTimeoutRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   function setTransientCopyState(nextState: 'copied' | 'failed') {
     if (copyResetTimeoutRef.current !== null) {
@@ -81,11 +85,17 @@ export function MessageActions({
   }
 
   return (
-    <div className={`flex items-center gap-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 ${isUser ? 'justify-start' : 'justify-end'}`}>
+    <div
+      className={`flex items-center gap-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 ${
+        isUser ? 'justify-start' : 'justify-end'
+      }`}
+    >
       {canCopy && (
         <button
           type="button"
-          onClick={() => { void handleCopy(); }}
+          onClick={() => {
+            void handleCopy();
+          }}
           className={cx('ui-message-action-button', copyState === 'copied' && 'text-accent', copyState === 'failed' && 'text-danger')}
           title={copyState === 'failed' ? 'Copy to clipboard failed' : 'Copy this assistant message to the clipboard'}
         >
@@ -95,9 +105,13 @@ export function MessageActions({
       {onRewind && (
         <button
           type="button"
-          onClick={() => { void handleRewind(); }}
+          onClick={() => {
+            void handleRewind();
+          }}
           className={cx('ui-message-action-button', isRewinding && 'text-accent')}
-          title={isUser ? 'Rewind into a new conversation from this prompt' : 'Rewind into a new conversation from the prompt that led here'}
+          title={
+            isUser ? 'Rewind into a new conversation from this prompt' : 'Rewind into a new conversation from the prompt that led here'
+          }
           disabled={isRewinding}
         >
           {isRewinding ? '↩ rewinding…' : '↩ rewind'}
@@ -106,7 +120,9 @@ export function MessageActions({
       {!isUser && onFork && (
         <button
           type="button"
-          onClick={() => { void handleFork(); }}
+          onClick={() => {
+            void handleFork();
+          }}
           className={cx('ui-message-action-button', isForking && 'text-accent')}
           title="Fork into a new conversation from here"
           disabled={isForking}
@@ -117,4 +133,3 @@ export function MessageActions({
     </div>
   );
 }
-

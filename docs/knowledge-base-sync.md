@@ -34,13 +34,13 @@ If you add files that should not be tracked, update the `.gitignore` in the mirr
 
 The Knowledge page sidebar shows the mirror's current sync status:
 
-| State | Meaning |
-|---|---|
-| In sync | The local mirror matches the remote. |
-| Pending local changes | Files have been modified but have not settled into a commit yet. |
-| Pending local/remote commits | There are un-pushed local commits or unpulled remote commits. |
-| Sync in progress | A sync operation is running. |
-| Sync error | The last sync attempt failed. |
+| State                        | Meaning                                                          |
+| ---------------------------- | ---------------------------------------------------------------- |
+| In sync                      | The local mirror matches the remote.                             |
+| Pending local changes        | Files have been modified but have not settled into a commit yet. |
+| Pending local/remote commits | There are un-pushed local commits or unpulled remote commits.    |
+| Sync in progress             | A sync operation is running.                                     |
+| Sync error                   | The last sync attempt failed.                                    |
 
 The status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
 

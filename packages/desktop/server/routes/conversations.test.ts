@@ -226,9 +226,7 @@ function createResponse() {
   return response;
 }
 
-function createDesktopHarness(options?: {
-  flushLiveDeferredResumes?: () => Promise<void>;
-}) {
+function createDesktopHarness(options?: { flushLiveDeferredResumes?: () => Promise<void> }) {
   const deleteHandlers = new Map<string, Handler>();
   const getHandlers = new Map<string, Handler>();
   const patchHandlers = new Map<string, Handler>();
@@ -346,10 +344,21 @@ describe('conversation routes', () => {
     });
     readSessionSearchTextMock.mockReturnValue('search text');
     readCachedRelatedConversationPointersMock.mockReturnValue(null);
-    searchConversationInspectSessionsMock.mockReturnValue({ query: 'needle', mode: 'allTerms', scope: 'all', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }] });
+    searchConversationInspectSessionsMock.mockReturnValue({
+      query: 'needle',
+      mode: 'allTerms',
+      scope: 'all',
+      totalMatching: 1,
+      returnedCount: 1,
+      matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }],
+    });
     resolveConversationSessionFileMock.mockReturnValue('/sessions/session-1.jsonl');
     saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw' });
-    addConversationCommitCheckpointCommentMock.mockReturnValue({ id: 'checkpoint-1', commentCount: 1, comments: [{ id: 'comment-1', body: 'Ship it' }] });
+    addConversationCommitCheckpointCommentMock.mockReturnValue({
+      id: 'checkpoint-1',
+      commentCount: 1,
+      comments: [{ id: 'comment-1', body: 'Ship it' }],
+    });
     scheduleDeferredResumeForSessionFileMock.mockResolvedValue({ id: 'resume-2', delay: '5m' });
     toggleConversationAttentionMock.mockReturnValue({ read: true });
     updateLiveSessionModelPreferencesMock.mockResolvedValue({ model: 'gpt-4o', thinkingLevel: 'high' });
@@ -377,10 +386,13 @@ describe('conversation routes', () => {
 
     readConversationSessionSignatureMock.mockReturnValueOnce('sig-current');
     const unchangedRes = createResponse();
-    await getHandler('/api/sessions/:id')(createRequest({
-      params: { id: 'session-1' },
-      query: { knownSessionSignature: ' sig-current ', tailBlocks: '5' },
-    }), unchangedRes);
+    await getHandler('/api/sessions/:id')(
+      createRequest({
+        params: { id: 'session-1' },
+        query: { knownSessionSignature: ' sig-current ', tailBlocks: '5' },
+      }),
+      unchangedRes,
+    );
     expect(unchangedRes.json).toHaveBeenCalledWith({
       unchanged: true,
       sessionId: 'session-1',
@@ -390,16 +402,19 @@ describe('conversation routes', () => {
     readConversationSessionSignatureMock.mockReturnValueOnce('sig-current');
     buildAppendOnlySessionDetailResponseMock.mockReturnValueOnce({ appended: true, sessionId: 'session-1' });
     const appendOnlyRes = createResponse();
-    await getHandler('/api/sessions/:id')(createRequest({
-      params: { id: 'session-1' },
-      query: {
-        knownBlockOffset: String(Number.MAX_SAFE_INTEGER + 1),
-        knownLastBlockId: 'block-3',
-        knownSessionSignature: 'sig-old',
-        knownTotalBlocks: String(Number.MAX_SAFE_INTEGER + 1),
-        tailBlocks: '10',
-      },
-    }), appendOnlyRes);
+    await getHandler('/api/sessions/:id')(
+      createRequest({
+        params: { id: 'session-1' },
+        query: {
+          knownBlockOffset: String(Number.MAX_SAFE_INTEGER + 1),
+          knownLastBlockId: 'block-3',
+          knownSessionSignature: 'sig-old',
+          knownTotalBlocks: String(Number.MAX_SAFE_INTEGER + 1),
+          tailBlocks: '10',
+        },
+      }),
+      appendOnlyRes,
+    );
     expect(readSessionDetailForRouteMock).toHaveBeenCalledWith({
       conversationId: 'session-1',
       profile: 'assistant',
@@ -422,16 +437,23 @@ describe('conversation routes', () => {
     });
     const detailRes = createResponse();
     await getHandler('/api/sessions/:id')(createRequest({ params: { id: 'session-1' }, query: {} }), detailRes);
-    expect(setServerTimingHeadersMock).toHaveBeenCalledWith(detailRes, expect.arrayContaining([
-      expect.objectContaining({ description: 'skipped' }),
-      expect.objectContaining({ description: 'hit/local' }),
-    ]), expect.objectContaining({ route: 'session-detail' }));
-    expect(logSlowConversationPerfMock).toHaveBeenCalledWith('session detail request', expect.objectContaining({ conversationId: 'session-1' }));
+    expect(setServerTimingHeadersMock).toHaveBeenCalledWith(
+      detailRes,
+      expect.arrayContaining([expect.objectContaining({ description: 'skipped' }), expect.objectContaining({ description: 'hit/local' })]),
+      expect.objectContaining({ route: 'session-detail' }),
+    );
+    expect(logSlowConversationPerfMock).toHaveBeenCalledWith(
+      'session detail request',
+      expect.objectContaining({ conversationId: 'session-1' }),
+    );
     expect(detailRes.json).toHaveBeenCalledWith({ id: 'session-1', signature: 'sig-next', blocks: [] });
 
     readSessionImageAssetMock.mockReturnValueOnce(null);
     const missingImageRes = createResponse();
-    getHandler('/api/sessions/:id/blocks/:blockId/image')(createRequest({ params: { id: 'session-1', blockId: 'block-1' } }), missingImageRes);
+    getHandler('/api/sessions/:id/blocks/:blockId/image')(
+      createRequest({ params: { id: 'session-1', blockId: 'block-1' } }),
+      missingImageRes,
+    );
     expect(missingImageRes.status).toHaveBeenCalledWith(404);
     expect(missingImageRes.json).toHaveBeenCalledWith({ error: 'Session image not found' });
 
@@ -442,23 +464,32 @@ describe('conversation routes', () => {
     expect(imageRes.send).toHaveBeenCalledWith(Buffer.from('image-data'));
 
     const indexedImageRes = createResponse();
-    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(createRequest({
-      params: { id: 'session-1', blockId: 'block-1', imageIndex: '2' },
-    }), indexedImageRes);
+    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(
+      createRequest({
+        params: { id: 'session-1', blockId: 'block-1', imageIndex: '2' },
+      }),
+      indexedImageRes,
+    );
     expect(readSessionImageAssetMock).toHaveBeenLastCalledWith('session-1', 'block-1', 2);
     expect(indexedImageRes.send).toHaveBeenCalledWith(Buffer.from('image-data'));
 
     const malformedIndexedImageRes = createResponse();
-    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(createRequest({
-      params: { id: 'session-1', blockId: 'block-1', imageIndex: '2abc' },
-    }), malformedIndexedImageRes);
+    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(
+      createRequest({
+        params: { id: 'session-1', blockId: 'block-1', imageIndex: '2abc' },
+      }),
+      malformedIndexedImageRes,
+    );
     expect(malformedIndexedImageRes.status).toHaveBeenCalledWith(400);
     expect(malformedIndexedImageRes.json).toHaveBeenCalledWith({ error: 'imageIndex must be a non-negative integer' });
 
     const unsafeIndexedImageRes = createResponse();
-    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(createRequest({
-      params: { id: 'session-1', blockId: 'block-1', imageIndex: '9007199254740993' },
-    }), unsafeIndexedImageRes);
+    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(
+      createRequest({
+        params: { id: 'session-1', blockId: 'block-1', imageIndex: '9007199254740993' },
+      }),
+      unsafeIndexedImageRes,
+    );
     expect(unsafeIndexedImageRes.status).toHaveBeenCalledWith(400);
     expect(unsafeIndexedImageRes.json).toHaveBeenCalledWith({ error: 'imageIndex must be a non-negative integer' });
 
@@ -495,7 +526,14 @@ describe('conversation routes', () => {
       maxSnippetCharacters: 220,
       stopAfterLimit: true,
     });
-    expect(contentSearchRes.json).toHaveBeenCalledWith({ query: 'needle', mode: 'allTerms', scope: 'all', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }] });
+    expect(contentSearchRes.json).toHaveBeenCalledWith({
+      query: 'needle',
+      mode: 'allTerms',
+      scope: 'all',
+      totalMatching: 1,
+      returnedCount: 1,
+      matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }],
+    });
   });
 
   it('warms related conversation pointers without reading transcript search text on the request path', () => {
@@ -507,13 +545,16 @@ describe('conversation routes', () => {
     });
 
     const response = createResponse();
-    postHandler('/api/related-conversation-pointers/warm')(createRequest({
-      body: {
-        prompt: 'Fix suggested context beach ball',
-        currentConversationId: 'current',
-        currentCwd: '/repo/a',
-      },
-    }), response);
+    postHandler('/api/related-conversation-pointers/warm')(
+      createRequest({
+        body: {
+          prompt: 'Fix suggested context beach ball',
+          currentConversationId: 'current',
+          currentCwd: '/repo/a',
+        },
+      }),
+      response,
+    );
 
     expect(readSessionSearchTextMock).not.toHaveBeenCalled();
     expect(warmRelatedConversationPointerCacheMock).toHaveBeenCalledWith({
@@ -521,10 +562,13 @@ describe('conversation routes', () => {
       currentConversationId: 'current',
       currentCwd: '/repo/a',
     });
-    expect(logInfoMock).toHaveBeenCalledWith('related conversation pointer warm', expect.objectContaining({
-      cache: 'miss',
-      pointerCount: 1,
-    }));
+    expect(logInfoMock).toHaveBeenCalledWith(
+      'related conversation pointer warm',
+      expect.objectContaining({
+        cache: 'miss',
+        pointerCount: 1,
+      }),
+    );
     expect(response.json).toHaveBeenCalledWith({ ok: true, pointerCount: 1 });
   });
 
@@ -552,10 +596,13 @@ describe('conversation routes', () => {
     expect(missingDelayRes.json).toHaveBeenCalledWith({ error: 'delay is required' });
 
     const createResumeRes = createResponse();
-    await postHandler('/api/conversations/:id/deferred-resumes')(createRequest({
-      params: { id: 'session-1' },
-      body: { delay: '5m', prompt: 'Check again later', behavior: 'followUp' },
-    }), createResumeRes);
+    await postHandler('/api/conversations/:id/deferred-resumes')(
+      createRequest({
+        params: { id: 'session-1' },
+        body: { delay: '5m', prompt: 'Check again later', behavior: 'followUp' },
+      }),
+      createResumeRes,
+    );
     expect(scheduleDeferredResumeForSessionFileMock).toHaveBeenCalledWith({
       delay: '5m',
       prompt: 'Check again later',
@@ -570,9 +617,12 @@ describe('conversation routes', () => {
     });
 
     const cancelResumeRes = createResponse();
-    await deleteHandler('/api/conversations/:id/deferred-resumes/:resumeId')(createRequest({
-      params: { id: 'session-1', resumeId: 'resume-1' },
-    }), cancelResumeRes);
+    await deleteHandler('/api/conversations/:id/deferred-resumes/:resumeId')(
+      createRequest({
+        params: { id: 'session-1', resumeId: 'resume-1' },
+      }),
+      cancelResumeRes,
+    );
     expect(cancelDeferredResumeForSessionFileMock).toHaveBeenCalledWith({
       id: 'resume-1',
       sessionFile: '/sessions/session-1.jsonl',
@@ -584,9 +634,12 @@ describe('conversation routes', () => {
     });
 
     const fireResumeRes = createResponse();
-    await postHandler('/api/conversations/:id/deferred-resumes/:resumeId/fire')(createRequest({
-      params: { id: 'session-1', resumeId: 'resume-1' },
-    }), fireResumeRes);
+    await postHandler('/api/conversations/:id/deferred-resumes/:resumeId/fire')(
+      createRequest({
+        params: { id: 'session-1', resumeId: 'resume-1' },
+      }),
+      fireResumeRes,
+    );
     expect(fireDeferredResumeNowForSessionFileMock).toHaveBeenCalledWith({
       id: 'resume-1',
       sessionFile: '/sessions/session-1.jsonl',
@@ -607,17 +660,23 @@ describe('conversation routes', () => {
 
     getConversationArtifactMock.mockReturnValueOnce(null);
     const missingArtifactRes = createResponse();
-    getHandler('/api/conversations/:id/artifacts/:artifactId')(createRequest({
-      params: { id: 'session-1', artifactId: 'missing' },
-    }), missingArtifactRes);
+    getHandler('/api/conversations/:id/artifacts/:artifactId')(
+      createRequest({
+        params: { id: 'session-1', artifactId: 'missing' },
+      }),
+      missingArtifactRes,
+    );
     expect(missingArtifactRes.status).toHaveBeenCalledWith(404);
     expect(missingArtifactRes.json).toHaveBeenCalledWith({ error: 'Artifact not found' });
 
     const createCheckpointCommentRes = createResponse();
-    postHandler('/api/conversations/:id/checkpoints/:checkpointId/comments')(createRequest({
-      params: { id: 'session-1', checkpointId: 'checkpoint-1' },
-      body: { body: 'Ship it' },
-    }), createCheckpointCommentRes);
+    postHandler('/api/conversations/:id/checkpoints/:checkpointId/comments')(
+      createRequest({
+        params: { id: 'session-1', checkpointId: 'checkpoint-1' },
+        body: { body: 'Ship it' },
+      }),
+      createCheckpointCommentRes,
+    );
     expect(addConversationCommitCheckpointCommentMock).toHaveBeenCalledWith({
       profile: 'assistant',
       conversationId: 'session-1',
@@ -640,9 +699,12 @@ describe('conversation routes', () => {
 
     getConversationAttachmentMock.mockReturnValueOnce(null);
     const missingAttachmentRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId')(createRequest({
-      params: { id: 'session-1', attachmentId: 'missing' },
-    }), missingAttachmentRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'missing' },
+      }),
+      missingAttachmentRes,
+    );
     expect(missingAttachmentRes.status).toHaveBeenCalledWith(404);
     expect(missingAttachmentRes.json).toHaveBeenCalledWith({ error: 'Attachment not found' });
 
@@ -652,93 +714,126 @@ describe('conversation routes', () => {
     expect(badCreateAttachmentRes.json).toHaveBeenCalledWith({ error: 'sourceData and previewData are required.' });
 
     const createAttachmentRes = createResponse();
-    postHandler('/api/conversations/:id/attachments')(createRequest({
-      params: { id: 'session-1' },
-      body: {
+    postHandler('/api/conversations/:id/attachments')(
+      createRequest({
+        params: { id: 'session-1' },
+        body: {
+          note: 'Diagram note',
+          previewData: 'preview-data',
+          previewMimeType: 'image/png',
+          sourceData: 'source-data',
+          sourceMimeType: 'application/json',
+          title: 'Diagram',
+        },
+      }),
+      createAttachmentRes,
+    );
+    expect(saveConversationAttachmentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'session-1',
         note: 'Diagram note',
-        previewData: 'preview-data',
-        previewMimeType: 'image/png',
-        sourceData: 'source-data',
-        sourceMimeType: 'application/json',
+        profile: 'assistant',
         title: 'Diagram',
-      },
-    }), createAttachmentRes);
-    expect(saveConversationAttachmentMock).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'session-1',
-      note: 'Diagram note',
-      profile: 'assistant',
-      title: 'Diagram',
-    }));
+      }),
+    );
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('attachments');
 
     const badPatchAttachmentRes = createResponse();
-    patchHandler('/api/conversations/:id/attachments/:attachmentId')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1' },
-      body: { sourceData: 'only-source' },
-    }), badPatchAttachmentRes);
+    patchHandler('/api/conversations/:id/attachments/:attachmentId')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1' },
+        body: { sourceData: 'only-source' },
+      }),
+      badPatchAttachmentRes,
+    );
     expect(badPatchAttachmentRes.status).toHaveBeenCalledWith(400);
     expect(badPatchAttachmentRes.json).toHaveBeenCalledWith({ error: 'sourceData and previewData are required.' });
 
     getConversationAttachmentMock.mockReturnValueOnce(null);
     const patchMissingAttachmentRes = createResponse();
-    patchHandler('/api/conversations/:id/attachments/:attachmentId')(createRequest({
-      params: { id: 'session-1', attachmentId: 'missing' },
-      body: { sourceData: 'source', previewData: 'preview' },
-    }), patchMissingAttachmentRes);
+    patchHandler('/api/conversations/:id/attachments/:attachmentId')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'missing' },
+        body: { sourceData: 'source', previewData: 'preview' },
+      }),
+      patchMissingAttachmentRes,
+    );
     expect(patchMissingAttachmentRes.status).toHaveBeenCalledWith(404);
     expect(patchMissingAttachmentRes.json).toHaveBeenCalledWith({ error: 'Attachment not found' });
 
     const patchAttachmentRes = createResponse();
-    patchHandler('/api/conversations/:id/attachments/:attachmentId')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1' },
-      body: { sourceData: 'source', previewData: 'preview', title: 'Updated diagram' },
-    }), patchAttachmentRes);
-    expect(saveConversationAttachmentMock).toHaveBeenLastCalledWith(expect.objectContaining({
-      attachmentId: 'attachment-1',
-      title: 'Updated diagram',
-    }));
-    expect(patchAttachmentRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      attachment: { id: 'attachment-1', kind: 'excalidraw' },
-      conversationId: 'session-1',
-    }));
+    patchHandler('/api/conversations/:id/attachments/:attachmentId')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1' },
+        body: { sourceData: 'source', previewData: 'preview', title: 'Updated diagram' },
+      }),
+      patchAttachmentRes,
+    );
+    expect(saveConversationAttachmentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        attachmentId: 'attachment-1',
+        title: 'Updated diagram',
+      }),
+    );
+    expect(patchAttachmentRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachment: { id: 'attachment-1', kind: 'excalidraw' },
+        conversationId: 'session-1',
+      }),
+    );
 
     const badAssetRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'invalid' },
-      query: {},
-    }), badAssetRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'invalid' },
+        query: {},
+      }),
+      badAssetRes,
+    );
     expect(badAssetRes.status).toHaveBeenCalledWith(400);
     expect(badAssetRes.json).toHaveBeenCalledWith({ error: 'asset must be "source" or "preview"' });
 
     const badRevisionRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
-      query: { revision: '0' },
-    }), badRevisionRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
+        query: { revision: '0' },
+      }),
+      badRevisionRes,
+    );
     expect(badRevisionRes.status).toHaveBeenCalledWith(400);
     expect(badRevisionRes.json).toHaveBeenCalledWith({ error: 'revision must be a positive integer when provided.' });
 
     const malformedRevisionRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
-      query: { revision: '2abc' },
-    }), malformedRevisionRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
+        query: { revision: '2abc' },
+      }),
+      malformedRevisionRes,
+    );
     expect(malformedRevisionRes.status).toHaveBeenCalledWith(400);
     expect(malformedRevisionRes.json).toHaveBeenCalledWith({ error: 'revision must be a positive integer when provided.' });
 
     const unsafeRevisionRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
-      query: { revision: '9007199254740993' },
-    }), unsafeRevisionRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
+        query: { revision: '9007199254740993' },
+      }),
+      unsafeRevisionRes,
+    );
     expect(unsafeRevisionRes.status).toHaveBeenCalledWith(400);
     expect(unsafeRevisionRes.json).toHaveBeenCalledWith({ error: 'revision must be a positive integer when provided.' });
 
     const downloadRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
-      query: { revision: '2' },
-    }), downloadRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
+        query: { revision: '2' },
+      }),
+      downloadRes,
+    );
     expect(readConversationAttachmentDownloadMock).toHaveBeenCalledWith({
       asset: 'preview',
       attachmentId: 'attachment-1',
@@ -752,16 +847,22 @@ describe('conversation routes', () => {
       throw new Error('Attachment not found');
     });
     const downloadMissingRes = createResponse();
-    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'source' },
-      query: {},
-    }), downloadMissingRes);
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(
+      createRequest({
+        params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'source' },
+        query: {},
+      }),
+      downloadMissingRes,
+    );
     expect(downloadMissingRes.status).toHaveBeenCalledWith(404);
     expect(downloadMissingRes.json).toHaveBeenCalledWith({ error: 'Attachment not found' });
 
     toggleConversationAttentionMock.mockReturnValueOnce(null);
     const missingAttentionRes = createResponse();
-    patchHandler('/api/conversations/:id/attention')(createRequest({ params: { id: 'missing' }, body: { read: true } }), missingAttentionRes);
+    patchHandler('/api/conversations/:id/attention')(
+      createRequest({ params: { id: 'missing' }, body: { read: true } }),
+      missingAttentionRes,
+    );
     expect(missingAttentionRes.status).toHaveBeenCalledWith(404);
     expect(missingAttentionRes.json).toHaveBeenCalledWith({ error: 'Conversation not found' });
 
@@ -773,6 +874,5 @@ describe('conversation routes', () => {
       read: true,
     });
     expect(attentionRes.json).toHaveBeenCalledWith({ ok: true });
-
   });
 });

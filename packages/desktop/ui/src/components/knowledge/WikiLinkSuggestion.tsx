@@ -1,5 +1,6 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+
 import type { VaultEntry } from '../../shared/types';
 
 // ── List component ────────────────────────────────────────────────────────────
@@ -15,71 +16,82 @@ export interface WikiLinkListRef {
 
 function Ico({ d, size = 12 }: { d: string; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
       <path d={d} />
     </svg>
   );
 }
 
-const FILE_ICON = 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z';
+const FILE_ICON =
+  'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z';
 
-const WikiLinkList = forwardRef<WikiLinkListRef, WikiLinkListProps>(
-  function WikiLinkList({ items, command }, ref) {
-    const [selectedIndex, setSelectedIndex] = useState(0);
+const WikiLinkList = forwardRef<WikiLinkListRef, WikiLinkListProps>(function WikiLinkList({ items, command }, ref) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-    useEffect(() => setSelectedIndex(0), [items]);
+  useEffect(() => setSelectedIndex(0), [items]);
 
-    useImperativeHandle(ref, () => ({
-      onKeyDown({ event }: SuggestionKeyDownProps) {
-        if (event.key === 'ArrowUp') {
-          setSelectedIndex((i) => (i - 1 + items.length) % items.length);
-          return true;
-        }
-        if (event.key === 'ArrowDown') {
-          setSelectedIndex((i) => (i + 1) % items.length);
-          return true;
-        }
-        if (event.key === 'Enter') {
-          const item = items[selectedIndex];
-          if (item) command(item);
-          return true;
-        }
-        return false;
-      },
-    }));
+  useImperativeHandle(ref, () => ({
+    onKeyDown({ event }: SuggestionKeyDownProps) {
+      if (event.key === 'ArrowUp') {
+        setSelectedIndex((i) => (i - 1 + items.length) % items.length);
+        return true;
+      }
+      if (event.key === 'ArrowDown') {
+        setSelectedIndex((i) => (i + 1) % items.length);
+        return true;
+      }
+      if (event.key === 'Enter') {
+        const item = items[selectedIndex];
+        if (item) command(item);
+        return true;
+      }
+      return false;
+    },
+  }));
 
-    if (!items.length) {
-      return (
-        <div className="kb-wikilink-popup">
-          <p className="px-3 py-2 text-[12px] text-dim">No matching files</p>
-        </div>
-      );
-    }
-
+  if (!items.length) {
     return (
       <div className="kb-wikilink-popup">
-        {items.map((item, i) => (
-          <button
-            key={item.id}
-            type="button"
-            className={[
-              'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] truncate',
-              i === selectedIndex
-                ? 'bg-accent/15 text-primary'
-                : 'text-secondary hover:bg-accent/8 hover:text-primary',
-            ].join(' ')}
-            onMouseDown={(e) => { e.preventDefault(); command(item); }}
-          >
-            <span className="text-dim shrink-0"><Ico d={FILE_ICON} /></span>
-            <span className="truncate">{item.name.replace(/\.md$/, '')}</span>
-            <span className="text-dim truncate text-[10px] ml-auto">{item.id.split('/').slice(0, -1).join('/')}</span>
-          </button>
-        ))}
+        <p className="px-3 py-2 text-[12px] text-dim">No matching files</p>
       </div>
     );
-  },
-);
+  }
+
+  return (
+    <div className="kb-wikilink-popup">
+      {items.map((item, i) => (
+        <button
+          key={item.id}
+          type="button"
+          className={[
+            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] truncate',
+            i === selectedIndex ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
+          ].join(' ')}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            command(item);
+          }}
+        >
+          <span className="text-dim shrink-0">
+            <Ico d={FILE_ICON} />
+          </span>
+          <span className="truncate">{item.name.replace(/\.md$/, '')}</span>
+          <span className="text-dim truncate text-[10px] ml-auto">{item.id.split('/').slice(0, -1).join('/')}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
 
 // ── Renderer factory ──────────────────────────────────────────────────────────
 // Returns the render object expected by @tiptap/suggestion.
@@ -126,9 +138,7 @@ export function buildWikiLinkRenderer() {
     if (!rect) return;
     const POPUP_HEIGHT = 220;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const top = spaceBelow >= POPUP_HEIGHT
-      ? rect.bottom + 4
-      : rect.top - POPUP_HEIGHT - 4;
+    const top = spaceBelow >= POPUP_HEIGHT ? rect.bottom + 4 : rect.top - POPUP_HEIGHT - 4;
     container.style.left = `${rect.left}px`;
     container.style.top = `${top}px`;
   }
@@ -145,7 +155,9 @@ export function buildWikiLinkRenderer() {
           command: props.command,
         }),
       );
-      setTimeout(() => { listRef = ref.current; }, 0);
+      setTimeout(() => {
+        listRef = ref.current;
+      }, 0);
     });
   }
 

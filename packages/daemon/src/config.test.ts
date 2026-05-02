@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { getDefaultDaemonConfig, loadDaemonConfig, writeDaemonPowerConfig } from './config.js';
 
 const originalCompanionPort = process.env.PERSONAL_AGENT_COMPANION_PORT;

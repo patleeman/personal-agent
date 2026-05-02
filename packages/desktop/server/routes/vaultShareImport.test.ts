@@ -1,7 +1,9 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { importVaultSharedItem } from './vaultShareImport.js';
 
 describe('vaultShareImport', () => {
@@ -160,57 +162,72 @@ describe('vaultShareImport', () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-bad-image-'));
     const targetDirAbs = join(root, 'Inbox');
 
-    await expect(importVaultSharedItem({
-      kind: 'image',
-      root,
-      targetDirAbs,
-      title: 'Bad Screenshot',
-      mimeType: 'image/png',
-      fileName: 'screenshot.png',
-      dataBase64: 'not-valid-base64!',
-      createdAt: '2026-04-22T12:00:00.000Z',
-    })).rejects.toThrow('Shared image data must be valid base64.');
+    await expect(
+      importVaultSharedItem({
+        kind: 'image',
+        root,
+        targetDirAbs,
+        title: 'Bad Screenshot',
+        mimeType: 'image/png',
+        fileName: 'screenshot.png',
+        dataBase64: 'not-valid-base64!',
+        createdAt: '2026-04-22T12:00:00.000Z',
+      }),
+    ).rejects.toThrow('Shared image data must be valid base64.');
   });
 
   it('rejects non-base64 shared image data urls', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-non-base64-image-'));
     const targetDirAbs = join(root, 'Inbox');
 
-    await expect(importVaultSharedItem({
-      kind: 'image',
-      root,
-      targetDirAbs,
-      title: 'Bad Screenshot',
-      mimeType: 'image/png',
-      fileName: 'screenshot.png',
-      dataBase64: 'data:image/png,aGVsbG8=',
-      createdAt: '2026-04-22T12:00:00.000Z',
-    })).rejects.toThrow('Shared image data URL must be base64-encoded.');
+    await expect(
+      importVaultSharedItem({
+        kind: 'image',
+        root,
+        targetDirAbs,
+        title: 'Bad Screenshot',
+        mimeType: 'image/png',
+        fileName: 'screenshot.png',
+        dataBase64: 'data:image/png,aGVsbG8=',
+        createdAt: '2026-04-22T12:00:00.000Z',
+      }),
+    ).rejects.toThrow('Shared image data URL must be base64-encoded.');
   });
 
   it('rejects shared image imports with non-image mime types', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-non-image-'));
     const targetDirAbs = join(root, 'Inbox');
 
-    await expect(importVaultSharedItem({
-      kind: 'image',
-      root,
-      targetDirAbs,
-      title: 'Not an image',
-      mimeType: 'text/plain',
-      fileName: 'note.txt',
-      dataBase64: Buffer.from('not-image-bytes', 'utf-8').toString('base64'),
-      createdAt: '2026-04-22T12:00:00.000Z',
-    })).rejects.toThrow('mimeType must be an image type for image imports.');
+    await expect(
+      importVaultSharedItem({
+        kind: 'image',
+        root,
+        targetDirAbs,
+        title: 'Not an image',
+        mimeType: 'text/plain',
+        fileName: 'note.txt',
+        dataBase64: Buffer.from('not-image-bytes', 'utf-8').toString('base64'),
+        createdAt: '2026-04-22T12:00:00.000Z',
+      }),
+    ).rejects.toThrow('mimeType must be an image type for image imports.');
   });
 
   it('extracts readable markdown for shared URLs', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-url-'));
     const targetDirAbs = join(root, 'Inbox');
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(`<!doctype html><html><head><title>Example Article</title><meta name="description" content="Article summary"></head><body><article><h1>Example Article</h1><p>Important captured content.</p></article></body></html>`, {
-      status: 200,
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            `<!doctype html><html><head><title>Example Article</title><meta name="description" content="Article summary"></head><body><article><h1>Example Article</h1><p>Important captured content.</p></article></body></html>`,
+            {
+              status: 200,
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            },
+          ),
+      ),
+    );
 
     const imported = await importVaultSharedItem({
       kind: 'url',

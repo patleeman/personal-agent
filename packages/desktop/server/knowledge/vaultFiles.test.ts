@@ -1,13 +1,10 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  buildReferencedVaultFilesContext,
-  listVaultFiles,
-  resolveMentionedVaultFiles,
-  resolveVaultFileById,
-} from './vaultFiles.js';
+
+import { buildReferencedVaultFilesContext, listVaultFiles, resolveMentionedVaultFiles, resolveVaultFileById } from './vaultFiles.js';
 
 const createdDirs: string[] = [];
 
@@ -36,22 +33,18 @@ describe('vaultFiles', () => {
   it('lists root-relative folders and files and skips ignored directories and junk files', () => {
     const root = createVaultFixture();
 
-    expect(listVaultFiles(root).map((file) => `${file.kind}:${file.id}`)).toEqual([
-      'folder:notes/',
-      'file:notes/daily.md',
-    ]);
+    expect(listVaultFiles(root).map((file) => `${file.kind}:${file.id}`)).toEqual(['folder:notes/', 'file:notes/daily.md']);
   });
 
   it('resolves mentioned folders and files in encounter order and ignores unsafe paths', () => {
     const root = createVaultFixture();
 
-    expect(resolveMentionedVaultFiles(
-      'Review @notes/ and @notes/daily.md and then @_profiles/datadog/AGENTS.md and @.DS_Store but ignore @../secrets.txt.',
-      root,
-    ).map((file) => `${file.kind}:${file.id}`)).toEqual([
-      'folder:notes/',
-      'file:notes/daily.md',
-    ]);
+    expect(
+      resolveMentionedVaultFiles(
+        'Review @notes/ and @notes/daily.md and then @_profiles/datadog/AGENTS.md and @.DS_Store but ignore @../secrets.txt.',
+        root,
+      ).map((file) => `${file.kind}:${file.id}`),
+    ).toEqual(['folder:notes/', 'file:notes/daily.md']);
 
     expect(resolveVaultFileById('../secrets.txt', root)).toBeNull();
     expect(resolveVaultFileById('.DS_Store', root)).toBeNull();

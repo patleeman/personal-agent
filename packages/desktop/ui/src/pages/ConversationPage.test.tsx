@@ -1,26 +1,26 @@
-import React from 'react';
 import { parseFragment } from 'parse5';
+import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AppDataContext } from '../app/contexts.js';
+import { constrainPromptImageDimensions } from '../conversation/promptAttachments.js';
 import {
   ConversationPage,
-  resolveDisplayedConversationPendingStatusLabel,
-  resolveConversationPerformanceMode,
-  shouldShowMissingConversationState,
-  shouldAutoDispatchPendingInitialPrompt,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
-  shouldDeferConversationFileRefresh,
-  shouldFetchConversationLiveSessionGitContext,
-  shouldLoadConversationModels,
-  shouldUseHealthyDesktopConversationState,
-  shouldFetchConversationAttachments,
-
   replaceConversationMetaInSessionList,
   resolveConversationExecutionOverride,
+  resolveConversationPerformanceMode,
+  resolveDisplayedConversationPendingStatusLabel,
+  shouldAutoDispatchPendingInitialPrompt,
+  shouldDeferConversationFileRefresh,
+  shouldFetchConversationAttachments,
+  shouldFetchConversationLiveSessionGitContext,
+  shouldLoadConversationModels,
+  shouldShowMissingConversationState,
+  shouldUseHealthyDesktopConversationState,
 } from './ConversationPage.js';
-import { constrainPromptImageDimensions } from '../conversation/promptAttachments.js';
-import { AppDataContext } from '../app/contexts.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -53,36 +53,44 @@ function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode |
 
 describe('desktop conversation state fallback', () => {
   it('preserves partial remote execution identity overrides', () => {
-    expect(resolveConversationExecutionOverride({
-      remoteConversationId: ' remote-1 ',
-    })).toEqual({ remoteConversationId: 'remote-1' });
+    expect(
+      resolveConversationExecutionOverride({
+        remoteConversationId: ' remote-1 ',
+      }),
+    ).toEqual({ remoteConversationId: 'remote-1' });
 
-    expect(resolveConversationExecutionOverride({
-      remoteHostId: ' host-1 ',
-      remoteHostLabel: ' Remote Host ',
-    })).toEqual({ remoteHostId: 'host-1', remoteHostLabel: 'Remote Host' });
+    expect(
+      resolveConversationExecutionOverride({
+        remoteHostId: ' host-1 ',
+        remoteHostLabel: ' Remote Host ',
+      }),
+    ).toEqual({ remoteHostId: 'host-1', remoteHostLabel: 'Remote Host' });
 
-    expect(resolveConversationExecutionOverride({
-      remoteHostId: 'host-1',
-      remoteHostLabel: '   ',
-    })).toEqual({ remoteHostId: 'host-1' });
+    expect(
+      resolveConversationExecutionOverride({
+        remoteHostId: 'host-1',
+        remoteHostLabel: '   ',
+      }),
+    ).toEqual({ remoteHostId: 'host-1' });
 
     expect(resolveConversationExecutionOverride({})).toBeNull();
   });
 
   it('syncs active conversation meta back into the session list', () => {
-    const sessions = [{
-      id: 'conv-123',
-      file: '/tmp/conv-123.jsonl',
-      timestamp: '2026-01-01T00:00:00.000Z',
-      cwd: '/repo',
-      cwdSlug: '-repo',
-      model: 'model-a',
-      title: 'Old title',
-      messageCount: 4,
-      isRunning: false,
-      needsAttention: true,
-    }];
+    const sessions = [
+      {
+        id: 'conv-123',
+        file: '/tmp/conv-123.jsonl',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        cwd: '/repo',
+        cwdSlug: '-repo',
+        model: 'model-a',
+        title: 'Old title',
+        messageCount: 4,
+        isRunning: false,
+        needsAttention: true,
+      },
+    ];
 
     const next = replaceConversationMetaInSessionList(sessions, 'conv-123', {
       ...sessions[0]!,
@@ -101,78 +109,96 @@ describe('desktop conversation state fallback', () => {
   });
 
   it('does not rewrite sessions when active conversation meta is unchanged', () => {
-    const sessions = [{
-      id: 'conv-123',
-      file: '/tmp/conv-123.jsonl',
-      timestamp: '2026-01-01T00:00:00.000Z',
-      cwd: '/repo',
-      cwdSlug: '-repo',
-      model: 'model-a',
-      title: 'Stable title',
-      messageCount: 4,
-      isRunning: true,
-      needsAttention: true,
-    }];
+    const sessions = [
+      {
+        id: 'conv-123',
+        file: '/tmp/conv-123.jsonl',
+        timestamp: '2026-01-01T00:00:00.000Z',
+        cwd: '/repo',
+        cwdSlug: '-repo',
+        model: 'model-a',
+        title: 'Stable title',
+        messageCount: 4,
+        isRunning: true,
+        needsAttention: true,
+      },
+    ];
 
     expect(replaceConversationMetaInSessionList(sessions, 'conv-123', sessions[0]!)).toBe(sessions);
   });
 
   it('uses the dedicated desktop state only while the local subscription is healthy', () => {
-    expect(shouldUseHealthyDesktopConversationState({
-      draft: false,
-      conversationId: 'conv-123',
-      desktopMode: 'local',
-      desktopError: null,
-    })).toBe(true);
+    expect(
+      shouldUseHealthyDesktopConversationState({
+        draft: false,
+        conversationId: 'conv-123',
+        desktopMode: 'local',
+        desktopError: null,
+      }),
+    ).toBe(true);
 
-    expect(shouldUseHealthyDesktopConversationState({
-      draft: false,
-      conversationId: 'conv-123',
-      desktopMode: 'local',
-      desktopError: 'Conversation state subscription failed.',
-    })).toBe(false);
+    expect(
+      shouldUseHealthyDesktopConversationState({
+        draft: false,
+        conversationId: 'conv-123',
+        desktopMode: 'local',
+        desktopError: 'Conversation state subscription failed.',
+      }),
+    ).toBe(false);
 
-    expect(shouldUseHealthyDesktopConversationState({
-      draft: false,
-      conversationId: 'conv-123',
-      desktopMode: 'checking',
-      desktopError: null,
-    })).toBe(false);
+    expect(
+      shouldUseHealthyDesktopConversationState({
+        draft: false,
+        conversationId: 'conv-123',
+        desktopMode: 'checking',
+        desktopError: null,
+      }),
+    ).toBe(false);
 
-    expect(shouldUseHealthyDesktopConversationState({
-      draft: true,
-      conversationId: 'conv-123',
-      desktopMode: 'local',
-      desktopError: null,
-    })).toBe(false);
+    expect(
+      shouldUseHealthyDesktopConversationState({
+        draft: true,
+        conversationId: 'conv-123',
+        desktopMode: 'local',
+        desktopError: null,
+      }),
+    ).toBe(false);
   });
 });
 
 describe('conversation attachment fetch gating', () => {
   it('only loads saved conversation attachments when the drawings picker is actually open', () => {
-    expect(shouldFetchConversationAttachments({
-      draft: true,
-      conversationId: 'conv-123',
-      drawingsPickerOpen: true,
-    })).toBe(false);
+    expect(
+      shouldFetchConversationAttachments({
+        draft: true,
+        conversationId: 'conv-123',
+        drawingsPickerOpen: true,
+      }),
+    ).toBe(false);
 
-    expect(shouldFetchConversationAttachments({
-      draft: false,
-      conversationId: null,
-      drawingsPickerOpen: true,
-    })).toBe(false);
+    expect(
+      shouldFetchConversationAttachments({
+        draft: false,
+        conversationId: null,
+        drawingsPickerOpen: true,
+      }),
+    ).toBe(false);
 
-    expect(shouldFetchConversationAttachments({
-      draft: false,
-      conversationId: 'conv-123',
-      drawingsPickerOpen: false,
-    })).toBe(false);
+    expect(
+      shouldFetchConversationAttachments({
+        draft: false,
+        conversationId: 'conv-123',
+        drawingsPickerOpen: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldFetchConversationAttachments({
-      draft: false,
-      conversationId: 'conv-123',
-      drawingsPickerOpen: true,
-    })).toBe(true);
+    expect(
+      shouldFetchConversationAttachments({
+        draft: false,
+        conversationId: 'conv-123',
+        drawingsPickerOpen: true,
+      }),
+    ).toBe(true);
   });
 });
 
@@ -196,341 +222,406 @@ describe('conversation rendering mode', () => {
     expect(resolveConversationPerformanceMode({ messageCount: 96 })).toBe('aggressive');
     expect(resolveConversationPerformanceMode({ messageCount: 240 })).toBe('aggressive');
   });
-
-
 });
 
 describe('conversation model loading', () => {
   it('keeps draft model data hot even before a session exists', () => {
-    expect(shouldLoadConversationModels({
-      draft: true,
-      hasPendingInitialPrompt: false,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(true);
+    expect(
+      shouldLoadConversationModels({
+        draft: true,
+        hasPendingInitialPrompt: false,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(true);
   });
 
   it('defers model reads while the initial prompt is still pending or in flight', () => {
-    expect(shouldLoadConversationModels({
-      draft: false,
-      hasPendingInitialPrompt: true,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(false);
+    expect(
+      shouldLoadConversationModels({
+        draft: false,
+        hasPendingInitialPrompt: true,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldLoadConversationModels({
-      draft: false,
-      hasPendingInitialPrompt: false,
-      hasPendingInitialPromptInFlight: true,
-    })).toBe(false);
+    expect(
+      shouldLoadConversationModels({
+        draft: false,
+        hasPendingInitialPrompt: false,
+        hasPendingInitialPromptInFlight: true,
+      }),
+    ).toBe(false);
   });
 
   it('loads model data once the initial prompt work is clear', () => {
-    expect(shouldLoadConversationModels({
-      draft: false,
-      hasPendingInitialPrompt: false,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(true);
+    expect(
+      shouldLoadConversationModels({
+        draft: false,
+        hasPendingInitialPrompt: false,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(true);
   });
 });
 
 describe('conversation file refresh deferral', () => {
   it('defers file-backed refreshes while the initial prompt is still pending or in flight', () => {
-    expect(shouldDeferConversationFileRefresh({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: true,
-      pendingInitialPromptDispatching: false,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(true);
+    expect(
+      shouldDeferConversationFileRefresh({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: true,
+        pendingInitialPromptDispatching: false,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(true);
 
-    expect(shouldDeferConversationFileRefresh({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: false,
-      pendingInitialPromptDispatching: true,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(true);
+    expect(
+      shouldDeferConversationFileRefresh({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: false,
+        pendingInitialPromptDispatching: true,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(true);
 
-    expect(shouldDeferConversationFileRefresh({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: false,
-      pendingInitialPromptDispatching: false,
-      hasPendingInitialPromptInFlight: true,
-    })).toBe(true);
+    expect(
+      shouldDeferConversationFileRefresh({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: false,
+        pendingInitialPromptDispatching: false,
+        hasPendingInitialPromptInFlight: true,
+      }),
+    ).toBe(true);
   });
 
   it('keeps normal file refreshes enabled once the carried prompt work is clear', () => {
-    expect(shouldDeferConversationFileRefresh({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: false,
-      pendingInitialPromptDispatching: false,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(false);
+    expect(
+      shouldDeferConversationFileRefresh({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: false,
+        pendingInitialPromptDispatching: false,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(false);
   });
 });
 
 describe('conversation live-session git context loading', () => {
   it('defers git-context reads while the initial prompt is still pending or in flight', () => {
-    expect(shouldFetchConversationLiveSessionGitContext({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationLiveDecision: true,
-      conversationBootstrapLoading: false,
-      sessionLoading: false,
-      isStreaming: false,
-      hasPendingInitialPrompt: true,
-      pendingInitialPromptDispatching: false,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(false);
+    expect(
+      shouldFetchConversationLiveSessionGitContext({
+        draft: false,
+        conversationId: 'conv-123',
+        conversationLiveDecision: true,
+        conversationBootstrapLoading: false,
+        sessionLoading: false,
+        isStreaming: false,
+        hasPendingInitialPrompt: true,
+        pendingInitialPromptDispatching: false,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldFetchConversationLiveSessionGitContext({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationLiveDecision: true,
-      conversationBootstrapLoading: false,
-      sessionLoading: false,
-      isStreaming: false,
-      hasPendingInitialPrompt: false,
-      pendingInitialPromptDispatching: true,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(false);
+    expect(
+      shouldFetchConversationLiveSessionGitContext({
+        draft: false,
+        conversationId: 'conv-123',
+        conversationLiveDecision: true,
+        conversationBootstrapLoading: false,
+        sessionLoading: false,
+        isStreaming: false,
+        hasPendingInitialPrompt: false,
+        pendingInitialPromptDispatching: true,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldFetchConversationLiveSessionGitContext({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationLiveDecision: true,
-      conversationBootstrapLoading: false,
-      sessionLoading: false,
-      isStreaming: false,
-      hasPendingInitialPrompt: false,
-      pendingInitialPromptDispatching: false,
-      hasPendingInitialPromptInFlight: true,
-    })).toBe(false);
+    expect(
+      shouldFetchConversationLiveSessionGitContext({
+        draft: false,
+        conversationId: 'conv-123',
+        conversationLiveDecision: true,
+        conversationBootstrapLoading: false,
+        sessionLoading: false,
+        isStreaming: false,
+        hasPendingInitialPrompt: false,
+        pendingInitialPromptDispatching: false,
+        hasPendingInitialPromptInFlight: true,
+      }),
+    ).toBe(false);
   });
 
   it('loads git context once the conversation is live and the initial prompt work is clear', () => {
-    expect(shouldFetchConversationLiveSessionGitContext({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationLiveDecision: true,
-      conversationBootstrapLoading: false,
-      sessionLoading: false,
-      isStreaming: false,
-      hasPendingInitialPrompt: false,
-      pendingInitialPromptDispatching: false,
-      hasPendingInitialPromptInFlight: false,
-    })).toBe(true);
+    expect(
+      shouldFetchConversationLiveSessionGitContext({
+        draft: false,
+        conversationId: 'conv-123',
+        conversationLiveDecision: true,
+        conversationBootstrapLoading: false,
+        sessionLoading: false,
+        isStreaming: false,
+        hasPendingInitialPrompt: false,
+        pendingInitialPromptDispatching: false,
+        hasPendingInitialPromptInFlight: false,
+      }),
+    ).toBe(true);
   });
 });
 
 describe('conversation live state helpers', () => {
   it('does not show the missing state until session discovery has loaded', () => {
-    expect(shouldShowMissingConversationState({
-      draft: false,
-      conversationId: 'conv-123',
-      sessionsLoaded: false,
-      confirmedLive: false,
-      sessionLoading: false,
-      hasVisibleSessionDetail: false,
-      hasSavedConversationSessionFile: false,
-      hasPendingInitialPrompt: false,
-    })).toBe(false);
+    expect(
+      shouldShowMissingConversationState({
+        draft: false,
+        conversationId: 'conv-123',
+        sessionsLoaded: false,
+        confirmedLive: false,
+        sessionLoading: false,
+        hasVisibleSessionDetail: false,
+        hasSavedConversationSessionFile: false,
+        hasPendingInitialPrompt: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldShowMissingConversationState({
-      draft: false,
-      conversationId: 'conv-123',
-      sessionsLoaded: true,
-      confirmedLive: false,
-      sessionLoading: false,
-      hasVisibleSessionDetail: false,
-      hasSavedConversationSessionFile: false,
-      hasPendingInitialPrompt: false,
-    })).toBe(true);
+    expect(
+      shouldShowMissingConversationState({
+        draft: false,
+        conversationId: 'conv-123',
+        sessionsLoaded: true,
+        confirmedLive: false,
+        sessionLoading: false,
+        hasVisibleSessionDetail: false,
+        hasSavedConversationSessionFile: false,
+        hasPendingInitialPrompt: false,
+      }),
+    ).toBe(true);
   });
 
   it('waits to auto-dispatch a pending initial prompt until no background start is in flight', () => {
-    expect(shouldAutoDispatchPendingInitialPrompt({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: true,
-      pendingInitialPromptDispatching: false,
-      hasStreamSnapshot: true,
-      hasTranscriptMessages: false,
-    })).toBe(true);
+    expect(
+      shouldAutoDispatchPendingInitialPrompt({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: true,
+        pendingInitialPromptDispatching: false,
+        hasStreamSnapshot: true,
+        hasTranscriptMessages: false,
+      }),
+    ).toBe(true);
 
-    expect(shouldAutoDispatchPendingInitialPrompt({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: true,
-      pendingInitialPromptDispatching: true,
-      hasStreamSnapshot: true,
-      hasTranscriptMessages: false,
-    })).toBe(false);
+    expect(
+      shouldAutoDispatchPendingInitialPrompt({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: true,
+        pendingInitialPromptDispatching: true,
+        hasStreamSnapshot: true,
+        hasTranscriptMessages: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldAutoDispatchPendingInitialPrompt({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: true,
-      pendingInitialPromptDispatching: false,
-      hasStreamSnapshot: false,
-      hasTranscriptMessages: false,
-    })).toBe(false);
+    expect(
+      shouldAutoDispatchPendingInitialPrompt({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: true,
+        pendingInitialPromptDispatching: false,
+        hasStreamSnapshot: false,
+        hasTranscriptMessages: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldAutoDispatchPendingInitialPrompt({
-      draft: false,
-      conversationId: 'conv-123',
-      hasPendingInitialPrompt: true,
-      pendingInitialPromptDispatching: false,
-      hasStreamSnapshot: true,
-      hasTranscriptMessages: true,
-    })).toBe(false);
+    expect(
+      shouldAutoDispatchPendingInitialPrompt({
+        draft: false,
+        conversationId: 'conv-123',
+        hasPendingInitialPrompt: true,
+        pendingInitialPromptDispatching: false,
+        hasStreamSnapshot: true,
+        hasTranscriptMessages: true,
+      }),
+    ).toBe(false);
   });
 
   it('keeps a detached-start prompt visible until the accepted user turn shows up in the transcript', () => {
-    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
-      messages: undefined,
-      prompt: {
-        text: 'Kick this off',
-        images: [],
-        attachmentRefs: [],
-      },
-    })).toBe(false);
+    expect(
+      hasConversationTranscriptAcceptedPendingInitialPrompt({
+        messages: undefined,
+        prompt: {
+          text: 'Kick this off',
+          images: [],
+          attachmentRefs: [],
+        },
+      }),
+    ).toBe(false);
 
-    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
-      messages: [{
-        type: 'text',
-        ts: '2026-04-11T12:00:00.000Z',
-        text: 'Working…',
-      }],
-      prompt: {
-        text: 'Kick this off',
-        images: [],
-        attachmentRefs: [],
-      },
-    })).toBe(false);
+    expect(
+      hasConversationTranscriptAcceptedPendingInitialPrompt({
+        messages: [
+          {
+            type: 'text',
+            ts: '2026-04-11T12:00:00.000Z',
+            text: 'Working…',
+          },
+        ],
+        prompt: {
+          text: 'Kick this off',
+          images: [],
+          attachmentRefs: [],
+        },
+      }),
+    ).toBe(false);
 
-    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
-      messages: [{
-        type: 'user',
-        ts: '2026-04-11T12:00:01.000Z',
-        text: 'Kick this off',
-      }],
-      prompt: {
-        text: 'Kick this off',
-        images: [],
-        attachmentRefs: [],
-      },
-    })).toBe(true);
+    expect(
+      hasConversationTranscriptAcceptedPendingInitialPrompt({
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-04-11T12:00:01.000Z',
+            text: 'Kick this off',
+          },
+        ],
+        prompt: {
+          text: 'Kick this off',
+          images: [],
+          attachmentRefs: [],
+        },
+      }),
+    ).toBe(true);
   });
 
   it('matches image-only detached-start prompts by user image count', () => {
-    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
-      messages: [{
-        type: 'user',
-        ts: '2026-04-11T12:00:01.000Z',
-        text: '',
-        images: [{ alt: 'Attached image' }],
-      }],
-      prompt: {
-        text: '',
-        images: [{
-          data: 'abc',
-          mimeType: 'image/png',
-        }],
-        attachmentRefs: [],
-      },
-    })).toBe(true);
+    expect(
+      hasConversationTranscriptAcceptedPendingInitialPrompt({
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-04-11T12:00:01.000Z',
+            text: '',
+            images: [{ alt: 'Attached image' }],
+          },
+        ],
+        prompt: {
+          text: '',
+          images: [
+            {
+              data: 'abc',
+              mimeType: 'image/png',
+            },
+          ],
+          attachmentRefs: [],
+        },
+      }),
+    ).toBe(true);
 
-    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
-      messages: [{
-        type: 'user',
-        ts: '2026-04-11T12:00:01.000Z',
-        text: '',
-      }],
-      prompt: {
-        text: '',
-        images: [{
-          data: 'abc',
-          mimeType: 'image/png',
-        }],
-        attachmentRefs: [],
-      },
-    })).toBe(false);
+    expect(
+      hasConversationTranscriptAcceptedPendingInitialPrompt({
+        messages: [
+          {
+            type: 'user',
+            ts: '2026-04-11T12:00:01.000Z',
+            text: '',
+          },
+        ],
+        prompt: {
+          text: '',
+          images: [
+            {
+              data: 'abc',
+              mimeType: 'image/png',
+            },
+          ],
+          attachmentRefs: [],
+        },
+      }),
+    ).toBe(false);
   });
 
   it('keeps showing a pending status while a draft or initial prompt is still staging', () => {
-    expect(resolveDisplayedConversationPendingStatusLabel({
-      explicitLabel: null,
-      draft: true,
-      hasDraftPendingPrompt: true,
-      pendingPrompt: null,
-      isStreaming: false,
-      hasPendingInitialPrompt: false,
-      hasPendingInitialPromptInFlight: false,
-      isLiveSession: false,
-      hasVisibleSessionDetail: false,
-    })).toBe('Sending…');
+    expect(
+      resolveDisplayedConversationPendingStatusLabel({
+        explicitLabel: null,
+        draft: true,
+        hasDraftPendingPrompt: true,
+        pendingPrompt: null,
+        isStreaming: false,
+        hasPendingInitialPrompt: false,
+        hasPendingInitialPromptInFlight: false,
+        isLiveSession: false,
+        hasVisibleSessionDetail: false,
+      }),
+    ).toBe('Sending…');
 
-    expect(resolveDisplayedConversationPendingStatusLabel({
-      explicitLabel: null,
-      draft: false,
-      hasDraftPendingPrompt: false,
-      pendingPrompt: {
-        text: 'Use the selected threads',
-        images: [],
-        attachmentRefs: [],
-        relatedConversationIds: ['conv-1', 'conv-2'],
-      },
-      isStreaming: false,
-      hasPendingInitialPrompt: true,
-      hasPendingInitialPromptInFlight: false,
-      isLiveSession: true,
-      hasVisibleSessionDetail: false,
-    })).toBe('Summarizing 2 related threads…');
+    expect(
+      resolveDisplayedConversationPendingStatusLabel({
+        explicitLabel: null,
+        draft: false,
+        hasDraftPendingPrompt: false,
+        pendingPrompt: {
+          text: 'Use the selected threads',
+          images: [],
+          attachmentRefs: [],
+          relatedConversationIds: ['conv-1', 'conv-2'],
+        },
+        isStreaming: false,
+        hasPendingInitialPrompt: true,
+        hasPendingInitialPromptInFlight: false,
+        isLiveSession: true,
+        hasVisibleSessionDetail: false,
+      }),
+    ).toBe('Summarizing 2 related threads…');
 
-    expect(resolveDisplayedConversationPendingStatusLabel({
-      explicitLabel: null,
-      draft: false,
-      hasDraftPendingPrompt: false,
-      pendingPrompt: null,
-      isStreaming: false,
-      hasPendingInitialPrompt: false,
-      hasPendingInitialPromptInFlight: true,
-      isLiveSession: true,
-      hasVisibleSessionDetail: false,
-    })).toBe('Working…');
+    expect(
+      resolveDisplayedConversationPendingStatusLabel({
+        explicitLabel: null,
+        draft: false,
+        hasDraftPendingPrompt: false,
+        pendingPrompt: null,
+        isStreaming: false,
+        hasPendingInitialPrompt: false,
+        hasPendingInitialPromptInFlight: true,
+        isLiveSession: true,
+        hasVisibleSessionDetail: false,
+      }),
+    ).toBe('Working…');
 
-    expect(resolveDisplayedConversationPendingStatusLabel({
-      explicitLabel: 'Resuming…',
-      draft: false,
-      hasDraftPendingPrompt: false,
-      pendingPrompt: null,
-      isStreaming: false,
-      hasPendingInitialPrompt: false,
-      hasPendingInitialPromptInFlight: false,
-      isLiveSession: false,
-      hasVisibleSessionDetail: true,
-    })).toBe('Resuming…');
+    expect(
+      resolveDisplayedConversationPendingStatusLabel({
+        explicitLabel: 'Resuming…',
+        draft: false,
+        hasDraftPendingPrompt: false,
+        pendingPrompt: null,
+        isStreaming: false,
+        hasPendingInitialPrompt: false,
+        hasPendingInitialPromptInFlight: false,
+        isLiveSession: false,
+        hasVisibleSessionDetail: true,
+      }),
+    ).toBe('Resuming…');
 
-    expect(resolveDisplayedConversationPendingStatusLabel({
-      explicitLabel: null,
-      draft: false,
-      hasDraftPendingPrompt: false,
-      pendingPrompt: {
-        text: 'Use the selected threads',
-        images: [],
-        attachmentRefs: [],
-        relatedConversationIds: ['conv-1'],
-      },
-      isStreaming: true,
-      hasPendingInitialPrompt: true,
-      hasPendingInitialPromptInFlight: true,
-      isLiveSession: true,
-      hasVisibleSessionDetail: false,
-    })).toBeNull();
+    expect(
+      resolveDisplayedConversationPendingStatusLabel({
+        explicitLabel: null,
+        draft: false,
+        hasDraftPendingPrompt: false,
+        pendingPrompt: {
+          text: 'Use the selected threads',
+          images: [],
+          attachmentRefs: [],
+          relatedConversationIds: ['conv-1'],
+        },
+        isStreaming: true,
+        hasPendingInitialPrompt: true,
+        hasPendingInitialPromptInFlight: true,
+        isLiveSession: true,
+        hasVisibleSessionDetail: false,
+      }),
+    ).toBeNull();
   });
-
 });
 
 describe('ConversationPage', () => {
@@ -552,21 +643,25 @@ describe('ConversationPage', () => {
   });
 
   it('renders without reading tree state before initialization', () => {
-    expect(() => renderToString(
-      <MemoryRouter initialEntries={['/conversations/test-session']}>
-        <Routes>
-          <Route path="/conversations/:id" element={<ConversationPage />} />
-        </Routes>
-      </MemoryRouter>,
-    )).not.toThrow();
+    expect(() =>
+      renderToString(
+        <MemoryRouter initialEntries={['/conversations/test-session']}>
+          <Routes>
+            <Route path="/conversations/:id" element={<ConversationPage />} />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
   });
 
   it('renders safely before the route param is available', () => {
-    expect(() => renderToString(
-      <MemoryRouter>
-        <ConversationPage />
-      </MemoryRouter>,
-    )).not.toThrow();
+    expect(() =>
+      renderToString(
+        <MemoryRouter>
+          <ConversationPage />
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
   });
 
   it('shows the auto mode toggle on the new conversation page and moves workspace selection into the empty state', () => {
@@ -639,52 +734,56 @@ describe('ConversationPage', () => {
   it('shows active background runs above the composer even without other shelf content', () => {
     const runId = 'run-ui-preview-check-2026-04-26T00-00-01-000Z-feedface';
     const html = renderToString(
-      <AppDataContext.Provider value={{
-        projects: null,
-        sessions: null,
-        tasks: null,
-        runs: {
-          scannedAt: '2026-04-26T00:00:02.000Z',
-          runsRoot: '/tmp/runs',
-          summary: { total: 1, recoveryActions: {}, statuses: { running: 1 } },
-          runs: [{
-            runId,
-            paths: {
-              root: `/tmp/runs/${runId}`,
-              manifestPath: `/tmp/runs/${runId}/manifest.json`,
-              statusPath: `/tmp/runs/${runId}/status.json`,
-              checkpointPath: `/tmp/runs/${runId}/checkpoint.json`,
-              eventsPath: `/tmp/runs/${runId}/events.jsonl`,
-              outputLogPath: `/tmp/runs/${runId}/output.log`,
-              resultPath: `/tmp/runs/${runId}/result.json`,
-            },
-            manifest: {
-              version: 1,
-              id: runId,
-              kind: 'background-run',
-              resumePolicy: 'continue',
-              createdAt: '2026-04-26T00:00:01.000Z',
-              spec: { metadata: { taskSlug: 'ui-preview-check' } },
-              source: { type: 'tool', id: 'test-session' },
-            },
-            status: {
-              version: 1,
-              runId,
-              status: 'running',
-              createdAt: '2026-04-26T00:00:01.000Z',
-              updatedAt: '2026-04-26T00:00:02.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-04-26T00:00:01.000Z',
-            },
-            problems: [],
-            recoveryAction: 'none',
-          }],
-        },
-        setProjects: () => {},
-        setSessions: () => {},
-        setTasks: () => {},
-        setRuns: () => {},
-      }}>
+      <AppDataContext.Provider
+        value={{
+          projects: null,
+          sessions: null,
+          tasks: null,
+          runs: {
+            scannedAt: '2026-04-26T00:00:02.000Z',
+            runsRoot: '/tmp/runs',
+            summary: { total: 1, recoveryActions: {}, statuses: { running: 1 } },
+            runs: [
+              {
+                runId,
+                paths: {
+                  root: `/tmp/runs/${runId}`,
+                  manifestPath: `/tmp/runs/${runId}/manifest.json`,
+                  statusPath: `/tmp/runs/${runId}/status.json`,
+                  checkpointPath: `/tmp/runs/${runId}/checkpoint.json`,
+                  eventsPath: `/tmp/runs/${runId}/events.jsonl`,
+                  outputLogPath: `/tmp/runs/${runId}/output.log`,
+                  resultPath: `/tmp/runs/${runId}/result.json`,
+                },
+                manifest: {
+                  version: 1,
+                  id: runId,
+                  kind: 'background-run',
+                  resumePolicy: 'continue',
+                  createdAt: '2026-04-26T00:00:01.000Z',
+                  spec: { metadata: { taskSlug: 'ui-preview-check' } },
+                  source: { type: 'tool', id: 'test-session' },
+                },
+                status: {
+                  version: 1,
+                  runId,
+                  status: 'running',
+                  createdAt: '2026-04-26T00:00:01.000Z',
+                  updatedAt: '2026-04-26T00:00:02.000Z',
+                  activeAttempt: 1,
+                  startedAt: '2026-04-26T00:00:01.000Z',
+                },
+                problems: [],
+                recoveryAction: 'none',
+              },
+            ],
+          },
+          setProjects: () => {},
+          setSessions: () => {},
+          setTasks: () => {},
+          setRuns: () => {},
+        }}
+      >
         <MemoryRouter initialEntries={['/conversations/test-session']}>
           <Routes>
             <Route path="/conversations/:id" element={<ConversationPage />} />

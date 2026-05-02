@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   buildReplySelectionScopeProps,
   findSelectionReplyScopeElement,
@@ -21,7 +22,8 @@ describe('replySelection', () => {
   });
 
   it('reads only the selected text that intersects the scope element', () => {
-    document.body.innerHTML = '<div id="before">before </div><section data-selection-reply-scope="assistant-message"><p>first line</p><p>second line</p></section><div id="after"> after</div>';
+    document.body.innerHTML =
+      '<div id="before">before </div><section data-selection-reply-scope="assistant-message"><p>first line</p><p>second line</p></section><div id="after"> after</div>';
     const before = document.querySelector('#before') as HTMLElement;
     const scope = document.querySelector('section') as HTMLElement;
     const after = document.querySelector('#after') as HTMLElement;
@@ -44,7 +46,8 @@ describe('replySelection', () => {
   });
 
   it('finds selection start and end scopes with range fallback', () => {
-    document.body.innerHTML = '<section data-selection-reply-scope="assistant-message">start</section><section data-selection-reply-scope="assistant-message">end</section>';
+    document.body.innerHTML =
+      '<section data-selection-reply-scope="assistant-message">start</section><section data-selection-reply-scope="assistant-message">end</section>';
     const scopes = Array.from(document.querySelectorAll('section')) as HTMLElement[];
     const range = document.createRange();
     range.setStart(scopes[0].firstChild as Text, 0);

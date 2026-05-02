@@ -3,10 +3,10 @@ import {
   listRecoverableWebLiveConversationRuns as listRecoverableWebLiveConversationRunsLocal,
   listRecoverableWebLiveConversationRunsFromDaemon,
   pingDaemon,
-  saveWebLiveConversationRunState,
-  syncWebLiveConversationRunState,
   type RecoverableWebLiveConversationRun,
+  saveWebLiveConversationRunState,
   type SyncWebLiveConversationRunRequestInput,
+  syncWebLiveConversationRunState,
   type WebLiveConversationPendingOperation,
   type WebLiveConversationPreludeMessage,
   type WebLiveConversationPromptImage,
@@ -27,11 +27,13 @@ function isDaemonUnavailable(error: unknown): boolean {
   }
 
   const message = error.message.toLowerCase();
-  return message.includes('enoent')
-    || message.includes('econnrefused')
-    || message.includes('timed out')
-    || message.includes('closed without response')
-    || message.includes('unknown request type');
+  return (
+    message.includes('enoent') ||
+    message.includes('econnrefused') ||
+    message.includes('timed out') ||
+    message.includes('closed without response') ||
+    message.includes('unknown request type')
+  );
 }
 
 export { createWebLiveConversationRunId };

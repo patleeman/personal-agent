@@ -1,3 +1,7 @@
+import type { ConversationAutoModeState } from './conversationAutoMode.js';
+import { readSessionDetailForRoute } from './conversationService.js';
+import { inlineConversationSessionDetailAssetsCapability } from './conversationSessionAssetCapability.js';
+import { readConversationSessionMetaCapability } from './conversationSessionCapability.js';
 import type {
   LiveContextUsage,
   LiveSessionPresenceState,
@@ -7,10 +11,6 @@ import type {
   SseEvent,
 } from './liveSessions.js';
 import { readLiveSessionStateSnapshot } from './liveSessions.js';
-import type { ConversationAutoModeState } from './conversationAutoMode.js';
-import { readConversationSessionMetaCapability } from './conversationSessionCapability.js';
-import { inlineConversationSessionDetailAssetsCapability } from './conversationSessionAssetCapability.js';
-import { readSessionDetailForRoute } from './conversationService.js';
 
 export interface DesktopConversationMessageBlock {
   type: 'user' | 'text' | 'context' | 'summary' | 'thinking' | 'tool_use' | 'image' | 'error';
@@ -120,10 +120,7 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
 
 const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
 
-function findLastToolUseIndex(
-  blocks: DesktopConversationMessageBlock[],
-  toolCallId: string,
-): number {
+function findLastToolUseIndex(blocks: DesktopConversationMessageBlock[], toolCallId: string): number {
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index];
     if (block?.type === 'tool_use' && block._toolCallId === toolCallId) {
@@ -176,7 +173,13 @@ function displayBlockToMessageBlock(block: {
 }): DesktopConversationMessageBlock {
   switch (block.type) {
     case 'user':
-      return { type: 'user', id: block.id, text: block.text ?? '', images: Array.isArray(block.images) ? block.images as DesktopConversationMessageBlock['images'] : undefined, ts: block.ts };
+      return {
+        type: 'user',
+        id: block.id,
+        text: block.text ?? '',
+        images: Array.isArray(block.images) ? (block.images as DesktopConversationMessageBlock['images']) : undefined,
+        ts: block.ts,
+      };
     case 'text':
       return { type: 'text', id: block.id, text: block.text ?? '', ts: block.ts };
     case 'context':
@@ -184,7 +187,15 @@ function displayBlockToMessageBlock(block: {
     case 'thinking':
       return { type: 'thinking', id: block.id, text: block.text ?? '', ts: block.ts };
     case 'summary':
-      return { type: 'summary', id: block.id, kind: block.kind, title: block.title, text: block.text ?? '', detail: block.detail, ts: block.ts };
+      return {
+        type: 'summary',
+        id: block.id,
+        kind: block.kind,
+        title: block.title,
+        text: block.text ?? '',
+        detail: block.detail,
+        ts: block.ts,
+      };
     case 'tool_use':
       return {
         type: 'tool_use',
@@ -218,9 +229,7 @@ function displayBlockToMessageBlock(block: {
   }
 }
 
-export function createDesktopConversationStreamStateFromSnapshot(
-  snapshot: LiveSessionStateSnapshot,
-): DesktopConversationStreamState {
+export function createDesktopConversationStreamStateFromSnapshot(snapshot: LiveSessionStateSnapshot): DesktopConversationStreamState {
   return {
     blocks: snapshot.blocks.map((block) => displayBlockToMessageBlock(block)),
     blockOffset: snapshot.blockOffset,
@@ -241,10 +250,7 @@ export function createDesktopConversationStreamStateFromSnapshot(
   };
 }
 
-export function applyDesktopConversationStreamEvent(
-  prev: DesktopConversationStreamState,
-  event: SseEvent,
-): DesktopConversationStreamState {
+export function applyDesktopConversationStreamEvent(prev: DesktopConversationStreamState, event: SseEvent): DesktopConversationStreamState {
   const blocks = [...prev.blocks];
 
   switch (event.type) {
@@ -285,9 +291,11 @@ export function applyDesktopConversationStreamEvent(
     case 'user_message': {
       const nextBlock = displayBlockToMessageBlock(event.block);
       const last = blocks.at(-1);
-      const sameUserBlock = last?.type === 'user' && nextBlock.type === 'user'
-        && (last.text ?? '') === (nextBlock.text ?? '')
-        && desktopUserBlockImagesMatch(last.images ?? [], nextBlock.images ?? []);
+      const sameUserBlock =
+        last?.type === 'user' &&
+        nextBlock.type === 'user' &&
+        (last.text ?? '') === (nextBlock.text ?? '') &&
+        desktopUserBlockImagesMatch(last.images ?? [], nextBlock.images ?? []);
       if (sameUserBlock) {
         blocks[blocks.length - 1] = nextBlock;
       } else {
@@ -365,9 +373,7 @@ export function applyDesktopConversationStreamEvent(
       if (index >= 0) {
         const block = blocks[index];
         const partialResult = event.partialResult as { content?: Array<{ text?: string }> } | string | undefined;
-        const partialText = typeof partialResult === 'string'
-          ? partialResult
-          : partialResult?.content?.[0]?.text ?? '';
+        const partialText = typeof partialResult === 'string' ? partialResult : (partialResult?.content?.[0]?.text ?? '');
         blocks[index] = {
           ...block,
           output: `${block.output ?? ''}${partialText}`,
@@ -427,15 +433,19 @@ function desktopUserBlockImagesMatch(
   previousImages: NonNullable<DesktopConversationMessageBlock['images']>,
   nextImages: NonNullable<DesktopConversationMessageBlock['images']>,
 ): boolean {
-  return previousImages.length === nextImages.length
-    && nextImages.every((image, index) => {
+  return (
+    previousImages.length === nextImages.length &&
+    nextImages.every((image, index) => {
       const previousImage = previousImages[index];
-      return Boolean(previousImage)
-        && (previousImage.src ?? '') === (image.src ?? '')
-        && (previousImage.mimeType?.trim().toLowerCase() ?? '') === (image.mimeType?.trim().toLowerCase() ?? '')
-        && (previousImage.caption ?? '') === (image.caption ?? '')
-        && (previousImage.alt ?? '') === (image.alt ?? '');
-    });
+      return (
+        Boolean(previousImage) &&
+        (previousImage.src ?? '') === (image.src ?? '') &&
+        (previousImage.mimeType?.trim().toLowerCase() ?? '') === (image.mimeType?.trim().toLowerCase() ?? '') &&
+        (previousImage.caption ?? '') === (image.caption ?? '') &&
+        (previousImage.alt ?? '') === (image.alt ?? '')
+      );
+    })
+  );
 }
 
 export async function readDesktopConversationState(input: {
@@ -447,14 +457,13 @@ export async function readDesktopConversationState(input: {
   if (!conversationId) {
     throw new Error('conversationId required');
   }
-  const tailBlocks = typeof input.tailBlocks === 'number' && Number.isSafeInteger(input.tailBlocks) && input.tailBlocks > 0
-    ? Math.min(1000, input.tailBlocks)
-    : undefined;
+  const tailBlocks =
+    typeof input.tailBlocks === 'number' && Number.isSafeInteger(input.tailBlocks) && input.tailBlocks > 0
+      ? Math.min(1000, input.tailBlocks)
+      : undefined;
 
   const sessionMeta = readConversationSessionMetaCapability(conversationId);
-  const liveSession = sessionMeta?.isLive
-    ? readLiveSessionStateSnapshot(conversationId, tailBlocks)
-    : null;
+  const liveSession = sessionMeta?.isLive ? readLiveSessionStateSnapshot(conversationId, tailBlocks) : null;
 
   if (liveSession && sessionMeta) {
     return {

@@ -23,10 +23,7 @@ export type ChatRenderItem =
   | { type: 'message'; block: MessageBlock; index: number }
   | { type: 'trace_cluster'; blocks: TraceConversationBlock[]; startIndex: number; endIndex: number; summary: TraceClusterSummary };
 
-function addSummaryCategory(
-  categories: Map<string, TraceClusterSummaryCategory>,
-  category: Omit<TraceClusterSummaryCategory, 'count'>,
-) {
+function addSummaryCategory(categories: Map<string, TraceClusterSummaryCategory>, category: Omit<TraceClusterSummaryCategory, 'count'>) {
   const current = categories.get(category.key);
   if (current) {
     current.count += 1;
@@ -43,10 +40,9 @@ function isTraceConversationBlock(block: MessageBlock): block is TraceConversati
     case 'error':
       return true;
     case 'tool_use':
-      return block.tool !== 'artifact'
-        && block.tool !== 'checkpoint'
-        && block.tool !== 'ask_user_question'
-        && !isTerminalBashToolBlock(block);
+      return (
+        block.tool !== 'artifact' && block.tool !== 'checkpoint' && block.tool !== 'ask_user_question' && !isTerminalBashToolBlock(block)
+      );
     default:
       return false;
   }
@@ -141,4 +137,3 @@ export function buildChatRenderItems(messages: MessageBlock[]): ChatRenderItem[]
   flushTraceBlocks();
   return items;
 }
-

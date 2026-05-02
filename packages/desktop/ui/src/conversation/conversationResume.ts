@@ -17,10 +17,12 @@ function hasPendingConversationOperation(run: DurableRunRecord | null | undefine
   const payload = isRecord(run?.checkpoint?.payload) ? run.checkpoint.payload : undefined;
   const pendingOperation = payload?.pendingOperation;
 
-  return isRecord(pendingOperation)
-    && pendingOperation.type === 'prompt'
-    && typeof pendingOperation.text === 'string'
-    && pendingOperation.text.trim().length > 0;
+  return (
+    isRecord(pendingOperation) &&
+    pendingOperation.type === 'prompt' &&
+    typeof pendingOperation.text === 'string' &&
+    pendingOperation.text.trim().length > 0
+  );
 }
 
 export function didConversationStopWithError(message: MessageBlock | null | undefined): boolean {

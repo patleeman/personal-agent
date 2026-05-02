@@ -1,13 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  getPromptCatalogRoot,
-  readPromptCatalogEntry,
-  renderPromptCatalogTemplate,
-  requirePromptCatalogEntry,
-} from './prompt-catalog.js';
+
+import { getPromptCatalogRoot, readPromptCatalogEntry, renderPromptCatalogTemplate, requirePromptCatalogEntry } from './prompt-catalog.js';
 
 const tempDirs: string[] = [];
 
@@ -35,12 +32,7 @@ describe('prompt catalog helpers', () => {
   });
 
   it('renders template placeholders and collapses extra blank lines', () => {
-    const rendered = renderPromptCatalogTemplate([
-      'Header',
-      '{{ section_one }}',
-      '{{ section_two }}',
-      'Footer',
-    ].join('\n'), {
+    const rendered = renderPromptCatalogTemplate(['Header', '{{ section_one }}', '{{ section_two }}', 'Footer'].join('\n'), {
       section_one: 'First block',
       section_two: '',
     });
@@ -49,10 +41,7 @@ describe('prompt catalog helpers', () => {
   });
 
   it('renders nunjucks conditional logic', () => {
-    const rendered = renderPromptCatalogTemplate([
-      'Header',
-      '{% if include_footer %}Footer{% endif %}',
-    ].join('\n'), {
+    const rendered = renderPromptCatalogTemplate(['Header', '{% if include_footer %}Footer{% endif %}'].join('\n'), {
       include_footer: true,
     });
 

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   applyWebSecurityHeaders,
   createInMemoryRateLimit,
@@ -8,14 +9,14 @@ import {
   resolveRequestOrigin,
 } from './webSecurity.js';
 
-function createRequest(input: {
-  method?: string;
-  protocol?: string;
-  headers?: Record<string, string | undefined>;
-} = {}): Request {
-  const headers = Object.fromEntries(
-    Object.entries(input.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]),
-  );
+function createRequest(
+  input: {
+    method?: string;
+    protocol?: string;
+    headers?: Record<string, string | undefined>;
+  } = {},
+): Request {
+  const headers = Object.fromEntries(Object.entries(input.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
 
   return {
     method: input.method ?? 'GET',
@@ -61,28 +62,34 @@ afterEach(() => {
 
 describe('resolveRequestOrigin', () => {
   it('prefers forwarded host and protocol when present', () => {
-    expect(resolveRequestOrigin({
-      host: '127.0.0.1:3742',
-      protocol: 'http',
-      forwardedHost: 'agent.tail.ts.net',
-      forwardedProto: 'https',
-    })).toBe('https://agent.tail.ts.net');
+    expect(
+      resolveRequestOrigin({
+        host: '127.0.0.1:3742',
+        protocol: 'http',
+        forwardedHost: 'agent.tail.ts.net',
+        forwardedProto: 'https',
+      }),
+    ).toBe('https://agent.tail.ts.net');
   });
 
   it('uses the first forwarded token and normalizes casing', () => {
-    expect(resolveRequestOrigin({
-      host: '127.0.0.1:3741',
-      protocol: 'http',
-      forwardedHost: ' Agent.Tail.Ts.Net:443 , ignored.example ',
-      forwardedProto: ' HTTPS:, http ',
-    })).toBe('https://agent.tail.ts.net:443');
+    expect(
+      resolveRequestOrigin({
+        host: '127.0.0.1:3741',
+        protocol: 'http',
+        forwardedHost: ' Agent.Tail.Ts.Net:443 , ignored.example ',
+        forwardedProto: ' HTTPS:, http ',
+      }),
+    ).toBe('https://agent.tail.ts.net:443');
   });
 
   it('falls back to direct host and protocol', () => {
-    expect(resolveRequestOrigin({
-      host: '127.0.0.1:3741',
-      protocol: 'http',
-    })).toBe('http://127.0.0.1:3741');
+    expect(
+      resolveRequestOrigin({
+        host: '127.0.0.1:3741',
+        protocol: 'http',
+      }),
+    ).toBe('http://127.0.0.1:3741');
   });
 
   it('returns null when host or protocol are missing', () => {
@@ -198,10 +205,7 @@ describe('enforceSameOriginUnsafeRequests', () => {
 
 describe('createInMemoryRateLimit', () => {
   it('tracks hits per key and drops requests outside the window', () => {
-    vi.spyOn(Date, 'now')
-      .mockReturnValueOnce(1_000)
-      .mockReturnValueOnce(1_050)
-      .mockReturnValueOnce(2_500);
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_050).mockReturnValueOnce(2_500);
 
     const handler = createInMemoryRateLimit({
       windowMs: 1_000,
@@ -218,9 +222,7 @@ describe('createInMemoryRateLimit', () => {
   });
 
   it('rejects requests over the limit and returns retry metadata', () => {
-    vi.spyOn(Date, 'now')
-      .mockReturnValueOnce(1_000)
-      .mockReturnValueOnce(1_600);
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_600);
 
     const handler = createInMemoryRateLimit({
       windowMs: 1_000,

@@ -41,7 +41,9 @@ export function ConversationSavedHeader({
             </button>
           </h1>
         ) : (
-          <h1 className="max-w-full break-words text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary sm:text-[34px]">{title}</h1>
+          <h1 className="max-w-full break-words text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary sm:text-[34px]">
+            {title}
+          </h1>
         )}
       </div>
       {cwdEditing && (
@@ -76,9 +78,7 @@ export function ConversationSavedHeader({
           </button>
         </form>
       )}
-      {cwdError && (
-        <p className="text-[11px] text-danger/80">{cwdError}</p>
-      )}
+      {cwdError && <p className="text-[11px] text-danger/80">{cwdError}</p>}
     </div>
   );
 }

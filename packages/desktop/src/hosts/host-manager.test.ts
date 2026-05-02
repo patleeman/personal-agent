@@ -59,9 +59,7 @@ describe('HostManager', () => {
       version: 2,
       openWindowOnLaunch: true,
       windowState: { width: 1440, height: 960 },
-      hosts: [
-        { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'user@gpu-box' },
-      ],
+      hosts: [{ id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'user@gpu-box' }],
     };
     mocks.loadDesktopConfig.mockImplementation(() => config);
     mocks.saveDesktopConfig.mockImplementation((next) => {
@@ -115,12 +113,14 @@ describe('HostManager', () => {
       sshTarget: 'user@bender',
     });
 
-    expect(mocks.saveDesktopConfig).toHaveBeenCalledWith(expect.objectContaining({
-      hosts: expect.arrayContaining([
-        expect.objectContaining({ id: 'ssh-1' }),
-        expect.objectContaining({ id: 'ssh-2', sshTarget: 'user@bender' }),
-      ]),
-    }));
+    expect(mocks.saveDesktopConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hosts: expect.arrayContaining([
+          expect.objectContaining({ id: 'ssh-1' }),
+          expect.objectContaining({ id: 'ssh-2', sshTarget: 'user@bender' }),
+        ]),
+      }),
+    );
 
     await expect(manager.saveHost({ id: 'local', label: 'Local', kind: 'local' })).rejects.toThrow('Only SSH remotes');
   });

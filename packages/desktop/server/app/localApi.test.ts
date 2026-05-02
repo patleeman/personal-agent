@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./bootstrap.js', async () => {
@@ -21,8 +22,8 @@ vi.mock('@personal-agent/core', async () => {
   };
 });
 
-import { dispatchDesktopLocalApiRequest, normalizeDesktopLocalApiTailBlocks, rollbackDesktopConversation } from './localApi.js';
 import { startConversationRecovery } from './bootstrap.js';
+import { dispatchDesktopLocalApiRequest, normalizeDesktopLocalApiTailBlocks, rollbackDesktopConversation } from './localApi.js';
 
 function readJsonBody(response: Awaited<ReturnType<typeof dispatchDesktopLocalApiRequest>>) {
   return JSON.parse(Buffer.from(response.body).toString('utf-8')) as Record<string, unknown>;
@@ -36,15 +37,19 @@ describe('desktop local API conversation actions', () => {
   });
 
   it('rejects unsafe rollback turn counts before resolving conversation state', async () => {
-    await expect(rollbackDesktopConversation({
-      conversationId: 'conversation-1',
-      numTurns: Number.MAX_SAFE_INTEGER + 1,
-    })).rejects.toThrow('numTurns must be a positive integer.');
+    await expect(
+      rollbackDesktopConversation({
+        conversationId: 'conversation-1',
+        numTurns: Number.MAX_SAFE_INTEGER + 1,
+      }),
+    ).rejects.toThrow('numTurns must be a positive integer.');
 
-    await expect(rollbackDesktopConversation({
-      conversationId: 'conversation-1',
-      numTurns: Number.MAX_SAFE_INTEGER,
-    })).rejects.toThrow('numTurns must be a positive integer.');
+    await expect(
+      rollbackDesktopConversation({
+        conversationId: 'conversation-1',
+        numTurns: Number.MAX_SAFE_INTEGER,
+      }),
+    ).rejects.toThrow('numTurns must be a positive integer.');
   });
 });
 
@@ -73,19 +78,21 @@ describe('desktop local API vault routes', () => {
       path: '/api/vault/tree',
     });
 
-    expect(startConversationRecovery).toHaveBeenCalledWith(expect.objectContaining({
-      isLive: expect.any(Function),
-      resumeSession: expect.any(Function),
-      queuePromptContext: expect.any(Function),
-      promptSession: expect.any(Function),
-    }));
+    expect(startConversationRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isLive: expect.any(Function),
+        resumeSession: expect.any(Function),
+        queuePromptContext: expect.any(Function),
+        promptSession: expect.any(Function),
+      }),
+    );
     expect(treeResponse.statusCode).toBe(200);
-    expect(readJsonBody(treeResponse)).toEqual(expect.objectContaining({
-      root: tempRoot,
-      entries: expect.arrayContaining([
-        expect.objectContaining({ id: 'notes/', kind: 'folder', name: 'notes' }),
-      ]),
-    }));
+    expect(readJsonBody(treeResponse)).toEqual(
+      expect.objectContaining({
+        root: tempRoot,
+        entries: expect.arrayContaining([expect.objectContaining({ id: 'notes/', kind: 'folder', name: 'notes' })]),
+      }),
+    );
 
     const writeResponse = await dispatchDesktopLocalApiRequest({
       method: 'PUT',
@@ -97,11 +104,13 @@ describe('desktop local API vault routes', () => {
     });
 
     expect(writeResponse.statusCode).toBe(200);
-    expect(readJsonBody(writeResponse)).toEqual(expect.objectContaining({
-      id: 'notes/new-note.md',
-      kind: 'file',
-      name: 'new-note.md',
-    }));
+    expect(readJsonBody(writeResponse)).toEqual(
+      expect.objectContaining({
+        id: 'notes/new-note.md',
+        kind: 'file',
+        name: 'new-note.md',
+      }),
+    );
     expect(readFileSync(join(tempRoot, 'notes', 'new-note.md'), 'utf-8')).toBe('# New note\n');
 
     const assetResponse = await dispatchDesktopLocalApiRequest({

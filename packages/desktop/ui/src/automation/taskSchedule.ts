@@ -49,13 +49,15 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   const second = Number(match[6]);
   const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second &&
+    date.getUTCMilliseconds() === millisecond
+  );
 }
 
 function parseNumberField(value: string, min: number, max: number): number | null {
@@ -316,7 +318,9 @@ function humanizeCronExpression(cron: string): string {
     case 'hourly':
       return parsed.minute === 0 ? 'every hour on the hour' : `every hour at :${pad2(parsed.minute)}`;
     case 'interval':
-      return parsed.minute === 0 ? `every ${parsed.intervalHours}h on the hour` : `every ${parsed.intervalHours}h at :${pad2(parsed.minute)}`;
+      return parsed.minute === 0
+        ? `every ${parsed.intervalHours}h on the hour`
+        : `every ${parsed.intervalHours}h at :${pad2(parsed.minute)}`;
     case 'daily':
       return `daily at ${formatTime(parsed.hour, parsed.minute)}`;
     case 'weekdays':

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import type { MessageBlock } from '../shared/types';
 import {
   collectConversationRunMentions,
   createConversationLiveRunId,
@@ -6,12 +8,13 @@ import {
   getConversationRunIdFromSearch,
   setConversationRunIdInSearch,
 } from './conversationRuns.js';
-import type { MessageBlock } from '../shared/types';
 
 describe('conversationRuns helpers', () => {
   it('reads and writes the selected run search param', () => {
     expect(getConversationRunIdFromSearch('?run=run-code-review-2026-03-13-abcd1234')).toBe('run-code-review-2026-03-13-abcd1234');
-    expect(setConversationRunIdInSearch('?artifact=demo', 'run-code-review-2026-03-13-abcd1234')).toBe('?artifact=demo&run=run-code-review-2026-03-13-abcd1234');
+    expect(setConversationRunIdInSearch('?artifact=demo', 'run-code-review-2026-03-13-abcd1234')).toBe(
+      '?artifact=demo&run=run-code-review-2026-03-13-abcd1234',
+    );
     expect(setConversationRunIdInSearch('?artifact=demo&run=run-code-review-2026-03-13-abcd1234', null)).toBe('?artifact=demo');
   });
 
@@ -48,9 +51,7 @@ describe('conversationRuns helpers', () => {
       output: 'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\n',
     };
 
-    expect(extractDurableRunIdsFromBlock(block)).toEqual([
-      'run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
-    ]);
+    expect(extractDurableRunIdsFromBlock(block)).toEqual(['run-code-review-2026-03-13T17-42-11-000Z-abcd1234']);
   });
 
   it('collects unique run mentions across a conversation', () => {
@@ -60,7 +61,8 @@ describe('conversationRuns helpers', () => {
         ts: '2026-03-13T18:00:00.000Z',
         tool: 'bash',
         input: { action: 'start_agent', taskSlug: 'code-review', prompt: 'review this diff' },
-        output: 'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\nInspect    runId=run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
+        output:
+          'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\nInspect    runId=run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
       },
       {
         type: 'text',

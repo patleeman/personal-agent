@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ComposerAttachmentShelf } from './ComposerAttachmentShelf';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -83,13 +84,15 @@ describe('ComposerAttachmentShelf', () => {
 
   it('opens an image preview for drawing attachments', () => {
     const { container } = renderShelf({
-      drawingAttachments: [{
-        localId: 'drawing-1',
-        title: 'Wireframe',
-        revision: 3,
-        dirty: false,
-        previewUrl: 'data:image/png;base64,ZmFrZQ==',
-      }],
+      drawingAttachments: [
+        {
+          localId: 'drawing-1',
+          title: 'Wireframe',
+          revision: 3,
+          dirty: false,
+          previewUrl: 'data:image/png;base64,ZmFrZQ==',
+        },
+      ],
     });
 
     click(container.querySelector('button[aria-label="Preview Wireframe (rev 3)"]'));
@@ -102,12 +105,14 @@ describe('ComposerAttachmentShelf', () => {
     const file = new File(['preview'], 'Screenshot 2026-04-22.png', { type: 'image/png' });
     const { container, onRemoveAttachment, onRemoveDrawingAttachment } = renderShelf({
       attachments: [file],
-      drawingAttachments: [{
-        localId: 'drawing-1',
-        title: 'Wireframe',
-        dirty: true,
-        previewUrl: 'data:image/png;base64,ZmFrZQ==',
-      }],
+      drawingAttachments: [
+        {
+          localId: 'drawing-1',
+          title: 'Wireframe',
+          dirty: true,
+          previewUrl: 'data:image/png;base64,ZmFrZQ==',
+        },
+      ],
     });
 
     click(container.querySelector('button[title="Remove Screenshot 2026-04-22.png"]'));

@@ -1,13 +1,9 @@
-import { DESKTOP_APP_EVENTS_EVENT, getDesktopBridge } from './desktopBridge';
 import type { DesktopAppEvent } from '../shared/types';
+import { DESKTOP_APP_EVENTS_EVENT, getDesktopBridge } from './desktopBridge';
 
 interface DesktopAppEventsEnvelope {
   subscriptionId: string;
-  event:
-    | { type: 'open' }
-    | { type: 'event'; event: DesktopAppEvent }
-    | { type: 'error'; message: string }
-    | { type: 'close' };
+  event: { type: 'open' } | { type: 'event'; event: DesktopAppEvent } | { type: 'error'; message: string } | { type: 'close' };
 }
 
 interface DesktopAppEventsListener {

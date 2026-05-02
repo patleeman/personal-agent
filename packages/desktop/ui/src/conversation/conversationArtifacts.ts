@@ -66,21 +66,19 @@ export function readArtifactPresentation(block: Extract<MessageBlock, { type: 't
   };
 
   const action = details?.action ?? (isArtifactAction(input.action) ? input.action : undefined);
-  const artifactId = typeof details?.artifactId === 'string' && details.artifactId.trim().length > 0
-    ? details.artifactId.trim()
-    : typeof input.artifactId === 'string' && input.artifactId.trim().length > 0
-      ? input.artifactId.trim()
-      : null;
-  const title = typeof details?.title === 'string' && details.title.trim().length > 0
-    ? details.title.trim()
-    : typeof input.title === 'string' && input.title.trim().length > 0
-      ? input.title.trim()
-      : artifactId;
-  const kind = isArtifactKind(details?.kind)
-    ? details.kind
-    : isArtifactKind(input.kind)
-      ? input.kind
-      : null;
+  const artifactId =
+    typeof details?.artifactId === 'string' && details.artifactId.trim().length > 0
+      ? details.artifactId.trim()
+      : typeof input.artifactId === 'string' && input.artifactId.trim().length > 0
+        ? input.artifactId.trim()
+        : null;
+  const title =
+    typeof details?.title === 'string' && details.title.trim().length > 0
+      ? details.title.trim()
+      : typeof input.title === 'string' && input.title.trim().length > 0
+        ? input.title.trim()
+        : artifactId;
+  const kind = isArtifactKind(details?.kind) ? details.kind : isArtifactKind(input.kind) ? input.kind : null;
 
   if (!action || !artifactId || !title || !kind || (action !== 'save' && action !== 'get')) {
     return null;
@@ -91,15 +89,14 @@ export function readArtifactPresentation(block: Extract<MessageBlock, { type: 't
     artifactId,
     title,
     kind,
-    revision: typeof details?.revision === 'number'
-      && Number.isSafeInteger(details.revision)
-      && details.revision > 0
-      && details.revision <= MAX_ARTIFACT_REVISION
-      ? details.revision
-      : undefined,
+    revision:
+      typeof details?.revision === 'number' &&
+      Number.isSafeInteger(details.revision) &&
+      details.revision > 0 &&
+      details.revision <= MAX_ARTIFACT_REVISION
+        ? details.revision
+        : undefined,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,
-    openRequested: typeof details?.openRequested === 'boolean'
-      ? details.openRequested
-      : input.open === true,
+    openRequested: typeof details?.openRequested === 'boolean' ? details.openRequested : input.open === true,
   };
 }

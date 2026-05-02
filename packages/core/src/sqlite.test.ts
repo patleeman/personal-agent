@@ -21,7 +21,11 @@ describe('openSqliteDatabase', () => {
     const prepare = vi.fn(() => ({ run: vi.fn(), get: vi.fn(), all: vi.fn() }));
     const close = vi.fn();
     const pragma = vi.fn();
-    const transaction = vi.fn((fn: (...args: unknown[]) => void) => (...args: unknown[]) => fn(...args));
+    const transaction = vi.fn(
+      (fn: (...args: unknown[]) => void) =>
+        (...args: unknown[]) =>
+          fn(...args),
+    );
     const seenPaths: string[] = [];
     const values: string[] = [];
 
@@ -94,13 +98,7 @@ describe('openSqliteDatabase', () => {
     })('ok');
     db.close();
 
-    expect(calls).toEqual([
-      'PRAGMA foreign_keys = ON',
-      'BEGIN',
-      'body:ok',
-      'COMMIT',
-      'close',
-    ]);
+    expect(calls).toEqual(['PRAGMA foreign_keys = ON', 'BEGIN', 'body:ok', 'COMMIT', 'close']);
   });
 
   it('rolls back and rethrows when the emulated transaction body fails', async () => {

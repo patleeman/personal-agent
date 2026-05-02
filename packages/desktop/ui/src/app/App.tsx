@@ -1,9 +1,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
+
 import { api } from '../client/api';
-import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
-import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { Layout } from '../components/Layout';
+import { bumpConversationScopedEventVersions, INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../conversation/conversationEventVersions';
 import { resolveConversationIndexRedirect } from '../conversation/conversationRoutes';
 import {
   hasDraftConversationAttachments,
@@ -11,8 +11,17 @@ import {
   readDraftConversationComposer,
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
+import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
 import { useConversations } from '../hooks/useConversations';
+import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
+import {
+  mergeSessionSnapshotPreservingOrder,
+  removeSessionMetaPreservingOrder,
+  replaceSessionMetaPreservingOrder,
+} from '../session/sessionListState';
 import { fetchSessionsSnapshot } from '../session/sessionSnapshot';
+import type { DaemonState, DesktopAppEvent, DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
+import { ThemeProvider } from '../ui-state/theme';
 import {
   AppDataContext,
   AppEventsContext,
@@ -22,52 +31,36 @@ import {
   SystemStatusContext,
   useAppData,
 } from './contexts';
-import {
-  INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
-  bumpConversationScopedEventVersions,
-} from '../conversation/conversationEventVersions';
-import {
-  mergeSessionSnapshotPreservingOrder,
-  removeSessionMetaPreservingOrder,
-  replaceSessionMetaPreservingOrder,
-} from '../session/sessionListState';
-import { ThemeProvider } from '../ui-state/theme';
-import type {
-  DaemonState,
-  DesktopAppEvent,
-  DurableRunListResult,
-  ScheduledTaskSummary,
-  SessionMeta,
-} from '../shared/types';
 
 function ConversationsRouteRedirect() {
   const { openIds, pinnedIds } = useConversations();
   const redirectPath = resolveConversationIndexRedirect({
     openIds,
     pinnedIds,
-    hasDraft: readDraftConversationComposer().trim().length > 0
-      || readDraftConversationCwd().trim().length > 0
-      || hasDraftConversationAttachments()
-      || hasDraftConversationContextDocs(),
+    hasDraft:
+      readDraftConversationComposer().trim().length > 0 ||
+      readDraftConversationCwd().trim().length > 0 ||
+      hasDraftConversationAttachments() ||
+      hasDraftConversationContextDocs(),
   });
 
   return <Navigate to={redirectPath} replace />;
 }
 
 const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('../pages/TasksPage').then((module) => ({ default: module.TasksPage })));
-const ConversationPage = lazyRouteWithRecovery('conversation-page', () => import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
-const SettingsPage = lazyRouteWithRecovery('settings-page', () => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
-const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () => import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })));
+const ConversationPage = lazyRouteWithRecovery('conversation-page', () =>
+  import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })),
+);
+const SettingsPage = lazyRouteWithRecovery('settings-page', () =>
+  import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
+);
+const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () =>
+  import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })),
+);
 
 function suspendRoute(element: React.ReactNode) {
   return (
-    <Suspense
-      fallback={(
-        <div className="flex h-full items-center justify-center px-6 text-[12px] text-dim">
-          Loading…
-        </div>
-      )}
-    >
+    <Suspense fallback={<div className="flex h-full items-center justify-center px-6 text-[12px] text-dim">Loading…</div>}>
       {element}
     </Suspense>
   );
@@ -88,7 +81,6 @@ export function App() {
   const [conversationVersions, setConversationVersions] = useState(INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS);
   const [sseStatus, setSseStatus] = useState<'connecting' | 'open' | 'reconnecting' | 'offline'>('connecting');
 
-
   const projects = null;
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
@@ -105,7 +97,6 @@ export function App() {
       return next;
     });
   }, []);
-
 
   const setProjects = useCallback(() => {}, []);
 
@@ -131,29 +122,33 @@ export function App() {
     setConversationVersions((previous) => bumpConversationScopedEventVersions(previous, sessionId));
   }, []);
 
-  const refreshSessionMeta = useCallback((sessionId: string) => {
-    const inflight = inflightSessionMetaRefreshesRef.current.get(sessionId);
-    if (inflight) {
-      return inflight;
-    }
+  const refreshSessionMeta = useCallback(
+    (sessionId: string) => {
+      const inflight = inflightSessionMetaRefreshesRef.current.get(sessionId);
+      if (inflight) {
+        return inflight;
+      }
 
-    const request = api.sessionMeta(sessionId)
-      .then((session) => {
-        applySessionMetaUpdate(sessionId, session);
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        if (/not found/i.test(message)) {
-          applySessionMetaUpdate(sessionId, null);
-        }
-      })
-      .finally(() => {
-        inflightSessionMetaRefreshesRef.current.delete(sessionId);
-      });
+      const request = api
+        .sessionMeta(sessionId)
+        .then((session) => {
+          applySessionMetaUpdate(sessionId, session);
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if (/not found/i.test(message)) {
+            applySessionMetaUpdate(sessionId, null);
+          }
+        })
+        .finally(() => {
+          inflightSessionMetaRefreshesRef.current.delete(sessionId);
+        });
 
-    inflightSessionMetaRefreshesRef.current.set(sessionId, request);
-    return request;
-  }, [applySessionMetaUpdate]);
+      inflightSessionMetaRefreshesRef.current.set(sessionId, request);
+      return request;
+    },
+    [applySessionMetaUpdate],
+  );
 
   const setTasks = useCallback((items: ScheduledTaskSummary[]) => {
     setTasksState(items);
@@ -167,56 +162,60 @@ export function App() {
     setDaemonState(state);
   }, []);
 
-  const handleDesktopAppEvent = useCallback((payload: DesktopAppEvent) => {
-    switch (payload.type) {
-      case 'live_title':
-        setTitle(payload.sessionId, payload.title);
-        return;
-      case 'session_meta_changed':
-        bumpConversationVersion(payload.sessionId);
-        void refreshSessionMeta(payload.sessionId);
-        return;
-      case 'session_file_changed':
-        bumpConversationVersion(payload.sessionId);
-        return;
+  const handleDesktopAppEvent = useCallback(
+    (payload: DesktopAppEvent) => {
+      switch (payload.type) {
+        case 'live_title':
+          setTitle(payload.sessionId, payload.title);
+          return;
+        case 'session_meta_changed':
+          bumpConversationVersion(payload.sessionId);
+          void refreshSessionMeta(payload.sessionId);
+          return;
+        case 'session_file_changed':
+          bumpConversationVersion(payload.sessionId);
+          return;
 
-      case 'sessions':
-        setSessions(payload.sessions);
-        return;
-      case 'tasks':
-        setTasks(payload.tasks);
-        return;
-      case 'runs':
-        setRuns(payload.result);
-        return;
-      case 'daemon':
-        setDaemon(payload.state);
-        return;
-      case 'invalidate':
-        if (payload.topics.includes('runs')) {
-          void api.runs()
-            .then((result) => {
-              setRuns(result);
-            })
-            .catch(() => {
-              // Keep the last known snapshot until the next app event or manual refresh.
-            });
-        }
-        setEventVersions((prev) => {
-          const next = { ...prev };
-          for (const topic of payload.topics) {
-            if (topic in next) {
-              const trackedTopic = topic as keyof typeof next;
-              next[trackedTopic] += 1;
-            }
+        case 'sessions':
+          setSessions(payload.sessions);
+          return;
+        case 'tasks':
+          setTasks(payload.tasks);
+          return;
+        case 'runs':
+          setRuns(payload.result);
+          return;
+        case 'daemon':
+          setDaemon(payload.state);
+          return;
+        case 'invalidate':
+          if (payload.topics.includes('runs')) {
+            void api
+              .runs()
+              .then((result) => {
+                setRuns(result);
+              })
+              .catch(() => {
+                // Keep the last known snapshot until the next app event or manual refresh.
+              });
           }
-          return next;
-        });
-        return;
-      default:
-        return;
-    }
-  }, [bumpConversationVersion, refreshSessionMeta, setDaemon, setSessions, setTasks, setTitle]);
+          setEventVersions((prev) => {
+            const next = { ...prev };
+            for (const topic of payload.topics) {
+              if (topic in next) {
+                const trackedTopic = topic as keyof typeof next;
+                next[trackedTopic] += 1;
+              }
+            }
+            return next;
+          });
+          return;
+        default:
+          return;
+      }
+    },
+    [bumpConversationVersion, refreshSessionMeta, setDaemon, setSessions, setTasks, setTitle],
+  );
 
   const bootstrapSnapshots = useCallback(() => {
     void fetchSessionsSnapshot()
@@ -227,7 +226,8 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    void api.tasks()
+    void api
+      .tasks()
       .then((items) => {
         setTasks(items);
       })
@@ -235,7 +235,8 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    void api.runs()
+    void api
+      .runs()
       .then((result) => {
         setRuns(result);
       })
@@ -243,7 +244,8 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    void api.daemon()
+    void api
+      .daemon()
       .then((state) => {
         setDaemon(state);
       })
@@ -275,19 +277,21 @@ export function App() {
       onclose: () => {
         setSseStatus('offline');
       },
-    }).then((localCleanup) => {
-      if (cancelled) {
-        localCleanup();
-        return;
-      }
+    })
+      .then((localCleanup) => {
+        if (cancelled) {
+          localCleanup();
+          return;
+        }
 
-      cleanup = localCleanup;
-    }).catch(() => {
-      if (!cancelled) {
-        setSseStatus('offline');
-        void bootstrapSnapshots();
-      }
-    });
+        cleanup = localCleanup;
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSseStatus('offline');
+          void bootstrapSnapshots();
+        }
+      });
 
     return () => {
       cancelled = true;

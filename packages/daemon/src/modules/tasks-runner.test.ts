@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { CompanionRuntime } from '../companion/types.js';
 import type { RunnableTaskDefinition } from './tasks-runner.js';
 
@@ -207,10 +208,12 @@ describe('runTaskInIsolatedPi', () => {
 
     expect(result.success).toBe(true);
     expect(runtime.createConversation).toHaveBeenCalledWith({ cwd: '/repo/background' });
-    expect(runtime.promptConversation).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'conv-created',
-      text: 'Run nightly checks',
-    }));
+    expect(runtime.promptConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-created',
+        text: 'Run nightly checks',
+      }),
+    );
   });
 
   it('fails clearly when the backend conversation runtime is unavailable', async () => {

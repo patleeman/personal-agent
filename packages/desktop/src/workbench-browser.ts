@@ -1,4 +1,5 @@
-import { BrowserWindow, Menu, WebContentsView, shell, type WebContents } from 'electron';
+import { BrowserWindow, Menu, shell, type WebContents, WebContentsView } from 'electron';
+
 import { readStoredWorkbenchBrowserUrl, writeStoredWorkbenchBrowserUrl } from './state/workbench-browser-state.js';
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com/';
@@ -231,12 +232,16 @@ function cdpRuntimeValue(raw: unknown): unknown {
 }
 
 async function cdpEvaluate(webContents: WebContents, expression: string): Promise<unknown> {
-  return withCdp(webContents, async (send) => cdpRuntimeValue(await send('Runtime.evaluate', {
-    expression,
-    awaitPromise: true,
-    returnByValue: true,
-    userGesture: true,
-  })));
+  return withCdp(webContents, async (send) =>
+    cdpRuntimeValue(
+      await send('Runtime.evaluate', {
+        expression,
+        awaitPromise: true,
+        returnByValue: true,
+        userGesture: true,
+      }),
+    ),
+  );
 }
 
 export class WorkbenchBrowserViewController {
@@ -253,7 +258,13 @@ export class WorkbenchBrowserViewController {
     return Boolean(entry && !entry.view.webContents.isDestroyed());
   }
 
-  setBounds(owner: WebContents, visible: boolean, bounds: WorkbenchBrowserBounds | null, sessionKey?: string | null, deactivate?: boolean): WorkbenchBrowserState | null {
+  setBounds(
+    owner: WebContents,
+    visible: boolean,
+    bounds: WorkbenchBrowserBounds | null,
+    sessionKey?: string | null,
+    deactivate?: boolean,
+  ): WorkbenchBrowserState | null {
     const ownerWindow = BrowserWindow.fromWebContents(owner);
     if (!ownerWindow || ownerWindow.isDestroyed()) {
       return null;
@@ -318,7 +329,9 @@ export class WorkbenchBrowserViewController {
 
   async snapshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserSnapshot> {
     const view = this.requireView(owner, sessionKey);
-    const raw = await cdpEvaluate(view.webContents, `(() => {
+    const raw = await cdpEvaluate(
+      view.webContents,
+      `(() => {
       ${this.pageHelperSource()}
       const title = document.title ? 'Title: ' + document.title + '\n' : '';
       const url = location.href ? 'URL: ' + location.href + '\n' : '';
@@ -340,13 +353,12 @@ export class WorkbenchBrowserViewController {
         };
       }).filter(Boolean);
       return { text: (url + title + body).slice(0, ${MAX_SNAPSHOT_TEXT_LENGTH}), elements };
-    })()`);
+    })()`,
+    );
 
-    const rawSnapshot = raw && typeof raw === 'object' ? raw as { text?: unknown; elements?: unknown } : {};
+    const rawSnapshot = raw && typeof raw === 'object' ? (raw as { text?: unknown; elements?: unknown }) : {};
     const text = typeof rawSnapshot.text === 'string' ? rawSnapshot.text : '';
-    const elements = Array.isArray(rawSnapshot.elements)
-      ? rawSnapshot.elements as WorkbenchBrowserSnapshotElement[]
-      : [];
+    const elements = Array.isArray(rawSnapshot.elements) ? (rawSnapshot.elements as WorkbenchBrowserSnapshotElement[]) : [];
     const entry = this.views.get(this.viewKey(owner.id, sessionKey));
     if (entry) {
       entry.lastSnapshotRevision = entry.browserRevision;
@@ -361,7 +373,9 @@ export class WorkbenchBrowserViewController {
 
   async screenshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserScreenshot> {
     const view = this.requireView(owner, sessionKey);
-    const capture = await withCdp(view.webContents, async (send) => send('Page.captureScreenshot', { format: 'png', fromSurface: true })) as { data?: string };
+    const capture = (await withCdp(view.webContents, async (send) =>
+      send('Page.captureScreenshot', { format: 'png', fromSurface: true }),
+    )) as { data?: string };
     const bounds = view.getBounds();
     return {
       ...getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey))),
@@ -372,7 +386,10 @@ export class WorkbenchBrowserViewController {
     };
   }
 
-  async cdp(owner: WebContents, input: { command?: unknown; continueOnError?: unknown; sessionKey?: string | null }): Promise<WorkbenchBrowserCdpResult> {
+  async cdp(
+    owner: WebContents,
+    input: { command?: unknown; continueOnError?: unknown; sessionKey?: string | null },
+  ): Promise<WorkbenchBrowserCdpResult> {
     const view = this.requireView(owner, input.sessionKey);
     const commands = normalizeWorkbenchBrowserCdpCommands(input.command);
     const continueOnError = input.continueOnError === true;
@@ -567,7 +584,9 @@ export class WorkbenchBrowserViewController {
   }
 
   private async captureCommentTarget(view: WebContentsView, x: number, y: number): Promise<WorkbenchBrowserCommentTarget> {
-    const target = await cdpEvaluate(view.webContents, `(() => {
+    const target = await cdpEvaluate(
+      view.webContents,
+      `(() => {
       ${this.pageHelperSource()}
       const element = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)}) || document.body;
       const rect = element.getBoundingClientRect();
@@ -589,7 +608,8 @@ export class WorkbenchBrowserViewController {
         devicePixelRatio: window.devicePixelRatio || 1,
       };
       return JSON.parse(JSON.stringify(target));
-    })()`);
+    })()`,
+    );
     return target as WorkbenchBrowserCommentTarget;
   }
 
@@ -695,5 +715,4 @@ export class WorkbenchBrowserViewController {
       };
     `;
   }
-
 }

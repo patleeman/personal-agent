@@ -1,18 +1,18 @@
 import type {
+  CancelDurableRunResult,
   DaemonEvent,
   DaemonStatus,
   EmitResult,
-  ListDurableRunsResult,
+  FollowUpDurableRunResult,
   GetDurableRunResult,
-  StartScheduledTaskRunResult,
+  ListDurableRunsResult,
+  ListRecoverableWebLiveConversationRunsResult,
+  ReplayDurableRunResult,
   StartBackgroundRunRequestInput,
   StartBackgroundRunResult,
-  CancelDurableRunResult,
-  ReplayDurableRunResult,
-  FollowUpDurableRunResult,
-  SyncWebLiveConversationRunResult,
+  StartScheduledTaskRunResult,
   SyncWebLiveConversationRunRequestInput,
-  ListRecoverableWebLiveConversationRunsResult,
+  SyncWebLiveConversationRunResult,
 } from './types.js';
 
 export interface EmitRequest {
@@ -241,7 +241,10 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
     ...(callbackConversation
       ? {
           callbackConversation: {
-            conversationId: readRequiredString(callbackConversation.conversationId, 'runs.startBackground callbackConversation.conversationId'),
+            conversationId: readRequiredString(
+              callbackConversation.conversationId,
+              'runs.startBackground callbackConversation.conversationId',
+            ),
             sessionFile: readRequiredString(callbackConversation.sessionFile, 'runs.startBackground callbackConversation.sessionFile'),
             profile: readRequiredString(callbackConversation.profile, 'runs.startBackground callbackConversation.profile'),
             ...(readOptionalString(callbackConversation.repoRoot) ? { repoRoot: readOptionalString(callbackConversation.repoRoot) } : {}),
@@ -280,7 +283,9 @@ function readConversationRunInput(value: unknown): SyncWebLiveConversationRunReq
     profile: readOptionalString(value.profile),
     updatedAt: readOptionalString(value.updatedAt),
     lastError: readOptionalString(value.lastError),
-    ...(pendingOperation !== undefined ? { pendingOperation: pendingOperation as SyncWebLiveConversationRunRequestInput['pendingOperation'] } : {}),
+    ...(pendingOperation !== undefined
+      ? { pendingOperation: pendingOperation as SyncWebLiveConversationRunRequestInput['pendingOperation'] }
+      : {}),
   };
 }
 

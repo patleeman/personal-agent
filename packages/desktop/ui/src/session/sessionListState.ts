@@ -25,10 +25,7 @@ export function mergeSessionSnapshotPreservingOrder(
   return orderedSessions;
 }
 
-export function replaceSessionMetaPreservingOrder(
-  sessions: readonly SessionMeta[],
-  nextSession: SessionMeta,
-): SessionMeta[] {
+export function replaceSessionMetaPreservingOrder(sessions: readonly SessionMeta[], nextSession: SessionMeta): SessionMeta[] {
   const existingIndex = sessions.findIndex((session) => session.id === nextSession.id);
   if (existingIndex === -1) {
     return [...sessions, nextSession];
@@ -43,17 +40,11 @@ export function replaceSessionMetaPreservingOrder(
   return nextSessions;
 }
 
-export function removeSessionMetaPreservingOrder(
-  sessions: readonly SessionMeta[],
-  sessionId: string,
-): SessionMeta[] {
+export function removeSessionMetaPreservingOrder(sessions: readonly SessionMeta[], sessionId: string): SessionMeta[] {
   const existingIndex = sessions.findIndex((session) => session.id === sessionId);
   if (existingIndex === -1) {
     return sessions as SessionMeta[];
   }
 
-  return [
-    ...sessions.slice(0, existingIndex),
-    ...sessions.slice(existingIndex + 1),
-  ];
+  return [...sessions.slice(0, existingIndex), ...sessions.slice(existingIndex + 1)];
 }

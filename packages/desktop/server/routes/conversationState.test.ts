@@ -314,10 +314,13 @@ describe('registerConversationStateRoutes', () => {
       remoteMirror: { status: 'missing', durationMs: 0 },
     });
 
-    await handler({
-      params: { id: 'conversation-1' },
-      query: { tailBlocks: '12' },
-    }, res);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        query: { tailBlocks: '12' },
+      },
+      res,
+    );
 
     expect(readSessionDetailForRouteMock).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
@@ -338,24 +341,34 @@ describe('registerConversationStateRoutes', () => {
     listAllLiveSessionsMock.mockReturnValueOnce([{ id: 'conversation-1', raw: true }]);
     toPublicLiveSessionMetaMock.mockReturnValueOnce({ id: 'conversation-1', title: 'Live title' });
 
-    await handler({
-      params: { id: 'conversation-1' },
-      query: { knownSessionSignature: ' sig-1 ' },
-    }, res);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        query: { knownSessionSignature: ' sig-1 ' },
+      },
+      res,
+    );
 
     expect(readSessionDetailForRouteMock).not.toHaveBeenCalled();
     expect(toPublicLiveSessionMetaMock).toHaveBeenCalledWith({ id: 'conversation-1', raw: true });
-    expect(setServerTimingHeadersMock).toHaveBeenCalledWith(res, expect.any(Array), expect.objectContaining({
-      route: 'conversation-bootstrap',
-      conversationId: 'conversation-1',
-      remoteMirror: { status: 'deferred', durationMs: 0 },
-      sessionRead: null,
-    }));
-    expect(logSlowConversationPerfMock).toHaveBeenCalledWith('conversation bootstrap request', expect.objectContaining({
-      conversationId: 'conversation-1',
-      remoteMirrorStatus: 'deferred',
-      sessionReadLoader: 'signature',
-    }));
+    expect(setServerTimingHeadersMock).toHaveBeenCalledWith(
+      res,
+      expect.any(Array),
+      expect.objectContaining({
+        route: 'conversation-bootstrap',
+        conversationId: 'conversation-1',
+        remoteMirror: { status: 'deferred', durationMs: 0 },
+        sessionRead: null,
+      }),
+    );
+    expect(logSlowConversationPerfMock).toHaveBeenCalledWith(
+      'conversation bootstrap request',
+      expect.objectContaining({
+        conversationId: 'conversation-1',
+        remoteMirrorStatus: 'deferred',
+        sessionReadLoader: 'signature',
+      }),
+    );
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
       sessionDetail: null,
@@ -390,15 +403,18 @@ describe('registerConversationStateRoutes', () => {
       blocks: [{ id: 'block-2' }],
     });
 
-    await handler({
-      params: { id: 'conversation-1' },
-      query: {
-        knownSessionSignature: ' sig-old ',
-        knownBlockOffset: String(Number.MAX_SAFE_INTEGER + 1),
-        knownTotalBlocks: String(Number.MAX_SAFE_INTEGER + 1),
-        knownLastBlockId: ' block-1 ',
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        query: {
+          knownSessionSignature: ' sig-old ',
+          knownBlockOffset: String(Number.MAX_SAFE_INTEGER + 1),
+          knownTotalBlocks: String(Number.MAX_SAFE_INTEGER + 1),
+          knownLastBlockId: ' block-1 ',
+        },
       },
-    }, res);
+      res,
+    );
 
     expect(buildAppendOnlySessionDetailResponseMock).toHaveBeenCalledWith({
       detail: {
@@ -428,10 +444,13 @@ describe('registerConversationStateRoutes', () => {
 
     readSessionDetailForRouteMock.mockRejectedValueOnce(new Error('bootstrap failed'));
 
-    await handler({
-      params: { id: 'conversation-1' },
-      query: {},
-    }, res);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        query: {},
+      },
+      res,
+    );
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'bootstrap failed' });
@@ -455,9 +474,12 @@ describe('registerConversationStateRoutes', () => {
     readConversationModelPreferenceStateByIdMock.mockRejectedValueOnce(new Error('model read failed'));
     const failureRes = createResponse();
     await handler({ params: { id: 'conversation-1' } }, failureRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'model read failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'model read failed',
+      }),
+    );
     expect(failureRes.status).toHaveBeenCalledWith(500);
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'model read failed' });
   });
@@ -476,7 +498,11 @@ describe('registerConversationStateRoutes', () => {
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
     existsSyncMock.mockReturnValueOnce(true);
     SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
-    readConversationAutoModeStateFromSessionManagerMock.mockReturnValueOnce({ enabled: false, stopReason: 'done', updatedAt: '2026-04-12T15:05:00.000Z' });
+    readConversationAutoModeStateFromSessionManagerMock.mockReturnValueOnce({
+      enabled: false,
+      stopReason: 'done',
+      updatedAt: '2026-04-12T15:05:00.000Z',
+    });
     const storedRes = createResponse();
     await handler({ params: { id: 'conversation-1' } }, storedRes);
     expect(SessionManagerOpenMock).toHaveBeenCalledWith('/sessions/conversation-1.json');
@@ -497,7 +523,10 @@ describe('registerConversationStateRoutes', () => {
     setLiveSessionAutoModeStateMock.mockResolvedValueOnce({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:10:00.000Z' });
     const liveRes = createResponse();
     await handler({ params: { id: 'conversation-1' }, body: { enabled: true, surfaceId: 'surface-1' } }, liveRes);
-    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', { enabled: true, surfaceId: 'surface-1' });
+    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', {
+      enabled: true,
+      surfaceId: 'surface-1',
+    });
     expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', { enabled: true });
     expect(liveRes.json).toHaveBeenCalledWith({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:10:00.000Z' });
 
@@ -511,13 +540,19 @@ describe('registerConversationStateRoutes', () => {
     setLiveSessionAutoModeStateMock.mockResolvedValueOnce({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
     const recoveredRes = createResponse();
     await handler({ params: { id: 'conversation-1' }, body: { enabled: true, surfaceId: 'surface-2' } }, recoveredRes);
-    expect(recoverConversationCapabilityMock).toHaveBeenCalledWith('conversation-1', expect.objectContaining({
-      getCurrentProfile: expect.any(Function),
-      buildLiveSessionResourceOptions: expect.any(Function),
-      buildLiveSessionExtensionFactories: expect.any(Function),
-      flushLiveDeferredResumes: expect.any(Function),
-    }));
-    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', { enabled: true, surfaceId: 'surface-2' });
+    expect(recoverConversationCapabilityMock).toHaveBeenCalledWith(
+      'conversation-1',
+      expect.objectContaining({
+        getCurrentProfile: expect.any(Function),
+        buildLiveSessionResourceOptions: expect.any(Function),
+        buildLiveSessionExtensionFactories: expect.any(Function),
+        flushLiveDeferredResumes: expect.any(Function),
+      }),
+    );
+    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', {
+      enabled: true,
+      surfaceId: 'surface-2',
+    });
     expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', { enabled: true });
     expect(recoveredRes.json).toHaveBeenCalledWith({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
 
@@ -552,27 +587,48 @@ describe('registerConversationStateRoutes', () => {
     const handler = patchHandler('/api/conversations/:id/model-preferences');
 
     isLocalLiveMock.mockReturnValueOnce(true);
-    updateLiveSessionModelPreferencesMock.mockResolvedValueOnce({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '', hasExplicitServiceTier: false });
+    updateLiveSessionModelPreferencesMock.mockResolvedValueOnce({
+      conversationId: 'conversation-1',
+      model: 'gpt-5',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
     const liveRes = createResponse();
-    await handler({
-      params: { id: 'conversation-1' },
-      body: { model: 'gpt-5', surfaceId: 'surface-1' },
-    }, liveRes);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        body: { model: 'gpt-5', surfaceId: 'surface-1' },
+      },
+      liveRes,
+    );
     expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', {
       model: 'gpt-5',
       surfaceId: 'surface-1',
     });
     expect(updateLiveSessionModelPreferencesMock).toHaveBeenCalledWith('conversation-1', { model: 'gpt-5' }, [{ id: 'model-1' }]);
-    expect(liveRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '', hasExplicitServiceTier: false });
+    expect(liveRes.json).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      model: 'gpt-5',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
 
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
     SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
-    applyConversationModelPreferencesToSessionManagerMock.mockReturnValueOnce({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '', hasExplicitServiceTier: false });
+    applyConversationModelPreferencesToSessionManagerMock.mockReturnValueOnce({
+      conversationId: 'conversation-1',
+      model: 'claude-4',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
     const storedRes = createResponse();
-    await handler({
-      params: { id: 'conversation-1' },
-      body: { model: 'claude-4', thinkingLevel: null },
-    }, storedRes);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        body: { model: 'claude-4', thinkingLevel: null },
+      },
+      storedRes,
+    );
     expect(SessionManagerOpenMock).toHaveBeenCalledWith('/sessions/conversation-1.json');
     expect(applyConversationModelPreferencesToSessionManagerMock).toHaveBeenCalledWith(
       { id: 'session-manager' },
@@ -581,7 +637,12 @@ describe('registerConversationStateRoutes', () => {
       [{ id: 'model-1' }],
     );
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-1');
-    expect(storedRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '', hasExplicitServiceTier: false });
+    expect(storedRes.json).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      model: 'claude-4',
+      currentServiceTier: '',
+      hasExplicitServiceTier: false,
+    });
   });
 
   it('handles missing stored conversations and mapped model preference errors', async () => {
@@ -591,10 +652,13 @@ describe('registerConversationStateRoutes', () => {
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/missing.json');
     existsSyncMock.mockReturnValueOnce(false);
     const missingRes = createResponse();
-    await handler({
-      params: { id: 'missing' },
-      body: { model: 'gpt-5' },
-    }, missingRes);
+    await handler(
+      {
+        params: { id: 'missing' },
+        body: { model: 'gpt-5' },
+      },
+      missingRes,
+    );
     expect(missingRes.status).toHaveBeenCalledWith(404);
     expect(missingRes.json).toHaveBeenCalledWith({ error: 'Conversation not found' });
 
@@ -604,10 +668,13 @@ describe('registerConversationStateRoutes', () => {
       throw new Error('Unknown model: nope');
     });
     const invalidModelRes = createResponse();
-    await handler({
-      params: { id: 'conversation-1' },
-      body: { model: 'nope' },
-    }, invalidModelRes);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        body: { model: 'nope' },
+      },
+      invalidModelRes,
+    );
     expect(invalidModelRes.status).toHaveBeenCalledWith(400);
     expect(invalidModelRes.json).toHaveBeenCalledWith({ error: 'Unknown model: nope' });
 
@@ -618,10 +685,13 @@ describe('registerConversationStateRoutes', () => {
       return true;
     });
     const controlRes = createResponse();
-    await handler({
-      params: { id: 'conversation-1' },
-      body: { model: 'gpt-5', surfaceId: 'surface-1' },
-    }, controlRes);
+    await handler(
+      {
+        params: { id: 'conversation-1' },
+        body: { model: 'gpt-5', surfaceId: 'surface-1' },
+      },
+      controlRes,
+    );
     expect(controlRes.status).toHaveBeenCalledWith(409);
     expect(controlRes.json).toHaveBeenCalledWith({ error: 'surface locked' });
   });
@@ -658,12 +728,15 @@ describe('registerConversationStateRoutes', () => {
 
     await handler({ params: { id: 'conversation-1' } }, res);
 
-    expect(recoverConversationCapabilityMock).toHaveBeenCalledWith('conversation-1', expect.objectContaining({
-      getCurrentProfile: expect.any(Function),
-      buildLiveSessionResourceOptions: expect.any(Function),
-      buildLiveSessionExtensionFactories: expect.any(Function),
-      flushLiveDeferredResumes: flushLiveDeferredResumesMock,
-    }));
+    expect(recoverConversationCapabilityMock).toHaveBeenCalledWith(
+      'conversation-1',
+      expect.objectContaining({
+        getCurrentProfile: expect.any(Function),
+        buildLiveSessionResourceOptions: expect.any(Function),
+        buildLiveSessionExtensionFactories: expect.any(Function),
+        flushLiveDeferredResumes: flushLiveDeferredResumesMock,
+      }),
+    );
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-1-live',
       live: true,
@@ -876,10 +949,13 @@ describe('registerConversationStateRoutes', () => {
     const changedRes = createResponse();
     await handler({ params: { id: 'conversation-6' }, body: { cwd: '/next' } }, changedRes);
     expect(destroySessionMock).toHaveBeenCalledWith('conversation-6');
-    expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/conversation-6.json', expect.objectContaining({
-      cwdOverride: '/next',
-      extensionFactories: ['factory'],
-    }));
+    expect(resumeLocalSessionMock).toHaveBeenCalledWith(
+      '/sessions/conversation-6.json',
+      expect.objectContaining({
+        cwdOverride: '/next',
+        extensionFactories: ['factory'],
+      }),
+    );
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-6');
     expect(changedRes.json).toHaveBeenCalledWith({
       id: 'conversation-6',
@@ -903,9 +979,12 @@ describe('registerConversationStateRoutes', () => {
 
     await handler({ params: { id: 'conversation-1' }, body: { cwd: '/next' } }, res);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'cwd resume failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'cwd resume failed',
+      }),
+    );
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: cwd resume failed' });
   });

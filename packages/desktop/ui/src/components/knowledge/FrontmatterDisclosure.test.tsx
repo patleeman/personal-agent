@@ -1,17 +1,14 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+
 import { FrontmatterDisclosure } from './FrontmatterDisclosure';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 describe('FrontmatterDisclosure', () => {
   it('shows a collapsed summary with the frontmatter field count', () => {
-    const html = renderToStaticMarkup(
-      <FrontmatterDisclosure
-        frontmatter={{ title: 'Test', status: 'active' }}
-      />,
-    );
+    const html = renderToStaticMarkup(<FrontmatterDisclosure frontmatter={{ title: 'Test', status: 'active' }} />);
 
     expect(html).toContain('Frontmatter');
     expect(html).toContain('2 fields');
@@ -20,10 +17,7 @@ describe('FrontmatterDisclosure', () => {
 
   it('renders frontmatter rows in a key value table when expanded', () => {
     const html = renderToStaticMarkup(
-      <FrontmatterDisclosure
-        frontmatter={{ title: 'Test', status: 'active', tags: ['alpha', 'beta'] }}
-        defaultOpen
-      />,
+      <FrontmatterDisclosure frontmatter={{ title: 'Test', status: 'active', tags: ['alpha', 'beta'] }} defaultOpen />,
     );
 
     expect(html).toContain('<table');
@@ -37,12 +31,7 @@ describe('FrontmatterDisclosure', () => {
 
   it('shows raw frontmatter when yaml parsing fails', () => {
     const html = renderToStaticMarkup(
-      <FrontmatterDisclosure
-        frontmatter={{}}
-        rawFrontmatter={'title: [oops'}
-        parseError={'Unexpected ]'}
-        defaultOpen
-      />,
+      <FrontmatterDisclosure frontmatter={{}} rawFrontmatter={'title: [oops'} parseError={'Unexpected ]'} defaultOpen />,
     );
 
     expect(html).toContain('Invalid YAML');

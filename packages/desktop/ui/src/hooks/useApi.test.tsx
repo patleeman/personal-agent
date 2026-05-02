@@ -2,6 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { useApi, type UseApiResult } from './useApi';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -70,10 +71,15 @@ describe('useApi', () => {
     mountedRoots.push(root);
 
     await act(async () => {
-      root.render(<HookProbe cacheKey="same" fetcher={() => {
-        callCount += 1;
-        return callCount === 1 ? first.promise : refresh.promise;
-      }} />);
+      root.render(
+        <HookProbe
+          cacheKey="same"
+          fetcher={() => {
+            callCount += 1;
+            return callCount === 1 ? first.promise : refresh.promise;
+          }}
+        />,
+      );
     });
 
     await act(async () => {

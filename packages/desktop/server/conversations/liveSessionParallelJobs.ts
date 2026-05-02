@@ -49,15 +49,11 @@ export function resolveParallelJobsFile(sessionFile: string): string {
 }
 
 function normalizeParallelPromptJobStatus(value: unknown): ParallelPromptJobStatus {
-  return value === 'ready' || value === 'failed' || value === 'importing'
-    ? value
-    : 'running';
+  return value === 'ready' || value === 'failed' || value === 'importing' ? value : 'running';
 }
 
 function normalizeParallelPromptImageCount(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_PARALLEL_PROMPT_IMAGE_COUNT
-    ? value
-    : 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_PARALLEL_PROMPT_IMAGE_COUNT ? value : 0;
 }
 
 export function normalizeParallelPromptList(value: unknown, limit = 32): string[] {
@@ -100,21 +96,12 @@ function normalizeParallelPromptJob(candidate: unknown): ParallelPromptJob | nul
     return null;
   }
 
-  const createdAt = typeof job.createdAt === 'string' && job.createdAt.trim().length > 0
-    ? job.createdAt.trim()
-    : new Date().toISOString();
-  const updatedAt = typeof job.updatedAt === 'string' && job.updatedAt.trim().length > 0
-    ? job.updatedAt.trim()
-    : createdAt;
-  const childSessionFile = typeof job.childSessionFile === 'string' && job.childSessionFile.trim().length > 0
-    ? job.childSessionFile.trim()
-    : undefined;
-  const forkEntryId = typeof job.forkEntryId === 'string' && job.forkEntryId.trim().length > 0
-    ? job.forkEntryId.trim()
-    : undefined;
-  const repoRoot = typeof job.repoRoot === 'string' && job.repoRoot.trim().length > 0
-    ? job.repoRoot.trim()
-    : undefined;
+  const createdAt = typeof job.createdAt === 'string' && job.createdAt.trim().length > 0 ? job.createdAt.trim() : new Date().toISOString();
+  const updatedAt = typeof job.updatedAt === 'string' && job.updatedAt.trim().length > 0 ? job.updatedAt.trim() : createdAt;
+  const childSessionFile =
+    typeof job.childSessionFile === 'string' && job.childSessionFile.trim().length > 0 ? job.childSessionFile.trim() : undefined;
+  const forkEntryId = typeof job.forkEntryId === 'string' && job.forkEntryId.trim().length > 0 ? job.forkEntryId.trim() : undefined;
+  const repoRoot = typeof job.repoRoot === 'string' && job.repoRoot.trim().length > 0 ? job.repoRoot.trim() : undefined;
 
   return {
     id,
@@ -177,9 +164,7 @@ export function truncateParallelPreviewText(text: string, maxLength = 240): stri
     return '';
   }
 
-  return normalized.length > maxLength
-    ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
-    : normalized;
+  return normalized.length > maxLength ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…` : normalized;
 }
 
 function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPreview {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
 import { collectTraceClusterLinkedRuns } from './linkedRuns.js';
 import type { ChatRenderItem } from './transcriptItems.js';
@@ -55,10 +56,7 @@ export function useInlineTraceRunExpansion(renderItems: ChatRenderItem[]) {
     setExpandedInlineRunKeys((current) => filterInlineRunKeys(current, visibleInlineRunKeySet));
   }, [visibleInlineRunKeySet]);
 
-  const isInlineRunExpanded = useCallback(
-    (inlineRunKey: string) => expandedInlineRunKeys.has(inlineRunKey),
-    [expandedInlineRunKeys],
-  );
+  const isInlineRunExpanded = useCallback((inlineRunKey: string) => expandedInlineRunKeys.has(inlineRunKey), [expandedInlineRunKeys]);
 
   const toggleInlineRun = useCallback((inlineRunKey: string) => {
     setExpandedInlineRunKeys((current) => toggleInlineRunKey(current, inlineRunKey));

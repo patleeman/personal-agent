@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  buildFilePickerInvocation,
-  interpretFilePickerProcessResult,
-} from './filePicker.js';
+
+import { buildFilePickerInvocation, interpretFilePickerProcessResult } from './filePicker.js';
 
 describe('buildFilePickerInvocation', () => {
   describe('macOS (darwin)', () => {
@@ -60,10 +58,12 @@ describe('buildFilePickerInvocation', () => {
     });
 
     it('throws when no file picker is available', () => {
-      expect(() => buildFilePickerInvocation({
-        platform: 'linux',
-        hasCommand: () => false,
-      })).toThrow('No supported file picker found');
+      expect(() =>
+        buildFilePickerInvocation({
+          platform: 'linux',
+          hasCommand: () => false,
+        }),
+      ).toThrow('No supported file picker found');
     });
   });
 
@@ -91,9 +91,11 @@ describe('buildFilePickerInvocation', () => {
 
   describe('unsupported platforms', () => {
     it('throws for unsupported platforms', () => {
-      expect(() => buildFilePickerInvocation({
-        platform: 'sunos' as NodeJS.Platform,
-      })).toThrow('File picker is not supported on platform sunos');
+      expect(() =>
+        buildFilePickerInvocation({
+          platform: 'sunos' as NodeJS.Platform,
+        }),
+      ).toThrow('File picker is not supported on platform sunos');
     });
   });
 
@@ -134,27 +136,40 @@ describe('interpretFilePickerProcessResult', () => {
 
   it('returns cancelled when stderr mentions cancel', () => {
     const result = interpretFilePickerProcessResult({
-      status: 1, stdout: '', stderr: 'user cancelled',
+      status: 1,
+      stdout: '',
+      stderr: 'user cancelled',
     });
     expect(result).toEqual({ paths: [], cancelled: true });
   });
 
   it('returns cancelled when status is 1 and stderr is empty', () => {
     const result = interpretFilePickerProcessResult({
-      status: 1, stdout: '', stderr: '',
+      status: 1,
+      stdout: '',
+      stderr: '',
     });
     expect(result).toEqual({ paths: [], cancelled: true });
   });
 
   it('throws on process error', () => {
-    expect(() => interpretFilePickerProcessResult({
-      status: null, stdout: '', stderr: '', error: new Error('ENOENT'),
-    })).toThrow('ENOENT');
+    expect(() =>
+      interpretFilePickerProcessResult({
+        status: null,
+        stdout: '',
+        stderr: '',
+        error: new Error('ENOENT'),
+      }),
+    ).toThrow('ENOENT');
   });
 
   it('throws on unknown error with non-empty stderr', () => {
-    expect(() => interpretFilePickerProcessResult({
-      status: 2, stdout: '', stderr: 'permission denied',
-    })).toThrow('permission denied');
+    expect(() =>
+      interpretFilePickerProcessResult({
+        status: 2,
+        stdout: '',
+        stderr: 'permission denied',
+      }),
+    ).toThrow('permission denied');
   });
 });

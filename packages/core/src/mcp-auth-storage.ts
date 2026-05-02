@@ -2,6 +2,7 @@ import { readdirSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+
 import { resolveStatePaths } from './runtime/paths.js';
 
 const MCP_AUTH_SCHEMA_VERSION = 'v1';
@@ -103,10 +104,7 @@ export async function writeJsonFile(serverUrlHash: string, filename: string, dat
 }
 
 export async function readTextFile(serverUrlHash: string, filename: string): Promise<string | undefined> {
-  return readExistingFile([
-    getMcpAuthFilePath(serverUrlHash, filename),
-    ...getLegacyMcpAuthFilePaths(serverUrlHash, filename),
-  ]);
+  return readExistingFile([getMcpAuthFilePath(serverUrlHash, filename), ...getLegacyMcpAuthFilePaths(serverUrlHash, filename)]);
 }
 
 export async function writeTextFile(serverUrlHash: string, filename: string, text: string): Promise<void> {

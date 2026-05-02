@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { bytesToBase64, resampleFloat32ToPcm16, startComposerDictationCapture } from './conversationComposerDictation';
 
 describe('conversation composer dictation helpers', () => {

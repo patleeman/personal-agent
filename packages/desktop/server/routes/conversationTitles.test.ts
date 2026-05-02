@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  logErrorMock,
-  persistSettingsWriteMock,
-  readSavedConversationTitlePreferencesMock,
-  writeSavedConversationTitlePreferencesMock,
-} = vi.hoisted(() => ({
-  logErrorMock: vi.fn(),
-  persistSettingsWriteMock: vi.fn(),
-  readSavedConversationTitlePreferencesMock: vi.fn(),
-  writeSavedConversationTitlePreferencesMock: vi.fn(),
-}));
+const { logErrorMock, persistSettingsWriteMock, readSavedConversationTitlePreferencesMock, writeSavedConversationTitlePreferencesMock } =
+  vi.hoisted(() => ({
+    logErrorMock: vi.fn(),
+    persistSettingsWriteMock: vi.fn(),
+    readSavedConversationTitlePreferencesMock: vi.fn(),
+    writeSavedConversationTitlePreferencesMock: vi.fn(),
+  }));
 
 vi.mock('../middleware/index.js', () => ({
   logError: logErrorMock,
@@ -94,9 +90,12 @@ describe('registerConversationTitlesRoutes', () => {
 
     getHandler({}, res);
 
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'read failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'read failed',
+      }),
+    );
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: read failed' });
   });
@@ -125,17 +124,23 @@ describe('registerConversationTitlesRoutes', () => {
       return writer('/tmp/title-settings.json');
     });
 
-    patchHandler({
-      body: {
+    patchHandler(
+      {
+        body: {
+          enabled: false,
+          model: 'anthropic/claude-sonnet-4-6',
+        },
+      },
+      res,
+    );
+
+    expect(writeSavedConversationTitlePreferencesMock).toHaveBeenCalledWith(
+      {
         enabled: false,
         model: 'anthropic/claude-sonnet-4-6',
       },
-    }, res);
-
-    expect(writeSavedConversationTitlePreferencesMock).toHaveBeenCalledWith({
-      enabled: false,
-      model: 'anthropic/claude-sonnet-4-6',
-    }, '/tmp/title-settings.json');
+      '/tmp/title-settings.json',
+    );
     expect(res.json).toHaveBeenCalledWith({
       enabled: false,
       currentModel: 'anthropic/claude-sonnet-4-6',
@@ -153,9 +158,12 @@ describe('registerConversationTitlesRoutes', () => {
     patchHandler({ body: { model: null } }, res);
 
     expect(persistSettingsWriteMock).toHaveBeenCalledTimes(1);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'persist failed',
-    }));
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'request handler error',
+      expect.objectContaining({
+        message: 'persist failed',
+      }),
+    );
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: persist failed' });
   });

@@ -1,15 +1,20 @@
+import { loadDeferredResumeState, resolveDeferredResumeStateFile } from '@personal-agent/core';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import {
-  loadDeferredResumeState,
-  resolveDeferredResumeStateFile,
-} from '@personal-agent/core';
 import { describe, expect, it } from 'vitest';
-import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
+
 import { deliverBackgroundRunCallbackWakeup } from './background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from './background-run-deferred-resumes.js';
-import { loadDurableRunCheckpoint, loadDurableRunStatus, resolveDurableRunPaths, resolveDurableRunsRoot, saveDurableRunCheckpoint, saveDurableRunStatus } from './store.js';
+import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
+import {
+  loadDurableRunCheckpoint,
+  loadDurableRunStatus,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  saveDurableRunCheckpoint,
+  saveDurableRunStatus,
+} from './store.js';
 
 function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -91,21 +96,23 @@ describe('background run callbacks', () => {
 
     const deferredState = loadDeferredResumeState(resolveDeferredResumeStateFile(stateRoot));
     const wakeup = deferredState.resumes[delivered.wakeupId ?? ''];
-    expect(wakeup).toEqual(expect.objectContaining({
-      id: delivered.wakeupId,
-      sessionFile,
-      status: 'ready',
-      title: 'Background task wiki-raw-activity-drain completed',
-      source: {
-        kind: 'background-run',
-        id: run.runId,
-      },
-      delivery: expect.objectContaining({
-        alertLevel: 'passive',
-        autoResumeIfOpen: true,
-        requireAck: false,
+    expect(wakeup).toEqual(
+      expect.objectContaining({
+        id: delivered.wakeupId,
+        sessionFile,
+        status: 'ready',
+        title: 'Background task wiki-raw-activity-drain completed',
+        source: {
+          kind: 'background-run',
+          id: run.runId,
+        },
+        delivery: expect.objectContaining({
+          alertLevel: 'passive',
+          autoResumeIfOpen: true,
+          requireAck: false,
+        }),
       }),
-    }));
+    );
     expect(wakeup?.prompt).toContain(run.runId);
     expect(wakeup?.prompt).toContain('taskSlug=wiki-raw-activity-drain');
 
@@ -146,14 +153,16 @@ describe('background run callbacks', () => {
     const deferredState = loadDeferredResumeState(resolveDeferredResumeStateFile(stateRoot));
     const wakeup = deferredState.resumes[delivered.wakeupId ?? ''];
     expect(delivered.delivered).toBe(true);
-    expect(wakeup).toEqual(expect.objectContaining({
-      id: delivered.wakeupId,
-      status: 'ready',
-      source: {
-        kind: 'background-run',
-        id: run.runId,
-      },
-    }));
+    expect(wakeup).toEqual(
+      expect.objectContaining({
+        id: delivered.wakeupId,
+        status: 'ready',
+        source: {
+          kind: 'background-run',
+          id: run.runId,
+        },
+      }),
+    );
     expect(Number.isFinite(Date.parse(wakeup?.dueAt ?? ''))).toBe(true);
     expect(Number.isFinite(Date.parse(wakeup?.readyAt ?? ''))).toBe(true);
     expect(Number.isFinite(Date.parse(wakeup?.createdAt ?? ''))).toBe(true);
@@ -179,11 +188,13 @@ describe('background run callbacks', () => {
       runId: run.runId,
     });
 
-    await expect(surfaceBackgroundRunResultsIfReady({
-      runsRoot,
-      triggerRunId: run.runId,
-      now: new Date('2026-04-04T01:10:00.000Z'),
-    })).resolves.toEqual({ surfacedRunIds: [] });
+    await expect(
+      surfaceBackgroundRunResultsIfReady({
+        runsRoot,
+        triggerRunId: run.runId,
+        now: new Date('2026-04-04T01:10:00.000Z'),
+      }),
+    ).resolves.toEqual({ surfacedRunIds: [] });
   });
 
   it('preserves checkpoint payloads when checkpoint timestamps are malformed', async () => {
@@ -213,25 +224,29 @@ describe('background run callbacks', () => {
       updatedAt: 'not-a-date',
     });
 
-    await expect(deliverBackgroundRunCallbackWakeup({
-      daemonRoot,
-      stateRoot,
-      runsRoot,
-      runId: run.runId,
-    })).resolves.toEqual({
+    await expect(
+      deliverBackgroundRunCallbackWakeup({
+        daemonRoot,
+        stateRoot,
+        runsRoot,
+        runId: run.runId,
+      }),
+    ).resolves.toEqual({
       delivered: true,
       wakeupId: delivered.wakeupId,
       conversationId: 'conv-123',
     });
 
-    expect(loadDurableRunCheckpoint(run.checkpointPath)?.payload).toEqual(expect.objectContaining({
-      metadata: expect.objectContaining({
-        resumeParentOnExit: true,
+    expect(loadDurableRunCheckpoint(run.checkpointPath)?.payload).toEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resumeParentOnExit: true,
+        }),
+        backgroundRunCallback: expect.objectContaining({
+          wakeupId: delivered.wakeupId,
+        }),
       }),
-      backgroundRunCallback: expect.objectContaining({
-        wakeupId: delivered.wakeupId,
-      }),
-    }));
+    );
   });
 
   it('does not create callback wakeups for cancelled runs', async () => {
@@ -249,12 +264,14 @@ describe('background run callbacks', () => {
       cancelled: true,
     });
 
-    await expect(deliverBackgroundRunCallbackWakeup({
-      daemonRoot,
-      stateRoot,
-      runsRoot,
-      runId: run.runId,
-    })).resolves.toEqual({ delivered: false });
+    await expect(
+      deliverBackgroundRunCallbackWakeup({
+        daemonRoot,
+        stateRoot,
+        runsRoot,
+        runId: run.runId,
+      }),
+    ).resolves.toEqual({ delivered: false });
 
     const deferredState = loadDeferredResumeState(resolveDeferredResumeStateFile(stateRoot));
     expect(Object.keys(deferredState.resumes)).toEqual([]);

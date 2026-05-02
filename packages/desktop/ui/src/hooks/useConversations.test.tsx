@@ -2,8 +2,9 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
-import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY, ARCHIVED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings.js';
+import { ARCHIVED_SESSION_IDS_STORAGE_KEY, OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings.js';
 import type { ScheduledTaskSummary, SessionMeta } from '../shared/types.js';
 import { useConversations } from './useConversations.js';
 
@@ -25,7 +26,7 @@ function createStorage() {
   const map = new Map<string, string>();
   return {
     getItem(key: string) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     setItem(key: string, value: string) {
       map.set(key, value);
@@ -83,16 +84,18 @@ function renderProbeIntoRoot(root: Root, input: { sessions: SessionMeta[]; tasks
   act(() => {
     root.render(
       <SseConnectionContext.Provider value={{ status: 'offline' }}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: input.sessions,
-          tasks: input.tasks,
-          runs: null,
-          setProjects: () => {},
-          setSessions: () => {},
-          setTasks: () => {},
-          setRuns: () => {},
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: input.sessions,
+            tasks: input.tasks,
+            runs: null,
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}
+        >
           <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
             <HookProbe />
           </LiveTitlesContext.Provider>
@@ -116,7 +119,13 @@ describe('useConversations', () => {
     apiMocks.openConversationTabs.mockReset();
     apiMocks.setOpenConversationTabs.mockReset();
     apiMocks.openConversationTabs.mockResolvedValue({ sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] });
-    apiMocks.setOpenConversationTabs.mockResolvedValue({ ok: true, sessionIds: ['conv-auto'], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] });
+    apiMocks.setOpenConversationTabs.mockResolvedValue({
+      ok: true,
+      sessionIds: ['conv-auto'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [],
+    });
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));

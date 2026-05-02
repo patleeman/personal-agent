@@ -33,7 +33,9 @@ const {
   readFileSyncMock: vi.fn(),
   startScheduledTaskRunMock: vi.fn(),
   toScheduledTaskMetadataMock: vi.fn(),
-  normalizeAutomationTargetTypeForSelectionMock: vi.fn((value: string | null | undefined) => value === 'conversation' ? 'conversation' : 'background-agent'),
+  normalizeAutomationTargetTypeForSelectionMock: vi.fn((value: string | null | undefined) =>
+    value === 'conversation' ? 'conversation' : 'background-agent',
+  ),
   updateStoredAutomationMock: vi.fn(),
   applyScheduledTaskThreadBindingMock: vi.fn(),
   buildScheduledTaskThreadDetailMock: vi.fn(),
@@ -166,28 +168,32 @@ describe('registerTaskRoutes', () => {
     buildScheduledTaskThreadDetailMock.mockReset();
     resolveScheduledTaskThreadBindingMock.mockReset();
     toScheduledTaskMetadataMock.mockImplementation((task: TestTask) => toMetadata(task));
-    applyScheduledTaskThreadBindingMock.mockImplementation((taskId: string, input: { threadMode?: string | null; threadConversationId?: string | null; threadSessionFile?: string | null }) => {
-      const sourceTask = [...updateStoredAutomationMock.mock.results, ...createStoredAutomationMock.mock.results]
-        .map((result) => result.value as TestTask | undefined)
-        .filter((task): task is TestTask => Boolean(task) && task.id === taskId)
-        .at(-1);
-      return createTask({
-        ...sourceTask,
-        id: taskId,
-        threadMode: (input.threadMode as TestTask['threadMode']) ?? 'dedicated',
-        threadConversationId: input.threadConversationId ?? `automation.${taskId}`,
-      });
-    });
+    applyScheduledTaskThreadBindingMock.mockImplementation(
+      (taskId: string, input: { threadMode?: string | null; threadConversationId?: string | null; threadSessionFile?: string | null }) => {
+        const sourceTask = [...updateStoredAutomationMock.mock.results, ...createStoredAutomationMock.mock.results]
+          .map((result) => result.value as TestTask | undefined)
+          .filter((task): task is TestTask => Boolean(task) && task.id === taskId)
+          .at(-1);
+        return createTask({
+          ...sourceTask,
+          id: taskId,
+          threadMode: (input.threadMode as TestTask['threadMode']) ?? 'dedicated',
+          threadConversationId: input.threadConversationId ?? `automation.${taskId}`,
+        });
+      },
+    );
     buildScheduledTaskThreadDetailMock.mockImplementation((task: TestTask) => ({
       threadMode: task.threadMode ?? 'dedicated',
       ...(task.threadConversationId ? { threadConversationId: task.threadConversationId } : {}),
       ...(task.threadTitle ? { threadTitle: task.threadTitle } : {}),
     }));
-    resolveScheduledTaskThreadBindingMock.mockImplementation((input: { threadMode?: string | null; threadConversationId?: string | null }) => ({
-      mode: (input.threadMode as TestTask['threadMode']) ?? 'dedicated',
-      conversationId: input.threadConversationId ?? undefined,
-      sessionFile: input.threadConversationId ? `/sessions/${input.threadConversationId}.jsonl` : undefined,
-    }));
+    resolveScheduledTaskThreadBindingMock.mockImplementation(
+      (input: { threadMode?: string | null; threadConversationId?: string | null }) => ({
+        mode: (input.threadMode as TestTask['threadMode']) ?? 'dedicated',
+        conversationId: input.threadConversationId ?? undefined,
+        sessionFile: input.threadConversationId ? `/sessions/${input.threadConversationId}.jsonl` : undefined,
+      }),
+    );
     ensureAutomationThreadMock.mockImplementation((taskId: string) => createTask({ id: taskId }));
   });
 
@@ -247,12 +253,14 @@ describe('registerTaskRoutes', () => {
       runtimeState: {
         'task-1': createRuntime(),
       },
-      runtimeEntries: [createRuntime({
-        id: 'task-2',
-        running: false,
-        lastStatus: 'idle',
-        lastRunAt: '2026-04-08T00:00:00.000Z',
-      })],
+      runtimeEntries: [
+        createRuntime({
+          id: 'task-2',
+          running: false,
+          lastStatus: 'idle',
+          lastRunAt: '2026-04-08T00:00:00.000Z',
+        }),
+      ],
     });
 
     const res = createResponse();
@@ -345,18 +353,21 @@ describe('registerTaskRoutes', () => {
     });
 
     const res = createResponse();
-    createHandler({
-      body: {
-        title: 'Created task',
-        enabled: false,
-        cron: '*/5 * * * *',
-        model: 'claude',
-        thinkingLevel: 'medium',
-        cwd: '/tmp/work',
-        timeoutSeconds: 45,
-        prompt: 'Body',
+    createHandler(
+      {
+        body: {
+          title: 'Created task',
+          enabled: false,
+          cron: '*/5 * * * *',
+          model: 'claude',
+          thinkingLevel: 'medium',
+          cwd: '/tmp/work',
+          timeoutSeconds: 45,
+          prompt: 'Body',
+        },
       },
-    }, res);
+      res,
+    );
 
     expect(createStoredAutomationMock).toHaveBeenCalledWith({
       profile: 'assistant',
@@ -460,10 +471,13 @@ describe('registerTaskRoutes', () => {
 
     const res = createResponse();
     patchHandler({ params: { id: 'task-1' }, body: { title: 'Updated task', prompt: 'Updated prompt' } }, res);
-    expect(updateStoredAutomationMock).toHaveBeenCalledWith('task-1', expect.objectContaining({
-      title: 'Updated task',
-      prompt: 'Updated prompt',
-    }));
+    expect(updateStoredAutomationMock).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({
+        title: 'Updated task',
+        prompt: 'Updated prompt',
+      }),
+    );
     expect(applyScheduledTaskThreadBindingMock).toHaveBeenNthCalledWith(1, 'task-1', {
       threadMode: 'dedicated',
       threadConversationId: undefined,

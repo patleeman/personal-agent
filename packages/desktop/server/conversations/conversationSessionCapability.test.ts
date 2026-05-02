@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  listConversationSessionsSnapshotMock,
-  readConversationSessionMetaMock,
-  readSessionSearchTextMock,
-} = vi.hoisted(() => ({
+const { listConversationSessionsSnapshotMock, readConversationSessionMetaMock, readSessionSearchTextMock } = vi.hoisted(() => ({
   listConversationSessionsSnapshotMock: vi.fn(),
   readConversationSessionMetaMock: vi.fn(),
   readSessionSearchTextMock: vi.fn(),
@@ -21,8 +17,8 @@ vi.mock('./sessions.js', () => ({
 
 import {
   readConversationSessionMetaCapability,
-  readConversationSessionSearchIndexCapability,
   readConversationSessionsCapability,
+  readConversationSessionSearchIndexCapability,
 } from './conversationSessionCapability.js';
 
 beforeEach(() => {
@@ -56,13 +52,13 @@ describe('conversationSessionCapability', () => {
   });
 
   it('builds a normalized session search index and tolerates missing sessions', () => {
-    readSessionSearchTextMock
-      .mockReturnValueOnce('hello world')
-      .mockReturnValueOnce(null);
+    readSessionSearchTextMock.mockReturnValueOnce('hello world').mockReturnValueOnce(null);
 
-    expect(readConversationSessionSearchIndexCapability({
-      sessionIds: [' conversation-1 ', 'conversation-2', '', 42],
-    })).toEqual({
+    expect(
+      readConversationSessionSearchIndexCapability({
+        sessionIds: [' conversation-1 ', 'conversation-2', '', 42],
+      }),
+    ).toEqual({
       index: {
         'conversation-1': 'hello world',
         'conversation-2': '',

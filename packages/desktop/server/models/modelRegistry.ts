@@ -1,6 +1,8 @@
 import { dirname, join } from 'node:path';
-import { getPiAgentRuntimeDir } from '@personal-agent/core';
+
 import { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { getPiAgentRuntimeDir } from '@personal-agent/core';
+
 import { normalizeModelContextWindow } from './modelContextWindows.js';
 
 type RegistryModel = ReturnType<ModelRegistry['getAvailable']>[number];

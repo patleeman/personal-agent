@@ -1,62 +1,52 @@
 /**
  * Runtime state management
- * 
+ *
  * Provides path resolution and bootstrap validation for mutable
  * runtime state (auth, sessions, cache) outside managed repo files.
  */
 
 // Path resolution
 export {
-  getDefaultStateRoot,
-  getStateRoot,
-  getPiAgentStateDir,
-  getPiAgentRuntimeDir,
-  resolveNeutralChatCwd,
-  getDefaultConfigRoot,
   getConfigRoot,
-  getDefaultVaultRoot,
-  getKnowledgeBaseStateDir,
-  getManagedKnowledgeBaseRoot,
-  getVaultRoot,
-  getDefaultProfilesRoot,
-  getProfilesRoot,
+  getDefaultConfigRoot,
   getDefaultLocalProfileDir,
-  getLocalProfileDir,
-  getSyncRoot,
-  getDurablePiAgentDir,
-  getDurableSessionsDir,
-  getDurableConversationAttentionDir,
-  getDurableProfilesDir,
+  getDefaultProfilesRoot,
+  getDefaultStateRoot,
+  getDefaultVaultRoot,
   getDurableAgentFilePath,
-  getDurableProfileDir,
-  getDurableProfileSettingsFilePath,
-  getDurableProfileModelsFilePath,
-  getDurableSettingsDir,
+  getDurableConversationAttentionDir,
+  getDurableMemoryDir,
   getDurableModelsDir,
-  getDurableSkillsDir,
   getDurableNodesDir,
   getDurableNotesDir,
-  getDurableMemoryDir,
-  getDurableTasksDir,
+  getDurablePiAgentDir,
+  getDurableProfileDir,
+  getDurableProfileModelsFilePath,
+  getDurableProfilesDir,
+  getDurableProfileSettingsFilePath,
   getDurableProjectsDir,
-  resolveStatePaths,
+  getDurableSessionsDir,
+  getDurableSettingsDir,
+  getDurableSkillsDir,
+  getDurableTasksDir,
+  getKnowledgeBaseStateDir,
+  getLocalProfileDir,
+  getManagedKnowledgeBaseRoot,
+  getPiAgentRuntimeDir,
+  getPiAgentStateDir,
+  getProfilesRoot,
+  getStateRoot,
+  getSyncRoot,
+  getVaultRoot,
   isPathInRepo,
-  validateStatePathsOutsideRepo,
+  resolveNeutralChatCwd,
+  resolveStatePaths,
   type RuntimeStatePaths,
+  validateStatePathsOutsideRepo,
 } from './paths.js';
 
 // Bootstrap validation
-export {
-  bootstrapState,
-  bootstrapStateOrThrow,
-  canBootstrap,
-  type BootstrapResult,
-  type BootstrapError,
-} from './bootstrap.js';
+export { type BootstrapError, type BootstrapResult, bootstrapState, bootstrapStateOrThrow, canBootstrap } from './bootstrap.js';
 
 // Pi agent runtime directory
-export {
-  preparePiAgentDir,
-  type PreparePiAgentDirOptions,
-  type PreparePiAgentDirResult,
-} from './agent-dir.js';
+export { preparePiAgentDir, type PreparePiAgentDirOptions, type PreparePiAgentDirResult } from './agent-dir.js';

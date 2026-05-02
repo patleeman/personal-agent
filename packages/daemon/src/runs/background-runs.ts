@@ -1,23 +1,18 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
-import { buildBackgroundAgentArgv, type BackgroundRunAgentSpec } from '../background-run-agent.js';
+
+import { type BackgroundRunAgentSpec, buildBackgroundAgentArgv } from '../background-run-agent.js';
+import { scheduleRun, type ScheduleRunInput, type TargetAgent, type TargetShell, type TriggerNow } from './schedule-run.js';
 import {
   appendDurableRunEvent,
   createInitialDurableRunStatus,
+  type DurableRunPaths,
   loadDurableRunCheckpoint,
   loadDurableRunManifest,
   loadDurableRunStatus,
   saveDurableRunCheckpoint,
   saveDurableRunStatus,
-  type DurableRunPaths,
 } from './store.js';
-import {
-  scheduleRun,
-  type ScheduleRunInput,
-  type TriggerNow,
-  type TargetAgent,
-  type TargetShell,
-} from './schedule-run.js';
 
 /**
  * Immediate background-run request.
@@ -97,9 +92,7 @@ function normalizeArgv(argv: string[] | undefined): string[] | undefined {
     return undefined;
   }
 
-  const normalized = argv
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  const normalized = argv.map((value) => value.trim()).filter((value) => value.length > 0);
 
   return normalized.length > 0 ? normalized : undefined;
 }
@@ -142,8 +135,9 @@ function ensureCommandSpec(input: StartBackgroundRunInput): {
   const argv = normalizeArgv(input.argv);
   const shellCommand = normalizeShellCommand(input.shellCommand);
   const agent = normalizeAgentSpec(input.agent);
-  const definedSpecs = [argv ? 'argv' : null, shellCommand ? 'shellCommand' : null, agent ? 'agent' : null]
-    .filter((value): value is 'argv' | 'shellCommand' | 'agent' => value !== null);
+  const definedSpecs = [argv ? 'argv' : null, shellCommand ? 'shellCommand' : null, agent ? 'agent' : null].filter(
+    (value): value is 'argv' | 'shellCommand' | 'agent' => value !== null,
+  );
 
   if (definedSpecs.length > 1) {
     throw new Error('Background run must use exactly one of argv, shellCommand, or agent.');
@@ -168,18 +162,10 @@ function appendOutputLog(path: string, text: string): void {
 export function createBackgroundRunId(taskSlug: string, createdAt: string): string {
   const nonce = Math.random().toString(16).slice(2, 10);
 
-  return [
-    'run',
-    sanitizeIdSegment(taskSlug, 'background'),
-    toTimestampKey(createdAt),
-    nonce,
-  ].join('-');
+  return ['run', sanitizeIdSegment(taskSlug, 'background'), toTimestampKey(createdAt), nonce].join('-');
 }
 
-export async function createBackgroundRunRecord(
-  runsRoot: string,
-  input: StartBackgroundRunInput,
-): Promise<StartBackgroundRunRecord> {
+export async function createBackgroundRunRecord(runsRoot: string, input: StartBackgroundRunInput): Promise<StartBackgroundRunRecord> {
   const { argv, shellCommand, agent } = ensureCommandSpec(input);
 
   // Build ScheduleRunInput from legacy input
@@ -188,9 +174,7 @@ export async function createBackgroundRunRecord(
   // scheduleRun expects daemonRoot where runs are stored under <daemonRoot>/runs/
   // The old API accepted runsRoot directly (the parent of run directories)
   // Convert: if runsRoot ends with '/runs', use its parent; otherwise use runsRoot itself
-  const daemonRoot = runsRoot.endsWith('/runs')
-    ? runsRoot.slice(0, -'/runs'.length)
-    : runsRoot;
+  const daemonRoot = runsRoot.endsWith('/runs') ? runsRoot.slice(0, -'/runs'.length) : runsRoot;
 
   const result = await scheduleRun(daemonRoot, scheduleInput);
 
@@ -270,15 +254,18 @@ export async function markBackgroundRunStarted(input: {
   const checkpoint = loadDurableRunCheckpoint(input.runPaths.checkpointPath);
   const payload = checkpoint?.payload ?? {};
 
-  saveDurableRunStatus(input.runPaths.statusPath, createInitialDurableRunStatus({
-    runId: input.runId,
-    status: 'running',
-    createdAt: manifest?.createdAt ?? input.startedAt,
-    updatedAt: input.startedAt,
-    activeAttempt: 1,
-    startedAt: input.startedAt,
-    checkpointKey: 'spawned',
-  }));
+  saveDurableRunStatus(
+    input.runPaths.statusPath,
+    createInitialDurableRunStatus({
+      runId: input.runId,
+      status: 'running',
+      createdAt: manifest?.createdAt ?? input.startedAt,
+      updatedAt: input.startedAt,
+      activeAttempt: 1,
+      startedAt: input.startedAt,
+      checkpointKey: 'spawned',
+    }),
+  );
 
   saveDurableRunCheckpoint(input.runPaths.checkpointPath, {
     version: 1,
@@ -317,28 +304,23 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
     return;
   }
 
-  const status = input.cancelled
-    ? 'cancelled'
-    : input.exitCode === 0
-      ? 'completed'
-      : 'failed';
-  const step = input.cancelled
-    ? 'cancelled'
-    : input.exitCode === 0
-      ? 'completed'
-      : 'failed';
+  const status = input.cancelled ? 'cancelled' : input.exitCode === 0 ? 'completed' : 'failed';
+  const step = input.cancelled ? 'cancelled' : input.exitCode === 0 ? 'completed' : 'failed';
 
-  saveDurableRunStatus(input.runPaths.statusPath, createInitialDurableRunStatus({
-    runId: input.runId,
-    status,
-    createdAt: manifest?.createdAt ?? input.startedAt,
-    updatedAt: input.endedAt,
-    activeAttempt: 1,
-    startedAt: input.startedAt,
-    completedAt: input.endedAt,
-    checkpointKey: step,
-    lastError: input.error,
-  }));
+  saveDurableRunStatus(
+    input.runPaths.statusPath,
+    createInitialDurableRunStatus({
+      runId: input.runId,
+      status,
+      createdAt: manifest?.createdAt ?? input.startedAt,
+      updatedAt: input.endedAt,
+      activeAttempt: 1,
+      startedAt: input.startedAt,
+      completedAt: input.endedAt,
+      checkpointKey: step,
+      lastError: input.error,
+    }),
+  );
 
   const checkpoint = loadDurableRunCheckpoint(input.runPaths.checkpointPath);
   saveDurableRunCheckpoint(input.runPaths.checkpointPath, {
@@ -362,11 +344,7 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
     version: 1,
     runId: input.runId,
     timestamp: input.endedAt,
-    type: input.cancelled
-      ? 'run.cancelled'
-      : input.exitCode === 0
-        ? 'run.completed'
-        : 'run.failed',
+    type: input.cancelled ? 'run.cancelled' : input.exitCode === 0 ? 'run.completed' : 'run.failed',
     attempt: 1,
     payload: {
       taskSlug: input.taskSlug,
@@ -381,20 +359,35 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
   const marker = `\n__PA_RUN_EXIT_CODE=${String(input.exitCode)}\n`;
   appendOutputLog(input.runPaths.outputLogPath, `${marker}# endedAt=${input.endedAt}\n# status=${status}\n`);
 
-  writeFileSync(input.runPaths.resultPath, JSON.stringify({
-    version: 1,
-    runId: input.runId,
-    taskSlug: input.taskSlug,
-    cwd: input.cwd,
-    startedAt: input.startedAt,
-    endedAt: input.endedAt,
-    exitCode: input.exitCode,
-    signal: input.signal,
-    cancelled: input.cancelled,
-    success: input.exitCode === 0 && !input.cancelled,
-    summary: input.summary ?? (input.error ? input.error : input.cancelled ? 'Run cancelled.' : input.exitCode === 0 ? 'Run completed successfully.' : `Run failed with exit code ${input.exitCode}.`),
-    ...(input.error ? { error: input.error } : {}),
-  }, null, 2));
+  writeFileSync(
+    input.runPaths.resultPath,
+    JSON.stringify(
+      {
+        version: 1,
+        runId: input.runId,
+        taskSlug: input.taskSlug,
+        cwd: input.cwd,
+        startedAt: input.startedAt,
+        endedAt: input.endedAt,
+        exitCode: input.exitCode,
+        signal: input.signal,
+        cancelled: input.cancelled,
+        success: input.exitCode === 0 && !input.cancelled,
+        summary:
+          input.summary ??
+          (input.error
+            ? input.error
+            : input.cancelled
+              ? 'Run cancelled.'
+              : input.exitCode === 0
+                ? 'Run completed successfully.'
+                : `Run failed with exit code ${input.exitCode}.`),
+        ...(input.error ? { error: input.error } : {}),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 export async function markBackgroundRunCancelling(input: {
@@ -409,24 +402,32 @@ export async function markBackgroundRunCancelling(input: {
     return false;
   }
 
-  if (currentStatus.status === 'completed' || currentStatus.status === 'failed' || currentStatus.status === 'cancelled' || currentStatus.status === 'interrupted') {
+  if (
+    currentStatus.status === 'completed' ||
+    currentStatus.status === 'failed' ||
+    currentStatus.status === 'cancelled' ||
+    currentStatus.status === 'interrupted'
+  ) {
     return false;
   }
 
   const cancelledAt = new Date(input.cancelledAt ?? Date.now()).toISOString();
   const checkpoint = loadDurableRunCheckpoint(input.runPaths.checkpointPath);
 
-  saveDurableRunStatus(input.runPaths.statusPath, createInitialDurableRunStatus({
-    runId: input.runId,
-    status: 'cancelled',
-    createdAt: currentStatus.createdAt,
-    updatedAt: cancelledAt,
-    activeAttempt: currentStatus.activeAttempt,
-    startedAt: currentStatus.startedAt,
-    completedAt: cancelledAt,
-    checkpointKey: 'cancelled',
-    lastError: input.reason,
-  }));
+  saveDurableRunStatus(
+    input.runPaths.statusPath,
+    createInitialDurableRunStatus({
+      runId: input.runId,
+      status: 'cancelled',
+      createdAt: currentStatus.createdAt,
+      updatedAt: cancelledAt,
+      activeAttempt: currentStatus.activeAttempt,
+      startedAt: currentStatus.startedAt,
+      completedAt: cancelledAt,
+      checkpointKey: 'cancelled',
+      lastError: input.reason,
+    }),
+  );
 
   saveDurableRunCheckpoint(input.runPaths.checkpointPath, {
     version: 1,
@@ -469,23 +470,31 @@ export async function markBackgroundRunInterrupted(input: {
     return false;
   }
 
-  if (currentStatus.status === 'completed' || currentStatus.status === 'failed' || currentStatus.status === 'cancelled' || currentStatus.status === 'interrupted') {
+  if (
+    currentStatus.status === 'completed' ||
+    currentStatus.status === 'failed' ||
+    currentStatus.status === 'cancelled' ||
+    currentStatus.status === 'interrupted'
+  ) {
     return false;
   }
 
   const interruptedAt = new Date(input.interruptedAt ?? Date.now()).toISOString();
   const checkpoint = loadDurableRunCheckpoint(input.runPaths.checkpointPath);
 
-  saveDurableRunStatus(input.runPaths.statusPath, createInitialDurableRunStatus({
-    runId: input.runId,
-    status: 'interrupted',
-    createdAt: currentStatus.createdAt,
-    updatedAt: interruptedAt,
-    activeAttempt: currentStatus.activeAttempt,
-    startedAt: currentStatus.startedAt,
-    checkpointKey: 'interrupted',
-    lastError: input.reason,
-  }));
+  saveDurableRunStatus(
+    input.runPaths.statusPath,
+    createInitialDurableRunStatus({
+      runId: input.runId,
+      status: 'interrupted',
+      createdAt: currentStatus.createdAt,
+      updatedAt: interruptedAt,
+      activeAttempt: currentStatus.activeAttempt,
+      startedAt: currentStatus.startedAt,
+      checkpointKey: 'interrupted',
+      lastError: input.reason,
+    }),
+  );
 
   saveDurableRunCheckpoint(input.runPaths.checkpointPath, {
     version: 1,

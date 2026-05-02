@@ -1,70 +1,54 @@
 import type { Express } from 'express';
-import type { ServerRouteContext } from './context.js';
-import {
-  setConversationServiceContext,
-  readConversationSessionSignature,
-  readSessionDetailForRoute,
-  parseTailBlocksQuery,
-  publishConversationSessionMetaChanged,
-  toggleConversationAttention,
-} from '../conversations/conversationService.js';
-import {
-  ConversationDeferredResumeCapabilityNotFoundError,
-  cancelConversationDeferredResumeCapability,
-  fireConversationDeferredResumeCapability,
-  readConversationDeferredResumesCapability,
-  scheduleConversationDeferredResumeCapability,
-} from '../conversations/conversationDeferredResumeCapability.js';
-import {
-  buildAppendOnlySessionDetailResponse,
-  readSessionBlock,
-  readSessionImageAsset,
-} from '../conversations/sessions.js';
-import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
-import {
-  logError,
-  logInfo,
-  logWarn,
-  logSlowConversationPerf,
-  setServerTimingHeaders,
-  invalidateAppTopics,
-} from '../middleware/index.js';
+
 import {
   ConversationAssetCapabilityInputError,
   ConversationAssetCapabilityNotFoundError,
   createConversationAttachmentCapability,
+  createConversationCommitCheckpointCommentCapability,
   readConversationArtifactCapability,
   readConversationArtifactsCapability,
   readConversationAttachmentCapability,
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
-  createConversationCommitCheckpointCommentCapability,
   readConversationCheckpointReviewContextCapability,
   readConversationCommitCheckpointCapability,
   readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
+import { readConversationContextDocs, writeConversationContextDocs } from '../conversations/conversationContextDocs.js';
 import {
-  readConversationSessionMetaCapability,
-  readConversationSessionSearchIndexCapability,
-  readConversationSessionsCapability,
-} from '../conversations/conversationSessionCapability.js';
+  cancelConversationDeferredResumeCapability,
+  ConversationDeferredResumeCapabilityNotFoundError,
+  fireConversationDeferredResumeCapability,
+  readConversationDeferredResumesCapability,
+  scheduleConversationDeferredResumeCapability,
+} from '../conversations/conversationDeferredResumeCapability.js';
 import {
   ConversationInspectCapabilityInputError,
   searchConversationInspectSessions,
 } from '../conversations/conversationInspectCapability.js';
 import {
-  readConversationSummaryIndexCapability,
-  startConversationSummaryBackfillLoop,
-} from '../conversations/conversationSummaries.js';
+  parseTailBlocksQuery,
+  publishConversationSessionMetaChanged,
+  readConversationSessionSignature,
+  readSessionDetailForRoute,
+  setConversationServiceContext,
+  toggleConversationAttention,
+} from '../conversations/conversationService.js';
+import {
+  readConversationSessionMetaCapability,
+  readConversationSessionsCapability,
+  readConversationSessionSearchIndexCapability,
+} from '../conversations/conversationSessionCapability.js';
+import { readConversationSummaryIndexCapability, startConversationSummaryBackfillLoop } from '../conversations/conversationSummaries.js';
 import {
   readCachedRelatedConversationPointers,
   warmRelatedConversationPointerCache,
 } from '../conversations/relatedConversationPointers.js';
-import {
-  readConversationContextDocs,
-  writeConversationContextDocs,
-} from '../conversations/conversationContextDocs.js';
+import { buildAppendOnlySessionDetailResponse, readSessionBlock, readSessionImageAsset } from '../conversations/sessions.js';
+import { invalidateAppTopics, logError, logInfo, logSlowConversationPerf, logWarn, setServerTimingHeaders } from '../middleware/index.js';
+import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
+import type { ServerRouteContext } from './context.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
@@ -87,15 +71,14 @@ function initializeConversationRoutesContext(
 
 function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
   const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-  const parsed = typeof candidate === 'number'
-    ? candidate
-    : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
-      ? Number.parseInt(candidate.trim(), 10)
-      : undefined;
+  const parsed =
+    typeof candidate === 'number'
+      ? candidate
+      : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
+        ? Number.parseInt(candidate.trim(), 10)
+        : undefined;
 
-  return Number.isSafeInteger(parsed) && (parsed as number) >= 0
-    ? parsed as number
-    : undefined;
+  return Number.isSafeInteger(parsed) && (parsed as number) >= 0 ? (parsed as number) : undefined;
 }
 
 function parseNonNegativeIntegerPath(value: string): number | null {
@@ -190,27 +173,32 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
       const rawKnownSessionSignature = Array.isArray(req.query.knownSessionSignature)
         ? req.query.knownSessionSignature[0]
         : req.query.knownSessionSignature;
-      const knownSessionSignature = typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
-        ? rawKnownSessionSignature.trim()
-        : undefined;
+      const knownSessionSignature =
+        typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
+          ? rawKnownSessionSignature.trim()
+          : undefined;
       const knownBlockOffset = parseNonNegativeIntegerQuery(req.query.knownBlockOffset);
       const knownTotalBlocks = parseNonNegativeIntegerQuery(req.query.knownTotalBlocks);
       const knownLastBlockId = parseTrimmedQueryString(req.query.knownLastBlockId);
       const currentSessionSignature = readConversationSessionSignature(req.params.id);
       if (knownSessionSignature && currentSessionSignature && knownSessionSignature === currentSessionSignature) {
         const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-        setServerTimingHeaders(res, [
-          { name: 'remote_sync', durationMs: 0, description: 'deferred' },
-          { name: 'session_read', durationMs: 0, description: 'reuse/signature' },
-          { name: 'total', durationMs },
-        ], {
-          route: 'session-detail',
-          conversationId: req.params.id,
-          ...(tailBlocks ? { tailBlocks } : {}),
-          remoteMirror: { status: 'deferred', durationMs: 0 },
-          sessionRead: null,
-          durationMs,
-        });
+        setServerTimingHeaders(
+          res,
+          [
+            { name: 'remote_sync', durationMs: 0, description: 'deferred' },
+            { name: 'session_read', durationMs: 0, description: 'reuse/signature' },
+            { name: 'total', durationMs },
+          ],
+          {
+            route: 'session-detail',
+            conversationId: req.params.id,
+            ...(tailBlocks ? { tailBlocks } : {}),
+            remoteMirror: { status: 'deferred', durationMs: 0 },
+            sessionRead: null,
+            durationMs,
+          },
+        );
 
         res.json({
           unchanged: true,
@@ -225,49 +213,69 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
         profile: getCurrentProfileFn(),
         tailBlocks,
       });
-      if (!sessionRead.detail) { res.status(404).json({ error: 'Session not found' }); return; }
+      if (!sessionRead.detail) {
+        res.status(404).json({ error: 'Session not found' });
+        return;
+      }
 
-      const appendOnly = knownSessionSignature && sessionRead.detail.signature && knownSessionSignature !== sessionRead.detail.signature
-        ? buildAppendOnlySessionDetailResponse({
-            detail: sessionRead.detail,
-            knownBlockOffset,
-            knownTotalBlocks,
-            knownLastBlockId,
-          })
-        : null;
+      const appendOnly =
+        knownSessionSignature && sessionRead.detail.signature && knownSessionSignature !== sessionRead.detail.signature
+          ? buildAppendOnlySessionDetailResponse({
+              detail: sessionRead.detail,
+              knownBlockOffset,
+              knownTotalBlocks,
+              knownLastBlockId,
+            })
+          : null;
       if (appendOnly) {
         const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-        setServerTimingHeaders(res, [
-          { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
-          { name: 'session_read', durationMs: sessionRead.telemetry?.durationMs ?? 0, description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown' },
-          { name: 'total', durationMs },
-        ], {
-          route: 'session-detail',
-          conversationId: req.params.id,
-          ...(tailBlocks ? { tailBlocks } : {}),
-          remoteMirror,
-          sessionRead: sessionRead.telemetry,
-          result: 'append-only',
-          durationMs,
-        });
+        setServerTimingHeaders(
+          res,
+          [
+            { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
+            {
+              name: 'session_read',
+              durationMs: sessionRead.telemetry?.durationMs ?? 0,
+              description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown',
+            },
+            { name: 'total', durationMs },
+          ],
+          {
+            route: 'session-detail',
+            conversationId: req.params.id,
+            ...(tailBlocks ? { tailBlocks } : {}),
+            remoteMirror,
+            sessionRead: sessionRead.telemetry,
+            result: 'append-only',
+            durationMs,
+          },
+        );
 
         res.json(appendOnly);
         return;
       }
 
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      setServerTimingHeaders(res, [
-        { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
-        { name: 'session_read', durationMs: sessionRead.telemetry?.durationMs ?? 0, description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown' },
-        { name: 'total', durationMs },
-      ], {
-        route: 'session-detail',
-        conversationId: req.params.id,
-        ...(tailBlocks ? { tailBlocks } : {}),
-        remoteMirror,
-        sessionRead: sessionRead.telemetry,
-        durationMs,
-      });
+      setServerTimingHeaders(
+        res,
+        [
+          { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
+          {
+            name: 'session_read',
+            durationMs: sessionRead.telemetry?.durationMs ?? 0,
+            description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown',
+          },
+          { name: 'total', durationMs },
+        ],
+        {
+          route: 'session-detail',
+          conversationId: req.params.id,
+          ...(tailBlocks ? { tailBlocks } : {}),
+          remoteMirror,
+          sessionRead: sessionRead.telemetry,
+          durationMs,
+        },
+      );
       logSlowConversationPerf('session detail request', {
         conversationId: req.params.id,
         durationMs,
@@ -291,7 +299,10 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
   router.get('/api/sessions/:id/blocks/:blockId/image', (req, res) => {
     try {
       const asset = readSessionImageAsset(req.params.id, req.params.blockId);
-      if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
+      if (!asset) {
+        res.status(404).json({ error: 'Session image not found' });
+        return;
+      }
       if (asset.fileName) {
         res.setHeader('Content-Disposition', buildContentDispositionHeader('inline', asset.fileName));
       }
@@ -315,7 +326,10 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
         return;
       }
       const asset = readSessionImageAsset(req.params.id, req.params.blockId, imageIndex);
-      if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
+      if (!asset) {
+        res.status(404).json({ error: 'Session image not found' });
+        return;
+      }
       if (asset.fileName) {
         res.setHeader('Content-Disposition', buildContentDispositionHeader('inline', asset.fileName));
       }
@@ -334,7 +348,10 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
   router.get('/api/sessions/:id/blocks/:blockId', (req, res) => {
     try {
       const result = readSessionBlock(req.params.id, req.params.blockId);
-      if (!result) { res.status(404).json({ error: 'Session block not found' }); return; }
+      if (!result) {
+        res.status(404).json({ error: 'Session block not found' });
+        return;
+      }
       res.json(result);
     } catch (err) {
       logError('request handler error', {
@@ -383,14 +400,16 @@ export function registerConversationRoutes(
   router.post('/api/sessions/search', (req, res) => {
     try {
       const body = req.body as { query?: unknown; limit?: unknown };
-      res.json(searchConversationInspectSessions({
-        query: body.query,
-        limit: body.limit,
-        scope: 'all',
-        searchMode: 'allTerms',
-        maxSnippetCharacters: 220,
-        stopAfterLimit: true,
-      }));
+      res.json(
+        searchConversationInspectSessions({
+          query: body.query,
+          limit: body.limit,
+          scope: 'all',
+          searchMode: 'allTerms',
+          maxSnippetCharacters: 220,
+          stopAfterLimit: true,
+        }),
+      );
     } catch (err) {
       if (err instanceof ConversationInspectCapabilityInputError) {
         res.status(400).json({ error: err.message });
@@ -467,12 +486,14 @@ export function registerConversationRoutes(
   router.post('/api/conversations/:id/deferred-resumes', async (req, res) => {
     try {
       const { delay, prompt, behavior } = req.body as { delay?: string; prompt?: string; behavior?: 'steer' | 'followUp' };
-      res.json(await scheduleConversationDeferredResumeCapability({
-        conversationId: req.params.id,
-        delay,
-        prompt,
-        behavior,
-      }));
+      res.json(
+        await scheduleConversationDeferredResumeCapability({
+          conversationId: req.params.id,
+          delay,
+          prompt,
+          behavior,
+        }),
+      );
     } catch (err) {
       if (writeConversationDeferredResumeCapabilityError(res, err)) {
         return;
@@ -483,10 +504,12 @@ export function registerConversationRoutes(
 
   router.delete('/api/conversations/:id/deferred-resumes/:resumeId', async (req, res) => {
     try {
-      res.json(await cancelConversationDeferredResumeCapability({
-        conversationId: req.params.id,
-        resumeId: req.params.resumeId,
-      }));
+      res.json(
+        await cancelConversationDeferredResumeCapability({
+          conversationId: req.params.id,
+          resumeId: req.params.resumeId,
+        }),
+      );
     } catch (err) {
       if (writeConversationDeferredResumeCapabilityError(res, err)) {
         return;
@@ -497,11 +520,13 @@ export function registerConversationRoutes(
 
   router.post('/api/conversations/:id/deferred-resumes/:resumeId/fire', async (req, res) => {
     try {
-      res.json(await fireConversationDeferredResumeCapability({
-        conversationId: req.params.id,
-        resumeId: req.params.resumeId,
-        flushLiveDeferredResumes: flushLiveDeferredResumesFn,
-      }));
+      res.json(
+        await fireConversationDeferredResumeCapability({
+          conversationId: req.params.id,
+          resumeId: req.params.resumeId,
+          flushLiveDeferredResumes: flushLiveDeferredResumesFn,
+        }),
+      );
     } catch (err) {
       if (writeConversationDeferredResumeCapabilityError(res, err)) {
         return;
@@ -527,10 +552,12 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
     try {
-      res.json(readConversationArtifactCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        artifactId: req.params.artifactId,
-      }));
+      res.json(
+        readConversationArtifactCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          artifactId: req.params.artifactId,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -560,10 +587,12 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/checkpoints/:checkpointId', (req, res) => {
     try {
-      res.json(readConversationCommitCheckpointCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        checkpointId: req.params.checkpointId,
-      }));
+      res.json(
+        readConversationCommitCheckpointCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          checkpointId: req.params.checkpointId,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -578,10 +607,12 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/checkpoints/:checkpointId/review-context', async (req, res) => {
     try {
-      res.json(await readConversationCheckpointReviewContextCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        checkpointId: req.params.checkpointId,
-      }));
+      res.json(
+        await readConversationCheckpointReviewContextCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          checkpointId: req.params.checkpointId,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -596,12 +627,14 @@ export function registerConversationRoutes(
 
   router.post('/api/conversations/:id/checkpoints/:checkpointId/comments', (req, res) => {
     try {
-      res.json(createConversationCommitCheckpointCommentCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        checkpointId: req.params.checkpointId,
-        body: req.body?.body,
-        filePath: req.body?.filePath,
-      }));
+      res.json(
+        createConversationCommitCheckpointCommentCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          checkpointId: req.params.checkpointId,
+          body: req.body?.body,
+          filePath: req.body?.filePath,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -631,10 +664,12 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
     try {
-      res.json(readConversationAttachmentCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        attachmentId: req.params.attachmentId,
-      }));
+      res.json(
+        readConversationAttachmentCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          attachmentId: req.params.attachmentId,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -661,10 +696,12 @@ export function registerConversationRoutes(
         note?: string;
       };
 
-      res.json(createConversationAttachmentCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        ...body,
-      }));
+      res.json(
+        createConversationAttachmentCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          ...body,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -690,11 +727,13 @@ export function registerConversationRoutes(
         note?: string;
       };
 
-      res.json(updateConversationAttachmentCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        attachmentId: req.params.attachmentId,
-        ...body,
-      }));
+      res.json(
+        updateConversationAttachmentCapability(getCurrentProfileFn(), {
+          conversationId: req.params.id,
+          attachmentId: req.params.attachmentId,
+          ...body,
+        }),
+      );
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -710,9 +749,7 @@ export function registerConversationRoutes(
   router.get('/api/conversations/:id/attachments/:attachmentId/download/:asset', (req, res) => {
     try {
       const revisionQuery = parsePositiveIntegerQuery(req.query.revision);
-      const asset = req.params.asset === 'source' || req.params.asset === 'preview'
-        ? req.params.asset
-        : 'invalid';
+      const asset = req.params.asset === 'source' || req.params.asset === 'preview' ? req.params.asset : 'invalid';
 
       const download = readConversationAttachmentDownloadCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
@@ -722,10 +759,7 @@ export function registerConversationRoutes(
       });
 
       res.setHeader('Content-Type', download.mimeType);
-      res.setHeader('Content-Disposition', buildContentDispositionHeader(
-        asset === 'preview' ? 'inline' : 'attachment',
-        download.fileName,
-      ));
+      res.setHeader('Content-Disposition', buildContentDispositionHeader(asset === 'preview' ? 'inline' : 'attachment', download.fileName));
       res.sendFile(download.filePath);
     } catch (err) {
       logError('request handler error', {
@@ -800,7 +834,4 @@ export function registerConversationRoutes(
       res.status(500).json({ error: String(err) });
     }
   });
-
 }
-
-

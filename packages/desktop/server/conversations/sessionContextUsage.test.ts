@@ -2,7 +2,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { estimateContextUsageSegments, readSessionContextUsageFromFile } from './sessionContextUsage.js';
 
 const tempDirs: string[] = [];
@@ -25,36 +27,52 @@ function sumSegments(segments: Array<{ tokens: number }> | undefined): number {
 
 describe('readSessionContextUsageFromFile', () => {
   it('splits effective context into scaled user, assistant, and tool segments', () => {
-    const segments = estimateContextUsageSegments([
-      { role: 'user', content: [{ type: 'text', text: 'review the diff' }] },
-      {
-        role: 'assistant',
-        content: [
-          { type: 'thinking', thinking: 'plan' },
-          { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { path: 'README.md' } },
-          { type: 'text', text: 'I checked the file.' },
-        ],
-        provider: 'openai-codex',
-        model: 'gpt-5.4',
-        stopReason: 'stop',
-        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-        timestamp: Date.parse('2026-03-10T20:00:01.000Z'),
-      },
-      { role: 'toolResult', toolCallId: 'tool-1', toolName: 'read', content: [{ type: 'text', text: 'some output' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') },
-    ] as never, 1_200);
+    const segments = estimateContextUsageSegments(
+      [
+        { role: 'user', content: [{ type: 'text', text: 'review the diff' }] },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'plan' },
+            { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { path: 'README.md' } },
+            { type: 'text', text: 'I checked the file.' },
+          ],
+          provider: 'openai-codex',
+          model: 'gpt-5.4',
+          stopReason: 'stop',
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          timestamp: Date.parse('2026-03-10T20:00:01.000Z'),
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'tool-1',
+          toolName: 'read',
+          content: [{ type: 'text', text: 'some output' }],
+          timestamp: Date.parse('2026-03-10T20:00:02.000Z'),
+        },
+      ] as never,
+      1_200,
+    );
 
     expect(sumSegments(segments)).toBe(1_200);
-    expect(segments).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'user' }),
-      expect.objectContaining({ key: 'assistant' }),
-      expect.objectContaining({ key: 'tool' }),
-    ]));
+    expect(segments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'user' }),
+        expect.objectContaining({ key: 'assistant' }),
+        expect.objectContaining({ key: 'tool' }),
+      ]),
+    );
   });
 
   it('rejects fractional and unsafe context token totals', () => {
-    const messages = [
-      { role: 'user', content: [{ type: 'text', text: 'review the diff' }] },
-    ] as never;
+    const messages = [{ role: 'user', content: [{ type: 'text', text: 'review the diff' }] }] as never;
 
     expect(estimateContextUsageSegments(messages, 1_200.5)).toEqual([]);
     expect(estimateContextUsageSegments(messages, Number.MAX_SAFE_INTEGER + 1)).toEqual([]);
@@ -63,8 +81,21 @@ describe('readSessionContextUsageFromFile', () => {
   it('returns null context tokens after compaction until a post-compaction assistant responds', () => {
     const file = createTempSessionFile([
       { type: 'session', id: 'session-1', timestamp: '2026-03-10T20:00:00.000Z', cwd: '/tmp/project', version: 3 },
-      { type: 'model_change', id: 'm1', parentId: null, timestamp: '2026-03-10T20:00:01.000Z', provider: 'openai-codex', modelId: 'gpt-5.4' },
-      { type: 'message', id: 'u1', parentId: 'm1', timestamp: '2026-03-10T20:00:02.000Z', message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') } },
+      {
+        type: 'model_change',
+        id: 'm1',
+        parentId: null,
+        timestamp: '2026-03-10T20:00:01.000Z',
+        provider: 'openai-codex',
+        modelId: 'gpt-5.4',
+      },
+      {
+        type: 'message',
+        id: 'u1',
+        parentId: 'm1',
+        timestamp: '2026-03-10T20:00:02.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') },
+      },
       {
         type: 'message',
         id: 'a1',
@@ -75,13 +106,34 @@ describe('readSessionContextUsageFromFile', () => {
           content: [{ type: 'text', text: 'hi' }],
           provider: 'openai-codex',
           model: 'gpt-5.4',
-          usage: { input: 1000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 1100, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          usage: {
+            input: 1000,
+            output: 100,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 1100,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
           stopReason: 'stop',
           timestamp: Date.parse('2026-03-10T20:00:03.000Z'),
         },
       },
-      { type: 'compaction', id: 'c1', parentId: 'a1', timestamp: '2026-03-10T20:00:04.000Z', summary: 'Compacted.', firstKeptEntryId: 'u1', tokensBefore: 1100 },
-      { type: 'message', id: 'u2', parentId: 'c1', timestamp: '2026-03-10T20:00:05.000Z', message: { role: 'user', content: [{ type: 'text', text: 'continue' }], timestamp: Date.parse('2026-03-10T20:00:05.000Z') } },
+      {
+        type: 'compaction',
+        id: 'c1',
+        parentId: 'a1',
+        timestamp: '2026-03-10T20:00:04.000Z',
+        summary: 'Compacted.',
+        firstKeptEntryId: 'u1',
+        tokensBefore: 1100,
+      },
+      {
+        type: 'message',
+        id: 'u2',
+        parentId: 'c1',
+        timestamp: '2026-03-10T20:00:05.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'continue' }], timestamp: Date.parse('2026-03-10T20:00:05.000Z') },
+      },
     ]);
 
     expect(readSessionContextUsageFromFile(file)).toEqual({ tokens: null, modelId: 'gpt-5.4' });
@@ -90,8 +142,21 @@ describe('readSessionContextUsageFromFile', () => {
   it('uses post-compaction assistant usage instead of pre-compaction transcript totals', () => {
     const file = createTempSessionFile([
       { type: 'session', id: 'session-1', timestamp: '2026-03-10T20:00:00.000Z', cwd: '/tmp/project', version: 3 },
-      { type: 'model_change', id: 'm1', parentId: null, timestamp: '2026-03-10T20:00:01.000Z', provider: 'openai-codex', modelId: 'gpt-5.4' },
-      { type: 'message', id: 'u1', parentId: 'm1', timestamp: '2026-03-10T20:00:02.000Z', message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') } },
+      {
+        type: 'model_change',
+        id: 'm1',
+        parentId: null,
+        timestamp: '2026-03-10T20:00:01.000Z',
+        provider: 'openai-codex',
+        modelId: 'gpt-5.4',
+      },
+      {
+        type: 'message',
+        id: 'u1',
+        parentId: 'm1',
+        timestamp: '2026-03-10T20:00:02.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') },
+      },
       {
         type: 'message',
         id: 'a1',
@@ -102,13 +167,34 @@ describe('readSessionContextUsageFromFile', () => {
           content: [{ type: 'text', text: 'hi' }],
           provider: 'openai-codex',
           model: 'gpt-5.4',
-          usage: { input: 200000, output: 15000, cacheRead: 0, cacheWrite: 0, totalTokens: 215000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          usage: {
+            input: 200000,
+            output: 15000,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 215000,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
           stopReason: 'stop',
           timestamp: Date.parse('2026-03-10T20:00:03.000Z'),
         },
       },
-      { type: 'compaction', id: 'c1', parentId: 'a1', timestamp: '2026-03-10T20:00:04.000Z', summary: 'Compacted.', firstKeptEntryId: 'u1', tokensBefore: 215000 },
-      { type: 'message', id: 'u2', parentId: 'c1', timestamp: '2026-03-10T20:00:05.000Z', message: { role: 'user', content: [{ type: 'text', text: 'continue' }], timestamp: Date.parse('2026-03-10T20:00:05.000Z') } },
+      {
+        type: 'compaction',
+        id: 'c1',
+        parentId: 'a1',
+        timestamp: '2026-03-10T20:00:04.000Z',
+        summary: 'Compacted.',
+        firstKeptEntryId: 'u1',
+        tokensBefore: 215000,
+      },
+      {
+        type: 'message',
+        id: 'u2',
+        parentId: 'c1',
+        timestamp: '2026-03-10T20:00:05.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'continue' }], timestamp: Date.parse('2026-03-10T20:00:05.000Z') },
+      },
       {
         type: 'message',
         id: 'a2',
@@ -119,7 +205,14 @@ describe('readSessionContextUsageFromFile', () => {
           content: [{ type: 'text', text: 'done' }],
           provider: 'openai-codex',
           model: 'gpt-5.4',
-          usage: { input: 14000, output: 800, cacheRead: 0, cacheWrite: 0, totalTokens: 14800, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          usage: {
+            input: 14000,
+            output: 800,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 14800,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
           stopReason: 'stop',
           timestamp: Date.parse('2026-03-10T20:00:06.000Z'),
         },
@@ -127,23 +220,38 @@ describe('readSessionContextUsageFromFile', () => {
     ]);
 
     const usage = readSessionContextUsageFromFile(file);
-    expect(usage).toEqual(expect.objectContaining({
-      tokens: 14800,
-      modelId: 'gpt-5.4',
-      segments: expect.arrayContaining([
-        expect.objectContaining({ key: 'user' }),
-        expect.objectContaining({ key: 'assistant' }),
-        expect.objectContaining({ key: 'summary' }),
-      ]),
-    }));
+    expect(usage).toEqual(
+      expect.objectContaining({
+        tokens: 14800,
+        modelId: 'gpt-5.4',
+        segments: expect.arrayContaining([
+          expect.objectContaining({ key: 'user' }),
+          expect.objectContaining({ key: 'assistant' }),
+          expect.objectContaining({ key: 'summary' }),
+        ]),
+      }),
+    );
     expect(sumSegments(usage?.segments)).toBe(14800);
   });
 
   it('omits unsafe context token totals restored from transcript usage', () => {
     const file = createTempSessionFile([
       { type: 'session', id: 'session-1', timestamp: '2026-03-10T20:00:00.000Z', cwd: '/tmp/project', version: 3 },
-      { type: 'model_change', id: 'm1', parentId: null, timestamp: '2026-03-10T20:00:01.000Z', provider: 'openai-codex', modelId: 'gpt-5.4' },
-      { type: 'message', id: 'u1', parentId: 'm1', timestamp: '2026-03-10T20:00:02.000Z', message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') } },
+      {
+        type: 'model_change',
+        id: 'm1',
+        parentId: null,
+        timestamp: '2026-03-10T20:00:01.000Z',
+        provider: 'openai-codex',
+        modelId: 'gpt-5.4',
+      },
+      {
+        type: 'message',
+        id: 'u1',
+        parentId: 'm1',
+        timestamp: '2026-03-10T20:00:02.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') },
+      },
       {
         type: 'message',
         id: 'a1',
@@ -154,7 +262,14 @@ describe('readSessionContextUsageFromFile', () => {
           content: [{ type: 'text', text: 'hi' }],
           provider: 'openai-codex',
           model: 'gpt-5.4',
-          usage: { input: Number.MAX_SAFE_INTEGER + 1, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: Number.MAX_SAFE_INTEGER + 101, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          usage: {
+            input: Number.MAX_SAFE_INTEGER + 1,
+            output: 100,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: Number.MAX_SAFE_INTEGER + 101,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
           stopReason: 'stop',
           timestamp: Date.parse('2026-03-10T20:00:03.000Z'),
         },

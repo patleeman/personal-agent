@@ -1,8 +1,6 @@
 import type { SessionManager } from '@mariozechner/pi-coding-agent';
-import {
-  resolveTranscriptTailRecoveryPlan,
-  type TranscriptTailRecoveryReason,
-} from './liveSessionRecovery.js';
+
+import { resolveTranscriptTailRecoveryPlan, type TranscriptTailRecoveryReason } from './liveSessionRecovery.js';
 
 export interface LiveSessionTranscriptRepairHost {
   session: {
@@ -26,10 +24,10 @@ export function repairLiveSessionTranscriptTail<TEntry extends LiveSessionTransc
   reason: TranscriptTailRecoveryReason | null;
   summary?: string;
 } {
-  const sessionManager = entry.session.sessionManager as Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'branchWithSummary' | 'resetLeaf' | 'buildSessionContext'>> | undefined;
-  if (!sessionManager
-    || typeof sessionManager.getBranch !== 'function'
-    || typeof sessionManager.getEntry !== 'function') {
+  const sessionManager = entry.session.sessionManager as
+    | Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'branchWithSummary' | 'resetLeaf' | 'buildSessionContext'>>
+    | undefined;
+  if (!sessionManager || typeof sessionManager.getBranch !== 'function' || typeof sessionManager.getEntry !== 'function') {
     return {
       recoverable: false,
       repaired: false,
@@ -46,11 +44,11 @@ export function repairLiveSessionTranscriptTail<TEntry extends LiveSessionTransc
     };
   }
 
-  if (typeof sessionManager.resetLeaf !== 'function'
-    || typeof sessionManager.buildSessionContext !== 'function'
-    || (plan.targetEntryId !== null
-      && typeof sessionManager.branch !== 'function'
-      && typeof sessionManager.branchWithSummary !== 'function')) {
+  if (
+    typeof sessionManager.resetLeaf !== 'function' ||
+    typeof sessionManager.buildSessionContext !== 'function' ||
+    (plan.targetEntryId !== null && typeof sessionManager.branch !== 'function' && typeof sessionManager.branchWithSummary !== 'function')
+  ) {
     return {
       recoverable: true,
       repaired: false,

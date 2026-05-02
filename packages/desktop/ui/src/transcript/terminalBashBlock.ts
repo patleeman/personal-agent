@@ -33,9 +33,7 @@ function readBoolean(value: Record<string, unknown> | null, key: string): boolea
   return value?.[key] === true;
 }
 
-export function readTerminalBashToolPresentation(
-  block: MessageBlock | null | undefined,
-): TerminalBashToolPresentation | null {
+export function readTerminalBashToolPresentation(block: MessageBlock | null | undefined): TerminalBashToolPresentation | null {
   if (!block || block.type !== 'tool_use' || block.tool !== 'bash') {
     return null;
   }
@@ -61,8 +59,6 @@ export function readTerminalBashToolPresentation(
   };
 }
 
-export function isTerminalBashToolBlock(
-  block: MessageBlock | null | undefined,
-): block is Extract<MessageBlock, { type: 'tool_use' }> {
+export function isTerminalBashToolBlock(block: MessageBlock | null | undefined): block is Extract<MessageBlock, { type: 'tool_use' }> {
   return readTerminalBashToolPresentation(block) !== null;
 }

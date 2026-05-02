@@ -1,15 +1,11 @@
-import type { Express, Request, Response } from 'express';
-import { listProfiles, readPackageSourceTargetState } from '@personal-agent/core';
-import {
-  buildMergedMcpConfigDocument,
-  inspectCliBinary,
-  readBundledSkillMcpManifests,
-  readMcpConfigDocument,
-} from '@personal-agent/core';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
+import { listProfiles, readPackageSourceTargetState } from '@personal-agent/core';
+import { buildMergedMcpConfigDocument, inspectCliBinary, readBundledSkillMcpManifests, readMcpConfigDocument } from '@personal-agent/core';
+import type { Express, Request, Response } from 'express';
+
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
 import { logError } from '../middleware/index.js';
+import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for tools routes');
@@ -38,7 +34,15 @@ let withTemporaryProfileAgentDirFn: <T>(profile: string, run: (agentDir: string)
 const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 
 function initializeToolsRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getProfilesRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'withTemporaryProfileAgentDir'>,
+  context: Pick<
+    ServerRouteContext,
+    | 'getCurrentProfile'
+    | 'getRepoRoot'
+    | 'getProfilesRoot'
+    | 'buildLiveSessionResourceOptions'
+    | 'buildLiveSessionExtensionFactories'
+    | 'withTemporaryProfileAgentDir'
+  >,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
@@ -49,9 +53,7 @@ function initializeToolsRoutesContext(
 }
 
 function resolveRequestedProfileFromQuery(req: Request): string {
-  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string'
-    ? req.query[VIEW_PROFILE_QUERY_PARAM].trim()
-    : '';
+  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string' ? req.query[VIEW_PROFILE_QUERY_PARAM].trim() : '';
 
   if (!requestedProfile) {
     return getCurrentProfileFn();
@@ -89,11 +91,7 @@ function buildPackageInstallState(profile = getCurrentProfileFn()) {
   };
 }
 
-function buildMcpCallbackUrl(input: {
-  callbackHost?: string;
-  callbackPort?: number;
-  callbackPath?: string;
-}): string | undefined {
+function buildMcpCallbackUrl(input: { callbackHost?: string; callbackPort?: number; callbackPath?: string }): string | undefined {
   if (!input.callbackHost && !input.callbackPort && !input.callbackPath) {
     return undefined;
   }
@@ -108,11 +106,13 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
   try {
     const profile = resolveRequestedProfileFromQuery(req);
     const resourceOptions = buildLiveSessionResourceOptionsFn(profile);
-    const details = await withTemporaryProfileAgentDirFn(profile, (agentDir) => inspectAvailableTools(getRepoRootFn(), {
-      ...resourceOptions,
-      agentDir,
-      extensionFactories: buildLiveSessionExtensionFactoriesFn(),
-    }));
+    const details = await withTemporaryProfileAgentDirFn(profile, (agentDir) =>
+      inspectAvailableTools(getRepoRootFn(), {
+        ...resourceOptions,
+        agentDir,
+        extensionFactories: buildLiveSessionExtensionFactoriesFn(),
+      }),
+    );
     const bundledSkillManifests = readBundledSkillMcpManifests(resourceOptions.additionalSkillPaths ?? []);
     const configDiscoveryEnv = { ...process.env };
     delete configDiscoveryEnv.MCP_CONFIG_PATH;
@@ -202,7 +202,15 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
 
 export function registerToolsRoutes(
   app: Pick<Express, 'get'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getProfilesRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'withTemporaryProfileAgentDir'>,
+  context: Pick<
+    ServerRouteContext,
+    | 'getCurrentProfile'
+    | 'getRepoRoot'
+    | 'getProfilesRoot'
+    | 'buildLiveSessionResourceOptions'
+    | 'buildLiveSessionExtensionFactories'
+    | 'withTemporaryProfileAgentDir'
+  >,
 ): void {
   initializeToolsRoutesContext(context);
   app.get('/api/tools', handleToolsRequest);

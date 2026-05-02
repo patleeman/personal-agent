@@ -1,17 +1,18 @@
 import { memo, useCallback, useMemo, useState } from 'react';
+
 import { parseSkillBlock } from '../../knowledge/skillBlock';
 import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
-import { buildReplySelectionScopeProps, type ReplySelectionGestureHandler } from './replySelection.js';
-import { buildSummaryPreview } from './summaryPreview.js';
-import { renderMarkdownText, renderText, SkillInvocationCard } from './MarkdownMessage.js';
-import { MessageActions } from './MessageActions.js';
-import { ImagePreview, type InspectableImage } from './ImageMessageBlocks.js';
+import { cx, SurfacePanel } from '../ui';
 import type { ChatViewLayout } from './chatViewTypes.js';
-import { SurfacePanel, cx } from '../ui';
+import { ImagePreview, type InspectableImage } from './ImageMessageBlocks.js';
 import { InlineTraceRunCard } from './InlineTraceRunCard.js';
 import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
 import { readMentionedLinkedRunsFromText } from './linkedRuns.js';
+import { renderMarkdownText, renderText, SkillInvocationCard } from './MarkdownMessage.js';
+import { MessageActions } from './MessageActions.js';
+import { buildReplySelectionScopeProps, type ReplySelectionGestureHandler } from './replySelection.js';
+import { buildSummaryPreview } from './summaryPreview.js';
 
 function formatInjectedContextLabel(customType?: string): string {
   if (!customType || customType === 'referenced_context') {
@@ -95,9 +96,7 @@ export const UserMessage = memo(function UserMessage({
               {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, { onOpenFilePath, onOpenCheckpoint })}
             </div>
           ) : hasText ? (
-            <div className="px-1.5 pb-0.5">
-              {renderMarkdownText(block.text, { onOpenFilePath, onOpenCheckpoint })}
-            </div>
+            <div className="px-1.5 pb-0.5">{renderMarkdownText(block.text, { onOpenFilePath, onOpenCheckpoint })}</div>
           ) : null}
         </div>
         <p className="ui-message-meta mt-1 text-right pr-1">{timeAgo(block.ts)}</p>
@@ -159,10 +158,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         <span className="ui-chat-avatar-mark">pa</span>
       </div>
       <div className="flex-1 min-w-0 space-y-1.5">
-        <div
-          {...replySelectionScopeProps}
-          className="ui-message-card-assistant text-primary space-y-1"
-        >
+        <div {...replySelectionScopeProps} className="ui-message-card-assistant text-primary space-y-1">
           {showRawRunCallbackCard ? (
             <RawRunCallbackCard
               runs={rawRunCallbackRuns}
@@ -209,11 +205,13 @@ function readRawRunCallbackLinkedRuns(text: string) {
 }
 
 function looksLikeRawRunCallback(text: string): boolean {
-  return /\b(?:Durable run|Background task)\s+\S+\s+has finished\./.test(text.trim())
-    && /\btaskSlug=/.test(text)
-    && /\bstatus=/.test(text)
-    && /\blog=/.test(text)
-    && /Recent log tail:/.test(text);
+  return (
+    /\b(?:Durable run|Background task)\s+\S+\s+has finished\./.test(text.trim()) &&
+    /\btaskSlug=/.test(text) &&
+    /\bstatus=/.test(text) &&
+    /\blog=/.test(text) &&
+    /Recent log tail:/.test(text)
+  );
 }
 
 function RawRunCallbackCard({
@@ -325,9 +323,7 @@ export function resolveCompactionSummaryDetail(title: string | undefined, extraD
   })();
 
   const normalizedExtraDetail = extraDetail?.trim();
-  return normalizedExtraDetail
-    ? `${baseDetail} ${normalizedExtraDetail}`
-    : baseDetail;
+  return normalizedExtraDetail ? `${baseDetail} ${normalizedExtraDetail}` : baseDetail;
 }
 
 export const SummaryMessage = memo(function SummaryMessage({
@@ -358,7 +354,9 @@ export const SummaryMessage = memo(function SummaryMessage({
       case 'related':
         return {
           label: block.title || 'Reused thread summaries',
-          detail: block.detail?.trim() || 'Selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
+          detail:
+            block.detail?.trim() ||
+            'Selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
           accentClass: 'border-accent/20 bg-accent/5',
           markerClass: 'border-accent/25 bg-accent/10 text-accent',
           labelClass: 'text-accent',
@@ -390,12 +388,19 @@ export const SummaryMessage = memo(function SummaryMessage({
     <div className="group">
       <SurfacePanel muted className={cx('px-3.5 py-3.5', summaryPresentation.accentClass)} data-summary-kind={block.kind}>
         <div className="flex items-start gap-3">
-          <div className={cx('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold', summaryPresentation.markerClass)}>
+          <div
+            className={cx(
+              'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold',
+              summaryPresentation.markerClass,
+            )}
+          >
             <span aria-hidden="true">{summaryPresentation.marker}</span>
           </div>
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <p className={cx('text-[10px] font-semibold uppercase tracking-[0.18em]', summaryPresentation.labelClass)}>{summaryPresentation.label}</p>
+              <p className={cx('text-[10px] font-semibold uppercase tracking-[0.18em]', summaryPresentation.labelClass)}>
+                {summaryPresentation.label}
+              </p>
               <span className="flex-1" />
               <p className="ui-message-meta">{timeAgo(block.ts)}</p>
             </div>
@@ -415,7 +420,7 @@ export const SummaryMessage = memo(function SummaryMessage({
                   type="button"
                   className="ui-action-button text-[11px]"
                   aria-expanded={expanded}
-                  onClick={() => setExpanded(current => !current)}
+                  onClick={() => setExpanded((current) => !current)}
                 >
                   {expanded ? 'Hide summary' : 'Show summary'}
                 </button>
@@ -429,4 +434,3 @@ export const SummaryMessage = memo(function SummaryMessage({
     </div>
   );
 });
-

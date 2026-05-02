@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -54,22 +55,24 @@ const {
     };
   });
   const readdirSyncMock = vi.fn((path: string) => entriesByDir.get(path) ?? []);
-  const watchMock = vi.fn((path: string, options: Record<string, unknown>, callback: (eventType: string, filename?: string | Buffer | null) => void) => {
-    if (options.recursive && unsupportedRecursivePaths.has(path)) {
-      const error = new Error(`recursive watch unsupported for ${path}`) as Error & { code?: string };
-      error.code = 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM';
-      throw error;
-    }
+  const watchMock = vi.fn(
+    (path: string, options: Record<string, unknown>, callback: (eventType: string, filename?: string | Buffer | null) => void) => {
+      if (options.recursive && unsupportedRecursivePaths.has(path)) {
+        const error = new Error(`recursive watch unsupported for ${path}`) as Error & { code?: string };
+        error.code = 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM';
+        throw error;
+      }
 
-    const explicitError = watchErrorsByPath.get(path);
-    if (explicitError) {
-      throw explicitError;
-    }
+      const explicitError = watchErrorsByPath.get(path);
+      if (explicitError) {
+        throw explicitError;
+      }
 
-    const close = vi.fn();
-    watchRegistrations.push({ path, options, callback, close });
-    return { close };
-  });
+      const close = vi.fn();
+      watchRegistrations.push({ path, options, callback, close });
+      return { close };
+    },
+  );
 
   return {
     directories,
@@ -89,8 +92,12 @@ const {
     resolveDaemonPathsMock: vi.fn(() => ({ root: '/daemon-root', socketPath: '/daemon/socket.sock' })),
     resolveDeferredResumeStateFileMock: vi.fn(() => '/state/deferred.json'),
     resolveDurableRunsRootMock: vi.fn(() => '/runs'),
-    resolveProfileActivityConversationLinksDirMock: vi.fn(({ stateRoot, profile }: { stateRoot?: string; profile: string }) => `${stateRoot ?? '/state'}/activity-links/${profile}`),
-    resolveProfileActivityStateDirMock: vi.fn(({ stateRoot, profile }: { stateRoot?: string; profile: string }) => `${stateRoot ?? '/state'}/activity/${profile}`),
+    resolveProfileActivityConversationLinksDirMock: vi.fn(
+      ({ stateRoot, profile }: { stateRoot?: string; profile: string }) => `${stateRoot ?? '/state'}/activity-links/${profile}`,
+    ),
+    resolveProfileActivityStateDirMock: vi.fn(
+      ({ stateRoot, profile }: { stateRoot?: string; profile: string }) => `${stateRoot ?? '/state'}/activity/${profile}`,
+    ),
     resolveProfileAlertsStateFileMock: vi.fn(({ profile }: { profile: string }) => `/alerts/${profile}.json`),
     resolveProfileConversationArtifactsDirMock: vi.fn(({ profile }: { profile: string }) => `/artifacts/${profile}`),
     resolveProfileConversationAttachmentsDirMock: vi.fn(({ profile }: { profile: string }) => `/attachments/${profile}`),
@@ -143,13 +150,7 @@ vi.mock('./logging.js', () => ({
   logWarn: logWarnMock,
 }));
 
-import {
-  invalidateAppTopics,
-  publishAppEvent,
-  startAppEventMonitor,
-  stopAppEventMonitor,
-  subscribeAppEvents,
-} from './appEvents.js';
+import { invalidateAppTopics, publishAppEvent, startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 
 function markDirectory(path: string): void {
   let current = path;
@@ -250,9 +251,7 @@ describe('appEvents mocked behavior', () => {
     unsubscribe();
     publishAppEvent({ type: 'connected' });
 
-    expect(events).toEqual([
-      { type: 'invalidate', topics: ['runs', 'tasks'] },
-    ]);
+    expect(events).toEqual([{ type: 'invalidate', topics: ['runs', 'tasks'] }]);
     expect(clearDurableRunsListCacheMock).toHaveBeenCalledTimes(1);
   });
 
@@ -324,10 +323,8 @@ describe('appEvents mocked behavior', () => {
       getCurrentProfile: () => 'assistant',
     });
 
-    getLatestWatch('/sessions', (registration) => registration.options.recursive === true)
-      .callback('change', 'conv-1.jsonl');
-    getLatestWatch('/config', (registration) => !registration.options.recursive)
-      .callback('change', 'profile.json');
+    getLatestWatch('/sessions', (registration) => registration.options.recursive === true).callback('change', 'conv-1.jsonl');
+    getLatestWatch('/config', (registration) => !registration.options.recursive).callback('change', 'profile.json');
 
     stopAppEventMonitor();
     vi.advanceTimersByTime(100);

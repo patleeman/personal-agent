@@ -1,4 +1,5 @@
 import { eng, removeStopwords } from 'stopword';
+
 import { fuzzyScore } from '../commands/slashMenu';
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 
@@ -9,10 +10,46 @@ const DEFAULT_CANDIDATE_LIMIT = 48;
 const DEFAULT_RECENT_RESULTS_LIMIT = 10;
 const MAX_RELATED_CONVERSATION_LIMIT = 100;
 const PRODUCT_QUERY_STOPWORDS = new Set([
-  'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'help', 'how',
-  'junk', 'like', 'look', 'looks', 'new', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
-  'thread', 'threads', 'today', 'used', 'user', 'want', 'wants', 'what', 'when', 'where', 'why', 'work', 'working',
-  'would', 'yeah',
+  'actually',
+  'agent',
+  'agents',
+  'app',
+  'conversation',
+  'conversations',
+  'does',
+  'doing',
+  'done',
+  'good',
+  'help',
+  'how',
+  'junk',
+  'like',
+  'look',
+  'looks',
+  'new',
+  'okay',
+  'please',
+  'pro',
+  'really',
+  'screen',
+  'stuff',
+  'thing',
+  'things',
+  'thread',
+  'threads',
+  'today',
+  'used',
+  'user',
+  'want',
+  'wants',
+  'what',
+  'when',
+  'where',
+  'why',
+  'work',
+  'working',
+  'would',
+  'yeah',
 ]);
 
 export interface RelatedConversationSearchResult {
@@ -42,16 +79,13 @@ function normalizeQueryTokens(query: string): string[] {
     .split(/\s+/)
     .filter((token) => token.length > 0);
 
-  const tokens = removeStopwords(cleanedTokens, eng)
-    .filter((token) => token.length > 1 && !PRODUCT_QUERY_STOPWORDS.has(token));
+  const tokens = removeStopwords(cleanedTokens, eng).filter((token) => token.length > 1 && !PRODUCT_QUERY_STOPWORDS.has(token));
 
   return [...new Set(tokens)].slice(0, 8);
 }
 
 function normalizePath(value: string | null | undefined): string {
-  return typeof value === 'string'
-    ? value.trim().replace(/[\\/]+$/, '')
-    : '';
+  return typeof value === 'string' ? value.trim().replace(/[\\/]+$/, '') : '';
 }
 
 function normalizeField(value: string | undefined): string {
@@ -59,9 +93,7 @@ function normalizeField(value: string | undefined): string {
 }
 
 function normalizePositiveIntegerLimit(value: number | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(MAX_RELATED_CONVERSATION_LIMIT, value)
-    : fallback;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(MAX_RELATED_CONVERSATION_LIMIT, value) : fallback;
 }
 
 function normalizeRecentWindowDays(value: number | null | undefined): number | null {
@@ -75,9 +107,7 @@ function normalizeRecentWindowDays(value: number | null | undefined): number | n
 }
 
 function normalizeNowMs(value: number | undefined): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : Date.now();
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : Date.now();
 }
 
 function parseConversationTimestamp(value: string | undefined): number {
@@ -98,9 +128,7 @@ function scoreField(token: string, value: string | undefined, weight: number): n
   const lowerValue = normalizedValue.toLowerCase();
   const containsIndex = lowerValue.indexOf(token);
   if (containsIndex !== -1) {
-    return weight
-      + Math.max(0, 36 - containsIndex)
-      + Math.max(0, 18 - Math.max(0, lowerValue.length - token.length));
+    return weight + Math.max(0, 36 - containsIndex) + Math.max(0, 18 - Math.max(0, lowerValue.length - token.length));
   }
 
   const fuzzy = fuzzyScore(token, normalizedValue);
@@ -121,11 +149,7 @@ function scoreRecency(timestamp: string, nowMs: number): number {
   return Math.max(0, Math.round(42 - ageDays * 5));
 }
 
-function buildReason(input: {
-  sameWorkspace: boolean;
-  matchedTerms: string[];
-  summary?: ConversationSummaryRecord;
-}): string {
+function buildReason(input: { sameWorkspace: boolean; matchedTerms: string[]; summary?: ConversationSummaryRecord }): string {
   const reasons: string[] = [];
   if (input.sameWorkspace) {
     reasons.push('Same workspace');
@@ -156,7 +180,9 @@ function buildSummarySearchText(session: SessionMeta, searchText: string, summar
     summary.filesTouched.join(' '),
     searchText,
     session.title,
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function scorePhrase(query: string, value: string | undefined, weight: number): number {
@@ -270,9 +296,7 @@ export function selectRecentConversationCandidates(
 ): SessionMeta[] {
   const nowMs = normalizeNowMs(options.nowMs);
   const recentWindowDays = normalizeRecentWindowDays(options.recentWindowDays);
-  const recentWindowMs = recentWindowDays === null
-    ? null
-    : recentWindowDays * DAY_MS;
+  const recentWindowMs = recentWindowDays === null ? null : recentWindowDays * DAY_MS;
   const workspaceCwd = normalizePath(options.workspaceCwd);
 
   return [...(sessions ?? [])]
@@ -320,7 +344,7 @@ export function listRecentConversationResults(
       timestamp: session.lastActivityAt ?? session.timestamp,
       snippet: summary?.displaySummary ?? '',
       matchedTerms: [],
-      score: (limit - index) + (summary ? 20 : 0),
+      score: limit - index + (summary ? 20 : 0),
       sameWorkspace,
       ...(summary ? { summary } : {}),
       ...(reason ? { reason } : {}),

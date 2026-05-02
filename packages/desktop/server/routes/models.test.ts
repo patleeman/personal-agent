@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -275,7 +276,15 @@ describe('model routes', () => {
     writeSavedDefaultCwdPreferenceMock.mockReset();
     writeSavedModelPreferencesMock.mockReset();
 
-    getAvailableModelsMock.mockReturnValue([{ id: 'model-a', provider: 'provider-a', name: 'Model A', contextWindow: 128_000, api: 'anthropic-messages' }]);
+    getAvailableModelsMock.mockReturnValue([
+      {
+        id: 'model-a',
+        provider: 'provider-a',
+        name: 'Model A',
+        contextWindow: 128_000,
+        api: 'anthropic-messages',
+      },
+    ]);
     getMachineConfigFilePathMock.mockReturnValue('/config/config.json');
     getProviderOAuthLoginStateMock.mockReturnValue({ id: 'login-1', status: 'pending' });
     readKnowledgeBaseStateMock.mockImplementation(() => ({
@@ -296,7 +305,9 @@ describe('model routes', () => {
       currentThinkingLevel: 'high',
       currentServiceTier: '',
     });
-    persistSettingsWriteMock.mockImplementation((write: (settingsFile: string) => unknown, options: { runtimeSettingsFile: string }) => write(options.runtimeSettingsFile));
+    persistSettingsWriteMock.mockImplementation((write: (settingsFile: string) => unknown, options: { runtimeSettingsFile: string }) =>
+      write(options.runtimeSettingsFile),
+    );
     readModelProvidersStateMock.mockReturnValue({ providers: [] });
     readProviderAuthStateMock.mockReturnValue({ providers: [] });
     readSavedDefaultCwdPreferencesMock.mockReturnValue({ cwd: '/repo' });
@@ -323,19 +334,25 @@ describe('model routes', () => {
       return readKnowledgeBaseStateMock();
     });
     writeMachineInstructionFilesMock.mockImplementation((instructionFiles: string[]) => {
-      machineConfig = instructionFiles.length > 0 ? { ...machineConfig, instructionFiles: [...instructionFiles] } : (() => {
-        const next = { ...machineConfig };
-        delete next.instructionFiles;
-        return next;
-      })();
+      machineConfig =
+        instructionFiles.length > 0
+          ? { ...machineConfig, instructionFiles: [...instructionFiles] }
+          : (() => {
+              const next = { ...machineConfig };
+              delete next.instructionFiles;
+              return next;
+            })();
       return machineConfig;
     });
     writeMachineSkillDirsMock.mockImplementation((skillDirs: string[]) => {
-      machineConfig = skillDirs.length > 0 ? { ...machineConfig, skillDirs: [...skillDirs] } : (() => {
-        const next = { ...machineConfig };
-        delete next.skillDirs;
-        return next;
-      })();
+      machineConfig =
+        skillDirs.length > 0
+          ? { ...machineConfig, skillDirs: [...skillDirs] }
+          : (() => {
+              const next = { ...machineConfig };
+              delete next.skillDirs;
+              return next;
+            })();
       return machineConfig;
     });
     upsertModelProviderMock.mockReturnValue({ providers: [{ id: 'openrouter' }] });
@@ -398,10 +415,12 @@ describe('model routes', () => {
     const fallbackRes = createResponse();
     desktop.getHandler('/api/models')(createRequest(), fallbackRes);
 
-    expect(fallbackRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      currentModel: 'claude-opus-4-6',
-      currentThinkingLevel: 'medium',
-    }));
+    expect(fallbackRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentModel: 'claude-opus-4-6',
+        currentThinkingLevel: 'medium',
+      }),
+    );
   });
 
   it('updates the current model, validates default cwd changes, and maps write failures', () => {
@@ -433,11 +452,10 @@ describe('model routes', () => {
 
     const cwdRes = createResponse();
     patchHandler('/api/default-cwd')(createRequest({ body: { cwd: '/repo/next' } }), cwdRes);
-    expect(writeSavedDefaultCwdPreferenceMock).toHaveBeenCalledWith(
-      { cwd: '/repo/next' },
-      expect.any(String),
-      { baseDir: process.cwd(), validate: true },
-    );
+    expect(writeSavedDefaultCwdPreferenceMock).toHaveBeenCalledWith({ cwd: '/repo/next' }, expect.any(String), {
+      baseDir: process.cwd(),
+      validate: true,
+    });
     expect(cwdRes.json).toHaveBeenCalledWith({ cwd: '/next-repo' });
 
     writeSavedDefaultCwdPreferenceMock.mockImplementationOnce(() => {
@@ -455,12 +473,14 @@ describe('model routes', () => {
 
     const readRes = createResponse();
     getHandler('/api/knowledge-base')(createRequest(), readRes);
-    expect(readRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      repoUrl: '',
-      branch: 'main',
-      configured: false,
-      managedRoot: '/runtime/knowledge-base/repo',
-    }));
+    expect(readRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoUrl: '',
+        branch: 'main',
+        configured: false,
+        managedRoot: '/runtime/knowledge-base/repo',
+      }),
+    );
 
     const invalidRepoUrlRes = createResponse();
     patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 123 } }), invalidRepoUrlRes);
@@ -468,7 +488,10 @@ describe('model routes', () => {
     expect(invalidRepoUrlRes.json).toHaveBeenCalledWith({ error: 'repoUrl must be a string or null' });
 
     const invalidBranchRes = createResponse();
-    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/user/kb.git', branch: 123 } }), invalidBranchRes);
+    patchHandler('/api/knowledge-base')(
+      createRequest({ body: { repoUrl: 'https://github.com/user/kb.git', branch: 123 } }),
+      invalidBranchRes,
+    );
     expect(invalidBranchRes.status).toHaveBeenCalledWith(400);
     expect(invalidBranchRes.json).toHaveBeenCalledWith({ error: 'branch must be a string or null' });
 
@@ -477,20 +500,24 @@ describe('model routes', () => {
     expect(updateKnowledgeBaseMock).toHaveBeenCalledWith({ repoUrl: 'https://github.com/user/kb.git', branch: 'trunk' });
     expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
-    expect(saveRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      repoUrl: 'https://github.com/user/kb.git',
-      branch: 'trunk',
-      configured: true,
-    }));
+    expect(saveRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoUrl: 'https://github.com/user/kb.git',
+        branch: 'trunk',
+        configured: true,
+      }),
+    );
 
     const syncRes = createResponse();
     postHandler('/api/knowledge-base/sync')(createRequest(), syncRes);
     expect(syncKnowledgeBaseNowMock).toHaveBeenCalledTimes(1);
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
-    expect(syncRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      repoUrl: 'https://github.com/user/kb.git',
-      branch: 'trunk',
-    }));
+    expect(syncRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoUrl: 'https://github.com/user/kb.git',
+        branch: 'trunk',
+      }),
+    );
   });
 
   it('reads and writes skill folder state with filesystem validation', () => {
@@ -577,27 +604,34 @@ describe('model routes', () => {
   it('reads conversation plan workspace state through the shared settings helpers', () => {
     const { files, getHandler } = createDesktopHarness(allocateFiles());
 
-    writeFileSync(files.settingsFile, JSON.stringify({
-      ui: {
-        conversationAutomation: {
-          defaultEnabled: true,
-          workflowPresets: {
-            presets: [
-              {
-                id: 'preset-1',
-                name: 'Alpha preset',
-                updatedAt: '2026-04-09T17:00:00.000Z',
-                items: [
-                  { kind: 'instruction', label: 'Instruction', text: 'Follow the plan.' },
-                  { kind: 'skill', label: 'Skill', skillName: 'backfill-tests', skillArgs: 'target=models' },
+    writeFileSync(
+      files.settingsFile,
+      JSON.stringify(
+        {
+          ui: {
+            conversationAutomation: {
+              defaultEnabled: true,
+              workflowPresets: {
+                presets: [
+                  {
+                    id: 'preset-1',
+                    name: 'Alpha preset',
+                    updatedAt: '2026-04-09T17:00:00.000Z',
+                    items: [
+                      { kind: 'instruction', label: 'Instruction', text: 'Follow the plan.' },
+                      { kind: 'skill', label: 'Skill', skillName: 'backfill-tests', skillArgs: 'target=models' },
+                    ],
+                  },
                 ],
+                defaultPresetIds: ['preset-1'],
               },
-            ],
-            defaultPresetIds: ['preset-1'],
+            },
           },
         },
-      },
-    }, null, 2));
+        null,
+        2,
+      ),
+    );
 
     const workspaceRes = createResponse();
     getHandler('/api/conversation-plans/workspace')(createRequest(), workspaceRes);
@@ -634,17 +668,24 @@ describe('model routes', () => {
     expect(invalidCreateRes.json).toHaveBeenCalledWith({ error: 'provider required' });
 
     const createRes = createResponse();
-    postHandler('/api/model-providers/providers')(createRequest({
-      body: {
-        provider: 'openrouter',
-        baseUrl: 'https://openrouter.ai',
+    postHandler('/api/model-providers/providers')(
+      createRequest({
+        body: {
+          provider: 'openrouter',
+          baseUrl: 'https://openrouter.ai',
+          apiKey: 'secret',
+        },
+      }),
+      createRes,
+    );
+    expect(upsertModelProviderMock).toHaveBeenCalledWith(
+      'shared',
+      'openrouter',
+      expect.objectContaining({
         apiKey: 'secret',
-      },
-    }), createRes);
-    expect(upsertModelProviderMock).toHaveBeenCalledWith('shared', 'openrouter', expect.objectContaining({
-      apiKey: 'secret',
-      baseUrl: 'https://openrouter.ai',
-    }));
+        baseUrl: 'https://openrouter.ai',
+      }),
+    );
     expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(refreshAllLiveSessionModelRegistriesMock).toHaveBeenCalled();
     expect(createRes.json).toHaveBeenCalledWith({ providers: [{ id: 'openrouter' }] });
@@ -660,39 +701,56 @@ describe('model routes', () => {
     expect(deleteProviderRes.json).toHaveBeenCalledWith({ providers: [] });
 
     const invalidCreateModelRes = createResponse();
-    postHandler('/api/model-providers/providers/:provider/models')(createRequest({
-      params: { provider: 'openrouter' },
-      body: {},
-    }), invalidCreateModelRes);
+    postHandler('/api/model-providers/providers/:provider/models')(
+      createRequest({
+        params: { provider: 'openrouter' },
+        body: {},
+      }),
+      invalidCreateModelRes,
+    );
     expect(invalidCreateModelRes.status).toHaveBeenCalledWith(400);
     expect(invalidCreateModelRes.json).toHaveBeenCalledWith({ error: 'modelId required' });
 
     const createModelRes = createResponse();
-    postHandler('/api/model-providers/providers/:provider/models')(createRequest({
-      params: { provider: 'openrouter' },
-      body: {
-        modelId: 'model-b',
-        name: 'Model B',
+    postHandler('/api/model-providers/providers/:provider/models')(
+      createRequest({
+        params: { provider: 'openrouter' },
+        body: {
+          modelId: 'model-b',
+          name: 'Model B',
+          contextWindow: 128000,
+        },
+      }),
+      createModelRes,
+    );
+    expect(upsertModelProviderModelMock).toHaveBeenCalledWith(
+      'shared',
+      'openrouter',
+      'model-b',
+      expect.objectContaining({
         contextWindow: 128000,
-      },
-    }), createModelRes);
-    expect(upsertModelProviderModelMock).toHaveBeenCalledWith('shared', 'openrouter', 'model-b', expect.objectContaining({
-      contextWindow: 128000,
-      name: 'Model B',
-    }));
+        name: 'Model B',
+      }),
+    );
     expect(createModelRes.json).toHaveBeenCalledWith({ providers: [{ id: 'openrouter', models: [{ id: 'model-b' }] }] });
 
     const invalidDeleteModelRes = createResponse();
-    deleteHandler('/api/model-providers/providers/:provider/models/:modelId')(createRequest({
-      params: { provider: 'openrouter', modelId: '' },
-    }), invalidDeleteModelRes);
+    deleteHandler('/api/model-providers/providers/:provider/models/:modelId')(
+      createRequest({
+        params: { provider: 'openrouter', modelId: '' },
+      }),
+      invalidDeleteModelRes,
+    );
     expect(invalidDeleteModelRes.status).toHaveBeenCalledWith(400);
     expect(invalidDeleteModelRes.json).toHaveBeenCalledWith({ error: 'modelId required' });
 
     const deleteModelRes = createResponse();
-    deleteHandler('/api/model-providers/providers/:provider/models/:modelId')(createRequest({
-      params: { provider: 'openrouter', modelId: 'model-b' },
-    }), deleteModelRes);
+    deleteHandler('/api/model-providers/providers/:provider/models/:modelId')(
+      createRequest({
+        params: { provider: 'openrouter', modelId: 'model-b' },
+      }),
+      deleteModelRes,
+    );
     expect(removeModelProviderModelMock).toHaveBeenCalledWith('shared', 'openrouter', 'model-b');
     expect(deleteModelRes.json).toHaveBeenCalledWith({ providers: [] });
   });
@@ -719,10 +777,13 @@ describe('model routes', () => {
     expect(invalidApiKeyRes.json).toHaveBeenCalledWith({ error: 'provider required' });
 
     const setApiKeyRes = createResponse();
-    patchHandler('/api/provider-auth/:provider/api-key')(createRequest({
-      params: { provider: 'openai' },
-      body: { apiKey: 'secret' },
-    }), setApiKeyRes);
+    patchHandler('/api/provider-auth/:provider/api-key')(
+      createRequest({
+        params: { provider: 'openai' },
+        body: { apiKey: 'secret' },
+      }),
+      setApiKeyRes,
+    );
     expect(setProviderApiKeyMock).toHaveBeenCalledWith(expect.any(String), 'openai', 'secret');
     expect(reloadAllLiveSessionAuthMock).toHaveBeenCalled();
     expect(setApiKeyRes.json).toHaveBeenCalledWith({ providers: [{ id: 'openai' }] });
@@ -738,10 +799,13 @@ describe('model routes', () => {
     expect(deleteAuthRes.json).toHaveBeenCalledWith({ providers: [] });
 
     const oauthStartRes = createResponse();
-    postHandler('/api/provider-auth/:provider/oauth/start')(createRequest({
-      params: { provider: 'openrouter' },
-      body: { redirectPort: 4123 },
-    }), oauthStartRes);
+    postHandler('/api/provider-auth/:provider/oauth/start')(
+      createRequest({
+        params: { provider: 'openrouter' },
+        body: { redirectPort: 4123 },
+      }),
+      oauthStartRes,
+    );
     expect(startProviderOAuthLoginMock).toHaveBeenCalledWith(expect.any(String), 'openrouter');
     expect(oauthStartRes.json).toHaveBeenCalledWith({ id: 'login-1', status: 'pending' });
 
@@ -772,10 +836,13 @@ describe('model routes', () => {
     expect(timeoutRes.end).toHaveBeenCalledTimes(1);
 
     const inputRes = createResponse();
-    postHandler('/api/provider-auth/oauth/:loginId/input')(createRequest({
-      params: { loginId: 'login-1' },
-      body: { input: '123456' },
-    }), inputRes);
+    postHandler('/api/provider-auth/oauth/:loginId/input')(
+      createRequest({
+        params: { loginId: 'login-1' },
+        body: { input: '123456' },
+      }),
+      inputRes,
+    );
     expect(submitProviderOAuthLoginInputMock).toHaveBeenCalledWith('login-1', '123456');
     expect(inputRes.json).toHaveBeenCalledWith({ id: 'login-1', status: 'waiting_input' });
 

@@ -23,26 +23,25 @@ vi.mock('../middleware/index.js', () => ({
   reloadAllLiveSessionAuth: vi.fn(),
 }));
 
-import {
-  readModelProvidersCapability,
-  saveModelProviderCapability,
-  deleteModelProviderCapability,
-  saveModelProviderModelCapability,
-  deleteModelProviderModelCapability,
-  readProviderAuthCapability,
-  setProviderApiKeyCapability,
-  removeProviderCredentialCapability,
-  startProviderOAuthLoginCapability,
-  readProviderOAuthLoginCapability,
-  submitProviderOAuthLoginInputCapability,
-  cancelProviderOAuthLoginCapability,
-  ProviderDesktopCapabilityInputError,
-  type ProviderDesktopCapabilityContext,
-} from './providerDesktopCapability.js';
-
+import * as middleware from '../middleware/index.js';
 import * as modelProviders from './modelProviders.js';
 import * as providerAuth from './providerAuth.js';
-import * as middleware from '../middleware/index.js';
+import {
+  cancelProviderOAuthLoginCapability,
+  deleteModelProviderCapability,
+  deleteModelProviderModelCapability,
+  type ProviderDesktopCapabilityContext,
+  ProviderDesktopCapabilityInputError,
+  readModelProvidersCapability,
+  readProviderAuthCapability,
+  readProviderOAuthLoginCapability,
+  removeProviderCredentialCapability,
+  saveModelProviderCapability,
+  saveModelProviderModelCapability,
+  setProviderApiKeyCapability,
+  startProviderOAuthLoginCapability,
+  submitProviderOAuthLoginInputCapability,
+} from './providerDesktopCapability.js';
 
 function createContext(overrides?: Partial<ProviderDesktopCapabilityContext>): ProviderDesktopCapabilityContext {
   return {
@@ -70,13 +69,12 @@ describe('saveModelProviderCapability', () => {
     const result = saveModelProviderCapability(context, { provider: ' openai ' });
     expect(modelProviders.upsertModelProvider).toHaveBeenCalledWith('test-profile', 'openai', expect.any(Object));
     expect(middleware.refreshAllLiveSessionModelRegistries).toHaveBeenCalled();
-    expect((context.materializeWebProfile as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('test-profile');
+    expect(context.materializeWebProfile as ReturnType<typeof vi.fn>).toHaveBeenCalledWith('test-profile');
     expect(result).toEqual({ providers: { openai: {} } });
   });
 
   it('throws on empty provider', () => {
-    expect(() => saveModelProviderCapability(createContext(), { provider: '' }))
-      .toThrow(ProviderDesktopCapabilityInputError);
+    expect(() => saveModelProviderCapability(createContext(), { provider: '' })).toThrow(ProviderDesktopCapabilityInputError);
   });
 });
 
@@ -104,13 +102,15 @@ describe('saveModelProviderModelCapability', () => {
   });
 
   it('throws on empty provider', () => {
-    expect(() => saveModelProviderModelCapability(createContext(), { provider: '', modelId: 'gpt-4' }))
-      .toThrow(ProviderDesktopCapabilityInputError);
+    expect(() => saveModelProviderModelCapability(createContext(), { provider: '', modelId: 'gpt-4' })).toThrow(
+      ProviderDesktopCapabilityInputError,
+    );
   });
 
   it('throws on empty modelId', () => {
-    expect(() => saveModelProviderModelCapability(createContext(), { provider: 'openai', modelId: '' }))
-      .toThrow(ProviderDesktopCapabilityInputError);
+    expect(() => saveModelProviderModelCapability(createContext(), { provider: 'openai', modelId: '' })).toThrow(
+      ProviderDesktopCapabilityInputError,
+    );
   });
 });
 
@@ -144,13 +144,11 @@ describe('setProviderApiKeyCapability', () => {
   });
 
   it('throws on empty provider', () => {
-    expect(() => setProviderApiKeyCapability(createContext(), '', 'key'))
-      .toThrow(ProviderDesktopCapabilityInputError);
+    expect(() => setProviderApiKeyCapability(createContext(), '', 'key')).toThrow(ProviderDesktopCapabilityInputError);
   });
 
   it('throws on empty apiKey', () => {
-    expect(() => setProviderApiKeyCapability(createContext(), 'openai', ''))
-      .toThrow(ProviderDesktopCapabilityInputError);
+    expect(() => setProviderApiKeyCapability(createContext(), 'openai', '')).toThrow(ProviderDesktopCapabilityInputError);
   });
 });
 

@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
+
 import {
   createProjectActivityEntry,
-  readProjectActivityEntry,
   type ProjectActivityEntryDocument,
   type ProjectActivityNotificationState,
+  readProjectActivityEntry,
 } from './project-artifacts.js';
-import { type SqliteDatabase, openSqliteDatabase } from './sqlite.js';
 import { getStateRoot } from './runtime/paths.js';
+import { openSqliteDatabase, type SqliteDatabase } from './sqlite.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ACTIVITY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -50,17 +51,13 @@ function getActivityStateRoot(stateRoot?: string): string {
 
 function validateProfileName(profile: string): void {
   if (!PROFILE_NAME_PATTERN.test(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
 export function validateActivityId(activityId: string): void {
   if (!ACTIVITY_ID_PATTERN.test(activityId)) {
-    throw new Error(
-      `Invalid activity id "${activityId}". Activity ids may only include letters, numbers, dashes, and underscores.`,
-    );
+    throw new Error(`Invalid activity id "${activityId}". Activity ids may only include letters, numbers, dashes, and underscores.`);
   }
 }
 
@@ -105,17 +102,21 @@ function normalizeStringArray(values: unknown): string[] | undefined {
     return undefined;
   }
 
-  const normalized = [...new Set(values
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0))];
+  const normalized = [
+    ...new Set(
+      values
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  ];
 
   return normalized.length > 0 ? normalized : undefined;
 }
 
 function normalizeNotificationState(value: unknown): ProjectActivityNotificationState {
   return ACTIVITY_NOTIFICATION_STATE_VALUES.has(value as ProjectActivityNotificationState)
-    ? value as ProjectActivityNotificationState
+    ? (value as ProjectActivityNotificationState)
     : 'none';
 }
 
@@ -166,8 +167,7 @@ function hasLegacyMarkdownActivityState(options: ResolveActivityOptions): boolea
     return false;
   }
 
-  return readdirSync(legacyActivityDir, { withFileTypes: true })
-    .some((entry) => entry.isFile() && entry.name.endsWith('.md'));
+  return readdirSync(legacyActivityDir, { withFileTypes: true }).some((entry) => entry.isFile() && entry.name.endsWith('.md'));
 }
 
 function hasLegacyActivityDb(options: ResolveActivityOptions): boolean {
@@ -236,11 +236,15 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
   if (existsSync(legacyDbPath)) {
     const legacyDb = openSqliteDatabase(legacyDbPath);
     try {
-      const legacyRows = legacyDb.prepare(`
+      const legacyRows = legacyDb
+        .prepare(
+          `
         SELECT id, created_at, entry_json
         FROM activity_entries
         ORDER BY created_at DESC, id DESC
-      `).all() as StoredActivityRow[];
+      `,
+        )
+        .all() as StoredActivityRow[];
       for (const row of legacyRows) {
         try {
           activityEntriesToInsert.push(parseStoredActivityEntry(row.entry_json, row.id));
@@ -253,11 +257,15 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
     }
 
     try {
-      const rows = legacyDb.prepare(`
+      const rows = legacyDb
+        .prepare(
+          `
         SELECT activity_id
         FROM activity_read_state
         ORDER BY activity_id ASC
-      `).all() as Array<{ activity_id: string }>;
+      `,
+        )
+        .all() as Array<{ activity_id: string }>;
       readStateIdsToInsert.push(...rows.map((row) => row.activity_id));
     } catch {
       // Ignore missing legacy read-state tables.
@@ -290,10 +298,12 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
     try {
       const parsed = JSON.parse(readFileSync(legacyReadStatePath, 'utf-8')) as unknown;
       if (Array.isArray(parsed)) {
-        readStateIdsToInsert.push(...parsed
-          .filter((value): value is string => typeof value === 'string')
-          .map((value) => value.trim())
-          .filter((value) => value.length > 0));
+        readStateIdsToInsert.push(
+          ...parsed
+            .filter((value): value is string => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+        );
         deleteLegacyReadState = true;
       }
     } catch {
@@ -344,11 +354,15 @@ function selectActivityRows(options: ResolveActivityOptions): StoredActivityRow[
     return [];
   }
 
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, created_at, entry_json
     FROM activity_entries
     ORDER BY created_at DESC, id DESC
-  `).all() as StoredActivityRow[];
+  `,
+    )
+    .all() as StoredActivityRow[];
 }
 
 function selectActivityRow(options: ResolveActivityEntryPathOptions): StoredActivityRow | undefined {
@@ -357,11 +371,15 @@ function selectActivityRow(options: ResolveActivityEntryPathOptions): StoredActi
     return undefined;
   }
 
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, created_at, entry_json
     FROM activity_entries
     WHERE id = ?
-  `).get(options.activityId) as StoredActivityRow | undefined;
+  `,
+    )
+    .get(options.activityId) as StoredActivityRow | undefined;
 }
 
 function hydrateStoredActivityEntry(options: ResolveActivityEntryPathOptions, row: StoredActivityRow): StoredActivityEntry {
@@ -372,24 +390,30 @@ function hydrateStoredActivityEntry(options: ResolveActivityEntryPathOptions, ro
 }
 
 function normalizeReadStateIds(ids: Iterable<string>): string[] {
-  return [...new Set(Array.from(ids)
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-    .filter((value) => ACTIVITY_ID_PATTERN.test(value)))]
-    .sort();
+  return [
+    ...new Set(
+      Array.from(ids)
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .filter((value) => ACTIVITY_ID_PATTERN.test(value)),
+    ),
+  ].sort();
 }
 
 function normalizeDeleteActivityIds(ids: Iterable<string>): string[] {
-  return [...new Set(Array.from(ids)
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-    .map((value) => {
-      validateActivityId(value);
-      return value;
-    }))]
-    .sort();
+  return [
+    ...new Set(
+      Array.from(ids)
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map((value) => {
+          validateActivityId(value);
+          return value;
+        }),
+    ),
+  ].sort();
 }
 
 export function loadProfileActivityReadState(options: ResolveActivityOptions): Set<string> {
@@ -398,11 +422,15 @@ export function loadProfileActivityReadState(options: ResolveActivityOptions): S
     return new Set();
   }
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT activity_id
     FROM activity_read_state
     ORDER BY activity_id ASC
-  `).all() as Array<{ activity_id: string }>;
+  `,
+    )
+    .all() as Array<{ activity_id: string }>;
 
   return new Set(rows.map((row) => row.activity_id));
 }
@@ -442,17 +470,15 @@ export function writeProfileActivityEntry(options: {
     throw new Error('Could not open activity sqlite database.');
   }
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO activity_entries (id, created_at, entry_json)
     VALUES (?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       created_at = excluded.created_at,
       entry_json = excluded.entry_json
-  `).run(
-    options.entry.id,
-    options.entry.createdAt,
-    serializeActivityEntry(options.entry),
-  );
+  `,
+  ).run(options.entry.id, options.entry.createdAt, serializeActivityEntry(options.entry));
 
   return buildActivityStoragePath({
     stateRoot: options.stateRoot,
@@ -467,9 +493,7 @@ export function hasProfileActivityEntry(options: ResolveActivityEntryPathOptions
 
 export function getProfileActivityEntry(options: ResolveActivityEntryPathOptions): StoredActivityEntry | null {
   const row = selectActivityRow(options);
-  return row
-    ? hydrateStoredActivityEntry(options, row)
-    : null;
+  return row ? hydrateStoredActivityEntry(options, row) : null;
 }
 
 export function deleteProfileActivityEntries(options: ResolveActivityOptions & { activityIds: Iterable<string> }): string[] {
@@ -506,11 +530,16 @@ export function listProfileActivityEntries(options: ResolveActivityOptions): Sto
 
   for (const row of rows) {
     try {
-      entries.push(hydrateStoredActivityEntry({
-        stateRoot: options.stateRoot,
-        profile: options.profile,
-        activityId: row.id,
-      }, row));
+      entries.push(
+        hydrateStoredActivityEntry(
+          {
+            stateRoot: options.stateRoot,
+            profile: options.profile,
+            activityId: row.id,
+          },
+          row,
+        ),
+      );
     } catch {
       continue;
     }

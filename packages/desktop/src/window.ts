@@ -1,16 +1,18 @@
-import { app, BrowserWindow, screen, shell, type WebContents } from 'electron';
+import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+
+import { app, BrowserWindow, screen, shell, type WebContents } from 'electron';
+
+import { syncDesktopShellAppModeForWindows } from './app-mode.js';
 import { ensureDesktopAppProtocolForHost } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
-import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
-import { getHostBrowserPartition } from './state/browser-partitions.js';
-import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopHostRecord } from './hosts/types.js';
-import { syncDesktopShellAppModeForWindows } from './app-mode.js';
-import { WorkbenchBrowserViewController, normalizeWorkbenchBrowserBounds } from './workbench-browser.js';
+import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
+import { getHostBrowserPartition } from './state/browser-partitions.js';
+import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
+import { normalizeWorkbenchBrowserBounds, WorkbenchBrowserViewController } from './workbench-browser.js';
 
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -124,9 +126,7 @@ export function shouldOpenNavigationExternally(currentUrl: string, targetUrl: st
 }
 
 export function buildWindowTitle(host: DesktopHostRecord): string {
-  const appName = typeof app.name === 'string' && app.name.trim().length > 0
-    ? app.name.trim()
-    : 'Personal Agent';
+  const appName = typeof app.name === 'string' && app.name.trim().length > 0 ? app.name.trim() : 'Personal Agent';
 
   if (host.kind === 'local') {
     return appName;
@@ -197,11 +197,10 @@ export function constrainDesktopWindowBounds(
     width: normalizedWidth,
     height: normalizedHeight,
   };
-  const targetArea = displayAreas.reduce<DesktopRectangle>((bestArea, area) => (
-    intersectRectangleArea(desiredBounds, area) > intersectRectangleArea(desiredBounds, bestArea)
-      ? area
-      : bestArea
-  ), fallbackArea);
+  const targetArea = displayAreas.reduce<DesktopRectangle>(
+    (bestArea, area) => (intersectRectangleArea(desiredBounds, area) > intersectRectangleArea(desiredBounds, bestArea) ? area : bestArea),
+    fallbackArea,
+  );
   const width = Math.min(normalizedWidth, targetArea.width);
   const height = Math.min(normalizedHeight, targetArea.height);
   const maxX = targetArea.x + Math.max(0, targetArea.width - width);
@@ -220,11 +219,14 @@ export class DesktopWindowController {
   private currentPartition?: string;
   private quitting = false;
   private remoteWindows = new Map<string, BrowserWindow>();
-  private trackedWindows = new Map<number, {
-    hostId: string;
-    role: ManagedWindowRole;
-    window: BrowserWindow;
-  }>();
+  private trackedWindows = new Map<
+    number,
+    {
+      hostId: string;
+      role: ManagedWindowRole;
+      window: BrowserWindow;
+    }
+  >();
   private readonly workbenchBrowser = new WorkbenchBrowserViewController();
   private hasVisibleWindowsInAppMode: boolean | null = null;
 
@@ -274,10 +276,7 @@ export class DesktopWindowController {
     await this.openWindowForHost(hostId, `/conversations/${encodeURIComponent(conversationId)}?view=zen`, 'popout');
   }
 
-  async openStartupErrorWindow(input: {
-    message: string;
-    logsDir: string;
-  }): Promise<void> {
+  async openStartupErrorWindow(input: { message: string; logsDir: string }): Promise<void> {
     const hostId = this.hostManager.getActiveHostId();
     const host = this.hostManager.getHostRecord(hostId);
     const partition = getHostBrowserPartition(host.id);
@@ -334,7 +333,10 @@ export class DesktopWindowController {
     return this.goForward(this.trackedWindows.get(webContentsId)?.window);
   }
 
-  setWorkbenchBrowserBoundsForWebContents(webContentsId: number, input: { visible?: boolean; bounds?: unknown; sessionKey?: string | null; deactivate?: boolean }): unknown {
+  setWorkbenchBrowserBoundsForWebContents(
+    webContentsId: number,
+    input: { visible?: boolean; bounds?: unknown; sessionKey?: string | null; deactivate?: boolean },
+  ): unknown {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       return null;
@@ -353,7 +355,10 @@ export class DesktopWindowController {
     return this.workbenchBrowser.getState(webContentsId, sessionKey);
   }
 
-  async navigateWorkbenchBrowserForWebContents(webContentsId: number, input: { url?: unknown; sessionKey?: string | null }): Promise<unknown> {
+  async navigateWorkbenchBrowserForWebContents(
+    webContentsId: number,
+    input: { url?: unknown; sessionKey?: string | null },
+  ): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
@@ -418,7 +423,11 @@ export class DesktopWindowController {
     return this.workbenchBrowser.screenshot(owner, conversationId);
   }
 
-  async cdpWorkbenchBrowserForConversation(input: { conversationId?: string | null; command?: unknown; continueOnError?: unknown }): Promise<unknown> {
+  async cdpWorkbenchBrowserForConversation(input: {
+    conversationId?: string | null;
+    command?: unknown;
+    continueOnError?: unknown;
+  }): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(input.conversationId);
     return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: input.conversationId });
   }
@@ -491,9 +500,7 @@ export class DesktopWindowController {
 
   private async ensureWorkbenchBrowserOwner(conversationId?: string | null): Promise<WebContents> {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      const route = conversationId?.trim()
-        ? `/conversations/${encodeURIComponent(conversationId.trim())}`
-        : '/';
+      const route = conversationId?.trim() ? `/conversations/${encodeURIComponent(conversationId.trim())}` : '/';
       await this.openMainWindow(route);
     }
 
@@ -557,9 +564,7 @@ export class DesktopWindowController {
     ensureDesktopAppProtocolForHost(this.hostManager, host.id);
 
     const config = loadDesktopConfig();
-    const remoteOffset = role !== 'main'
-      ? (this.countAdditionalWindows() + 1) * 28
-      : 0;
+    const remoteOffset = role !== 'main' ? (this.countAdditionalWindows() + 1) * 28 : 0;
     const savedWindowState = constrainDesktopWindowBounds(
       config.windowState ?? { width: DEFAULT_WINDOW_WIDTH, height: DEFAULT_WINDOW_HEIGHT },
       screen.getAllDisplays().map((display) => display.workArea),
@@ -673,11 +678,7 @@ export class DesktopWindowController {
     const targetUrl = toDesktopShellUrl(url);
     const currentUrl = window.webContents.getURL();
 
-    if (
-      currentUrl
-      && !window.webContents.isLoadingMainFrame()
-      && canNavigateWindowInApp(currentUrl, targetUrl)
-    ) {
+    if (currentUrl && !window.webContents.isLoadingMainFrame() && canNavigateWindowInApp(currentUrl, targetUrl)) {
       const targetRoute = toDesktopShellRoute(targetUrl);
       const currentRoute = toDesktopShellRoute(currentUrl);
 

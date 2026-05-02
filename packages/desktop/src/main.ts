@@ -1,27 +1,29 @@
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
 import { getStateRoot, hydrateProcessEnvFromShell } from '@personal-agent/core';
 import { setCompanionRuntimeProvider } from '@personal-agent/daemon';
 import { app, clipboard, dialog, Notification, shell } from 'electron';
+
+import { applyDesktopAboutPanelOptions } from './about.js';
 import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
-import { applyDesktopAboutPanelOptions } from './about.js';
 import { registerDesktopAppProtocol } from './app-protocol.js';
+import { createDesktopCompanionRuntime } from './companion/runtime.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
-import { createDesktopCompanionRuntime } from './companion/runtime.js';
-import { resolveDesktopLaunchPresentation } from './launch-mode.js';
-import { applyDesktopRuntimeEnvironmentOverrides } from './runtime-env.js';
-import { DesktopWindowController } from './window.js';
-import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
+import { type DesktopKeyboardShortcuts, validateDesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
+import { resolveDesktopLaunchPresentation } from './launch-mode.js';
 import { loadLocalApiModule } from './local-api-module.js';
 import { installDesktopApplicationMenu, setDesktopApplicationMenuKeyboardShortcutsReader } from './menu.js';
-import { validateDesktopKeyboardShortcuts, type DesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
-import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
+import { applyDesktopRuntimeEnvironmentOverrides } from './runtime-env.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
+import { DesktopTrayController } from './tray.js';
+import { DesktopUpdateManager } from './updates/update-manager.js';
 import { importClipboardUrlToKnowledge } from './url-clipper.js';
+import { DesktopWindowController } from './window.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
@@ -144,9 +146,7 @@ function renderDesktopErrorMessage(error: unknown): string {
 }
 
 function logBootstrapError(error: unknown): void {
-  const rendered = error instanceof Error
-    ? error.stack ?? error.message
-    : String(error);
+  const rendered = error instanceof Error ? (error.stack ?? error.message) : String(error);
 
   try {
     const mainLogPath = resolve(getStateRoot(), 'desktop', 'logs', 'main.log');
@@ -204,12 +204,14 @@ function reportDesktopError(error: unknown): void {
 
   try {
     const { desktopLogsDir } = resolveDesktopRuntimePaths();
-    void windowController?.openStartupErrorWindow({
-      message,
-      logsDir: desktopLogsDir,
-    }).catch((windowError) => {
-      logBootstrapError(windowError);
-    });
+    void windowController
+      ?.openStartupErrorWindow({
+        message,
+        logsDir: desktopLogsDir,
+      })
+      .catch((windowError) => {
+        logBootstrapError(windowError);
+      });
     dialog.showErrorBox(`${app.name} error`, `${message}\n\nSee desktop logs in:\n${desktopLogsDir}`);
   } catch {
     dialog.showErrorBox(`${app.name} error`, message);
@@ -543,12 +545,9 @@ async function requestAppQuit(): Promise<void> {
 
   quitRequestPromise = (async () => {
     try {
-      const confirmed = await confirmDesktopQuit(
-        dialog,
-        app.name,
-        resolveDesktopRuntimePaths().colorIconFile,
-        { keepsExternalDaemonRunning: false },
-      );
+      const confirmed = await confirmDesktopQuit(dialog, app.name, resolveDesktopRuntimePaths().colorIconFile, {
+        keepsExternalDaemonRunning: false,
+      });
       if (!confirmed) {
         return;
       }
@@ -581,7 +580,8 @@ app.on('activate', () => {
   void openMainRoute('/');
 });
 
-app.whenReady()
+app
+  .whenReady()
   .then(async () => {
     configureDesktopRuntimeEnvironment();
     applyDesktopApplicationIcon(process.platform, app, resolveDesktopRuntimePaths().colorIconFile);

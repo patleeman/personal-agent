@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
-import * as nunjucks from 'nunjucks';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import * as nunjucks from 'nunjucks';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -71,9 +72,7 @@ function normalizeTemplateVariables(variables: PromptCatalogVariables): Record<s
 }
 
 function getTemplateEnvironment(templateRoot?: string): nunjucks.Environment {
-  const loader = templateRoot
-    ? new nunjucks.FileSystemLoader(templateRoot, { noCache: true })
-    : undefined;
+  const loader = templateRoot ? new nunjucks.FileSystemLoader(templateRoot, { noCache: true }) : undefined;
 
   return new nunjucks.Environment(loader, {
     autoescape: false,
@@ -85,10 +84,7 @@ export function renderPromptCatalogTemplate(
   variables: PromptCatalogVariables = {},
   options: RenderPromptCatalogTemplateOptions = {},
 ): string {
-  const rendered = getTemplateEnvironment(options.templateRoot).renderString(
-    template,
-    normalizeTemplateVariables(variables),
-  );
+  const rendered = getTemplateEnvironment(options.templateRoot).renderString(template, normalizeTemplateVariables(variables));
 
   return rendered
     .replace(/[ \t]+\n/g, '\n')

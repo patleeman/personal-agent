@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { applyDesktopShellAppMode, syncDesktopShellAppModeForWindows } from './app-mode.js';
 
 describe('applyDesktopShellAppMode', () => {
@@ -39,10 +40,14 @@ describe('syncDesktopShellAppModeForWindows', () => {
     const hide = vi.fn();
     const show = vi.fn();
 
-    syncDesktopShellAppModeForWindows('darwin', {
-      setActivationPolicy,
-      dock: { hide, show },
-    }, true);
+    syncDesktopShellAppModeForWindows(
+      'darwin',
+      {
+        setActivationPolicy,
+        dock: { hide, show },
+      },
+      true,
+    );
 
     expect(setActivationPolicy).toHaveBeenCalledWith('regular');
     expect(show).toHaveBeenCalledTimes(1);
@@ -54,10 +59,14 @@ describe('syncDesktopShellAppModeForWindows', () => {
     const hide = vi.fn();
     const show = vi.fn();
 
-    syncDesktopShellAppModeForWindows('darwin', {
-      setActivationPolicy,
-      dock: { hide, show },
-    }, false);
+    syncDesktopShellAppModeForWindows(
+      'darwin',
+      {
+        setActivationPolicy,
+        dock: { hide, show },
+      },
+      false,
+    );
 
     expect(setActivationPolicy).toHaveBeenCalledWith('accessory');
     expect(hide).toHaveBeenCalledTimes(1);

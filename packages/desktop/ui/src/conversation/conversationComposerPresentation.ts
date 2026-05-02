@@ -1,5 +1,5 @@
-import type { ContextUsageSegment, ConversationContextDocRef, LiveSessionContext, ModelInfo, SessionContextUsage } from '../shared/types';
 import { parseSlashInput } from '../commands/slashMenu';
+import type { ContextUsageSegment, ConversationContextDocRef, LiveSessionContext, ModelInfo, SessionContextUsage } from '../shared/types';
 import type { MentionItem } from './conversationMentions';
 
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
@@ -20,9 +20,7 @@ export function resolveConversationAutocompleteCatalogDemand(input: string): {
 }
 
 export function isAttachableMentionItem(item: MentionItem): item is MentionItem & { path: string } {
-  return (item.kind === 'note' || item.kind === 'file')
-    && typeof item.path === 'string'
-    && item.path.trim().length > 0;
+  return (item.kind === 'note' || item.kind === 'file') && typeof item.path === 'string' && item.path.trim().length > 0;
 }
 
 export function mentionItemToConversationContextDoc(item: MentionItem & { path: string }): ConversationContextDocRef {
@@ -59,19 +57,14 @@ export function appendMentionedConversationContextDocs(
   currentDocs: ConversationContextDocRef[],
   items: Array<MentionItem & { path: string }>,
 ): ConversationContextDocRef[] {
-  return dedupeConversationContextDocs([
-    ...currentDocs,
-    ...items.map((item) => mentionItemToConversationContextDoc(item)),
-  ]);
+  return dedupeConversationContextDocs([...currentDocs, ...items.map((item) => mentionItemToConversationContextDoc(item))]);
 }
 
 export function removeConversationContextDocByPath(
   currentDocs: ConversationContextDocRef[],
   pathToRemove: string,
 ): ConversationContextDocRef[] {
-  return dedupeConversationContextDocs(
-    currentDocs.filter((doc) => doc.path !== pathToRemove),
-  );
+  return dedupeConversationContextDocs(currentDocs.filter((doc) => doc.path !== pathToRemove));
 }
 
 export function selectUnattachedMentionItems(
@@ -84,17 +77,16 @@ export function selectUnattachedMentionItems(
     .filter((item) => !attachedPaths.has(item.path));
 }
 
-export function truncateConversationShelfText(
-  text: string,
-  options: { maxChars?: number; maxLines?: number } = {},
-): string {
+export function truncateConversationShelfText(text: string, options: { maxChars?: number; maxLines?: number } = {}): string {
   const normalized = text.replace(/\r\n?/g, '\n');
-  const maxChars = typeof options.maxChars === 'number' && Number.isSafeInteger(options.maxChars) && options.maxChars > 0
-    ? Math.min(COMPOSER_SHELF_TEXT_MAX_CHARS, options.maxChars)
-    : COMPOSER_SHELF_TEXT_MAX_CHARS;
-  const maxLines = typeof options.maxLines === 'number' && Number.isSafeInteger(options.maxLines) && options.maxLines > 0
-    ? Math.min(COMPOSER_SHELF_TEXT_MAX_LINES, options.maxLines)
-    : COMPOSER_SHELF_TEXT_MAX_LINES;
+  const maxChars =
+    typeof options.maxChars === 'number' && Number.isSafeInteger(options.maxChars) && options.maxChars > 0
+      ? Math.min(COMPOSER_SHELF_TEXT_MAX_CHARS, options.maxChars)
+      : COMPOSER_SHELF_TEXT_MAX_CHARS;
+  const maxLines =
+    typeof options.maxLines === 'number' && Number.isSafeInteger(options.maxLines) && options.maxLines > 0
+      ? Math.min(COMPOSER_SHELF_TEXT_MAX_LINES, options.maxLines)
+      : COMPOSER_SHELF_TEXT_MAX_LINES;
   const lines = normalized.split('\n');
   const truncatedByLines = lines.length > maxLines;
   const lineLimited = truncatedByLines ? lines.slice(0, maxLines).join('\n') : normalized;
@@ -141,10 +133,7 @@ export function formatParallelJobStatusLabel(status: 'running' | 'ready' | 'fail
   }
 }
 
-export function formatParallelJobContextSummary(input: {
-  imageCount: number;
-  attachmentRefs: string[];
-}): string | null {
+export function formatParallelJobContextSummary(input: { imageCount: number; attachmentRefs: string[] }): string | null {
   const parts: string[] = [];
   if (Number.isSafeInteger(input.imageCount) && input.imageCount > 0) {
     parts.push(`${input.imageCount} image${input.imageCount === 1 ? '' : 's'}`);
@@ -189,10 +178,9 @@ export function resolveConversationContextUsageTokens(input: {
   };
 }
 
-export function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git']):
-  | { kind: 'none' }
-  | { kind: 'summary'; text: string }
-  | { kind: 'diff'; added: string; deleted: string } {
+export function resolveConversationGitSummaryPresentation(
+  git: LiveSessionContext['git'],
+): { kind: 'none' } | { kind: 'summary'; text: string } | { kind: 'diff'; added: string; deleted: string } {
   if (!git) {
     return { kind: 'none' };
   }

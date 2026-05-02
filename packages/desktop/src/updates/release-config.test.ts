@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 // @ts-expect-error electron-builder config is plain ESM, not typed TS.
 import electronBuilderConfig, { desktopReleasePublishConfig } from '../../../../electron-builder.config.mjs';
 import {
@@ -26,11 +27,9 @@ describe('desktop release config', () => {
   });
 
   it('unpacks native sqlite loader dependencies together', () => {
-    expect(electronBuilderConfig.asarUnpack).toEqual(expect.arrayContaining([
-      'node_modules/better-sqlite3/**/*',
-      'node_modules/bindings/**/*',
-      'node_modules/file-uri-to-path/**/*',
-    ]));
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining(['node_modules/better-sqlite3/**/*', 'node_modules/bindings/**/*', 'node_modules/file-uri-to-path/**/*']),
+    );
   });
 
   it('does not treat the local sharp stub as a native module', () => {

@@ -51,29 +51,14 @@ function normalizeTimestamp(value: unknown, fallback?: unknown): string {
 /**
  * Resolve the path to a conversation record.
  */
-export function resolveConversationRecordPath(
-  stateRoot: string,
-  profile: string,
-  conversationId: string,
-): string {
-  return join(
-    stateRoot,
-    'pi-agent',
-    'state',
-    'conversation-memory',
-    profile,
-    `${conversationId}.json`,
-  );
+export function resolveConversationRecordPath(stateRoot: string, profile: string, conversationId: string): string {
+  return join(stateRoot, 'pi-agent', 'state', 'conversation-memory', profile, `${conversationId}.json`);
 }
 
 /**
  * Read a conversation record.
  */
-export function readConversationRecord(
-  stateRoot: string,
-  profile: string,
-  conversationId: string,
-): ConversationRecord | null {
+export function readConversationRecord(stateRoot: string, profile: string, conversationId: string): ConversationRecord | null {
   const path = resolveConversationRecordPath(stateRoot, profile, conversationId);
 
   if (!existsSync(path)) {
@@ -91,12 +76,8 @@ export function readConversationRecord(
       updatedAt: normalizeTimestamp(parsed.updatedAt, parsed.createdAt),
       title: parsed.latestConversationTitle as string | undefined,
       summary: parsed.latestAnchorPreview as string | undefined,
-      relatedProjectIds: Array.isArray(parsed.relatedProjectIds)
-        ? parsed.relatedProjectIds.map(String)
-        : [],
-      childRunIds: Array.isArray(parsed.childRunIds)
-        ? parsed.childRunIds.map(String)
-        : [],
+      relatedProjectIds: Array.isArray(parsed.relatedProjectIds) ? parsed.relatedProjectIds.map(String) : [],
+      childRunIds: Array.isArray(parsed.childRunIds) ? parsed.childRunIds.map(String) : [],
       parentId: parsed.parentId as string | undefined,
     };
   } catch {
@@ -107,29 +88,33 @@ export function readConversationRecord(
 /**
  * Write a conversation record.
  */
-export function writeConversationRecord(
-  stateRoot: string,
-  profile: string,
-  record: ConversationRecord,
-): void {
+export function writeConversationRecord(stateRoot: string, profile: string, record: ConversationRecord): void {
   const path = resolveConversationRecordPath(stateRoot, profile, record.id);
 
   const dir = join(path, '..');
   const { mkdirSync } = require('fs');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 
-  writeFileSync(path, JSON.stringify({
-    version: CONVERSATION_FILE_VERSION,
-    conversationId: record.id,
-    state: record.state,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    ...(record.title ? { latestConversationTitle: record.title } : {}),
-    ...(record.summary ? { latestAnchorPreview: record.summary } : {}),
-    relatedProjectIds: record.relatedProjectIds,
-    childRunIds: record.childRunIds,
-    ...(record.parentId ? { parentId: record.parentId } : {}),
-  }, null, 2), 'utf-8');
+  writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        version: CONVERSATION_FILE_VERSION,
+        conversationId: record.id,
+        state: record.state,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        ...(record.title ? { latestConversationTitle: record.title } : {}),
+        ...(record.summary ? { latestAnchorPreview: record.summary } : {}),
+        relatedProjectIds: record.relatedProjectIds,
+        childRunIds: record.childRunIds,
+        ...(record.parentId ? { parentId: record.parentId } : {}),
+      },
+      null,
+      2,
+    ),
+    'utf-8',
+  );
 }
 
 /**
@@ -149,23 +134,17 @@ export function getConversationCloseAction(hasPendingRuns: boolean): 'soft' | 'h
  * - 'dormant' if any child is waiting/queued
  * - 'closed' if all children are terminal
  */
-export function deriveConversationState(
-  childRunStatuses: string[],
-): ConversationState {
+export function deriveConversationState(childRunStatuses: string[]): ConversationState {
   if (childRunStatuses.length === 0) {
     return 'closed';
   }
 
-  const hasRunning = childRunStatuses.some(
-    (s) => s === 'running' || s === 'recovering',
-  );
+  const hasRunning = childRunStatuses.some((s) => s === 'running' || s === 'recovering');
   if (hasRunning) {
     return 'open';
   }
 
-  const hasPending = childRunStatuses.some(
-    (s) => s === 'queued' || s === 'waiting',
-  );
+  const hasPending = childRunStatuses.some((s) => s === 'queued' || s === 'waiting');
   if (hasPending) {
     return 'dormant';
   }
@@ -176,17 +155,8 @@ export function deriveConversationState(
 /**
  * List all conversations for a profile.
  */
-export function listConversationRecords(
-  stateRoot: string,
-  profile: string,
-): ConversationRecord[] {
-  const dir = join(
-    stateRoot,
-    'pi-agent',
-    'state',
-    'conversation-memory',
-    profile,
-  );
+export function listConversationRecords(stateRoot: string, profile: string): ConversationRecord[] {
+  const dir = join(stateRoot, 'pi-agent', 'state', 'conversation-memory', profile);
 
   if (!existsSync(dir)) {
     return [];

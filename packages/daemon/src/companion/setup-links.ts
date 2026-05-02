@@ -1,34 +1,24 @@
 import { networkInterfaces } from 'node:os';
+
 import type { DaemonConfig } from '../config.js';
 import { resolveCompanionTailscaleUrl } from '../tailscale-serve.js';
 import type { CompanionPairingCode, CompanionSetupLink, CompanionSetupState } from './types.js';
 
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
-  return normalized === '127.0.0.1'
-    || normalized === '::1'
-    || normalized === 'localhost'
-    || normalized === '::ffff:127.0.0.1';
+  return normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost' || normalized === '::ffff:127.0.0.1';
 }
 
 function isWildcardHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
-  return normalized === '0.0.0.0'
-    || normalized === '::'
-    || normalized === '::0'
-    || normalized === '::ffff:0.0.0.0';
+  return normalized === '0.0.0.0' || normalized === '::' || normalized === '::0' || normalized === '::ffff:0.0.0.0';
 }
 
 function formatHttpHost(host: string): string {
   return host.includes(':') ? `[${host}]` : host;
 }
 
-function buildSetupUrl(input: {
-  baseUrl: string;
-  pairingCode: string;
-  hostLabel: string;
-  hostInstanceId: string;
-}): string {
+function buildSetupUrl(input: { baseUrl: string; pairingCode: string; hostLabel: string; hostInstanceId: string }): string {
   const params = new URLSearchParams({
     base: input.baseUrl,
     code: input.pairingCode,
@@ -72,9 +62,7 @@ export function buildCompanionSetupState(input: {
   const warnings: string[] = [];
   const links: CompanionSetupLink[] = [];
   const seenBaseUrls = new Set<string>();
-  const tailnetUrl = input.resolveTailnetUrl
-    ? input.resolveTailnetUrl(companionPort)
-    : resolveCompanionTailscaleUrl(companionPort);
+  const tailnetUrl = input.resolveTailnetUrl ? input.resolveTailnetUrl(companionPort) : resolveCompanionTailscaleUrl(companionPort);
   const addBaseUrl = (label: string, baseUrl: string) => {
     if (seenBaseUrls.has(baseUrl)) {
       return;
@@ -116,7 +104,8 @@ export function buildCompanionSetupState(input: {
     const interfaces = readInterfaces();
     const names = Object.keys(interfaces).sort(compareInterfacePriority);
     for (const name of names) {
-      const entries = (interfaces as Record<string, Array<{ address: string; family: string | number; internal: boolean }> | undefined>)[name] ?? [];
+      const entries =
+        (interfaces as Record<string, Array<{ address: string; family: string | number; internal: boolean }> | undefined>)[name] ?? [];
       for (const entry of entries) {
         const family = typeof entry.family === 'string' ? entry.family : String(entry.family);
         if ((family !== 'IPv4' && family !== '4') || entry.internal !== false || !isUsableIpv4Address(entry.address)) {
@@ -127,7 +116,9 @@ export function buildCompanionSetupState(input: {
     }
 
     if (links.length === 0) {
-      warnings.push('No non-loopback IPv4 network address is available for QR pairing. Connect the host machine to Wi-Fi or Ethernet, or bind the companion host to a specific reachable address.');
+      warnings.push(
+        'No non-loopback IPv4 network address is available for QR pairing. Connect the host machine to Wi-Fi or Ethernet, or bind the companion host to a specific reachable address.',
+      );
     }
   } else {
     addHostLink('Configured host', companionHost);

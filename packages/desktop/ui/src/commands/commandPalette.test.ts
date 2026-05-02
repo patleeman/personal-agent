@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
+  type CommandPaletteItem,
   isCommandPaletteThreadDataLoading,
   resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
   selectCommandPaletteScopedItems,
   shouldBootstrapCommandPaletteThreads,
-  type CommandPaletteItem,
 } from './commandPalette';
 
 interface TestAction {
@@ -68,11 +69,7 @@ describe('command palette search', () => {
   it('includes files in the search-all scope', () => {
     const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'search' });
 
-    expect(results.map((group) => group.section)).toEqual([
-      'open',
-      'archived',
-      'files',
-    ]);
+    expect(results.map((group) => group.section)).toEqual(['open', 'archived', 'files']);
   });
 
   it('keeps local thread and file title matches while adding content-search results', () => {
@@ -82,16 +79,20 @@ describe('command palette search', () => {
       openConversationItems: [ITEMS[0]!],
       archivedConversationItems: [ITEMS[1]!],
       fileItems: [ITEMS[2]!],
-      searchedConversationItems: [{
-        ...ITEMS[1]!,
-        id: 'conversation-search:beta:block-1',
-        title: 'Matched transcript block',
-      }],
-      searchedFileItems: [{
-        ...ITEMS[2]!,
-        id: 'file-search:guide',
-        title: 'Workspace file excerpt',
-      }],
+      searchedConversationItems: [
+        {
+          ...ITEMS[1]!,
+          id: 'conversation-search:beta:block-1',
+          title: 'Matched transcript block',
+        },
+      ],
+      searchedFileItems: [
+        {
+          ...ITEMS[2]!,
+          id: 'file-search:guide',
+          title: 'Workspace file excerpt',
+        },
+      ],
     });
 
     expect(scoped.map((item) => item.id)).toEqual([
@@ -152,49 +153,61 @@ describe('command palette search', () => {
   });
 
   it('bootstraps thread results when the palette opens before sessions load', () => {
-    expect(shouldBootstrapCommandPaletteThreads({
-      open: true,
-      scope: 'threads',
-      sessions: null,
-      alreadyRequested: false,
-    })).toBe(true);
+    expect(
+      shouldBootstrapCommandPaletteThreads({
+        open: true,
+        scope: 'threads',
+        sessions: null,
+        alreadyRequested: false,
+      }),
+    ).toBe(true);
 
-    expect(shouldBootstrapCommandPaletteThreads({
-      open: true,
-      scope: 'search',
-      sessions: null,
-      alreadyRequested: false,
-    })).toBe(true);
+    expect(
+      shouldBootstrapCommandPaletteThreads({
+        open: true,
+        scope: 'search',
+        sessions: null,
+        alreadyRequested: false,
+      }),
+    ).toBe(true);
 
-    expect(shouldBootstrapCommandPaletteThreads({
-      open: true,
-      scope: 'files',
-      sessions: null,
-      alreadyRequested: false,
-    })).toBe(false);
+    expect(
+      shouldBootstrapCommandPaletteThreads({
+        open: true,
+        scope: 'files',
+        sessions: null,
+        alreadyRequested: false,
+      }),
+    ).toBe(false);
   });
 
   it('does not re-bootstrap thread results after the first request or once sessions are loaded', () => {
-    expect(shouldBootstrapCommandPaletteThreads({
-      open: true,
-      scope: 'threads',
-      sessions: null,
-      alreadyRequested: true,
-    })).toBe(false);
+    expect(
+      shouldBootstrapCommandPaletteThreads({
+        open: true,
+        scope: 'threads',
+        sessions: null,
+        alreadyRequested: true,
+      }),
+    ).toBe(false);
 
-    expect(shouldBootstrapCommandPaletteThreads({
-      open: true,
-      scope: 'threads',
-      sessions: [],
-      alreadyRequested: false,
-    })).toBe(false);
+    expect(
+      shouldBootstrapCommandPaletteThreads({
+        open: true,
+        scope: 'threads',
+        sessions: [],
+        alreadyRequested: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldBootstrapCommandPaletteThreads({
-      open: false,
-      scope: 'threads',
-      sessions: null,
-      alreadyRequested: false,
-    })).toBe(false);
+    expect(
+      shouldBootstrapCommandPaletteThreads({
+        open: false,
+        scope: 'threads',
+        sessions: null,
+        alreadyRequested: false,
+      }),
+    ).toBe(false);
   });
 
   it('treats unknown sessions as a loading state for thread sections', () => {

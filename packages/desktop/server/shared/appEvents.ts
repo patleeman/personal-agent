@@ -1,19 +1,21 @@
-import { existsSync, readdirSync, statSync, watch, type Dirent, type FSWatcher } from 'node:fs';
+import { type Dirent, existsSync, type FSWatcher, readdirSync, statSync, watch } from 'node:fs';
 import { basename, dirname, join, normalize } from 'node:path';
+
 import {
   getDurableTasksDir,
   resolveConversationAttentionStatePath,
   resolveDeferredResumeStateFile,
-  resolveProfileAlertsStateFile,
-  resolveProfileConversationAttachmentsDir,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityStateDir,
+  resolveProfileAlertsStateFile,
   resolveProfileConversationArtifactsDir,
+  resolveProfileConversationAttachmentsDir,
   resolveProfileConversationCommitCheckpointsDir,
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
-import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
+
 import { clearDurableRunsListCache } from '../automation/durableRuns.js';
+import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
 import { logWarn } from './logging.js';
 
 export type AppEventTopic =
@@ -198,18 +200,10 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: alertsStateFile, kind: 'file' },
       ...activitySources,
     ],
-    sessionFiles: [
-      { path: options.sessionsDir, kind: 'directory', eventKinds: ['change', 'rename'] },
-    ],
-    artifacts: [
-      { path: conversationArtifactsDir, kind: 'directory' },
-    ],
-    checkpoints: [
-      { path: conversationCommitCheckpointsDir, kind: 'directory' },
-    ],
-    attachments: [
-      { path: conversationAttachmentsDir, kind: 'directory' },
-    ],
+    sessionFiles: [{ path: options.sessionsDir, kind: 'directory', eventKinds: ['change', 'rename'] }],
+    artifacts: [{ path: conversationArtifactsDir, kind: 'directory' }],
+    checkpoints: [{ path: conversationCommitCheckpointsDir, kind: 'directory' }],
+    attachments: [{ path: conversationAttachmentsDir, kind: 'directory' }],
     tasks: [
       { path: tasksDir, kind: 'directory' },
       { path: options.taskStateFile, kind: 'file' },
@@ -257,66 +251,84 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
       if (source.kind === 'file') {
         const parent = dirname(source.path);
         if (isDirectory(parent)) {
-          addTarget({
-            path: parent,
-            recursive: false,
-            rebuildOnEvent: false,
-            filterName: basename(source.path),
-            eventKinds: source.eventKinds,
-          }, topic);
+          addTarget(
+            {
+              path: parent,
+              recursive: false,
+              rebuildOnEvent: false,
+              filterName: basename(source.path),
+              eventKinds: source.eventKinds,
+            },
+            topic,
+          );
           continue;
         }
 
-        addTarget({
-          path: findNearestExistingDirectory(parent),
-          recursive: true,
-          rebuildOnEvent: true,
-          filterName: basename(source.path),
-          eventKinds: source.eventKinds,
-        }, topic);
+        addTarget(
+          {
+            path: findNearestExistingDirectory(parent),
+            recursive: true,
+            rebuildOnEvent: true,
+            filterName: basename(source.path),
+            eventKinds: source.eventKinds,
+          },
+          topic,
+        );
         continue;
       }
 
       if (isDirectory(source.path)) {
-        addTarget({
-          path: source.path,
-          recursive: true,
-          rebuildOnEvent: false,
-          eventKinds: source.eventKinds,
-        }, topic);
+        addTarget(
+          {
+            path: source.path,
+            recursive: true,
+            rebuildOnEvent: false,
+            eventKinds: source.eventKinds,
+          },
+          topic,
+        );
 
         const parent = dirname(source.path);
         if (isDirectory(parent)) {
-          addTarget({
-            path: parent,
-            recursive: false,
-            rebuildOnEvent: true,
-            filterName: basename(source.path),
-            eventKinds: source.eventKinds,
-          }, topic);
+          addTarget(
+            {
+              path: parent,
+              recursive: false,
+              rebuildOnEvent: true,
+              filterName: basename(source.path),
+              eventKinds: source.eventKinds,
+            },
+            topic,
+          );
         }
         continue;
       }
 
       const parent = dirname(source.path);
       if (isDirectory(parent)) {
-        addTarget({
-          path: parent,
-          recursive: false,
-          rebuildOnEvent: true,
-          filterName: basename(source.path),
-          eventKinds: source.eventKinds,
-        }, topic);
+        addTarget(
+          {
+            path: parent,
+            recursive: false,
+            rebuildOnEvent: true,
+            filterName: basename(source.path),
+            eventKinds: source.eventKinds,
+          },
+          topic,
+        );
         continue;
       }
 
-      addTarget({
-        path: findNearestExistingDirectory(parent),
-        recursive: true,
-        rebuildOnEvent: true,
-        filterName: basename(source.path),
-        eventKinds: source.eventKinds,
-      }, topic);
+      addTarget(
+        {
+          path: findNearestExistingDirectory(parent),
+          recursive: true,
+          rebuildOnEvent: true,
+          filterName: basename(source.path),
+          eventKinds: source.eventKinds,
+        },
+        topic,
+      );
     }
   }
 
@@ -331,7 +343,10 @@ function startBasicWatch(path: string, onEvent: (eventKind: AppEventWatchKind, c
   return () => watcher.close();
 }
 
-function startManualDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, changedPath: string | null) => void): WatchStop {
+function startManualDirectoryTreeWatch(
+  path: string,
+  onEvent: (eventKind: AppEventWatchKind, changedPath: string | null) => void,
+): WatchStop {
   const watchers = new Map<string, FSWatcher>();
   let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -401,9 +416,7 @@ function startDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatc
 
     return () => watcher.close();
   } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : '';
     if (code !== 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM') {
       throw error;
     }
@@ -438,9 +451,7 @@ function startWatchTarget(
   };
 
   try {
-    return target.recursive
-      ? startDirectoryTreeWatch(target.path, handleEvent)
-      : startBasicWatch(target.path, handleEvent);
+    return target.recursive ? startDirectoryTreeWatch(target.path, handleEvent) : startBasicWatch(target.path, handleEvent);
   } catch (error) {
     logWarn('app event watch registration failed', {
       path: target.path,
@@ -567,8 +578,9 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
     for (const stop of watcherStops) {
       stop();
     }
-    watcherStops = buildWatchTargets(options, currentProfile)
-      .map((target) => startWatchTarget(target, queueInvalidation, queueConversationSessionFileChange, scheduleRebuild));
+    watcherStops = buildWatchTargets(options, currentProfile).map((target) =>
+      startWatchTarget(target, queueInvalidation, queueConversationSessionFileChange, scheduleRebuild),
+    );
   };
 
   const refreshProfile = () => {

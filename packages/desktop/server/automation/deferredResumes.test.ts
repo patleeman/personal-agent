@@ -2,14 +2,16 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { loadDeferredResumeState } from '@personal-agent/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  DEFAULT_DEFERRED_RESUME_PROMPT,
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
   createReadyDeferredResumeForSessionFile,
+  DEFAULT_DEFERRED_RESUME_PROMPT,
   fireDeferredResumeNowForSessionFile,
   listDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
@@ -119,11 +121,13 @@ describe('deferredResumes', () => {
       readyAt: 'bad-ready-time',
     });
 
-    expect(ready).toEqual(expect.objectContaining({
-      dueAt: '2026-03-12T13:00:00.000Z',
-      createdAt: '2026-03-12T13:00:00.000Z',
-      readyAt: '2026-03-12T13:00:00.000Z',
-    }));
+    expect(ready).toEqual(
+      expect.objectContaining({
+        dueAt: '2026-03-12T13:00:00.000Z',
+        createdAt: '2026-03-12T13:00:00.000Z',
+        readyAt: '2026-03-12T13:00:00.000Z',
+      }),
+    );
   });
 
   it('cancels only entries that belong to the requested session file', async () => {
@@ -148,9 +152,7 @@ describe('deferredResumes', () => {
 
     expect(cancelled.id).toBe(remove.id);
     expect(listDeferredResumesForSessionFile('/tmp/sessions/current.jsonl')).toEqual([]);
-    expect(listDeferredResumesForSessionFile('/tmp/sessions/other.jsonl')).toEqual([
-      expect.objectContaining({ id: keep.id }),
-    ]);
+    expect(listDeferredResumesForSessionFile('/tmp/sessions/other.jsonl')).toEqual([expect.objectContaining({ id: keep.id })]);
   });
 
   it('fires a scheduled resume immediately without dropping a newer schedule', async () => {
@@ -178,11 +180,13 @@ describe('deferredResumes', () => {
       at: new Date('2026-03-12T13:00:30.000Z'),
     });
 
-    expect(fired).toEqual(expect.objectContaining({
-      id: first.id,
-      status: 'ready',
-      readyAt: '2026-03-12T13:00:30.000Z',
-    }));
+    expect(fired).toEqual(
+      expect.objectContaining({
+        id: first.id,
+        status: 'ready',
+        readyAt: '2026-03-12T13:00:30.000Z',
+      }),
+    );
     expect(listDeferredResumesForSessionFile(sessionFile)).toEqual([
       expect.objectContaining({ id: first.id, status: 'ready', readyAt: '2026-03-12T13:00:30.000Z' }),
       expect.objectContaining({ id: second.id, prompt: 'second', status: 'scheduled' }),
@@ -205,9 +209,7 @@ describe('deferredResumes', () => {
       sessionFile,
       at: new Date('2026-03-12T13:00:31.000Z'),
     });
-    expect(activated).toEqual([
-      expect.objectContaining({ id: first.id, status: 'ready' }),
-    ]);
+    expect(activated).toEqual([expect.objectContaining({ id: first.id, status: 'ready' })]);
 
     const second = await scheduleDeferredResumeForSessionFile({
       sessionFile,
@@ -257,12 +259,14 @@ describe('deferredResumes', () => {
       dueAt: '2026-03-12T13:05:00.000Z',
     });
 
-    expect(retried).toEqual(expect.objectContaining({
-      id: first.id,
-      status: 'scheduled',
-      dueAt: '2026-03-12T13:05:00.000Z',
-      attempts: 1,
-    }));
+    expect(retried).toEqual(
+      expect.objectContaining({
+        id: first.id,
+        status: 'scheduled',
+        dueAt: '2026-03-12T13:05:00.000Z',
+        attempts: 1,
+      }),
+    );
     expect(listDeferredResumesForSessionFile(sessionFile)).toEqual([
       expect.objectContaining({ id: first.id, status: 'scheduled', attempts: 1 }),
       expect.objectContaining({ id: second.id, prompt: 'second', status: 'scheduled' }),
@@ -286,48 +290,58 @@ describe('deferredResumes', () => {
       now: new Date('2026-03-12T12:00:00.000Z'),
     });
 
-    expect(scheduled).toEqual(expect.objectContaining({
-      prompt: 'Watch the prod gates.',
-      title: 'Watch the prod gates',
-      kind: 'reminder',
-      dueAt: '2026-03-12T13:30:00.000Z',
-      delivery: {
-        alertLevel: 'disruptive',
-        autoResumeIfOpen: false,
-        requireAck: true,
-      },
-    }));
+    expect(scheduled).toEqual(
+      expect.objectContaining({
+        prompt: 'Watch the prod gates.',
+        title: 'Watch the prod gates',
+        kind: 'reminder',
+        dueAt: '2026-03-12T13:30:00.000Z',
+        delivery: {
+          alertLevel: 'disruptive',
+          autoResumeIfOpen: false,
+          requireAck: true,
+        },
+      }),
+    );
 
     const stored = Object.values(loadDeferredResumeState().resumes)[0];
-    expect(stored).toEqual(expect.objectContaining({
-      source: { kind: 'reminder-tool', id: 'reminder-1' },
-    }));
+    expect(stored).toEqual(
+      expect.objectContaining({
+        source: { kind: 'reminder-tool', id: 'reminder-1' },
+      }),
+    );
   });
 
   it('rejects invalid delays', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    await expect(scheduleDeferredResumeForSessionFile({
-      sessionFile: '/tmp/sessions/current.jsonl',
-      delay: 'later',
-    })).rejects.toThrow('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+    await expect(
+      scheduleDeferredResumeForSessionFile({
+        sessionFile: '/tmp/sessions/current.jsonl',
+        delay: 'later',
+      }),
+    ).rejects.toThrow('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
   });
 
   it('rejects non-ISO at timestamps', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    await expect(scheduleDeferredResumeForSessionFile({
-      sessionFile: '/tmp/sessions/current.jsonl',
-      at: '9999',
-      now: new Date('2026-03-12T13:00:00.000Z'),
-    })).rejects.toThrow('Invalid time expression. Use forms like now+1d, now+1d@20:00, tomorrow 8pm, or an ISO-8601 timestamp.');
+    await expect(
+      scheduleDeferredResumeForSessionFile({
+        sessionFile: '/tmp/sessions/current.jsonl',
+        at: '9999',
+        now: new Date('2026-03-12T13:00:00.000Z'),
+      }),
+    ).rejects.toThrow('Invalid time expression. Use forms like now+1d, now+1d@20:00, tomorrow 8pm, or an ISO-8601 timestamp.');
 
-    await expect(scheduleDeferredResumeForSessionFile({
-      sessionFile: '/tmp/sessions/current.jsonl',
-      at: '2026-02-31T13:00:00.000Z',
-      now: new Date('2026-03-12T13:00:00.000Z'),
-    })).rejects.toThrow('Invalid time expression. Use forms like now+1d, now+1d@20:00, tomorrow 8pm, or an ISO-8601 timestamp.');
+    await expect(
+      scheduleDeferredResumeForSessionFile({
+        sessionFile: '/tmp/sessions/current.jsonl',
+        at: '2026-02-31T13:00:00.000Z',
+        now: new Date('2026-03-12T13:00:00.000Z'),
+      }),
+    ).rejects.toThrow('Invalid time expression. Use forms like now+1d, now+1d@20:00, tomorrow 8pm, or an ISO-8601 timestamp.');
   });
 });

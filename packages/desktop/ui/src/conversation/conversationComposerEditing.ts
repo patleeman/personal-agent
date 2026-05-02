@@ -25,12 +25,8 @@ export function resolveComposerClearShortcut(input: {
   shouldClear: boolean;
   shouldRememberInput: boolean;
 } {
-  const isClearShortcut = input.ctrlKey
-    && !input.metaKey
-    && !input.altKey
-    && !input.shiftKey
-    && input.key.toLowerCase() === 'c'
-    && !input.isComposing;
+  const isClearShortcut =
+    input.ctrlKey && !input.metaKey && !input.altKey && !input.shiftKey && input.key.toLowerCase() === 'c' && !input.isComposing;
 
   if (!isClearShortcut) {
     return { shouldClear: false, shouldRememberInput: false };
@@ -53,16 +49,10 @@ export function canNavigateComposerHistoryValue(input: {
   }
 
   const caret = input.selectionStart;
-  return input.key === 'ArrowUp'
-    ? !input.value.slice(0, caret).includes('\n')
-    : !input.value.slice(caret).includes('\n');
+  return input.key === 'ArrowUp' ? !input.value.slice(0, caret).includes('\n') : !input.value.slice(caret).includes('\n');
 }
 
-export function insertTextAtComposerSelection(input: {
-  currentInput: string;
-  selection: ComposerSelectionRange;
-  text: string;
-}): {
+export function insertTextAtComposerSelection(input: { currentInput: string; selection: ComposerSelectionRange; text: string }): {
   nextInput: string;
   nextCaret: number;
 } | null {
@@ -98,14 +88,13 @@ export function resolveComposerHistoryNavigation(input: {
   if (input.history.length === 0) {
     return null;
   }
-  const currentIndex = input.currentIndex === null || !Number.isSafeInteger(input.currentIndex)
-    ? null
-    : Math.max(0, Math.min(input.currentIndex, input.history.length - 1));
+  const currentIndex =
+    input.currentIndex === null || !Number.isSafeInteger(input.currentIndex)
+      ? null
+      : Math.max(0, Math.min(input.currentIndex, input.history.length - 1));
 
   if (input.direction === 'older') {
-    const nextIndex = currentIndex === null
-      ? input.history.length - 1
-      : Math.max(0, currentIndex - 1);
+    const nextIndex = currentIndex === null ? input.history.length - 1 : Math.max(0, currentIndex - 1);
 
     return {
       nextIndex,

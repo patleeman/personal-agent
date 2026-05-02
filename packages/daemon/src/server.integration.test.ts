@@ -3,19 +3,28 @@
  * Tests IPC request/response flows including malformed requests
  */
 
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
+import { loadDeferredResumeState } from '@personal-agent/core';
+import { randomUUID } from 'crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
+import { createConnection } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createConnection } from 'net';
-import { randomUUID } from 'crypto';
-import { loadDeferredResumeState } from '@personal-agent/core';
-import { PersonalAgentDaemon } from './server.js';
+
 import type { DaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
-import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunsRoot, resolveDurableRunPaths, saveDurableRunManifest, saveDurableRunStatus, scanDurableRun } from './runs/store.js';
 import { listPendingBackgroundRunResults } from './runs/background-run-deferred-resumes.js';
+import {
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+  scanDurableRun,
+} from './runs/store.js';
+import { PersonalAgentDaemon } from './server.js';
 
 const tempDirs: string[] = [];
 const originalEnv = { ...process.env };
@@ -198,18 +207,24 @@ describe('daemon IPC integration', () => {
     const runsRoot = resolveDurableRunsRoot(daemonPaths.root);
     const runPaths = resolveDurableRunPaths(runsRoot, 'run-continue');
     mkdirSync(runPaths.root, { recursive: true, mode: 0o700 });
-    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
-      id: 'run-continue',
-      kind: 'conversation',
-      resumePolicy: 'continue',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-continue',
-      status: 'running',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 2,
-    }));
+    saveDurableRunManifest(
+      runPaths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-continue',
+        kind: 'conversation',
+        resumePolicy: 'continue',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      runPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-continue',
+        status: 'running',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 2,
+      }),
+    );
 
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();
@@ -243,18 +258,24 @@ describe('daemon IPC integration', () => {
     const runsRoot = resolveDurableRunsRoot(daemonPaths.root);
     const runPaths = resolveDurableRunPaths(runsRoot, 'run-rerun');
     mkdirSync(runPaths.root, { recursive: true, mode: 0o700 });
-    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
-      id: 'run-rerun',
-      kind: 'scheduled-task',
-      resumePolicy: 'rerun',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-rerun',
-      status: 'interrupted',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 1,
-    }));
+    saveDurableRunManifest(
+      runPaths.manifestPath,
+      createDurableRunManifest({
+        id: 'run-rerun',
+        kind: 'scheduled-task',
+        resumePolicy: 'rerun',
+        createdAt: '2026-03-12T18:00:00Z',
+      }),
+    );
+    saveDurableRunStatus(
+      runPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: 'run-rerun',
+        status: 'interrupted',
+        createdAt: '2026-03-12T18:00:00Z',
+        activeAttempt: 1,
+      }),
+    );
 
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();

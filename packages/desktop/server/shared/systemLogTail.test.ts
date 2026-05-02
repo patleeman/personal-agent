@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { filterSystemLogTailLines, isRemovedSyncLogLine } from './systemLogTail.js';
 
 describe('systemLogTail', () => {
@@ -12,14 +13,13 @@ describe('systemLogTail', () => {
     const kept = '[info] wrote ~/.local/state/personal-agent/sync/tasks/example.task.md';
 
     expect(isRemovedSyncLogLine(kept)).toBe(false);
-    expect(filterSystemLogTailLines([
-      '[info] [module:sync] old log line',
-      kept,
-      '[warn] run-sync-error-resolver failed',
-      '[info] daemon started',
-    ])).toEqual([
-      kept,
-      '[info] daemon started',
-    ]);
+    expect(
+      filterSystemLogTailLines([
+        '[info] [module:sync] old log line',
+        kept,
+        '[warn] run-sync-error-resolver failed',
+        '[info] daemon started',
+      ]),
+    ).toEqual([kept, '[info] daemon started']);
   });
 });

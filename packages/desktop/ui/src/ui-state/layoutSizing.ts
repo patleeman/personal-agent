@@ -63,17 +63,13 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
   }
 }
 
-function getMainViewportWidth(input: {
-  viewportWidth: number;
-  sidebarWidth: number;
-  resizeHandleWidth?: number;
-}): number {
+function getMainViewportWidth(input: { viewportWidth: number; sidebarWidth: number; resizeHandleWidth?: number }): number {
   const resizeHandleWidth = input.resizeHandleWidth ?? RESIZE_HANDLE_WIDTH;
   if (![input.viewportWidth, input.sidebarWidth, resizeHandleWidth].every(Number.isSafeInteger)) {
     return 0;
   }
 
-  return Math.max(0, input.viewportWidth - input.sidebarWidth - (resizeHandleWidth * 2));
+  return Math.max(0, input.viewportWidth - input.sidebarWidth - resizeHandleWidth * 2);
 }
 
 export function getRailInitialWidth(input: {
@@ -85,9 +81,10 @@ export function getRailInitialWidth(input: {
   resizeHandleWidth?: number;
 }): number {
   const prefs = getRailLayoutPrefs(input.pathname);
-  const initialWidth = prefs.initialMainWidthRatio === undefined
-    ? (prefs.initialWidth ?? input.railMinWidth)
-    : Math.floor(getMainViewportWidth(input) * prefs.initialMainWidthRatio);
+  const initialWidth =
+    prefs.initialMainWidthRatio === undefined
+      ? (prefs.initialWidth ?? input.railMinWidth)
+      : Math.floor(getMainViewportWidth(input) * prefs.initialMainWidthRatio);
 
   return clampPanelWidth(initialWidth, input.railMinWidth, input.railMaxWidth);
 }

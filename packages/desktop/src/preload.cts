@@ -37,10 +37,12 @@ const desktopBridge = {
   getEnvironment: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-environment`),
   getConnections: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-connections`),
   getNavigationState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-navigation-state`),
-  continueConversationInHost: (input: { conversationId: string; hostId: string; cwd?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:continue-conversation-in-host`, input),
+  continueConversationInHost: (input: { conversationId: string; hostId: string; cwd?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:continue-conversation-in-host`, input),
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
-  readRemoteDirectory: (input: { hostId: string; path?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-remote-directory`, input),
+  readRemoteDirectory: (input: { hostId: string; path?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-remote-directory`, input),
   testSshConnection: (input: { sshTarget: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:test-ssh-connection`, input),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
   openConversationPopout: (input: { conversationId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-conversation-popout`, input),
@@ -75,16 +77,15 @@ const desktopBridge = {
     canMove?: boolean;
     canDelete?: boolean;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-knowledge-entry-context-menu`, input),
-  showSelectionContextMenu: (input: {
-    x: number;
-    y: number;
-    canReply?: boolean;
-    canCopy?: boolean;
-  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-selection-context-menu`, input),
+  showSelectionContextMenu: (input: { x: number; y: number; canReply?: boolean; canCopy?: boolean }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-selection-context-menu`, input),
   openPath: (targetPath: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-path`, targetPath),
   readDesktopAppPreferences: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-desktop-app-preferences`),
-  updateDesktopAppPreferences: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, input),
+  updateDesktopAppPreferences: (input: {
+    autoInstallUpdates?: boolean;
+    startOnSystemStart?: boolean;
+    keyboardShortcuts?: Record<string, string>;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, input),
   ensureCompanionNetworkReachable: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:ensure-companion-network-reachable`),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
@@ -106,8 +107,12 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),
   readConversationPlansWorkspace: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`),
   readOpenConversationTabs: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-open-conversation-tabs`),
-  updateOpenConversationTabs: (input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[]; workspacePaths?: string[] }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-open-conversation-tabs`, input),
+  updateOpenConversationTabs: (input: {
+    sessionIds?: string[];
+    pinnedSessionIds?: string[];
+    archivedSessionIds?: string[];
+    workspacePaths?: string[];
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-open-conversation-tabs`, input),
   readModelProviders: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-model-providers`),
   saveModelProvider: (input: {
     provider: string;
@@ -134,17 +139,21 @@ const desktopBridge = {
     cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
     compat?: Record<string, unknown>;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-model-provider-model`, input),
-  deleteModelProviderModel: (input: { provider: string; modelId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-model-provider-model`, input),
+  deleteModelProviderModel: (input: { provider: string; modelId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-model-provider-model`, input),
   readProviderAuth: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-provider-auth`),
   setProviderApiKey: (input: { provider: string; apiKey: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-provider-api-key`, input),
   removeProviderCredential: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:remove-provider-credential`, provider),
   startProviderOAuthLogin: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:start-provider-oauth-login`, provider),
   readProviderOAuthLogin: (loginId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-provider-oauth-login`, loginId),
-  submitProviderOAuthLoginInput: (input: { loginId: string; value: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-provider-oauth-login-input`, input),
+  submitProviderOAuthLoginInput: (input: { loginId: string; value: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-provider-oauth-login-input`, input),
   cancelProviderOAuthLogin: (loginId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-provider-oauth-login`, loginId),
   subscribeProviderOAuthLogin: (loginId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-provider-oauth-login`, loginId),
-  unsubscribeProviderOAuthLogin: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-provider-oauth-login`, subscriptionId),
-  markConversationAttention: (input: { conversationId: string; read?: boolean }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-conversation-attention`, input),
+  unsubscribeProviderOAuthLogin: (subscriptionId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-provider-oauth-login`, subscriptionId),
+  markConversationAttention: (input: { conversationId: string; read?: boolean }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-conversation-attention`, input),
   readScheduledTasks: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-tasks`),
   readScheduledTaskDetail: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-detail`, taskId),
   readScheduledTaskLog: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-log`, taskId),
@@ -177,7 +186,8 @@ const desktopBridge = {
   readDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run`, runId),
   readDurableRunLog: (input: { runId: string; tail?: number }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run-log`, input),
   cancelDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-durable-run`, runId),
-  markDurableRunAttention: (input: { runId: string; read?: boolean }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-durable-run-attention`, input),
+  markDurableRunAttention: (input: { runId: string; read?: boolean }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-durable-run-attention`, input),
   readConversationBootstrap: (input: {
     conversationId: string;
     tailBlocks?: number;
@@ -192,25 +202,36 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:change-conversation-cwd`, input),
   readConversationDeferredResumes: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-deferred-resumes`, conversationId),
-  scheduleConversationDeferredResume: (input: { conversationId: string; delay: string; prompt?: string; behavior?: 'steer' | 'followUp' }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:schedule-conversation-deferred-resume`, input),
+  scheduleConversationDeferredResume: (input: {
+    conversationId: string;
+    delay: string;
+    prompt?: string;
+    behavior?: 'steer' | 'followUp';
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:schedule-conversation-deferred-resume`, input),
   cancelConversationDeferredResume: (input: { conversationId: string; resumeId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-conversation-deferred-resume`, input),
   fireConversationDeferredResume: (input: { conversationId: string; resumeId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:fire-conversation-deferred-resume`, input),
-  recoverConversation: (conversationId: string) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:recover-conversation`, conversationId),
+  recoverConversation: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:recover-conversation`, conversationId),
   readConversationModelPreferences: (input: { conversationId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, input),
-  updateConversationModelPreferences: (input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null; surfaceId?: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
-  readConversationArtifacts: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifacts`, conversationId),
+  updateConversationModelPreferences: (input: {
+    conversationId: string;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+    surfaceId?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
+  readConversationArtifacts: (conversationId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifacts`, conversationId),
   readConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifact`, input),
-  readConversationCheckpoints: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-checkpoints`, conversationId),
+  readConversationCheckpoints: (conversationId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-checkpoints`, conversationId),
   readConversationCheckpoint: (input: { conversationId: string; checkpointId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-checkpoint`, input),
-  readConversationAttachments: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachments`, conversationId),
+  readConversationAttachments: (conversationId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachments`, conversationId),
   readConversationAttachment: (input: { conversationId: string; attachmentId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment`, input),
   createConversationAttachment: (input: {
@@ -237,8 +258,12 @@ const desktopBridge = {
     previewMimeType?: string;
     note?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-attachment`, input),
-  readConversationAttachmentAsset: (input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment-asset`, input),
+  readConversationAttachmentAsset: (input: {
+    conversationId: string;
+    attachmentId: string;
+    asset: 'source' | 'preview';
+    revision?: number;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment-asset`, input),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
   readLiveSessionForkEntries: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, conversationId),
@@ -251,19 +276,19 @@ const desktopBridge = {
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-detail`, input),
-  readSessionBlock: (input: { sessionId: string; blockId: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-block`, input),
-  createLiveSession: (input: { cwd?: string; workspaceCwd?: string | null; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-live-session`, input),
+  readSessionBlock: (input: { sessionId: string; blockId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-block`, input),
+  createLiveSession: (input: {
+    cwd?: string;
+    workspaceCwd?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-live-session`, input),
   resumeLiveSession: (input: { sessionFile: string; cwd?: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:resume-live-session`, input),
   takeOverLiveSession: (input: { conversationId: string; surfaceId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:take-over-live-session`, input),
-  restoreQueuedLiveSessionMessage: (input: {
-    conversationId: string;
-    behavior: 'steer' | 'followUp';
-    index: number;
-    previewId?: string;
-  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:restore-queued-live-session-message`, input),
+  restoreQueuedLiveSessionMessage: (input: { conversationId: string; behavior: 'steer' | 'followUp'; index: number; previewId?: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:restore-queued-live-session-message`, input),
   compactLiveSession: (input: { conversationId: string; customInstructions?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:compact-live-session`, input),
   exportLiveSession: (input: { conversationId: string; outputPath?: string }) =>
@@ -308,24 +333,35 @@ const desktopBridge = {
     surfaceId?: string;
     surfaceType?: 'desktop_web' | 'mobile_web';
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-conversation-state`, input),
-  unsubscribeConversationState: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-conversation-state`, subscriptionId),
+  unsubscribeConversationState: (subscriptionId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-conversation-state`, subscriptionId),
   subscribeApiStream: (path: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-api-stream`, path),
   unsubscribeApiStream: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, subscriptionId),
   subscribeAppEvents: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-app-events`),
   unsubscribeAppEvents: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-app-events`, subscriptionId),
   subscribeRemoteOperations: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-remote-operations`),
-  unsubscribeRemoteOperations: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
+  unsubscribeRemoteOperations: (subscriptionId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
-  setWorkbenchBrowserBounds: (input: { visible: boolean; sessionKey?: string | null; bounds?: { x: number; y: number; width: number; height: number }; deactivate?: boolean }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-set-bounds`, input),
-  getWorkbenchBrowserState: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-state`, input),
-  navigateWorkbenchBrowser: (input: { url: string; sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-navigate`, input),
+  setWorkbenchBrowserBounds: (input: {
+    visible: boolean;
+    sessionKey?: string | null;
+    bounds?: { x: number; y: number; width: number; height: number };
+    deactivate?: boolean;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-set-bounds`, input),
+  getWorkbenchBrowserState: (input?: { sessionKey?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-state`, input),
+  navigateWorkbenchBrowser: (input: { url: string; sessionKey?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-navigate`, input),
   goBackWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-back`, input),
-  goForwardWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-forward`, input),
-  reloadWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-reload`, input),
+  goForwardWorkbenchBrowser: (input?: { sessionKey?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-forward`, input),
+  reloadWorkbenchBrowser: (input?: { sessionKey?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-reload`, input),
   stopWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-stop`, input),
-  snapshotWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-snapshot`, input),
+  snapshotWorkbenchBrowser: (input?: { sessionKey?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-snapshot`, input),
 };
 
 if (domGlobals.document?.documentElement) {

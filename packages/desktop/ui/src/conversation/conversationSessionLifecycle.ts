@@ -5,9 +5,11 @@ import type { LiveSessionCreateResult } from '../shared/types';
 export function isConversationSessionNotLiveError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.trim().toLowerCase();
-  return normalized === 'session not live'
-    || normalized === 'not a live session'
-    || normalized.startsWith('session ') && normalized.endsWith(' is not live');
+  return (
+    normalized === 'session not live' ||
+    normalized === 'not a live session' ||
+    (normalized.startsWith('session ') && normalized.endsWith(' is not live'))
+  );
 }
 
 export function primeCreatedConversationOpenCaches(
@@ -22,19 +24,9 @@ export function primeCreatedConversationOpenCaches(
     return;
   }
 
-  primeConversationBootstrapCache(
-    created.id,
-    created.bootstrap,
-    { tailBlocks: options.tailBlocks },
-    options.bootstrapVersionKey,
-  );
+  primeConversationBootstrapCache(created.id, created.bootstrap, { tailBlocks: options.tailBlocks }, options.bootstrapVersionKey);
 
   if (created.bootstrap.sessionDetail) {
-    primeSessionDetailCache(
-      created.id,
-      created.bootstrap.sessionDetail,
-      { tailBlocks: options.tailBlocks },
-      options.sessionDetailVersion,
-    );
+    primeSessionDetailCache(created.id, created.bootstrap.sessionDetail, { tailBlocks: options.tailBlocks }, options.sessionDetailVersion);
   }
 }

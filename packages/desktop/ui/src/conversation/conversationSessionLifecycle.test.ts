@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isConversationSessionNotLiveError, primeCreatedConversationOpenCaches } from './conversationSessionLifecycle';
+
 import { primeConversationBootstrapCache } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';
+import { isConversationSessionNotLiveError, primeCreatedConversationOpenCaches } from './conversationSessionLifecycle';
 
 vi.mock('../hooks/useConversationBootstrap', () => ({
   primeConversationBootstrapCache: vi.fn(),
@@ -37,27 +38,20 @@ describe('conversation session lifecycle helpers', () => {
       sessionDetail,
     };
 
-    primeCreatedConversationOpenCaches({
-      id: 'conv-1',
-      bootstrap,
-    } as never, {
-      tailBlocks: 120,
-      bootstrapVersionKey: '7',
-      sessionDetailVersion: 8,
-    });
+    primeCreatedConversationOpenCaches(
+      {
+        id: 'conv-1',
+        bootstrap,
+      } as never,
+      {
+        tailBlocks: 120,
+        bootstrapVersionKey: '7',
+        sessionDetailVersion: 8,
+      },
+    );
 
-    expect(primeConversationBootstrapCache).toHaveBeenCalledWith(
-      'conv-1',
-      bootstrap,
-      { tailBlocks: 120 },
-      '7',
-    );
-    expect(primeSessionDetailCache).toHaveBeenCalledWith(
-      'conv-1',
-      sessionDetail,
-      { tailBlocks: 120 },
-      8,
-    );
+    expect(primeConversationBootstrapCache).toHaveBeenCalledWith('conv-1', bootstrap, { tailBlocks: 120 }, '7');
+    expect(primeSessionDetailCache).toHaveBeenCalledWith('conv-1', sessionDetail, { tailBlocks: 120 }, 8);
   });
 
   it('does not prime caches when creation did not return bootstrap data', () => {

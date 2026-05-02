@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import type { DurableRunRecord } from '../../shared/types';
-import type { LinkedRunPresentation } from './linkedRuns.js';
 import { extractLinkedTaskSlugFromRunId, pickBestResolvedLinkedRunCandidate, resolveLinkedRunRecord } from './linkedRunResolution.js';
+import type { LinkedRunPresentation } from './linkedRuns.js';
 
 const emptyPaths = {
   root: '',
@@ -13,12 +14,15 @@ const emptyPaths = {
   resultPath: '',
 };
 
-function runRecord(runId: string, options: {
-  taskSlug?: string;
-  prompt?: string;
-  status?: string;
-  updatedAt?: string;
-} = {}): DurableRunRecord {
+function runRecord(
+  runId: string,
+  options: {
+    taskSlug?: string;
+    prompt?: string;
+    status?: string;
+    updatedAt?: string;
+  } = {},
+): DurableRunRecord {
   return {
     runId,
     paths: emptyPaths,
@@ -62,7 +66,9 @@ describe('linkedRunResolution', () => {
 
   it('resolves exact run ids first', () => {
     const exact = runRecord('run-exact');
-    expect(resolveLinkedRunRecord({ runId: 'run-exact', title: 'Other', detail: null }, [exact], { tasks: null, sessions: null })).toBe(exact);
+    expect(resolveLinkedRunRecord({ runId: 'run-exact', title: 'Other', detail: null }, [exact], { tasks: null, sessions: null })).toBe(
+      exact,
+    );
   });
 
   it('resolves timestamped linked ids by task slug', () => {

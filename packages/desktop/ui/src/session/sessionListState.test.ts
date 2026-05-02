@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { SessionMeta } from '../shared/types';
 import {
   mergeSessionSnapshotPreservingOrder,
@@ -49,11 +50,16 @@ describe('sessionListState', () => {
       createSession({ id: 'gamma', title: 'Gamma' }),
     ];
 
-    expect(replaceSessionMetaPreservingOrder(sessions, createSession({
-      id: 'beta',
-      title: 'Beta refreshed',
-      lastActivityAt: '2026-04-07T12:30:00.000Z',
-    }))).toEqual([
+    expect(
+      replaceSessionMetaPreservingOrder(
+        sessions,
+        createSession({
+          id: 'beta',
+          title: 'Beta refreshed',
+          lastActivityAt: '2026-04-07T12:30:00.000Z',
+        }),
+      ),
+    ).toEqual([
       createSession({ id: 'alpha', title: 'Alpha' }),
       createSession({
         id: 'beta',
@@ -65,10 +71,7 @@ describe('sessionListState', () => {
   });
 
   it('appends brand new sessions at the end', () => {
-    const sessions = [
-      createSession({ id: 'alpha', title: 'Alpha' }),
-      createSession({ id: 'beta', title: 'Beta' }),
-    ];
+    const sessions = [createSession({ id: 'alpha', title: 'Alpha' }), createSession({ id: 'beta', title: 'Beta' })];
 
     expect(replaceSessionMetaPreservingOrder(sessions, createSession({ id: 'gamma', title: 'Gamma' }))).toEqual([
       createSession({ id: 'alpha', title: 'Alpha' }),

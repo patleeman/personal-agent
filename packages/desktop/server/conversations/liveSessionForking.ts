@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+
 import type { ParallelPromptJob } from './liveSessionParallelJobs.js';
 
 export function resolveLastCompletedConversationEntryId(sessionFile: string): string | null {
@@ -64,11 +65,13 @@ export function getStableForkBranchEntries(sessionFile: string): StableForkBranc
         try {
           const entry = JSON.parse(rawLine) as StableForkBranchEntry;
           return typeof entry.id === 'string' && entry.id.trim().length > 0
-            ? [{
-                ...entry,
-                id: entry.id.trim(),
-                parentId: typeof entry.parentId === 'string' ? entry.parentId.trim() : entry.parentId ?? null,
-              }]
+            ? [
+                {
+                  ...entry,
+                  id: entry.id.trim(),
+                  parentId: typeof entry.parentId === 'string' ? entry.parentId.trim() : (entry.parentId ?? null),
+                },
+              ]
             : [];
         } catch {
           return [];
@@ -103,10 +106,7 @@ function isStableCompletedBranchEntry(entry: StableForkBranchEntry | undefined):
   return entry.message.stopReason !== 'toolUse';
 }
 
-export function resolveStableForkEntryId(
-  sessionFile: string,
-  options: { activeTurnInProgress?: boolean } = {},
-): string | null {
+export function resolveStableForkEntryId(sessionFile: string, options: { activeTurnInProgress?: boolean } = {}): string | null {
   const branch = getStableForkBranchEntries(sessionFile);
   if (branch.length === 0) {
     return null;
@@ -133,9 +133,7 @@ export function resolveStableForkEntryId(
 
   if (latestUserIndex >= 0) {
     const latestUserEntry = branch[latestUserIndex];
-    const hasStableCompletedEntryAfterLatestUser = branch
-      .slice(latestUserIndex + 1)
-      .some((entry) => isStableCompletedBranchEntry(entry));
+    const hasStableCompletedEntryAfterLatestUser = branch.slice(latestUserIndex + 1).some((entry) => isStableCompletedBranchEntry(entry));
 
     if (!hasStableCompletedEntryAfterLatestUser) {
       let current: StableForkBranchEntry | undefined = latestUserEntry?.parentId ? branchById.get(latestUserEntry.parentId) : undefined;
@@ -164,14 +162,14 @@ export function extractTextFromMessageContent(content: unknown): string {
   }
 
   return content
-    .flatMap((part) => (
-      part
-      && typeof part === 'object'
-      && (part as { type?: unknown }).type === 'text'
-      && typeof (part as { text?: unknown }).text === 'string'
+    .flatMap((part) =>
+      part &&
+      typeof part === 'object' &&
+      (part as { type?: unknown }).type === 'text' &&
+      typeof (part as { text?: unknown }).text === 'string'
         ? [(part as { text: string }).text]
-        : []
-    ))
+        : [],
+    )
     .join('\n')
     .trim();
 }
@@ -179,12 +177,24 @@ export function extractTextFromMessageContent(content: unknown): string {
 function formatParallelQuotedSection(text: string): string {
   return text
     .split('\n')
-    .map((line) => line.length > 0 ? `> ${line}` : '>')
+    .map((line) => (line.length > 0 ? `> ${line}` : '>'))
     .join('\n');
 }
 
 export function buildParallelImportedContent(
-  job: Pick<ParallelPromptJob, 'prompt' | 'childConversationId' | 'resultText' | 'error' | 'imageCount' | 'attachmentRefs' | 'touchedFiles' | 'parentTouchedFiles' | 'overlapFiles' | 'sideEffects'>,
+  job: Pick<
+    ParallelPromptJob,
+    | 'prompt'
+    | 'childConversationId'
+    | 'resultText'
+    | 'error'
+    | 'imageCount'
+    | 'attachmentRefs'
+    | 'touchedFiles'
+    | 'parentTouchedFiles'
+    | 'overlapFiles'
+    | 'sideEffects'
+  >,
 ): string {
   const attachmentRefs = Array.isArray(job.attachmentRefs) ? job.attachmentRefs : [];
   const touchedFiles = Array.isArray(job.touchedFiles) ? job.touchedFiles : [];
@@ -193,12 +203,7 @@ export function buildParallelImportedContent(
   const sideEffects = Array.isArray(job.sideEffects) ? job.sideEffects : [];
   const childHref = `/conversations/${encodeURIComponent(job.childConversationId)}`;
   const promptText = job.prompt.trim().length > 0 ? job.prompt.trim() : '(image-only prompt)';
-  const sections = [
-    '### Parallel response',
-    '',
-    `[Open side thread](${childHref})`,
-    '',
-  ];
+  const sections = ['### Parallel response', '', `[Open side thread](${childHref})`, ''];
 
   const metadata: string[] = [];
   if (job.imageCount > 0) {

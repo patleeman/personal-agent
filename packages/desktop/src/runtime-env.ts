@@ -1,6 +1,8 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+
 import { getDefaultStateRoot, getPiAgentRuntimeDir } from '@personal-agent/core';
+
 import { resolveDesktopLaunchPresentation } from './launch-mode.js';
 
 export const TESTING_DESKTOP_COMPANION_PORT = 3844;
@@ -31,9 +33,7 @@ export function resolveDesktopRuntimeEnvironmentOverrides(
     ...(env.PERSONAL_AGENT_STATE_ROOT?.trim()
       ? {}
       : { stateRoot: resolveTestingStateRoot(options.defaultStateRoot ?? resolveDefaultStateRootForEnv(env)) }),
-    ...(env.PERSONAL_AGENT_COMPANION_PORT?.trim()
-      ? {}
-      : { companionPort: String(TESTING_DESKTOP_COMPANION_PORT) }),
+    ...(env.PERSONAL_AGENT_COMPANION_PORT?.trim() ? {} : { companionPort: String(TESTING_DESKTOP_COMPANION_PORT) }),
   };
 }
 

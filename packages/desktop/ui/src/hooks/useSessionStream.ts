@@ -3,6 +3,10 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { api } from '../client/api';
+import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
+import { parseSkillBlock } from '../knowledge/skillBlock';
 import type {
   ConversationAutoModeState,
   LiveSessionPresenceState,
@@ -15,11 +19,8 @@ import type {
   SessionContextUsage,
   SseEvent,
 } from '../shared/types';
-import { api } from '../client/api';
-import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
-import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../ui-state/liveSessionWarmth';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
-import { parseSkillBlock } from '../knowledge/skillBlock';
+import { clearWarmLiveSessionState, readWarmLiveSessionState, writeWarmLiveSessionState } from '../ui-state/liveSessionWarmth';
 
 export interface StreamState {
   blocks: MessageBlock[];
@@ -43,9 +44,7 @@ export interface StreamState {
 const MAX_LIVE_SESSION_TAIL_BLOCKS = 1000;
 
 export function normalizeLiveSessionTailBlocks(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? Math.min(MAX_LIVE_SESSION_TAIL_BLOCKS, value)
-    : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(MAX_LIVE_SESSION_TAIL_BLOCKS, value) : undefined;
 }
 
 function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
@@ -159,32 +158,28 @@ export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[
     }
 
     const candidate = item as Partial<QueuedPromptPreview>;
-    const imageCount = typeof candidate.imageCount === 'number' && Number.isSafeInteger(candidate.imageCount) && candidate.imageCount > 0
-      ? candidate.imageCount
-      : 0;
+    const imageCount =
+      typeof candidate.imageCount === 'number' && Number.isSafeInteger(candidate.imageCount) && candidate.imageCount > 0
+        ? candidate.imageCount
+        : 0;
     const rawText = typeof candidate.text === 'string' ? candidate.text : '';
-    const text = rawText.trim().length > 0
-      ? rawText.trim()
-      : (imageCount > 0 ? '' : '(empty queued prompt)');
-    const id = typeof candidate.id === 'string' && candidate.id.trim().length > 0
-      ? candidate.id.trim()
-      : createPendingQueuePreview(text).id;
+    const text = rawText.trim().length > 0 ? rawText.trim() : imageCount > 0 ? '' : '(empty queued prompt)';
+    const id =
+      typeof candidate.id === 'string' && candidate.id.trim().length > 0 ? candidate.id.trim() : createPendingQueuePreview(text).id;
 
-    return [{
-      id,
-      text,
-      imageCount,
-      ...(typeof candidate.restorable === 'boolean' ? { restorable: candidate.restorable } : {}),
-      ...(typeof candidate.pending === 'boolean' ? { pending: candidate.pending } : {}),
-    }];
+    return [
+      {
+        id,
+        text,
+        imageCount,
+        ...(typeof candidate.restorable === 'boolean' ? { restorable: candidate.restorable } : {}),
+        ...(typeof candidate.pending === 'boolean' ? { pending: candidate.pending } : {}),
+      },
+    ];
   });
 }
 
-function appendPendingQueueItem(
-  state: StreamState,
-  behavior: 'steer' | 'followUp',
-  item: QueuedPromptPreview,
-): StreamState {
+function appendPendingQueueItem(state: StreamState, behavior: 'steer' | 'followUp', item: QueuedPromptPreview): StreamState {
   if (behavior === 'steer') {
     return {
       ...state,
@@ -204,11 +199,7 @@ function appendPendingQueueItem(
   };
 }
 
-export function removePendingQueueItemById(
-  state: StreamState,
-  behavior: 'steer' | 'followUp',
-  itemId: string,
-): StreamState {
+export function removePendingQueueItemById(state: StreamState, behavior: 'steer' | 'followUp', itemId: string): StreamState {
   const normalizedItemId = itemId.trim();
   if (!normalizedItemId) {
     return state;
@@ -230,10 +221,7 @@ export function removePendingQueueItemById(
   };
 }
 
-function removeOptimisticUserBlock(
-  state: StreamState,
-  optimisticBlockId: string,
-): StreamState {
+function removeOptimisticUserBlock(state: StreamState, optimisticBlockId: string): StreamState {
   if (!optimisticBlockId.trim()) {
     return state;
   }
@@ -250,11 +238,7 @@ function removeOptimisticUserBlock(
   };
 }
 
-function selectVisibleStreamState(
-  state: StreamState,
-  stateSessionId: string | null,
-  requestedSessionId: string | null,
-): StreamState {
+function selectVisibleStreamState(state: StreamState, stateSessionId: string | null, requestedSessionId: string | null): StreamState {
   return stateSessionId === requestedSessionId ? state : INITIAL_STREAM_STATE;
 }
 
@@ -279,34 +263,39 @@ export function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefi
     return false;
   }
 
-  return messageBlockImagesMatch(previous.images ?? [], next.images ?? [])
-    && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
+  return (
+    messageBlockImagesMatch(previous.images ?? [], next.images ?? []) && nextSkillBlock.name.trim().toLowerCase() === previousSkillName
+  );
 }
 
 function messageBlockImagesMatch(
   previousImages: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>,
   nextImages: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>,
 ): boolean {
-  return previousImages.length === nextImages.length
-    && nextImages.every((image, index) => {
+  return (
+    previousImages.length === nextImages.length &&
+    nextImages.every((image, index) => {
       const previousImage = previousImages[index];
       if (!previousImage) {
         return false;
       }
 
       if (previousImage.src === image.src) {
-        return messageImageMimeTypesMatch(previousImage.mimeType, image.mimeType)
-          && previousImage.caption === image.caption;
+        return messageImageMimeTypesMatch(previousImage.mimeType, image.mimeType) && previousImage.caption === image.caption;
       }
 
       const previousSrc = previousImage.src ?? '';
       const nextSrc = image.src ?? '';
-      const bridgesPreviewToTranscriptData = (previousSrc.startsWith('blob:') && isImageBase64DataUrl(nextSrc))
-        || (isImageBase64DataUrl(previousSrc) && nextSrc.startsWith('blob:'));
-      return bridgesPreviewToTranscriptData
-        && messageImageMimeTypesMatch(previousImage.mimeType, image.mimeType)
-        && previousImage.caption === image.caption;
-    });
+      const bridgesPreviewToTranscriptData =
+        (previousSrc.startsWith('blob:') && isImageBase64DataUrl(nextSrc)) ||
+        (isImageBase64DataUrl(previousSrc) && nextSrc.startsWith('blob:'));
+      return (
+        bridgesPreviewToTranscriptData &&
+        messageImageMimeTypesMatch(previousImage.mimeType, image.mimeType) &&
+        previousImage.caption === image.caption
+      );
+    })
+  );
 }
 
 function messageImageMimeTypesMatch(previousMimeType: string | undefined, nextMimeType: string | undefined): boolean {
@@ -320,9 +309,7 @@ function isImageBase64DataUrl(value: string): boolean {
   }
   const commaIndex = normalized.indexOf(',');
   const base64 = commaIndex >= 0 ? value.slice(commaIndex + 1).trim() : '';
-  return Boolean(base64)
-    && base64.length % 4 !== 1
-    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
+  return Boolean(base64) && base64.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
 }
 
 export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | undefined, next: MessageBlock): boolean {
@@ -333,10 +320,7 @@ export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | u
   return messageBlockImagesMatch(previous.images ?? [], next.images ?? []);
 }
 
-function resolveSessionStreamSubscriptionId(
-  sessionId: string | null,
-  options?: { enabled?: boolean },
-): string | null {
+function resolveSessionStreamSubscriptionId(sessionId: string | null, options?: { enabled?: boolean }): string | null {
   return options?.enabled === false ? null : sessionId;
 }
 
@@ -367,21 +351,23 @@ function shouldRetrySessionStreamAfterError(status?: number): boolean {
 }
 
 function shouldPersistWarmLiveSessionState(state: StreamState): boolean {
-  return state.hasSnapshot
-    || state.blocks.length > 0
-    || state.isStreaming
-    || state.error !== null
-    || state.title !== null
-    || state.tokens !== null
-    || state.cost !== null
-    || state.contextUsage !== null
-    || state.pendingQueue.steering.length > 0
-    || state.pendingQueue.followUp.length > 0
-    || state.parallelJobs.length > 0
-    || state.presence.surfaces.length > 0
-    || state.presence.controllerSurfaceId !== null
-    || state.presence.controllerSurfaceType !== null
-    || state.presence.controllerAcquiredAt !== null;
+  return (
+    state.hasSnapshot ||
+    state.blocks.length > 0 ||
+    state.isStreaming ||
+    state.error !== null ||
+    state.title !== null ||
+    state.tokens !== null ||
+    state.cost !== null ||
+    state.contextUsage !== null ||
+    state.pendingQueue.steering.length > 0 ||
+    state.pendingQueue.followUp.length > 0 ||
+    state.parallelJobs.length > 0 ||
+    state.presence.surfaces.length > 0 ||
+    state.presence.controllerSurfaceId !== null ||
+    state.presence.controllerSurfaceType !== null ||
+    state.presence.controllerAcquiredAt !== null
+  );
 }
 
 function readSeededSessionStreamState(sessionId: string | null): StreamState {
@@ -405,10 +391,12 @@ function isLiveSessionControlError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.trim().toLowerCase();
 
-  return normalized.includes('controlled by another surface')
-    || normalized.includes('surface id is required to control this conversation')
-    || normalized.includes('no surface is currently controlling this conversation')
-    || normalized.includes('open the conversation on this surface before taking control');
+  return (
+    normalized.includes('controlled by another surface') ||
+    normalized.includes('surface id is required to control this conversation') ||
+    normalized.includes('no surface is currently controlling this conversation') ||
+    normalized.includes('open the conversation on this surface before taking control')
+  );
 }
 
 function wait(ms: number): Promise<void> {
@@ -417,16 +405,13 @@ function wait(ms: number): Promise<void> {
   });
 }
 
-export function normalizeSurfaceRegistrationWaitOptions(input: {
-  timeoutMs?: number;
-  pollMs?: number;
-}): { timeoutMs: number; pollMs: number } {
-  const timeoutMs = Number.isSafeInteger(input.timeoutMs) && (input.timeoutMs as number) >= 0
-    ? Math.min(10_000, input.timeoutMs as number)
-    : 1_500;
-  const pollMs = Number.isSafeInteger(input.pollMs) && (input.pollMs as number) >= 10
-    ? Math.min(1_000, input.pollMs as number)
-    : 50;
+export function normalizeSurfaceRegistrationWaitOptions(input: { timeoutMs?: number; pollMs?: number }): {
+  timeoutMs: number;
+  pollMs: number;
+} {
+  const timeoutMs =
+    Number.isSafeInteger(input.timeoutMs) && (input.timeoutMs as number) >= 0 ? Math.min(10_000, input.timeoutMs as number) : 1_500;
+  const pollMs = Number.isSafeInteger(input.pollMs) && (input.pollMs as number) >= 10 ? Math.min(1_000, input.pollMs as number) : 50;
   return { timeoutMs, pollMs };
 }
 
@@ -499,7 +484,10 @@ async function submitLivePromptWithControlRetry<T>(input: {
   return await input.attemptPrompt();
 }
 
-export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean; registerSurface?: boolean }) {
+export function useSessionStream(
+  sessionId: string | null,
+  options?: { tailBlocks?: number; enabled?: boolean; registerSurface?: boolean },
+) {
   const normalizedSessionId = sessionId?.trim() || null;
   const [state, setState] = useState<StreamState>(() => readSeededSessionStreamState(normalizedSessionId));
   const [connectVersion, setConnectVersion] = useState(0);
@@ -543,121 +531,142 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       return;
     }
 
-    setForcedSessionId((current) => current === normalizedSessionId ? current : normalizedSessionId);
+    setForcedSessionId((current) => (current === normalizedSessionId ? current : normalizedSessionId));
   }, [normalizedSessionId]);
 
-  const waitForCurrentSurfaceRegistration = useCallback(() => waitForSurfaceRegistration({
-    surfaceId,
-    hasSurface: () => isLiveSessionSurfaceRegistered(presenceRef.current, surfaceId),
-    reconnect: normalizedSessionId
-      ? () => {
-          ensureRequestedSubscription();
-          setConnectVersion((current) => current + 1);
-        }
-      : undefined,
-  }), [ensureRequestedSubscription, normalizedSessionId, surfaceId]);
-
-  const send = useCallback(async (
-    text: string,
-    behavior?: 'steer' | 'followUp',
-    images?: PromptImageInput[],
-    attachmentRefs?: PromptAttachmentRefInput[],
-    contextMessages?: Array<{ customType: string; content: string }>,
-    relatedConversationIds?: string[],
-  ) => {
-    if (!normalizedSessionId) return undefined;
-
-    ensureRequestedSubscription();
-
-    let optimisticUserBlockId: string | null = null;
-    let optimisticQueueItemId: string | null = null;
-
-    if (!behavior) {
-      const ts = new Date().toISOString();
-      const userBlock: MessageBlock = {
-        type: 'user',
-        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        text,
-        ts,
-        ...(images && images.length > 0
-          ? {
-              images: images.map((image) => ({
-                alt: image.name ?? 'Attached image',
-                src: image.previewUrl,
-                mimeType: image.mimeType,
-                caption: image.name,
-              })),
+  const waitForCurrentSurfaceRegistration = useCallback(
+    () =>
+      waitForSurfaceRegistration({
+        surfaceId,
+        hasSurface: () => isLiveSessionSurfaceRegistered(presenceRef.current, surfaceId),
+        reconnect: normalizedSessionId
+          ? () => {
+              ensureRequestedSubscription();
+              setConnectVersion((current) => current + 1);
             }
-          : {}),
-      };
-      optimisticUserBlockId = userBlock.id ?? null;
-      blocksRef.current = [...blocksRef.current, userBlock];
-      setState((s) => ({ ...s, blocks: blocksRef.current }));
-    } else {
-      const optimisticQueueItem = createOptimisticPendingQueueItem(text, images?.length ?? 0);
-      optimisticQueueItemId = optimisticQueueItem.id;
-      setState((s) => appendPendingQueueItem(s, behavior, optimisticQueueItem));
-    }
+          : undefined,
+      }),
+    [ensureRequestedSubscription, normalizedSessionId, surfaceId],
+  );
 
-    try {
+  const send = useCallback(
+    async (
+      text: string,
+      behavior?: 'steer' | 'followUp',
+      images?: PromptImageInput[],
+      attachmentRefs?: PromptAttachmentRefInput[],
+      contextMessages?: Array<{ customType: string; content: string }>,
+      relatedConversationIds?: string[],
+    ) => {
+      if (!normalizedSessionId) return undefined;
+
+      ensureRequestedSubscription();
+
+      let optimisticUserBlockId: string | null = null;
+      let optimisticQueueItemId: string | null = null;
+
+      if (!behavior) {
+        const ts = new Date().toISOString();
+        const userBlock: MessageBlock = {
+          type: 'user',
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          text,
+          ts,
+          ...(images && images.length > 0
+            ? {
+                images: images.map((image) => ({
+                  alt: image.name ?? 'Attached image',
+                  src: image.previewUrl,
+                  mimeType: image.mimeType,
+                  caption: image.name,
+                })),
+              }
+            : {}),
+        };
+        optimisticUserBlockId = userBlock.id ?? null;
+        blocksRef.current = [...blocksRef.current, userBlock];
+        setState((s) => ({ ...s, blocks: blocksRef.current }));
+      } else {
+        const optimisticQueueItem = createOptimisticPendingQueueItem(text, images?.length ?? 0);
+        optimisticQueueItemId = optimisticQueueItem.id;
+        setState((s) => appendPendingQueueItem(s, behavior, optimisticQueueItem));
+      }
+
+      try {
+        return await submitLivePromptWithControlRetry({
+          attemptPrompt: () =>
+            api.promptSession(
+              normalizedSessionId,
+              text,
+              behavior,
+              images,
+              attachmentRefs,
+              surfaceId,
+              contextMessages,
+              relatedConversationIds,
+            ),
+          waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
+          takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
+        });
+      } catch (error) {
+        if (behavior && optimisticQueueItemId) {
+          setState((s) => removePendingQueueItemById(s, behavior, optimisticQueueItemId ?? ''));
+        } else if (optimisticUserBlockId) {
+          setState((s) => {
+            const next = removeOptimisticUserBlock(s, optimisticUserBlockId ?? '');
+            blocksRef.current = next.blocks;
+            return next;
+          });
+        }
+        throw error;
+      }
+    },
+    [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration],
+  );
+
+  const parallel = useCallback(
+    async (
+      text: string,
+      images?: PromptImageInput[],
+      attachmentRefs?: PromptAttachmentRefInput[],
+      contextMessages?: Array<{ customType: string; content: string }>,
+      relatedConversationIds?: string[],
+    ) => {
+      if (!normalizedSessionId) {
+        return;
+      }
+
+      ensureRequestedSubscription();
       return await submitLivePromptWithControlRetry({
-        attemptPrompt: () => api.promptSession(normalizedSessionId, text, behavior, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds),
+        attemptPrompt: () =>
+          api.parallelPromptSession(normalizedSessionId, text, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds),
         waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
         takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
       });
-    } catch (error) {
-      if (behavior && optimisticQueueItemId) {
-        setState((s) => removePendingQueueItemById(s, behavior, optimisticQueueItemId ?? ''));
-      } else if (optimisticUserBlockId) {
-        setState((s) => {
-          const next = removeOptimisticUserBlock(s, optimisticUserBlockId ?? '');
-          blocksRef.current = next.blocks;
-          return next;
-        });
+    },
+    [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration],
+  );
+
+  const manageParallelJob = useCallback(
+    async (jobId: string, action: 'importNow' | 'skip' | 'cancel') => {
+      if (!normalizedSessionId) {
+        return;
       }
-      throw error;
-    }
-  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
-  const parallel = useCallback(async (
-    text: string,
-    images?: PromptImageInput[],
-    attachmentRefs?: PromptAttachmentRefInput[],
-    contextMessages?: Array<{ customType: string; content: string }>,
-    relatedConversationIds?: string[],
-  ) => {
-    if (!normalizedSessionId) {
-      return;
-    }
-
-    ensureRequestedSubscription();
-    return await submitLivePromptWithControlRetry({
-      attemptPrompt: () => api.parallelPromptSession(normalizedSessionId, text, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds),
-      waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
-      takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
-    });
-  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
-
-  const manageParallelJob = useCallback(async (
-    jobId: string,
-    action: 'importNow' | 'skip' | 'cancel',
-  ) => {
-    if (!normalizedSessionId) {
-      return;
-    }
-
-    ensureRequestedSubscription();
-    return retryLiveSessionActionAfterTakeover({
-      attemptAction: () => api.manageParallelPromptJob(normalizedSessionId, jobId, action, surfaceId),
-      takeOverSessionControl: async () => {
-        const surfaceReady = await waitForCurrentSurfaceRegistration();
-        if (!surfaceReady) {
-          throw new Error('Unable to confirm this surface is connected yet. Try again in a moment.');
-        }
-        return api.takeoverLiveSession(normalizedSessionId, surfaceId);
-      },
-    });
-  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
+      ensureRequestedSubscription();
+      return retryLiveSessionActionAfterTakeover({
+        attemptAction: () => api.manageParallelPromptJob(normalizedSessionId, jobId, action, surfaceId),
+        takeOverSessionControl: async () => {
+          const surfaceReady = await waitForCurrentSurfaceRegistration();
+          if (!surfaceReady) {
+            throw new Error('Unable to confirm this surface is connected yet. Try again in a moment.');
+          }
+          return api.takeoverLiveSession(normalizedSessionId, surfaceId);
+        },
+      });
+    },
+    [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration],
+  );
 
   const abort = useCallback(async () => {
     if (!normalizedSessionId) return;
@@ -734,16 +743,20 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       es.onmessage = (e: MessageEvent<string>) => {
         if (closed) return;
         let event: SseEvent;
-        try { event = JSON.parse(e.data) as SseEvent; }
-        catch { return; }
+        try {
+          event = JSON.parse(e.data) as SseEvent;
+        } catch {
+          return;
+        }
 
-        setState(prev => applyEvent(prev, blocksRef, streamingRef, event));
+        setState((prev) => applyEvent(prev, blocksRef, streamingRef, event));
       };
 
       es.onerror = () => {
         if (closed) return;
         es.close();
-        api.liveSession(requestedSessionId)
+        api
+          .liveSession(requestedSessionId)
           .then(() => {
             if (!closed) {
               setTimeout(connect, 2_000);
@@ -783,10 +796,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
 const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
 
-function readLiveTerminalBashDetails(
-  toolName: string,
-  args: Record<string, unknown> | null | undefined,
-): Record<string, unknown> | null {
+function readLiveTerminalBashDetails(toolName: string, args: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
   if (toolName !== 'bash' || !args || args.displayMode !== TERMINAL_BASH_DISPLAY_MODE) {
     return null;
   }
@@ -924,14 +934,13 @@ function applyEvent(
 
     case 'tool_update': {
       const idx = blocks.findLastIndex(
-        b => b.type === 'tool_use' && (b as MessageBlock & { _toolCallId?: string })._toolCallId === event.toolCallId,
+        (b) => b.type === 'tool_use' && (b as MessageBlock & { _toolCallId?: string })._toolCallId === event.toolCallId,
       );
       if (idx >= 0) {
         const b = blocks[idx] as Extract<MessageBlock, { type: 'tool_use' }>;
         // partialResult from Pi is an AgentToolResult; content[0].text holds the text
         const pr = event.partialResult as { content?: { text?: string }[] } | string | undefined;
-        const partial = typeof pr === 'string' ? pr
-          : pr?.content?.[0]?.text ?? '';
+        const partial = typeof pr === 'string' ? pr : (pr?.content?.[0]?.text ?? '');
         blocks[idx] = { ...b, output: (b.output ?? '') + partial };
       }
       blocksRef.current = blocks;
@@ -940,16 +949,16 @@ function applyEvent(
 
     case 'tool_end': {
       const idx = blocks.findLastIndex(
-        b => b.type === 'tool_use' && (b as MessageBlock & { _toolCallId?: string })._toolCallId === event.toolCallId,
+        (b) => b.type === 'tool_use' && (b as MessageBlock & { _toolCallId?: string })._toolCallId === event.toolCallId,
       );
       if (idx >= 0) {
         const b = blocks[idx] as Extract<MessageBlock, { type: 'tool_use' }>;
         blocks[idx] = {
           ...b,
-          output:     event.output,   // replace partial with final
-          status:     event.isError ? 'error' : 'ok',
+          output: event.output, // replace partial with final
+          status: event.isError ? 'error' : 'ok',
           durationMs: event.durationMs,
-          details:    event.details ?? b.details,
+          details: event.details ?? b.details,
         };
       }
       blocksRef.current = blocks;

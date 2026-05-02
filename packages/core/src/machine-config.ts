@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
+
 import { getConfigRoot } from './runtime/paths.js';
 
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
@@ -93,25 +94,29 @@ function normalizeStringArray(value: unknown): string[] | undefined {
     return undefined;
   }
 
-  const normalized = [...new Set(value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0))];
+  const normalized = [
+    ...new Set(
+      value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  ];
 
   return normalized.length > 0 ? normalized : undefined;
 }
 
 function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const document = isRecord(value) ? value : {};
-  const vaultRoot = typeof document.vaultRoot === 'string' && document.vaultRoot.trim().length > 0
-    ? document.vaultRoot.trim()
-    : undefined;
-  const knowledgeBaseRepoUrl = typeof document.knowledgeBaseRepoUrl === 'string' && document.knowledgeBaseRepoUrl.trim().length > 0
-    ? document.knowledgeBaseRepoUrl.trim()
-    : undefined;
-  const knowledgeBaseBranch = typeof document.knowledgeBaseBranch === 'string' && document.knowledgeBaseBranch.trim().length > 0
-    ? document.knowledgeBaseBranch.trim()
-    : undefined;
+  const vaultRoot = typeof document.vaultRoot === 'string' && document.vaultRoot.trim().length > 0 ? document.vaultRoot.trim() : undefined;
+  const knowledgeBaseRepoUrl =
+    typeof document.knowledgeBaseRepoUrl === 'string' && document.knowledgeBaseRepoUrl.trim().length > 0
+      ? document.knowledgeBaseRepoUrl.trim()
+      : undefined;
+  const knowledgeBaseBranch =
+    typeof document.knowledgeBaseBranch === 'string' && document.knowledgeBaseBranch.trim().length > 0
+      ? document.knowledgeBaseBranch.trim()
+      : undefined;
   const instructionFiles = normalizeStringArray(document.instructionFiles);
   const skillDirs = normalizeStringArray(document.skillDirs);
   const daemon = normalizeSection(document.daemon);
@@ -347,10 +352,13 @@ export function readMachineKnowledgeBase(options: MachineConfigOptions = {}): Ma
   };
 }
 
-export function writeMachineKnowledgeBase(input: {
-  repoUrl?: string | null;
-  branch?: string | null;
-}, options: MachineConfigOptions = {}): MachineConfigDocument {
+export function writeMachineKnowledgeBase(
+  input: {
+    repoUrl?: string | null;
+    branch?: string | null;
+  },
+  options: MachineConfigOptions = {},
+): MachineConfigDocument {
   const normalizedRepoUrl = typeof input.repoUrl === 'string' ? input.repoUrl.trim() : '';
   const normalizedBranch = typeof input.branch === 'string' ? input.branch.trim() : DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH;
 
@@ -388,23 +396,25 @@ export function readMachineUiConfig(options: MachineConfigOptions = {}): Machine
   });
 }
 
-export function writeMachineUiConfig(
-  input: WriteMachineUiConfigInput,
-  options: MachineConfigOptions = {},
-): MachineUiConfigState {
+export function writeMachineUiConfig(input: WriteMachineUiConfigInput, options: MachineConfigOptions = {}): MachineUiConfigState {
   const currentState = readMachineUiConfig(options);
   const currentSection = readMachineConfigSection('ui', options) ?? {};
 
   const updated = finalizeMachineUiConfigState({
-    resumeFallbackPrompt: input.resumeFallbackPrompt === undefined
-      ? currentState.resumeFallbackPrompt
-      : normalizeResumeFallbackPrompt(input.resumeFallbackPrompt),
+    resumeFallbackPrompt:
+      input.resumeFallbackPrompt === undefined
+        ? currentState.resumeFallbackPrompt
+        : normalizeResumeFallbackPrompt(input.resumeFallbackPrompt),
   });
 
-  updateMachineConfigSection('ui', () => ({
-    ...currentSection,
-    resumeFallbackPrompt: updated.resumeFallbackPrompt,
-  }), options);
+  updateMachineConfigSection(
+    'ui',
+    () => ({
+      ...currentSection,
+      resumeFallbackPrompt: updated.resumeFallbackPrompt,
+    }),
+    options,
+  );
 
   return updated;
 }

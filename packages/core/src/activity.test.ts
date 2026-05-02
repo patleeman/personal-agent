@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
-import { openSqliteDatabase } from './sqlite.js';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   closeActivityDbs,
   listProfileActivityEntries,
@@ -18,6 +18,7 @@ import {
   writeProfileActivityEntry,
 } from './activity.js';
 import { createProjectActivityEntry, writeProjectActivityEntry } from './project-artifacts.js';
+import { openSqliteDatabase } from './sqlite.js';
 
 const tempDirs: string[] = [];
 
@@ -35,20 +36,23 @@ function createTempStateRoot(): string {
 describe('activity paths', () => {
   it('resolves the profile-scoped activity state directory', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveProfileActivityStateDir({ stateRoot, profile: 'datadog' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog'));
+    expect(resolveProfileActivityStateDir({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog'),
+    );
   });
 
   it('resolves the profile-scoped activity directory', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveProfileActivityDir({ stateRoot, profile: 'datadog' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog', 'activities'));
+    expect(resolveProfileActivityDir({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog', 'activities'),
+    );
   });
 
   it('resolves a profile activity entry path', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveActivityEntryPath({ stateRoot, profile: 'datadog', activityId: 'daily-report' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog', 'activities', 'daily-report.md'));
+    expect(resolveActivityEntryPath({ stateRoot, profile: 'datadog', activityId: 'daily-report' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog', 'activities', 'daily-report.md'),
+    );
   });
 
   it('rejects invalid activity ids', () => {
@@ -59,8 +63,9 @@ describe('activity paths', () => {
 describe('activity read state', () => {
   it('resolves the activity read-state path', () => {
     const stateRoot = createTempStateRoot();
-    expect(resolveActivityReadStatePath({ stateRoot, profile: 'datadog' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog', 'read-state.json'));
+    expect(resolveActivityReadStatePath({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'activity', 'datadog', 'read-state.json'),
+    );
   });
 
   it('loads an empty read state when the file is missing', () => {
@@ -125,13 +130,16 @@ describe('activity storage', () => {
     const legacyEntryPath = join(legacyActivityDir, 'legacy-item.md');
     const legacyReadStatePath = join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog', 'read-state.json');
     mkdirSync(legacyActivityDir, { recursive: true });
-    writeProjectActivityEntry(legacyEntryPath, createProjectActivityEntry({
-      id: 'legacy-item',
-      createdAt: '2026-03-10T08:00:00.000Z',
-      profile: 'datadog',
-      kind: 'note',
-      summary: 'Migrated from markdown.',
-    }));
+    writeProjectActivityEntry(
+      legacyEntryPath,
+      createProjectActivityEntry({
+        id: 'legacy-item',
+        createdAt: '2026-03-10T08:00:00.000Z',
+        profile: 'datadog',
+        kind: 'note',
+        summary: 'Migrated from markdown.',
+      }),
+    );
     writeFileSync(legacyReadStatePath, JSON.stringify(['legacy-item']));
 
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' }).map((entry) => entry.entry.id)).toEqual(['legacy-item']);
@@ -164,13 +172,13 @@ describe('activity storage', () => {
       kind: 'note',
       summary: 'Migrated from legacy sqlite.',
     });
-    legacyDb.prepare('INSERT INTO activity_entries (id, created_at, entry_json) VALUES (?, ?, ?)')
+    legacyDb
+      .prepare('INSERT INTO activity_entries (id, created_at, entry_json) VALUES (?, ?, ?)')
       .run(legacyEntry.id, legacyEntry.createdAt, JSON.stringify(legacyEntry));
     legacyDb.prepare('INSERT INTO activity_read_state (activity_id) VALUES (?)').run(legacyEntry.id);
     legacyDb.close();
 
-    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' }).map((entry) => entry.entry.id))
-      .toEqual(['legacy-sqlite-item']);
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' }).map((entry) => entry.entry.id)).toEqual(['legacy-sqlite-item']);
     expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' })).toEqual(new Set(['legacy-sqlite-item']));
     expect(existsSync(legacyDbPath)).toBe(false);
     expect(existsSync(resolveProfileActivityDbPath({ stateRoot, profile: 'datadog' }))).toBe(true);

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { buildKnowledgeEntryContextMenuTemplate, normalizeKnowledgeEntryContextMenuCoordinate } from './knowledge-entry-context-menu.js';
 
 describe('buildKnowledgeEntryContextMenuTemplate', () => {
@@ -8,16 +9,19 @@ describe('buildKnowledgeEntryContextMenuTemplate', () => {
   });
 
   it('groups rename and move before delete with a native separator', () => {
-    const template = buildKnowledgeEntryContextMenuTemplate({
-      canOpenInFinder: true,
-      canCreateFile: true,
-      canCreateFolder: true,
-      canRename: true,
-      canMove: true,
-      canDelete: true,
-    }, vi.fn());
+    const template = buildKnowledgeEntryContextMenuTemplate(
+      {
+        canOpenInFinder: true,
+        canCreateFile: true,
+        canCreateFolder: true,
+        canRename: true,
+        canMove: true,
+        canDelete: true,
+      },
+      vi.fn(),
+    );
 
-    expect(template.map((item) => item.type === 'separator' ? 'separator' : item.label)).toEqual([
+    expect(template.map((item) => (item.type === 'separator' ? 'separator' : item.label))).toEqual([
       'New File',
       'New Folder',
       'separator',
@@ -32,9 +36,7 @@ describe('buildKnowledgeEntryContextMenuTemplate', () => {
   it('omits separators when only one section is present', () => {
     const template = buildKnowledgeEntryContextMenuTemplate({ canDelete: true }, vi.fn());
 
-    expect(template).toEqual([
-      expect.objectContaining({ label: 'Delete' }),
-    ]);
+    expect(template).toEqual([expect.objectContaining({ label: 'Delete' })]);
   });
 
   it('returns an empty template when no actions are available', () => {

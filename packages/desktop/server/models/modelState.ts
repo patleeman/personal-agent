@@ -38,9 +38,7 @@ export function readModelState(settingsFile: string) {
   const models = listModelDefinitions();
   const saved = normalizeSavedModelPreferences(settingsFile, models);
   const modelIds = new Set(models.map((model) => model.id));
-  const currentModel = (saved.currentModel && modelIds.has(saved.currentModel))
-    ? saved.currentModel
-    : (models[0]?.id || '');
+  const currentModel = saved.currentModel && modelIds.has(saved.currentModel) ? saved.currentModel : models[0]?.id || '';
   const selectedModel = models.find((model) => model.id === currentModel) ?? null;
 
   return {

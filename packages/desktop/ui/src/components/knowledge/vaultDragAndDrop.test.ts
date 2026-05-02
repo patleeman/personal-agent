@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { canDropVaultEntry, getVaultEntryParentDir, normalizeVaultDir } from './vaultDragAndDrop';
 
 describe('vaultDragAndDrop', () => {

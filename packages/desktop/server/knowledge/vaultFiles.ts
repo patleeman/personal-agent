@@ -1,6 +1,8 @@
-import { existsSync, readdirSync, statSync, type Dirent, type Stats } from 'node:fs';
+import { type Dirent, existsSync, readdirSync, type Stats, statSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
+
 import { getVaultRoot } from '@personal-agent/core';
+
 import { extractMentionIds } from './promptReferences.js';
 
 export interface VaultFileSummary {
@@ -24,11 +26,7 @@ const SKIPPED_DIRECTORY_NAMES = new Set([
   'node_modules',
 ]);
 
-const SKIPPED_FILE_NAMES = new Set([
-  '.DS_Store',
-  'Thumbs.db',
-  'desktop.ini',
-]);
+const SKIPPED_FILE_NAMES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
 
 const MAX_REFERENCED_FOLDER_CHILDREN = 20;
 
@@ -60,7 +58,9 @@ function sortVaultFiles(files: VaultFileSummary[]): VaultFileSummary[] {
     file: 1,
   };
 
-  return files.sort((left, right) => left.id.localeCompare(right.id) || kindOrder[left.kind] - kindOrder[right.kind] || left.path.localeCompare(right.path));
+  return files.sort(
+    (left, right) => left.id.localeCompare(right.id) || kindOrder[left.kind] - kindOrder[right.kind] || left.path.localeCompare(right.path),
+  );
 }
 
 function shouldSkipVaultEntry(name: string, kind: VaultFileSummary['kind']): boolean {
@@ -93,11 +93,7 @@ function readVaultChildSummary(parent: VaultFileSummary, entry: Dirent): VaultFi
     return null;
   }
 
-  const expectedKind: VaultFileSummary['kind'] | null = entry.isDirectory()
-    ? 'folder'
-    : entry.isFile()
-      ? 'file'
-      : null;
+  const expectedKind: VaultFileSummary['kind'] | null = entry.isDirectory() ? 'folder' : entry.isFile() ? 'file' : null;
   if (!expectedKind || shouldSkipVaultEntry(entry.name, expectedKind)) {
     return null;
   }
@@ -136,16 +132,17 @@ function readReferencedFolderChildren(folder: VaultFileSummary): { total: number
 
   let entries: Dirent[];
   try {
-    entries = readdirSync(folder.path, { withFileTypes: true })
-      .sort((left, right) => left.name.localeCompare(right.name));
+    entries = readdirSync(folder.path, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
   } catch {
     return { total: 0, shown: [] };
   }
 
-  const children = sortVaultFiles(entries.flatMap((entry) => {
-    const child = readVaultChildSummary(folder, entry);
-    return child ? [child] : [];
-  }));
+  const children = sortVaultFiles(
+    entries.flatMap((entry) => {
+      const child = readVaultChildSummary(folder, entry);
+      return child ? [child] : [];
+    }),
+  );
 
   return {
     total: children.length,
@@ -256,20 +253,15 @@ export function buildReferencedVaultFilesContext(files: VaultFileSummary[]): str
     ...files.map((file) => {
       if (file.kind === 'folder') {
         const children = readReferencedFolderChildren(file);
-        const childLines = children.shown.length > 0
-          ? [
-              `  children (${children.shown.length}${children.total > children.shown.length ? ` of ${children.total}` : ''}):`,
-              ...children.shown.map((child) => `    - @${child.id}`),
-            ]
-          : ['  children: none'];
+        const childLines =
+          children.shown.length > 0
+            ? [
+                `  children (${children.shown.length}${children.total > children.shown.length ? ` of ${children.total}` : ''}):`,
+                ...children.shown.map((child) => `    - @${child.id}`),
+              ]
+            : ['  children: none'];
 
-        return [
-          `- @${file.id}`,
-          '  kind: folder',
-          `  path: ${file.path}`,
-          `  updated: ${file.updatedAt}`,
-          ...childLines,
-        ].join('\n');
+        return [`- @${file.id}`, '  kind: folder', `  path: ${file.path}`, `  updated: ${file.updatedAt}`, ...childLines].join('\n');
       }
 
       return [

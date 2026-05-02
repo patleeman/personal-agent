@@ -99,7 +99,10 @@ function describeLinkedRun(runId: string): LinkedRunDescriptor {
 }
 
 export function normalizeRunLabel(value: string): string {
-  return value.replace(/[-_\s]+/g, ' ').trim().toLowerCase();
+  return value
+    .replace(/[-_\s]+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function readRunField(record: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -117,9 +120,7 @@ function excerptLinkedRunText(value: string | null | undefined, maxLength = 72):
     return null;
   }
 
-  return preview.length <= maxLength
-    ? preview
-    : `${preview.slice(0, maxLength - 1).trimEnd()}…`;
+  return preview.length <= maxLength ? preview : `${preview.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 function summarizeWorkspaceTail(value: string | null | undefined): string | null {
@@ -178,7 +179,9 @@ function buildRunToolPreview(block: Extract<MessageBlock, { type: 'tool_use' }>)
     case 'rerun':
       return `rerun ${summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'execution'}`;
     case 'follow_up':
-      return `follow_up ${prompt ?? summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'task'}`;
+      return `follow_up ${
+        prompt ?? summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'task'
+      }`;
     case 'start_agent':
       return `start_agent ${prompt ?? taskSlug ?? runLabel ?? 'agent task'}`;
     case 'start':
@@ -198,10 +201,13 @@ export function buildToolPreview(block: Extract<MessageBlock, { type: 'tool_use'
 
   return block.input.command !== undefined
     ? buildGenericInputPreview(block.input.command)
-    : block.input.path !== undefined ? buildGenericInputPreview(block.input.path)
-    : block.input.url !== undefined ? buildGenericInputPreview(block.input.url).replace('https://', '').slice(0, 60)
-    : block.input.query !== undefined ? buildGenericInputPreview(block.input.query).slice(0, 60)
-    : '';
+    : block.input.path !== undefined
+      ? buildGenericInputPreview(block.input.path)
+      : block.input.url !== undefined
+        ? buildGenericInputPreview(block.input.url).replace('https://', '').slice(0, 60)
+        : block.input.query !== undefined
+          ? buildGenericInputPreview(block.input.query).slice(0, 60)
+          : '';
 }
 
 function buildGenericInputPreview(value: unknown): string {
@@ -228,7 +234,7 @@ function buildGenericInputPreview(value: unknown): string {
 function buildCdpCommandPreview(value: unknown): string | null {
   if (Array.isArray(value)) {
     const methods = value
-      .map((item) => isRecord(item) && typeof item.method === 'string' ? item.method : null)
+      .map((item) => (isRecord(item) && typeof item.method === 'string' ? item.method : null))
       .filter((method): method is string => Boolean(method));
     if (methods.length === 0) {
       return null;
@@ -243,11 +249,12 @@ function buildCdpCommandPreview(value: unknown): string | null {
   }
 
   const params = isRecord(value.params) ? value.params : null;
-  const detail = typeof params?.url === 'string'
-    ? params.url.replace('https://', '').slice(0, 40)
-    : typeof params?.expression === 'string'
-      ? params.expression.split('\n')[0]?.slice(0, 40)
-      : null;
+  const detail =
+    typeof params?.url === 'string'
+      ? params.url.replace('https://', '').slice(0, 40)
+      : typeof params?.expression === 'string'
+        ? params.expression.split('\n')[0]?.slice(0, 40)
+        : null;
 
   return detail ? `${value.method} ${detail}` : value.method;
 }
@@ -318,9 +325,7 @@ function presentLinkedRun(runId: string, listed: ListedRunDetails | null = null)
   const descriptor = describeLinkedRun(runId);
   const title = descriptor.detail ?? descriptor.title;
   const detailBits: string[] = [];
-  const status = listed?.status && listed.status !== 'unknown'
-    ? normalizeRunLabel(listed.status)
-    : null;
+  const status = listed?.status && listed.status !== 'unknown' ? normalizeRunLabel(listed.status) : null;
   const kindLabel = listed ? (describeListedRunKind(listed) ?? descriptor.kindLabel) : descriptor.kindLabel;
 
   if (status) {
@@ -352,9 +357,7 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
 
   const sourceRunId = readRunField(details, 'sourceRunId');
   const extractedRunIds = extractDurableRunIdsFromBlock(block);
-  const runId = readRunField(details, 'runId')
-    ?? extractedRunIds.find((candidate) => candidate !== sourceRunId)
-    ?? sourceRunId;
+  const runId = readRunField(details, 'runId') ?? extractedRunIds.find((candidate) => candidate !== sourceRunId) ?? sourceRunId;
   if (!runId) {
     return null;
   }
@@ -413,10 +416,7 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
   }
 
   if (sourceRunId) {
-    pushRunDetail(
-      detailBits,
-      `from ${summarizeLinkedRunTail(sourceRunId.replace(/^(?:run|task)-/, '')) ?? sourceRunId}`,
-    );
+    pushRunDetail(detailBits, `from ${summarizeLinkedRunTail(sourceRunId.replace(/^(?:run|task)-/, '')) ?? sourceRunId}`);
   }
 
   return {
@@ -426,7 +426,10 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
   };
 }
 
-export function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }>): { scope: 'listed' | 'mentioned'; runs: LinkedRunPresentation[] } {
+export function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }>): {
+  scope: 'listed' | 'mentioned';
+  runs: LinkedRunPresentation[];
+} {
   const listedRuns = readListedRuns(block);
   if (listedRuns) {
     return {

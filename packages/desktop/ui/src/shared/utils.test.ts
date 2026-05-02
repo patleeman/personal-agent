@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { formatDate, timeAgo, timeAgoCompact } from './utils.js';
 
 describe('shared time utilities', () => {

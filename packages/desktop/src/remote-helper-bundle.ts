@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
 import { app } from 'electron';
+
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import type { RemotePlatformInfo } from './remote-platform.js';
 

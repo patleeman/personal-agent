@@ -198,10 +198,7 @@ function mergeResolvedEnvironment(baseEnv: NodeJS.ProcessEnv, shellEnv: NodeJS.P
   return mergedEnv;
 }
 
-export function resolveChildProcessEnv(
-  overrides: NodeJS.ProcessEnv = {},
-  baseEnv: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
+export function resolveChildProcessEnv(overrides: NodeJS.ProcessEnv = {}, baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const shellEnv = getCachedInteractiveShellEnvironment(baseEnv);
   const mergedEnv = mergeResolvedEnvironment(baseEnv, shellEnv);
   const pathKey = findPathKey(overrides, mergedEnv);

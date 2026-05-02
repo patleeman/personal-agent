@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
+
 import type { ProjectRecord, ScheduledTaskDetail, SessionMeta } from '../shared/types';
-import { buildTaskExistingThreadOptions, buildTaskProjectOptions, formatCatchUpWindowLabel, parseCatchUpWindowMinutes, shouldClearMissingExistingThreadSelection, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
+import {
+  buildTaskExistingThreadOptions,
+  buildTaskProjectOptions,
+  formatCatchUpWindowLabel,
+  parseCatchUpWindowMinutes,
+  shouldClearMissingExistingThreadSelection,
+  shouldShowTaskModelControls,
+  taskStatusMeta,
+} from './ScheduledTaskPanel';
 
 function createTask(overrides: Partial<ScheduledTaskDetail>): ScheduledTaskDetail {
   return {
@@ -36,7 +45,7 @@ describe('ScheduledTaskPanel editor capabilities', () => {
 
   it('treats unsafe persisted catch-up windows as disabled', () => {
     expect(formatCatchUpWindowLabel(Number.MAX_SAFE_INTEGER + 1)).toBe('Disabled');
-    expect(formatCatchUpWindowLabel((7 * 24 * 60 * 60) + 60)).toBe('Disabled');
+    expect(formatCatchUpWindowLabel(7 * 24 * 60 * 60 + 60)).toBe('Disabled');
     expect(formatCatchUpWindowLabel(90.5)).toBe('Disabled');
   });
 
@@ -78,12 +87,14 @@ describe('ScheduledTaskPanel editor capabilities', () => {
       plan: { milestones: [] },
     };
 
-    expect(buildTaskProjectOptions({
-      defaultCwd: '/',
-      savedWorkspacePaths: ['/tmp/saved-worktree'],
-      sessions: [remoteSession, localSession],
-      projects: [project],
-    })).toEqual([
+    expect(
+      buildTaskProjectOptions({
+        defaultCwd: '/',
+        savedWorkspacePaths: ['/tmp/saved-worktree'],
+        sessions: [remoteSession, localSession],
+        projects: [project],
+      }),
+    ).toEqual([
       { path: '/tmp/saved-worktree', label: 'saved-worktree' },
       { path: '/tmp/local-worktree', label: 'local-worktree' },
       { path: '/tmp/project-repo', label: 'Project Repo' },
@@ -109,34 +120,40 @@ describe('ScheduledTaskPanel editor capabilities', () => {
       remoteConversationId: 'remote-1',
     };
 
-    expect(buildTaskExistingThreadOptions({
-      effectiveThreadCwd: '/tmp/worktree',
-      sessions: [remoteSession, localSession],
-    })).toEqual([
-      { id: 'local-thread', label: 'Local thread', cwd: '/tmp/worktree' },
-    ]);
+    expect(
+      buildTaskExistingThreadOptions({
+        effectiveThreadCwd: '/tmp/worktree',
+        sessions: [remoteSession, localSession],
+      }),
+    ).toEqual([{ id: 'local-thread', label: 'Local thread', cwd: '/tmp/worktree' }]);
   });
 
   it('keeps an existing thread selection while sessions are still loading', () => {
-    expect(shouldClearMissingExistingThreadSelection({
-      threadMode: 'existing',
-      threadConversationId: 'thread-1',
-      existingThreadOptions: [],
-      sessionsLoaded: false,
-    })).toBe(false);
+    expect(
+      shouldClearMissingExistingThreadSelection({
+        threadMode: 'existing',
+        threadConversationId: 'thread-1',
+        existingThreadOptions: [],
+        sessionsLoaded: false,
+      }),
+    ).toBe(false);
 
-    expect(shouldClearMissingExistingThreadSelection({
-      threadMode: 'existing',
-      threadConversationId: 'thread-1',
-      existingThreadOptions: [],
-      sessionsLoaded: true,
-    })).toBe(true);
+    expect(
+      shouldClearMissingExistingThreadSelection({
+        threadMode: 'existing',
+        threadConversationId: 'thread-1',
+        existingThreadOptions: [],
+        sessionsLoaded: true,
+      }),
+    ).toBe(true);
 
-    expect(shouldClearMissingExistingThreadSelection({
-      threadMode: 'existing',
-      threadConversationId: 'thread-1',
-      existingThreadOptions: [{ id: 'thread-1' }],
-      sessionsLoaded: true,
-    })).toBe(false);
+    expect(
+      shouldClearMissingExistingThreadSelection({
+        threadMode: 'existing',
+        threadConversationId: 'thread-1',
+        existingThreadOptions: [{ id: 'thread-1' }],
+        sessionsLoaded: true,
+      }),
+    ).toBe(false);
   });
 });

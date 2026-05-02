@@ -1,10 +1,11 @@
-import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listStoredSessions } from './session-meta.js';
+
 import { getDurableSessionsDir } from './runtime/paths.js';
+import { listStoredSessions } from './session-meta.js';
 
 const tempDirs: string[] = [];
 
@@ -38,7 +39,11 @@ describe('listStoredSessions', () => {
       [
         JSON.stringify({ type: 'session', id: 'conv-older', timestamp: '2026-03-12T12:00:00.000Z', cwd: '/Users/patrick/project' }),
         JSON.stringify({ type: 'model_change', modelId: 'gpt-5.4' }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:01:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Older conversation' }] } }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:01:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Older conversation' }] },
+        }),
       ].join('\n') + '\n',
     );
 
@@ -46,8 +51,16 @@ describe('listStoredSessions', () => {
       join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-05-00-000Z_b.jsonl'),
       [
         JSON.stringify({ type: 'session', id: 'conv-newer', timestamp: '2026-03-12T12:05:00.000Z', cwd: '/Users/patrick/project' }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:06:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Newer conversation title' }] } }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:07:00.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:06:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Newer conversation title' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:07:00.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
+        }),
       ].join('\n') + '\n',
     );
 
@@ -84,17 +97,27 @@ describe('listStoredSessions', () => {
       join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-08-00-000Z_named.jsonl'),
       [
         JSON.stringify({ type: 'session', id: 'conv-named', timestamp: '2026-03-12T12:08:00.000Z', cwd: '/Users/patrick/project' }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:08:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Fallback first message title' }] } }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:08:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:08:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Fallback first message title' }] },
+        }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:08:02.000Z',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
+        }),
         JSON.stringify({ type: 'session_info', name: 'Generated session title' }),
       ].join('\n') + '\n',
     );
 
-    expect(listStoredSessions({ sessionsDir })[0]).toEqual(expect.objectContaining({
-      id: 'conv-named',
-      title: 'Generated session title',
-      messageCount: 2,
-    }));
+    expect(listStoredSessions({ sessionsDir })[0]).toEqual(
+      expect.objectContaining({
+        id: 'conv-named',
+        title: 'Generated session title',
+        messageCount: 2,
+      }),
+    );
   });
 
   it('defaults to the synced durable sessions directory for the active state root', () => {
@@ -109,15 +132,21 @@ describe('listStoredSessions', () => {
       join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-09-00-000Z_synced.jsonl'),
       [
         JSON.stringify({ type: 'session', id: 'conv-synced', timestamp: '2026-03-12T12:09:00.000Z', cwd: '/Users/patrick/project' }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:09:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Loaded from synced root' }] } }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:09:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Loaded from synced root' }] },
+        }),
       ].join('\n') + '\n',
     );
 
-    expect(listStoredSessions()[0]).toEqual(expect.objectContaining({
-      id: 'conv-synced',
-      file: join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-09-00-000Z_synced.jsonl'),
-      title: 'Loaded from synced root',
-    }));
+    expect(listStoredSessions()[0]).toEqual(
+      expect.objectContaining({
+        id: 'conv-synced',
+        file: join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-09-00-000Z_synced.jsonl'),
+        title: 'Loaded from synced root',
+      }),
+    );
   });
 
   it('falls back to slug-derived cwd, file mtimes, and string user content', () => {
@@ -137,15 +166,17 @@ describe('listStoredSessions', () => {
     const fallbackTimestamp = new Date('2026-03-12T12:10:30.000Z');
     utimesSync(filePath, fallbackTimestamp, fallbackTimestamp);
 
-    expect(listStoredSessions({ sessionsDir })[0]).toEqual(expect.objectContaining({
-      id: 'conv-fallback',
-      cwd: 'Users/patrick/project',
-      cwdSlug: '--Users-patrick-project--',
-      model: 'unknown',
-      title: 'Fallback string title',
-      timestamp: fallbackTimestamp.toISOString(),
-      lastActivityAt: fallbackTimestamp.toISOString(),
-    }));
+    expect(listStoredSessions({ sessionsDir })[0]).toEqual(
+      expect.objectContaining({
+        id: 'conv-fallback',
+        cwd: 'Users/patrick/project',
+        cwdSlug: '--Users-patrick-project--',
+        model: 'unknown',
+        title: 'Fallback string title',
+        timestamp: fallbackTimestamp.toISOString(),
+        lastActivityAt: fallbackTimestamp.toISOString(),
+      }),
+    );
   });
 
   it('falls back to image attachment titles when the stored session name is blank', () => {
@@ -167,10 +198,12 @@ describe('listStoredSessions', () => {
       ].join('\n') + '\n',
     );
 
-    expect(listStoredSessions({ sessionsDir })[0]).toEqual(expect.objectContaining({
-      id: 'conv-images',
-      title: '(2 image attachments)',
-    }));
+    expect(listStoredSessions({ sessionsDir })[0]).toEqual(
+      expect.objectContaining({
+        id: 'conv-images',
+        title: '(2 image attachments)',
+      }),
+    );
   });
 
   it('sorts root-level session files by id when last activity ties and skips files without a session record', () => {
@@ -180,7 +213,11 @@ describe('listStoredSessions', () => {
       join(sessionsDir, '2026-03-12T12-12-00-000Z_a.jsonl'),
       [
         JSON.stringify({ type: 'session', id: 'conv-a', timestamp: '2026-03-12T12:12:00.000Z', cwd: '/Users/patrick/project-a' }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:15:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Alpha' }] } }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:15:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Alpha' }] },
+        }),
       ].join('\n') + '\n',
     );
 
@@ -188,13 +225,23 @@ describe('listStoredSessions', () => {
       join(sessionsDir, '2026-03-12T12-12-00-000Z_b.jsonl'),
       [
         JSON.stringify({ type: 'session', id: 'conv-b', timestamp: '2026-03-12T12:12:00.000Z', cwd: '/Users/patrick/project-b' }),
-        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:15:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Beta' }] } }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:15:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Beta' }] },
+        }),
       ].join('\n') + '\n',
     );
 
     writeFile(
       join(sessionsDir, '2026-03-12T12-12-00-000Z_ignored.jsonl'),
-      [JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:15:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Ignored' }] } })].join('\n') + '\n',
+      [
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:15:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Ignored' }] },
+        }),
+      ].join('\n') + '\n',
     );
 
     expect(listStoredSessions({ sessionsDir }).map((session) => session.id)).toEqual(['conv-b', 'conv-a']);

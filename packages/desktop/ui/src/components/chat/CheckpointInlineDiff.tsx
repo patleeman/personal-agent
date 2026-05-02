@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { useAppEvents } from '../../app/contexts';
 import { api } from '../../client/api';
 import { useApi } from '../../hooks/useApi';
 import { CheckpointDiffSection } from '../checkpoints/CheckpointDiffView';
-import { ErrorState, LoadingState, cx } from '../ui';
+import { cx, ErrorState, LoadingState } from '../ui';
 
 const COLLAPSED_INLINE_DIFF_HEIGHT = 'clamp(12rem, 24vh, 16rem)';
 const EXPANDED_INLINE_DIFF_HEIGHT = 'clamp(24rem, 56vh, 44rem)';
@@ -33,12 +34,10 @@ export function CheckpointInlineDiff({
     return api.conversationCheckpoint(conversationId, checkpointId);
   }, [checkpointId, conversationId, previewEnabled]);
 
-  const {
-    data,
-    loading,
-    error,
-    refetch,
-  } = useApi(fetchPreview, previewEnabled ? `${conversationId}:checkpoint-inline:${checkpointId}` : `checkpoint-inline:${checkpointId}:disabled`);
+  const { data, loading, error, refetch } = useApi(
+    fetchPreview,
+    previewEnabled ? `${conversationId}:checkpoint-inline:${checkpointId}` : `checkpoint-inline:${checkpointId}:disabled`,
+  );
 
   useEffect(() => {
     if (previousCheckpointIdRef.current === checkpointId) {
@@ -94,10 +93,7 @@ export function CheckpointInlineDiff({
             <button
               type="button"
               onClick={() => onOpenCheckpoint(checkpointId)}
-              className={cx(
-                'ui-toolbar-button px-2 py-1 text-[10px]',
-                modalOpen ? 'text-secondary' : 'text-accent',
-              )}
+              className={cx('ui-toolbar-button px-2 py-1 text-[10px]', modalOpen ? 'text-secondary' : 'text-accent')}
             >
               {modalOpen ? 'Modal open' : 'Open modal'}
             </button>
@@ -106,10 +102,7 @@ export function CheckpointInlineDiff({
       </div>
 
       <div
-        className={cx(
-          'relative mt-3 overflow-hidden rounded-xl bg-base/40',
-          hasFiles && !expanded && 'cursor-zoom-in',
-        )}
+        className={cx('relative mt-3 overflow-hidden rounded-xl bg-base/40', hasFiles && !expanded && 'cursor-zoom-in')}
         style={{ height: expanded ? EXPANDED_INLINE_DIFF_HEIGHT : COLLAPSED_INLINE_DIFF_HEIGHT }}
         onClick={() => {
           if (!hasFiles || expanded) {
@@ -124,20 +117,19 @@ export function CheckpointInlineDiff({
         ) : error || !checkpoint ? (
           <ErrorState message={error || 'Couldn’t load the inline diff preview.'} className="m-3" />
         ) : checkpoint.files.length === 0 ? (
-          <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">No changed files were captured for this checkpoint.</div>
+          <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">
+            No changed files were captured for this checkpoint.
+          </div>
         ) : (
           <div className="h-full overflow-auto overscroll-contain">
             {checkpoint.files.map((file) => (
-              <CheckpointDiffSection
-                key={`${file.path}:${file.previousPath ?? ''}`}
-                file={file}
-                view="unified"
-                stickyHeader
-              />
+              <CheckpointDiffSection key={`${file.path}:${file.previousPath ?? ''}`} file={file} view="unified" stickyHeader />
             ))}
           </div>
         )}
-        {!expanded && hasFiles ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-surface via-surface/90 to-transparent" /> : null}
+        {!expanded && hasFiles ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-surface via-surface/90 to-transparent" />
+        ) : null}
       </div>
     </div>
   );

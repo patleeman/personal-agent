@@ -1,25 +1,26 @@
 import { randomUUID } from 'crypto';
 import { createConnection } from 'net';
-import { createDaemonEvent } from './events.js';
+
 import type { DaemonConfig } from './config.js';
 import { loadDaemonConfig } from './config.js';
+import { createDaemonEvent } from './events.js';
 import { getDaemonClientTransportOverride } from './in-process-client.js';
 import { resolveDaemonPaths } from './paths.js';
 import type {
+  CancelDurableRunResult,
   DaemonEvent,
   DaemonEventInput,
   DaemonStatus,
-  ListDurableRunsResult,
+  FollowUpDurableRunResult,
   GetDurableRunResult,
-  StartScheduledTaskRunResult,
+  ListDurableRunsResult,
+  ListRecoverableWebLiveConversationRunsResult,
+  ReplayDurableRunResult,
   StartBackgroundRunRequestInput,
   StartBackgroundRunResult,
-  CancelDurableRunResult,
-  ReplayDurableRunResult,
-  FollowUpDurableRunResult,
+  StartScheduledTaskRunResult,
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
-  ListRecoverableWebLiveConversationRunsResult,
 } from './types.js';
 
 interface RequestEnvelope {
@@ -244,10 +245,7 @@ export async function startScheduledTaskRun(taskId: string, config?: DaemonConfi
   );
 }
 
-export async function startBackgroundRun(
-  input: StartBackgroundRunRequestInput,
-  config?: DaemonConfig,
-): Promise<StartBackgroundRunResult> {
+export async function startBackgroundRun(input: StartBackgroundRunRequestInput, config?: DaemonConfig): Promise<StartBackgroundRunResult> {
   const transport = getTransport();
   if (transport) {
     return transport.startBackgroundRun(input, config);
@@ -295,11 +293,7 @@ export async function rerunDurableRun(runId: string, config?: DaemonConfig): Pro
   );
 }
 
-export async function followUpDurableRun(
-  runId: string,
-  prompt?: string,
-  config?: DaemonConfig,
-): Promise<FollowUpDurableRunResult> {
+export async function followUpDurableRun(runId: string, prompt?: string, config?: DaemonConfig): Promise<FollowUpDurableRunResult> {
   const normalizedPrompt = typeof prompt === 'string' && prompt.trim().length > 0 ? prompt.trim() : undefined;
   const transport = getTransport();
   if (transport) {
@@ -389,10 +383,7 @@ function formatDaemonUnavailableWarning(error: unknown, config?: DaemonConfig): 
 
   if (code === 'ENOENT') {
     const socketPath = getSocketPath(config);
-    return (
-      'daemon is not running; background events are disabled. ' +
-      `Start it with: pa daemon start (socket: ${socketPath})`
-    );
+    return 'daemon is not running; background events are disabled. ' + `Start it with: pa daemon start (socket: ${socketPath})`;
   }
 
   const message = error instanceof Error ? error.message : String(error);

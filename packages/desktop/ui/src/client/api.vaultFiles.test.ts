@@ -7,13 +7,27 @@ describe('api.vaultFiles', () => {
   });
 
   it('uses HTTP even on the local desktop host', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      root: '/vault',
-      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          root: '/vault',
+          files: [
+            {
+              id: 'notes/a.md',
+              kind: 'file',
+              name: 'a.md',
+              path: '/vault/notes/a.md',
+              sizeBytes: 12,
+              updatedAt: '2026-04-18T12:00:00.000Z',
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        },
+      ),
+    );
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('window', {
       personalAgentDesktop: {
@@ -40,7 +54,16 @@ describe('api.vaultFiles', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/vault-files', { method: 'GET', cache: 'no-store' });
     expect(result).toEqual({
       root: '/vault',
-      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      files: [
+        {
+          id: 'notes/a.md',
+          kind: 'file',
+          name: 'a.md',
+          path: '/vault/notes/a.md',
+          sizeBytes: 12,
+          updatedAt: '2026-04-18T12:00:00.000Z',
+        },
+      ],
     });
   });
 });

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import { clearStoredState, persistStoredState, readStoredState, type StorageLike } from './reloadState';
 
 function createStorage(): StorageLike {
   const map = new Map<string, string>();
   return {
     getItem(key) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     setItem(key, value) {
       map.set(key, value);
@@ -27,11 +28,13 @@ describe('reloadState helpers', () => {
 
     persistStoredState({ key: 'composer', value: { text: 'hello', count: 2 }, storage });
 
-    expect(readStoredState({
-      key: 'composer',
-      fallback: { text: '', count: 0 },
-      storage,
-    })).toEqual({ text: 'hello', count: 2 });
+    expect(
+      readStoredState({
+        key: 'composer',
+        fallback: { text: '', count: 0 },
+        storage,
+      }),
+    ).toEqual({ text: 'hello', count: 2 });
   });
 
   it('removes stored values when shouldPersist returns false', () => {

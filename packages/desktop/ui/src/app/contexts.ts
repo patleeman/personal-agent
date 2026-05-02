@@ -2,18 +2,12 @@
  * Shared React contexts for cross-component state.
  */
 import { createContext, useContext } from 'react';
+
 import {
-  INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
   type ConversationScopedEventVersions,
+  INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
 } from '../conversation/conversationEventVersions';
-import type {
-  AppEventTopic,
-  DaemonState,
-  DurableRunListResult,
-  ProjectRecord,
-  ScheduledTaskSummary,
-  SessionMeta,
-} from '../shared/types';
+import type { AppEventTopic, DaemonState, DurableRunListResult, ProjectRecord, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 
 // ── Live title overrides ──────────────────────────────────────────────────────
 // ConversationPage pushes stream.title here; Sidebar reads it to update tabs/archive.
@@ -111,4 +105,3 @@ export const SystemStatusContext = createContext<SystemStatusContextValue>({
   daemon: null,
   setDaemon: () => {},
 });
-

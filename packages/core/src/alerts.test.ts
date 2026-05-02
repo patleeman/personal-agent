@@ -3,14 +3,8 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  acknowledgeAlert,
-  countActiveAlerts,
-  dismissAlert,
-  getAlert,
-  listAlerts,
-  upsertAlert,
-} from './alerts.js';
+
+import { acknowledgeAlert, countActiveAlerts, dismissAlert, getAlert, listAlerts, upsertAlert } from './alerts.js';
 
 const tempDirs: string[] = [];
 
@@ -82,8 +76,6 @@ describe('alerts', () => {
 
     const dismissed = dismissAlert({ stateRoot, profile: 'datadog', alertId: 'reminder-1', at: '2026-03-26T13:02:00.000Z' });
     expect(dismissed).toEqual(expect.objectContaining({ status: 'dismissed', dismissedAt: '2026-03-26T13:02:00.000Z' }));
-    expect(getAlert({ stateRoot, profile: 'datadog', alertId: 'reminder-1' })).toEqual(
-      expect.objectContaining({ status: 'dismissed' }),
-    );
+    expect(getAlert({ stateRoot, profile: 'datadog', alertId: 'reminder-1' })).toEqual(expect.objectContaining({ status: 'dismissed' }));
   });
 });

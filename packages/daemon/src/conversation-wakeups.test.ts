@@ -2,8 +2,10 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { acknowledgeAlert, type DeferredResumeRecord, getAlert } from '@personal-agent/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { acknowledgeAlert, getAlert, type DeferredResumeRecord } from '@personal-agent/core';
+
 import { buildDeferredResumeAlertId, surfaceReadyDeferredResume } from './conversation-wakeups.js';
 const tempDirs: string[] = [];
 
@@ -78,11 +80,13 @@ describe('conversation wakeups', () => {
       profile: 'shared',
       alertId: buildDeferredResumeAlertId(record),
     });
-    expect(alert).toEqual(expect.objectContaining({
-      status: 'active',
-      createdAt: '2026-03-26T14:15:00.000Z',
-      wakeupId: 'resume_123',
-    }));
+    expect(alert).toEqual(
+      expect.objectContaining({
+        status: 'active',
+        createdAt: '2026-03-26T14:15:00.000Z',
+        wakeupId: 'resume_123',
+      }),
+    );
     expect(alert).not.toHaveProperty('acknowledgedAt');
     expect(alert).not.toHaveProperty('dismissedAt');
   });

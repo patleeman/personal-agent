@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { api } from '../client/api';
+
 import { useAppEvents } from '../app/contexts';
+import { api } from '../client/api';
 import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../shared/types';
 
 interface CachedSessionDetailEntry {
@@ -22,10 +23,7 @@ function readSessionDetailLastBlockId(detail: SessionDetail | null | undefined):
   return blockId && blockId.length > 0 ? blockId : undefined;
 }
 
-function mergeAppendOnlySessionDetail(
-  cached: SessionDetail,
-  result: SessionDetailAppendOnlyResponse,
-): SessionDetail | null {
+function mergeAppendOnlySessionDetail(cached: SessionDetail, result: SessionDetailAppendOnlyResponse): SessionDetail | null {
   const dropCount = Math.max(0, result.blockOffset - cached.blockOffset);
   const retainedBlocks = cached.blocks.slice(dropCount);
   const nextVisibleLength = Math.max(0, result.totalBlocks - result.blockOffset);
@@ -44,10 +42,7 @@ function mergeAppendOnlySessionDetail(
   };
 }
 
-function mergeSessionDetailResultWithCachedDetail(
-  cached: SessionDetail | null,
-  result: SessionDetailResult,
-): SessionDetail | null {
+function mergeSessionDetailResultWithCachedDetail(cached: SessionDetail | null, result: SessionDetailResult): SessionDetail | null {
   if ('unchanged' in result) {
     if (!cached) {
       return null;
@@ -97,22 +92,13 @@ function trimSessionDetailCache(): void {
   }
 }
 
-export function primeSessionDetailCache(
-  sessionId: string,
-  detail: SessionDetail,
-  options?: { tailBlocks?: number },
-  version = 0,
-): void {
+export function primeSessionDetailCache(sessionId: string, detail: SessionDetail, options?: { tailBlocks?: number }, version = 0): void {
   const cacheKey = buildSessionDetailCacheKey(sessionId, options);
   sessionDetailCache.set(cacheKey, { detail, version });
   trimSessionDetailCache();
 }
 
-export function fetchSessionDetailCached(
-  sessionId: string,
-  options?: { tailBlocks?: number },
-  version = 0,
-): Promise<SessionDetail> {
+export function fetchSessionDetailCached(sessionId: string, options?: { tailBlocks?: number }, version = 0): Promise<SessionDetail> {
   const cacheKey = buildSessionDetailCacheKey(sessionId, options);
   const cached = readCachedSessionDetailEntry(sessionId, options);
   if (cached && cached.version === version) {
@@ -125,13 +111,14 @@ export function fetchSessionDetailCached(
     return inflight;
   }
 
-  const request = api.sessionDetail(sessionId, {
-    ...options,
-    ...(readSessionDetailSignature(cached?.detail) ? { knownSessionSignature: readSessionDetailSignature(cached?.detail) } : {}),
-    ...(typeof cached?.detail?.blockOffset === 'number' ? { knownBlockOffset: cached.detail.blockOffset } : {}),
-    ...(typeof cached?.detail?.totalBlocks === 'number' ? { knownTotalBlocks: cached.detail.totalBlocks } : {}),
-    ...(readSessionDetailLastBlockId(cached?.detail) ? { knownLastBlockId: readSessionDetailLastBlockId(cached?.detail) } : {}),
-  })
+  const request = api
+    .sessionDetail(sessionId, {
+      ...options,
+      ...(readSessionDetailSignature(cached?.detail) ? { knownSessionSignature: readSessionDetailSignature(cached?.detail) } : {}),
+      ...(typeof cached?.detail?.blockOffset === 'number' ? { knownBlockOffset: cached.detail.blockOffset } : {}),
+      ...(typeof cached?.detail?.totalBlocks === 'number' ? { knownTotalBlocks: cached.detail.totalBlocks } : {}),
+      ...(readSessionDetailLastBlockId(cached?.detail) ? { knownLastBlockId: readSessionDetailLastBlockId(cached?.detail) } : {}),
+    })
     .then(async (result) => {
       let detail = mergeSessionDetailResultWithCachedDetail(cached?.detail ?? null, result);
       if (!detail) {

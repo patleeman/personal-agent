@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizeConversationSummaryBackfillLoopOptions, parseConversationSummaryAttemptTimestamp } from './conversationSummaries.js';
 
 describe('conversation summary attempts', () => {
@@ -16,11 +17,13 @@ describe('conversation summary attempts', () => {
   });
 
   it('caps huge backfill loop timer options', () => {
-    expect(normalizeConversationSummaryBackfillLoopOptions({
-      initialDelayMs: Number.MAX_SAFE_INTEGER,
-      intervalMs: Number.MAX_SAFE_INTEGER,
-      limit: Number.MAX_SAFE_INTEGER,
-    })).toEqual({
+    expect(
+      normalizeConversationSummaryBackfillLoopOptions({
+        initialDelayMs: Number.MAX_SAFE_INTEGER,
+        intervalMs: Number.MAX_SAFE_INTEGER,
+        limit: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toEqual({
       initialDelayMs: 60_000,
       intervalMs: 600_000,
       limit: 50,

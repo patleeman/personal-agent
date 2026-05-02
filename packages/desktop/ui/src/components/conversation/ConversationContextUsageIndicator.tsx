@@ -1,6 +1,6 @@
-import { cx } from '../ui';
-import type { ContextUsageSegment } from '../../shared/types';
 import { formatContextUsageLabel, getContextUsagePercent } from '../../conversation/conversationHeader';
+import type { ContextUsageSegment } from '../../shared/types';
+import { cx } from '../ui';
 
 export interface ConversationContextUsageTokens {
   total: number | null;
@@ -12,20 +12,15 @@ export function ConversationContextUsageIndicator({ tokens }: { tokens: Conversa
   const label = formatContextUsageLabel(tokens.total, tokens.contextWindow);
   const percent = getContextUsagePercent(tokens.total, tokens.contextWindow);
   const boundedPercent = Math.max(0, Math.min(100, percent ?? 0));
-  const toneClass = percent === null
-    ? 'bg-dim/70'
-    : percent >= 90
-      ? 'bg-danger'
-      : percent >= 70
-        ? 'bg-warning'
-        : 'bg-accent';
-  const ringColor = percent === null
-    ? 'rgba(151, 164, 203, 0.5)'
-    : percent >= 90
-      ? 'rgba(248, 113, 113, 0.95)'
-      : percent >= 70
-        ? 'rgba(251, 191, 36, 0.95)'
-        : 'rgba(139, 167, 255, 0.95)';
+  const toneClass = percent === null ? 'bg-dim/70' : percent >= 90 ? 'bg-danger' : percent >= 70 ? 'bg-warning' : 'bg-accent';
+  const ringColor =
+    percent === null
+      ? 'rgba(151, 164, 203, 0.5)'
+      : percent >= 90
+        ? 'rgba(248, 113, 113, 0.95)'
+        : percent >= 70
+          ? 'rgba(251, 191, 36, 0.95)'
+          : 'rgba(139, 167, 255, 0.95)';
 
   return (
     <span className="group relative inline-flex shrink-0 items-center" role="img" title={label} aria-label={`Context usage: ${label}`}>

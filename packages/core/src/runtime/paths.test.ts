@@ -2,41 +2,42 @@
  * Tests for runtime state path resolution
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import { homedir, tmpdir } from 'os';
+import { join } from 'path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   getConfigRoot,
   getDefaultStateRoot,
   getDefaultVaultRoot,
+  getDurableAgentFilePath,
+  getDurableConversationAttentionDir,
+  getDurableMemoryDir,
+  getDurableModelsDir,
+  getDurableNodesDir,
+  getDurableNotesDir,
+  getDurablePiAgentDir,
+  getDurableProfileDir,
+  getDurableProfilesDir,
+  getDurableProjectsDir,
+  getDurableSessionsDir,
+  getDurableSettingsDir,
+  getDurableSkillsDir,
+  getDurableTasksDir,
   getKnowledgeBaseStateDir,
-  getManagedKnowledgeBaseRoot,
   getLocalProfileDir,
+  getManagedKnowledgeBaseRoot,
   getProfilesRoot,
   getStateRoot,
   getSyncRoot,
-  getDurablePiAgentDir,
-  getDurableSessionsDir,
-  getDurableConversationAttentionDir,
   getVaultRoot,
-  getDurableProfilesDir,
-  getDurableAgentFilePath,
-  getDurableProfileDir,
-  getDurableSettingsDir,
-  getDurableModelsDir,
-  getDurableSkillsDir,
-  getDurableNodesDir,
-  getDurableNotesDir,
-  getDurableMemoryDir,
-  getDurableTasksDir,
-  getDurableProjectsDir,
+  isPathInRepo,
   resolveNeutralChatCwd,
   resolveStatePaths,
-  isPathInRepo,
-  validateStatePathsOutsideRepo,
   type RuntimeStatePaths,
+  validateStatePathsOutsideRepo,
 } from './paths.js';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
-import { homedir, tmpdir } from 'os';
-import { join } from 'path';
 
 describe('getDefaultStateRoot', () => {
   const originalEnv = process.env;

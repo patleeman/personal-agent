@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
   BrowserWindow: class BrowserWindow {},
@@ -8,8 +9,8 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
 }));
 import {
-  normalizeWorkbenchBrowserCdpCommands,
   normalizeWorkbenchBrowserBounds,
+  normalizeWorkbenchBrowserCdpCommands,
   normalizeWorkbenchBrowserUrl,
 } from './workbench-browser.js';
 
@@ -55,13 +56,12 @@ describe('workbench browser validation', () => {
     expect(normalizeWorkbenchBrowserCdpCommands({ method: 'Runtime.evaluate', params: { expression: 'document.title' } })).toEqual([
       { method: 'Runtime.evaluate', params: { expression: 'document.title' } },
     ]);
-    expect(normalizeWorkbenchBrowserCdpCommands([
-      { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } },
-      { method: 'Page.captureScreenshot' },
-    ])).toEqual([
-      { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } },
-      { method: 'Page.captureScreenshot' },
-    ]);
+    expect(
+      normalizeWorkbenchBrowserCdpCommands([
+        { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } },
+        { method: 'Page.captureScreenshot' },
+      ]),
+    ).toEqual([{ method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } }, { method: 'Page.captureScreenshot' }]);
   });
 
   it('rejects invalid CDP object commands', () => {

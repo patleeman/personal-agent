@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
-import { getStateRoot } from './runtime/paths.js';
+
 import type { AlertSeverity } from './alerts.js';
+import { getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
@@ -130,7 +131,11 @@ export function loadTaskCallbackBindings(options: { profile: string; stateRoot?:
   }
 }
 
-export function saveTaskCallbackBindings(options: { profile: string; stateRoot?: string; bindings: Record<string, TaskCallbackBinding> }): string {
+export function saveTaskCallbackBindings(options: {
+  profile: string;
+  stateRoot?: string;
+  bindings: Record<string, TaskCallbackBinding>;
+}): string {
   const path = resolveTaskCallbackBindingsFile(options);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   writeFileSync(path, `${JSON.stringify({ version: 1, bindings: options.bindings }, null, 2)}\n`);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   extractQueuedPromptContent,
   isVisibleQueueFallbackPreviewId,
@@ -56,14 +57,17 @@ describe('liveSessionQueue', () => {
   });
 
   it('extracts queued prompt text and image attachments', () => {
-    const extracted = extractQueuedPromptContent({
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Hello ' },
-        { type: 'text', text: 'world' },
-        { type: 'image', data: 'abc', mimeType: 'image/jpeg', name: 'photo.jpg' },
-      ],
-    }, 'fallback');
+    const extracted = extractQueuedPromptContent(
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Hello ' },
+          { type: 'text', text: 'world' },
+          { type: 'image', data: 'abc', mimeType: 'image/jpeg', name: 'photo.jpg' },
+        ],
+      },
+      'fallback',
+    );
 
     expect(extracted).toEqual({
       text: 'Hello world',
@@ -74,17 +78,20 @@ describe('liveSessionQueue', () => {
   });
 
   it('drops malformed queued prompt image attachments when restoring content', () => {
-    const extracted = extractQueuedPromptContent({
-      role: 'user',
-      content: [
-        { type: 'image', data: 'abc', mimeType: ' image/png ', name: ' shot.png ' },
-        { type: 'image', data: '', mimeType: 'image/png' },
-        { type: 'image', data: '   ', mimeType: 'image/png' },
-        { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
-        { type: 'image', data: 'missing-mime', mimeType: '' },
-        { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
-      ],
-    }, 'fallback');
+    const extracted = extractQueuedPromptContent(
+      {
+        role: 'user',
+        content: [
+          { type: 'image', data: 'abc', mimeType: ' image/png ', name: ' shot.png ' },
+          { type: 'image', data: '', mimeType: 'image/png' },
+          { type: 'image', data: '   ', mimeType: 'image/png' },
+          { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
+          { type: 'image', data: 'missing-mime', mimeType: '' },
+          { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
+        ],
+      },
+      'fallback',
+    );
 
     expect(extracted).toEqual({
       text: 'fallback',
@@ -93,10 +100,13 @@ describe('liveSessionQueue', () => {
   });
 
   it('falls back to visible queued text when internal queued text is blank', () => {
-    const extracted = extractQueuedPromptContent({
-      role: 'user',
-      content: [{ type: 'text', text: '   ' }],
-    }, 'visible fallback');
+    const extracted = extractQueuedPromptContent(
+      {
+        role: 'user',
+        content: [{ type: 'text', text: '   ' }],
+      },
+      'visible fallback',
+    );
 
     expect(extracted).toEqual({ text: 'visible fallback', images: [] });
   });
@@ -106,21 +116,25 @@ describe('liveSessionQueue', () => {
       getSteeringMessages: () => ['Trim me'],
       getFollowUpMessages: () => [],
       agent: {
-        steeringQueue: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: '  Trim me  ' },
-            { type: 'image', data: 'abc', mimeType: 'image/png' },
-          ],
-        }],
+        steeringQueue: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: '  Trim me  ' },
+              { type: 'image', data: 'abc', mimeType: 'image/png' },
+            ],
+          },
+        ],
       },
     } as never);
 
-    expect(previews.steering).toEqual([{
-      id: expect.stringMatching(/^steer-queued-/),
-      text: 'Trim me',
-      imageCount: 1,
-    }]);
+    expect(previews.steering).toEqual([
+      {
+        id: expect.stringMatching(/^steer-queued-/),
+        text: 'Trim me',
+        imageCount: 1,
+      },
+    ]);
   });
 
   it('restores by preview id without removing the wrong visible queued prompt when the index is stale', async () => {
@@ -130,16 +144,21 @@ describe('liveSessionQueue', () => {
       { role: 'user', content: [{ type: 'text', text: 'second queued prompt' }], __personalAgentQueuedPromptId: 'second' },
     ];
 
-    const restored = await restoreLiveSessionQueuedMessage({
-      session: {
-        agent: { steeringQueue, followUpQueue: [] },
-        getSteeringMessages: () => steeringMessages,
-        getFollowUpMessages: () => [],
-        clearQueue: () => ({ steering: [], followUp: [] }),
-        steer: async () => undefined,
-        followUp: async () => undefined,
+    const restored = await restoreLiveSessionQueuedMessage(
+      {
+        session: {
+          agent: { steeringQueue, followUpQueue: [] },
+          getSteeringMessages: () => steeringMessages,
+          getFollowUpMessages: () => [],
+          clearQueue: () => ({ steering: [], followUp: [] }),
+          steer: async () => undefined,
+          followUp: async () => undefined,
+        },
       },
-    }, 'steer', 0, 'second');
+      'steer',
+      0,
+      'second',
+    );
 
     expect(restored.text).toBe('second queued prompt');
     expect(steeringMessages).toEqual(['first queued prompt']);
@@ -147,16 +166,22 @@ describe('liveSessionQueue', () => {
   });
 
   it('rejects unsafe queued prompt restore indexes', async () => {
-    await expect(restoreLiveSessionQueuedMessage({
-      session: {
-        agent: { steeringQueue: [], followUpQueue: [] },
-        getSteeringMessages: () => [],
-        getFollowUpMessages: () => [],
-        clearQueue: () => ({ steering: [], followUp: [] }),
-        steer: async () => undefined,
-        followUp: async () => undefined,
-      },
-    }, 'steer', Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow('Queued message index must be a non-negative integer');
+    await expect(
+      restoreLiveSessionQueuedMessage(
+        {
+          session: {
+            agent: { steeringQueue: [], followUpQueue: [] },
+            getSteeringMessages: () => [],
+            getFollowUpMessages: () => [],
+            clearQueue: () => ({ steering: [], followUp: [] }),
+            steer: async () => undefined,
+            followUp: async () => undefined,
+          },
+        },
+        'steer',
+        Number.MAX_SAFE_INTEGER + 1,
+      ),
+    ).rejects.toThrow('Queued message index must be a non-negative integer');
   });
 
   it('restores visible-only queued prompts by preview id when the index is stale', async () => {
@@ -165,16 +190,21 @@ describe('liveSessionQueue', () => {
       steeringMessages.push(text);
     };
 
-    const restored = await restoreLiveSessionQueuedMessage({
-      session: {
-        agent: {},
-        getSteeringMessages: () => steeringMessages,
-        getFollowUpMessages: () => [],
-        clearQueue: () => ({ steering: steeringMessages.splice(0), followUp: [] }),
-        steer,
-        followUp: async () => undefined,
+    const restored = await restoreLiveSessionQueuedMessage(
+      {
+        session: {
+          agent: {},
+          getSteeringMessages: () => steeringMessages,
+          getFollowUpMessages: () => [],
+          clearQueue: () => ({ steering: steeringMessages.splice(0), followUp: [] }),
+          steer,
+          followUp: async () => undefined,
+        },
       },
-    }, 'steer', 0, 'steer-visible-1');
+      'steer',
+      0,
+      'steer-visible-1',
+    );
 
     expect(restored.text).toBe('second queued prompt');
     expect(steeringMessages).toEqual(['first queued prompt']);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createDaemonEvent } from './events.js';
 import { parseRequest } from './ipc-protocol.js';
 
@@ -19,10 +20,12 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.list request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_3',
-      type: 'runs.list',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_3',
+        type: 'runs.list',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_3',
@@ -31,11 +34,13 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.get request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_4',
-      type: 'runs.get',
-      runId: 'run-123',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_4',
+        type: 'runs.get',
+        runId: 'run-123',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_4',
@@ -45,19 +50,25 @@ describe('parseRequest', () => {
   });
 
   it('rejects runs.get request without runId', () => {
-    expect(() => parseRequest(JSON.stringify({
-      id: 'req_5',
-      type: 'runs.get',
-      runId: '',
-    }))).toThrow('runs.get runId must be a non-empty string');
+    expect(() =>
+      parseRequest(
+        JSON.stringify({
+          id: 'req_5',
+          type: 'runs.get',
+          runId: '',
+        }),
+      ),
+    ).toThrow('runs.get runId must be a non-empty string');
   });
 
   it('parses runs.startTask request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_6',
-      type: 'runs.startTask',
-      taskId: 'daily-status',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_6',
+        type: 'runs.startTask',
+        taskId: 'daily-status',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_6',
@@ -67,27 +78,33 @@ describe('parseRequest', () => {
   });
 
   it('rejects runs.startTask request without taskId', () => {
-    expect(() => parseRequest(JSON.stringify({
-      id: 'req_7',
-      type: 'runs.startTask',
-      taskId: '',
-    }))).toThrow('runs.startTask taskId must be a non-empty string');
+    expect(() =>
+      parseRequest(
+        JSON.stringify({
+          id: 'req_7',
+          type: 'runs.startTask',
+          taskId: '',
+        }),
+      ),
+    ).toThrow('runs.startTask taskId must be a non-empty string');
   });
 
   it('parses runs.startBackground request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_7b',
-      type: 'runs.startBackground',
-      input: {
-        taskSlug: 'code-review',
-        cwd: '/tmp/work',
-        argv: ['pa', '-p', 'hello'],
-        source: {
-          type: 'cli',
-          id: 'code-review',
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_7b',
+        type: 'runs.startBackground',
+        input: {
+          taskSlug: 'code-review',
+          cwd: '/tmp/work',
+          argv: ['pa', '-p', 'hello'],
+          source: {
+            type: 'cli',
+            id: 'code-review',
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_7b',
@@ -105,20 +122,22 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.startBackground agent request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_7ba',
-      type: 'runs.startBackground',
-      input: {
-        taskSlug: 'subagent',
-        cwd: '/tmp/work',
-        agent: {
-          prompt: 'Review the latest diff',
-          profile: 'datadog',
-          model: 'openai-codex/gpt-5.4',
-          noSession: true,
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_7ba',
+        type: 'runs.startBackground',
+        input: {
+          taskSlug: 'subagent',
+          cwd: '/tmp/work',
+          agent: {
+            prompt: 'Review the latest diff',
+            profile: 'datadog',
+            model: 'openai-codex/gpt-5.4',
+            noSession: true,
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_7ba',
@@ -137,27 +156,29 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.startBackground manifest metadata and checkpoint payload', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_7bb',
-      type: 'runs.startBackground',
-      input: {
-        taskSlug: 'remote-run',
-        cwd: '/tmp/work',
-        shellCommand: 'node worker.mjs',
-        manifestMetadata: {
-          customMetadata: {
-            targetId: 'gpu-box',
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_7bb',
+        type: 'runs.startBackground',
+        input: {
+          taskSlug: 'remote-run',
+          cwd: '/tmp/work',
+          shellCommand: 'node worker.mjs',
+          manifestMetadata: {
+            customMetadata: {
+              targetId: 'gpu-box',
+            },
           },
-        },
-        checkpointPayload: {
-          customMetadata: {
-            import: {
-              status: 'not_ready',
+          checkpointPayload: {
+            customMetadata: {
+              import: {
+                status: 'not_ready',
+              },
             },
           },
         },
-      },
-    }));
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_7bb',
@@ -183,11 +204,13 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.cancel request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_7c',
-      type: 'runs.cancel',
-      runId: 'run-code-review-2026-03-12',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_7c',
+        type: 'runs.cancel',
+        runId: 'run-code-review-2026-03-12',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_7c',
@@ -197,11 +220,13 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.rerun request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_7d',
-      type: 'runs.rerun',
-      runId: 'run-code-review-2026-03-12',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_7d',
+        type: 'runs.rerun',
+        runId: 'run-code-review-2026-03-12',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_7d',
@@ -211,12 +236,14 @@ describe('parseRequest', () => {
   });
 
   it('parses runs.followUp request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_7e',
-      type: 'runs.followUp',
-      runId: 'run-code-review-2026-03-12',
-      prompt: 'continue from the failing test',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_7e',
+        type: 'runs.followUp',
+        runId: 'run-code-review-2026-03-12',
+        prompt: 'continue from the failing test',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_7e',
@@ -227,21 +254,23 @@ describe('parseRequest', () => {
   });
 
   it('parses conversations.sync request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_8',
-      type: 'conversations.sync',
-      input: {
-        conversationId: 'conv-123',
-        sessionFile: '/tmp/conv-123.jsonl',
-        cwd: '/tmp',
-        state: 'running',
-        pendingOperation: {
-          type: 'prompt',
-          text: 'continue',
-          enqueuedAt: '2026-03-12T17:00:00.000Z',
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_8',
+        type: 'conversations.sync',
+        input: {
+          conversationId: 'conv-123',
+          sessionFile: '/tmp/conv-123.jsonl',
+          cwd: '/tmp',
+          state: 'running',
+          pendingOperation: {
+            type: 'prompt',
+            text: 'continue',
+            enqueuedAt: '2026-03-12T17:00:00.000Z',
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_8',
@@ -261,10 +290,12 @@ describe('parseRequest', () => {
   });
 
   it('parses conversations.recoverable request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_9',
-      type: 'conversations.recoverable',
-    }));
+    const parsed = parseRequest(
+      JSON.stringify({
+        id: 'req_9',
+        type: 'conversations.recoverable',
+      }),
+    );
 
     expect(parsed).toEqual({
       id: 'req_9',

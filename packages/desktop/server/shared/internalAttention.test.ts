@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { DaemonStateSnapshot } from '../automation/daemon.js';
 import {
   classifyDaemonAttentionState,
@@ -50,15 +51,17 @@ describe('internalAttention', () => {
   });
 
   it('does not persist ownerless internal attention entries anymore', () => {
-    expect(writeInternalAttentionEntry({
-      repoRoot: '/repo',
-      stateRoot: '/state',
-      profile: 'assistant',
-      kind: 'service',
-      summary: 'Daemon recovered!!!',
-      details: 'Recovered after a short restart.',
-      createdAt: '2026-03-13T12:00:00.000Z',
-    })).toBe('');
+    expect(
+      writeInternalAttentionEntry({
+        repoRoot: '/repo',
+        stateRoot: '/state',
+        profile: 'assistant',
+        kind: 'service',
+        summary: 'Daemon recovered!!!',
+        details: 'Recovered after a short restart.',
+        createdAt: '2026-03-13T12:00:00.000Z',
+      }),
+    ).toBe('');
   });
 
   it('classifies daemon attention states across healthy, inspection, offline, and inactive cases', () => {
@@ -73,19 +76,27 @@ describe('internalAttention', () => {
       details: undefined,
     });
 
-    expect(classifyDaemonAttentionState(createDaemonSnapshot({
-      running: false,
-      warnings: ['Could not inspect daemon runtime: timeout', 'Daemon runtime is not responding on the local socket.'],
-    }))).toEqual({
+    expect(
+      classifyDaemonAttentionState(
+        createDaemonSnapshot({
+          running: false,
+          warnings: ['Could not inspect daemon runtime: timeout', 'Daemon runtime is not responding on the local socket.'],
+        }),
+      ),
+    ).toEqual({
       key: 'issue:inspection',
       label: 'inspection error',
       details: 'Could not inspect daemon runtime: timeout\nDaemon runtime is not responding on the local socket.',
     });
 
-    expect(classifyDaemonAttentionState(createDaemonSnapshot({
-      running: false,
-      warnings: ['Daemon runtime is not responding on the local socket.'],
-    }))).toEqual({
+    expect(
+      classifyDaemonAttentionState(
+        createDaemonSnapshot({
+          running: false,
+          warnings: ['Daemon runtime is not responding on the local socket.'],
+        }),
+      ),
+    ).toEqual({
       key: 'issue:offline',
       label: 'offline',
       details: 'Daemon runtime is not responding on the local socket.',
@@ -136,7 +147,11 @@ describe('internalAttention', () => {
       repoRoot: '/repo',
       stateRoot: '/state',
       getCurrentProfile: () => 'assistant',
-      readDaemonState: vi.fn(async () => snapshots.shift() ?? createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] })),
+      readDaemonState: vi.fn(
+        async () =>
+          snapshots.shift() ??
+          createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] }),
+      ),
       writeEntry,
       now: () => new Date(nowMs),
       issueGraceMs: 0.5,
@@ -161,7 +176,11 @@ describe('internalAttention', () => {
       repoRoot: '/repo',
       stateRoot: '/state',
       getCurrentProfile: () => 'assistant',
-      readDaemonState: vi.fn(async () => snapshots.shift() ?? createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] })),
+      readDaemonState: vi.fn(
+        async () =>
+          snapshots.shift() ??
+          createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] }),
+      ),
       writeEntry,
       now: () => new Date(nowMs),
       issueGraceMs: Number.MAX_SAFE_INTEGER,
@@ -171,10 +190,12 @@ describe('internalAttention', () => {
     nowMs += 61_000;
     await monitor.tick();
 
-    expect(writeEntry).toHaveBeenCalledWith(expect.objectContaining({
-      summary: 'Daemon is offline.',
-      idPrefix: 'daemon-issue',
-    }));
+    expect(writeEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Daemon is offline.',
+        idPrefix: 'daemon-issue',
+      }),
+    );
   });
 
   it('suppresses daemon issue and recovery entries until the suppression window expires', async () => {
@@ -268,7 +289,8 @@ describe('internalAttention', () => {
   it('logs polling failures and only starts one interval at a time', async () => {
     vi.useFakeTimers();
     const logger = { warn: vi.fn() };
-    const readDaemonState = vi.fn()
+    const readDaemonState = vi
+      .fn()
       .mockRejectedValueOnce(new Error('poll failed'))
       .mockResolvedValue(createDaemonSnapshot({ running: true }));
 

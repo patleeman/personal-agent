@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../desktop-env.js', () => ({
@@ -31,13 +32,16 @@ describe('workbench browser state', () => {
   it('drops unsafe persisted entries', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-workbench-browser-state-'));
     process.env.TEST_DESKTOP_STATE_DIR = dir;
-    writeFileSync(join(dir, 'workbench-browser-state.json'), JSON.stringify({
-      version: 1,
-      entries: [
-        { sessionKey: 'ok', url: 'https://example.com/', updatedAt: '2026-04-01T00:00:00.000Z' },
-        { sessionKey: 'bad', url: 'file:///etc/passwd', updatedAt: '2026-04-01T00:00:00.000Z' },
-      ],
-    }));
+    writeFileSync(
+      join(dir, 'workbench-browser-state.json'),
+      JSON.stringify({
+        version: 1,
+        entries: [
+          { sessionKey: 'ok', url: 'https://example.com/', updatedAt: '2026-04-01T00:00:00.000Z' },
+          { sessionKey: 'bad', url: 'file:///etc/passwd', updatedAt: '2026-04-01T00:00:00.000Z' },
+        ],
+      }),
+    );
     const mod = await import('./workbench-browser-state.js');
 
     expect(mod.readStoredWorkbenchBrowserUrl('ok')).toBe('https://example.com/');

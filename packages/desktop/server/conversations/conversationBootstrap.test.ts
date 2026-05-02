@@ -25,10 +25,7 @@ vi.mock('./sessions.js', () => ({
   buildAppendOnlySessionDetailResponse: buildAppendOnlySessionDetailResponseMock,
 }));
 
-import {
-  isMissingConversationBootstrapState,
-  readConversationBootstrapState,
-} from './conversationBootstrap.js';
+import { isMissingConversationBootstrapState, readConversationBootstrapState } from './conversationBootstrap.js';
 
 describe('conversationBootstrap', () => {
   beforeEach(() => {
@@ -128,16 +125,20 @@ describe('conversationBootstrap', () => {
   });
 
   it('detects when the bootstrap state is missing entirely', () => {
-    expect(isMissingConversationBootstrapState({
-      conversationId: 'missing',
-      sessionDetail: null,
-      liveSession: { live: false },
-    })).toBe(true);
+    expect(
+      isMissingConversationBootstrapState({
+        conversationId: 'missing',
+        sessionDetail: null,
+        liveSession: { live: false },
+      }),
+    ).toBe(true);
 
-    expect(isMissingConversationBootstrapState({
-      conversationId: 'live',
-      sessionDetail: null,
-      liveSession: { live: true, id: 'live' },
-    })).toBe(false);
+    expect(
+      isMissingConversationBootstrapState({
+        conversationId: 'live',
+        sessionDetail: null,
+        liveSession: { live: true, id: 'live' },
+      }),
+    ).toBe(false);
   });
 });

@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createChangeWorkingDirectoryAgentExtension } from './changeWorkingDirectoryAgentExtension.js';
 
 const tempDirs: string[] = [];
@@ -21,9 +23,11 @@ afterEach(() => {
 function registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryChange = vi.fn()) {
   let registeredTool:
     | {
-      execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
-      promptGuidelines?: string[];
-    }
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+        promptGuidelines?: string[];
+      }
     | undefined;
 
   createChangeWorkingDirectoryAgentExtension({
@@ -31,7 +35,9 @@ function registerChangeWorkingDirectoryTool(requestConversationWorkingDirectoryC
   })({
     registerTool: (tool: unknown) => {
       registeredTool = tool as {
-        execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+        execute: (
+          ...args: unknown[]
+        ) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
         promptGuidelines?: string[];
       };
     },

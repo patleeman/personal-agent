@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext } from '../app/contexts.js';
 import { useApi } from '../hooks/useApi';
 import { useConversations } from '../hooks/useConversations.js';
@@ -136,16 +137,18 @@ describe('ContextRail run detail', () => {
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123?run=conversation-live-conv-123']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -203,19 +206,21 @@ describe('ContextRail run detail', () => {
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/source-1?run=conversation-deferred-resume-resume-1']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [
-            createSession({ id: 'source-1', title: 'Source conversation', file: '/tmp/source-1.jsonl' }),
-            createSession({ id: 'target-1', title: 'Target conversation', file: '/tmp/target-1.jsonl' }),
-          ],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [
+              createSession({ id: 'source-1', title: 'Source conversation', file: '/tmp/source-1.jsonl' }),
+              createSession({ id: 'target-1', title: 'Target conversation', file: '/tmp/target-1.jsonl' }),
+            ],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -288,16 +293,18 @@ describe('ContextRail run detail', () => {
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123?run=run-ui-preview-check-1']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -316,16 +323,18 @@ describe('ContextRail run detail', () => {
   it('shows the working directory controls on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -339,16 +348,18 @@ describe('ContextRail run detail', () => {
   it('keeps the automations rail in browse mode while the create modal is open', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations?new=1']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -361,16 +372,18 @@ describe('ContextRail run detail', () => {
   it('limits the saved-conversation rail to run information', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -386,16 +399,18 @@ describe('ContextRail run detail', () => {
   it('keeps the saved-conversation rail focused on runs even when an artifact is selected', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123?artifact=test-artifact']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -422,16 +437,18 @@ describe('ContextRail run detail', () => {
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations']}>
-        <AppDataContext.Provider value={{
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
+        <AppDataContext.Provider
+          value={{
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}
+        >
           <ContextRail />
         </AppDataContext.Provider>
       </MemoryRouter>,
@@ -442,5 +459,4 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Archived');
     expect(html).toContain('Pinned session');
   });
-
 });

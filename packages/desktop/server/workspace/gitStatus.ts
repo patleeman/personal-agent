@@ -6,15 +6,7 @@ export interface GitRepoInfo {
   name: string;
 }
 
-export type GitStatusChangeKind =
-  | 'modified'
-  | 'added'
-  | 'deleted'
-  | 'renamed'
-  | 'copied'
-  | 'typechange'
-  | 'untracked'
-  | 'conflicted';
+export type GitStatusChangeKind = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'untracked' | 'conflicted';
 
 export interface GitStatusChange {
   relativePath: string;
@@ -43,17 +35,23 @@ const GIT_STATUS_TOTAL_BUDGET_MS = 2_000;
 const GIT_STATUS_COMMAND_TIMEOUT_MS = 1_500;
 const MAX_GIT_STATUS_CACHE_ENTRIES = 64;
 const MAX_GIT_REPO_INFO_CACHE_ENTRIES = 256;
-const gitStatusSummaryCache = new Map<string, {
-  fetchedAt: number;
-  ttlMs: number;
-  summary: GitStatusSummary | null;
-  hasRepo: boolean;
-  degraded: boolean;
-}>();
-const gitRepoInfoCache = new Map<string, {
-  fetchedAt: number;
-  repo: GitRepoInfo | null;
-}>();
+const gitStatusSummaryCache = new Map<
+  string,
+  {
+    fetchedAt: number;
+    ttlMs: number;
+    summary: GitStatusSummary | null;
+    hasRepo: boolean;
+    degraded: boolean;
+  }
+>();
+const gitRepoInfoCache = new Map<
+  string,
+  {
+    fetchedAt: number;
+    repo: GitRepoInfo | null;
+  }
+>();
 
 type HeadCommitState = 'present' | 'absent' | 'unknown';
 
@@ -81,11 +79,12 @@ function runGitCommandAllowFailure(args: string[], cwd: string, timeoutMs = GIT_
     };
   } catch (error) {
     const childError = error as { stdout?: string | Buffer; status?: number | null; code?: string };
-    const stdout = typeof childError.stdout === 'string'
-      ? childError.stdout
-      : Buffer.isBuffer(childError.stdout)
-        ? childError.stdout.toString('utf-8')
-        : '';
+    const stdout =
+      typeof childError.stdout === 'string'
+        ? childError.stdout
+        : Buffer.isBuffer(childError.stdout)
+          ? childError.stdout.toString('utf-8')
+          : '';
 
     return {
       stdout,
@@ -139,8 +138,7 @@ export function countGitStatusEntries(output: string): number {
   return output
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .length;
+    .filter((line) => line.length > 0).length;
 }
 
 export function parseGitNumstat(output: string): { linesAdded: number; linesDeleted: number } {
@@ -335,7 +333,11 @@ function readTrackedDiffSummary(cwd: string, deadlineAt: number): { linesAdded: 
   return { linesAdded, linesDeleted, degraded };
 }
 
-function readUntrackedDiffSummary(cwd: string, untrackedPaths: string[], deadlineAt: number): { linesAdded: number; linesDeleted: number; degraded: boolean } {
+function readUntrackedDiffSummary(
+  cwd: string,
+  untrackedPaths: string[],
+  deadlineAt: number,
+): { linesAdded: number; linesDeleted: number; degraded: boolean } {
   let linesAdded = 0;
   let linesDeleted = 0;
   let degraded = false;
@@ -365,7 +367,7 @@ function readUntrackedDiffSummary(cwd: string, untrackedPaths: string[], deadlin
 
 export function readGitRepoInfo(cwd: string): GitRepoInfo | null {
   const cached = gitRepoInfoCache.get(cwd);
-  if (cached && (Date.now() - cached.fetchedAt) <= GIT_REPO_INFO_CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.fetchedAt <= GIT_REPO_INFO_CACHE_TTL_MS) {
     return cached.repo;
   }
 
@@ -407,7 +409,7 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
 
   const repoRoot = repo.root;
   const cached = gitStatusSummaryCache.get(repoRoot);
-  if (cached && (Date.now() - cached.fetchedAt) <= cached.ttlMs) {
+  if (cached && Date.now() - cached.fetchedAt <= cached.ttlMs) {
     return {
       summary: cached.summary,
       telemetry: {
@@ -434,7 +436,11 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
     };
   }
 
-  const statusResult = runGitCommandAllowFailure(['status', '--porcelain=v1', '--branch', '--untracked-files=all'], repoRoot, statusTimeoutMs);
+  const statusResult = runGitCommandAllowFailure(
+    ['status', '--porcelain=v1', '--branch', '--untracked-files=all'],
+    repoRoot,
+    statusTimeoutMs,
+  );
   if (statusResult.exitCode !== 0) {
     cacheGitStatusSummary(repoRoot, null, true, true);
     return {
@@ -455,9 +461,7 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
   let degraded = false;
 
   if (changes.length > 0) {
-    const untrackedPaths = changes
-      .filter((change) => change.change === 'untracked')
-      .map((change) => change.relativePath);
+    const untrackedPaths = changes.filter((change) => change.change === 'untracked').map((change) => change.relativePath);
     const hasTrackedChanges = changes.some((change) => change.change !== 'untracked');
 
     if (hasTrackedChanges) {

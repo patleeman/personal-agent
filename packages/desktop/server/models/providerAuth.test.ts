@@ -2,12 +2,10 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  readProviderAuthState,
-  removeProviderCredential,
-  setProviderApiKey,
-} from './providerAuth.js';
+
+import { readProviderAuthState, removeProviderCredential, setProviderApiKey } from './providerAuth.js';
 
 const tempDirs: string[] = [];
 

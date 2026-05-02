@@ -1,6 +1,7 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import { readQueueState, type QueuedPromptPreview } from './liveSessionQueue.js';
+
 import { hasQueuedOrActiveHiddenTurn, type LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
+import { type QueuedPromptPreview, readQueueState } from './liveSessionQueue.js';
 
 export interface LiveSessionQueueReadHost extends LiveSessionHiddenTurnState {
   session: AgentSession;
@@ -15,19 +16,18 @@ export function canInjectResumeFallbackPrompt(entry: LiveSessionQueueReadHost | 
     return false;
   }
 
-  const steering = typeof entry.session.getSteeringMessages === 'function'
-    ? entry.session.getSteeringMessages()
-    : [];
+  const steering = typeof entry.session.getSteeringMessages === 'function' ? entry.session.getSteeringMessages() : [];
   if (steering.length > 0) {
     return false;
   }
 
-  const followUp = typeof entry.session.getFollowUpMessages === 'function'
-    ? entry.session.getFollowUpMessages()
-    : [];
+  const followUp = typeof entry.session.getFollowUpMessages === 'function' ? entry.session.getFollowUpMessages() : [];
   return followUp.length === 0;
 }
 
-export function listQueuedPromptPreviews(entry: LiveSessionQueueReadHost): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
+export function listQueuedPromptPreviews(entry: LiveSessionQueueReadHost): {
+  steering: QueuedPromptPreview[];
+  followUp: QueuedPromptPreview[];
+} {
   return readQueueState(entry.session);
 }

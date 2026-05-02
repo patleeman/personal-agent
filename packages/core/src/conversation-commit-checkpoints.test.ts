@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   addConversationCommitCheckpointComment,
   getConversationCommitCheckpoint,
@@ -30,8 +31,9 @@ describe('conversation commit checkpoint storage', () => {
   it('saves and lists commit checkpoints', () => {
     const stateRoot = createTempStateRoot();
 
-    expect(resolveProfileConversationCommitCheckpointsDir({ stateRoot, profile: 'assistant' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-commit-checkpoints', 'assistant'));
+    expect(resolveProfileConversationCommitCheckpointsDir({ stateRoot, profile: 'assistant' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-commit-checkpoints', 'assistant'),
+    );
 
     const record = saveConversationCommitCheckpoint({
       stateRoot,
@@ -65,7 +67,8 @@ describe('conversation commit checkpoint storage', () => {
           status: 'modified',
           additions: 12,
           deletions: 3,
-          patch: 'diff --git a/packages/desktop/ui/src/pages/ConversationPage.tsx b/packages/desktop/ui/src/pages/ConversationPage.tsx\n@@ -1 +1 @@\n-old\n+new\n',
+          patch:
+            'diff --git a/packages/desktop/ui/src/pages/ConversationPage.tsx b/packages/desktop/ui/src/pages/ConversationPage.tsx\n@@ -1 +1 @@\n-old\n+new\n',
         },
       ],
     });
@@ -76,25 +79,31 @@ describe('conversation commit checkpoint storage', () => {
     expect(record.commentCount).toBe(1);
     expect(record.comments).toHaveLength(1);
 
-    expect(resolveConversationCommitCheckpointPath({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conversation-1',
-      checkpointId: record.id,
-    })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-commit-checkpoints', 'assistant', 'conversation-1', `${record.id}.json`));
+    expect(
+      resolveConversationCommitCheckpointPath({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conversation-1',
+        checkpointId: record.id,
+      }),
+    ).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-commit-checkpoints', 'assistant', 'conversation-1', `${record.id}.json`));
 
-    expect(getConversationCommitCheckpoint({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conversation-1',
-      checkpointId: record.id,
-    })).toEqual(record);
+    expect(
+      getConversationCommitCheckpoint({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conversation-1',
+        checkpointId: record.id,
+      }),
+    ).toEqual(record);
 
-    expect(listConversationCommitCheckpoints({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conversation-1',
-    })).toEqual([
+    expect(
+      listConversationCommitCheckpoints({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conversation-1',
+      }),
+    ).toEqual([
       {
         id: 'abc1234def567890abc1234def567890abc12345',
         conversationId: 'conversation-1',

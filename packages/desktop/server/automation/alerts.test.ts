@@ -2,9 +2,10 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { getAlert, upsertAlert } from '@personal-agent/core';
-import { createReadyDeferredResumeForSessionFile, listDeferredResumesForSessionFile } from './deferredResumes.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   acknowledgeAlertForProfile,
   dismissAlertForProfile,
@@ -13,6 +14,7 @@ import {
   listAlertsForProfile,
   snoozeAlertForProfile,
 } from './alerts.js';
+import { createReadyDeferredResumeForSessionFile, listDeferredResumesForSessionFile } from './deferredResumes.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -60,9 +62,7 @@ describe('alerts server helpers', () => {
     upsertAlert({ stateRoot, profile: 'shared', alert: createAlert({ id: 'alert-1' }) });
 
     const listed = listAlertsForProfile('shared');
-    expect(listed).toEqual([
-      expect.objectContaining({ id: 'alert-1', status: 'active' }),
-    ]);
+    expect(listed).toEqual([expect.objectContaining({ id: 'alert-1', status: 'active' })]);
 
     expect(getAlertSnapshotForProfile('shared')).toEqual({
       entries: listed,
@@ -71,12 +71,8 @@ describe('alerts server helpers', () => {
     expect(getAlertForProfile('shared', 'alert-1')).toEqual(expect.objectContaining({ id: 'alert-1' }));
     expect(getAlertForProfile('shared', 'missing')).toBeUndefined();
 
-    expect(acknowledgeAlertForProfile('shared', 'alert-1')).toEqual(
-      expect.objectContaining({ id: 'alert-1', status: 'acknowledged' }),
-    );
-    expect(dismissAlertForProfile('shared', 'alert-1')).toEqual(
-      expect.objectContaining({ id: 'alert-1', status: 'dismissed' }),
-    );
+    expect(acknowledgeAlertForProfile('shared', 'alert-1')).toEqual(expect.objectContaining({ id: 'alert-1', status: 'acknowledged' }));
+    expect(dismissAlertForProfile('shared', 'alert-1')).toEqual(expect.objectContaining({ id: 'alert-1', status: 'dismissed' }));
   });
 
   it('returns undefined for missing alerts and validates snooze inputs before loading wakeup state', async () => {
@@ -91,14 +87,14 @@ describe('alerts server helpers', () => {
       alert: createAlert({ id: 'wakeup-alert-1', wakeupId: 'resume-1' }),
     });
 
-    await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', {
-      delay: '15m',
-      at: '2026-03-26T14:15:00.000Z',
-    })).rejects.toThrow('Specify only one of delay or at when snoozing an alert.');
+    await expect(
+      snoozeAlertForProfile('shared', 'wakeup-alert-1', {
+        delay: '15m',
+        at: '2026-03-26T14:15:00.000Z',
+      }),
+    ).rejects.toThrow('Specify only one of delay or at when snoozing an alert.');
 
-    await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', {})).rejects.toThrow(
-      'delay is required when snoozing an alert.',
-    );
+    await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', {})).rejects.toThrow('delay is required when snoozing an alert.');
 
     await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', { delay: 'bogus' })).rejects.toThrow(
       'Invalid delay. Use forms like 30s, 10m, 2h, or 1d.',
@@ -116,10 +112,12 @@ describe('alerts server helpers', () => {
       'Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.',
     );
 
-    await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', {
-      at: '2026-03-26T13:59:00.000Z',
-      now: new Date('2026-03-26T14:00:00.000Z'),
-    })).rejects.toThrow('Snooze time must be in the future.');
+    await expect(
+      snoozeAlertForProfile('shared', 'wakeup-alert-1', {
+        at: '2026-03-26T13:59:00.000Z',
+        now: new Date('2026-03-26T14:00:00.000Z'),
+      }),
+    ).rejects.toThrow('Snooze time must be in the future.');
   });
 
   it('rejects snoozes for alerts without wakeup state', async () => {
@@ -179,18 +177,20 @@ describe('alerts server helpers', () => {
       now: new Date('2026-03-26T14:00:00.000Z'),
     });
 
-    expect(result).toEqual(expect.objectContaining({
-      alert: expect.objectContaining({
-        id: 'wakeup-alert-1',
-        status: 'acknowledged',
+    expect(result).toEqual(
+      expect.objectContaining({
+        alert: expect.objectContaining({
+          id: 'wakeup-alert-1',
+          status: 'acknowledged',
+        }),
+        resume: expect.objectContaining({
+          id: reminder.id,
+          status: 'scheduled',
+          dueAt: '2026-03-26T14:15:00.000Z',
+          attempts: 1,
+        }),
       }),
-      resume: expect.objectContaining({
-        id: reminder.id,
-        status: 'scheduled',
-        dueAt: '2026-03-26T14:15:00.000Z',
-        attempts: 1,
-      }),
-    }));
+    );
 
     expect(listDeferredResumesForSessionFile('/tmp/sessions/conv-123.jsonl')).toEqual([
       expect.objectContaining({
@@ -241,11 +241,13 @@ describe('alerts server helpers', () => {
     });
 
     expect(result?.resume.dueAt).toBe('2026-03-26T14:15:00.000Z');
-    expect(result?.alert).toEqual(expect.objectContaining({
-      id: 'wakeup-alert-invalid-now',
-      status: 'acknowledged',
-      updatedAt: '2026-03-26T14:00:00.000Z',
-    }));
+    expect(result?.alert).toEqual(
+      expect.objectContaining({
+        id: 'wakeup-alert-invalid-now',
+        status: 'acknowledged',
+        updatedAt: '2026-03-26T14:00:00.000Z',
+      }),
+    );
   });
 
   it('supports explicit snooze timestamps', async () => {
@@ -281,11 +283,13 @@ describe('alerts server helpers', () => {
       now: new Date('2026-03-26T14:00:00.000Z'),
     });
 
-    expect(result).toEqual(expect.objectContaining({
-      resume: expect.objectContaining({
-        id: reminder.id,
-        dueAt: '2026-03-26T15:00:00.000Z',
+    expect(result).toEqual(
+      expect.objectContaining({
+        resume: expect.objectContaining({
+          id: reminder.id,
+          dueAt: '2026-03-26T15:00:00.000Z',
+        }),
       }),
-    }));
+    );
   });
 });

@@ -1,33 +1,36 @@
-import { useEffect, useMemo, useRef, useState, type SelectHTMLAttributes } from 'react';
+import { type SelectHTMLAttributes, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../client/api';
+
 import { useAppData } from '../app/contexts';
-import { buildConversationGroupLabels, normalizeConversationGroupCwd } from '../conversation/conversationCwdGroups';
-import { useApi } from '../hooks/useApi';
-import { normalizeWorkspacePaths } from '../local/savedWorkspacePaths';
-import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import { isScheduledTaskDetail } from '../automation/scheduledTaskDetail';
 import {
   buildCronFromEasyTaskSchedule,
   createCronEditorState,
+  type CronEditorState,
+  type EasyTaskCadence,
+  type EasyTaskSchedule,
   formatTaskSchedule,
   formatTimeInputValue,
   fromDateTimeLocalValue,
   parseTimeInputValue,
   toDateTimeLocalValue,
   WEEKDAY_OPTIONS,
-  type CronEditorState,
-  type EasyTaskCadence,
-  type EasyTaskSchedule,
 } from '../automation/taskSchedule';
+import { api } from '../client/api';
+import { buildConversationGroupLabels, normalizeConversationGroupCwd } from '../conversation/conversationCwdGroups';
+import { useApi } from '../hooks/useApi';
+import { normalizeWorkspacePaths } from '../local/savedWorkspacePaths';
+import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import type { ProjectRecord, ScheduledTaskDetail, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { timeAgo } from '../shared/utils';
-import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
+import { cx, ErrorState, LoadingState, ToolbarButton } from './ui';
 
 const TITLE_INPUT_CLASS = 'w-full min-w-0 bg-transparent text-[16px] font-medium text-primary placeholder:text-dim/75 outline-none';
-const PROMPT_INPUT_CLASS = 'min-h-0 flex-1 w-full resize-none overflow-y-auto bg-transparent px-1 pb-3 pt-2 text-[15px] leading-7 text-primary placeholder:text-dim/75 outline-none';
-const INLINE_FIELD_CLASS = 'h-8 min-w-0 rounded-md border border-transparent bg-transparent px-1.5 text-[12px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
+const PROMPT_INPUT_CLASS =
+  'min-h-0 flex-1 w-full resize-none overflow-y-auto bg-transparent px-1 pb-3 pt-2 text-[15px] leading-7 text-primary placeholder:text-dim/75 outline-none';
+const INLINE_FIELD_CLASS =
+  'h-8 min-w-0 rounded-md border border-transparent bg-transparent px-1.5 text-[12px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
 const INLINE_INPUT_CLASS = INLINE_FIELD_CLASS;
 const INLINE_SELECT_CLASS = `${INLINE_FIELD_CLASS} appearance-none pr-6`;
 const FIELD_LABEL_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-dim';
@@ -101,9 +104,7 @@ function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
 function toggleButtonClass(active: boolean): string {
   return cx(
     'inline-flex h-8 items-center rounded-md px-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
-    active
-      ? 'bg-surface/55 text-primary'
-      : 'text-secondary hover:bg-surface/45 hover:text-primary',
+    active ? 'bg-surface/55 text-primary' : 'text-secondary hover:bg-surface/45 hover:text-primary',
   );
 }
 
@@ -116,11 +117,7 @@ function dayButtonClass(active: boolean): string {
   );
 }
 
-function InlineSelect({
-  className,
-  children,
-  ...props
-}: SelectHTMLAttributes<HTMLSelectElement>) {
+function InlineSelect({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <label className="relative inline-flex min-w-0 items-center">
       <select {...props} className={cx(INLINE_SELECT_CLASS, className)}>
@@ -145,9 +142,7 @@ function InlineSelect({
 }
 
 function resolveCronExpression(state: TaskFormState): string {
-  return state.cronEditor.mode === 'builder'
-    ? buildCronFromEasyTaskSchedule(state.cronEditor.builder)
-    : state.cronEditor.rawCron.trim();
+  return state.cronEditor.mode === 'builder' ? buildCronFromEasyTaskSchedule(state.cronEditor.builder) : state.cronEditor.rawCron.trim();
 }
 
 export function parseCatchUpWindowMinutes(value: string): number | undefined {
@@ -212,9 +207,7 @@ function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): strin
 }
 
 function createTaskMutationPayload(state: TaskFormState) {
-  const catchUpWindowMinutes = state.scheduleMode === 'cron'
-    ? parseCatchUpWindowMinutes(state.catchUpWindowMinutes)
-    : undefined;
+  const catchUpWindowMinutes = state.scheduleMode === 'cron' ? parseCatchUpWindowMinutes(state.catchUpWindowMinutes) : undefined;
 
   return {
     title: state.title.trim(),
@@ -222,12 +215,13 @@ function createTaskMutationPayload(state: TaskFormState) {
     at: state.scheduleMode === 'at' ? fromDateTimeLocalValue(state.atValue) : null,
     model: state.model.trim() || null,
     thinkingLevel: state.thinkingLevel.trim() || null,
-    cwd: state.runIn === 'worktree' ? (state.projectPath.trim() || null) : null,
-    catchUpWindowSeconds: typeof catchUpWindowMinutes === 'number' && !Number.isNaN(catchUpWindowMinutes) ? catchUpWindowMinutes * 60 : null,
+    cwd: state.runIn === 'worktree' ? state.projectPath.trim() || null : null,
+    catchUpWindowSeconds:
+      typeof catchUpWindowMinutes === 'number' && !Number.isNaN(catchUpWindowMinutes) ? catchUpWindowMinutes * 60 : null,
     prompt: state.prompt,
     targetType: state.targetType,
     threadMode: state.threadMode,
-    threadConversationId: state.threadMode === 'existing' ? (state.threadConversationId.trim() || null) : null,
+    threadConversationId: state.threadMode === 'existing' ? state.threadConversationId.trim() || null : null,
   };
 }
 
@@ -243,10 +237,18 @@ function PromptText({ value }: { value: string }) {
     <div className="space-y-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">
       {lines.map((line, index) => {
         if (line.startsWith('## ') || line.startsWith('# ')) {
-          return <p key={index} className="mt-2 text-[13px] font-semibold text-primary">{line.replace(/^#+\s/, '')}</p>;
+          return (
+            <p key={index} className="mt-2 text-[13px] font-semibold text-primary">
+              {line.replace(/^#+\s/, '')}
+            </p>
+          );
         }
         if (line.startsWith('- ') || line.match(/^\d+\. /)) {
-          return <p key={index} className="pl-2">{line}</p>;
+          return (
+            <p key={index} className="pl-2">
+              {line}
+            </p>
+          );
         }
         if (line.trim() === '') {
           return <div key={index} className="h-1.5" />;
@@ -257,14 +259,7 @@ function PromptText({ value }: { value: string }) {
   );
 }
 
-function CronBuilderEditor({
-  value,
-  onChange,
-}: {
-  value: CronEditorState;
-  onChange: (next: CronEditorState) => void;
-}) {
-
+function CronBuilderEditor({ value, onChange }: { value: CronEditorState; onChange: (next: CronEditorState) => void }) {
   function updateBuilder(patch: Partial<EasyTaskSchedule>) {
     onChange({
       ...value,
@@ -287,7 +282,9 @@ function CronBuilderEditor({
   function toggleWeekday(day: number) {
     const current = value.builder.weekdays;
     const next = current.includes(day)
-      ? current.length > 1 ? current.filter((entry) => entry !== day) : current
+      ? current.length > 1
+        ? current.filter((entry) => entry !== day)
+        : current
       : [...current, day].sort((left, right) => left - right);
     updateBuilder({ weekdays: next });
   }
@@ -353,7 +350,10 @@ function CronBuilderEditor({
               </>
             )}
 
-            {(value.builder.cadence === 'daily' || value.builder.cadence === 'weekdays' || value.builder.cadence === 'weekly' || value.builder.cadence === 'monthly') && (
+            {(value.builder.cadence === 'daily' ||
+              value.builder.cadence === 'weekdays' ||
+              value.builder.cadence === 'weekly' ||
+              value.builder.cadence === 'monthly') && (
               <input
                 type="time"
                 value={formatTimeInputValue(value.builder.hour, value.builder.minute)}
@@ -390,7 +390,6 @@ function CronBuilderEditor({
             spellCheck={false}
           />
         )}
-
       </div>
 
       {!value.supported && value.mode === 'raw' && (
@@ -571,12 +570,15 @@ function InlineSwitch({
         aria-hidden="true"
         className={cx(
           'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
-          checked
-            ? 'border-accent/55 bg-accent/75 shadow-sm'
-            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
+          checked ? 'border-accent/55 bg-accent/75 shadow-sm' : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
         )}
       >
-        <span className={cx('h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform', checked ? 'translate-x-[14px]' : 'translate-x-0')} />
+        <span
+          className={cx(
+            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
+            checked ? 'translate-x-[14px]' : 'translate-x-0',
+          )}
+        />
       </span>
       <span className={cx('leading-none', checked && 'text-primary')}>{label}</span>
     </button>
@@ -603,10 +605,12 @@ function TaskAdvancedMenu({
           <span className={FIELD_LABEL_CLASS}>Target</span>
           <InlineSelect
             value={value.targetType}
-            onChange={(event) => onChange({
-              targetType: event.target.value as TaskFormState['targetType'],
-              ...(event.target.value === 'conversation' && value.threadMode === 'none' ? { threadMode: 'dedicated' as const } : {}),
-            })}
+            onChange={(event) =>
+              onChange({
+                targetType: event.target.value as TaskFormState['targetType'],
+                ...(event.target.value === 'conversation' && value.threadMode === 'none' ? { threadMode: 'dedicated' as const } : {}),
+              })
+            }
             className="w-full"
             name="targetType"
             aria-label="Automation target"
@@ -646,7 +650,9 @@ function TaskAdvancedMenu({
                 aria-label="Run if missed within minutes"
                 placeholder="Disabled"
               />
-              <p className={FIELD_HELP_CLASS}>Run once after wake if the latest missed slot was within this many minutes. Leave blank to skip missed runs.</p>
+              <p className={FIELD_HELP_CLASS}>
+                Run once after wake if the latest missed slot was within this many minutes. Leave blank to skip missed runs.
+              </p>
             </div>
           </>
         )}
@@ -655,10 +661,12 @@ function TaskAdvancedMenu({
           <span className={FIELD_LABEL_CLASS}>Thread</span>
           <InlineSelect
             value={value.threadMode}
-            onChange={(event) => onChange({
-              threadMode: event.target.value as TaskFormState['threadMode'],
-              ...(event.target.value !== 'existing' ? { threadConversationId: '' } : {}),
-            })}
+            onChange={(event) =>
+              onChange({
+                threadMode: event.target.value as TaskFormState['threadMode'],
+                ...(event.target.value !== 'existing' ? { threadConversationId: '' } : {}),
+              })
+            }
             className="w-full"
             name="threadMode"
             aria-label="Automation thread mode"
@@ -677,7 +685,9 @@ function TaskAdvancedMenu({
             >
               <option value="">Choose thread</option>
               {existingThreadOptions.map((entry) => (
-                <option key={entry.id} value={entry.id}>{entry.label}</option>
+                <option key={entry.id} value={entry.id}>
+                  {entry.label}
+                </option>
               ))}
             </InlineSelect>
           )}
@@ -699,7 +709,9 @@ function TaskAdvancedMenu({
               >
                 <option value="">Default</option>
                 {modelOptions.map((model) => (
-                  <option key={model.id} value={model.id}>{model.id}</option>
+                  <option key={model.id} value={model.id}>
+                    {model.id}
+                  </option>
                 ))}
               </InlineSelect>
             </div>
@@ -714,7 +726,9 @@ function TaskAdvancedMenu({
                 aria-label="Automation reasoning level"
               >
                 {THINKING_LEVEL_OPTIONS.map((option) => (
-                  <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                  <option key={option.value || 'unset'} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </InlineSelect>
             </div>
@@ -756,12 +770,7 @@ function TaskEditorForm({
 
   useEffect(() => {
     const defaultPath = normalizeConversationGroupCwd(cwdState?.effectiveCwd);
-    if (
-      value.runIn === 'worktree'
-      && !value.projectPath.trim()
-      && defaultPath
-      && !isFilesystemRootPath(defaultPath)
-    ) {
+    if (value.runIn === 'worktree' && !value.projectPath.trim() && defaultPath && !isFilesystemRootPath(defaultPath)) {
       onChange({ projectPath: defaultPath });
     }
   }, [cwdState?.effectiveCwd, onChange, value.projectPath, value.runIn]);
@@ -799,44 +808,53 @@ function TaskEditorForm({
     };
   }, [moreMenuOpen]);
 
-  const projectOptions = useMemo(() => buildTaskProjectOptions({
-    projectPath: value.projectPath,
-    defaultCwd: cwdState?.effectiveCwd,
-    savedWorkspacePaths,
-    sessions,
-    projects,
-  }), [cwdState?.effectiveCwd, projects, savedWorkspacePaths, sessions, value.projectPath]);
+  const projectOptions = useMemo(
+    () =>
+      buildTaskProjectOptions({
+        projectPath: value.projectPath,
+        defaultCwd: cwdState?.effectiveCwd,
+        savedWorkspacePaths,
+        sessions,
+        projects,
+      }),
+    [cwdState?.effectiveCwd, projects, savedWorkspacePaths, sessions, value.projectPath],
+  );
 
-  const effectiveThreadCwd = value.runIn === 'worktree'
-    ? normalizeConversationGroupCwd(value.projectPath)
-    : normalizeConversationGroupCwd(cwdState?.effectiveCwd);
-  const existingThreadOptions = useMemo(() => buildTaskExistingThreadOptions({
-    sessions,
-    effectiveThreadCwd,
-  }), [effectiveThreadCwd, sessions]);
+  const effectiveThreadCwd =
+    value.runIn === 'worktree' ? normalizeConversationGroupCwd(value.projectPath) : normalizeConversationGroupCwd(cwdState?.effectiveCwd);
+  const existingThreadOptions = useMemo(
+    () =>
+      buildTaskExistingThreadOptions({
+        sessions,
+        effectiveThreadCwd,
+      }),
+    [effectiveThreadCwd, sessions],
+  );
   const selectedExistingThread = existingThreadOptions.find((option) => option.id === value.threadConversationId);
   const thinkingLabel = THINKING_LEVEL_OPTIONS.find((option) => option.value === value.thinkingLevel)?.label ?? value.thinkingLevel;
   const advancedSummaryParts = [
     formatTargetTypeLabel(value.targetType),
-    value.scheduleMode === 'cron' && value.catchUpWindowMinutes.trim()
-      ? `catch up ${value.catchUpWindowMinutes.trim()}m`
-      : null,
+    value.scheduleMode === 'cron' && value.catchUpWindowMinutes.trim() ? `catch up ${value.catchUpWindowMinutes.trim()}m` : null,
     value.threadMode === 'existing'
       ? (selectedExistingThread?.label ?? 'Existing thread')
-      : (value.threadMode === 'none' ? 'No thread' : null),
-    value.model.trim() ? value.model.trim().split('/').pop() ?? value.model.trim() : null,
+      : value.threadMode === 'none'
+        ? 'No thread'
+        : null,
+    value.model.trim() ? (value.model.trim().split('/').pop() ?? value.model.trim()) : null,
     value.thinkingLevel.trim() ? thinkingLabel : null,
   ].filter((entry): entry is string => Boolean(entry));
   const advancedSummary = advancedSummaryParts.length > 0 ? advancedSummaryParts.join(' · ') : null;
   const visibleError = error ?? (submitAttempted ? validationError : null);
 
   useEffect(() => {
-    if (shouldClearMissingExistingThreadSelection({
-      threadMode: value.threadMode,
-      threadConversationId: value.threadConversationId,
-      existingThreadOptions,
-      sessionsLoaded: sessions !== null,
-    })) {
+    if (
+      shouldClearMissingExistingThreadSelection({
+        threadMode: value.threadMode,
+        threadConversationId: value.threadConversationId,
+        existingThreadOptions,
+        sessionsLoaded: sessions !== null,
+      })
+    ) {
       onChange({ threadConversationId: '' });
     }
   }, [existingThreadOptions, onChange, sessions, value.threadConversationId, value.threadMode]);
@@ -867,9 +885,7 @@ function TaskEditorForm({
               autoFocus
             />
             <div ref={moreMenuRef} className="relative flex shrink-0 items-center gap-2">
-              {advancedSummary && (
-                <span className="max-w-[16rem] truncate text-[12px] text-secondary">{advancedSummary}</span>
-              )}
+              {advancedSummary && <span className="max-w-[16rem] truncate text-[12px] text-secondary">{advancedSummary}</span>}
               <button
                 type="button"
                 onClick={() => setMoreMenuOpen((current) => !current)}
@@ -906,7 +922,9 @@ function TaskEditorForm({
       <div className="px-6 pb-4 pt-2">
         <div className="mx-auto max-w-4xl space-y-2">
           {visibleError ? (
-            <p className="text-[12px] text-danger" aria-live="polite">{visibleError}</p>
+            <p className="text-[12px] text-danger" aria-live="polite">
+              {visibleError}
+            </p>
           ) : null}
 
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -937,10 +955,12 @@ function TaskEditorForm({
                 <InlineSwitch
                   checked={value.runIn === 'worktree'}
                   label="Worktree"
-                  onCheckedChange={(checked) => onChange({
-                    runIn: checked ? 'worktree' : 'local',
-                    ...(checked ? {} : { projectPath: '' }),
-                  })}
+                  onCheckedChange={(checked) =>
+                    onChange({
+                      runIn: checked ? 'worktree' : 'local',
+                      ...(checked ? {} : { projectPath: '' }),
+                    })
+                  }
                 />
                 {value.runIn === 'worktree' ? (
                   <InlineSelect
@@ -952,7 +972,9 @@ function TaskEditorForm({
                   >
                     <option value="">Select project</option>
                     {projectOptions.map((entry) => (
-                      <option key={entry.path} value={entry.path}>{entry.label}</option>
+                      <option key={entry.path} value={entry.path}>
+                        {entry.label}
+                      </option>
                     ))}
                   </InlineSelect>
                 ) : (
@@ -966,7 +988,7 @@ function TaskEditorForm({
                 Cancel
               </button>
               <ToolbarButton type="submit" disabled={saving}>
-                {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create' : 'Save')}
+                {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : mode === 'create' ? 'Create' : 'Save'}
               </ToolbarButton>
             </div>
           </div>
@@ -989,7 +1011,8 @@ function TaskLogSection({ taskId }: { taskId: string }) {
     }
 
     setLoading(true);
-    api.taskLog(taskId)
+    api
+      .taskLog(taskId)
       .then((data) => {
         setLog(data.log);
         setLogPath(data.path);
@@ -1006,7 +1029,7 @@ function TaskLogSection({ taskId }: { taskId: string }) {
   return (
     <div className="border-t border-border-subtle pt-3">
       <button onClick={loadLog} className="text-[11px] text-accent hover:underline flex items-center gap-1.5">
-        {loading ? <span className="animate-spin text-[10px]">⟳</span> : (open ? '▾' : '▸')}
+        {loading ? <span className="animate-spin text-[10px]">⟳</span> : open ? '▾' : '▸'}
         Last run log
       </button>
       {open && log !== null && (
@@ -1055,7 +1078,9 @@ export function ScheduledTaskCreatePanel({ onCancel }: { onCancel?: () => void }
       error={saveError}
       onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
       onCancel={onCancel ?? (() => navigate('/automations'))}
-      onSubmit={() => { void handleCreate(); }}
+      onSubmit={() => {
+        void handleCreate();
+      }}
     />
   );
 }
@@ -1071,7 +1096,12 @@ export function ScheduledTaskPanel({
 }) {
   const navigate = useNavigate();
   const { setTasks } = useAppData();
-  const { data: task, loading, error, refetch } = useApi(async () => {
+  const {
+    data: task,
+    loading,
+    error,
+    refetch,
+  } = useApi(async () => {
     const detail = await api.taskDetail(id);
     if (!isScheduledTaskDetail(detail)) {
       throw new Error('Task details are unavailable.');
@@ -1120,10 +1150,7 @@ export function ScheduledTaskPanel({
     setSaveError(null);
     try {
       await api.saveTask(id, createTaskMutationPayload(draft));
-      await Promise.all([
-        refetch({ resetLoading: false }),
-        refreshTaskSnapshot(setTasks),
-      ]);
+      await Promise.all([refetch({ resetLoading: false }), refreshTaskSnapshot(setTasks)]);
       setEditing(false);
       setDraft(null);
       onClose?.();
@@ -1141,7 +1168,7 @@ export function ScheduledTaskPanel({
         value={draft}
         saving={saving}
         error={saveError}
-        onChange={(patch) => setDraft((current) => current ? { ...current, ...patch } : current)}
+        onChange={(patch) => setDraft((current) => (current ? { ...current, ...patch } : current))}
         onCancel={() => {
           setEditing(false);
           setDraft(null);
@@ -1150,7 +1177,9 @@ export function ScheduledTaskPanel({
             onClose?.();
           }
         }}
-        onSubmit={() => { void handleSave(); }}
+        onSubmit={() => {
+          void handleSave();
+        }}
       />
     );
   }
@@ -1165,16 +1194,26 @@ export function ScheduledTaskPanel({
           <p className="ui-card-title break-all">{taskDetail.title ?? taskDetail.id}</p>
           <p className="ui-card-meta">
             <span className={status.cls}>{status.text}</span>
-            {taskDetail.lastRunAt && <><span className="opacity-40 mx-1.5">·</span>last run {timeAgo(taskDetail.lastRunAt)}</>}
-            {!taskDetail.enabled && <><span className="opacity-40 mx-1.5">·</span>disabled</>}
+            {taskDetail.lastRunAt && (
+              <>
+                <span className="opacity-40 mx-1.5">·</span>last run {timeAgo(taskDetail.lastRunAt)}
+              </>
+            )}
+            {!taskDetail.enabled && (
+              <>
+                <span className="opacity-40 mx-1.5">·</span>disabled
+              </>
+            )}
           </p>
           <p className="text-[12px] text-secondary">{taskDetail.id}</p>
         </div>
-        <ToolbarButton onClick={() => {
-          setDraft(createTaskFormState(taskDetail));
-          setSaveError(null);
-          setEditing(true);
-        }}>
+        <ToolbarButton
+          onClick={() => {
+            setDraft(createTaskFormState(taskDetail));
+            setSaveError(null);
+            setEditing(true);
+          }}
+        >
           Edit
         </ToolbarButton>
       </div>

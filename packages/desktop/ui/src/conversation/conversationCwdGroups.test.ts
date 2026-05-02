@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { buildConversationGroupLabels, getConversationGroupLabel, groupConversationItemsByCwd } from './conversationCwdGroups.js';
 
 describe('conversationCwdGroups', () => {
@@ -17,10 +18,7 @@ describe('conversationCwdGroups', () => {
   });
 
   it('disambiguates workspaces that share the same basename', () => {
-    const labelsByCwd = buildConversationGroupLabels([
-      '/home/user/personal/personal-agent',
-      '/home/user/documents/personal-agent',
-    ]);
+    const labelsByCwd = buildConversationGroupLabels(['/home/user/personal/personal-agent', '/home/user/documents/personal-agent']);
 
     expect(getConversationGroupLabel('/home/user/personal/personal-agent', { labelsByCwd })).toBe('personal/personal-agent');
     expect(getConversationGroupLabel('/home/user/documents/personal-agent', { labelsByCwd })).toBe('documents/personal-agent');

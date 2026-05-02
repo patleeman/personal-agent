@@ -1,4 +1,5 @@
 import { SessionManager } from '@mariozechner/pi-coding-agent';
+
 import { logWarn } from '../shared/logging.js';
 import { resolveLastCompletedConversationEntryId } from './liveSessionForking.js';
 import type { LiveSessionLoaderOptions } from './liveSessionLoader.js';
@@ -16,7 +17,11 @@ export async function summarizeAndForkLiveSession(
   entry: LiveSessionSummarizeForkHost,
   options: LiveSessionLoaderOptions,
   callbacks: {
-    createSessionFromExisting: (sessionFile: string, cwd: string, options: LiveSessionLoaderOptions) => Promise<{ id: string; sessionFile: string }>;
+    createSessionFromExisting: (
+      sessionFile: string,
+      cwd: string,
+      options: LiveSessionLoaderOptions,
+    ) => Promise<{ id: string; sessionFile: string }>;
     resumeSession: (sessionFile: string, options: LiveSessionLoaderOptions & { cwdOverride?: string }) => Promise<{ id: string }>;
     compactSession: (sessionId: string) => Promise<unknown>;
     appendVisibleCustomMessage: (sessionId: string, customType: string, content: string) => Promise<void>;

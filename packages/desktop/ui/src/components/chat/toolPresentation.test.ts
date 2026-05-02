@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { MessageBlock } from '../../shared/types';
 import {
   getStreamingStatusLabel,
@@ -31,7 +32,14 @@ describe('toolPresentation', () => {
   });
 
   it('auto-opens running tool blocks and latest streaming thinking blocks', () => {
-    const runningTool: MessageBlock = { type: 'tool_use', ts: '2026-04-26T00:00:00.000Z', tool: 'bash', input: {}, output: '', status: 'running' };
+    const runningTool: MessageBlock = {
+      type: 'tool_use',
+      ts: '2026-04-26T00:00:00.000Z',
+      tool: 'bash',
+      input: {},
+      output: '',
+      status: 'running',
+    };
     const thinking: MessageBlock = { type: 'thinking', ts: '2026-04-26T00:00:00.000Z', text: 'thinking' };
 
     expect(shouldAutoOpenConversationBlock(runningTool, 0, 2, false)).toBe(true);
@@ -43,7 +51,26 @@ describe('toolPresentation', () => {
     expect(getStreamingStatusLabel([], false)).toBeNull();
     expect(getStreamingStatusLabel([], true)).toBe('Working…');
     expect(getStreamingStatusLabel([{ type: 'text', ts: '2026-04-26T00:00:00.000Z', text: 'hi' }], true)).toBe('Responding…');
-    expect(getStreamingStatusLabel([{ type: 'tool_use', ts: '2026-04-26T00:00:00.000Z', tool: 'bash', input: {}, output: '', status: 'running' }], true)).toBe('Running bash…');
-    expect(getStreamingStatusLabel([{ type: 'subagent', ts: '2026-04-26T00:00:00.000Z', name: 'reviewer', prompt: '', status: 'running' }], true)).toBe('Running reviewer…');
+    expect(
+      getStreamingStatusLabel(
+        [
+          {
+            type: 'tool_use',
+            ts: '2026-04-26T00:00:00.000Z',
+            tool: 'bash',
+            input: {},
+            output: '',
+            status: 'running',
+          },
+        ],
+        true,
+      ),
+    ).toBe('Running bash…');
+    expect(
+      getStreamingStatusLabel(
+        [{ type: 'subagent', ts: '2026-04-26T00:00:00.000Z', name: 'reviewer', prompt: '', status: 'running' }],
+        true,
+      ),
+    ).toBe('Running reviewer…');
   });
 });

@@ -1,21 +1,17 @@
 import { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
 import type { RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 import { timeAgo } from '../shared/utils';
-import { Keycap, cx } from './ui';
+import { cx, Keycap } from './ui';
 
 const DEFAULT_RELATED_THREAD_HOTKEY_LIMIT = 9;
 const WEAK_SELECTED_RELATED_THREAD_SCORE = 6;
 
 function formatMatchedTerms(result: RelatedConversationSearchResult): string {
-  return result.matchedTerms
-    .slice(0, 3)
-    .join(', ');
+  return result.matchedTerms.slice(0, 3).join(', ');
 }
 
 function formatRowHotkey(index: number, limit: number): string | null {
-  return index >= 0 && index < limit
-    ? `Ctrl+${index + 1}`
-    : null;
+  return index >= 0 && index < limit ? `Ctrl+${index + 1}` : null;
 }
 
 export function DraftRelatedThreadsPanel({
@@ -66,7 +62,9 @@ export function DraftRelatedThreadsPanel({
           <span className="font-semibold uppercase tracking-[0.14em] text-dim/80">Suggested context</span>
           <span className="ml-2 text-secondary">Auto-ranked from past conversations.</span>
         </p>
-        <p className="shrink-0" aria-live="polite">{statusText}</p>
+        <p className="shrink-0" aria-live="polite">
+          {statusText}
+        </p>
       </div>
 
       {results.length > 0 ? (
@@ -107,10 +105,10 @@ export function DraftRelatedThreadsPanel({
                   <span className="min-w-0 flex-1 text-[12px]">
                     <span className="block min-w-0 truncate text-primary">
                       <span className="font-medium">{result.title}</span>
-                      <span className={cx('text-dim', checked && 'text-accent/70')}>{` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
-                      {autoSelected && (
-                        <span className="text-accent/80"> · auto-selected</span>
-                      )}
+                      <span className={cx('text-dim', checked && 'text-accent/70')}>
+                        {` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}
+                      </span>
+                      {autoSelected && <span className="text-accent/80">· auto-selected</span>}
                     </span>
                     {(detail || reason) && (
                       <span className={cx('mt-0.5 block min-w-0 truncate text-[11px] text-secondary', checked && 'text-accent/70')}>

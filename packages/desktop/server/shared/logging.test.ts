@@ -49,12 +49,16 @@ describe('web logging', () => {
       getHeader: vi.fn(),
     };
 
-    webRequestLoggingMiddleware({
-      path: '/app',
-      method: 'GET',
-      originalUrl: '/app',
-      url: '/app',
-    } as never, res as never, next);
+    webRequestLoggingMiddleware(
+      {
+        path: '/app',
+        method: 'GET',
+        originalUrl: '/app',
+        url: '/app',
+      } as never,
+      res as never,
+      next,
+    );
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.on).not.toHaveBeenCalled();
@@ -80,25 +84,27 @@ describe('web logging', () => {
       getHeader: vi.fn(() => '42'),
     };
 
-    webRequestLoggingMiddleware({
-      path: '/api/runs',
-      method: 'GET',
-      originalUrl: '/api/runs?limit=1',
-      url: '/api/runs?limit=1',
-    } as never, res as never, next);
+    webRequestLoggingMiddleware(
+      {
+        path: '/api/runs',
+        method: 'GET',
+        originalUrl: '/api/runs?limit=1',
+        url: '/api/runs?limit=1',
+      } as never,
+      res as never,
+      next,
+    );
     finishHandler?.();
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(console.log).mock.calls[0]?.[0]).toContain('request completed method=GET path=/api/runs?limit=1 status=200 durationMs=123.5 contentLength=42');
+    expect(vi.mocked(console.log).mock.calls[0]?.[0]).toContain(
+      'request completed method=GET path=/api/runs?limit=1 status=200 durationMs=123.5 contentLength=42',
+    );
   });
 
   it('logs client and server api failures at warn and error levels', async () => {
     const bigintSpy = vi.spyOn(process.hrtime, 'bigint');
-    bigintSpy
-      .mockReturnValueOnce(0n)
-      .mockReturnValueOnce(50_000_000n)
-      .mockReturnValueOnce(0n)
-      .mockReturnValueOnce(80_000_000n);
+    bigintSpy.mockReturnValueOnce(0n).mockReturnValueOnce(50_000_000n).mockReturnValueOnce(0n).mockReturnValueOnce(80_000_000n);
     const { webRequestLoggingMiddleware } = await import('./logging.js');
 
     const warnNext = vi.fn();
@@ -112,12 +118,16 @@ describe('web logging', () => {
       }),
       getHeader: vi.fn(() => null),
     };
-    webRequestLoggingMiddleware({
-      path: '/api/tasks',
-      method: 'POST',
-      originalUrl: '',
-      url: '/api/tasks',
-    } as never, warnRes as never, warnNext);
+    webRequestLoggingMiddleware(
+      {
+        path: '/api/tasks',
+        method: 'POST',
+        originalUrl: '',
+        url: '/api/tasks',
+      } as never,
+      warnRes as never,
+      warnNext,
+    );
     warnFinishHandler?.();
 
     const errorNext = vi.fn();
@@ -131,18 +141,26 @@ describe('web logging', () => {
       }),
       getHeader: vi.fn(() => '0'),
     };
-    webRequestLoggingMiddleware({
-      path: '/api/tasks',
-      method: 'DELETE',
-      originalUrl: '/api/tasks/123',
-      url: '/api/tasks/123',
-    } as never, errorRes as never, errorNext);
+    webRequestLoggingMiddleware(
+      {
+        path: '/api/tasks',
+        method: 'DELETE',
+        originalUrl: '/api/tasks/123',
+        url: '/api/tasks/123',
+      } as never,
+      errorRes as never,
+      errorNext,
+    );
     errorFinishHandler?.();
 
     expect(warnNext).toHaveBeenCalledTimes(1);
     expect(errorNext).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toContain('request completed method=POST path=/api/tasks status=404 durationMs=50 contentLength=null');
-    expect(vi.mocked(console.error).mock.calls[0]?.[0]).toContain('request failed method=DELETE path=/api/tasks/123 status=500 durationMs=80 contentLength=0');
+    expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toContain(
+      'request completed method=POST path=/api/tasks status=404 durationMs=50 contentLength=null',
+    );
+    expect(vi.mocked(console.error).mock.calls[0]?.[0]).toContain(
+      'request failed method=DELETE path=/api/tasks/123 status=500 durationMs=80 contentLength=0',
+    );
   });
 
   it('installs process logging handlers once and routes emitted events through the logger', async () => {
@@ -158,12 +176,7 @@ describe('web logging', () => {
     installProcessLogging();
 
     expect(processOnSpy).toHaveBeenCalledTimes(4);
-    expect([...handlers.keys()]).toEqual([
-      'uncaughtExceptionMonitor',
-      'unhandledRejection',
-      'SIGTERM',
-      'SIGINT',
-    ]);
+    expect([...handlers.keys()]).toEqual(['uncaughtExceptionMonitor', 'unhandledRejection', 'SIGTERM', 'SIGINT']);
 
     handlers.get('uncaughtExceptionMonitor')?.(new Error('boom'));
     handlers.get('unhandledRejection')?.(new Error('reject'));

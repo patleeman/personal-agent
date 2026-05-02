@@ -25,13 +25,9 @@ describe('testSshConnection', () => {
   });
 
   it('parses the probed platform and runtime cache details', () => {
-    mocks.runSshCommand.mockReturnValue([
-      'Darwin',
-      'arm64',
-      '/Users/patrick',
-      '/var/folders/example/T/',
-      '/Users/patrick/.cache/personal-agent/ssh-runtime',
-    ].join('\n'));
+    mocks.runSshCommand.mockReturnValue(
+      ['Darwin', 'arm64', '/Users/patrick', '/var/folders/example/T/', '/Users/patrick/.cache/personal-agent/ssh-runtime'].join('\n'),
+    );
 
     expect(testSshConnection({ sshTarget: ' user@bender ' })).toEqual({
       ok: true,

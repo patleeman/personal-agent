@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import React, { useMemo } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { useParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DesktopAppEvent, DurableRunListResult, DurableRunRecord, SessionMeta } from '../shared/types';
 
 (globalThis as typeof globalThis & { React?: typeof React; IS_REACT_ACT_ENVIRONMENT?: boolean }).React = React;
@@ -57,7 +58,9 @@ vi.mock('../navigation/lazyRouteRecovery', async () => {
           <section data-testid="background-work">
             <span>Background Work</span>
             <span>{state.indicatorText}</span>
-            {state.activeRuns.map((run) => <span key={run.runId}>{run.runId}</span>)}
+            {state.activeRuns.map((run) => (
+              <span key={run.runId}>{run.runId}</span>
+            ))}
           </section>
         ) : (
           <section data-testid="no-background-work">No Background Work</section>
@@ -109,17 +112,19 @@ function createRun(
         metadata: { taskSlug: 'test-run', cwd: '/repo' },
       },
     },
-    ...(includeStatus ? { status: {
-      version: 1,
-      runId,
-      status,
-      createdAt: '2026-04-29T01:22:23.123Z',
-      updatedAt: options.updatedAt ?? '2026-04-29T01:22:24.000Z',
-      activeAttempt: 1,
-      ...(status === 'completed' || status === 'failed' || status === 'cancelled'
-        ? { completedAt: '2026-04-29T01:22:25.000Z' }
-        : {}),
-    } } : {}),
+    ...(includeStatus
+      ? {
+          status: {
+            version: 1,
+            runId,
+            status,
+            createdAt: '2026-04-29T01:22:23.123Z',
+            updatedAt: options.updatedAt ?? '2026-04-29T01:22:24.000Z',
+            activeAttempt: 1,
+            ...(status === 'completed' || status === 'failed' || status === 'cancelled' ? { completedAt: '2026-04-29T01:22:25.000Z' } : {}),
+          },
+        }
+      : {}),
     problems: [],
     recoveryAction: 'none',
   } as DurableRunRecord;
@@ -201,7 +206,9 @@ describe('App background work run state integration', () => {
 
   afterEach(() => {
     if (root) {
-      act(() => { root?.unmount(); });
+      act(() => {
+        root?.unmount();
+      });
       root = null;
     }
     container?.remove();
@@ -273,10 +280,7 @@ describe('App background work run state integration', () => {
 
     await emitDesktopEvent({
       type: 'runs',
-      result: createRuns([
-        createRun('run-first', 'failed'),
-        createRun('run-rerun', 'running'),
-      ]),
+      result: createRuns([createRun('run-first', 'failed'), createRun('run-rerun', 'running')]),
     });
     expect(container.textContent).toContain('Background Work');
     expect(container.textContent).toContain('run-rerun');

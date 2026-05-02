@@ -1,13 +1,14 @@
 /**
  * Bootstrap validation for runtime state
- * 
+ *
  * Performs explicit writability and directory-creation checks
  * for resolved runtime state locations. Fails fast with clear
  * actionable errors when paths are invalid.
  */
 
-import { mkdir, access, constants } from 'fs/promises';
+import { access, constants, mkdir } from 'fs/promises';
 import { dirname } from 'path';
+
 import type { RuntimeStatePaths } from './paths.js';
 
 /**
@@ -54,17 +55,14 @@ async function ensureDirectory(dirPath: string): Promise<void> {
 /**
  * Validate a single state directory
  */
-async function validateStateDirectory(
-  dirPath: string,
-  label: string
-): Promise<BootstrapError | null> {
+async function validateStateDirectory(dirPath: string, label: string): Promise<BootstrapError | null> {
   // Check if parent exists and is writable (for creation)
   const parentDir = dirname(dirPath);
-  
+
   try {
     // Try to ensure the directory exists
     await ensureDirectory(dirPath);
-    
+
     // Verify it's now writable
     if (!(await isWritable(dirPath))) {
       return {
@@ -73,11 +71,11 @@ async function validateStateDirectory(
         message: `${label} directory "${dirPath}" is not writable`,
       };
     }
-    
+
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    
+
     // Check if parent is writable (for diagnosis)
     try {
       await access(parentDir, constants.W_OK);
@@ -98,25 +96,25 @@ async function validateStateDirectory(
 
 /**
  * Bootstrap runtime state directories
- * 
+ *
  * Creates directories if they don't exist and validates writability.
  * Returns detailed errors for each failed path.
  */
 export async function bootstrapState(paths: RuntimeStatePaths): Promise<BootstrapResult> {
   const errors: BootstrapError[] = [];
-  
+
   const results = await Promise.all([
     validateStateDirectory(paths.auth, 'Auth'),
     validateStateDirectory(paths.session, 'Session'),
     validateStateDirectory(paths.cache, 'Cache'),
   ]);
-  
+
   for (const result of results) {
     if (result) {
       errors.push(result);
     }
   }
-  
+
   return {
     success: errors.length === 0,
     errors,
@@ -125,21 +123,18 @@ export async function bootstrapState(paths: RuntimeStatePaths): Promise<Bootstra
 
 /**
  * Bootstrap with fatal error on failure
- * 
+ *
  * Throws an error with actionable diagnostics if bootstrap fails.
  * Use this for early exit during application startup.
  */
 export async function bootstrapStateOrThrow(paths: RuntimeStatePaths): Promise<void> {
   const result = await bootstrapState(paths);
-  
+
   if (!result.success) {
-    const errorMessages = result.errors.map(e => `  - ${e.message}`).join('\n');
+    const errorMessages = result.errors.map((e) => `  - ${e.message}`).join('\n');
     const suggestions = generateSuggestions(result.errors);
-    
-    throw new Error(
-      `Runtime state bootstrap failed:\n${errorMessages}\n\n` +
-      `Suggestions:\n${suggestions}`
-    );
+
+    throw new Error(`Runtime state bootstrap failed:\n${errorMessages}\n\n` + `Suggestions:\n${suggestions}`);
   }
 }
 
@@ -148,32 +143,22 @@ export async function bootstrapStateOrThrow(paths: RuntimeStatePaths): Promise<v
  */
 function generateSuggestions(errors: BootstrapError[]): string {
   const suggestions: string[] = [];
-  
-  const hasPermissionErrors = errors.some(e => e.type === 'permission');
-  const hasCreationErrors = errors.some(e => e.type === 'creation');
-  
+
+  const hasPermissionErrors = errors.some((e) => e.type === 'permission');
+  const hasCreationErrors = errors.some((e) => e.type === 'creation');
+
   if (hasPermissionErrors) {
-    suggestions.push(
-      '  - Check directory permissions or run with appropriate privileges'
-    );
-    suggestions.push(
-      '  - Set PERSONAL_AGENT_STATE_ROOT to a writable directory (e.g., /tmp/personal-agent for testing)'
-    );
+    suggestions.push('  - Check directory permissions or run with appropriate privileges');
+    suggestions.push('  - Set PERSONAL_AGENT_STATE_ROOT to a writable directory (e.g., /tmp/personal-agent for testing)');
   }
-  
+
   if (hasCreationErrors) {
-    suggestions.push(
-      '  - Ensure parent directories exist and are writable'
-    );
-    suggestions.push(
-      '  - Check disk space and filesystem health'
-    );
+    suggestions.push('  - Ensure parent directories exist and are writable');
+    suggestions.push('  - Check disk space and filesystem health');
   }
-  
-  suggestions.push(
-    '  - Override individual paths: PERSONAL_AGENT_AUTH_PATH, PERSONAL_AGENT_SESSION_PATH, PERSONAL_AGENT_CACHE_PATH'
-  );
-  
+
+  suggestions.push('  - Override individual paths: PERSONAL_AGENT_AUTH_PATH, PERSONAL_AGENT_SESSION_PATH, PERSONAL_AGENT_CACHE_PATH');
+
   return suggestions.join('\n');
 }
 

@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { net } from 'electron';
+
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
+import { net } from 'electron';
 
 interface AuthFileShape {
   ['openai-codex']?: {
@@ -123,10 +124,9 @@ function extractTranscriptText(value: unknown): string {
 }
 
 function isCloudflareChallenge(response: Response, text: string): boolean {
-  return response.status === 403 && (
-    response.headers.get('cf-mitigated') === 'challenge'
-    || text.includes('Just a moment')
-    || text.includes('cf-browser-verification')
+  return (
+    response.status === 403 &&
+    (response.headers.get('cf-mitigated') === 'challenge' || text.includes('Just a moment') || text.includes('cf-browser-verification'))
   );
 }
 

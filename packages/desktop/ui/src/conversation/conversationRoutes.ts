@@ -92,10 +92,7 @@ export function resolveConversationAdjacentPath(input: {
   return buildConversationSurfacePath(orderedIds[nextIndex]);
 }
 
-export function resolveConversationCloseRedirect(input: {
-  orderedIds?: Iterable<unknown>;
-  closingId?: unknown;
-}): string {
+export function resolveConversationCloseRedirect(input: { orderedIds?: Iterable<unknown>; closingId?: unknown }): string {
   const closingId = normalizeConversationSurfaceId(input.closingId);
   if (!closingId) {
     return DEFAULT_CONVERSATIONS_REDIRECT_PATH;

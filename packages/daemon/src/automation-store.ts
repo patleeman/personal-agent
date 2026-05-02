@@ -1,17 +1,14 @@
-import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+
+import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+
 import { loadDaemonConfig } from './config.js';
+import { parseCronExpression, type ParsedTaskDefinition, type ParsedTaskSchedule, parseTaskDefinition } from './modules/tasks-parser.js';
+import { loadTaskState, type TaskRuntimeState } from './modules/tasks-store.js';
 import { resolveDaemonPaths } from './paths.js';
 import { resolveRuntimeDbPath } from './runs/store.js';
-import { loadTaskState, type TaskRuntimeState } from './modules/tasks-store.js';
-import {
-  parseCronExpression,
-  parseTaskDefinition,
-  type ParsedTaskDefinition,
-  type ParsedTaskSchedule,
-} from './modules/tasks-parser.js';
 
 export type AutomationThreadMode = 'dedicated' | 'existing' | 'none';
 export type AutomationTargetType = 'background-agent' | 'conversation';
@@ -189,9 +186,7 @@ function parseJsonRecord(value: string | null | undefined): Record<string, unkno
 
   try {
     const parsed = JSON.parse(value) as unknown;
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : undefined;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
   } catch {
     return undefined;
   }
@@ -231,11 +226,13 @@ function slugifyTitle(title: string): string {
 }
 
 function humanizeLegacyTaskTitle(id: string): string {
-  return id
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^[a-z]/, (value) => value.toUpperCase()) || id;
+  return (
+    id
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^[a-z]/, (value) => value.toUpperCase()) || id
+  );
 }
 
 function toBooleanInt(value: boolean): number {
@@ -353,7 +350,9 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
     db.exec('ALTER TABLE automations ADD COLUMN thread_conversation_id TEXT');
   }
   db.exec("UPDATE automations SET target_type = 'background-agent' WHERE target_type IS NULL OR trim(target_type) = ''");
-  db.exec("UPDATE automations SET conversation_behavior = NULL WHERE conversation_behavior IS NOT NULL AND trim(conversation_behavior) NOT IN ('steer', 'followUp')");
+  db.exec(
+    "UPDATE automations SET conversation_behavior = NULL WHERE conversation_behavior IS NOT NULL AND trim(conversation_behavior) NOT IN ('steer', 'followUp')",
+  );
   db.exec("UPDATE automations SET thread_mode = 'dedicated' WHERE thread_mode IS NULL OR trim(thread_mode) = ''");
 
   dbCache.set(resolved, db);
@@ -424,15 +423,11 @@ function readOptionalTimestamp(value: unknown): string | undefined {
 }
 
 function readTaskRunStatus(value: unknown): TaskRuntimeState['lastStatus'] | undefined {
-  return value === 'running' || value === 'success' || value === 'failed' || value === 'skipped'
-    ? value
-    : undefined;
+  return value === 'running' || value === 'success' || value === 'failed' || value === 'skipped' ? value : undefined;
 }
 
 function readOneTimeResolvedStatus(value: unknown): TaskRuntimeState['oneTimeResolvedStatus'] | undefined {
-  return value === 'success' || value === 'failed' || value === 'skipped'
-    ? value
-    : undefined;
+  return value === 'success' || value === 'failed' || value === 'skipped' ? value : undefined;
 }
 
 function readNonNegativeInteger(value: unknown): number | undefined {
@@ -477,22 +472,13 @@ function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationAct
   if (!createdAt) {
     return undefined;
   }
-  const count = typeof payload?.count === 'number' && Number.isSafeInteger(payload.count) && payload.count > 0
-    ? payload.count
-    : undefined;
-  const firstScheduledAt = typeof payload?.firstScheduledAt === 'string'
-    ? normalizeIsoTimestamp(payload.firstScheduledAt)
-    : undefined;
-  const lastScheduledAt = typeof payload?.lastScheduledAt === 'string'
-    ? normalizeIsoTimestamp(payload.lastScheduledAt)
-    : undefined;
+  const count = typeof payload?.count === 'number' && Number.isSafeInteger(payload.count) && payload.count > 0 ? payload.count : undefined;
+  const firstScheduledAt = typeof payload?.firstScheduledAt === 'string' ? normalizeIsoTimestamp(payload.firstScheduledAt) : undefined;
+  const lastScheduledAt = typeof payload?.lastScheduledAt === 'string' ? normalizeIsoTimestamp(payload.lastScheduledAt) : undefined;
   const exampleScheduledAt = Array.isArray(payload?.exampleScheduledAt)
-    ? payload.exampleScheduledAt
-      .flatMap((value) => (typeof value === 'string' ? normalizeIsoTimestamp(value) ?? [] : []))
+    ? payload.exampleScheduledAt.flatMap((value) => (typeof value === 'string' ? (normalizeIsoTimestamp(value) ?? []) : []))
     : [];
-  const outcome = payload?.outcome === 'catch-up-started' || payload?.outcome === 'skipped'
-    ? payload.outcome
-    : undefined;
+  const outcome = payload?.outcome === 'catch-up-started' || payload?.outcome === 'skipped' ? payload.outcome : undefined;
 
   if (row.kind !== 'missed' || !count || !firstScheduledAt || !lastScheduledAt || !outcome) {
     return undefined;
@@ -541,19 +527,27 @@ function collectLegacyTaskFiles(taskDir: string): string[] {
 
 function readStoredAutomationRows(db: SqliteDatabase, profile?: string): StoredAutomationRow[] {
   if (profile) {
-    return db.prepare(`
+    return db
+      .prepare(
+        `
       SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, catch_up_window_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
       FROM automations
       WHERE profile = ?
       ORDER BY title COLLATE NOCASE ASC, created_at ASC, id ASC
-    `).all(profile) as StoredAutomationRow[];
+    `,
+      )
+      .all(profile) as StoredAutomationRow[];
   }
 
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, catch_up_window_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     FROM automations
     ORDER BY profile ASC, title COLLATE NOCASE ASC, created_at ASC, id ASC
-  `).all() as StoredAutomationRow[];
+  `,
+    )
+    .all() as StoredAutomationRow[];
 }
 
 function nextAutomationId(db: SqliteDatabase, title: string, preferredId?: string): string {
@@ -600,9 +594,10 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
     throw new Error('Provide exactly one of cron or at.');
   }
 
-  const timeoutSeconds = input.timeoutSeconds == null
-    ? loadDaemonConfig().modules.tasks.defaultTimeoutSeconds
-    : readOptionalPositiveInteger(input.timeoutSeconds, MAX_AUTOMATION_DURATION_SECONDS);
+  const timeoutSeconds =
+    input.timeoutSeconds == null
+      ? loadDaemonConfig().modules.tasks.defaultTimeoutSeconds
+      : readOptionalPositiveInteger(input.timeoutSeconds, MAX_AUTOMATION_DURATION_SECONDS);
   if (!timeoutSeconds) {
     throw new Error('timeoutSeconds must be a positive integer.');
   }
@@ -619,12 +614,12 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
   }
 
   const targetType = normalizeAutomationTargetTypeForSelection(input.targetType ?? undefined);
-  const conversationBehavior = targetType === 'conversation'
-    ? readAutomationConversationBehavior(input.conversationBehavior ?? undefined)
-    : undefined;
-  const catchUpWindowSeconds = !cron || input.catchUpWindowSeconds == null
-    ? undefined
-    : readOptionalPositiveInteger(input.catchUpWindowSeconds, MAX_AUTOMATION_DURATION_SECONDS);
+  const conversationBehavior =
+    targetType === 'conversation' ? readAutomationConversationBehavior(input.conversationBehavior ?? undefined) : undefined;
+  const catchUpWindowSeconds =
+    !cron || input.catchUpWindowSeconds == null
+      ? undefined
+      : readOptionalPositiveInteger(input.catchUpWindowSeconds, MAX_AUTOMATION_DURATION_SECONDS);
 
   if (input.catchUpWindowSeconds != null && cron && !catchUpWindowSeconds) {
     throw new Error('catchUpWindowSeconds must be a positive integer.');
@@ -659,11 +654,15 @@ export function listStoredAutomations(options: { profile?: string; dbPath?: stri
 
 export function getStoredAutomation(id: string, options: { profile?: string; dbPath?: string } = {}): StoredAutomation | undefined {
   const db = openAutomationDb(options.dbPath);
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, catch_up_window_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     FROM automations
     WHERE id = ?
-  `).get(id) as StoredAutomationRow | undefined;
+  `,
+    )
+    .get(id) as StoredAutomationRow | undefined;
   if (!row) {
     return undefined;
   }
@@ -679,11 +678,13 @@ export function createStoredAutomation(input: AutomationMutationInput & { dbPath
   const id = nextAutomationId(db, normalized.title, normalized.id);
   const now = new Date().toISOString();
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO automations (
       id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, catch_up_window_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'dedicated', NULL, NULL)
-  `).run(
+  `,
+  ).run(
     id,
     normalized.profile,
     normalized.title,
@@ -706,7 +707,10 @@ export function createStoredAutomation(input: AutomationMutationInput & { dbPath
   return getStoredAutomation(id, { dbPath: input.dbPath }) as StoredAutomation;
 }
 
-export function updateStoredAutomation(id: string, input: Partial<Omit<AutomationMutationInput, 'id' | 'profile'>> & { profile?: string; dbPath?: string }): StoredAutomation {
+export function updateStoredAutomation(
+  id: string,
+  input: Partial<Omit<AutomationMutationInput, 'id' | 'profile'>> & { profile?: string; dbPath?: string },
+): StoredAutomation {
   const existing = getStoredAutomation(id, { dbPath: input.dbPath });
   if (!existing) {
     throw new Error(`Automation not found: ${id}`);
@@ -735,11 +739,13 @@ export function updateStoredAutomation(id: string, input: Partial<Omit<Automatio
 
   const db = openAutomationDb(input.dbPath);
   const updatedAt = new Date().toISOString();
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE automations
     SET title = ?, enabled = ?, schedule_type = ?, cron = ?, at = ?, prompt = ?, cwd = ?, model_ref = ?, thinking_level = ?, timeout_seconds = ?, catch_up_window_seconds = ?, target_type = ?, conversation_behavior = ?, updated_at = ?
     WHERE id = ?
-  `).run(
+  `,
+  ).run(
     normalized.title,
     toBooleanInt(normalized.enabled),
     normalized.cron ? 'cron' : 'at',
@@ -777,24 +783,22 @@ export function setStoredAutomationThreadBinding(
   const db = openAutomationDb(input.dbPath);
   const updatedAt = new Date().toISOString();
   const mode = normalizeAutomationThreadMode(input.mode);
-  const conversationId = mode === 'none' || mode === 'dedicated'
-    ? readOptionalString(input.conversationId ?? undefined)
-    : readRequiredString(input.conversationId ?? undefined, 'conversationId');
-  const sessionFile = mode === 'none' || mode === 'dedicated'
-    ? readOptionalString(input.sessionFile ?? undefined)
-    : readRequiredString(input.sessionFile ?? undefined, 'sessionFile');
+  const conversationId =
+    mode === 'none' || mode === 'dedicated'
+      ? readOptionalString(input.conversationId ?? undefined)
+      : readRequiredString(input.conversationId ?? undefined, 'conversationId');
+  const sessionFile =
+    mode === 'none' || mode === 'dedicated'
+      ? readOptionalString(input.sessionFile ?? undefined)
+      : readRequiredString(input.sessionFile ?? undefined, 'sessionFile');
 
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE automations
     SET thread_mode = ?, thread_conversation_id = ?, thread_session_file = ?, updated_at = ?
     WHERE id = ?
-  `).run(
-    mode,
-    mode === 'none' ? null : (conversationId ?? null),
-    mode === 'none' ? null : (sessionFile ?? null),
-    updatedAt,
-    id,
-  );
+  `,
+  ).run(mode, mode === 'none' ? null : (conversationId ?? null), mode === 'none' ? null : (sessionFile ?? null), updatedAt, id);
 
   return getStoredAutomation(id, { dbPath: input.dbPath }) as StoredAutomation;
 }
@@ -817,10 +821,14 @@ export function deleteStoredAutomation(id: string, options: { profile?: string; 
 
 export function loadAutomationRuntimeStateMap(options: { dbPath?: string } = {}): Record<string, TaskRuntimeState> {
   const db = openAutomationDb(options.dbPath);
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT automation_id, running, running_started_at, active_run_id, last_run_id, last_status, last_run_at, last_success_at, last_failure_at, last_error, last_log_path, last_scheduled_minute, CAST(last_attempt_count AS TEXT) AS last_attempt_count, one_time_resolved_at, one_time_resolved_status, one_time_completed_at
     FROM automation_state
-  `).all() as AutomationStateRow[];
+  `,
+    )
+    .all() as AutomationStateRow[];
 
   const automations = new Map(listStoredAutomations({ dbPath: options.dbPath }).map((automation) => [automation.id, automation]));
   const output: Record<string, TaskRuntimeState> = {};
@@ -924,20 +932,21 @@ export function listAutomationActivityEntries(
 ): AutomationActivityEntry[] {
   const normalizedAutomationId = readRequiredString(automationId, 'automationId');
   const db = openAutomationDb(options.dbPath);
-  const limit = typeof options.limit === 'number' && Number.isSafeInteger(options.limit) && options.limit > 0
-    ? Math.min(200, options.limit)
-    : 20;
-  const rows = db.prepare(`
+  const limit =
+    typeof options.limit === 'number' && Number.isSafeInteger(options.limit) && options.limit > 0 ? Math.min(200, options.limit) : 20;
+  const rows = db
+    .prepare(
+      `
     SELECT seq, automation_id, kind, created_at, payload_json
     FROM automation_activity
     WHERE automation_id = ?
     ORDER BY created_at DESC, seq DESC
     LIMIT ?
-  `).all(normalizedAutomationId, limit) as AutomationActivityRow[];
+  `,
+    )
+    .all(normalizedAutomationId, limit) as AutomationActivityRow[];
 
-  return rows
-    .map((row) => rowToAutomationActivityEntry(row))
-    .filter((entry): entry is AutomationActivityEntry => entry !== undefined);
+  return rows.map((row) => rowToAutomationActivityEntry(row)).filter((entry): entry is AutomationActivityEntry => entry !== undefined);
 }
 
 export function appendAutomationActivityEntry(
@@ -962,8 +971,9 @@ export function appendAutomationActivityEntry(
 
   const firstScheduledAt = readAutomationActivityTimestamp(input.firstScheduledAt, 'firstScheduledAt');
   const lastScheduledAt = readAutomationActivityTimestamp(input.lastScheduledAt, 'lastScheduledAt');
-  const exampleScheduledAt = input.exampleScheduledAt
-    .flatMap((value) => (typeof value === 'string' ? normalizeIsoTimestamp(value) ?? [] : []));
+  const exampleScheduledAt = input.exampleScheduledAt.flatMap((value) =>
+    typeof value === 'string' ? (normalizeIsoTimestamp(value) ?? []) : [],
+  );
   if (input.outcome !== 'skipped' && input.outcome !== 'catch-up-started') {
     throw new Error(`Unsupported automation activity outcome: ${input.outcome}`);
   }
@@ -1007,11 +1017,15 @@ export function appendAutomationActivityEntry(
     throw new Error('Failed to allocate automation activity entry id.');
   }
 
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT seq, automation_id, kind, created_at, payload_json
     FROM automation_activity
     WHERE seq = ?
-  `).get(insertedSeq) as AutomationActivityRow | undefined;
+  `,
+    )
+    .get(insertedSeq) as AutomationActivityRow | undefined;
   const entry = row ? rowToAutomationActivityEntry(row) : undefined;
   if (!entry) {
     throw new Error('Failed to read automation activity entry after insert.');
@@ -1030,7 +1044,11 @@ export function ensureLegacyTaskImports(options: {
   const parseErrors: LegacyAutomationImportIssue[] = [];
   const files = collectLegacyTaskFiles(options.taskDir);
   const importedAt = new Date().toISOString();
-  const importedPaths = new Set((db.prepare('SELECT legacy_file_path FROM legacy_automation_imports').all() as Array<{ legacy_file_path: string }>).map((row) => row.legacy_file_path));
+  const importedPaths = new Set(
+    (db.prepare('SELECT legacy_file_path FROM legacy_automation_imports').all() as Array<{ legacy_file_path: string }>).map(
+      (row) => row.legacy_file_path,
+    ),
+  );
   let importedCount = 0;
 
   const insertAutomation = db.prepare(`
@@ -1094,11 +1112,13 @@ export function ensureLegacyTaskImports(options: {
   const legacyStateFile = options.legacyStateFile ?? join(dirname(options.dbPath ?? getAutomationDbPath()), 'task-state.json');
   if (existsSync(legacyStateFile)) {
     const legacyState = loadTaskState(legacyStateFile);
-    const existingStateIds = new Set((db.prepare('SELECT automation_id FROM automation_state').all() as Array<{ automation_id: string }>).map((row) => row.automation_id));
+    const existingStateIds = new Set(
+      (db.prepare('SELECT automation_id FROM automation_state').all() as Array<{ automation_id: string }>).map((row) => row.automation_id),
+    );
     const automations = listStoredAutomations({ dbPath: options.dbPath });
     const automationById = new Map(automations.map((automation) => [automation.id, automation]));
     const automationByLegacyFilePath = new Map(
-      automations.flatMap((automation) => automation.legacyFilePath ? [[resolve(automation.legacyFilePath), automation] as const] : []),
+      automations.flatMap((automation) => (automation.legacyFilePath ? [[resolve(automation.legacyFilePath), automation] as const] : [])),
     );
 
     const upsert = db.prepare(`

@@ -1,14 +1,7 @@
 import { spawn } from 'node:child_process';
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+
 import { getStateRoot } from '@personal-agent/core';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
@@ -96,11 +89,7 @@ function buildRequestMessage(action: ApplicationCommand): string {
   return 'Application restart requested. Rebuilding packages and restarting background services.';
 }
 
-function buildNotificationEnv(input: {
-  action: ApplicationCommand;
-  profile?: string;
-  requestedAt: string;
-}): Record<string, string> {
+function buildNotificationEnv(input: { action: ApplicationCommand; profile?: string; requestedAt: string }): Record<string, string> {
   const shared = {
     PERSONAL_AGENT_OPERATIONAL_ACTIVITY_STATE_ROOT: join(getStateRoot(), 'daemon'),
   };
@@ -152,9 +141,7 @@ function ensureApplicationCommandNotRunning(lockFile: string): void {
   }
 
   const requestedAtMs = parseApplicationCommandTimestamp(current.requestedAt);
-  const staleByAge = Number.isFinite(requestedAtMs)
-    ? (Date.now() - requestedAtMs) > RESTART_LOCK_MAX_AGE_MS
-    : true;
+  const staleByAge = Number.isFinite(requestedAtMs) ? Date.now() - requestedAtMs > RESTART_LOCK_MAX_AGE_MS : true;
 
   if (isProcessRunning(current.pid) && !staleByAge) {
     const currentAction = current.action ?? 'restart';
@@ -190,16 +177,24 @@ function requestApplicationCommand(input: {
   const requestedAt = new Date().toISOString();
   const command = buildCliCommand(input.action, cliEntryFile);
 
-  writeFileSync(lockFile, `${JSON.stringify({
-    action: input.action,
-    requestedAt,
-    repoRoot,
-    profile,
-    port: 0,
-    command,
-  }, null, 2)}\n`, {
-    flag: 'wx',
-  });
+  writeFileSync(
+    lockFile,
+    `${JSON.stringify(
+      {
+        action: input.action,
+        requestedAt,
+        repoRoot,
+        profile,
+        port: 0,
+        command,
+      },
+      null,
+      2,
+    )}\n`,
+    {
+      flag: 'wx',
+    },
+  );
 
   let logFd: number | undefined;
 
@@ -226,15 +221,22 @@ function requestApplicationCommand(input: {
 
     child.unref();
 
-    writeFileSync(lockFile, `${JSON.stringify({
-      action: input.action,
-      pid: child.pid,
-      requestedAt,
-      repoRoot,
-      profile,
-      port: 0,
-      command,
-    }, null, 2)}\n`);
+    writeFileSync(
+      lockFile,
+      `${JSON.stringify(
+        {
+          action: input.action,
+          pid: child.pid,
+          requestedAt,
+          repoRoot,
+          profile,
+          port: 0,
+          command,
+        },
+        null,
+        2,
+      )}\n`,
+    );
   } catch (error) {
     rmSync(lockFile, { force: true });
     throw error;
@@ -253,14 +255,9 @@ function requestApplicationCommand(input: {
   };
 }
 
-export function requestApplicationRestart(input: {
-  repoRoot: string;
-  profile: string;
-}): ApplicationCommandRequestResult {
+export function requestApplicationRestart(input: { repoRoot: string; profile: string }): ApplicationCommandRequestResult {
   return requestApplicationCommand({
     ...input,
     action: 'restart',
   });
 }
-
-

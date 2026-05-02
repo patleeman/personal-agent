@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -248,27 +249,34 @@ describe('createProfileState', () => {
       requestConversationWorkingDirectoryChange: (input: Record<string, unknown>) => Promise<unknown>;
     };
     requestConversationWorkingDirectoryChangeMock.mockResolvedValueOnce({ ok: true });
-    await expect(changeWorkingDirectoryOptions.requestConversationWorkingDirectoryChange({
-      conversationId: 'conv-1',
-      cwd: '/next-cwd',
-    })).resolves.toEqual({ ok: true });
-    expect(requestConversationWorkingDirectoryChangeMock).toHaveBeenCalledWith({
-      conversationId: 'conv-1',
-      cwd: '/next-cwd',
-    }, {
-      additionalExtensionPaths: ['/ext/shared'],
-      additionalSkillPaths: ['/skills/shared'],
-      additionalPromptTemplatePaths: ['/prompts/shared.md'],
-      additionalThemePaths: ['/themes/shared.json'],
-      extensionFactories: expect.any(Array),
-    });
+    await expect(
+      changeWorkingDirectoryOptions.requestConversationWorkingDirectoryChange({
+        conversationId: 'conv-1',
+        cwd: '/next-cwd',
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(requestConversationWorkingDirectoryChangeMock).toHaveBeenCalledWith(
+      {
+        conversationId: 'conv-1',
+        cwd: '/next-cwd',
+      },
+      {
+        additionalExtensionPaths: ['/ext/shared'],
+        additionalSkillPaths: ['/skills/shared'],
+        additionalPromptTemplatePaths: ['/prompts/shared.md'],
+        additionalThemePaths: ['/themes/shared.json'],
+        extensionFactories: expect.any(Array),
+      },
+    );
 
     let temporaryAgentDir = '';
-    await expect(state.withTemporaryProfileAgentDir('ignored', async (profileAgentDir) => {
-      temporaryAgentDir = profileAgentDir;
-      expect(existsSync(profileAgentDir)).toBe(true);
-      return 'done';
-    })).resolves.toBe('done');
+    await expect(
+      state.withTemporaryProfileAgentDir('ignored', async (profileAgentDir) => {
+        temporaryAgentDir = profileAgentDir;
+        expect(existsSync(profileAgentDir)).toBe(true);
+        return 'done';
+      }),
+    ).resolves.toBe('done');
     expect(materializeProfileToAgentDirMock).toHaveBeenCalledWith(resolvedShared, temporaryAgentDir);
     expect(existsSync(temporaryAgentDir)).toBe(false);
     expect(logger.warn).not.toHaveBeenCalled();

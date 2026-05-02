@@ -1,31 +1,14 @@
-import { mkdir, stat } from 'fs/promises';
 import { lstatSync, readlinkSync, rmSync, symlinkSync, unlinkSync } from 'fs';
+import { mkdir, stat } from 'fs/promises';
 import { dirname, join, relative, resolve } from 'path';
-import {
-  getDurablePiAgentDir,
-  getDurableSessionsDir,
-  getPiAgentRuntimeDir,
-  type RuntimeStatePaths,
-} from './paths.js';
 
-const GENERATED_RUNTIME_ARTIFACTS = [
-  'AGENTS.md',
-  'APPEND_SYSTEM.md',
-  'SYSTEM.md',
-] as const;
+import { getDurablePiAgentDir, getDurableSessionsDir, getPiAgentRuntimeDir, type RuntimeStatePaths } from './paths.js';
 
-const MIGRATABLE_RUNTIME_ARTIFACTS = [
-  'auth.json',
-  'models.json',
-  'settings.json',
-  'session-meta-index.json',
-  'bin',
-] as const;
+const GENERATED_RUNTIME_ARTIFACTS = ['AGENTS.md', 'APPEND_SYSTEM.md', 'SYSTEM.md'] as const;
 
-const STALE_SYNCED_RUNTIME_ARTIFACTS = [
-  ...GENERATED_RUNTIME_ARTIFACTS,
-  ...MIGRATABLE_RUNTIME_ARTIFACTS,
-] as const;
+const MIGRATABLE_RUNTIME_ARTIFACTS = ['auth.json', 'models.json', 'settings.json', 'session-meta-index.json', 'bin'] as const;
+
+const STALE_SYNCED_RUNTIME_ARTIFACTS = [...GENERATED_RUNTIME_ARTIFACTS, ...MIGRATABLE_RUNTIME_ARTIFACTS] as const;
 
 export interface PreparePiAgentDirOptions {
   statePaths: RuntimeStatePaths;
@@ -99,9 +82,7 @@ function removeStaleRuntimeArtifactsFromStateDir(agentStateDir: string): void {
   }
 }
 
-export async function preparePiAgentDir(
-  options: PreparePiAgentDirOptions,
-): Promise<PreparePiAgentDirResult> {
+export async function preparePiAgentDir(options: PreparePiAgentDirOptions): Promise<PreparePiAgentDirResult> {
   const durablePiAgentDir = getDurablePiAgentDir(options.statePaths.root);
   const durableSessionsDir = getDurableSessionsDir(options.statePaths.root);
   const agentDir = getPiAgentRuntimeDir(options.statePaths.root);

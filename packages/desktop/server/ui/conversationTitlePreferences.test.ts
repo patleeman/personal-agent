@@ -2,7 +2,9 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 
 const tempDirs: string[] = [];
@@ -30,17 +32,20 @@ describe('readSavedConversationTitlePreferences', () => {
   it('reads nested conversation title preferences', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultProvider: 'anthropic',
-      defaultModel: 'claude-sonnet-4-6',
-      ui: {
-        conversationTitles: {
-          enabled: false,
-          provider: 'openai-codex',
-          model: 'gpt-5.4',
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultProvider: 'anthropic',
+        defaultModel: 'claude-sonnet-4-6',
+        ui: {
+          conversationTitles: {
+            enabled: false,
+            provider: 'openai-codex',
+            model: 'gpt-5.4',
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(readSavedConversationTitlePreferences(file)).toEqual({
       enabled: false,
@@ -54,16 +59,19 @@ describe('writeSavedConversationTitlePreferences', () => {
   it('writes enabled and model while preserving unrelated settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-      ui: {
-        openConversationIds: ['session-1'],
-        conversationTitles: {
-          maxMessages: 4,
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultProvider: 'openai-codex',
+        defaultModel: 'gpt-5.4',
+        ui: {
+          openConversationIds: ['session-1'],
+          conversationTitles: {
+            maxMessages: 4,
+          },
         },
-      },
-    }));
+      }),
+    );
 
     writeSavedConversationTitlePreferences({ enabled: false, model: 'anthropic/claude-sonnet-4-6' }, file);
 
@@ -89,17 +97,20 @@ describe('writeSavedConversationTitlePreferences', () => {
   it('clears the explicit model override without removing other title settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-      ui: {
-        conversationTitles: {
-          enabled: false,
-          model: 'openai-codex/gpt-5.4',
-          reasoning: 'low',
+    writeFileSync(
+      file,
+      JSON.stringify({
+        defaultProvider: 'openai-codex',
+        defaultModel: 'gpt-5.4',
+        ui: {
+          conversationTitles: {
+            enabled: false,
+            model: 'openai-codex/gpt-5.4',
+            reasoning: 'low',
+          },
         },
-      },
-    }));
+      }),
+    );
 
     writeSavedConversationTitlePreferences({ model: '' }, file);
 

@@ -1,23 +1,17 @@
 import { existsSync } from 'node:fs';
+
 import { logWarn } from '../shared/logging.js';
 import { readGitRepoInfo } from '../workspace/gitStatus.js';
-import {
-  buildParallelImportedContent,
-  resolveStableForkEntryId,
-} from './liveSessionForking.js';
-import type { PromptImageAttachment } from './liveSessionQueue.js';
+import { buildParallelImportedContent, resolveStableForkEntryId } from './liveSessionForking.js';
 import type { LiveSessionLoaderOptions } from './liveSessionLoader.js';
-import {
-  normalizeParallelPromptList,
-  type ParallelPromptJob,
-  type ParallelPromptJobStatus,
-} from './liveSessionParallelJobs.js';
+import { normalizeParallelPromptList, type ParallelPromptJob, type ParallelPromptJobStatus } from './liveSessionParallelJobs.js';
 import {
   readParallelCurrentWorktreeDirtyPaths,
   readParallelJobCompletionFromSessionFile,
   replacePersistedParallelJob,
   type ResolveParallelChildSession,
 } from './liveSessionParallelReconciliation.js';
+import type { PromptImageAttachment } from './liveSessionQueue.js';
 
 export interface LiveSessionParallelImportHost {
   sessionId: string;
@@ -51,7 +45,10 @@ export interface LiveSessionParallelImportCallbacks<TEntry extends LiveSessionPa
     content: string,
     details: { childConversationId: string; status: 'complete' | 'failed' },
   ) => Promise<void>;
-  finalizeParallelChildLiveSession: (childConversationId: string, options?: { abortIfRunning?: boolean }) => Promise<'destroyed' | 'preserved' | 'missing'>;
+  finalizeParallelChildLiveSession: (
+    childConversationId: string,
+    options?: { abortIfRunning?: boolean },
+  ) => Promise<'destroyed' | 'preserved' | 'missing'>;
 }
 
 export async function startParallelPromptSession<TEntry extends LiveSessionParallelImportHost>(
@@ -66,9 +63,18 @@ export async function startParallelPromptSession<TEntry extends LiveSessionParal
   callbacks: {
     createJobId: () => string;
     createSession: (cwd: string, options: LiveSessionLoaderOptions) => Promise<{ id: string; sessionFile: string }>;
-    forkSession: (sessionId: string, entryId: string, options: LiveSessionLoaderOptions & { preserveSource?: boolean }) => Promise<{ newSessionId: string; sessionFile: string }>;
+    forkSession: (
+      sessionId: string,
+      entryId: string,
+      options: LiveSessionLoaderOptions & { preserveSource?: boolean },
+    ) => Promise<{ newSessionId: string; sessionFile: string }>;
     queuePromptContext: (sessionId: string, customType: string, content: string) => Promise<void>;
-    submitPromptSession: (sessionId: string, text: string, behavior?: 'steer' | 'followUp', images?: PromptImageAttachment[]) => Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }>;
+    submitPromptSession: (
+      sessionId: string,
+      text: string,
+      behavior?: 'steer' | 'followUp',
+      images?: PromptImageAttachment[],
+    ) => Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }>;
     resolveDefaultServiceTier: (entry: TEntry) => LiveSessionLoaderOptions['initialServiceTier'];
     hasQueuedOrActiveHiddenTurn: (entry: TEntry) => boolean;
     persistParallelJobs: (entry: TEntry) => void;
@@ -102,13 +108,11 @@ export async function startParallelPromptSession<TEntry extends LiveSessionParal
       })
     : await callbacks.createSession(entry.cwd, {
         ...options,
-        initialModel: options.initialModel === undefined ? entry.session.model?.id ?? null : options.initialModel,
-        initialThinkingLevel: options.initialThinkingLevel === undefined
-          ? entry.session.thinkingLevel ?? null
-          : options.initialThinkingLevel,
-        initialServiceTier: options.initialServiceTier === undefined
-          ? callbacks.resolveDefaultServiceTier(entry)
-          : options.initialServiceTier,
+        initialModel: options.initialModel === undefined ? (entry.session.model?.id ?? null) : options.initialModel,
+        initialThinkingLevel:
+          options.initialThinkingLevel === undefined ? (entry.session.thinkingLevel ?? null) : options.initialThinkingLevel,
+        initialServiceTier:
+          options.initialServiceTier === undefined ? callbacks.resolveDefaultServiceTier(entry) : options.initialServiceTier,
       });
 
   const childConversationId = 'id' in forked ? forked.id : forked.newSessionId;
@@ -209,20 +213,33 @@ export async function handleParallelPromptCompletion<TEntry extends LiveSessionP
     ? readParallelJobCompletionFromSessionFile(input.childSessionFile, { cwd: input.cwd, repoRoot: input.repoRoot })
     : { hasTerminalReply: false, touchedFiles: [] as string[], sideEffects: [] as string[] };
   const failed = input.error !== undefined;
-  const nextJobs = replacePersistedParallelJob(input.sourceSessionFile, input.jobId, (currentJob) => ({
-    ...currentJob,
-    childSessionFile: input.childSessionFile,
-    status: failed ? 'failed' : completion.status ?? 'ready',
-    updatedAt: new Date().toISOString(),
-    touchedFiles: completion.touchedFiles,
-    sideEffects: completion.sideEffects,
-    ...((failed || completion.status === 'failed')
-      ? { error: completion.error ?? (input.error instanceof Error ? input.error.message : input.error !== undefined ? String(input.error) : 'The parallel prompt failed before completing.') }
-      : {}),
-    ...((!failed && completion.status === 'ready') || completion.resultText !== undefined
-      ? { resultText: completion.resultText ?? '' }
-      : {}),
-  }), input.resolveParallelChildSession);
+  const nextJobs = replacePersistedParallelJob(
+    input.sourceSessionFile,
+    input.jobId,
+    (currentJob) => ({
+      ...currentJob,
+      childSessionFile: input.childSessionFile,
+      status: failed ? 'failed' : (completion.status ?? 'ready'),
+      updatedAt: new Date().toISOString(),
+      touchedFiles: completion.touchedFiles,
+      sideEffects: completion.sideEffects,
+      ...(failed || completion.status === 'failed'
+        ? {
+            error:
+              completion.error ??
+              (input.error instanceof Error
+                ? input.error.message
+                : input.error !== undefined
+                  ? String(input.error)
+                  : 'The parallel prompt failed before completing.'),
+          }
+        : {}),
+      ...((!failed && completion.status === 'ready') || completion.resultText !== undefined
+        ? { resultText: completion.resultText ?? '' }
+        : {}),
+    }),
+    input.resolveParallelChildSession,
+  );
   const currentEntry = input.getCurrentEntry();
   if (!currentEntry || currentEntry.session.sessionFile?.trim() !== input.sourceSessionFile) {
     return;
@@ -307,14 +324,10 @@ export async function tryImportReadyParallelJobs<TEntry extends LiveSessionParal
       callbacks.broadcastParallelState(entry, true);
 
       try {
-        await callbacks.appendParallelImportedMessage(
-          entry.sessionId,
-          buildParallelImportedContent(currentJob),
-          {
-            childConversationId: currentJob.childConversationId,
-            status: currentJob.error?.trim() ? 'failed' : 'complete',
-          },
-        );
+        await callbacks.appendParallelImportedMessage(entry.sessionId, buildParallelImportedContent(currentJob), {
+          childConversationId: currentJob.childConversationId,
+          status: currentJob.error?.trim() ? 'failed' : 'complete',
+        });
       } catch (error) {
         currentJob.status = fallbackStatus;
         currentJob.updatedAt = new Date().toISOString();
@@ -336,7 +349,10 @@ export async function tryImportReadyParallelJobs<TEntry extends LiveSessionParal
 export async function manageParallelPromptJob<TEntry extends LiveSessionParallelImportHost>(
   entry: TEntry,
   input: { jobId: string; action: 'importNow' | 'skip' | 'cancel' },
-  callbacks: Pick<LiveSessionParallelImportCallbacks<TEntry>, 'persistParallelJobs' | 'broadcastParallelState' | 'finalizeParallelChildLiveSession'> & {
+  callbacks: Pick<
+    LiveSessionParallelImportCallbacks<TEntry>,
+    'persistParallelJobs' | 'broadcastParallelState' | 'finalizeParallelChildLiveSession'
+  > & {
     tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
   },
 ): Promise<{ ok: true; status: 'imported' | 'queued' | 'skipped' | 'cancelled' }> {

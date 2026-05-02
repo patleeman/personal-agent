@@ -1,15 +1,11 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createMemoryDoc,
-  filterMemoryDocs,
-  lintMemoryDocs,
-  loadMemoryDocs,
-  loadMemoryPackageReferences,
-} from './memory-store.js';
+
+import { createMemoryDoc, filterMemoryDocs, lintMemoryDocs, loadMemoryDocs, loadMemoryPackageReferences } from './memory-store.js';
 
 const tempDirs: string[] = [];
 
@@ -119,17 +115,20 @@ Keep planning state durable.
   it('creates note nodes in sync/notes', () => {
     const vaultRoot = createTempDir('personal-agent-memory-create-');
 
-    const created = createMemoryDoc({
-      id: 'memory-index',
-      title: 'Memory index',
-      summary: 'Top-level memory hub.',
-      description: 'Tell the agent to use this as the top-level routing note for shared memory.',
-      type: 'index',
-      status: 'active',
-      area: 'notes',
-      role: 'hub',
-      related: ['personal-agent'],
-    }, { vaultRoot });
+    const created = createMemoryDoc(
+      {
+        id: 'memory-index',
+        title: 'Memory index',
+        summary: 'Top-level memory hub.',
+        description: 'Tell the agent to use this as the top-level routing note for shared memory.',
+        type: 'index',
+        status: 'active',
+        area: 'notes',
+        role: 'hub',
+        related: ['personal-agent'],
+      },
+      { vaultRoot },
+    );
 
     expect(created).toMatchObject({
       id: 'memory-index',

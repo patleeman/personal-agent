@@ -1,11 +1,8 @@
-import {
-  createWriteStream,
-  mkdirSync,
-  type WriteStream,
-} from 'fs';
+import { createWriteStream, mkdirSync, type WriteStream } from 'fs';
 import { join } from 'path';
-import type { CompanionRuntime } from '../companion/types.js';
+
 import { resolveCompanionRuntime } from '../companion/runtime.js';
+import type { CompanionRuntime } from '../companion/types.js';
 import { loadDaemonConfig } from '../config.js';
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
@@ -15,10 +12,11 @@ export interface TaskRunThreadBinding {
   threadConversationId?: string;
 }
 
-export type RunnableTaskDefinition = ParsedTaskDefinition & TaskRunThreadBinding & {
-  targetType?: 'background-agent' | 'conversation';
-  conversationBehavior?: 'steer' | 'followUp';
-};
+export type RunnableTaskDefinition = ParsedTaskDefinition &
+  TaskRunThreadBinding & {
+    targetType?: 'background-agent' | 'conversation';
+    conversationBehavior?: 'steer' | 'followUp';
+  };
 
 const MAX_CAPTURED_OUTPUT_CHARS = 16_000;
 const COMPLETION_POLL_INTERVAL_MS = 1000;
@@ -117,10 +115,12 @@ function extractConversationId(value: unknown): string | undefined {
     return undefined;
   }
 
-  return readString(value.conversationId)
-    ?? (isRecord(value.sessionMeta) ? readString(value.sessionMeta.id) : undefined)
-    ?? (isRecord(value.bootstrap) ? extractConversationId(value.bootstrap) : undefined)
-    ?? (isRecord(value.sessionDetail) ? readString(value.sessionDetail.conversationId) : undefined);
+  return (
+    readString(value.conversationId) ??
+    (isRecord(value.sessionMeta) ? readString(value.sessionMeta.id) : undefined) ??
+    (isRecord(value.bootstrap) ? extractConversationId(value.bootstrap) : undefined) ??
+    (isRecord(value.sessionDetail) ? readString(value.sessionDetail.conversationId) : undefined)
+  );
 }
 
 function extractIsRunning(value: unknown): boolean | undefined {
@@ -186,9 +186,7 @@ function summarizeEvent(event: unknown): string | undefined {
 }
 
 function readEventError(event: unknown): string | undefined {
-  return isRecord(event) && event.type === 'error'
-    ? readString(event.message) ?? 'Conversation run failed.'
-    : undefined;
+  return isRecord(event) && event.type === 'error' ? (readString(event.message) ?? 'Conversation run failed.') : undefined;
 }
 
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
@@ -215,9 +213,13 @@ async function resolveTaskConversation(runtime: CompanionRuntime, task: Runnable
       sessionFile: task.threadSessionFile,
       ...(task.cwd ? { cwd: task.cwd } : {}),
     });
-    return extractConversationId(resumed) ?? task.threadConversationId ?? (() => {
-      throw new Error(`Conversation runtime did not return a conversation id for automation @${task.id}.`);
-    })();
+    return (
+      extractConversationId(resumed) ??
+      task.threadConversationId ??
+      (() => {
+        throw new Error(`Conversation runtime did not return a conversation id for automation @${task.id}.`);
+      })()
+    );
   }
 
   if (task.threadConversationId) {
@@ -263,32 +265,35 @@ async function waitForConversationCompletion(input: {
   signal?.addEventListener('abort', abortHandler, { once: true });
 
   try {
-    unsubscribe = await runtime.subscribeConversation({
-      conversationId,
-      surfaceId: `automation-${task.id}`,
-      surfaceType: 'desktop_ui',
-      tailBlocks: 20,
-    }, (event) => {
-      const summary = summarizeEvent(event);
-      if (summary) {
-        writeLine(stream, summary);
-        capture.append(`${summary}\n`);
-      }
+    unsubscribe = await runtime.subscribeConversation(
+      {
+        conversationId,
+        surfaceId: `automation-${task.id}`,
+        surfaceType: 'desktop_ui',
+        tailBlocks: 20,
+      },
+      (event) => {
+        const summary = summarizeEvent(event);
+        if (summary) {
+          writeLine(stream, summary);
+          capture.append(`${summary}\n`);
+        }
 
-      const eventError = readEventError(event);
-      if (eventError) {
-        finish({ error: eventError });
-        return;
-      }
+        const eventError = readEventError(event);
+        if (eventError) {
+          finish({ error: eventError });
+          return;
+        }
 
-      if (isRecord(event) && event.type === 'agent_start' && promptDispatchStarted) {
-        started = true;
-      }
+        if (isRecord(event) && event.type === 'agent_start' && promptDispatchStarted) {
+          started = true;
+        }
 
-      if (isRecord(event) && (event.type === 'turn_end' || event.type === 'agent_end') && started) {
-        finish({ completed: true });
-      }
-    });
+        if (isRecord(event) && (event.type === 'turn_end' || event.type === 'agent_end') && started) {
+          finish({ completed: true });
+        }
+      },
+    );
 
     promptDispatchStarted = true;
     await runtime.promptConversation({
@@ -454,5 +459,3 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
     await closeStream(stream);
   }
 }
-
-

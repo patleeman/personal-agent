@@ -1,8 +1,15 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import { readParallelState, readPersistedParallelJobs, resolveParallelJobsFile, type ParallelPromptJob } from './liveSessionParallelJobs.js';
+
+import {
+  type ParallelPromptJob,
+  readParallelState,
+  readPersistedParallelJobs,
+  resolveParallelJobsFile,
+} from './liveSessionParallelJobs.js';
 
 const tempDirs: string[] = [];
 
@@ -22,41 +29,43 @@ describe('liveSessionParallelJobs', () => {
   it('rejects unsafe persisted parallel job image counts', () => {
     const dir = createTempDir('pa-parallel-jobs-');
     const sessionFile = join(dir, 'session.jsonl');
-    writeFileSync(resolveParallelJobsFile(sessionFile), JSON.stringify([
-      {
-        id: 'job-1',
-        prompt: 'Compare this screenshot.',
-        childConversationId: 'child-1',
-        status: 'ready',
-        createdAt: '2026-03-12T20:00:00.000Z',
-        updatedAt: '2026-03-12T20:01:00.000Z',
-        imageCount: Number.MAX_SAFE_INTEGER + 1,
-      },
-    ]));
+    writeFileSync(
+      resolveParallelJobsFile(sessionFile),
+      JSON.stringify([
+        {
+          id: 'job-1',
+          prompt: 'Compare this screenshot.',
+          childConversationId: 'child-1',
+          status: 'ready',
+          createdAt: '2026-03-12T20:00:00.000Z',
+          updatedAt: '2026-03-12T20:01:00.000Z',
+          imageCount: Number.MAX_SAFE_INTEGER + 1,
+        },
+      ]),
+    );
 
-    expect(readPersistedParallelJobs(sessionFile)).toEqual([
-      expect.objectContaining({ id: 'job-1', imageCount: 0 }),
-    ]);
+    expect(readPersistedParallelJobs(sessionFile)).toEqual([expect.objectContaining({ id: 'job-1', imageCount: 0 })]);
   });
 
   it('rejects absurd persisted parallel job image counts', () => {
     const dir = createTempDir('pa-parallel-jobs-');
     const sessionFile = join(dir, 'session.jsonl');
-    writeFileSync(resolveParallelJobsFile(sessionFile), JSON.stringify([
-      {
-        id: 'job-1',
-        prompt: 'Compare this screenshot.',
-        childConversationId: 'child-1',
-        status: 'ready',
-        createdAt: '2026-03-12T20:00:00.000Z',
-        updatedAt: '2026-03-12T20:01:00.000Z',
-        imageCount: Number.MAX_SAFE_INTEGER,
-      },
-    ]));
+    writeFileSync(
+      resolveParallelJobsFile(sessionFile),
+      JSON.stringify([
+        {
+          id: 'job-1',
+          prompt: 'Compare this screenshot.',
+          childConversationId: 'child-1',
+          status: 'ready',
+          createdAt: '2026-03-12T20:00:00.000Z',
+          updatedAt: '2026-03-12T20:01:00.000Z',
+          imageCount: Number.MAX_SAFE_INTEGER,
+        },
+      ]),
+    );
 
-    expect(readPersistedParallelJobs(sessionFile)).toEqual([
-      expect.objectContaining({ id: 'job-1', imageCount: 0 }),
-    ]);
+    expect(readPersistedParallelJobs(sessionFile)).toEqual([expect.objectContaining({ id: 'job-1', imageCount: 0 })]);
   });
 
   it('rejects unsafe parallel preview image counts', () => {
@@ -76,9 +85,7 @@ describe('liveSessionParallelJobs', () => {
       worktreeDirtyPathsAtStart: [],
     };
 
-    expect(readParallelState([job])).toEqual([
-      expect.objectContaining({ id: 'job-unsafe', imageCount: 0 }),
-    ]);
+    expect(readParallelState([job])).toEqual([expect.objectContaining({ id: 'job-unsafe', imageCount: 0 })]);
   });
 
   it('rejects absurd parallel preview image counts', () => {
@@ -98,8 +105,6 @@ describe('liveSessionParallelJobs', () => {
       worktreeDirtyPathsAtStart: [],
     };
 
-    expect(readParallelState([job])).toEqual([
-      expect.objectContaining({ id: 'job-absurd', imageCount: 0 }),
-    ]);
+    expect(readParallelState([job])).toEqual([expect.objectContaining({ id: 'job-absurd', imageCount: 0 })]);
   });
 });

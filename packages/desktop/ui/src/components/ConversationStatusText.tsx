@@ -18,10 +18,7 @@ export function ConversationStatusText({
         className={cx('flex h-3 w-3 items-center justify-center text-accent', className)}
         title="Agent is still running"
       >
-        <span
-          aria-hidden="true"
-          className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
-        />
+        <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
       </span>
     );
   }

@@ -3,12 +3,13 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
 import {
+  buildSidebarNavSectionStorageKey,
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
-  buildSidebarNavSectionStorageKey,
 } from '../local/localSettings.js';
 import type { SessionMeta } from '../shared/types.js';
 import { Sidebar } from './Sidebar.js';
@@ -35,7 +36,7 @@ function createStorage() {
   const map = new Map<string, string>();
   return {
     getItem(key: string) {
-      return map.has(key) ? map.get(key) ?? null : null;
+      return map.has(key) ? (map.get(key) ?? null) : null;
     },
     setItem(key: string, value: string) {
       map.set(key, value);
@@ -70,16 +71,18 @@ function renderSidebar(sessions: SessionMeta[]) {
     root.render(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            projects: null,
-            sessions,
-            tasks: null,
-            runs: null,
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
+          <AppDataContext.Provider
+            value={{
+              projects: null,
+              sessions,
+              tasks: null,
+              runs: null,
+              setProjects: () => {},
+              setSessions: () => {},
+              setTasks: () => {},
+              setRuns: () => {},
+            }}
+          >
             <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
               <Sidebar />
             </LiveTitlesContext.Provider>
@@ -165,7 +168,13 @@ describe('Sidebar group drag reordering', () => {
     apiMocks.setSavedWorkspacePaths.mockReset();
     apiMocks.changeConversationCwd.mockReset();
     apiMocks.sessions.mockReset();
-    apiMocks.setOpenConversationTabs.mockResolvedValue({ ok: true, sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] });
+    apiMocks.setOpenConversationTabs.mockResolvedValue({
+      ok: true,
+      sessionIds: [],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [],
+    });
     apiMocks.setSavedWorkspacePaths.mockResolvedValue([]);
     apiMocks.sessions.mockResolvedValue([]);
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
@@ -262,7 +271,12 @@ describe('Sidebar group drag reordering', () => {
       archivedSessionIds: [],
       workspacePaths: [alphaPath, betaPath],
     });
-    apiMocks.changeConversationCwd.mockResolvedValue({ id: 'conv-alpha-moved', sessionFile: '/tmp/conv-alpha-moved.jsonl', cwd: betaPath, changed: true });
+    apiMocks.changeConversationCwd.mockResolvedValue({
+      id: 'conv-alpha-moved',
+      sessionFile: '/tmp/conv-alpha-moved.jsonl',
+      cwd: betaPath,
+      changed: true,
+    });
     apiMocks.sessions.mockResolvedValue([
       createSession({ id: 'conv-alpha-moved', title: 'Alpha thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
       createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
@@ -308,7 +322,12 @@ describe('Sidebar group drag reordering', () => {
       archivedSessionIds: [],
       workspacePaths: [alphaPath, betaPath],
     });
-    apiMocks.changeConversationCwd.mockResolvedValue({ id: 'conv-alpha', sessionFile: '/tmp/conv-alpha.jsonl', cwd: betaPath, changed: true });
+    apiMocks.changeConversationCwd.mockResolvedValue({
+      id: 'conv-alpha',
+      sessionFile: '/tmp/conv-alpha.jsonl',
+      cwd: betaPath,
+      changed: true,
+    });
     apiMocks.sessions.mockResolvedValue([
       createSession({ id: 'conv-alpha', title: 'Alpha thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
       createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
@@ -390,7 +409,11 @@ describe('Sidebar group drag reordering', () => {
 
     expect(getScopedGroupOrder(container, 'remote:')).toEqual([betaKey, alphaKey]);
     expect(localStorage.getItem(THREADS_SORT_BY_STORAGE_KEY)).toBe('manual');
-    expect(JSON.parse(localStorage.getItem(THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY) ?? '[]').filter((groupKey: string) => groupKey.startsWith('remote:'))).toEqual([betaKey, alphaKey]);
+    expect(
+      JSON.parse(localStorage.getItem(THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY) ?? '[]').filter((groupKey: string) =>
+        groupKey.startsWith('remote:'),
+      ),
+    ).toEqual([betaKey, alphaKey]);
     expect(JSON.parse(localStorage.getItem(PINNED_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-remote-pinned']);
     expect(JSON.parse(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-remote-open']);
   });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { ChatRenderItem } from './transcriptItems.js';
 import { collectVisibleInlineRunKeys, filterInlineRunKeys, toggleInlineRunKey } from './useInlineTraceRunExpansion.js';
 

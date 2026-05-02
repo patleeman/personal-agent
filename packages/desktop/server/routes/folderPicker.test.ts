@@ -19,7 +19,9 @@ describe('registerFolderPickerRoutes', () => {
     getDefaultWebCwd?: () => string;
     resolveRequestedCwd?: (cwd: string | null | undefined, defaultCwd: string) => string | undefined;
   }) {
-    let postHandler: ((req: { body?: { cwd?: string | null; prompt?: string | null } }, res: ReturnType<typeof createResponse>) => void) | undefined;
+    let postHandler:
+      | ((req: { body?: { cwd?: string | null; prompt?: string | null } }, res: ReturnType<typeof createResponse>) => void)
+      | undefined;
     const router = {
       post: vi.fn((path: string, next: typeof postHandler) => {
         expect(path).toBe('/api/folder-picker');

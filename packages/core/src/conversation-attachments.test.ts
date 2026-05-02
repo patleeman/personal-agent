@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   deleteConversationAttachment,
   getConversationAttachment,
@@ -37,26 +38,32 @@ describe('conversation attachment paths', () => {
   it('resolves profile/conversation/attachment directories', () => {
     const stateRoot = createTempStateRoot();
 
-    expect(resolveProfileConversationAttachmentsDir({ stateRoot, profile: 'assistant' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant'));
+    expect(resolveProfileConversationAttachmentsDir({ stateRoot, profile: 'assistant' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant'),
+    );
 
-    expect(resolveConversationAttachmentsDir({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
-      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant', 'conv-123'));
+    expect(resolveConversationAttachmentsDir({ stateRoot, profile: 'assistant', conversationId: 'conv-123' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant', 'conv-123'),
+    );
 
-    expect(resolveConversationAttachmentDir({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conv-123',
-      attachmentId: 'diagram',
-    })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant', 'conv-123', 'diagram'));
+    expect(
+      resolveConversationAttachmentDir({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-123',
+        attachmentId: 'diagram',
+      }),
+    ).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant', 'conv-123', 'diagram'));
 
-    expect(resolveConversationAttachmentRevisionDir({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conv-123',
-      attachmentId: 'diagram',
-      revision: 2,
-    })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant', 'conv-123', 'diagram', 'revisions', '2'));
+    expect(
+      resolveConversationAttachmentRevisionDir({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-123',
+        attachmentId: 'diagram',
+        revision: 2,
+      }),
+    ).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-attachments', 'assistant', 'conv-123', 'diagram', 'revisions', '2'));
   });
 
   it('rejects invalid attachment ids', () => {
@@ -66,14 +73,16 @@ describe('conversation attachment paths', () => {
   it('rejects malformed attachment asset base64', () => {
     const stateRoot = createTempStateRoot();
 
-    expect(() => saveConversationAttachment({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conv-bad-base64',
-      title: 'Bad asset',
-      sourceData: 'not-valid-base64!',
-      previewData: toBase64('preview'),
-    })).toThrow('Attachment source data must be valid base64.');
+    expect(() =>
+      saveConversationAttachment({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-bad-base64',
+        title: 'Bad asset',
+        sourceData: 'not-valid-base64!',
+        previewData: toBase64('preview'),
+      }),
+    ).toThrow('Attachment source data must be valid base64.');
   });
 });
 
@@ -214,19 +223,23 @@ describe('conversation attachment storage', () => {
     });
     expect(existsSync(attachmentDir)).toBe(true);
 
-    expect(deleteConversationAttachment({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conv-delete',
-      attachmentId: saved.id,
-    })).toBe(true);
+    expect(
+      deleteConversationAttachment({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-delete',
+        attachmentId: saved.id,
+      }),
+    ).toBe(true);
 
-    expect(getConversationAttachment({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conv-delete',
-      attachmentId: saved.id,
-    })).toBeNull();
+    expect(
+      getConversationAttachment({
+        stateRoot,
+        profile: 'assistant',
+        conversationId: 'conv-delete',
+        attachmentId: saved.id,
+      }),
+    ).toBeNull();
     expect(existsSync(attachmentDir)).toBe(false);
   });
 });

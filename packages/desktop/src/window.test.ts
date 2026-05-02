@@ -39,10 +39,10 @@ vi.mock('electron', () => ({
 }));
 
 import {
-  DesktopWindowController,
   buildWindowTitle,
   canNavigateWindowInApp,
   constrainDesktopWindowBounds,
+  DesktopWindowController,
   getDesktopWindowChromeOptions,
   shouldOpenNavigationExternally,
   shouldOpenWindowExternally,
@@ -85,24 +85,26 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('keeps the desktop shell marker in full URLs but strips it from in-app routes', () => {
-    expect(toDesktopShellUrl('http://127.0.0.1:3741/conversations/new')).toBe(
-      'http://127.0.0.1:3741/conversations/new?desktop-shell=1',
-    );
+    expect(toDesktopShellUrl('http://127.0.0.1:3741/conversations/new')).toBe('http://127.0.0.1:3741/conversations/new?desktop-shell=1');
     expect(toDesktopShellRoute('http://127.0.0.1:3741/conversations/new?desktop-shell=1&view=wide#tail')).toBe(
       '/conversations/new?view=wide#tail',
     );
   });
 
   it('treats same-origin navigations as in-app route changes', () => {
-    expect(canNavigateWindowInApp(
-      'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-      'http://127.0.0.1:3741/conversations/new?desktop-shell=1',
-    )).toBe(true);
+    expect(
+      canNavigateWindowInApp(
+        'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
+        'http://127.0.0.1:3741/conversations/new?desktop-shell=1',
+      ),
+    ).toBe(true);
 
-    expect(canNavigateWindowInApp(
-      'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-      'https://desktop.example.ts.net/conversations/new?desktop-shell=1',
-    )).toBe(false);
+    expect(
+      canNavigateWindowInApp(
+        'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
+        'https://desktop.example.ts.net/conversations/new?desktop-shell=1',
+      ),
+    ).toBe(false);
   });
 
   it('opens target-blank web links in the system browser instead of a new desktop window', () => {
@@ -112,15 +114,16 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('redirects cross-origin navigations to the system browser while keeping in-app routes local', () => {
-    expect(shouldOpenNavigationExternally(
-      'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-      'https://example.com/docs',
-    )).toBe(true);
+    expect(shouldOpenNavigationExternally('http://127.0.0.1:3741/conversations/abc?desktop-shell=1', 'https://example.com/docs')).toBe(
+      true,
+    );
 
-    expect(shouldOpenNavigationExternally(
-      'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-      'http://127.0.0.1:3741/settings?desktop-shell=1',
-    )).toBe(false);
+    expect(
+      shouldOpenNavigationExternally(
+        'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
+        'http://127.0.0.1:3741/settings?desktop-shell=1',
+      ),
+    ).toBe(false);
   });
 
   it('includes the current app name in window titles so testing launches stand out', () => {
@@ -135,22 +138,24 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('re-centers saved off-screen bounds onto the available display', () => {
-    expect(constrainDesktopWindowBounds(
-      {
-        x: 2052,
-        y: 749,
-        width: 1788,
-        height: 1411,
-      },
-      [
+    expect(
+      constrainDesktopWindowBounds(
         {
-          x: 0,
-          y: 0,
-          width: 1512,
-          height: 982,
+          x: 2052,
+          y: 749,
+          width: 1788,
+          height: 1411,
         },
-      ],
-    )).toEqual({
+        [
+          {
+            x: 0,
+            y: 0,
+            width: 1512,
+            height: 982,
+          },
+        ],
+      ),
+    ).toEqual({
       x: 0,
       y: 0,
       width: 1512,
@@ -159,22 +164,24 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('falls back from unsafe saved window bounds', () => {
-    expect(constrainDesktopWindowBounds(
-      {
-        x: Number.MAX_SAFE_INTEGER + 1,
-        y: 40,
-        width: Number.MAX_SAFE_INTEGER + 1,
-        height: 700,
-      },
-      [
+    expect(
+      constrainDesktopWindowBounds(
         {
-          x: 0,
-          y: 0,
-          width: 1512,
-          height: 982,
+          x: Number.MAX_SAFE_INTEGER + 1,
+          y: 40,
+          width: Number.MAX_SAFE_INTEGER + 1,
+          height: 700,
         },
-      ],
-    )).toEqual({
+        [
+          {
+            x: 0,
+            y: 0,
+            width: 1512,
+            height: 982,
+          },
+        ],
+      ),
+    ).toEqual({
       x: 36,
       y: 141,
       width: 1440,
@@ -183,22 +190,24 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('falls back from absurd saved window bounds', () => {
-    expect(constrainDesktopWindowBounds(
-      {
-        x: Number.MAX_SAFE_INTEGER,
-        y: 40,
-        width: Number.MAX_SAFE_INTEGER,
-        height: 700,
-      },
-      [
+    expect(
+      constrainDesktopWindowBounds(
         {
-          x: 0,
-          y: 0,
-          width: 1512,
-          height: 982,
+          x: Number.MAX_SAFE_INTEGER,
+          y: 40,
+          width: Number.MAX_SAFE_INTEGER,
+          height: 700,
         },
-      ],
-    )).toEqual({
+        [
+          {
+            x: 0,
+            y: 0,
+            width: 1512,
+            height: 982,
+          },
+        ],
+      ),
+    ).toEqual({
       x: 36,
       y: 141,
       width: 1440,
@@ -207,22 +216,24 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('falls back from fractional saved window bounds', () => {
-    expect(constrainDesktopWindowBounds(
-      {
-        x: 12.5,
-        y: 40.5,
-        width: 1000.5,
-        height: 700.5,
-      },
-      [
+    expect(
+      constrainDesktopWindowBounds(
         {
-          x: 0,
-          y: 0,
-          width: 1512,
-          height: 982,
+          x: 12.5,
+          y: 40.5,
+          width: 1000.5,
+          height: 700.5,
         },
-      ],
-    )).toEqual({
+        [
+          {
+            x: 0,
+            y: 0,
+            width: 1512,
+            height: 982,
+          },
+        ],
+      ),
+    ).toEqual({
       x: 36,
       y: 11,
       width: 1440,
@@ -231,23 +242,25 @@ describe('window desktop navigation helpers', () => {
   });
 
   it('preserves visible bounds and offsets remote windows without leaving the display', () => {
-    expect(constrainDesktopWindowBounds(
-      {
-        x: 120,
-        y: 80,
-        width: 1100,
-        height: 780,
-      },
-      [
+    expect(
+      constrainDesktopWindowBounds(
         {
-          x: 0,
-          y: 0,
-          width: 1512,
-          height: 982,
+          x: 120,
+          y: 80,
+          width: 1100,
+          height: 780,
         },
-      ],
-      28,
-    )).toEqual({
+        [
+          {
+            x: 0,
+            y: 0,
+            width: 1512,
+            height: 982,
+          },
+        ],
+        28,
+      ),
+    ).toEqual({
       x: 148,
       y: 108,
       width: 1100,

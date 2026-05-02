@@ -1,12 +1,11 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  renderSystemPromptTemplateMock,
-} = vi.hoisted(() => ({
+const { renderSystemPromptTemplateMock } = vi.hoisted(() => ({
   renderSystemPromptTemplateMock: vi.fn(),
 }));
 
@@ -30,10 +29,10 @@ function createTempDir(prefix: string): string {
 
 function writeSkillNode(skillsDir: string, skillId: string, description: string, profiles: string[] = []): void {
   mkdirSync(join(skillsDir, skillId), { recursive: true });
-  const profilesBlock = profiles.length > 0
-    ? `profiles:\n${profiles.map((profile) => `  - ${profile}`).join('\n')}\n`
-    : '';
-  writeFileSync(join(skillsDir, skillId, 'SKILL.md'), `---
+  const profilesBlock = profiles.length > 0 ? `profiles:\n${profiles.map((profile) => `  - ${profile}`).join('\n')}\n` : '';
+  writeFileSync(
+    join(skillsDir, skillId, 'SKILL.md'),
+    `---
 name: ${skillId}
 description: ${description}
 ${profilesBlock}metadata:
@@ -44,7 +43,8 @@ ${profilesBlock}metadata:
 ---
 
 # ${skillId}
-`);
+`,
+  );
 }
 
 function writeProfileDirs(stateRoot: string, ...profiles: string[]): void {
@@ -77,7 +77,9 @@ describe('knowledge base extension', () => {
 
     writeProfileDirs(stateRoot, 'shared', 'datadog');
     mkdirSync(join(repoRoot, 'internal-skills', 'artifacts'), { recursive: true });
-    writeFileSync(join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'), `---
+    writeFileSync(
+      join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'),
+      `---
 id: artifacts
 kind: internal-skill
 title: Artifacts
@@ -85,10 +87,15 @@ summary: How built-in rendered outputs behave.
 ---
 
 # Artifacts
-`);
+`,
+    );
     writeSkillNode(join(stateRoot, 'vault', '_skills'), 'shared-skill', 'Shared skill available to every profile.', ['shared']);
-    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'datadog-skill', 'Datadog-only skill available in the datadog profile.', ['datadog']);
-    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'default-skill', 'Default-only skill that should not appear for datadog.', ['default']);
+    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'datadog-skill', 'Datadog-only skill available in the datadog profile.', [
+      'datadog',
+    ]);
+    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'default-skill', 'Default-only skill that should not appear for datadog.', [
+      'default',
+    ]);
 
     renderSystemPromptTemplateMock.mockReturnValue(`# Identity & Goal
 
@@ -156,10 +163,10 @@ Freeform markdown files live anywhere under the vault root.
     knowledgeBaseExtension(pi as never);
     expect(beforeAgentStartHandler).toBeDefined();
 
-    const result = await beforeAgentStartHandler!(
+    const result = (await beforeAgentStartHandler!(
       { prompt: 'please remember this setup', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: stateRoot },
-    ) as { systemPrompt?: string } | undefined;
+    )) as { systemPrompt?: string } | undefined;
 
     const prompt = result?.systemPrompt ?? '';
     expect(prompt).toContain('# Identity & Goal');
@@ -193,7 +200,9 @@ Freeform markdown files live anywhere under the vault root.
 
     writeProfileDirs(stateRoot, 'shared');
     mkdirSync(join(repoRoot, 'internal-skills', 'artifacts'), { recursive: true });
-    writeFileSync(join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'), `---
+    writeFileSync(
+      join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'),
+      `---
 id: artifacts
 kind: internal-skill
 title: Artifacts
@@ -201,7 +210,8 @@ summary: How built-in rendered outputs behave.
 ---
 
 # Artifacts
-`);
+`,
+    );
 
     renderSystemPromptTemplateMock.mockReturnValue(`# Identity & Goal
 
@@ -249,10 +259,10 @@ Freeform markdown files live anywhere under the vault root.
 
     knowledgeBaseExtension(pi as never);
 
-    const result = await beforeAgentStartHandler!(
+    const result = (await beforeAgentStartHandler!(
       { prompt: 'what should we retain?', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
-    ) as { systemPrompt?: string } | undefined;
+    )) as { systemPrompt?: string } | undefined;
 
     const prompt = result?.systemPrompt ?? '';
     expect(prompt).toContain('- active_profile: shared');
@@ -262,7 +272,9 @@ Freeform markdown files live anywhere under the vault root.
     expect(prompt).not.toContain('- requested_profile: missing-profile');
     expect(prompt).not.toContain('requested profile was missing');
     expect(prompt).toContain(`- AGENTS.md: ${join(stateRoot, 'vault', 'AGENTS.md')}`);
-    expect(prompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'sync', 'tasks')} (Note: Scheduled tasks belong here, not in shared notes).`);
+    expect(prompt).toContain(
+      `- Scheduled tasks dir: ${join(stateRoot, 'sync', 'tasks')} (Note: Scheduled tasks belong here, not in shared notes).`,
+    );
 
     // Should still show knowledge vault section
     expect(prompt).toContain('## Knowledge Vault');
@@ -287,15 +299,9 @@ Freeform markdown files live anywhere under the vault root.
 
     knowledgeBaseExtension(pi as never);
 
-    const slashResult = await beforeAgentStartHandler!(
-      { prompt: '/model', systemPrompt: 'BASE_SYSTEM_PROMPT' },
-      { cwd: repoRoot },
-    );
+    const slashResult = await beforeAgentStartHandler!({ prompt: '/model', systemPrompt: 'BASE_SYSTEM_PROMPT' }, { cwd: repoRoot });
 
-    const emptyResult = await beforeAgentStartHandler!(
-      { prompt: '   ', systemPrompt: 'BASE_SYSTEM_PROMPT' },
-      { cwd: repoRoot },
-    );
+    const emptyResult = await beforeAgentStartHandler!({ prompt: '   ', systemPrompt: 'BASE_SYSTEM_PROMPT' }, { cwd: repoRoot });
 
     expect(slashResult).toBeUndefined();
     expect(emptyResult).toBeUndefined();
@@ -329,10 +335,10 @@ You are Patrick Lee's personal AI agent.
 
     knowledgeBaseExtension(pi as never);
 
-    const result = await beforeAgentStartHandler!(
+    const result = (await beforeAgentStartHandler!(
       { prompt: 'inspect the sync prompt behavior', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
-    ) as { systemPrompt?: string } | undefined;
+    )) as { systemPrompt?: string } | undefined;
 
     expect(result?.systemPrompt ?? '').toContain('# Identity & Goal');
   });

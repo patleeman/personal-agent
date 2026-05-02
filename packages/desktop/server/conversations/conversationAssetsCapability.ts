@@ -1,5 +1,6 @@
 import {
   addConversationCommitCheckpointComment,
+  type ConversationCommitCheckpointSummary,
   deleteConversationArtifact,
   deleteConversationAttachment,
   getConversationArtifact,
@@ -9,14 +10,11 @@ import {
   listConversationCommitCheckpoints,
   readConversationAttachmentDownload,
   saveConversationAttachment,
-  type ConversationCommitCheckpointSummary,
 } from '@personal-agent/core';
+
 import { invalidateAppTopics } from '../shared/appEvents.js';
-import {
-  readConversationCheckpointReviewContext,
-  resolveConversationCheckpointRecord,
-} from './checkpointReview.js';
-import { readSessionBlocks, type DisplayBlock } from './sessions.js';
+import { readConversationCheckpointReviewContext, resolveConversationCheckpointRecord } from './checkpointReview.js';
+import { type DisplayBlock, readSessionBlocks } from './sessions.js';
 
 export class ConversationAssetCapabilityInputError extends Error {}
 export class ConversationAssetCapabilityNotFoundError extends Error {}
@@ -165,8 +163,7 @@ function mergeTranscriptCommitCheckpoints(
     }
   }
 
-  return Array.from(checkpointsByCommit.values())
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return Array.from(checkpointsByCommit.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 function buildAttachmentListResult(profile: string, conversationId: string) {
@@ -202,14 +199,15 @@ function normalizeAttachmentDownloadInput(input: ConversationAttachmentDownloadI
 } {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const attachmentId = normalizeRequiredId(input.attachmentId, 'attachmentId');
-  const asset: 'source' | 'preview' | null = input.asset === 'source' || input.asset === 'preview'
-    ? input.asset
-    : null;
+  const asset: 'source' | 'preview' | null = input.asset === 'source' || input.asset === 'preview' ? input.asset : null;
   if (!asset) {
     throw new ConversationAssetCapabilityInputError('asset must be "source" or "preview"');
   }
 
-  if (input.revision !== undefined && (!Number.isSafeInteger(input.revision) || input.revision <= 0 || input.revision > MAX_ATTACHMENT_REVISION)) {
+  if (
+    input.revision !== undefined &&
+    (!Number.isSafeInteger(input.revision) || input.revision <= 0 || input.revision > MAX_ATTACHMENT_REVISION)
+  ) {
     throw new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.');
   }
 
@@ -226,10 +224,7 @@ export function readConversationArtifactsCapability(profile: string, conversatio
   return buildArtifactListResult(profile, conversationId);
 }
 
-export function readConversationArtifactCapability(
-  profile: string,
-  input: ConversationArtifactMutationInput,
-) {
+export function readConversationArtifactCapability(profile: string, input: ConversationArtifactMutationInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const artifactId = normalizeRequiredId(input.artifactId, 'artifactId');
   const artifact = getConversationArtifact({ profile, conversationId, artifactId });
@@ -248,10 +243,7 @@ export function readConversationCommitCheckpointsCapability(profile: string, con
   return buildCheckpointListResult(profile, conversationId);
 }
 
-export function readConversationCommitCheckpointCapability(
-  profile: string,
-  input: ConversationCheckpointMutationInput,
-) {
+export function readConversationCommitCheckpointCapability(profile: string, input: ConversationCheckpointMutationInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
   const checkpoint = resolveConversationCheckpointRecord({ profile, conversationId, checkpointId });
@@ -265,10 +257,7 @@ export function readConversationCommitCheckpointCapability(
   };
 }
 
-export function createConversationCommitCheckpointCommentCapability(
-  profile: string,
-  input: ConversationCheckpointCommentCreateInput,
-) {
+export function createConversationCommitCheckpointCommentCapability(profile: string, input: ConversationCheckpointCommentCreateInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
   const body = normalizeRequiredId(input.body ?? '', 'body');
@@ -293,10 +282,7 @@ export function createConversationCommitCheckpointCommentCapability(
   };
 }
 
-export async function readConversationCheckpointReviewContextCapability(
-  profile: string,
-  input: ConversationCheckpointMutationInput,
-) {
+export async function readConversationCheckpointReviewContextCapability(profile: string, input: ConversationCheckpointMutationInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
   const reviewContext = await readConversationCheckpointReviewContext({
@@ -311,10 +297,7 @@ export async function readConversationCheckpointReviewContextCapability(
   return reviewContext;
 }
 
-export function deleteConversationArtifactCapability(
-  profile: string,
-  input: ConversationArtifactMutationInput,
-) {
+export function deleteConversationArtifactCapability(profile: string, input: ConversationArtifactMutationInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const artifactId = normalizeRequiredId(input.artifactId, 'artifactId');
   const deleted = deleteConversationArtifact({ profile, conversationId, artifactId });
@@ -334,10 +317,7 @@ export function readConversationAttachmentsCapability(profile: string, conversat
   return buildAttachmentListResult(profile, conversationId);
 }
 
-export function readConversationAttachmentCapability(
-  profile: string,
-  input: ConversationAttachmentMutationInput,
-) {
+export function readConversationAttachmentCapability(profile: string, input: ConversationAttachmentMutationInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const attachmentId = normalizeRequiredId(input.attachmentId, 'attachmentId');
   const attachment = getConversationAttachment({ profile, conversationId, attachmentId });
@@ -351,10 +331,7 @@ export function readConversationAttachmentCapability(
   };
 }
 
-export function createConversationAttachmentCapability(
-  profile: string,
-  input: ConversationAttachmentSaveInput,
-) {
+export function createConversationAttachmentCapability(profile: string, input: ConversationAttachmentSaveInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const attachment = saveConversationAttachment({
     profile,
@@ -371,10 +348,7 @@ export function createConversationAttachmentCapability(
   };
 }
 
-export function updateConversationAttachmentCapability(
-  profile: string,
-  input: ConversationAttachmentSaveInput & { attachmentId: string },
-) {
+export function updateConversationAttachmentCapability(profile: string, input: ConversationAttachmentSaveInput & { attachmentId: string }) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const attachmentId = normalizeRequiredId(input.attachmentId, 'attachmentId');
   const existing = getConversationAttachment({ profile, conversationId, attachmentId });
@@ -398,10 +372,7 @@ export function updateConversationAttachmentCapability(
   };
 }
 
-export function deleteConversationAttachmentCapability(
-  profile: string,
-  input: ConversationAttachmentMutationInput,
-) {
+export function deleteConversationAttachmentCapability(profile: string, input: ConversationAttachmentMutationInput) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const attachmentId = normalizeRequiredId(input.attachmentId, 'attachmentId');
   const deleted = deleteConversationAttachment({ profile, conversationId, attachmentId });
@@ -416,10 +387,7 @@ export function deleteConversationAttachmentCapability(
   };
 }
 
-export function readConversationAttachmentDownloadCapability(
-  profile: string,
-  input: ConversationAttachmentDownloadInput,
-) {
+export function readConversationAttachmentDownloadCapability(profile: string, input: ConversationAttachmentDownloadInput) {
   try {
     return readConversationAttachmentDownload({
       profile,

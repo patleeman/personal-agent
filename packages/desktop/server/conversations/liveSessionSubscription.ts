@@ -1,21 +1,18 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import { readQueueState } from './liveSessionQueue.js';
-import { readParallelState, type ParallelPromptJob } from './liveSessionParallelJobs.js';
+
+import type { SseEvent } from './liveSessionEvents.js';
+import { ensureHiddenTurnState, type LiveSessionHiddenTurnState, shouldExposeHiddenTurnInTranscript } from './liveSessionHiddenTurns.js';
+import { type ParallelPromptJob, readParallelState } from './liveSessionParallelJobs.js';
 import {
   buildLiveSessionPresenceState,
-  registerLiveSessionSurface,
-  removeLiveSessionSurface,
   type LiveSessionPresenceHost,
   type LiveSessionSurfaceType,
+  registerLiveSessionSurface,
+  removeLiveSessionSurface,
 } from './liveSessionPresence.js';
-import {
-  ensureHiddenTurnState,
-  shouldExposeHiddenTurnInTranscript,
-  type LiveSessionHiddenTurnState,
-} from './liveSessionHiddenTurns.js';
-import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
+import { readQueueState } from './liveSessionQueue.js';
 import { readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
-import type { SseEvent } from './liveSessionEvents.js';
+import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
 
 export interface LiveSessionSubscriptionListener {
   send: (event: SseEvent) => void;
@@ -32,13 +29,15 @@ export interface LiveSessionSubscriptionHost extends LiveSessionPresenceHost, Li
 export function subscribeLiveSession<TEntry extends LiveSessionSubscriptionHost>(
   entry: TEntry,
   listener: (event: SseEvent) => void,
-  options: {
-    tailBlocks?: number;
-    surface?: {
-      surfaceId: string;
-      surfaceType: LiveSessionSurfaceType;
-    };
-  } | undefined,
+  options:
+    | {
+        tailBlocks?: number;
+        surface?: {
+          surfaceId: string;
+          surfaceType: LiveSessionSurfaceType;
+        };
+      }
+    | undefined,
   callbacks: {
     resolveTitle: (entry: TEntry) => string;
     broadcastPresenceState: (entry: TEntry, options?: { exclude?: LiveSessionSubscriptionListener }) => void;
@@ -50,9 +49,7 @@ export function subscribeLiveSession<TEntry extends LiveSessionSubscriptionHost>
   };
   entry.listeners.add(subscription);
 
-  const presenceChanged = options?.surface
-    ? registerLiveSessionSurface(entry, options.surface)
-    : false;
+  const presenceChanged = options?.surface ? registerLiveSessionSurface(entry, options.surface) : false;
 
   replayLiveSessionState(entry, subscription, options, callbacks.resolveTitle);
 
@@ -86,8 +83,10 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
     subscription.send({ type: 'presence_state', state: buildLiveSessionPresenceState(entry) });
   }
-  if (entry.session.isStreaming
-    && (!entry.activeHiddenTurnCustomType || shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType))) {
+  if (
+    entry.session.isStreaming &&
+    (!entry.activeHiddenTurnCustomType || shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType))
+  ) {
     subscription.send({ type: 'agent_start' });
   }
 }

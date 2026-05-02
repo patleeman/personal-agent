@@ -1,4 +1,3 @@
-import { join, resolve, sep } from 'path';
 import {
   activateDueDeferredResumes,
   loadDeferredResumeState,
@@ -6,6 +5,8 @@ import {
   resolveDeferredResumeStateFile,
   saveDeferredResumeState,
 } from '@personal-agent/core';
+import { join, resolve, sep } from 'path';
+
 import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
 import { markDeferredResumeConversationRunReady } from '../runs/deferred-resume-conversations.js';
 import type { DaemonModule } from './types.js';
@@ -58,10 +59,11 @@ function inferRepoRootFromTaskDir(taskDir: string, profile: string): string | un
 }
 
 function resolveProfileContext(taskDir: string): { profile: string; repoRoot?: string } {
-  const profile = inferProfileFromTaskDir(taskDir)
-    ?? sanitizeProfileName(process.env.PERSONAL_AGENT_ACTIVE_PROFILE)
-    ?? sanitizeProfileName(process.env.PERSONAL_AGENT_PROFILE)
-    ?? 'shared';
+  const profile =
+    inferProfileFromTaskDir(taskDir) ??
+    sanitizeProfileName(process.env.PERSONAL_AGENT_ACTIVE_PROFILE) ??
+    sanitizeProfileName(process.env.PERSONAL_AGENT_PROFILE) ??
+    'shared';
 
   return {
     profile,
@@ -69,10 +71,7 @@ function resolveProfileContext(taskDir: string): { profile: string; repoRoot?: s
   };
 }
 
-
-export function createDeferredResumeModule(
-  dependencies: DeferredResumeModuleDependencies = {},
-): DaemonModule {
+export function createDeferredResumeModule(dependencies: DeferredResumeModuleDependencies = {}): DaemonModule {
   const now = dependencies.now ?? (() => new Date());
   const state: DeferredResumeModuleState = {
     knownResumes: 0,

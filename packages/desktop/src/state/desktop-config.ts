@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import type { DesktopAppPreferences, DesktopConfig, DesktopHostRecord } from '../hosts/types.js';
+
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
+import type { DesktopAppPreferences, DesktopConfig, DesktopHostRecord } from '../hosts/types.js';
 import { normalizeDesktopKeyboardShortcuts, validateDesktopKeyboardShortcuts } from '../keyboard-shortcuts.js';
 
 const DEFAULT_WINDOW_STATE = {
@@ -82,21 +83,22 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
 
   const hosts = Array.isArray(input.hosts)
     ? input.hosts
-      .map((host) => normalizeSshHostRecord(host))
-      .filter((host): host is Extract<DesktopHostRecord, { kind: 'ssh' }> => host !== null)
+        .map((host) => normalizeSshHostRecord(host))
+        .filter((host): host is Extract<DesktopHostRecord, { kind: 'ssh' }> => host !== null)
     : [];
 
   return {
     version: 2,
     openWindowOnLaunch: input.openWindowOnLaunch !== false,
-    windowState: input.windowState && typeof input.windowState === 'object'
-      ? {
-          x: readSafeNumber(input.windowState.x),
-          y: readSafeNumber(input.windowState.y),
-          width: readPositiveSafeNumber(input.windowState.width) ?? DEFAULT_WINDOW_STATE.width,
-          height: readPositiveSafeNumber(input.windowState.height) ?? DEFAULT_WINDOW_STATE.height,
-        }
-      : { ...DEFAULT_WINDOW_STATE },
+    windowState:
+      input.windowState && typeof input.windowState === 'object'
+        ? {
+            x: readSafeNumber(input.windowState.x),
+            y: readSafeNumber(input.windowState.y),
+            width: readPositiveSafeNumber(input.windowState.width) ?? DEFAULT_WINDOW_STATE.width,
+            height: readPositiveSafeNumber(input.windowState.height) ?? DEFAULT_WINDOW_STATE.height,
+          }
+        : { ...DEFAULT_WINDOW_STATE },
     hosts,
     appPreferences: normalizeDesktopAppPreferences(input.appPreferences),
   };
@@ -144,9 +146,11 @@ export function readDesktopAppPreferences(config = loadDesktopConfig()): Desktop
   return normalizeDesktopAppPreferences(config.appPreferences);
 }
 
-export function updateDesktopAppPreferences(appPreferences: Partial<Omit<DesktopAppPreferences, 'keyboardShortcuts'>> & {
-  keyboardShortcuts?: Partial<DesktopAppPreferences['keyboardShortcuts']>;
-}): DesktopConfig {
+export function updateDesktopAppPreferences(
+  appPreferences: Partial<Omit<DesktopAppPreferences, 'keyboardShortcuts'>> & {
+    keyboardShortcuts?: Partial<DesktopAppPreferences['keyboardShortcuts']>;
+  },
+): DesktopConfig {
   const current = loadDesktopConfig();
   const next: DesktopConfig = {
     ...current,
@@ -155,10 +159,12 @@ export function updateDesktopAppPreferences(appPreferences: Partial<Omit<Desktop
       ...(appPreferences.autoInstallUpdates !== undefined ? { autoInstallUpdates: appPreferences.autoInstallUpdates } : {}),
       ...(appPreferences.startOnSystemStart !== undefined ? { startOnSystemStart: appPreferences.startOnSystemStart } : {}),
       ...(appPreferences.keyboardShortcuts !== undefined
-        ? { keyboardShortcuts: validateDesktopKeyboardShortcuts({
-            ...readDesktopAppPreferences(current).keyboardShortcuts,
-            ...appPreferences.keyboardShortcuts,
-          }) }
+        ? {
+            keyboardShortcuts: validateDesktopKeyboardShortcuts({
+              ...readDesktopAppPreferences(current).keyboardShortcuts,
+              ...appPreferences.keyboardShortcuts,
+            }),
+          }
         : {}),
     },
   };

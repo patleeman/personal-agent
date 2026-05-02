@@ -1,6 +1,7 @@
-import { Node, mergeAttributes } from '@tiptap/core';
+import { mergeAttributes, Node } from '@tiptap/core';
+import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
 import { Suggestion } from '@tiptap/suggestion';
-import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
+
 import type { VaultEntry } from '../../shared/types';
 
 export interface WikiLinkAttributes {
@@ -39,10 +40,14 @@ export function buildWikiLinkExtension(
     },
 
     renderHTML({ node, HTMLAttributes }) {
-      return ['span', mergeAttributes(HTMLAttributes, {
-        'data-wikilink': node.attrs.target,
-        class: 'kb-wikilink',
-      }), node.attrs.label ?? node.attrs.target];
+      return [
+        'span',
+        mergeAttributes(HTMLAttributes, {
+          'data-wikilink': node.attrs.target,
+          class: 'kb-wikilink',
+        }),
+        node.attrs.label ?? node.attrs.target,
+      ];
     },
 
     // ── Markdown ──────────────────────────────────────────────────────────────
@@ -82,13 +87,8 @@ export function buildWikiLinkExtension(
 
         const updateState = () => {
           const entries = getEntries();
-          const exists = entries.some((e) =>
-            e.kind === 'file' && (
-              e.name === target ||
-              e.name === `${target}.md` ||
-              e.id === target ||
-              e.id === `${target}.md`
-            ),
+          const exists = entries.some(
+            (e) => e.kind === 'file' && (e.name === target || e.name === `${target}.md` || e.id === target || e.id === `${target}.md`),
           );
           span.className = exists ? 'kb-wikilink' : 'kb-wikilink kb-wikilink-broken';
           span.setAttribute('data-wikilink', target);
@@ -102,13 +102,17 @@ export function buildWikiLinkExtension(
           e.preventDefault();
           e.stopPropagation();
           const entries = getEntries();
-          const found = entries.find((e) =>
-            e.name === target || e.name === `${target}.md` || e.id === target || e.id === `${target}.md`,
-          );
+          const found = entries.find((e) => e.name === target || e.name === `${target}.md` || e.id === target || e.id === `${target}.md`);
           if (found) onFileNavigate(found.id);
         });
 
-        return { dom: span, update: () => { updateState(); return true; } };
+        return {
+          dom: span,
+          update: () => {
+            updateState();
+            return true;
+          },
+        };
       };
     },
 
@@ -127,13 +131,13 @@ export function buildWikiLinkExtension(
             const q = query.toLowerCase();
             const entries = getEntries().filter((e) => e.kind === 'file');
             if (!q) return entries.slice(0, 12);
-            return entries
-              .filter((e) => e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q))
-              .slice(0, 12);
+            return entries.filter((e) => e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)).slice(0, 12);
           },
           command: ({ editor, range, props }) => {
             const target = props.name.replace(/\.md$/, '');
-            editor.chain().focus()
+            editor
+              .chain()
+              .focus()
               .deleteRange(range)
               .insertContent({ type: 'wikiLink', attrs: { target, label: null } })
               .run();

@@ -21,13 +21,16 @@ describe('liveSessionStateSnapshot', () => {
   it('defaults unsafe live snapshot tail block limits', async () => {
     const { buildLiveSessionSnapshot } = await import('./liveSessionStateSnapshot.js');
 
-    buildLiveSessionSnapshot({
-      session: {
-        sessionFile: '/tmp/session.jsonl',
-        isStreaming: false,
-        state: { messages: [] },
-      },
-    } as never, Number.MAX_SAFE_INTEGER + 1);
+    buildLiveSessionSnapshot(
+      {
+        session: {
+          sessionFile: '/tmp/session.jsonl',
+          isStreaming: false,
+          state: { messages: [] },
+        },
+      } as never,
+      Number.MAX_SAFE_INTEGER + 1,
+    );
 
     expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/tmp/session.jsonl', { tailBlocks: 400 });
   });
@@ -35,13 +38,16 @@ describe('liveSessionStateSnapshot', () => {
   it('caps expensive live snapshot tail block limits', async () => {
     const { buildLiveSessionSnapshot } = await import('./liveSessionStateSnapshot.js');
 
-    buildLiveSessionSnapshot({
-      session: {
-        sessionFile: '/tmp/session.jsonl',
-        isStreaming: false,
-        state: { messages: [] },
-      },
-    } as never, 5000);
+    buildLiveSessionSnapshot(
+      {
+        session: {
+          sessionFile: '/tmp/session.jsonl',
+          isStreaming: false,
+          state: { messages: [] },
+        },
+      } as never,
+      5000,
+    );
 
     expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/tmp/session.jsonl', { tailBlocks: 1000 });
   });

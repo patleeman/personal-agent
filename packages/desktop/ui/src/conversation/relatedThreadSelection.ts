@@ -6,9 +6,7 @@ const MAX_VISIBLE_RELATED_THREAD_RESULTS = 100;
 const MAX_AUTO_RELATED_THREAD_SELECTIONS = 5;
 
 function normalizeVisibleRelatedThreadLimit(value: number): number {
-  return Number.isSafeInteger(value) && value >= 0
-    ? Math.min(MAX_VISIBLE_RELATED_THREAD_RESULTS, value)
-    : 0;
+  return Number.isSafeInteger(value) && value >= 0 ? Math.min(MAX_VISIBLE_RELATED_THREAD_RESULTS, value) : 0;
 }
 
 export function buildRelatedThreadCandidateLookup(candidates: SessionMeta[]): {
@@ -33,9 +31,7 @@ export function selectVisibleRelatedThreadResults(input: {
   limit: number;
 }): RelatedConversationSearchResult[] {
   const limit = normalizeVisibleRelatedThreadLimit(input.limit);
-  const baseResults = input.query.trim().length > 0
-    ? input.searchResults
-    : input.recentResults;
+  const baseResults = input.query.trim().length > 0 ? input.searchResults : input.recentResults;
   const results: RelatedConversationSearchResult[] = [];
   const seen = new Set<string>();
 
@@ -58,9 +54,7 @@ export function selectVisibleRelatedThreadResults(input: {
 
     const normalizedSnippet = (input.searchIndex[sessionId] ?? '').replace(/\s+/g, ' ').trim();
     const summary = input.summaries[sessionId];
-    const snippet = normalizedSnippet.length > 140
-      ? `${normalizedSnippet.slice(0, 139).trimEnd()}…`
-      : normalizedSnippet;
+    const snippet = normalizedSnippet.length > 140 ? `${normalizedSnippet.slice(0, 139).trimEnd()}…` : normalizedSnippet;
     const sameWorkspace = Boolean(input.workspaceCwd && session.cwd === input.workspaceCwd);
     results.push({
       sessionId,
@@ -91,11 +85,7 @@ export function selectVisibleRelatedThreadResults(input: {
   return results.slice(0, limit);
 }
 
-export function toggleRelatedThreadSelectionIds(input: {
-  current: string[];
-  sessionId: string;
-  maxSelections: number;
-}): {
+export function toggleRelatedThreadSelectionIds(input: { current: string[]; sessionId: string; maxSelections: number }): {
   next: string[];
   rejected: boolean;
 } {
@@ -113,10 +103,7 @@ export function toggleRelatedThreadSelectionIds(input: {
   return { next: [...input.current, input.sessionId], rejected: false };
 }
 
-export function pruneRelatedThreadSelectionIds(
-  current: string[],
-  candidateById: ReadonlyMap<string, unknown>,
-): string[] {
+export function pruneRelatedThreadSelectionIds(current: string[], candidateById: ReadonlyMap<string, unknown>): string[] {
   return current.filter((sessionId) => candidateById.has(sessionId));
 }
 
@@ -127,11 +114,7 @@ export function selectMissingRelatedThreadSearchIndexIds(input: {
   candidateIds: string[];
   searchIndex: Record<string, string>;
 }): string[] {
-  if (
-    !input.draft
-    || (input.inputText.trim().length === 0 && input.selectedThreadIds.length === 0)
-    || input.candidateIds.length === 0
-  ) {
+  if (!input.draft || (input.inputText.trim().length === 0 && input.selectedThreadIds.length === 0) || input.candidateIds.length === 0) {
     return [];
   }
 
@@ -164,9 +147,10 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
 } {
   const selectedSet = new Set(input.selectedThreadIds);
   const autoSelectedSet = new Set(input.autoSelectedThreadIds);
-  const maxAutoSelections = Number.isSafeInteger(input.maxAutoSelections) && input.maxAutoSelections >= 0
-    ? Math.min(MAX_AUTO_RELATED_THREAD_SELECTIONS, input.maxAutoSelections)
-    : 0;
+  const maxAutoSelections =
+    Number.isSafeInteger(input.maxAutoSelections) && input.maxAutoSelections >= 0
+      ? Math.min(MAX_AUTO_RELATED_THREAD_SELECTIONS, input.maxAutoSelections)
+      : 0;
   const hasManualSelection = input.selectedThreadIds.some((sessionId) => !autoSelectedSet.has(sessionId));
   const prunedAutoSelectedThreadIds = input.autoSelectedThreadIds.filter((sessionId) => selectedSet.has(sessionId));
   const clearAutoSelections = () => ({
@@ -190,9 +174,7 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
     };
   }
 
-  const autoSelectedThreadIds = input.searchResults
-    .slice(0, maxAutoSelections)
-    .map((result) => result.sessionId);
+  const autoSelectedThreadIds = input.searchResults.slice(0, maxAutoSelections).map((result) => result.sessionId);
 
   if (autoSelectedThreadIds.length === 0) {
     if (input.autoSelectedThreadIds.length > 0) {
@@ -214,8 +196,8 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
   }
 
   if (
-    autoSelectedThreadIds.length === input.autoSelectedThreadIds.length
-    && autoSelectedThreadIds.every((sessionId, index) => sessionId === input.autoSelectedThreadIds[index])
+    autoSelectedThreadIds.length === input.autoSelectedThreadIds.length &&
+    autoSelectedThreadIds.every((sessionId, index) => sessionId === input.autoSelectedThreadIds[index])
   ) {
     return {
       selectedThreadIds: input.selectedThreadIds,

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { describe, expect, it, vi } from 'vitest';
+
 import { DaemonPowerController } from './power.js';
 
 class FakeChild extends EventEmitter {

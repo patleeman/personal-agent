@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   buildCronFromEasyTaskSchedule,
   createCronEditorState,
@@ -39,34 +40,40 @@ describe('taskSchedule helpers', () => {
   });
 
   it('builds cron expressions from simple schedules', () => {
-    expect(buildCronFromEasyTaskSchedule({
-      cadence: 'weekly',
-      minute: 30,
-      hour: 8,
-      intervalHours: 4,
-      weekdays: [1, 3, 5],
-      dayOfMonth: 1,
-    })).toBe('30 8 * * 1,3,5');
+    expect(
+      buildCronFromEasyTaskSchedule({
+        cadence: 'weekly',
+        minute: 30,
+        hour: 8,
+        intervalHours: 4,
+        weekdays: [1, 3, 5],
+        dayOfMonth: 1,
+      }),
+    ).toBe('30 8 * * 1,3,5');
   });
 
   it('does not clamp unsafe builder values into maximum schedule fields', () => {
-    expect(buildCronFromEasyTaskSchedule({
-      cadence: 'daily',
-      minute: Number.MAX_SAFE_INTEGER + 1,
-      hour: Number.MAX_SAFE_INTEGER + 1,
-      intervalHours: 4,
-      weekdays: [1],
-      dayOfMonth: 1,
-    })).toBe('0 0 * * *');
+    expect(
+      buildCronFromEasyTaskSchedule({
+        cadence: 'daily',
+        minute: Number.MAX_SAFE_INTEGER + 1,
+        hour: Number.MAX_SAFE_INTEGER + 1,
+        intervalHours: 4,
+        weekdays: [1],
+        dayOfMonth: 1,
+      }),
+    ).toBe('0 0 * * *');
 
-    expect(buildCronFromEasyTaskSchedule({
-      cadence: 'interval',
-      minute: 12.5,
-      hour: 0,
-      intervalHours: Number.MAX_SAFE_INTEGER + 1,
-      weekdays: [1],
-      dayOfMonth: 1,
-    })).toBe('0 */1 * * *');
+    expect(
+      buildCronFromEasyTaskSchedule({
+        cadence: 'interval',
+        minute: 12.5,
+        hour: 0,
+        intervalHours: Number.MAX_SAFE_INTEGER + 1,
+        weekdays: [1],
+        dayOfMonth: 1,
+      }),
+    ).toBe('0 */1 * * *');
   });
 
   it('formats supported schedules for display', () => {
@@ -93,8 +100,12 @@ describe('taskSchedule helpers', () => {
 
   it('finds the next cron run after the current minute', () => {
     const now = Date.parse('2026-03-18T08:58:30');
-    expect(getNextTaskRunAt({ enabled: true, cron: '0 9 * * 1-5' }, now)?.toISOString()).toBe(new Date('2026-03-18T09:00:00').toISOString());
-    expect(getNextTaskRunAt({ enabled: true, cron: '*/15 * * * *' }, Date.parse('2026-03-18T08:45:00'))?.toISOString()).toBe(new Date('2026-03-18T09:00:00').toISOString());
+    expect(getNextTaskRunAt({ enabled: true, cron: '0 9 * * 1-5' }, now)?.toISOString()).toBe(
+      new Date('2026-03-18T09:00:00').toISOString(),
+    );
+    expect(getNextTaskRunAt({ enabled: true, cron: '*/15 * * * *' }, Date.parse('2026-03-18T08:45:00'))?.toISOString()).toBe(
+      new Date('2026-03-18T09:00:00').toISOString(),
+    );
     expect(getNextTaskRunAt({ enabled: true, cron: '0 9abc * * *' }, now)).toBeNull();
     expect(getNextTaskRunAt({ enabled: true, cron: `*/${Number.MAX_SAFE_INTEGER + 1} * * * *` }, now)).toBeNull();
   });

@@ -1,6 +1,7 @@
-import { SessionManager, createAgentSession, type AgentSession } from '@mariozechner/pi-coding-agent';
-import { makeLoader, type LiveSessionLoaderOptions } from './liveSessionLoader.js';
+import { type AgentSession, createAgentSession, SessionManager } from '@mariozechner/pi-coding-agent';
+
 import { makeAuth, makeRegistry } from './liveSessionFactory.js';
+import { type LiveSessionLoaderOptions, makeLoader } from './liveSessionLoader.js';
 
 const NEW_SESSION_PROMPT_PROBE = 'hello';
 
@@ -16,10 +17,13 @@ interface BeforeAgentStartProbeRunner {
     prompt: string,
     images: unknown[] | undefined,
     systemPrompt: string,
-  ) => Promise<{
-    messages?: BeforeAgentStartProbeMessage[];
-    systemPrompt?: string;
-  } | undefined>;
+  ) => Promise<
+    | {
+        messages?: BeforeAgentStartProbeMessage[];
+        systemPrompt?: string;
+      }
+    | undefined
+  >;
 }
 
 async function inspectNewSessionRequest(session: AgentSession): Promise<{
@@ -87,7 +91,8 @@ export async function inspectAvailableLiveSessionTools(input: {
   try {
     const activeTools = session.getActiveToolNames();
     const activeToolSet = new Set(activeTools);
-    const tools = session.getAllTools()
+    const tools = session
+      .getAllTools()
       .map((tool) => ({
         name: tool.name,
         description: tool.description,

@@ -1,5 +1,7 @@
 import { relative } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { RuntimeStatePaths } from './paths.js';
 
 const statePaths: RuntimeStatePaths = {
@@ -99,11 +101,7 @@ describe('preparePiAgentDir race recovery', () => {
 
     await preparePiAgentDir({ statePaths });
 
-    expect(mocks.symlinkSyncMock).toHaveBeenCalledWith(
-      relativeDurableSessionsPath,
-      runtimeSessionsPath,
-      'dir',
-    );
+    expect(mocks.symlinkSyncMock).toHaveBeenCalledWith(relativeDurableSessionsPath, runtimeSessionsPath, 'dir');
     expect(mocks.readlinkSyncMock).toHaveBeenCalledWith(runtimeSessionsPath);
     expect(mocks.unlinkSyncMock).not.toHaveBeenCalled();
     expect(mocks.rmSyncMock).not.toHaveBeenCalled();
@@ -143,10 +141,6 @@ describe('preparePiAgentDir race recovery', () => {
 
     expect(mocks.rmSyncMock).toHaveBeenCalledWith(runtimeSessionsPath, { recursive: true, force: true });
     expect(mocks.symlinkSyncMock).toHaveBeenCalledTimes(2);
-    expect(mocks.symlinkSyncMock).toHaveBeenLastCalledWith(
-      relativeDurableSessionsPath,
-      runtimeSessionsPath,
-      'dir',
-    );
+    expect(mocks.symlinkSyncMock).toHaveBeenLastCalledWith(relativeDurableSessionsPath, runtimeSessionsPath, 'dir');
   });
 });

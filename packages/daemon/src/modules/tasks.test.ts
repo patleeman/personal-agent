@@ -1,10 +1,10 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { listProfileActivityEntries, loadDeferredResumeState, openSqliteDatabase, setTaskCallbackBinding } from '@personal-agent/core';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { listProfileActivityEntries, loadDeferredResumeState, openSqliteDatabase, setTaskCallbackBinding } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DaemonConfig } from '../config.js';
+
 import {
   appendAutomationActivityEntry,
   closeAutomationDbs,
@@ -16,6 +16,7 @@ import {
   saveAutomationSchedulerState,
   setStoredAutomationThreadBinding,
 } from '../automation-store.js';
+import type { DaemonConfig } from '../config.js';
 import {
   createDurableRunManifest,
   createInitialDurableRunStatus,
@@ -28,9 +29,9 @@ import {
   saveDurableRunStatus,
 } from '../runs/store.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
-import type { DaemonModuleContext } from './types.js';
 import { createTasksModule } from './tasks.js';
 import type { TaskRunRequest, TaskRunResult } from './tasks-runner.js';
+import type { DaemonModuleContext } from './types.js';
 
 const tempDirs: string[] = [];
 
@@ -72,7 +73,10 @@ interface PublishedEvent {
   payload?: EventPayload;
 }
 
-function createContext(taskDir: string, stateRoot: string): {
+function createContext(
+  taskDir: string,
+  stateRoot: string,
+): {
   context: DaemonModuleContext;
   published: PublishedEvent[];
 } {
@@ -140,13 +144,7 @@ async function waitForCondition(check: () => boolean, timeoutMs = 2000): Promise
   }
 }
 
-function createRunResult(
-  request: TaskRunRequest,
-  success: boolean,
-  nowIso: string,
-  error?: string,
-  outputText?: string,
-): TaskRunResult {
+function createRunResult(request: TaskRunRequest, success: boolean, nowIso: string, error?: string, outputText?: string): TaskRunResult {
   return {
     success,
     startedAt: nowIso,
@@ -171,67 +169,77 @@ describe('tasks module scheduling', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
 
-    expect(() => createStoredAutomation({
-      dbPath,
-      id: 'fractional-timeout',
-      profile: 'assistant',
-      title: 'Fractional timeout',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: 1.5,
-      prompt: 'Run maintenance.',
-    })).toThrow('timeoutSeconds must be a positive integer.');
+    expect(() =>
+      createStoredAutomation({
+        dbPath,
+        id: 'fractional-timeout',
+        profile: 'assistant',
+        title: 'Fractional timeout',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: 1.5,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('timeoutSeconds must be a positive integer.');
   });
 
   it('rejects unsafe automation durations when storing tasks', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
 
-    expect(() => createStoredAutomation({
-      dbPath,
-      id: 'unsafe-timeout',
-      profile: 'assistant',
-      title: 'Unsafe timeout',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
-      prompt: 'Run maintenance.',
-    })).toThrow('timeoutSeconds must be a positive integer.');
+    expect(() =>
+      createStoredAutomation({
+        dbPath,
+        id: 'unsafe-timeout',
+        profile: 'assistant',
+        title: 'Unsafe timeout',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('timeoutSeconds must be a positive integer.');
 
-    expect(() => createStoredAutomation({
-      dbPath,
-      id: 'huge-timeout',
-      profile: 'assistant',
-      title: 'Huge timeout',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: Number.MAX_SAFE_INTEGER,
-      prompt: 'Run maintenance.',
-    })).toThrow('timeoutSeconds must be a positive integer.');
+    expect(() =>
+      createStoredAutomation({
+        dbPath,
+        id: 'huge-timeout',
+        profile: 'assistant',
+        title: 'Huge timeout',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: Number.MAX_SAFE_INTEGER,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('timeoutSeconds must be a positive integer.');
 
-    expect(() => createStoredAutomation({
-      dbPath,
-      id: 'unsafe-catch-up',
-      profile: 'assistant',
-      title: 'Unsafe catch-up',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: 60,
-      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
-      prompt: 'Run maintenance.',
-    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+    expect(() =>
+      createStoredAutomation({
+        dbPath,
+        id: 'unsafe-catch-up',
+        profile: 'assistant',
+        title: 'Unsafe catch-up',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: 60,
+        catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('catchUpWindowSeconds must be a positive integer.');
 
-    expect(() => createStoredAutomation({
-      dbPath,
-      id: 'huge-catch-up',
-      profile: 'assistant',
-      title: 'Huge catch-up',
-      enabled: true,
-      cron: '0 * * * *',
-      timeoutSeconds: 60,
-      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
-      prompt: 'Run maintenance.',
-    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+    expect(() =>
+      createStoredAutomation({
+        dbPath,
+        id: 'huge-catch-up',
+        profile: 'assistant',
+        title: 'Huge catch-up',
+        enabled: true,
+        cron: '0 * * * *',
+        timeoutSeconds: 60,
+        catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('catchUpWindowSeconds must be a positive integer.');
   });
 
   it('normalizes one-time automation timestamps when storing tasks', () => {
@@ -249,26 +257,30 @@ describe('tasks module scheduling', () => {
       prompt: 'Run maintenance.',
     });
 
-    expect(automation.schedule).toEqual(expect.objectContaining({
-      type: 'at',
-      at: '2026-03-02T10:00:00.000Z',
-    }));
+    expect(automation.schedule).toEqual(
+      expect.objectContaining({
+        type: 'at',
+        at: '2026-03-02T10:00:00.000Z',
+      }),
+    );
   });
 
   it('rejects malformed one-time automation timestamps when storing tasks', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
 
-    expect(() => createStoredAutomation({
-      dbPath,
-      id: 'malformed-at',
-      profile: 'assistant',
-      title: 'Malformed at',
-      enabled: true,
-      at: '9999',
-      timeoutSeconds: 60,
-      prompt: 'Run maintenance.',
-    })).toThrow('Invalid at timestamp: 9999');
+    expect(() =>
+      createStoredAutomation({
+        dbPath,
+        id: 'malformed-at',
+        profile: 'assistant',
+        title: 'Malformed at',
+        enabled: true,
+        at: '9999',
+        timeoutSeconds: 60,
+        prompt: 'Run maintenance.',
+      }),
+    ).toThrow('Invalid at timestamp: 9999');
   });
 
   it('does not floor fractional automation activity limits', () => {
@@ -285,24 +297,32 @@ describe('tasks module scheduling', () => {
       prompt: 'Run maintenance.',
     });
 
-    appendAutomationActivityEntry('activity-limit', {
-      kind: 'missed',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      count: 1,
-      firstScheduledAt: '2026-03-02T10:00:00.000Z',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath });
-    appendAutomationActivityEntry('activity-limit', {
-      kind: 'missed',
-      createdAt: '2026-03-02T11:00:00.000Z',
-      count: 1,
-      firstScheduledAt: '2026-03-02T11:00:00.000Z',
-      lastScheduledAt: '2026-03-02T11:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T11:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath });
+    appendAutomationActivityEntry(
+      'activity-limit',
+      {
+        kind: 'missed',
+        createdAt: '2026-03-02T10:00:00.000Z',
+        count: 1,
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
+        exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+        outcome: 'skipped',
+      },
+      { dbPath },
+    );
+    appendAutomationActivityEntry(
+      'activity-limit',
+      {
+        kind: 'missed',
+        createdAt: '2026-03-02T11:00:00.000Z',
+        count: 1,
+        firstScheduledAt: '2026-03-02T11:00:00.000Z',
+        lastScheduledAt: '2026-03-02T11:00:00.000Z',
+        exampleScheduledAt: ['2026-03-02T11:00:00.000Z'],
+        outcome: 'skipped',
+      },
+      { dbPath },
+    );
 
     expect(listAutomationActivityEntries('activity-limit', { dbPath, limit: 1.5 })).toHaveLength(2);
   });
@@ -323,15 +343,19 @@ describe('tasks module scheduling', () => {
 
     for (let index = 0; index < 21; index += 1) {
       const hour = String(index).padStart(2, '0');
-      appendAutomationActivityEntry('unsafe-activity-limit', {
-        kind: 'missed',
-        createdAt: `2026-03-02T${hour}:00:00.000Z`,
-        count: 1,
-        firstScheduledAt: `2026-03-02T${hour}:00:00.000Z`,
-        lastScheduledAt: `2026-03-02T${hour}:00:00.000Z`,
-        exampleScheduledAt: [`2026-03-02T${hour}:00:00.000Z`],
-        outcome: 'skipped',
-      }, { dbPath });
+      appendAutomationActivityEntry(
+        'unsafe-activity-limit',
+        {
+          kind: 'missed',
+          createdAt: `2026-03-02T${hour}:00:00.000Z`,
+          count: 1,
+          firstScheduledAt: `2026-03-02T${hour}:00:00.000Z`,
+          lastScheduledAt: `2026-03-02T${hour}:00:00.000Z`,
+          exampleScheduledAt: [`2026-03-02T${hour}:00:00.000Z`],
+          outcome: 'skipped',
+        },
+        { dbPath },
+      );
     }
 
     expect(listAutomationActivityEntries('unsafe-activity-limit', { dbPath, limit: Number.MAX_SAFE_INTEGER + 1 })).toHaveLength(20);
@@ -351,15 +375,21 @@ describe('tasks module scheduling', () => {
       prompt: 'Run maintenance.',
     });
 
-    expect(() => appendAutomationActivityEntry('unsafe-activity-count', {
-      kind: 'missed',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      count: Number.MAX_SAFE_INTEGER + 1,
-      firstScheduledAt: '2026-03-02T10:00:00.000Z',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath })).toThrow('Automation activity count must be a positive integer.');
+    expect(() =>
+      appendAutomationActivityEntry(
+        'unsafe-activity-count',
+        {
+          kind: 'missed',
+          createdAt: '2026-03-02T10:00:00.000Z',
+          count: Number.MAX_SAFE_INTEGER + 1,
+          firstScheduledAt: '2026-03-02T10:00:00.000Z',
+          lastScheduledAt: '2026-03-02T10:00:00.000Z',
+          exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+          outcome: 'skipped',
+        },
+        { dbPath },
+      ),
+    ).toThrow('Automation activity count must be a positive integer.');
   });
 
   it('rejects invalid automation activity timestamps with field errors', () => {
@@ -375,25 +405,37 @@ describe('tasks module scheduling', () => {
       prompt: 'Run maintenance.',
     });
 
-    expect(() => appendAutomationActivityEntry('invalid-activity-time', {
-      kind: 'missed',
-      createdAt: 'not-a-date',
-      count: 1,
-      firstScheduledAt: '2026-03-02T10:00:00.000Z',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath })).toThrow('Automation activity createdAt must be a valid timestamp.');
+    expect(() =>
+      appendAutomationActivityEntry(
+        'invalid-activity-time',
+        {
+          kind: 'missed',
+          createdAt: 'not-a-date',
+          count: 1,
+          firstScheduledAt: '2026-03-02T10:00:00.000Z',
+          lastScheduledAt: '2026-03-02T10:00:00.000Z',
+          exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+          outcome: 'skipped',
+        },
+        { dbPath },
+      ),
+    ).toThrow('Automation activity createdAt must be a valid timestamp.');
 
-    expect(() => appendAutomationActivityEntry('invalid-activity-time', {
-      kind: 'missed',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      count: 1,
-      firstScheduledAt: 'not-a-date',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath })).toThrow('Automation activity firstScheduledAt must be a valid timestamp.');
+    expect(() =>
+      appendAutomationActivityEntry(
+        'invalid-activity-time',
+        {
+          kind: 'missed',
+          createdAt: '2026-03-02T10:00:00.000Z',
+          count: 1,
+          firstScheduledAt: 'not-a-date',
+          lastScheduledAt: '2026-03-02T10:00:00.000Z',
+          exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+          outcome: 'skipped',
+        },
+        { dbPath },
+      ),
+    ).toThrow('Automation activity firstScheduledAt must be a valid timestamp.');
   });
 
   it('skips persisted automation activity rows with malformed created times', () => {
@@ -408,15 +450,19 @@ describe('tasks module scheduling', () => {
       cron: '0 * * * *',
       prompt: 'Run maintenance.',
     });
-    appendAutomationActivityEntry('corrupt-activity-time', {
-      kind: 'missed',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      count: 1,
-      firstScheduledAt: '2026-03-02T10:00:00.000Z',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath });
+    appendAutomationActivityEntry(
+      'corrupt-activity-time',
+      {
+        kind: 'missed',
+        createdAt: '2026-03-02T10:00:00.000Z',
+        count: 1,
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
+        exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+        outcome: 'skipped',
+      },
+      { dbPath },
+    );
     openSqliteDatabase(dbPath)
       .prepare('UPDATE automation_activity SET created_at = ? WHERE automation_id = ?')
       .run('not-a-date', 'corrupt-activity-time');
@@ -436,15 +482,19 @@ describe('tasks module scheduling', () => {
       cron: '0 * * * *',
       prompt: 'Run maintenance.',
     });
-    appendAutomationActivityEntry('non-iso-activity-time', {
-      kind: 'missed',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      count: 1,
-      firstScheduledAt: '2026-03-02T10:00:00.000Z',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath });
+    appendAutomationActivityEntry(
+      'non-iso-activity-time',
+      {
+        kind: 'missed',
+        createdAt: '2026-03-02T10:00:00.000Z',
+        count: 1,
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
+        exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+        outcome: 'skipped',
+      },
+      { dbPath },
+    );
     openSqliteDatabase(dbPath)
       .prepare('UPDATE automation_activity SET created_at = ? WHERE automation_id = ?')
       .run('1', 'non-iso-activity-time');
@@ -465,15 +515,19 @@ describe('tasks module scheduling', () => {
       prompt: 'Run maintenance.',
     });
 
-    appendAutomationActivityEntry('non-iso-activity-example-time', {
-      kind: 'missed',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      count: 1,
-      firstScheduledAt: '2026-03-02T10:00:00.000Z',
-      lastScheduledAt: '2026-03-02T10:00:00.000Z',
-      exampleScheduledAt: ['1', '2026-03-02T10:00:00.000Z'],
-      outcome: 'skipped',
-    }, { dbPath });
+    appendAutomationActivityEntry(
+      'non-iso-activity-example-time',
+      {
+        kind: 'missed',
+        createdAt: '2026-03-02T10:00:00.000Z',
+        count: 1,
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
+        exampleScheduledAt: ['1', '2026-03-02T10:00:00.000Z'],
+        outcome: 'skipped',
+      },
+      { dbPath },
+    );
 
     expect(listAutomationActivityEntries('non-iso-activity-example-time', { dbPath })[0]?.exampleScheduledAt).toEqual([
       '2026-03-02T10:00:00.000Z',
@@ -492,36 +546,42 @@ describe('tasks module scheduling', () => {
       cron: '0 * * * *',
       prompt: 'Run maintenance.',
     });
-    openSqliteDatabase(dbPath).prepare(`
+    openSqliteDatabase(dbPath)
+      .prepare(
+        `
       INSERT INTO automation_state (
         automation_id, running_started_at, last_status, last_run_at, last_success_at,
         last_failure_at, last_attempt_count, one_time_resolved_at, one_time_resolved_status,
         one_time_completed_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      'corrupt-runtime-state',
-      'not-a-date',
-      'weird',
-      'bad-last-run',
-      'bad-success',
-      'bad-failure',
-      Number.MAX_SAFE_INTEGER + 1,
-      'bad-resolved',
-      'weird-status',
-      'bad-completed',
-    );
+    `,
+      )
+      .run(
+        'corrupt-runtime-state',
+        'not-a-date',
+        'weird',
+        'bad-last-run',
+        'bad-success',
+        'bad-failure',
+        Number.MAX_SAFE_INTEGER + 1,
+        'bad-resolved',
+        'weird-status',
+        'bad-completed',
+      );
 
-    expect(loadAutomationRuntimeStateMap({ dbPath })['corrupt-runtime-state']).toEqual(expect.objectContaining({
-      runningStartedAt: undefined,
-      lastStatus: undefined,
-      lastRunAt: undefined,
-      lastSuccessAt: undefined,
-      lastFailureAt: undefined,
-      lastAttemptCount: undefined,
-      oneTimeResolvedAt: undefined,
-      oneTimeResolvedStatus: undefined,
-      oneTimeCompletedAt: undefined,
-    }));
+    expect(loadAutomationRuntimeStateMap({ dbPath })['corrupt-runtime-state']).toEqual(
+      expect.objectContaining({
+        runningStartedAt: undefined,
+        lastStatus: undefined,
+        lastRunAt: undefined,
+        lastSuccessAt: undefined,
+        lastFailureAt: undefined,
+        lastAttemptCount: undefined,
+        oneTimeResolvedAt: undefined,
+        oneTimeResolvedStatus: undefined,
+        oneTimeCompletedAt: undefined,
+      }),
+    );
   });
 
   it('sanitizes non-ISO persisted automation runtime timestamps', () => {
@@ -536,29 +596,27 @@ describe('tasks module scheduling', () => {
       cron: '0 * * * *',
       prompt: 'Run maintenance.',
     });
-    openSqliteDatabase(dbPath).prepare(`
+    openSqliteDatabase(dbPath)
+      .prepare(
+        `
       INSERT INTO automation_state (
         automation_id, running_started_at, last_run_at, last_success_at,
         last_failure_at, one_time_resolved_at, one_time_completed_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      'non-iso-runtime-state',
-      '1',
-      '1',
-      '1',
-      '1',
-      '1',
-      '1',
-    );
+    `,
+      )
+      .run('non-iso-runtime-state', '1', '1', '1', '1', '1', '1');
 
-    expect(loadAutomationRuntimeStateMap({ dbPath })['non-iso-runtime-state']).toEqual(expect.objectContaining({
-      runningStartedAt: undefined,
-      lastRunAt: undefined,
-      lastSuccessAt: undefined,
-      lastFailureAt: undefined,
-      oneTimeResolvedAt: undefined,
-      oneTimeCompletedAt: undefined,
-    }));
+    expect(loadAutomationRuntimeStateMap({ dbPath })['non-iso-runtime-state']).toEqual(
+      expect.objectContaining({
+        runningStartedAt: undefined,
+        lastRunAt: undefined,
+        lastSuccessAt: undefined,
+        lastFailureAt: undefined,
+        oneTimeResolvedAt: undefined,
+        oneTimeCompletedAt: undefined,
+      }),
+    );
   });
 
   it('drops malformed persisted automation scheduler timestamps', () => {
@@ -590,10 +648,12 @@ describe('tasks module scheduling', () => {
       .prepare('UPDATE automations SET created_at = ?, updated_at = ? WHERE id = ?')
       .run('not-a-date', 'also-not-a-date', automation.id);
 
-    expect(listStoredAutomations({ dbPath })[0]).toEqual(expect.objectContaining({
-      createdAt: '2026-03-02T12:00:00.000Z',
-      updatedAt: '2026-03-02T12:00:00.000Z',
-    }));
+    expect(listStoredAutomations({ dbPath })[0]).toEqual(
+      expect.objectContaining({
+        createdAt: '2026-03-02T12:00:00.000Z',
+        updatedAt: '2026-03-02T12:00:00.000Z',
+      }),
+    );
   });
 
   it('does not floor fractional task module timer config', () => {
@@ -905,10 +965,7 @@ describe('tasks module scheduling', () => {
       `---\nid: default-mode\nat: "2026-03-02T10:00:00.000Z"\n---\nRun using default execution\n`,
     );
 
-    writeFileSync(
-      join(taskDir, 'second-run.task.md'),
-      `---\nid: second-run\nat: "2026-03-02T10:00:00.000Z"\n---\nRun the second task\n`,
-    );
+    writeFileSync(join(taskDir, 'second-run.task.md'), `---\nid: second-run\nat: "2026-03-02T10:00:00.000Z"\n---\nRun the second task\n`);
 
     let currentTime = new Date('2026-03-02T09:59:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
@@ -956,23 +1013,22 @@ describe('tasks module scheduling', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const taskPath = join(taskDir, 'daily-report.task.md');
 
-    writeFileSync(taskPath, `---
+    writeFileSync(
+      taskPath,
+      `---
 id: daily-report
 at: "2026-03-02T10:00:00.000Z"
 profile: datadog
 ---
 Write daily report
-`);
+`,
+    );
 
     let currentTime = new Date('2026-03-02T09:59:00.000Z');
 
-    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
-      request,
-      true,
-      currentTime.toISOString(),
-      undefined,
-      'Daily report generated successfully.',
-    ));
+    const runTask = vi.fn(async (request: TaskRunRequest) =>
+      createRunResult(request, true, currentTime.toISOString(), undefined, 'Daily report generated successfully.'),
+    );
 
     const module = createTasksModule(
       {
@@ -1014,23 +1070,28 @@ Write daily report
     const daemonRoot = join(stateRoot, 'daemon');
     const taskPath = join(taskDir, 'memory-maintenance.task.md');
 
-    writeFileSync(taskPath, `---
+    writeFileSync(
+      taskPath,
+      `---
 id: datadog-memory-maintenance
 at: "2026-03-02T10:00:00.000Z"
 profile: datadog
 ---
 Maintain durable memory
-`);
+`,
+    );
 
     let currentTime = new Date('2026-03-02T09:59:00.000Z');
 
-    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
-      request,
-      true,
-      currentTime.toISOString(),
-      undefined,
-      'Completed the datadog memory-maintenance pass.\n\nFiles updated\n- /tmp/processed-conversations.json',
-    ));
+    const runTask = vi.fn(async (request: TaskRunRequest) =>
+      createRunResult(
+        request,
+        true,
+        currentTime.toISOString(),
+        undefined,
+        'Completed the datadog memory-maintenance pass.\n\nFiles updated\n- /tmp/processed-conversations.json',
+      ),
+    );
 
     const module = createTasksModule(
       {
@@ -1079,60 +1140,72 @@ Maintain durable memory
     const taskPath = join(taskDir, 'recover-me.task.md');
     const priorRunId = 'task-recover-me-prior';
 
-    writeFileSync(taskPath, `---
+    writeFileSync(
+      taskPath,
+      `---
 id: recover-me
 at: "2026-03-02T10:00:00.000Z"
 profile: datadog
 ---
 Recover me after restart
-`);
+`,
+    );
 
     const runsRoot = resolveDurableRunsRoot(stateRoot);
     const priorRunPaths = resolveDurableRunPaths(runsRoot, priorRunId);
-    saveDurableRunManifest(priorRunPaths.manifestPath, createDurableRunManifest({
-      id: priorRunId,
-      kind: 'scheduled-task',
-      resumePolicy: 'rerun',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      source: {
-        type: 'scheduled-task',
-        id: 'recover-me',
-        filePath: taskPath,
-      },
-    }));
-    saveDurableRunStatus(priorRunPaths.statusPath, createInitialDurableRunStatus({
-      runId: priorRunId,
-      status: 'running',
-      createdAt: '2026-03-02T10:00:00.000Z',
-      updatedAt: '2026-03-02T10:05:00.000Z',
-      activeAttempt: 1,
-      startedAt: '2026-03-02T10:00:00.000Z',
-    }));
-
-    writeFileSync(join(stateRoot, 'task-state.json'), JSON.stringify({
-      version: 1,
-      tasks: {
-        [taskPath]: {
+    saveDurableRunManifest(
+      priorRunPaths.manifestPath,
+      createDurableRunManifest({
+        id: priorRunId,
+        kind: 'scheduled-task',
+        resumePolicy: 'rerun',
+        createdAt: '2026-03-02T10:00:00.000Z',
+        source: {
+          type: 'scheduled-task',
           id: 'recover-me',
           filePath: taskPath,
-          scheduleType: 'at',
-          running: true,
-          runningStartedAt: '2026-03-02T10:00:00.000Z',
-          activeRunId: priorRunId,
-          lastRunId: priorRunId,
-          lastStatus: 'running',
         },
-      },
-    }, null, 2));
+      }),
+    );
+    saveDurableRunStatus(
+      priorRunPaths.statusPath,
+      createInitialDurableRunStatus({
+        runId: priorRunId,
+        status: 'running',
+        createdAt: '2026-03-02T10:00:00.000Z',
+        updatedAt: '2026-03-02T10:05:00.000Z',
+        activeAttempt: 1,
+        startedAt: '2026-03-02T10:00:00.000Z',
+      }),
+    );
+
+    writeFileSync(
+      join(stateRoot, 'task-state.json'),
+      JSON.stringify(
+        {
+          version: 1,
+          tasks: {
+            [taskPath]: {
+              id: 'recover-me',
+              filePath: taskPath,
+              scheduleType: 'at',
+              running: true,
+              runningStartedAt: '2026-03-02T10:00:00.000Z',
+              activeRunId: priorRunId,
+              lastRunId: priorRunId,
+              lastStatus: 'running',
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
 
     const currentTime = new Date('2026-03-02T10:30:00.000Z');
-    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
-      request,
-      true,
-      currentTime.toISOString(),
-      undefined,
-      'Recovered successfully.',
-    ));
+    const runTask = vi.fn(async (request: TaskRunRequest) =>
+      createRunResult(request, true, currentTime.toISOString(), undefined, 'Recovered successfully.'),
+    );
 
     const module = createTasksModule(
       {
@@ -1161,9 +1234,7 @@ Recover me after restart
 
       const persistedState = loadAutomationRuntimeStateMap({ dbPath: resolveRuntimeDbPath(stateRoot) });
       const taskState = persistedState['recover-me'];
-      return taskState?.activeRunId === undefined
-        && taskState.lastRunId !== priorRunId
-        && taskState.oneTimeResolvedStatus === 'success';
+      return taskState?.activeRunId === undefined && taskState.lastRunId !== priorRunId && taskState.oneTimeResolvedStatus === 'success';
     });
 
     expect(runTask).toHaveBeenCalledTimes(1);
@@ -1184,13 +1255,16 @@ Recover me after restart
     const stateRoot = createTempDir('tasks-module-state-');
     const taskPath = join(taskDir, 'daily-report.task.md');
 
-    writeFileSync(taskPath, `---
+    writeFileSync(
+      taskPath,
+      `---
 id: daily-report
 at: "2026-03-02T10:00:00.000Z"
 profile: datadog
 ---
 Write daily report
-`);
+`,
+    );
 
     const currentTime = new Date('2026-03-02T10:30:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
@@ -1237,18 +1311,18 @@ Write daily report
     const stateRoot = createTempDir('tasks-module-state-');
     const taskPath = join(taskDir, 'hourly.task.md');
 
-    writeFileSync(taskPath, `---
+    writeFileSync(
+      taskPath,
+      `---
 id: hourly
 cron: "0 * * * *"
 profile: datadog
 ---
 Run hourly task
-`);
-
-    saveAutomationSchedulerState(
-      { lastEvaluatedAt: '2026-03-02T09:59:30.000Z' },
-      { dbPath: resolveRuntimeDbPath(stateRoot) },
+`,
     );
+
+    saveAutomationSchedulerState({ lastEvaluatedAt: '2026-03-02T09:59:30.000Z' }, { dbPath: resolveRuntimeDbPath(stateRoot) });
 
     let currentTime = new Date('2026-03-02T11:05:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
@@ -1312,10 +1386,7 @@ Run hourly task
     });
     setStoredAutomationThreadBinding('morning-brief', { dbPath, mode: 'none' });
 
-    saveAutomationSchedulerState(
-      { lastEvaluatedAt: '2026-03-02T09:59:30.000Z' },
-      { dbPath },
-    );
+    saveAutomationSchedulerState({ lastEvaluatedAt: '2026-03-02T09:59:30.000Z' }, { dbPath });
 
     expect(listStoredAutomations({ dbPath })[0]?.catchUpWindowSeconds).toBe(15 * 60);
 
@@ -1376,10 +1447,7 @@ Run hourly task
     });
     setStoredAutomationThreadBinding('morning-brief', { dbPath, mode: 'none' });
 
-    saveAutomationSchedulerState(
-      { lastEvaluatedAt: '2026-03-02T09:59:30.000Z' },
-      { dbPath },
-    );
+    saveAutomationSchedulerState({ lastEvaluatedAt: '2026-03-02T09:59:30.000Z' }, { dbPath });
 
     let currentTime = new Date('2026-03-02T10:10:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
@@ -1498,13 +1566,9 @@ Run hourly task
     });
 
     let currentTime = new Date('2026-03-02T10:00:00.000Z');
-    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
-      request,
-      true,
-      currentTime.toISOString(),
-      undefined,
-      'Confirm Kubernetes Mutations is waiting for approval.',
-    ));
+    const runTask = vi.fn(async (request: TaskRunRequest) =>
+      createRunResult(request, true, currentTime.toISOString(), undefined, 'Confirm Kubernetes Mutations is waiting for approval.'),
+    );
 
     const module = createTasksModule(
       {
@@ -1539,11 +1603,13 @@ Run hourly task
 
     const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
     const callback = Object.values(deferredState.resumes)[0];
-    expect(callback).toEqual(expect.objectContaining({
-      kind: 'task-callback',
-      status: 'ready',
-      title: 'Scheduled task @watch-prod completed',
-    }));
+    expect(callback).toEqual(
+      expect.objectContaining({
+        kind: 'task-callback',
+        status: 'ready',
+        title: 'Scheduled task @watch-prod completed',
+      }),
+    );
 
     await module.stop?.(context);
   });
@@ -1600,20 +1666,24 @@ Run hourly task
     expect(Object.keys(deferredState.resumes)).toHaveLength(0);
 
     const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
-    expect(runtimeState['conversation-check']).toEqual(expect.objectContaining({
-      lastStatus: 'success',
-      lastAttemptCount: 1,
-      oneTimeResolvedStatus: 'success',
-    }));
+    expect(runtimeState['conversation-check']).toEqual(
+      expect.objectContaining({
+        lastStatus: 'success',
+        lastAttemptCount: 1,
+        oneTimeResolvedStatus: 'success',
+      }),
+    );
     expect(runTask).toHaveBeenCalledTimes(1);
-    expect(runTask.mock.calls[0]?.[0].task).toEqual(expect.objectContaining({
-      id: 'conversation-check',
-      targetType: 'conversation',
-      threadMode: 'dedicated',
-      threadConversationId: expect.any(String),
-      threadSessionFile: expect.any(String),
-      conversationBehavior: 'followUp',
-    }));
+    expect(runTask.mock.calls[0]?.[0].task).toEqual(
+      expect.objectContaining({
+        id: 'conversation-check',
+        targetType: 'conversation',
+        threadMode: 'dedicated',
+        threadConversationId: expect.any(String),
+        threadSessionFile: expect.any(String),
+        conversationBehavior: 'followUp',
+      }),
+    );
 
     const runId = runtimeState['conversation-check']?.lastRunId;
     expect(runId).toBeTruthy();
@@ -1680,10 +1750,12 @@ Run hourly task
     expect(Object.keys(deferredState.resumes)).toHaveLength(0);
 
     const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
-    expect(runtimeState['hourly-check']).toEqual(expect.objectContaining({
-      lastStatus: 'success',
-      lastError: undefined,
-    }));
+    expect(runtimeState['hourly-check']).toEqual(
+      expect.objectContaining({
+        lastStatus: 'success',
+        lastError: undefined,
+      }),
+    );
     const status = module.getStatus?.() as { skippedRuns?: number; successfulRuns?: number };
     expect(status.skippedRuns).toBe(0);
     expect(status.successfulRuns).toBe(2);

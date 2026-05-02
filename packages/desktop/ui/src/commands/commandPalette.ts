@@ -98,10 +98,7 @@ export function shouldBootstrapCommandPaletteThreads(options: {
   return options.scope === 'threads' || options.scope === 'search';
 }
 
-export function isCommandPaletteThreadDataLoading(options: {
-  sessions: unknown[] | null;
-  sessionsLoading: boolean;
-}): boolean {
+export function isCommandPaletteThreadDataLoading(options: { sessions: unknown[] | null; sessionsLoading: boolean }): boolean {
   return options.sessions === null || options.sessionsLoading;
 }
 
@@ -132,10 +129,7 @@ export function selectCommandPaletteScopedItems<TAction>(input: {
     ...input.archivedConversationItems,
     ...(hasQuery ? input.searchedConversationItems : []),
   ];
-  const fileItems = [
-    ...input.fileItems,
-    ...(hasQuery ? input.searchedFileItems : []),
-  ];
+  const fileItems = [...input.fileItems, ...(hasQuery ? input.searchedFileItems : [])];
 
   switch (input.scope) {
     case 'threads':
@@ -274,15 +268,15 @@ export function searchCommandPaletteItems<TAction>(
     }
 
     const emptyQueryLimit = readEmptyQueryLimit(section, options.emptyQueryLimits?.[section]);
-    const limited = emptyQuery
-      ? rankedItems.slice(0, emptyQueryLimit)
-      : rankedItems;
+    const limited = emptyQuery ? rankedItems.slice(0, emptyQueryLimit) : rankedItems;
 
-    return [{
-      section,
-      label: COMMAND_PALETTE_SECTION_LABELS[section],
-      total: rankedItems.length,
-      items: limited.map(({ item, score }) => ({ ...item, score })),
-    } satisfies CommandPaletteSectionResult<TAction>];
+    return [
+      {
+        section,
+        label: COMMAND_PALETTE_SECTION_LABELS[section],
+        total: rankedItems.length,
+        items: limited.map(({ item, score }) => ({ ...item, score })),
+      } satisfies CommandPaletteSectionResult<TAction>,
+    ];
   });
 }

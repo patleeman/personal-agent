@@ -3,7 +3,15 @@ import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { TranscriptionFileInput, TranscriptionInstallResult, TranscriptionModelStatus, TranscriptionOptions, TranscriptionProvider, TranscriptionResult } from './types.js';
+
+import type {
+  TranscriptionFileInput,
+  TranscriptionInstallResult,
+  TranscriptionModelStatus,
+  TranscriptionOptions,
+  TranscriptionProvider,
+  TranscriptionResult,
+} from './types.js';
 
 const DEFAULT_LOCAL_WHISPER_MODEL = 'base.en';
 const PCM_SAMPLE_RATE = 16_000;
@@ -36,7 +44,10 @@ type WhisperContext = Awaited<ReturnType<typeof import('whisper-cpp-node').creat
 
 interface WhisperCppNodeModule {
   createWhisperContext(options: { model: string; use_gpu?: boolean; no_prints?: boolean }): WhisperContext;
-  transcribeAsync(ctx: WhisperContext, options: { pcmf32: Float32Array; language?: string; no_timestamps?: boolean; no_prints?: boolean }): Promise<{ segments: Array<[string, string, string]> }>;
+  transcribeAsync(
+    ctx: WhisperContext,
+    options: { pcmf32: Float32Array; language?: string; no_timestamps?: boolean; no_prints?: boolean },
+  ): Promise<{ segments: Array<[string, string, string]> }>;
 }
 
 interface WhisperCppTranscriptionProviderOptions {
@@ -94,11 +105,7 @@ function loadWhisperCpp(): WhisperCppNodeModule {
   return whisperCppModule;
 }
 
-function getOrCreateContext(
-  modelRootPath: string,
-  model: string,
-  module_: WhisperCppNodeModule,
-): WhisperContext {
+function getOrCreateContext(modelRootPath: string, model: string, module_: WhisperCppNodeModule): WhisperContext {
   const normalizedModel = normalizeLocalWhisperModel(model);
   const modelPath = resolveModelFilePath(modelRootPath, normalizedModel);
   const cacheKey = modelPath;
@@ -109,8 +116,8 @@ function getOrCreateContext(
 
   if (!existsSync(modelPath)) {
     throw new Error(
-      `Whisper model not found at ${modelPath}. Download it first via the Settings page or manually:\n`
-      + `curl -L -o "${modelPath}" "${resolveModelDownloadUrl(normalizedModel)}"`,
+      `Whisper model not found at ${modelPath}. Download it first via the Settings page or manually:\n` +
+        `curl -L -o "${modelPath}" "${resolveModelDownloadUrl(normalizedModel)}"`,
     );
   }
 

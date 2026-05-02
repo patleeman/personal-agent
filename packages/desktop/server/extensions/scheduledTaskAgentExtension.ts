@@ -1,25 +1,21 @@
-import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import {
-  clearTaskCallbackBinding,
-  getTaskCallbackBinding,
-  readSessionConversationId,
-  setTaskCallbackBinding,
-} from '@personal-agent/core';
+import { clearTaskCallbackBinding, getTaskCallbackBinding, readSessionConversationId, setTaskCallbackBinding } from '@personal-agent/core';
 import {
   createStoredAutomation,
   deleteStoredAutomation,
   normalizeAutomationTargetTypeForSelection,
   pingDaemon,
   startScheduledTaskRun,
-  updateStoredAutomation,
   type StoredAutomation,
+  updateStoredAutomation,
 } from '@personal-agent/daemon';
-import { invalidateAppTopics } from '../shared/appEvents.js';
+import { Type } from '@sinclair/typebox';
+
+import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
 import {
+  type LoadedScheduledTasksForProfile,
   loadScheduledTasksForProfile,
   resolveScheduledTaskForProfile,
-  type LoadedScheduledTasksForProfile,
   type TaskRuntimeEntry,
 } from '../automation/scheduledTasks.js';
 import {
@@ -28,7 +24,7 @@ import {
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
 } from '../automation/scheduledTaskThreads.js';
-import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
 const SCHEDULED_TASK_TARGET_VALUES = ['background-agent', 'conversation'] as const;
@@ -44,21 +40,60 @@ const ScheduledTaskToolParams = Type.Object({
   title: Type.Optional(Type.String({ description: 'Human-readable title for the automation. Defaults to taskId.' })),
   enabled: Type.Optional(Type.Boolean({ description: 'Whether the task is enabled when saving.' })),
   cron: Type.Optional(Type.String({ description: 'Recurring 5-field cron expression.' })),
-  at: Type.Optional(Type.String({ description: 'One-time schedule. Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.' })),
-  targetType: Type.Optional(Type.Union(SCHEDULED_TASK_TARGET_VALUES.map((value) => Type.Literal(value)), { description: 'Automation target: background-agent or conversation.' })),
-  threadMode: Type.Optional(Type.Union(SCHEDULED_TASK_THREAD_MODE_VALUES.map((value) => Type.Literal(value)), { description: 'Thread binding mode: dedicated, existing, or none.' })),
-  threadConversationId: Type.Optional(Type.String({ description: 'Existing conversation id when binding the automation to an existing thread.' })),
-  deliverAs: Type.Optional(Type.Union(SCHEDULED_TASK_DELIVER_AS_VALUES.map((value) => Type.Literal(value)), { description: 'Conversation delivery mode when targetType=conversation.' })),
+  at: Type.Optional(
+    Type.String({
+      description: 'One-time schedule. Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.',
+    }),
+  ),
+  targetType: Type.Optional(
+    Type.Union(
+      SCHEDULED_TASK_TARGET_VALUES.map((value) => Type.Literal(value)),
+      {
+        description: 'Automation target: background-agent or conversation.',
+      },
+    ),
+  ),
+  threadMode: Type.Optional(
+    Type.Union(
+      SCHEDULED_TASK_THREAD_MODE_VALUES.map((value) => Type.Literal(value)),
+      {
+        description: 'Thread binding mode: dedicated, existing, or none.',
+      },
+    ),
+  ),
+  threadConversationId: Type.Optional(
+    Type.String({ description: 'Existing conversation id when binding the automation to an existing thread.' }),
+  ),
+  deliverAs: Type.Optional(
+    Type.Union(
+      SCHEDULED_TASK_DELIVER_AS_VALUES.map((value) => Type.Literal(value)),
+      {
+        description: 'Conversation delivery mode when targetType=conversation.',
+      },
+    ),
+  ),
   model: Type.Optional(Type.String({ description: 'Full model ref, for example openai-codex/gpt-5.4.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for the task.' })),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 1, description: 'Per-run timeout in seconds.' })),
-  catchUpWindowSeconds: Type.Optional(Type.Number({ minimum: 1, description: 'Run once after wake when the latest missed cron slot is still within this many seconds.' })),
+  catchUpWindowSeconds: Type.Optional(
+    Type.Number({ minimum: 1, description: 'Run once after wake when the latest missed cron slot is still within this many seconds.' }),
+  ),
   prompt: Type.Optional(Type.String({ description: 'Task prompt body.' })),
-  deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether task completions should wake the current conversation later.' })),
-  notifyOnSuccess: Type.Optional(Type.Boolean({ description: 'Whether successful task completions should create an in-app alert for the current conversation callback.' })),
-  notifyOnFailure: Type.Optional(Type.Boolean({ description: 'Whether failed task completions should create an in-app alert for the current conversation callback.' })),
+  deliverResultToConversation: Type.Optional(
+    Type.Boolean({ description: 'Whether task completions should wake the current conversation later.' }),
+  ),
+  notifyOnSuccess: Type.Optional(
+    Type.Boolean({
+      description: 'Whether successful task completions should create an in-app alert for the current conversation callback.',
+    }),
+  ),
+  notifyOnFailure: Type.Optional(
+    Type.Boolean({ description: 'Whether failed task completions should create an in-app alert for the current conversation callback.' }),
+  ),
   requireAck: Type.Optional(Type.Boolean({ description: 'Whether callback alerts should stay active until acknowledged.' })),
-  autoResumeIfOpen: Type.Optional(Type.Boolean({ description: 'Whether an open saved conversation should auto-resume when the callback becomes ready.' })),
+  autoResumeIfOpen: Type.Optional(
+    Type.Boolean({ description: 'Whether an open saved conversation should auto-resume when the callback becomes ready.' }),
+  ),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -75,7 +110,9 @@ function readOptionalString(value: string | undefined): string | undefined {
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
-function resolveOptionalScheduleAt(value: string | undefined): { dueAt: string; interpretation: string; timeExpression: string } | undefined {
+function resolveOptionalScheduleAt(
+  value: string | undefined,
+): { dueAt: string; interpretation: string; timeExpression: string } | undefined {
   const normalized = readOptionalString(value);
   if (!normalized) {
     return undefined;
@@ -86,9 +123,7 @@ function resolveOptionalScheduleAt(value: string | undefined): { dueAt: string; 
 }
 
 function formatSchedule(task: Pick<StoredAutomation, 'schedule'>): string {
-  return task.schedule.type === 'cron'
-    ? `cron ${task.schedule.expression}`
-    : `at ${task.schedule.at}`;
+  return task.schedule.type === 'cron' ? `cron ${task.schedule.expression}` : `at ${task.schedule.at}`;
 }
 
 function formatTargetLabel(task: Pick<StoredAutomation, 'targetType'>): string {
@@ -108,9 +143,7 @@ function shouldApplyThreadBinding(params: {
   threadMode?: 'dedicated' | 'existing' | 'none';
   threadConversationId?: string;
 }): boolean {
-  return params.targetType === 'conversation'
-    || params.threadMode !== undefined
-    || params.threadConversationId !== undefined;
+  return params.targetType === 'conversation' || params.threadMode !== undefined || params.threadConversationId !== undefined;
 }
 
 function resolveThreadBindingInput(params: {
@@ -130,11 +163,11 @@ function resolveThreadBindingInput(params: {
   }
 
   if (
-    params.targetType === 'conversation'
-    && params.existing?.targetType === 'conversation'
-    && !params.threadMode
-    && !params.threadConversationId
-    && params.existing.threadMode !== 'none'
+    params.targetType === 'conversation' &&
+    params.existing?.targetType === 'conversation' &&
+    !params.threadMode &&
+    !params.threadConversationId &&
+    params.existing.threadMode !== 'none'
   ) {
     return {
       threadMode: params.existing.threadMode,
@@ -144,21 +177,24 @@ function resolveThreadBindingInput(params: {
     };
   }
 
-  const mode = params.threadMode
-    ?? (params.threadConversationId
+  const mode =
+    params.threadMode ??
+    (params.threadConversationId
       ? 'existing'
       : params.targetType === 'conversation'
-        ? (params.currentConversationId ? 'existing' : 'dedicated')
+        ? params.currentConversationId
+          ? 'existing'
+          : 'dedicated'
         : 'existing');
 
-  const conversationId = mode === 'existing'
-    ? (params.threadConversationId ?? params.currentConversationId ?? existingConversationId)
-    : undefined;
-  const threadSessionFile = conversationId === params.currentConversationId
-    ? params.currentSessionFile
-    : conversationId === existingConversationId
-      ? existingSessionFile
-      : undefined;
+  const conversationId =
+    mode === 'existing' ? (params.threadConversationId ?? params.currentConversationId ?? existingConversationId) : undefined;
+  const threadSessionFile =
+    conversationId === params.currentConversationId
+      ? params.currentSessionFile
+      : conversationId === existingConversationId
+        ? existingSessionFile
+        : undefined;
 
   return {
     threadMode: mode,
@@ -177,14 +213,15 @@ function formatTaskList(loaded: LoadedScheduledTasksForProfile): string {
 
   const lines = loaded.tasks.map((task) => {
     const runtime = loaded.runtimeState[task.key];
-    const status = runtime?.running
-      ? 'running'
-      : runtime?.lastStatus ?? (task.enabled ? 'active' : 'disabled');
+    const status = runtime?.running ? 'running' : (runtime?.lastStatus ?? (task.enabled ? 'active' : 'disabled'));
     const threadDetail = buildScheduledTaskThreadDetail(task);
-    const threadSummary = threadDetail.threadMode === 'none'
-      ? undefined
-      : (threadDetail.threadTitle ?? threadDetail.threadConversationId ?? threadDetail.threadMode);
-    return `- @${task.id} [${status}] ${task.title ?? task.id} · ${formatSchedule(task)} · ${formatTargetLabel(task)}${threadSummary ? ` · thread ${threadSummary}` : ''}`;
+    const threadSummary =
+      threadDetail.threadMode === 'none'
+        ? undefined
+        : (threadDetail.threadTitle ?? threadDetail.threadConversationId ?? threadDetail.threadMode);
+    return `- @${task.id} [${status}] ${task.title ?? task.id} · ${formatSchedule(task)} · ${formatTargetLabel(task)}${
+      threadSummary ? ` · thread ${threadSummary}` : ''
+    }`;
   });
 
   if (loaded.parseErrors.length > 0) {
@@ -261,9 +298,7 @@ function formatTaskDetail(
   return lines.join('\n');
 }
 
-export function createScheduledTaskAgentExtension(options: {
-  getCurrentProfile: () => string;
-}): (pi: ExtensionAPI) => void {
+export function createScheduledTaskAgentExtension(options: { getCurrentProfile: () => string }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
       name: 'scheduled_task',
@@ -315,12 +350,12 @@ export function createScheduledTaskAgentExtension(options: {
               const loaded = loadScheduledTasksForProfile(profile);
               const taskId = readRequiredString(params.taskId, 'taskId');
               const existing = loaded.tasks.find((task) => task.id === taskId);
-              const targetType = params.targetType === undefined
-                ? existing?.targetType ?? 'background-agent'
-                : normalizeAutomationTargetTypeForSelection(params.targetType);
-              const deliverAs = targetType === 'conversation'
-                ? (readConversationBehavior(params.deliverAs) ?? existing?.conversationBehavior)
-                : undefined;
+              const targetType =
+                params.targetType === undefined
+                  ? (existing?.targetType ?? 'background-agent')
+                  : normalizeAutomationTargetTypeForSelection(params.targetType);
+              const deliverAs =
+                targetType === 'conversation' ? (readConversationBehavior(params.deliverAs) ?? existing?.conversationBehavior) : undefined;
               const sessionFile = readOptionalString(ctx?.sessionManager?.getSessionFile?.());
               const currentConversationId = sessionFile ? readSessionConversationId(sessionFile) : undefined;
               const threadMode = readThreadMode(params.threadMode);
@@ -334,18 +369,16 @@ export function createScheduledTaskAgentExtension(options: {
               });
               const threadBindingInput = shouldBindThread
                 ? resolveThreadBindingInput({
-                  targetType,
-                  existing,
-                  threadMode,
-                  threadConversationId,
-                  currentConversationId,
-                  currentSessionFile: sessionFile,
-                  cwd,
-                })
+                    targetType,
+                    existing,
+                    threadMode,
+                    threadConversationId,
+                    currentConversationId,
+                    currentSessionFile: sessionFile,
+                    cwd,
+                  })
                 : undefined;
-              const validatedThreadBinding = threadBindingInput
-                ? resolveScheduledTaskThreadBinding(threadBindingInput)
-                : undefined;
+              const validatedThreadBinding = threadBindingInput ? resolveScheduledTaskThreadBinding(threadBindingInput) : undefined;
 
               if (targetType === 'conversation' && params.deliverResultToConversation === true) {
                 throw new Error('deliverResultToConversation is only supported for background-agent automations.');
@@ -353,40 +386,44 @@ export function createScheduledTaskAgentExtension(options: {
 
               const saved = existing
                 ? updateStoredAutomation(taskId, {
-                  title: readOptionalString(params.title) ?? existing.title ?? taskId,
-                  enabled: params.enabled ?? existing.enabled,
-                  cron: params.cron ?? (existing.schedule.type === 'cron' ? existing.schedule.expression : undefined),
-                  at: scheduledAt?.dueAt ?? (existing.schedule.type === 'at' ? existing.schedule.at : undefined),
-                  modelRef: params.model ?? existing.modelRef,
-                  cwd,
-                  timeoutSeconds: params.timeoutSeconds ?? existing.timeoutSeconds,
-                  ...(params.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: params.catchUpWindowSeconds } : existing.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: existing.catchUpWindowSeconds } : {}),
-                  prompt: params.prompt ?? existing.prompt,
-                  targetType,
-                  conversationBehavior: deliverAs,
-                })
+                    title: readOptionalString(params.title) ?? existing.title ?? taskId,
+                    enabled: params.enabled ?? existing.enabled,
+                    cron: params.cron ?? (existing.schedule.type === 'cron' ? existing.schedule.expression : undefined),
+                    at: scheduledAt?.dueAt ?? (existing.schedule.type === 'at' ? existing.schedule.at : undefined),
+                    modelRef: params.model ?? existing.modelRef,
+                    cwd,
+                    timeoutSeconds: params.timeoutSeconds ?? existing.timeoutSeconds,
+                    ...(params.catchUpWindowSeconds !== undefined
+                      ? { catchUpWindowSeconds: params.catchUpWindowSeconds }
+                      : existing.catchUpWindowSeconds !== undefined
+                        ? { catchUpWindowSeconds: existing.catchUpWindowSeconds }
+                        : {}),
+                    prompt: params.prompt ?? existing.prompt,
+                    targetType,
+                    conversationBehavior: deliverAs,
+                  })
                 : createStoredAutomation({
-                  id: taskId,
-                  profile,
-                  title: readOptionalString(params.title) ?? taskId,
-                  enabled: params.enabled ?? true,
-                  cron: params.cron,
-                  at: scheduledAt?.dueAt,
-                  modelRef: params.model,
-                  cwd,
-                  timeoutSeconds: params.timeoutSeconds,
-                  ...(params.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: params.catchUpWindowSeconds } : {}),
-                  prompt: params.prompt ?? '',
-                  targetType,
-                  conversationBehavior: deliverAs,
-                });
+                    id: taskId,
+                    profile,
+                    title: readOptionalString(params.title) ?? taskId,
+                    enabled: params.enabled ?? true,
+                    cron: params.cron,
+                    at: scheduledAt?.dueAt,
+                    modelRef: params.model,
+                    cwd,
+                    timeoutSeconds: params.timeoutSeconds,
+                    ...(params.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: params.catchUpWindowSeconds } : {}),
+                    prompt: params.prompt ?? '',
+                    targetType,
+                    conversationBehavior: deliverAs,
+                  });
               const task = validatedThreadBinding
                 ? applyScheduledTaskThreadBinding(saved.id, {
-                  threadMode: validatedThreadBinding.mode,
-                  threadConversationId: validatedThreadBinding.conversationId,
-                  threadSessionFile: validatedThreadBinding.sessionFile,
-                  cwd,
-                })
+                    threadMode: validatedThreadBinding.mode,
+                    threadConversationId: validatedThreadBinding.conversationId,
+                    threadSessionFile: validatedThreadBinding.sessionFile,
+                    cwd,
+                  })
                 : saved;
 
               if (targetType === 'conversation') {
@@ -415,17 +452,23 @@ export function createScheduledTaskAgentExtension(options: {
               invalidateAppTopics('tasks');
 
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: `${existing ? 'Updated' : 'Saved'} scheduled task @${taskId}${scheduledAt ? ` for ${scheduledAt.interpretation}` : ''}.`,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `${existing ? 'Updated' : 'Saved'} scheduled task @${taskId}${
+                      scheduledAt ? ` for ${scheduledAt.interpretation}` : ''
+                    }.`,
+                  },
+                ],
                 details: {
                   action: 'save',
                   profile,
                   taskId,
                   filePath: task.filePath,
                   targetType,
-                  ...(scheduledAt ? { dueAt: scheduledAt.dueAt, localDueAt: scheduledAt.interpretation, timeExpression: scheduledAt.timeExpression } : {}),
+                  ...(scheduledAt
+                    ? { dueAt: scheduledAt.dueAt, localDueAt: scheduledAt.interpretation, timeExpression: scheduledAt.timeExpression }
+                    : {}),
                 },
               };
             }
@@ -459,12 +502,12 @@ export function createScheduledTaskAgentExtension(options: {
 
                 const valid = Boolean(match);
                 return {
-                  content: [{
-                    type: 'text' as const,
-                    text: valid
-                      ? `Task @${taskId} is valid.`
-                      : `Task @${taskId} is invalid: ${parseError?.error ?? 'unknown error'}`,
-                  }],
+                  content: [
+                    {
+                      type: 'text' as const,
+                      text: valid ? `Task @${taskId} is valid.` : `Task @${taskId} is invalid: ${parseError?.error ?? 'unknown error'}`,
+                    },
+                  ],
                   isError: !valid,
                   details: {
                     action: 'validate',
@@ -477,12 +520,16 @@ export function createScheduledTaskAgentExtension(options: {
 
               const valid = loaded.parseErrors.length === 0;
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: valid
-                    ? `Validated ${loaded.tasks.length} scheduled task${loaded.tasks.length === 1 ? '' : 's'} for profile ${profile}.`
-                    : `Validation failed for ${loaded.parseErrors.length} task file${loaded.parseErrors.length === 1 ? '' : 's'}: ${loaded.parseErrors.map((entry) => `${entry.filePath}: ${entry.error}`).join('; ')}`,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: valid
+                      ? `Validated ${loaded.tasks.length} scheduled task${loaded.tasks.length === 1 ? '' : 's'} for profile ${profile}.`
+                      : `Validation failed for ${loaded.parseErrors.length} task file${loaded.parseErrors.length === 1 ? '' : 's'}: ${loaded.parseErrors
+                          .map((entry) => `${entry.filePath}: ${entry.error}`)
+                          .join('; ')}`,
+                  },
+                ],
                 isError: !valid,
                 details: {
                   action: 'validate',
@@ -497,7 +544,7 @@ export function createScheduledTaskAgentExtension(options: {
             case 'run': {
               const taskId = readRequiredString(params.taskId, 'taskId');
               const { task } = resolveScheduledTaskForProfile(profile, taskId);
-              if (!(await pingDaemon())) throw new Error("Daemon is not responding. Ensure the desktop app is running.");
+              if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await startScheduledTaskRun(task.id);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not start scheduled task @${taskId}.`);

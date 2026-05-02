@@ -1,17 +1,18 @@
-import type { DurableRunListResult, DurableRunRecord, MessageBlock, SessionDetail, SessionMeta } from '../shared/types';
-import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
-import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
-import { formatContextUsageLabel } from './conversationHeader';
-import { getRunHeadline, isRunActive, listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
+import {
+  getRunHeadline,
+  isRunActive,
+  listConnectedConversationBackgroundRuns,
+  type RunPresentationLookups,
+} from '../automation/runPresentation';
 import { listRecentConversationBackgroundRuns } from '../automation/runPresentation';
-
+import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
+import type { DurableRunListResult, DurableRunRecord, MessageBlock, SessionDetail, SessionMeta } from '../shared/types';
+import { formatContextUsageLabel } from './conversationHeader';
+import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
 
 const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
 
-export function shouldEnableConversationLiveStream(
-  conversationId: string | null | undefined,
-  confirmedLive: boolean | null,
-): boolean {
+export function shouldEnableConversationLiveStream(conversationId: string | null | undefined, confirmedLive: boolean | null): boolean {
   return Boolean(conversationId) && confirmedLive !== false;
 }
 
@@ -23,10 +24,7 @@ export function resolveConversationLiveSession(input: {
   return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
 }
 
-export function resolveConversationPendingStatusLabel(input: {
-  isLiveSession: boolean;
-  hasVisibleSessionDetail: boolean;
-}): string {
+export function resolveConversationPendingStatusLabel(input: { isLiveSession: boolean; hasVisibleSessionDetail: boolean }): string {
   if (input.isLiveSession) {
     return 'Working…';
   }
@@ -38,9 +36,7 @@ export function resolveConversationPendingStatusLabel(input: {
   return 'Sending…';
 }
 
-function resolvePendingConversationPreparationStatusLabel(
-  prompt: PendingConversationPrompt | null | undefined,
-): string | null {
+function resolvePendingConversationPreparationStatusLabel(prompt: PendingConversationPrompt | null | undefined): string | null {
   const relatedThreadCount = prompt?.relatedConversationIds?.length ?? 0;
   if (relatedThreadCount <= 0) {
     return null;
@@ -76,11 +72,13 @@ export function resolveDisplayedConversationPendingStatusLabel(input: {
   }
 
   if (input.hasPendingInitialPrompt || input.hasPendingInitialPromptInFlight) {
-    return resolvePendingConversationPreparationStatusLabel(input.pendingPrompt)
-      ?? resolveConversationPendingStatusLabel({
+    return (
+      resolvePendingConversationPreparationStatusLabel(input.pendingPrompt) ??
+      resolveConversationPendingStatusLabel({
         isLiveSession: input.isLiveSession,
         hasVisibleSessionDetail: input.hasVisibleSessionDetail,
-      });
+      })
+    );
   }
 
   return null;
@@ -111,14 +109,16 @@ export function shouldShowMissingConversationState(input: {
   hasSavedConversationSessionFile: boolean;
   hasPendingInitialPrompt: boolean;
 }): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.sessionsLoaded
-    && input.confirmedLive === false
-    && !input.sessionLoading
-    && !input.hasVisibleSessionDetail
-    && !input.hasSavedConversationSessionFile
-    && !input.hasPendingInitialPrompt;
+  return (
+    !input.draft &&
+    Boolean(input.conversationId) &&
+    input.sessionsLoaded &&
+    input.confirmedLive === false &&
+    !input.sessionLoading &&
+    !input.hasVisibleSessionDetail &&
+    !input.hasSavedConversationSessionFile &&
+    !input.hasPendingInitialPrompt
+  );
 }
 
 export function shouldDeferConversationFileRefresh(input: {
@@ -128,9 +128,11 @@ export function shouldDeferConversationFileRefresh(input: {
   pendingInitialPromptDispatching: boolean;
   hasPendingInitialPromptInFlight: boolean;
 }): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && (input.hasPendingInitialPrompt || input.pendingInitialPromptDispatching || input.hasPendingInitialPromptInFlight);
+  return (
+    !input.draft &&
+    Boolean(input.conversationId) &&
+    (input.hasPendingInitialPrompt || input.pendingInitialPromptDispatching || input.hasPendingInitialPromptInFlight)
+  );
 }
 
 export function shouldFetchConversationLiveSessionGitContext(input: {
@@ -144,15 +146,17 @@ export function shouldFetchConversationLiveSessionGitContext(input: {
   pendingInitialPromptDispatching: boolean;
   hasPendingInitialPromptInFlight: boolean;
 }): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.conversationLiveDecision === true
-    && !input.conversationBootstrapLoading
-    && !input.sessionLoading
-    && !input.isStreaming
-    && !input.hasPendingInitialPrompt
-    && !input.pendingInitialPromptDispatching
-    && !input.hasPendingInitialPromptInFlight;
+  return (
+    !input.draft &&
+    Boolean(input.conversationId) &&
+    input.conversationLiveDecision === true &&
+    !input.conversationBootstrapLoading &&
+    !input.sessionLoading &&
+    !input.isStreaming &&
+    !input.hasPendingInitialPrompt &&
+    !input.pendingInitialPromptDispatching &&
+    !input.hasPendingInitialPromptInFlight
+  );
 }
 
 export function resolveConversationPageTitle(input: {
@@ -167,13 +171,7 @@ export function resolveConversationPageTitle(input: {
     return NEW_CONVERSATION_TITLE;
   }
 
-  return getConversationDisplayTitle(
-    input.titleOverride,
-    input.streamTitle,
-    input.liveTitle,
-    input.detailTitle,
-    input.sessionTitle,
-  );
+  return getConversationDisplayTitle(input.titleOverride, input.streamTitle, input.liveTitle, input.detailTitle, input.sessionTitle);
 }
 
 export function replaceConversationTitleInSessionList<T extends { id: string; title: string }>(
@@ -234,9 +232,7 @@ export function replaceConversationMetaInSessionList(
       attachedContextDocs: nextMeta.attachedContextDocs ?? session.attachedContextDocs,
     };
 
-    const didChange = Object.keys(updated).some((key) => (
-      updated[key as keyof SessionMeta] !== session[key as keyof SessionMeta]
-    ));
+    const didChange = Object.keys(updated).some((key) => updated[key as keyof SessionMeta] !== session[key as keyof SessionMeta]);
     if (didChange) {
       changed = true;
       return updated;
@@ -280,10 +276,7 @@ export function formatConversationBackgroundRunStatusLabel(status: string | unde
   return typeof status === 'string' && status.trim().length > 0 ? status : 'active';
 }
 
-export function buildConversationBackgroundRunIndicatorText(
-  runs: DurableRunRecord[],
-  lookups: RunPresentationLookups = {},
-): string {
+export function buildConversationBackgroundRunIndicatorText(runs: DurableRunRecord[], lookups: RunPresentationLookups = {}): string {
   if (runs.length === 0) {
     return '';
   }
@@ -341,9 +334,7 @@ export function buildConversationSessionSummaryNotice(input: {
 }): string {
   const currentModel = input.currentModel?.trim() || '';
   const fallbackModel = input.fallbackModel?.trim() || '';
-  const cwd = input.draft
-    ? (input.draftCwd?.trim() || 'unset cwd')
-    : (input.cwd?.trim() || 'unknown cwd');
+  const cwd = input.draft ? input.draftCwd?.trim() || 'unset cwd' : input.cwd?.trim() || 'unknown cwd';
   const modelLabel = currentModel || fallbackModel || 'unknown model';
   const details = [
     input.draft ? 'Draft conversation' : input.title,
@@ -365,11 +356,11 @@ export function resolveConversationInitialHistoricalWarmupTarget(input: {
   historicalHasOlderBlocks: boolean;
 }): number | null {
   if (
-    input.draft
-    || !input.conversationId
-    || input.liveDecision !== false
-    || !input.historicalHasOlderBlocks
-    || input.historicalTotalBlocks <= 0
+    input.draft ||
+    !input.conversationId ||
+    input.liveDecision !== false ||
+    !input.historicalHasOlderBlocks ||
+    input.historicalTotalBlocks <= 0
   ) {
     return null;
   }
@@ -396,7 +387,12 @@ export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
   currentTailBlocks: number;
   loadedTailBlocks: boolean;
 }): boolean {
-  if (!input.warmupActive || typeof input.targetTailBlocks !== 'number' || !Number.isSafeInteger(input.targetTailBlocks) || input.targetTailBlocks <= 0) {
+  if (
+    !input.warmupActive ||
+    typeof input.targetTailBlocks !== 'number' ||
+    !Number.isSafeInteger(input.targetTailBlocks) ||
+    input.targetTailBlocks <= 0
+  ) {
     return false;
   }
 
@@ -410,11 +406,13 @@ export function shouldShowConversationBootstrapLoadingState(input: {
   hasRenderableMessages: boolean;
   hasVisibleSessionDetail: boolean;
 }): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.conversationBootstrapLoading
-    && !input.hasRenderableMessages
-    && !input.hasVisibleSessionDetail;
+  return (
+    !input.draft &&
+    Boolean(input.conversationId) &&
+    input.conversationBootstrapLoading &&
+    !input.hasRenderableMessages &&
+    !input.hasVisibleSessionDetail
+  );
 }
 
 export function resolveConversationStreamTitleSync<T extends { id: string; title: string }>(input: {
@@ -458,10 +456,7 @@ export function shouldUseHealthyDesktopConversationState(input: {
   desktopMode: 'checking' | 'local' | 'inactive';
   desktopError: string | null;
 }): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.desktopMode === 'local'
-    && !input.desktopError;
+  return !input.draft && Boolean(input.conversationId) && input.desktopMode === 'local' && !input.desktopError;
 }
 
 export function shouldSubscribeToDesktopConversationState(input: {
@@ -469,9 +464,7 @@ export function shouldSubscribeToDesktopConversationState(input: {
   remoteHostId?: string | null;
   remoteConversationId?: string | null;
 }): boolean {
-  return !input.draft
-    && !input.remoteHostId?.trim()
-    && !input.remoteConversationId?.trim();
+  return !input.draft && !input.remoteHostId?.trim() && !input.remoteConversationId?.trim();
 }
 
 export function shouldFetchConversationAttachments(input: {
@@ -508,10 +501,8 @@ export function resolveConversationVisibleScrollBinding(input: {
   usingStableTranscript: boolean;
 } {
   const hasRenderableMessages = (input.realMessages?.length ?? 0) > 0;
-  const usingStableTranscript = !hasRenderableMessages
-    && input.showConversationLoadingState
-    && !input.draft
-    && Boolean(input.stableTranscriptState);
+  const usingStableTranscript =
+    !hasRenderableMessages && input.showConversationLoadingState && !input.draft && Boolean(input.stableTranscriptState);
 
   if (usingStableTranscript) {
     return {
@@ -532,12 +523,8 @@ export function resolveConversationVisibleScrollBinding(input: {
   };
 }
 
-export function resolveConversationPerformanceMode(input: {
-  messageCount: number;
-}): 'default' | 'aggressive' {
-  return input.messageCount >= AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD
-    ? 'aggressive'
-    : 'default';
+export function resolveConversationPerformanceMode(input: { messageCount: number }): 'default' | 'aggressive' {
+  return input.messageCount >= AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD ? 'aggressive' : 'default';
 }
 
 export function shouldLoadConversationModels(input: {

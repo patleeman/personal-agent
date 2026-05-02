@@ -1,14 +1,12 @@
 import { eng, removeStopwords } from 'stopword';
-import { readConversationSummary } from './conversationSummaries.js';
+
 import {
+  type IndexedConversationSearchCandidate,
   scheduleConversationSearchIndexing,
   searchIndexedConversationDocuments,
-  type IndexedConversationSearchCandidate,
 } from './conversationSearchIndex.js';
-import {
-  readSessionMeta,
-  type SessionMeta,
-} from './sessions.js';
+import { readConversationSummary } from './conversationSummaries.js';
+import { readSessionMeta, type SessionMeta } from './sessions.js';
 
 export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
@@ -17,10 +15,46 @@ const AUTO_POINTER_RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const POINTER_CACHE_TTL_MS = 60_000;
 const WARM_POINTER_BUDGET_MS = 150;
 const PRODUCT_STOPWORDS = new Set([
-  'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'how', 'junk',
-  'like', 'look', 'looks', 'new', 'now', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
-  'thread', 'threads', 'today', 'used', 'user', 'want', 'wants', 'what', 'when', 'where', 'why', 'work', 'working',
-  'would', 'yeah',
+  'actually',
+  'agent',
+  'agents',
+  'app',
+  'conversation',
+  'conversations',
+  'does',
+  'doing',
+  'done',
+  'good',
+  'how',
+  'junk',
+  'like',
+  'look',
+  'looks',
+  'new',
+  'now',
+  'okay',
+  'please',
+  'pro',
+  'really',
+  'screen',
+  'stuff',
+  'thing',
+  'things',
+  'thread',
+  'threads',
+  'today',
+  'used',
+  'user',
+  'want',
+  'wants',
+  'what',
+  'when',
+  'where',
+  'why',
+  'work',
+  'working',
+  'would',
+  'yeah',
 ]);
 
 export interface RelatedConversationPointer {
@@ -86,12 +120,7 @@ function normalizeCacheText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ');
 }
 
-function buildPointerCacheKey(input: {
-  prompt: string;
-  currentConversationId?: string;
-  currentCwd?: string;
-  limit?: number;
-}): string {
+function buildPointerCacheKey(input: { prompt: string; currentConversationId?: string; currentCwd?: string; limit?: number }): string {
   return JSON.stringify({
     prompt: normalizeCacheText(input.prompt).toLowerCase(),
     currentConversationId: input.currentConversationId ?? '',
@@ -106,8 +135,7 @@ function tokenize(value: string): string[] {
     .split(/[^a-z0-9_./-]+/)
     .map((term) => term.trim())
     .filter((term) => term.length >= 3);
-  const terms = removeStopwords(tokens, eng)
-    .filter((term) => !PRODUCT_STOPWORDS.has(term));
+  const terms = removeStopwords(tokens, eng).filter((term) => !PRODUCT_STOPWORDS.has(term));
 
   return Array.from(new Set(terms)).slice(0, 32);
 }
@@ -123,9 +151,7 @@ function normalizePreview(value: string | undefined, maxLength = 220): string | 
     return undefined;
   }
 
-  return normalized.length > maxLength
-    ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
-    : normalized;
+  return normalized.length > maxLength ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…` : normalized;
 }
 
 function parsePointerTimestamp(value: string | undefined): number {
@@ -348,10 +374,12 @@ export function buildRelatedConversationPointers(input: {
   }
 
   return {
-    contextMessages: [{
-      customType: RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE,
-      content: formatPointerContext(pointers),
-    }],
+    contextMessages: [
+      {
+        customType: RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE,
+        content: formatPointerContext(pointers),
+      },
+    ],
     pointers,
     warnings,
   };

@@ -1,12 +1,13 @@
-import { existsSync, mkdtempSync, writeFileSync, utimesSync } from 'fs';
+import { existsSync, mkdtempSync, utimesSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { DaemonConfig } from '../config.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
-import type { DaemonModuleContext } from './types.js';
 import { createMaintenanceModule } from './maintenance.js';
+import type { DaemonModuleContext } from './types.js';
 
 const tempDirs: string[] = [];
 
@@ -21,7 +22,10 @@ interface PublishedEvent {
   payload?: EventPayload;
 }
 
-function createContext(logDir: string, warn = vi.fn()): {
+function createContext(
+  logDir: string,
+  warn = vi.fn(),
+): {
   context: DaemonModuleContext;
   published: PublishedEvent[];
   warn: ReturnType<typeof vi.fn>;
@@ -118,7 +122,7 @@ describe('maintenance module', () => {
     writeFileSync(freshLog, 'new log');
     writeFileSync(ignoredFile, 'not a log');
 
-    const eightDaysAgo = Date.now() - (8 * 24 * 60 * 60 * 1000);
+    const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
     const now = new Date();
     utimesSync(staleLog, new Date(eightDaysAgo), new Date(eightDaysAgo));
     utimesSync(freshLog, now, now);

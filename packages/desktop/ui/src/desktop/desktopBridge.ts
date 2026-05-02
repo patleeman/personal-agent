@@ -2,47 +2,47 @@ import type {
   AppStatus,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
-  ConversationCommitCheckpointRecord,
-  ConversationCommitCheckpointSummary,
   ConversationAttachmentAssetData,
   ConversationAttachmentRecord,
   ConversationAttachmentSummary,
   ConversationAutomationWorkspaceState,
-  ConversationTitleSettingsState,
-  DefaultCwdState,
-  DaemonState,
-  ModelProviderState,
-  ModelState,
-  ProviderAuthState,
-  ProviderOAuthLoginState,
   ConversationBootstrapState,
+  ConversationCommitCheckpointRecord,
+  ConversationCommitCheckpointSummary,
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
-  DesktopConnectionsState,
+  ConversationTitleSettingsState,
+  DaemonState,
+  DefaultCwdState,
+  DeferredResumeSummary,
   DesktopAppPreferencesState,
-  DurableRunDetailResult,
-  DurableRunListResult,
+  DesktopConnectionsState,
   DesktopEnvironmentState,
-  ScheduledTaskDetail,
-  ScheduledTaskSummary,
   DesktopHostRecord,
   DesktopNavigationState,
   DesktopRemoteDirectoryListing,
   DesktopRemoteOperationBridgeEvent,
   DesktopSshConnectionTestResult,
   DisplayBlock,
+  DurableRunDetailResult,
+  DurableRunListResult,
+  FolderPickerResult,
+  InjectedPromptMessage,
   LiveSessionContext,
   LiveSessionCreateResult,
   LiveSessionExportResult,
   LiveSessionForkEntry,
   LiveSessionMeta,
   LiveSessionPresenceState,
-  DeferredResumeSummary,
-  FolderPickerResult,
   MemoryData,
-  InjectedPromptMessage,
+  ModelProviderState,
+  ModelState,
   PromptAttachmentRefInput,
   PromptImageInput,
+  ProviderAuthState,
+  ProviderOAuthLoginState,
+  ScheduledTaskDetail,
+  ScheduledTaskSummary,
   SessionDetailResult,
   SessionMeta,
   ToolsState,
@@ -69,11 +69,7 @@ export type DesktopConversationContextMenuAction =
   | 'copy-id'
   | 'copy-deeplink';
 
-export type DesktopConversationCwdGroupContextMenuAction =
-  | 'open-in-finder'
-  | 'edit-name'
-  | 'archive-threads'
-  | 'remove';
+export type DesktopConversationCwdGroupContextMenuAction = 'open-in-finder' | 'edit-name' | 'archive-threads' | 'remove';
 
 export type DesktopKnowledgeEntryContextMenuAction = 'new-file' | 'new-folder' | 'open-in-finder' | 'rename' | 'move' | 'delete';
 
@@ -180,13 +176,28 @@ export interface PersonalAgentDesktopBridge {
   testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult>;
   openNewConversation(): Promise<void>;
   openConversationPopout(input: { conversationId: string }): Promise<void>;
-  showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
-  showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
-  showKnowledgeEntryContextMenu(input: DesktopKnowledgeEntryContextMenuRequest): Promise<{ action: DesktopKnowledgeEntryContextMenuAction | null }>;
-  showSelectionContextMenu(input: { x: number; y: number; canReply?: boolean; canCopy?: boolean }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
+  showConversationContextMenu(
+    input: DesktopConversationContextMenuRequest,
+  ): Promise<{ action: DesktopConversationContextMenuAction | null }>;
+  showConversationCwdGroupContextMenu(
+    input: DesktopConversationCwdGroupContextMenuRequest,
+  ): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
+  showKnowledgeEntryContextMenu(
+    input: DesktopKnowledgeEntryContextMenuRequest,
+  ): Promise<{ action: DesktopKnowledgeEntryContextMenuAction | null }>;
+  showSelectionContextMenu(input: {
+    x: number;
+    y: number;
+    canReply?: boolean;
+    canCopy?: boolean;
+  }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
-  updateDesktopAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean; keyboardShortcuts?: Record<string, string> }): Promise<DesktopAppPreferencesState>;
+  updateDesktopAppPreferences(input: {
+    autoInstallUpdates?: boolean;
+    startOnSystemStart?: boolean;
+    keyboardShortcuts?: Record<string, string>;
+  }): Promise<DesktopAppPreferencesState>;
   ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
@@ -194,8 +205,18 @@ export interface PersonalAgentDesktopBridge {
   readSessionMeta(sessionId: string): Promise<SessionMeta>;
   readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;
   readModels(): Promise<ModelState>;
-  transcribeFile(input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string; model?: string }): Promise<TranscriptionResult>;
-  updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<{ ok: true }>;
+  transcribeFile(input: {
+    dataBase64: string;
+    mimeType?: string;
+    fileName?: string;
+    language?: string;
+    model?: string;
+  }): Promise<TranscriptionResult>;
+  updateModelPreferences(input: {
+    model?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+  }): Promise<{ ok: true }>;
   readDefaultCwd(): Promise<DefaultCwdState>;
   updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
   readVaultFiles(): Promise<VaultFileListResult>;
@@ -313,7 +334,12 @@ export interface PersonalAgentDesktopBridge {
   renameConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
   changeConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }): Promise<ConversationCwdChangeResult>;
   readConversationDeferredResumes(conversationId: string): Promise<{ conversationId: string; resumes: DeferredResumeSummary[] }>;
-  scheduleConversationDeferredResume(input: { conversationId: string; delay: string; prompt?: string; behavior?: 'steer' | 'followUp' }): Promise<{
+  scheduleConversationDeferredResume(input: {
+    conversationId: string;
+    delay: string;
+    prompt?: string;
+    behavior?: 'steer' | 'followUp';
+  }): Promise<{
     conversationId: string;
     resume: DeferredResumeSummary;
     resumes: DeferredResumeSummary[];
@@ -329,14 +355,33 @@ export interface PersonalAgentDesktopBridge {
     resumes: DeferredResumeSummary[];
   }>;
   recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
-  readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>;
-  updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>;
+  readConversationModelPreferences(input: {
+    conversationId: string;
+  }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>;
+  updateConversationModelPreferences(input: {
+    conversationId: string;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+    surfaceId?: string;
+  }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>;
   readConversationArtifacts(conversationId: string): Promise<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>;
-  readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
-  readConversationCheckpoints(conversationId: string): Promise<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>;
-  readConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>;
+  readConversationArtifact(input: {
+    conversationId: string;
+    artifactId: string;
+  }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
+  readConversationCheckpoints(
+    conversationId: string,
+  ): Promise<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>;
+  readConversationCheckpoint(input: {
+    conversationId: string;
+    checkpointId: string;
+  }): Promise<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>;
   readConversationAttachments(conversationId: string): Promise<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>;
-  readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord }>;
+  readConversationAttachment(input: {
+    conversationId: string;
+    attachmentId: string;
+  }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord }>;
   createConversationAttachment(input: {
     conversationId: string;
     kind?: 'excalidraw';
@@ -361,7 +406,12 @@ export interface PersonalAgentDesktopBridge {
     previewMimeType?: string;
     note?: string;
   }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord; attachments: ConversationAttachmentSummary[] }>;
-  readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<ConversationAttachmentAssetData>;
+  readConversationAttachmentAsset(input: {
+    conversationId: string;
+    attachmentId: string;
+    asset: 'source' | 'preview';
+    revision?: number;
+  }): Promise<ConversationAttachmentAssetData>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
@@ -374,7 +424,13 @@ export interface PersonalAgentDesktopBridge {
     knownLastBlockId?: string;
   }): Promise<SessionDetailResult>;
   readSessionBlock(input: { sessionId: string; blockId: string }): Promise<DisplayBlock>;
-  createLiveSession(input: { cwd?: string; workspaceCwd?: string | null; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<LiveSessionCreateResult>;
+  createLiveSession(input: {
+    cwd?: string;
+    workspaceCwd?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+  }): Promise<LiveSessionCreateResult>;
   resumeLiveSession(input: { sessionFile: string; cwd?: string }): Promise<{ id: string }>;
   takeOverLiveSession(input: { conversationId: string; surfaceId: string }): Promise<LiveSessionPresenceState>;
   restoreQueuedLiveSessionMessage(input: {
@@ -388,7 +444,12 @@ export interface PersonalAgentDesktopBridge {
   reloadLiveSession(conversationId: string): Promise<{ ok: true }>;
   destroyLiveSession(conversationId: string): Promise<{ ok: true }>;
   branchLiveSession(input: { conversationId: string; entryId: string }): Promise<{ newSessionId: string; sessionFile: string }>;
-  forkLiveSession(input: { conversationId: string; entryId: string; preserveSource?: boolean; beforeEntry?: boolean }): Promise<{ newSessionId: string; sessionFile: string }>;
+  forkLiveSession(input: {
+    conversationId: string;
+    entryId: string;
+    preserveSource?: boolean;
+    beforeEntry?: boolean;
+  }): Promise<{ newSessionId: string; sessionFile: string }>;
   summarizeAndForkLiveSession(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt(input: {
     conversationId: string;
@@ -453,7 +514,12 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
-  setWorkbenchBrowserBounds(input: { visible: boolean; sessionKey?: string | null; bounds?: DesktopWorkbenchBrowserBounds; deactivate?: boolean }): Promise<DesktopWorkbenchBrowserState | null>;
+  setWorkbenchBrowserBounds(input: {
+    visible: boolean;
+    sessionKey?: string | null;
+    bounds?: DesktopWorkbenchBrowserBounds;
+    deactivate?: boolean;
+  }): Promise<DesktopWorkbenchBrowserState | null>;
   getWorkbenchBrowserState(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState | null>;
   navigateWorkbenchBrowser(input: { url: string; sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
   goBackWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
@@ -532,14 +598,13 @@ export async function readDesktopEnvironment(): Promise<DesktopEnvironmentState 
   }
 
   desktopEnvironmentBridge = bridge;
-  const request = bridge.getEnvironment()
-    .catch((error) => {
-      if (desktopEnvironmentPromise === request) {
-        desktopEnvironmentPromise = null;
-        desktopEnvironmentBridge = null;
-      }
-      throw error;
-    });
+  const request = bridge.getEnvironment().catch((error) => {
+    if (desktopEnvironmentPromise === request) {
+      desktopEnvironmentPromise = null;
+      desktopEnvironmentBridge = null;
+    }
+    throw error;
+  });
   desktopEnvironmentPromise = request;
   return request;
 }
