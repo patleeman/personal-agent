@@ -26,8 +26,10 @@ Conversations are for live execution. Reusable knowledge, workflows, reminders, 
 
 ### Prerequisites
 
+- **macOS** (the desktop app targets macOS arm64; no Windows or Linux build currently)
 - Node.js **20+**
 - npm **11+** recommended
+- Xcode (only needed for iOS companion development in the simulator)
 - macOS (the desktop app is macOS-only; the iOS companion requires Xcode for simulator builds)
 
 ### Install from source
@@ -143,6 +145,15 @@ There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa no
 - `prompt-catalog/` — prompt text owned by this repo
 - `docs/` — product semantics and current behavior
 
+## Dependencies
+
+The core AI runtime comes from `@mariozechner/pi-coding-agent` and `@mariozechner/pi-ai`, both published on the public npm registry. They install automatically with `npm install`.
+
+## Platform notes
+
+- **Desktop app**: macOS arm64 only. Signed release builds require an Apple Developer ID certificate. Local dev (`npm run desktop:start`) skips signing.
+- **iOS companion**: Xcode required. Simulator is free; device builds need an Apple Developer account.
+
 ## Development
 
 ```bash
@@ -159,6 +170,13 @@ npm run desktop:start     # launch the Electron app
 npm run desktop:dev       # same dev launcher
 npm run ios:dev           # iOS companion against local dev host
 npm run ab:run -- --session smoke-check --command "ab open personal-agent://app/ && ab wait 1000 && ab snapshot -i"
+```
+
+To skip code signing for local Electron builds:
+
+```bash
+export CSC_IDENTITY_AUTO_DISCOVERY=false
+npm run desktop:start
 ```
 
 Notes:

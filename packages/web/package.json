@@ -3,6 +3,9 @@
   "version": "0.5.35",
   "license": "AGPL-3.0-only",
   "description": "Personal Agent desktop renderer",
+  "repository": "github:user/personal-agent",
+  "bugs": "https://github.com/user/personal-agent/issues",
+  "homepage": "https://github.com/user/personal-agent",
   "type": "module",
   "scripts": {
     "build:deps": "npm --prefix ../core run build && npm --prefix ../daemon run build",

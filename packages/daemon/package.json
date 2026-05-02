@@ -3,6 +3,9 @@
   "version": "0.5.35",
   "license": "AGPL-3.0-only",
   "description": "personal-agent background daemon",
+  "repository": "github:user/personal-agent",
+  "bugs": "https://github.com/user/personal-agent/issues",
+  "homepage": "https://github.com/user/personal-agent",
   "type": "module",
   "exports": {
     ".": {

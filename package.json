@@ -4,6 +4,9 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Personal agent monorepo",
+  "repository": "github:user/personal-agent",
+  "bugs": "https://github.com/user/personal-agent/issues",
+  "homepage": "https://github.com/user/personal-agent",
   "workspaces": [
     "packages/*"
   ],
