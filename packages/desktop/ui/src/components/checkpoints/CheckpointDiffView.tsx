@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useCallback, type CSSProperties } from 'react';
 import { PatchDiff } from '@pierre/diffs/react';
 import type { FileDiffOptions } from '@pierre/diffs';
 import type { ConversationCommitCheckpointFile } from '../../shared/types';
@@ -57,19 +57,23 @@ export function fileDisplayPath(file: ConversationCommitCheckpointFile): string 
 export function CheckpointDiffSection({
   file,
   active = false,
+  collapsed = false,
   view,
   registerSection,
   stickyHeader = false,
   showActiveBadge = false,
   sectionClassName,
+  onToggleCollapse,
 }: {
   file: ConversationCommitCheckpointFile;
   active?: boolean;
+  collapsed?: boolean;
   view: 'unified' | 'split';
   registerSection?: (node: HTMLDivElement | null) => void;
   stickyHeader?: boolean;
   showActiveBadge?: boolean;
   sectionClassName?: string;
+  onToggleCollapse?: () => void;
 }) {
   const { theme } = useTheme();
   const diffOptions = useMemo<FileDiffOptions<undefined>>(() => ({
@@ -83,37 +87,59 @@ export function CheckpointDiffSection({
     overflow: 'wrap',
   }), [theme, view]);
 
+  const handleToggleCollapse = useCallback(() => {
+    onToggleCollapse?.();
+  }, [onToggleCollapse]);
+
   return (
     <section
       ref={registerSection}
       data-checkpoint-file-path={file.path}
       className={cx('mb-4 scroll-mt-4 overflow-hidden rounded-lg border border-border-subtle/80 bg-base/80 shadow-[0_18px_50px_rgba(0,0,0,0.14)]', active && 'border-accent/30', sectionClassName)}
     >
-      <div
+      <button
+        type="button"
+        onClick={handleToggleCollapse}
         className={cx(
-          'border-b border-border-subtle/60 bg-elevated/35 px-4 py-2.5',
+          'flex w-full items-center justify-between gap-3 border-b border-border-subtle/60 bg-elevated/35 px-4 py-2.5 text-left transition-colors',
           stickyHeader && 'sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-elevated/80',
         )}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={cx('shrink-0 text-dim transition-transform', collapsed && '-rotate-90')}
+              aria-hidden="true"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
             <p className="truncate font-mono text-[12px] text-primary" title={fileDisplayPath(file)}>{fileDisplayPath(file)}</p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-secondary">
-              <span className="uppercase tracking-[0.14em] text-dim/80">{statusLabel(file)}</span>
-              <span className="font-mono tabular-nums"><span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span></span>
-            </p>
           </div>
-          {showActiveBadge && active ? <span className="text-[10px] uppercase tracking-[0.14em] text-accent">Current</span> : null}
+          <p className="mt-0.5 flex flex-wrap items-center gap-2 pl-[18px] text-[10px] text-secondary">
+            <span className="uppercase tracking-[0.14em] text-dim/80">{statusLabel(file)}</span>
+            <span className="font-mono tabular-nums"><span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span></span>
+          </p>
         </div>
-      </div>
-      <div className="overflow-hidden bg-[rgb(var(--color-terminal-surface))]">
-        <PatchDiff
-          key={`${file.path}:${view}`}
-          patch={file.patch}
-          options={diffOptions}
-          style={checkpointDiffStyle}
-        />
-      </div>
+        {showActiveBadge && active ? <span className="text-[10px] uppercase tracking-[0.14em] text-accent">Current</span> : null}
+      </button>
+      {!collapsed ? (
+        <div className="overflow-hidden bg-[rgb(var(--color-terminal-surface))]">
+          <PatchDiff
+            key={`${file.path}:${view}`}
+            patch={file.patch}
+            options={diffOptions}
+            style={checkpointDiffStyle}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

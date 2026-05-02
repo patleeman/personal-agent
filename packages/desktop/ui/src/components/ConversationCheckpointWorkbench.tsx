@@ -401,12 +401,14 @@ export function ConversationCheckpointWorkbenchPane({
   const [error, setError] = useState<string | null>(null);
   const [diffView, setDiffView] = useState<DiffViewMode>('split');
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const viewerScrollRef = useRef<HTMLDivElement | null>(null);
   const fileSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     setDiffView('split');
     setActiveFilePath(null);
+    setExpandedFiles(new Set());
     fileSectionRefs.current = {};
   }, [checkpointId]);
 
@@ -447,6 +449,19 @@ export function ConversationCheckpointWorkbenchPane({
   }, [checkpointId, conversationId, onMissingCheckpoint, versions.checkpoints]);
 
   const selectedFilePath = activeFilePath ?? checkpoint?.files[0]?.path ?? null;
+
+  // Keep only the active file expanded by default; allow manual toggle
+  useEffect(() => {
+    if (!selectedFilePath) {
+      return;
+    }
+    setExpandedFiles((current) => {
+      if (current.size === 1 && current.has(selectedFilePath)) {
+        return current;
+      }
+      return new Set([selectedFilePath]);
+    });
+  }, [selectedFilePath]);
 
   const checkpointSubtitle = useMemo(() => {
     if (!checkpoint) {
@@ -588,16 +603,28 @@ export function ConversationCheckpointWorkbenchPane({
                       key={`${file.path}:${file.previousPath ?? ''}`}
                       file={file}
                       active={selectedFilePath === file.path}
+                      collapsed={!expandedFiles.has(file.path)}
                       view={diffView}
                       stickyHeader
                       showActiveBadge
                       registerSection={(node) => {
                         fileSectionRefs.current[file.path] = node;
                       }}
+                      onToggleCollapse={() => {
+                        setExpandedFiles((current) => {
+                          const next = new Set(current);
+                          if (next.has(file.path)) {
+                            next.delete(file.path);
+                          } else {
+                            next.add(file.path);
+                          }
+                          return next;
+                        });
+                      }}
                     />
                   ))}
                 </div>
-              )}
+              )
             </div>
           )}
         </div>
@@ -619,6 +646,7 @@ function UncommittedDiffPaneView({
 }) {
   const { result, loading, error } = useUncommittedDiff(workspaceCwd);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const viewerScrollRef = useRef<HTMLDivElement | null>(null);
   const fileSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -626,8 +654,21 @@ function UncommittedDiffPaneView({
   const selectedFilePath = activeFilePath ?? files[0]?.path ?? null;
 
   useEffect(() => {
-    setActiveFilePath(files[0]?.path ?? null);
+    setActiveFilePath((current) => current ?? files[0]?.path ?? null);
   }, [files]);
+
+  // Keep only the active file expanded by default; allow manual toggle
+  useEffect(() => {
+    if (!selectedFilePath) {
+      return;
+    }
+    setExpandedFiles((current) => {
+      if (current.size === 1 && current.has(selectedFilePath)) {
+        return current;
+      }
+      return new Set([selectedFilePath]);
+    });
+  }, [selectedFilePath]);
 
   useEffect(() => {
     if (!files.length) {
@@ -754,11 +795,23 @@ function UncommittedDiffPaneView({
                     key={`${file.path}:${file.previousPath ?? ''}`}
                     file={file}
                     active={selectedFilePath === file.path}
+                    collapsed={!expandedFiles.has(file.path)}
                     view={diffView}
                     stickyHeader
                     showActiveBadge
                     registerSection={(node) => {
                       fileSectionRefs.current[file.path] = node;
+                    }}
+                    onToggleCollapse={() => {
+                      setExpandedFiles((current) => {
+                        const next = new Set(current);
+                        if (next.has(file.path)) {
+                          next.delete(file.path);
+                        } else {
+                          next.add(file.path);
+                        }
+                        return next;
+                      });
                     }}
                   />
                 ))}
