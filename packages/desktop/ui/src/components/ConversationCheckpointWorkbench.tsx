@@ -473,7 +473,7 @@ export function ConversationCheckpointWorkbenchPane({
   }, [checkpointId]);
 
   useEffect(() => {
-    if (!checkpointId) {
+    if (!checkpointId || checkpointId === UNCOMMITTED_SENTINEL) {
       setCheckpoint(null);
       setLoading(false);
       setError(null);
@@ -510,19 +510,6 @@ export function ConversationCheckpointWorkbenchPane({
   }, [checkpointId, conversationId, onMissingCheckpoint, versions.checkpoints]);
 
   const selectedFilePath = activeFilePath ?? checkpoint?.files[0]?.path ?? null;
-
-  // Keep only the active file expanded by default; allow manual toggle
-  useEffect(() => {
-    if (!selectedFilePath) {
-      return;
-    }
-    setExpandedFiles((current) => {
-      if (current.size === 1 && current.has(selectedFilePath)) {
-        return current;
-      }
-      return new Set([selectedFilePath]);
-    });
-  }, [selectedFilePath]);
 
   const checkpointSubtitle = useMemo(() => {
     if (!checkpoint) {
@@ -720,11 +707,16 @@ function UncommittedDiffPaneView({
 }) {
   const { result, loading, error } = useUncommittedDiff(workspaceCwd);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const viewerScrollRef = useRef<HTMLDivElement | null>(null);
   const fileSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const files = result?.files ?? [];
   const selectedFilePath = activeFilePath ?? files[0]?.path ?? null;
+
+  useEffect(() => {
+    setExpandedFiles(new Set());
+  }, [result]);
 
   useEffect(() => {
     setActiveFilePath((current) => current ?? files[0]?.path ?? null);
@@ -821,7 +813,8 @@ function UncommittedDiffPaneView({
     );
   }
 
-  if (loading && !result) {
+  // Avoid flashing empty state — treat initial mount as still loading
+  if ((loading || !result) && !error) {
     return <LoadingState label="Checking uncommitted changes…" className="justify-center h-full" />;
   }
 
@@ -861,11 +854,23 @@ function UncommittedDiffPaneView({
                     key={`${file.path}:${file.previousPath ?? ''}`}
                     file={file}
                     active={selectedFilePath === file.path}
+                    collapsed={!expandedFiles.has(file.path)}
                     view={diffView}
                     stickyHeader
                     showActiveBadge
                     registerSection={(node) => {
                       fileSectionRefs.current[file.path] = node;
+                    }}
+                    onToggleCollapse={() => {
+                      setExpandedFiles((current) => {
+                        const next = new Set(current);
+                        if (next.has(file.path)) {
+                          next.delete(file.path);
+                        } else {
+                          next.add(file.path);
+                        }
+                        return next;
+                      });
                     }}
                   />
                 ))}
