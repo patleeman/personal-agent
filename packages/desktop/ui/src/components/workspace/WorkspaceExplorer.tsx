@@ -6,8 +6,8 @@ import { markdown } from '@codemirror/lang-markdown';
 import { python } from '@codemirror/lang-python';
 import { yaml } from '@codemirror/lang-yaml';
 import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
+import { EditorState, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import {
   type ContextMenuItem as FileTreeContextMenuItem,
@@ -253,66 +253,46 @@ class DeletedLinesWidget extends WidgetType {
 }
 
 const setDiffDecorations = StateEffect.define<DiffDecorationSpec>();
-const diffDecorationsField = StateField.define<DiffDecorationSpec>({
-  create: () => ({ addedLines: [], deletedBlocks: [] }),
-  update(value, transaction) {
+
+function buildDiffDecorations(spec: DiffDecorationSpec, state: EditorState): DecorationSet {
+  const added = new Set(spec.addedLines);
+  const builder = new RangeSetBuilder<Decoration>();
+  const blocksByLine = new Map<number, string[]>();
+  for (const block of spec.deletedBlocks) {
+    blocksByLine.set(block.afterLine, [...(blocksByLine.get(block.afterLine) ?? []), ...block.lines]);
+  }
+
+  const beforeFirst = blocksByLine.get(0);
+  if (beforeFirst?.length) {
+    builder.add(0, 0, Decoration.widget({ widget: new DeletedLinesWidget(beforeFirst), side: -1, block: true }));
+  }
+
+  for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber++) {
+    const line = state.doc.line(lineNumber);
+    if (added.has(lineNumber)) {
+      builder.add(line.from, line.from, Decoration.line({ class: 'workspace-added-line' }));
+    }
+    const deleted = blocksByLine.get(lineNumber);
+    if (deleted?.length) {
+      builder.add(line.to, line.to, Decoration.widget({ widget: new DeletedLinesWidget(deleted), side: 1, block: true }));
+    }
+  }
+
+  return builder.finish();
+}
+
+const diffDecorationsField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(decorations, transaction) {
     for (const effect of transaction.effects) {
-      if (effect.is(setDiffDecorations)) return effect.value;
+      if (effect.is(setDiffDecorations)) {
+        return buildDiffDecorations(effect.value, transaction.state);
+      }
     }
-    return value;
+    return decorations.map(transaction.changes);
   },
+  provide: (field) => EditorView.decorations.from(field),
 });
-
-const diffDecorationPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-
-    constructor(view: EditorView) {
-      this.decorations = this.build(view);
-    }
-
-    update(update: {
-      docChanged: boolean;
-      viewportChanged: boolean;
-      startState: unknown;
-      state: typeof EditorView.prototype.state;
-      view: EditorView;
-    }) {
-      if (update.docChanged || update.viewportChanged || update.startState !== update.state) {
-        this.decorations = this.build(update.view);
-      }
-    }
-
-    build(view: EditorView): DecorationSet {
-      const spec = view.state.field(diffDecorationsField, false) ?? { addedLines: [], deletedBlocks: [] };
-      const added = new Set(spec.addedLines);
-      const builder = new RangeSetBuilder<Decoration>();
-      const blocksByLine = new Map<number, string[]>();
-      for (const block of spec.deletedBlocks) {
-        blocksByLine.set(block.afterLine, [...(blocksByLine.get(block.afterLine) ?? []), ...block.lines]);
-      }
-
-      const beforeFirst = blocksByLine.get(0);
-      if (beforeFirst?.length) {
-        builder.add(0, 0, Decoration.widget({ widget: new DeletedLinesWidget(beforeFirst), side: -1, block: true }));
-      }
-
-      for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber++) {
-        const line = view.state.doc.line(lineNumber);
-        if (added.has(lineNumber)) {
-          builder.add(line.from, line.from, Decoration.line({ class: 'workspace-added-line' }));
-        }
-        const deleted = blocksByLine.get(lineNumber);
-        if (deleted?.length) {
-          builder.add(line.to, line.to, Decoration.widget({ widget: new DeletedLinesWidget(deleted), side: 1, block: true }));
-        }
-      }
-
-      return builder.finish();
-    }
-  },
-  { decorations: (plugin) => plugin.decorations },
-);
 
 function useWorkspaceWatcher(cwd: string | null, enabled: boolean, onEvent: () => void): void {
   const onEventRef = useRef(onEvent);
@@ -554,7 +534,6 @@ function WorkspaceTreeContextMenu({
 function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') {
   return [
     diffDecorationsField,
-    diffDecorationPlugin,
     EditorView.lineWrapping,
     EditorView.theme(
       {
