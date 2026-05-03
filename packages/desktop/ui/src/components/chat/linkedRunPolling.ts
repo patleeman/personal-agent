@@ -4,7 +4,7 @@ import { api } from '../../client/api';
 import type { DurableRunDetailResult } from '../../shared/types';
 
 export const INLINE_RUN_LOG_TAIL_LINES = 240;
-const INLINE_RUN_POLL_INTERVAL_MS = 2200;
+export const INLINE_RUN_POLL_INTERVAL_MS = 2200;
 const MAX_INLINE_RUN_LOG_TAIL_LINES = 1000;
 const MAX_INLINE_RUN_POLL_INTERVAL_MS = 10_000;
 
