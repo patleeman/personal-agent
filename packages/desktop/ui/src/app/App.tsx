@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import { api } from '../client/api';
@@ -30,6 +30,67 @@ import {
   SseConnectionContext,
   SystemStatusContext,
 } from './contexts';
+
+// ── Top-level error boundary ────────────────────────────────────────────────
+// Catches render crashes outside of route content (context providers, hooks, etc.)
+// so the user sees a recovery UI instead of a white screen.
+
+interface AppErrorBoundaryState {
+  hasError: boolean;
+  errorMessage: string | null;
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = { hasError: false, errorMessage: null };
+
+  static getDerivedStateFromError(error: unknown): AppErrorBoundaryState {
+    return {
+      hasError: true,
+      errorMessage: error instanceof Error ? (error.stack ?? error.message) : String(error ?? ''),
+    };
+  }
+
+  componentDidUpdate(_prevProps: { children: ReactNode }, prevState: AppErrorBoundaryState) {
+    // If we recovered (e.g., hot reload), clear the error state.
+    if (prevState.hasError && !this.state.hasError) {
+      return;
+    }
+  }
+
+  render() {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-base px-6">
+        <div className="max-w-lg rounded-2xl border border-border-subtle bg-surface px-6 py-6 shadow-sm">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-dim">Something went wrong</p>
+          <h1 className="mt-2 text-[22px] font-semibold text-primary">Personal Agent encountered an error</h1>
+          <p className="mt-2 text-[13px] leading-6 text-secondary">
+            The application crashed unexpectedly. You can try reloading, or start a new conversation.
+          </p>
+          {this.state.errorMessage ? (
+            <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/8 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-dim">Error details</p>
+              <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-primary">
+                {this.state.errorMessage}
+              </p>
+            </div>
+          ) : null}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button className="ui-action-button" onClick={() => window.location.reload()}>
+              Reload application
+            </button>
+            <a href="/conversations/new" className="ui-action-button">
+              New conversation
+            </a>
+          </div>
+        </div>
+      </main>
+    );
+  }
+}
 
 function ConversationsRouteRedirect() {
   const { openIds, pinnedIds } = useConversations();
@@ -253,9 +314,52 @@ export function App() {
       });
   }, [setDaemon, setRuns, setSessions, setTasks]);
 
-  useEffect(() => {
+  // Track the latest subscription so we don't re-subscribe after a fresh mount.
+  const subscriptionGenerationRef = useRef(0);
+
+  const subscribe = useCallback(() => {
+    const generation = ++subscriptionGenerationRef.current;
     let cancelled = false;
     let cleanup = () => {};
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleReconnect = (delayMs: number) => {
+      if (cancelled) return;
+      reconnectTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        cleanup();
+        void subscribeDesktopAppEvents({
+          onopen: () => {
+            openedOnceRef.current = true;
+            setSseStatus('open');
+          },
+          onevent: handleDesktopAppEvent,
+          onerror: () => {
+            setSseStatus(openedOnceRef.current ? 'reconnecting' : 'connecting');
+          },
+          onclose: () => {
+            setSseStatus('offline');
+            // Schedule a reconnect if we were previously connected.
+            if (openedOnceRef.current) {
+              scheduleReconnect(3000);
+            }
+          },
+        })
+          .then((localCleanup) => {
+            if (cancelled || generation !== subscriptionGenerationRef.current) {
+              localCleanup();
+              return;
+            }
+            cleanup = localCleanup;
+          })
+          .catch(() => {
+            if (cancelled || generation !== subscriptionGenerationRef.current) return;
+            setSseStatus('offline');
+            void bootstrapSnapshots();
+          });
+      }, delayMs);
+    };
+
     const bootstrapTimer = window.setTimeout(() => {
       if (!openedOnceRef.current) {
         setSseStatus('offline');
@@ -275,10 +379,14 @@ export function App() {
       },
       onclose: () => {
         setSseStatus('offline');
+        // Schedule a reconnect if we were previously connected.
+        if (openedOnceRef.current) {
+          scheduleReconnect(3000);
+        }
       },
     })
       .then((localCleanup) => {
-        if (cancelled) {
+        if (cancelled || generation !== subscriptionGenerationRef.current) {
           localCleanup();
           return;
         }
@@ -286,47 +394,55 @@ export function App() {
         cleanup = localCleanup;
       })
       .catch(() => {
-        if (!cancelled) {
-          setSseStatus('offline');
-          void bootstrapSnapshots();
-        }
+        if (cancelled || generation !== subscriptionGenerationRef.current) return;
+        setSseStatus('offline');
+        void bootstrapSnapshots();
       });
 
     return () => {
       cancelled = true;
       window.clearTimeout(bootstrapTimer);
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
       cleanup();
       setSseStatus('offline');
     };
   }, [bootstrapSnapshots, handleDesktopAppEvent]);
 
+  useEffect(() => {
+    return subscribe();
+  }, [subscribe]);
+
   return (
-    <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
-      <SseConnectionContext.Provider value={{ status: sseStatus }}>
-        <AppDataContext.Provider value={{ projects, sessions, tasks, runs, setProjects, setSessions, setTasks, setRuns }}>
-          <SystemStatusContext.Provider value={{ daemon, setDaemon }}>
-            <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
-              <ThemeProvider>
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<Layout />}>
-                      <Route index element={<Navigate to="/conversations/new" replace />} />
-                      <Route path="conversations" element={<ConversationsRouteRedirect />} />
-                      <Route path="conversations/new" element={<DraftConversationRoute />} />
-                      <Route path="conversations/:id" element={<SavedConversationRoute />} />
-                      <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
-                      <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
-                      <Route path="automations" element={suspendRoute(<TasksPage />)} />
-                      <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
-                      <Route path="settings" element={suspendRoute(<SettingsPage />)} />
-                    </Route>
-                  </Routes>
-                </BrowserRouter>
-              </ThemeProvider>
-            </LiveTitlesContext.Provider>
-          </SystemStatusContext.Provider>
-        </AppDataContext.Provider>
-      </SseConnectionContext.Provider>
-    </AppEventsContext.Provider>
+    <AppErrorBoundary>
+      <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
+        <SseConnectionContext.Provider value={{ status: sseStatus }}>
+          <AppDataContext.Provider value={{ projects, sessions, tasks, runs, setProjects, setSessions, setTasks, setRuns }}>
+            <SystemStatusContext.Provider value={{ daemon, setDaemon }}>
+              <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
+                <ThemeProvider>
+                  <BrowserRouter>
+                    <Routes>
+                      <Route path="/" element={<Layout />}>
+                        <Route index element={<Navigate to="/conversations/new" replace />} />
+                        <Route path="conversations" element={<ConversationsRouteRedirect />} />
+                        <Route path="conversations/new" element={<DraftConversationRoute />} />
+                        <Route path="conversations/:id" element={<SavedConversationRoute />} />
+                        <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
+                        <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
+                        <Route path="automations" element={suspendRoute(<TasksPage />)} />
+                        <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
+                        <Route path="settings" element={suspendRoute(<SettingsPage />)} />
+                      </Route>
+                    </Routes>
+                  </BrowserRouter>
+                </ThemeProvider>
+              </LiveTitlesContext.Provider>
+            </SystemStatusContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </AppEventsContext.Provider>
+    </AppErrorBoundary>
   );
 }
