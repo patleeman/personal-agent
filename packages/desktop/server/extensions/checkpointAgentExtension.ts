@@ -17,7 +17,12 @@ const CHECKPOINT_ACTION_VALUES = ['save', 'get', 'list'] as const;
 type CheckpointAction = (typeof CHECKPOINT_ACTION_VALUES)[number];
 
 const CheckpointToolParams = Type.Object({
-  action: Type.Union(CHECKPOINT_ACTION_VALUES.map((value) => Type.Literal(value))),
+  action: Type.Unsafe<CheckpointAction>({
+    type: 'string',
+    enum: ['save', 'get', 'list'],
+    description:
+      'Required. Action to perform: save (create a commit checkpoint), get (retrieve a saved checkpoint), or list (show all checkpoints).',
+  }),
   checkpointId: Type.Optional(Type.String({ description: 'Stable checkpoint id. Defaults to the created commit SHA.' })),
   message: Type.Optional(Type.String({ description: 'Commit message for the checkpoint. Required when action=save.' })),
   paths: Type.Optional(
@@ -313,12 +318,14 @@ export function createCheckpointAgentExtension(options: {
     pi.registerTool({
       name: 'checkpoint',
       label: 'Checkpoint',
-      description: 'Create and inspect targeted git commit checkpoints for the current conversation.',
-      promptSnippet: 'Create a targeted git checkpoint commit and attach a reviewable diff to the conversation.',
+      description:
+        'Create, get, and list targeted git commit checkpoints for the current conversation. Use action=save to create a checkpoint, action=get to retrieve one, or action=list to see all saved checkpoints.',
+      promptSnippet: 'Create, retrieve, or list targeted git commit checkpoints tied to the conversation.',
       promptGuidelines: [
-        'Use this tool when the user wants a focused checkpoint commit tied to the current conversation, especially before review or handoff.',
-        'Keep checkpoints targeted: pass explicit paths and a concise commit message. Do not checkpoint unrelated files.',
-        'This tool commits only the requested paths and saves a durable diff snapshot for transcript review.',
+        'Set action="save" with explicit paths and a concise commit message to create a checkpoint. Do not checkpoint unrelated files.',
+        'Set action="get" with a checkpointId to retrieve a previously saved checkpoint and its diff.',
+        'Set action="list" to see all saved checkpoints for the current conversation.',
+        'The action parameter is always required and must be one of: save, get, list.',
       ],
       parameters: CheckpointToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
