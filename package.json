@@ -1,12 +1,12 @@
 {
   "name": "personal-agent",
   "version": "0.5.35",
-  "private": true,
+  "private": false,
   "license": "MIT",
   "description": "Personal agent monorepo",
-  "repository": "github:user/personal-agent",
-  "bugs": "https://github.com/user/personal-agent/issues",
-  "homepage": "https://github.com/user/personal-agent",
+  "repository": "github:patleeman/personal-agent",
+  "bugs": "https://github.com/patleeman/personal-agent/issues",
+  "homepage": "https://github.com/patleeman/personal-agent",
   "workspaces": [
     "packages/*"
   ],
