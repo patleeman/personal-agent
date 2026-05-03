@@ -1,6 +1,6 @@
 {
   "name": "personal-agent",
-  "version": "0.5.35",
+  "version": "0.6.0",
   "private": false,
   "license": "MIT",
   "description": "Personal agent monorepo",
@@ -77,7 +77,7 @@
   },
   "dependencies": {
     "@mariozechner/pi-ai": "0.72.0",
-    "@mariozechner/pi-coding-agent": "^0.72.0",
+    "@mariozechner/pi-coding-agent": "^0.72.1",
     "@mozilla/readability": "^0.5.0",
     "@sinclair/typebox": "^0.34.48",
     "jsdom": "^24.0.0",
