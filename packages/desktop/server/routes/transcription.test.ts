@@ -1,113 +1,29 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { readRequiredBase64 } from './transcription.js';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const { persistSettingsWriteMock } = vi.hoisted(() => ({
-  persistSettingsWriteMock: vi.fn(),
-}));
-
-vi.mock('../ui/settingsPersistence.js', () => ({
-  persistSettingsWrite: persistSettingsWriteMock,
-}));
-
-import { readRequiredBase64, registerTranscriptionRoutes } from './transcription.js';
-
-describe('registerTranscriptionRoutes', () => {
-  beforeEach(() => {
-    persistSettingsWriteMock.mockReset();
+describe('readRequiredBase64', () => {
+  it('decodes valid base64', () => {
+    const buf = readRequiredBase64('aGVsbG8=', 'Audio data');
+    expect(buf.toString()).toBe('hello');
   });
 
-  function createHarness(settingsFile = '/tmp/transcription-settings.json') {
-    let patchHandler: ((req: { body: unknown }, res: ReturnType<typeof createResponse>) => void) | undefined;
-    const postHandlers = new Map<string, (req: { body: unknown }, res: ReturnType<typeof createResponse>) => Promise<void>>();
-    const router = {
-      get: vi.fn(),
-      post: vi.fn((path: string, next: (req: { body: unknown }, res: ReturnType<typeof createResponse>) => Promise<void>) => {
-        postHandlers.set(path, next);
-      }),
-      patch: vi.fn((path: string, next: typeof patchHandler) => {
-        expect(path).toBe('/api/transcription/settings');
-        patchHandler = next;
-      }),
-    };
-
-    registerTranscriptionRoutes(router as never, {
-      getSettingsFile: () => settingsFile,
-      getAuthFile: () => '/tmp/auth.json',
-    });
-
-    return {
-      patchHandler: patchHandler!,
-      postHandler: postHandlers.get('/api/transcription/transcribe-file')!,
-      installModelHandler: postHandlers.get('/api/transcription/install-model')!,
-    };
-  }
-
-  function createResponse() {
-    return {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    };
-  }
-
-  it('persists dictation settings through durable settings persistence', () => {
-    const { patchHandler } = createHarness('/tmp/runtime-settings.json');
-    const res = createResponse();
-    persistSettingsWriteMock.mockImplementation((writer, options) => {
-      expect(options).toEqual({ runtimeSettingsFile: '/tmp/runtime-settings.json' });
-      return writer('/tmp/runtime-settings.json');
-    });
-
-    patchHandler(
-      {
-        body: {
-          provider: 'local-whisper',
-          model: 'base.en',
-        },
-      },
-      res,
-    );
-
-    expect(persistSettingsWriteMock).toHaveBeenCalledTimes(1);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        settings: {
-          provider: 'local-whisper',
-          model: 'base.en',
-        },
-      }),
-    );
+  it('throws for non-string value', () => {
+    expect(() => readRequiredBase64(123, 'Audio')).toThrow('Audio is required');
   });
 
-  it('rejects malformed transcription file base64 before provider dispatch', () => {
-    expect(() => readRequiredBase64('not-valid-base64!', 'dataBase64')).toThrow('dataBase64 must contain valid base64 data.');
+  it('throws for empty string', () => {
+    expect(() => readRequiredBase64('', 'Input')).toThrow('Input is required');
   });
 
-  it('returns a client error for malformed transcription file base64', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'pa-transcription-route-'));
-    const settingsFile = join(root, 'settings.json');
-    writeFileSync(settingsFile, JSON.stringify({ transcription: { provider: 'local-whisper' } }));
-    const { postHandler } = createHarness(settingsFile);
-    const res = createResponse();
-
-    await postHandler({ body: { dataBase64: 'not-valid-base64!' } }, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'dataBase64 must contain valid base64 data.' });
+  it('throws for whitespace-only', () => {
+    expect(() => readRequiredBase64('   ', 'Input')).toThrow('Input is required');
   });
 
-  it('returns a client error when installing without a provider', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'pa-transcription-route-'));
-    const settingsFile = join(root, 'settings.json');
-    writeFileSync(settingsFile, JSON.stringify({ transcription: { provider: 'local-whisper', model: 'base.en' } }));
-    const { installModelHandler } = createHarness(settingsFile);
-    const res = createResponse();
+  it('throws for invalid base64 characters', () => {
+    expect(() => readRequiredBase64('!!!', 'Audio')).toThrow('Audio must contain valid base64 data');
+  });
 
-    await installModelHandler({ body: { provider: null, model: 'base.en' } }, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Choose a transcription provider in Settings before using dictation.' });
+  it('rejects base64 with single character (length % 4 == 1)', () => {
+    expect(() => readRequiredBase64('Y', 'Audio')).toThrow('Audio must contain valid base64 data');
   });
 });

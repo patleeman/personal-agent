@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import { getSupportedThinkingLevels, type Model } from '@mariozechner/pi-ai';
+import { getSupportedThinkingLevels, type Api, type Model } from '@mariozechner/pi-ai';
 import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
 
 import {
@@ -65,7 +65,7 @@ function normalizeServiceTier(value: unknown): ServiceTier | '' {
   return normalizeServiceTierValue(value);
 }
 
-function clampServiceTier(serviceTier: ServiceTier | '', model: Pick<Model<any>, 'id'> | null | undefined): ServiceTier | '' {
+function clampServiceTier(serviceTier: ServiceTier | '', model: Pick<Model<Api>, 'id'> | null | undefined): ServiceTier | '' {
   if (!serviceTier) {
     return '';
   }
@@ -77,7 +77,7 @@ function clampServiceTier(serviceTier: ServiceTier | '', model: Pick<Model<any>,
   return modelSupportsServiceTier(model, serviceTier) ? serviceTier : '';
 }
 
-function getAvailableThinkingLevels(model: Model<any> | null | undefined): ThinkingLevel[] {
+function getAvailableThinkingLevels(model: Model<Api> | null | undefined): ThinkingLevel[] {
   if (!model?.reasoning) {
     return ['off'];
   }
@@ -85,7 +85,7 @@ function getAvailableThinkingLevels(model: Model<any> | null | undefined): Think
   return getSupportedThinkingLevels(model) as ThinkingLevel[];
 }
 
-function clampThinkingLevel(level: ThinkingLevel | '', model: Model<any> | null | undefined): ThinkingLevel {
+function clampThinkingLevel(level: ThinkingLevel | '', model: Model<Api> | null | undefined): ThinkingLevel {
   const availableLevels = getAvailableThinkingLevels(model);
   if (!level) {
     return availableLevels.includes(DEFAULT_THINKING_LEVEL)
@@ -100,11 +100,11 @@ function clampThinkingLevel(level: ThinkingLevel | '', model: Model<any> | null 
   return availableLevels[availableLevels.length - 1] ?? 'off';
 }
 
-export function modelSupportsServiceTiers(model: Pick<Model<any>, 'id'> | null | undefined): boolean {
+export function modelSupportsServiceTiers(model: Pick<Model<Api>, 'id'> | null | undefined): boolean {
   return getSupportedServiceTiersForModel(model).length > 0;
 }
 
-function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | null {
+function resolveModelById(modelId: string, models: Model<Api>[]): Model<Api> | null {
   if (!modelId) {
     return null;
   }
@@ -153,12 +153,12 @@ function readServiceTierOverride(branch: Array<{ type: string; customType?: stri
 function buildResolvedState(
   snapshot: ConversationModelPreferenceSnapshot,
   defaults: ConversationModelPreferenceDefaults,
-  models: Model<any>[],
+  models: Model<Api>[],
 ): {
   currentModel: string;
   currentThinkingLevel: ThinkingLevel | '';
   currentServiceTier: ServiceTier | '';
-  currentModelDefinition: Model<any> | null;
+  currentModelDefinition: Model<Api> | null;
 } {
   const fallbackModel = readNonEmptyString(defaults.currentModel);
   const currentModel = snapshot.currentModel || fallbackModel;
@@ -184,13 +184,13 @@ function computeNextConversationModelPreferences(
   snapshot: ConversationModelPreferenceSnapshot,
   input: ConversationModelPreferenceInput,
   defaults: ConversationModelPreferenceDefaults,
-  models: Model<any>[],
+  models: Model<Api>[],
 ): {
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
   hasExplicitServiceTier: boolean;
-  nextModel: Model<any> | null;
+  nextModel: Model<Api> | null;
   shouldAppendModelChange: boolean;
   nextPersistedThinkingLevel: ThinkingLevel | null;
   nextServiceTierOverride: ServiceTierOverride | undefined;
@@ -309,7 +309,7 @@ export function readConversationModelPreferenceSnapshot(
 export function resolveConversationModelPreferenceState(
   snapshot: ConversationModelPreferenceSnapshot,
   defaults: ConversationModelPreferenceDefaults,
-  models: Model<any>[],
+  models: Model<Api>[],
 ): ConversationModelPreferenceState {
   const resolved = buildResolvedState(snapshot, defaults, models);
   return {
@@ -334,7 +334,7 @@ export function applyConversationModelPreferencesToSessionManager(
   >,
   input: ConversationModelPreferenceInput,
   defaults: ConversationModelPreferenceDefaults,
-  models: Model<any>[],
+  models: Model<Api>[],
 ): ConversationModelPreferenceState {
   const snapshot = readConversationModelPreferenceSnapshot(sessionManager);
   const next = computeNextConversationModelPreferences(snapshot, input, defaults, models);
@@ -363,7 +363,7 @@ export async function applyConversationModelPreferencesToLiveSession(
   session: Pick<AgentSession, 'setModel' | 'setThinkingLevel' | 'sessionManager'>,
   input: ConversationModelPreferenceInput,
   defaults: ConversationModelPreferenceDefaults,
-  models: Model<any>[],
+  models: Model<Api>[],
 ): Promise<ConversationModelPreferenceState> {
   const snapshot = readConversationModelPreferenceSnapshot(session.sessionManager);
   const next = computeNextConversationModelPreferences(snapshot, input, defaults, models);

@@ -350,7 +350,6 @@ describe('matchesUnifiedNodeQuery', () => {
       id: 'test',
       title: 'Test',
       summary: '',
-      description: '',
       status: 'active',
       type: 'note',
       kinds: [],
@@ -360,17 +359,13 @@ describe('matchesUnifiedNodeQuery', () => {
       body: '',
       filePath: '',
       dirPath: '',
-      searchText: 'test',
+      searchText: 'test search text for matching',
       ...overrides,
     } as any;
   }
 
-  it('matches by id', () => {
-    expect(matchesUnifiedNodeQuery(makeNode({ id: 'my-project', searchText: 'my-project' }), 'my-project')).toBe(true);
-  });
-
-  it('matches by title', () => {
-    expect(matchesUnifiedNodeQuery(makeNode({ title: 'My Cool Project', searchText: 'My Cool Project' }), 'Cool')).toBe(true);
+  it('matches by id field prefix', () => {
+    expect(matchesUnifiedNodeQuery(makeNode({ id: 'my-project' }), 'id:my-project')).toBe(true);
   });
 
   it('returns true for undefined query', () => {
@@ -381,31 +376,90 @@ describe('matchesUnifiedNodeQuery', () => {
     expect(matchesUnifiedNodeQuery(makeNode(), '')).toBe(true);
   });
 
-  it('is case-insensitive', () => {
-    expect(matchesUnifiedNodeQuery(makeNode({ id: 'MY-PROJECT', searchText: 'MY-PROJECT' }), 'my-project')).toBe(true);
+  it('matches search text case-insensitively', () => {
+    const node = {
+      id: 'x',
+      title: 'x',
+      summary: '',
+      status: 'active',
+      type: 'note',
+      kinds: [],
+      tags: [],
+      profiles: [],
+      links: { related: [], conversations: [], relationships: [] },
+      body: '',
+      filePath: '',
+      dirPath: '',
+      searchText: 'hello world',
+    } as any;
+    expect(matchesUnifiedNodeQuery(node, 'hello')).toBe(true);
+  });
+
+  it('matches id via field prefix', () => {
+    const node = {
+      id: 'my-project',
+      title: 'x',
+      summary: '',
+      status: 'active',
+      type: 'note',
+      kinds: [],
+      tags: [],
+      profiles: [],
+      links: { related: [], conversations: [], relationships: [] },
+      body: '',
+      filePath: '',
+      dirPath: '',
+      searchText: '',
+    } as any;
+    expect(matchesUnifiedNodeQuery(node, 'id:my-project')).toBe(true);
+  });
+
+  it('does not match different id', () => {
+    const node = {
+      id: 'other',
+      title: 'x',
+      summary: '',
+      status: 'active',
+      type: 'note',
+      kinds: [],
+      tags: [],
+      profiles: [],
+      links: { related: [], conversations: [], relationships: [] },
+      body: '',
+      filePath: '',
+      dirPath: '',
+      searchText: '',
+    } as any;
+    expect(matchesUnifiedNodeQuery(node, 'id:my-project')).toBe(false);
   });
 });
 
 describe('findUnifiedNodeById', () => {
   it('finds a node by id', () => {
-    const nodes = [{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }] as any;
+    const nodes = [
+      { id: 'a', title: 'A' },
+      { id: 'b', title: 'B' },
+    ] as any;
     expect(findUnifiedNodeById(nodes, 'b').title).toBe('B');
   });
 
-  it('returns undefined for missing id', () => {
-    expect(findUnifiedNodeById([], 'missing')).toBeUndefined();
+  it('throws for missing id', () => {
+    expect(() => findUnifiedNodeById([], 'missing')).toThrow('No node found with id');
   });
 });
 
 describe('collectDuplicateUnifiedNodeIds', () => {
   it('finds duplicate ids', () => {
     const nodes = [
-      { id: 'dup' }, { id: 'unique' }, { id: 'dup' }, { id: 'dup' },
+      { id: 'dup', filePath: '/a' },
+      { id: 'unique', filePath: '/b' },
+      { id: 'dup', filePath: '/c' },
+      { id: 'dup', filePath: '/d' },
     ] as any;
     const dups = collectDuplicateUnifiedNodeIds(nodes);
     expect(dups).toHaveLength(1);
     expect(dups[0].id).toBe('dup');
-    expect(dups[0].count).toBe(3);
+    expect(dups[0].files).toHaveLength(3);
   });
 
   it('returns empty for unique nodes', () => {
