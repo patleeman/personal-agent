@@ -75,7 +75,17 @@ function resolveDesktopWebDistDir(): string {
 
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim() || resolve(currentDir, '..', '..', '..');
-  return resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist');
+
+  // Match dev mode order from resolveDesktopRuntimePaths: ui/dist first, then dist.
+  const candidates = [resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist'), resolve(repoRoot, 'packages', 'desktop', 'dist')];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
 }
 
 function resolveStaticFilePath(requestPath: string): string {
