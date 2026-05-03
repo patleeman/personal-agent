@@ -29,34 +29,43 @@ const {
   daemonRunOrchestrationPromptExtensionMock,
   renameSessionMock,
   requestConversationWorkingDirectoryChangeMock,
-} = vi.hoisted(() => ({
-  getProfilesRootMock: vi.fn(() => '/profiles-root'),
-  getStateRootMock: vi.fn(() => '/state-root'),
-  materializeProfileToAgentDirMock: vi.fn(),
-  resolveResourceProfileMock: vi.fn(),
-  writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
-  createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
-  createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
-  createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
-  createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
-  createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
-  createConversationInspectAgentExtensionMock: vi.fn(() => 'conversation-inspect-extension'),
-  createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
-  createConversationTitleAgentExtensionMock: vi.fn(() => 'conversation-title-extension'),
-  createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
-  createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
-  createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
-  createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
-  createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
-  createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
-  webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
-  gptApplyPatchExtensionMock: vi.fn(() => 'gpt-apply-patch-extension'),
-  knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
-  openaiNativeCompactionExtensionMock: vi.fn(() => 'openai-native-compaction-extension'),
-  daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
-  renameSessionMock: vi.fn(),
-  requestConversationWorkingDirectoryChangeMock: vi.fn(),
-}));
+  authStorageMock,
+} = vi.hoisted(() => {
+  const authStorageMock = {
+    hasAuth: vi.fn(() => false),
+    create: vi.fn(() => authStorageMock),
+  };
+
+  return {
+    getProfilesRootMock: vi.fn(() => '/profiles-root'),
+    getStateRootMock: vi.fn(() => '/state-root'),
+    materializeProfileToAgentDirMock: vi.fn(),
+    resolveResourceProfileMock: vi.fn(),
+    writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
+    createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
+    createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
+    createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
+    createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
+    createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
+    createConversationInspectAgentExtensionMock: vi.fn(() => 'conversation-inspect-extension'),
+    createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
+    createConversationTitleAgentExtensionMock: vi.fn(() => 'conversation-title-extension'),
+    createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
+    createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
+    createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
+    createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
+    createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
+    createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
+    webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
+    gptApplyPatchExtensionMock: vi.fn(() => 'gpt-apply-patch-extension'),
+    knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
+    openaiNativeCompactionExtensionMock: vi.fn(() => 'openai-native-compaction-extension'),
+    daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
+    renameSessionMock: vi.fn(),
+    requestConversationWorkingDirectoryChangeMock: vi.fn(),
+    authStorageMock,
+  };
+});
 
 vi.mock('@personal-agent/core', () => ({
   getProfilesRoot: getProfilesRootMock,
@@ -147,6 +156,10 @@ vi.mock('../conversations/liveSessions.js', () => ({
   requestConversationWorkingDirectoryChange: requestConversationWorkingDirectoryChangeMock,
 }));
 
+vi.mock('@mariozechner/pi-coding-agent', () => ({
+  AuthStorage: authStorageMock,
+}));
+
 import { createProfileState } from './profileState.js';
 
 const resolvedShared = {
@@ -181,6 +194,9 @@ describe('createProfileState', () => {
     createScheduledTaskAgentExtensionMock.mockClear();
     createWorkbenchBrowserAgentExtensionMock.mockClear();
     requestConversationWorkingDirectoryChangeMock.mockReset();
+    authStorageMock.hasAuth.mockReset();
+    authStorageMock.hasAuth.mockReturnValue(false);
+    authStorageMock.create.mockClear();
     delete process.env.PERSONAL_AGENT_ACTIVE_PROFILE;
     delete process.env.PERSONAL_AGENT_PROFILE;
     delete process.env.PERSONAL_AGENT_REPO_ROOT;
@@ -214,7 +230,6 @@ describe('createProfileState', () => {
       'run-extension',
       'conversation-inspect-extension',
       'conversation-title-extension',
-      'image-extension',
       'artifact-extension',
       'checkpoint-extension',
       'mcp-extension',

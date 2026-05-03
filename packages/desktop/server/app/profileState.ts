@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import { materializeProfileToAgentDir, resolveResourceProfile } from '@personal-agent/core';
 
@@ -92,6 +92,15 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     return currentProfile;
   }
 
+  function hasOpenAiImageProvider(): boolean {
+    try {
+      const auth = AuthStorage.create(join(agentDir, 'auth.json'));
+      return auth.hasAuth('openai') || auth.hasAuth('openai-codex');
+    } catch {
+      return false;
+    }
+  }
+
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
       createScheduledTaskAgentExtension({
@@ -114,7 +123,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       createConversationTitleAgentExtension({
         setConversationTitle: renameSession,
       }),
-      createImageAgentExtension(),
+      ...(hasOpenAiImageProvider() ? [createImageAgentExtension()] : []),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
         repoRoot,
