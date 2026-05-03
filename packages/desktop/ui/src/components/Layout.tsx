@@ -398,8 +398,8 @@ function useViewportWidth() {
 const ENABLE_OPEN_CONVERSATION_WARMING = true;
 const OPEN_TAB_WARM_TAIL_BLOCKS = 120;
 const OPEN_TAB_WARM_IDLE_TIMEOUT_MS = 1500;
-const OPEN_TAB_WARM_START_DELAY_MS = 0;
-const OPEN_TAB_WARM_INTERLEAVE_MS = 25;
+const OPEN_TAB_WARM_START_DELAY_MS = 3000;
+const OPEN_TAB_WARM_INTERLEAVE_MS = 300;
 
 type IdleCallbackHandle = number;
 type IdleCallbackLike = (deadline: { didTimeout: boolean; timeRemaining(): number }) => void;

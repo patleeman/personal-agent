@@ -165,6 +165,10 @@ export class DesktopTrayController {
   }
 
   refresh(): void {
+    if (this.tray.isDestroyed()) {
+      return;
+    }
+
     this.renderMenu();
   }
 
@@ -173,6 +177,9 @@ export class DesktopTrayController {
   }
 
   private renderMenu(): void {
+    if (this.tray.isDestroyed()) {
+      return;
+    }
     const appName = typeof app.name === 'string' && app.name.trim().length > 0 ? app.name.trim() : 'Personal Agent';
     this.tray.setToolTip(buildTrayToolTip(appName, this.startupState));
     const menu = Menu.buildFromTemplate(
