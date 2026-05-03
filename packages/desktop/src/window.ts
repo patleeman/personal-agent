@@ -529,15 +529,17 @@ export class DesktopWindowController {
   }
 
   private getNavigationState(window = this.mainWindow): DesktopNavigationState {
+    const nav = window?.webContents.navigationHistory;
     return {
-      canGoBack: window?.webContents.canGoBack() ?? false,
-      canGoForward: window?.webContents.canGoForward() ?? false,
+      canGoBack: nav?.canGoBack() ?? false,
+      canGoForward: nav?.canGoForward() ?? false,
     };
   }
 
   private async goBack(window = this.mainWindow): Promise<DesktopNavigationState> {
-    if (window?.webContents.canGoBack()) {
-      window.webContents.goBack();
+    const nav = window?.webContents.navigationHistory;
+    if (nav?.canGoBack()) {
+      nav.goBack();
       await delay(120);
     }
 
@@ -545,8 +547,9 @@ export class DesktopWindowController {
   }
 
   private async goForward(window = this.mainWindow): Promise<DesktopNavigationState> {
-    if (window?.webContents.canGoForward()) {
-      window.webContents.goForward();
+    const nav = window?.webContents.navigationHistory;
+    if (nav?.canGoForward()) {
+      nav.goForward();
       await delay(120);
     }
 

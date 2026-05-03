@@ -194,12 +194,13 @@ interface WorkbenchBrowserViewEntry {
 }
 
 function getState(webContents: WebContents, entry?: WorkbenchBrowserViewEntry): WorkbenchBrowserState {
+  const nav = webContents.navigationHistory;
   return {
     url: webContents.getURL(),
     title: webContents.getTitle(),
     loading: webContents.isLoadingMainFrame(),
-    canGoBack: webContents.canGoBack(),
-    canGoForward: webContents.canGoForward(),
+    canGoBack: nav.canGoBack(),
+    canGoForward: nav.canGoForward(),
     active: entry?.active === true,
     browserRevision: entry?.browserRevision ?? 0,
     lastSnapshotRevision: entry?.lastSnapshotRevision ?? 0,
@@ -298,8 +299,9 @@ export class WorkbenchBrowserViewController {
 
   async goBack(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
     const view = this.requireView(owner, sessionKey);
-    if (view.webContents.canGoBack()) {
-      view.webContents.goBack();
+    const nav = view.webContents.navigationHistory;
+    if (nav.canGoBack()) {
+      nav.goBack();
       await wait(120);
     }
     return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
@@ -307,8 +309,9 @@ export class WorkbenchBrowserViewController {
 
   async goForward(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
     const view = this.requireView(owner, sessionKey);
-    if (view.webContents.canGoForward()) {
-      view.webContents.goForward();
+    const nav = view.webContents.navigationHistory;
+    if (nav.canGoForward()) {
+      nav.goForward();
       await wait(120);
     }
     return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
