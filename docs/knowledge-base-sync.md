@@ -1,70 +1,76 @@
 # Knowledge Base Sync
 
-The knowledge base can be backed by a git repository for synchronization across machines.
+Knowledge Base Sync uses git to synchronize vault content across machines. When configured, the runtime maintains a managed git clone that serves as the vault root.
 
-## How it works
+## How It Works
 
-When `knowledgeBaseRepoUrl` is configured in `<config-root>/config.json`, the runtime maintains a managed clone of the repository at:
+1. The runtime clones a remote git repository to `<state-root>/knowledge-base/repo`
+2. Local file changes are tracked via a content-addressed snapshot (blob hashes)
+3. On sync, the runtime pulls remote changes and pushes local changes
+4. The managed mirror serves as the effective `<vault-root>`
 
-```text
-<state-root>/knowledge-base/repo
+```
+Machine A ──► Git remote ◄── Machine B
+                 │
+          Managed clone
+          <state-root>/knowledge-base/repo
+                 │
+            Effective vault root
 ```
 
-This clone is the effective `<vault-root>` (unless `PERSONAL_AGENT_VAULT_ROOT` overrides it). The runtime treats it as the canonical source of durable knowledge: instruction files, skills, projects, and normal docs all live inside this clone.
+## Configuration
 
-The sync engine:
+Set the repo URL in config.json:
 
-1. **Pulls** remote changes so the local mirror stays up to date with the remote repository
-2. **Watches** for local file edits and commits them after a quiet period (~2 minutes of no writes)
-3. **Pushes** local commits to the remote
+```json
+{
+  "knowledgeBaseRepoUrl": "git@github.com:user/pa-knowledge.git",
+  "knowledgeBaseBranch": "main"
+}
+```
 
-The sync loop runs every 5 minutes in the background. Manual sync (from Settings or the Knowledge page) checks immediately.
+The branch setting is optional. When omitted, the remote default branch is used.
 
-## .gitignore
+## Vault Root Resolution
 
-The managed mirror uses a standard `.gitignore` at the repo root. Common entries exclude:
+When KB sync is configured, the vault root resolution order is:
 
-- `node_modules/`
-- `.DS_Store`
-- build artifacts or large binary files that should not live in the knowledge base
+1. `PERSONAL_AGENT_VAULT_ROOT` environment variable
+2. Managed KB mirror (`<state-root>/knowledge-base/repo`)
+3. Legacy `vaultRoot` config value
+4. `~/Documents/personal-agent`
 
-If you add files that should not be tracked, update the `.gitignore` in the mirror directly. The sync engine respects git's normal ignore rules.
+When `PERSONAL_AGENT_VAULT_ROOT` is set, the managed mirror is bypassed entirely.
 
-## Sync state in the UI
+## Sync State
 
-The Knowledge page sidebar shows the mirror's current sync status:
+The runtime tracks sync state in the machine configuration:
 
-| State                        | Meaning                                                          |
-| ---------------------------- | ---------------------------------------------------------------- |
-| In sync                      | The local mirror matches the remote.                             |
-| Pending local changes        | Files have been modified but have not settled into a commit yet. |
-| Pending local/remote commits | There are un-pushed local commits or unpulled remote commits.    |
-| Sync in progress             | A sync operation is running.                                     |
-| Sync error                   | The last sync attempt failed.                                    |
+| Field          | Description                                          |
+| -------------- | ---------------------------------------------------- |
+| `repoUrl`      | Configured remote URL                                |
+| `branch`       | Tracked branch                                       |
+| `lastSyncAt`   | ISO timestamp of last sync                           |
+| `lastSyncHead` | Commit SHA at last sync                              |
+| `snapshot`     | Content-addressed file snapshot for change detection |
 
-The status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
+## Sync Status
 
-## Cross-process locking
+The runtime exposes the sync status through the API:
 
-The sync engine uses a cross-process lock on the mirror directory. This prevents multiple runtimes (e.g. a desktop app and a standalone daemon) from racing each other through the same checkout.
+| Status     | Meaning                      |
+| ---------- | ---------------------------- |
+| `disabled` | No repo URL configured       |
+| `idle`     | Synced, waiting for changes  |
+| `syncing`  | Currently pulling or pushing |
+| `error`    | Last sync failed             |
 
-## Migration from an unmanaged vault
+When idle, the status also includes git status information:
 
-If you have content in an old unmanaged local vault (set via legacy `vaultRoot` or the default `~/Documents/personal-agent`), copy the files into the managed repo manually. The runtime no longer auto-imports legacy vault content.
+- `localChangeCount` — files modified locally
+- `aheadCount` — local commits not on remote
+- `behindCount` — remote commits not yet pulled
 
-## URL import
+## Recovery
 
-The desktop Knowledge page can import a web page directly into `<vault-root>`. Use this to save a URL as a durable note instead of quoting it inside a conversation. The imported file is a markdown document in the managed repo and will be synced like any other local change.
-
-## Practical rules
-
-- Treat the managed mirror as the source of truth for durable knowledge while KB sync is enabled
-- If content is missing after sync, compare with any old local vault and copy missing files manually
-- Large binary files in the knowledge base will slow down sync — keep the KB to markdown, small images, and config files
-- The branch defaults to `main` unless overridden with `knowledgeBaseBranch` in config
-
-## Related docs
-
-- [Configuration](./configuration.md) — `knowledgeBaseRepoUrl` and `knowledgeBaseBranch`
-- [Knowledge System](./knowledge-system.md)
-- [Deskop App](./desktop-app.md)
+When conflicts or errors occur, the runtime preserves recovery data. The recovery directory contains backup copies of files that could not be merged automatically.

@@ -1,80 +1,83 @@
 # Projects
 
-Projects are the optional structured durable-work surface.
+Projects are structured work packages that live in the vault. They have milestones, tasks, and durable status that persists across conversations and agent sessions.
 
-Use one only when a plain doc or conversation is no longer enough.
+## Project Structure
 
-## When to use a project
+Each project lives at `<vault-root>/projects/<projectId>/`:
 
-Good fits:
-
-- work with milestones or durable tasks
-- work with blockers and validation status
-- handoff-ready work that needs a stable state file
-- work with durable attachments or artifacts that belong to the project
-
-Do not default to a project for ordinary notes or one-off conversations.
-
-## Current on-disk shape
-
-```text
-<vault-root>/projects/<projectId>/
-├── state.yaml
-├── project.md
-├── tasks/
-├── files/
-├── attachments/
-└── artifacts/
+```
+projects/
+└── my-project/
+    ├── state.yaml          # Milestones, tasks, status, metadata
+    └── artifacts/          # Project-owned deliverables
+        ├── spec-v1.md
+        └── diagram.png
 ```
 
-Important pieces:
+## State File
 
-- `state.yaml` — structured machine-readable state
-- `project.md` — human-readable summary and context
-- `tasks/` — optional task-level files when the project needs them
-- `attachments/` — project-owned supporting files
-- `artifacts/` — project-owned deliverables and exports
+The `state.yaml` file tracks project progress:
 
-## What goes where
+```yaml
+title: 'Refactor auth module'
+status: 'active'
+description: 'Replace the legacy auth system with OAuth2'
 
-### `project.md`
+milestones:
+  - title: 'Design'
+    status: 'completed'
+    tasks:
+      - title: 'Write OAuth2 flow document'
+        status: 'done'
+      - title: 'Review with team'
+        status: 'done'
 
-Use it for:
+  - title: 'Implementation'
+    status: 'in-progress'
+    tasks:
+      - title: 'Implement token exchange'
+        status: 'in-progress'
+      - title: 'Add refresh token support'
+        status: 'todo'
+      - title: 'Write integration tests'
+        status: 'todo'
 
-- what the project is
-- why it exists
-- current summary
-- design notes that should stay readable
-- links to related docs and threads
-
-### `state.yaml`
-
-Use it for:
-
-- status
-- milestones
-- tasks
-- blockers
-- validation facts
-- timestamps and machine-readable progress
-
-## What not to do
-
-- do not use a project for general reusable reference material
-- do not use a project when a normal doc would do
-- do not confuse project tasks with daemon scheduled tasks
-
-## Validation
-
-Validate project files with:
-
-```bash
-npm run validate:projects
+  - title: 'Migration'
+    status: 'planned'
+    tasks:
+      - title: 'Migrate existing users'
+        status: 'todo'
 ```
 
-## Related docs
+### State values
 
-- [Decision Guide](./decision-guide.md)
-- [Knowledge System](./knowledge-system.md)
-- [Conversations](./conversations.md)
-- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
+| Field              | Values                                      |
+| ------------------ | ------------------------------------------- |
+| `status`           | `"active"`, `"completed"`, `"archived"`     |
+| Milestone `status` | `"planned"`, `"in-progress"`, `"completed"` |
+| Task `status`      | `"todo"`, `"in-progress"`, `"done"`         |
+
+## Project Tasks vs Daemon Tasks
+
+| Type                   | Storage               | Scope                | Managed by             |
+| ---------------------- | --------------------- | -------------------- | ---------------------- |
+| Project tasks          | `state.yaml` in vault | Project-specific     | Agent in conversations |
+| Daemon scheduled tasks | Daemon runtime DB     | Global/cross-project | Daemon scheduler       |
+
+These are independent systems. A project task tracks work within a project. A daemon scheduled task is a runtime automation.
+
+## Linking Conversations
+
+A conversation can be linked to a project. Linked conversations appear in the project context, so the agent can reference project state across threads. Links are stored in the conversation metadata.
+
+## Project Artifacts
+
+Project-owned deliverables live in the `artifacts/` directory. These are durable files that persist independently of any single conversation. Use project artifacts for:
+
+- Design documents
+- Specifications
+- Meeting notes
+- Delivered outputs
+
+Unlike conversation artifacts (which are rendered in the transcript), project artifacts are files in the vault.

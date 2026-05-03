@@ -1,92 +1,95 @@
 # Daemon
 
-The daemon owns unattended behavior.
+The daemon is a long-lived background process that owns durable runtime behavior. The desktop app manages it automatically — start and stop happen with the app lifecycle.
 
-If something should keep running after the current shell or conversation turn, the daemon is usually involved.
+## What the Daemon Owns
 
-## What it owns
+| Component             | Description                                                               |
+| --------------------- | ------------------------------------------------------------------------- |
+| Runs                  | Detached agent work, started from conversations, inspected later          |
+| Scheduled tasks       | Recurring or one-time automations with cron or natural-language schedules |
+| Wakeups               | Conversation callbacks triggered by completed runs and tasks              |
+| Companion API         | HTTP/WebSocket endpoint for iOS app and remote clients                    |
+| Reminders             | Tell-me-later wakeups that resume a specific conversation                 |
+| SSH target management | CRUD for remote SSH connections                                           |
 
-- durable background runs
-- scheduled tasks and automations
-- conversation wakeups and deferred resumes
-- run logs and automation activity
-- companion and pairing state for remote/native access
-- cleanup and maintenance
+## Lifecycle
 
-## State layout
+The desktop app spawns the daemon as a child process on launch and sends SIGTERM on quit. The daemon communicates over a local Unix socket.
 
-```text
-<state-root>/daemon/
-├── personal-agentd.sock
-├── logs/
-│   └── daemon.log
-├── runtime.db
-└── runs/
+```
+Desktop app ←──→ Daemon (child process)
+                    │
+                    ├── Runtime DB (SQLite)
+                    ├── Automation store
+                    ├── Run logs
+                    └── Companion API (HTTP/WebSocket)
 ```
 
-Important pieces:
+If the daemon crashes or is killed, the desktop app restarts it automatically.
 
-- `runtime.db` — run metadata, automation definitions, scheduler state
-- `runs/<run-id>/` — per-run logs and result blobs
+## Keep Awake
 
-Companion auth and host state live under `<state-root>/companion/`. Scheduled task source files default to `<state-root>/sync/tasks`, while task runtime/activity state lives in the daemon database.
+When background work is running (runs, scheduled tasks, long-running automations), the daemon can prevent macOS idle sleep. Toggle this in Settings or via the API.
 
-## When you need it
+## Daemon State API
 
-Keep the daemon running when you use:
+| Endpoint            | Method | What it returns                                  |
+| ------------------- | ------ | ------------------------------------------------ |
+| `/api/daemon`       | GET    | Current state: running status, keepAwake, uptime |
+| `/api/daemon/power` | PATCH  | Update keepAwake, returns updated state          |
 
-- `run`
-- `scheduled_task`
-- queued wakeups that should survive the current UI process
-- remote pairing or companion behavior
+### State response
 
-You can still do direct foreground conversation work without it, but unattended behavior degrades.
-
-## Service management
-
-```bash
-pa daemon status
-pa daemon start
-pa daemon stop
-pa daemon restart
-pa daemon logs
-pa daemon service install
-pa daemon service status
-pa daemon service uninstall
+```json
+{
+  "running": true,
+  "keepAwake": true,
+  "pid": 82341,
+  "uptimeMs": 2845000
+}
 ```
 
-Managed services use `launchd` on macOS and `systemd --user` on Linux.
+### Power update
+
+```json
+// PATCH /api/daemon/power
+{ "keepAwake": true }
+```
 
 ## Companion API
 
-The daemon also serves the native companion API when companion support is enabled.
+The daemon exposes an HTTP/WebSocket API for external clients. Configured in daemon config:
 
-Defaults:
+- **Host** — bind address (default: `127.0.0.1`)
+- **Port** — listen port (default: auto-assigned)
 
-- host: `127.0.0.1`
-- port: `3843`
-- API root: `/companion/v1`
+The companion API serves the iOS app and SSH remote management endpoints.
 
-The iOS local-dev host uses port `3845` through repo scripts. Use Settings in the desktop app for pairing and host reachability checks.
+## State Storage
 
-## Desktop shell note
+The daemon stores its state in `<state-root>/daemon/`:
 
-The desktop app can own the daemon directly instead of relying on a separately managed OS service.
+| Path         | Content                                         |
+| ------------ | ----------------------------------------------- |
+| `runtime.db` | SQLite database for runs, tasks, reminders      |
+| `socket`     | Local Unix socket for desktop app communication |
+| `logs/`      | Run output logs                                 |
 
-The daemon package still owns the background behavior. Only the host process changes.
+## Configuration
 
-Scheduled automations execute through the desktop/backend conversation runtime. The daemon schedules, records durable run state, and waits for the conversation turn to finish; it should not shell out to a `pi` binary for automation execution.
+Daemon settings are part of the main config.json:
 
-## What breaks when it is off
+```json
+{
+  "daemon": {
+    "companion": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 0
+    }
+  }
+}
+```
 
-- scheduled automations do not run
-- detached runs cannot be launched or inspected normally
-- deferred wakeups do not fire
-- remote pairing and companion APIs are unavailable
-
-## Related docs
-
-- [Command-Line Guide (`pa`)](./command-line.md)
-- [Desktop App](./desktop-app.md)
-- [Runs](../internal-skills/runs/INDEX.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+Most daemon settings are managed through the desktop Settings UI and do not require manual config file edits.

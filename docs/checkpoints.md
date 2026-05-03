@@ -1,49 +1,70 @@
-# Checkpoints and Diffs
+# Checkpoints
 
-Checkpoints bind a conversation to a specific snapshot of the working tree. Diffs surface those snapshots inline in the workbench.
+Checkpoints create targeted git commits tied to a conversation. They capture the state of selected files at a specific point, making it possible to review diffs, roll back changes, or branch later.
 
-## The checkpoint tool
+## Creating a Checkpoint
 
-The `checkpoint` tool creates a focused git commit that covers only the files relevant to the current task. It is available to agents in any conversation that has a working directory under git.
+From a conversation, use the checkpoint tool or the save button in the workbench Diffs rail. Select the files or directories to include in the snapshot.
 
+```json
+// Agent tool call
+{
+  "action": "save",
+  "message": "Refactor auth middleware",
+  "paths": ["packages/core/src/auth.ts", "packages/core/src/auth.test.ts"]
+}
 ```
-checkpoint action=save message="Description of what was done" paths=["src/file.ts", "docs/README.md"]
+
+Each checkpoint produces a real git commit in the repository.
+
+## Checkpoint Data
+
+Each checkpoint stores:
+
+| Field       | Description                                            |
+| ----------- | ------------------------------------------------------ |
+| `id`        | Unique checkpoint identifier                           |
+| `title`     | Checkpoint name or commit message                      |
+| `commitSha` | Git commit hash                                        |
+| `createdAt` | ISO timestamp                                          |
+| `files`     | Array of tracked files with additions and deletions    |
+| `anchor`    | The conversation message that triggered the checkpoint |
+
+### File snapshot
+
+```json
+{
+  "file": "packages/core/src/auth.ts",
+  "additions": 45,
+  "deletions": 12,
+  "messageCount": 1
+}
 ```
 
-The tool stages only the specified paths, commits them with the given message, and attaches the diff to the conversation for review. It does not push automatically.
+## Viewing Checkpoints
 
-**Key behaviors:**
+Checkpoints appear in the Diffs tab of the workbench rail. The list shows all checkpoints for the conversation, ordered by creation time.
 
-- **Targeted commits** — only the listed paths are staged. Unrelated changes in the working tree are left alone. If the tool cannot safely stage only the intended hunks, it stops and reports the conflict.
-- **Review modal** — by default, saving a checkpoint opens a diff review in the workbench. The review can be skipped with `open=false`.
-- **Listing** — `checkpoint action=list` lists recent checkpoints for the conversation.
-- **Inspection** — `checkpoint action=get checkpointId=<sha>` returns details for a specific checkpoint.
+Each checkpoint entry shows:
 
-## Diffs in the workbench
+- Title or commit message
+- Timestamp
+- File count and change summary (additions/deletions)
 
-When a conversation has saved checkpoint diffs, they appear in the right workbench rail under the **Diffs** tab.
+Click a checkpoint to expand its files and view diffs.
 
-- Diffs are conversation-scoped. Opening a checkpoint review switches the workbench to show the diff in the main pane while the rail lists all diffs newest-first.
-- Each diff entry shows the commit message, the files changed, and the diff content.
-- The workbench diff view replaces the old modal-based diff review — all checkpoint browsing happens inline.
+## Workflow
 
-## Checkpoints vs. artifacts
+Checkpoints let you experiment freely in a conversation and commit changes at meaningful points:
 
-| Surface    | Purpose                                 | Lifecycle                                                   |
-| ---------- | --------------------------------------- | ----------------------------------------------------------- |
-| Checkpoint | git commit snapshot of code changes     | tied to conversation, persists in git                       |
-| Artifact   | rendered output (HTML, diagram, report) | tied to conversation, stored in conversation artifact state |
+1. Work on code in a conversation
+2. When you reach a good state, create a checkpoint
+3. Continue working with the safety net of a saved state
+4. Use the Diff Viewer to review what changed between checkpoints
+5. If needed, roll back or branch from any checkpoint
 
-Checkpoints are for code. Artifacts are for rendered output. The two are independent — a checkpoint can include an artifact file as part of the commit, and an artifact can reference checkpoint diffs.
+Checkpoints are real git commits and appear in the repo's git history alongside manually created commits.
 
-## Practical rules
+## Storage
 
-- Checkpoint after completing a task or reaching a clear milestone. Targeted commits keep history clean.
-- If unrelated work is mixed into a file the checkpoint covers, do not stage the unrelated hunks. If the tool cannot separate them safely, stop and flag it.
-- Push happens independently — checkpoints are local commits. Use the normal git push when ready.
-- Checkpoints are not a backup mechanism. They are a review and collaboration surface tied to the conversation thread.
-
-## Related docs
-
-- [Conversations](./conversations.md)
-- [Desktop App](./desktop-app.md) — workbench diffs section
+Checkpoints are stored in the conversation state and linked to git commits. They survive conversation restarts and appear in the Diffs rail whenever the conversation is reopened.

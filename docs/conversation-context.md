@@ -1,96 +1,60 @@
 # Conversation Context
 
-Use this doc when deciding how a conversation should carry durable context.
+Conversations can carry durable context through file references, attached docs, and binary uploads. The agent sees this context alongside the conversation history.
 
-## Four context types
+## File References
 
-### 1. One-shot mention
+Type `@` in the composer to fuzzy-search workspace files. Matching files appear in a dropdown. Select one to insert a reference.
 
-Use `@file` or `@doc` when the content matters for one turn only.
+The referenced file content is injected into the prompt when the message is sent. The agent sees the full file contents, not just the path.
 
-Good fit:
+```
+User: @src/auth.ts Can you review this file?
+      @src/auth.test.ts And its tests?
 
-- "review this file"
-- "use this note for the next answer"
-
-### 2. Attached context doc
-
-Use an attached context doc when the conversation should keep durable knowledge in scope across turns.
-
-Good fit:
-
-- long-lived project context
-- a standing design brief for one thread
-- a spec the thread will revisit repeatedly
-
-Attached context docs are stored as references, not pasted snapshots.
-
-Current state file:
-
-```text
-<state-root>/pi-agent/state/conversation-context-docs/<conversationId>.json
+Agent sees: contents of auth.ts + auth.test.ts + the prompt
 ```
 
-### 3. Binary or editor attachment
+## Attached Context Docs
 
-Use conversation attachments for images, drawings, and other thread-local assets that belong to the conversation itself.
+Drag a markdown file into the composer or use the attach button to pin it as conversation-scoped durable context.
 
-Examples:
+Attached docs:
 
-- screenshots
-- drawings
-- generated images
-- attachment-backed prompt inputs
+- Persist across all turns in the conversation
+- Appear in the Knowledge rail when workbench mode is active
+- Are loaded by the agent on every turn
+- Do not modify the vault — they are scoped to the conversation
 
-These are conversation-local assets, not vault docs.
+Multiple docs can be attached to a single conversation. Remove an attached doc from the Knowledge rail.
 
-### 4. Conversation artifact
+## Binary Attachments
 
-Use a conversation artifact for rendered outputs that should stay inspectable in the transcript.
+Images, PDFs, and other binary files can be attached to individual messages:
 
-Examples:
+| Method      | How                                       |
+| ----------- | ----------------------------------------- |
+| Paste       | `Ctrl+V` (macOS) or `Ctrl+V` (Windows)    |
+| Drag        | Drag file into the composer               |
+| File picker | Use the attachment button in the composer |
 
-- HTML memo
-- Mermaid diagram
-- LaTeX output
+Images are sent to the model as image content. Other binary formats are stored as conversation attachments but may not be visible to all models.
 
-See [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md).
+## Context Loading Order
 
-## Attached docs vs repeated `@` mentions
+When the agent builds context for a turn, it merges inputs in this order:
 
-Use this rule:
+1. **Instruction files** — standing behavior and policy from vault or config
+2. **Attached context docs** — durable docs pinned to this conversation
+3. **Inline `@` file references** — files referenced in the current message
+4. **Binary attachments** — images and files attached to the current message
+5. **Conversation history** — previous turns in this thread
 
-- include once with `@...` when the context is temporary
-- attach the doc when the thread should keep it in scope across turns
+Later entries have higher priority for conflicting instructions.
 
-## Prompt budgeting
+## Use Cases
 
-Attached docs should not be pasted in full on every turn.
-
-The normal pattern is:
-
-- store a reference to the source file
-- include title, path, and short summary in prompt assembly
-- read the full file only when the turn actually needs it
-
-## What belongs in `<vault-root>` vs the conversation
-
-Keep this split:
-
-- source knowledge lives in `<vault-root>`
-- thread-local references live in conversation state
-- binary conversation assets live in conversation attachment state
-- rendered thread outputs live in artifact state
-
-## Practical rules
-
-- do not duplicate large docs into transcript text unless necessary
-- prefer attached docs over re-mentioning the same file every turn
-- prefer vault docs for reusable knowledge and conversation attachments for thread-local assets
-- use artifacts when rendering is the point, not just storage
-
-## Related docs
-
-- [Conversations](./conversations.md)
-- [Knowledge System](./knowledge-system.md)
-- [Decision Guide](./decision-guide.md)
+- **Project setup** — attach a `CONTEXT.md` doc that describes the project
+- **Code review** — `@` reference specific files for the agent to analyze
+- **Design feedback** — paste a screenshot and ask for visual feedback
+- **Multi-file changes** — reference several files and ask for coordinated edits

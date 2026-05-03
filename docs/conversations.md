@@ -1,110 +1,107 @@
 # Conversations
 
-Conversations are the primary live work surface.
+Conversations are live agent threads. Each conversation has a transcript, a composer, access to tools, and full message history.
 
-Use a conversation when work is happening now.
+## Starting a Conversation
 
-## What belongs in a conversation
+Create a new conversation from the sidebar (`+` button) or navigate to `/conversations/new`. The composer appears at the bottom of the transcript pane.
 
-Good fits:
+Type a message and press Enter to send it to the agent. The agent processes the prompt, calls tools as needed, and streams the response.
 
-- prompts and replies
-- tool use
-- repo/file work in the current cwd
-- one-shot `@` mentions
-- attached context docs
-- attachments, drawings, and images
-- conversation artifacts
-- checkpoints tied to the thread
-- short-lived execution state
+## Composer
 
-Bad fits:
+The composer is the text input area at the bottom of the conversation view.
 
-- the only copy of reusable knowledge
-- the only durable copy of a plan or status record
-- reusable workflow instructions
-- standing policy that should be selected outside the thread
+| Feature           | How                                      |
+| ----------------- | ---------------------------------------- |
+| Send message      | Enter                                    |
+| New line          | Shift+Enter                              |
+| File reference    | Type `@` to fuzzy-search workspace files |
+| Image paste       | Ctrl+V or drag image into composer       |
+| Binary attachment | Drag file into composer                  |
 
-## Conversation state that matters
+## Session Lifecycle
 
-A conversation can carry:
+Conversations are saved automatically. Every message, tool call, and tool result is persisted. Past conversations appear in the left sidebar. Click any conversation to resume it.
 
-- working directory
-- model and reasoning preferences
-- attached context docs
-- binary attachments
-- artifacts and checkpoints
-- queued follow-up work
-- auto mode state
+| State  | Behavior                              |
+| ------ | ------------------------------------- |
+| Active | Agent is processing a prompt          |
+| Idle   | Waiting for user input                |
+| Saved  | Persisted to disk, visible in sidebar |
 
-Durable session files live under `<state-root>/sync/pi-agent/sessions/`.
+## Branching
 
-Attached context-doc references live under `<state-root>/pi-agent/state/conversation-context-docs/`.
+Conversations support tree-style branching. Each turn creates a node in the conversation tree.
 
-## One thread, many durable connections
+### /fork
 
-A conversation often owns or links to other durable surfaces:
+Create a new conversation from a previous user message. The new conversation starts fresh but carries the context up to that point.
 
-- docs in `<vault-root>`
-- projects in `<vault-root>/projects/`
-- reminders and queue items
-- daemon-backed runs
-- automations that call back into the thread
-- checkpoints and artifacts
+```
+Original thread:
 
-The conversation is the execution hub, not the only storage layer.
+  ┌─ msg1 ─ msg2 ─ msg3 ─ msg4 (current)
 
-## Auto mode
+Fork from msg2:
 
-Auto mode means the backend performs a hidden review turn after each visible assistant turn.
+  ┌─ msg1 ─ msg2 (forked)
+                └─ msg5 ─ msg6 (new thread)
+```
 
-That hidden controller should keep going while useful work remains and stop only when the task is done, blocked, or needs user input.
+### /tree
 
-For the agent operating discipline around autonomous continuation, validation, durable runs, and tenacious follow-through, read [Auto Mode](../internal-skills/auto-mode/INDEX.md).
+Navigate the conversation tree to any previous point and continue from there without creating a new file.
 
-## Cross-thread inspection
+```
+  ┌─ msg1 ─ msg2 ─ msg3 ─ msg4 (branch A, current)
+  │
+  └─ msg5 ─ msg6 (branch B)
 
-Agents can inspect other conversations through the read-only `conversation_inspect` tool.
+/tree navigates to msg5, continue from there.
+```
 
-Use it for:
+### /clone
 
-- listing live or archived threads
-- searching visible transcript text with `searchMode: "phrase" | "allTerms" | "anyTerm"`
-- reading visible blocks from another conversation, including `roles: ["user", "assistant"]` when the intent is conversational filtering
-- pulling surrounding context in one call with `includeAroundMatches: true` and `window`
-- diff-style follow-up reads
+Duplicate the current active branch into a new conversation file. Useful before making experimental changes.
 
-It does not expose hidden reasoning from another thread. Structural block `types` are `user`, `text`, `context`, `summary`, `tool_use`, `image`, and `error`; use `roles` instead when you mean participant-style filtering.
+## Async Follow-Through
 
-## Async follow-through from a conversation
+While the agent is processing, you can queue additional messages. The composer remains active during streaming.
 
-Common follow-up surfaces:
+| Delivery mode | When it arrives                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Steering      | After the current assistant turn finishes executing its tool calls, before the next LLM call |
+| Follow-up     | After the agent completes all work (all tool calls finished)                                 |
 
-- `conversation_queue` — continue this thread later
-- `reminder` — bring this thread back with stronger tell-me-later intent
-- `run` — detached work started now
-- `scheduled_task` — unattended later or recurring work
+Queued messages appear in the composer area. Press Escape to abort and restore queued messages to the editor. Alt+Up to retrieve queued messages back.
 
-Use the owning thread as the default place where async outcomes remain visible.
+## Conversation Inspect
 
-## UI routes
+The agent can read other conversation transcripts using the `conversation_inspect` tool. This provides read-only access to message history, tool calls, and results across threads. See [Conversation Inspect](conversation-inspect.md).
 
-- `/conversations` redirects to the best current conversation target.
-- `/conversations/new` opens the draft conversation.
-- `/conversations/:id` opens a saved conversation.
+## Auto Mode
 
-## Practical rules
+When enabled, each visible assistant turn is followed by a hidden review turn. The review runs in the background and can perform follow-up work. See [Auto Mode](auto-mode.md).
 
-- use the conversation for execution itself
-- keep reusable knowledge in `<vault-root>` and attach it when needed
-- keep durable status in a project when the work needs structure
-- prefer the built-in async tools over inventing ad hoc reminder files or shell wrappers
+## Keyboard Shortcuts
 
-## Related docs
+| Action                   | Shortcut       |
+| ------------------------ | -------------- |
+| New conversation         | `Cmd+N`        |
+| Toggle sidebar           | `Cmd+\`        |
+| Toggle workbench         | `Cmd+Option+\` |
+| Submit message           | Enter          |
+| New line in composer     | Shift+Enter    |
+| Cancel agent response    | Escape         |
+| Retrieve queued messages | Alt+Up         |
 
-- [Conversation Context](./conversation-context.md)
-- [Knowledge System](./knowledge-system.md)
-- [Projects](./projects.md)
-- [Desktop App](./desktop-app.md)
-- [Auto Mode](../internal-skills/auto-mode/INDEX.md)
-- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
+All shortcuts are configurable in Settings.
+
+## Routes
+
+| Route                | Page                  |
+| -------------------- | --------------------- |
+| `/conversations`     | Conversation list     |
+| `/conversations/new` | New conversation      |
+| `/conversations/:id` | Existing conversation |

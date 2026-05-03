@@ -8,6 +8,7 @@ import {
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { api, vaultApi } from '../../client/api';
 import { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
@@ -1447,9 +1448,15 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
             </div>
           </div>
           <div className="flex flex-1 min-h-0 items-start px-3 pb-3 pt-2">
-            <div className="space-y-1.5 text-[12px] leading-5 text-secondary">
-              <p className="font-medium text-primary">Sync a repo to enable Knowledge.</p>
-              <p>The Knowledge UI stays empty until a managed repo is configured.</p>
+            <div className="space-y-2 text-[12px] leading-5 text-secondary">
+              <p className="font-medium text-primary">Connect a git repo to use Knowledge.</p>
+              <p>
+                PA needs a git repo to store and sync durable docs. Add a repo URL in{' '}
+                <Link to="/settings#settings-general" className="text-accent hover:underline">
+                  Settings
+                </Link>
+                {' '}— any git remote works, empty or existing.
+              </p>
             </div>
           </div>
         </>

@@ -1,154 +1,68 @@
 # Knowledge System
 
-Use this doc for the durable knowledge model.
+The knowledge system manages durable content that shapes agent behavior and provides reusable reference material. It lives under `<vault-root>`.
 
-## The four durable content types
+## Vault
 
-### 1. Instruction files
+The vault is the root directory for all durable knowledge. It resolves in this order:
 
-Instruction files shape agent behavior.
+1. `PERSONAL_AGENT_VAULT_ROOT` environment variable
+2. Managed KB mirror at `<state-root>/knowledge-base/repo` (when `knowledgeBaseRepoUrl` is configured)
+3. Legacy `vaultRoot` config value in `<config-root>/config.json`
+4. `~/Documents/personal-agent`
 
-Use them for:
+## Vault Contents
 
-- standing policy
-- role and mission
-- workflow defaults
-- operating constraints
+### Instruction files
 
-They are selected through config or Settings. `AGENTS.md` is the strongest convention, but not the only valid filename.
+Markdown files that define standing behavior and policy for the agent. These are not just reference material — they actively shape how the agent responds.
 
-### 2. Docs
+Selected in Settings or listed in config.json:
 
-Docs are the default unit of durable knowledge.
-
-Use them for:
-
-- architecture notes
-- reference material
-- research
-- design notes
-- plans that should outlive a thread
-
-A doc can be a single markdown file or a folder with `INDEX.md`.
-
-### 3. Skills
-
-Skills are reusable workflow packages.
-
-Shared contract:
-
-```text
-<vault-root>/skills/<skill>/SKILL.md
+```json
+{
+  "instructionFiles": ["instructions/base.md", "instructions/code-style.md"]
+}
 ```
 
-Use a skill when the content is procedural and should be invoked again later.
+Profile-scoped instruction files live under `<config-root>/profiles/<profile>/`.
 
-### 4. Projects
+### Docs
 
-Projects are optional structured work packages.
+Reusable reference material stored as markdown files anywhere under `<vault-root>`. Docs are facts the agent reads when needed — API references, architecture decisions, onboarding guides.
 
-Use them only when the work needs durable machine-readable state such as milestones, blockers, tasks, or validation.
+### Skills
 
-Shared contract:
+Reusable workflows defined as markdown with a standard structure:
 
-```text
-<vault-root>/projects/<projectId>/
+```
+<vault-root>/skills/<skill-name>/
+├── SKILL.md       # Main skill definition
+├── examples/      # Optional supporting files
+└── assets/        # Optional images or data
 ```
 
-See [Projects](./projects.md).
+Skills are loaded by the runtime and available to the agent through skill commands. Each skill is a self-contained procedure the agent can follow.
 
-## What is special vs freeform
+### Projects
 
-Special durable contracts:
+Structured work packages with milestones, tasks, and durable status. See [Projects](projects.md).
 
-- selected instruction files
-- `<vault-root>/skills/<skill>/SKILL.md`
-- `<vault-root>/projects/<projectId>/...`
-- conversation mentions and attached context docs
+## Loading Order
 
-Freeform conventions:
+When assembling the runtime context, knowledge merges in this order. Later sources override earlier ones for conflicting keys:
 
-- `notes/`
-- `references/`
-- `systems/`
-- `people/`
-- any other folder taxonomy you choose for normal docs
+1. Repo-managed defaults (`extensions/`, `internal-skills/`, `prompt-catalog/`, `docs/`)
+2. Selected instruction files
+3. Skill directories under vault
+4. Vault docs
 
-Folder names can be useful, but they should not carry more product meaning than the actual file content.
+## Agent Interaction
 
-## Effective vault root
+The agent reads from the vault using file tools. It can browse, read, and reference vault content during conversations. The desktop Knowledge Editor provides a UI for browsing and editing vault files. See [Knowledge Editor](knowledge-editor.md).
 
-`<vault-root>` resolves in this order:
+## Related
 
-1. `PERSONAL_AGENT_VAULT_ROOT`
-2. managed KB mirror at `<state-root>/knowledge-base/repo` when `knowledgeBaseRepoUrl` is configured
-3. legacy `vaultRoot` from `<config-root>/config.json`
-4. default `~/Documents/personal-agent`
-
-When managed KB sync is enabled, assume the managed KB mirror unless you know otherwise.
-
-If you still have content in an old unmanaged local vault, copy it into the managed repo yourself before switching over. PA no longer auto-imports legacy vault content.
-
-## Conversation interaction with the vault
-
-A conversation can use durable knowledge in two different ways:
-
-- `@file-or-doc` for one turn
-- attached context docs for durable thread-scoped context
-
-That keeps the roles clean:
-
-- the vault stores the source document
-- the conversation stores a reference to the document
-- the agent loads the exact file only when needed
-
-## Managed git sync status
-
-When managed KB sync is enabled, the Knowledge page sidebar shows the mirror's current git sync state.
-
-It can surface:
-
-- in sync
-- pending local changes
-- pending local commits or remote commits
-- sync in progress or the latest sync error
-
-That status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
-
-The sync engine uses a cross-process lock for that mirror, so multiple runtimes do not race each other through the same checkout. It also waits for local file edits to be quiet for about two minutes before creating a sync commit, and the background loop runs every five minutes. Manual sync still checks immediately, but fresh autosave writes stay local until they settle.
-
-If the managed repo is still missing content after sync, compare it with any old local vault and copy the missing files over manually.
-
-## URL import
-
-The desktop app Knowledge page can import a web page into `<vault-root>`.
-
-Use that when the right move is “save this URL as a durable note” rather than “quote it inside a conversation”.
-
-## Old terms you may still see
-
-Older code and docs still use some legacy terms.
-
-Preferred current mapping:
-
-- **page** → doc
-- **node** → doc or project, depending on context
-- **tracked page** → project
-- **memory note** → normal doc in `<vault-root>`
-
-When in doubt, think in terms of doc, skill, project, and instruction file.
-
-## Practical rules
-
-- if it should be remembered outside the current task, write it into `<vault-root>`
-- if it is procedural, make it a skill
-- if it is behavior or policy, make it an instruction file
-- if it needs structured progress state, make it a project
-- do not treat old chat history as the canonical durable store
-
-## Related docs
-
-- [Conversation Context](./conversation-context.md)
-- [Conversations](./conversations.md)
-- [Projects](./projects.md)
-- [Configuration](./configuration.md)
+- [Knowledge Base Sync](knowledge-base-sync.md) — git-backed vault synchronization
+- [Projects](projects.md) — structured work packages in the vault
+- [Configuration](configuration.md) — vault root and instruction file settings

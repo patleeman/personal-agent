@@ -1,121 +1,72 @@
 # Release Cycle
 
-Desktop releases are built, signed, notarized, and published locally.
+Desktop releases are built, signed, notarized, and published locally. Pushing a tag to `main` does not automatically produce a release — release is a manual local process.
 
-Do not rely on pushing a tag to `main` to produce a shipped desktop release automatically.
-
-## Main commands
-
-From the repo root:
+## Release Commands
 
 ```bash
+# Patch release (0.5.35 -> 0.5.36)
 npm run release:desktop:patch
+
+# Minor release (0.5.35 -> 0.6.0)
 npm run release:desktop:minor
+
+# Major release (0.5.35 -> 1.0.0)
 npm run release:desktop:major
 ```
 
-Those commands:
+## Release Flow
 
-1. bump the app version with `npm version`
-2. refresh `@mariozechner/pi-coding-agent` to the latest published npm version
-3. sync workspace package versions and refresh `package-lock.json`
-4. build signed desktop artifacts locally
-5. notarize the artifacts
-6. require a smoke test of the built `.app` binary
-7. push the commit and tag
-8. create or update the matching GitHub release in the source repo's GitHub Releases
+Each release command performs these steps in order:
 
-Pi is now updated automatically by the `npm version` step used by the desktop release commands. If Pi is already current, the step is a no-op.
+1. **Version bump** — `npm version` bumps the version following semver
+2. **Pi update** — refreshes `@mariozechner/pi-coding-agent` to the latest published version
+3. **Dependency sync** — updates workspace package versions and regenerates `package-lock.json`
+4. **Build** — builds signed desktop artifacts locally
+5. **Notarize** — submits the built `.app` for Apple notarization
+6. **Smoke test** — launches the built app in an isolated environment and verifies basic functionality
+7. **Git push** — pushes the version commit and tag to the remote
+8. **GitHub release** — creates or updates the matching release in the releases repository
 
-If the version bump already happened and you only need to retry publish:
+## Automated Smoke Test
+
+The release script runs an automated smoke test after signing and notarization, before pushing the tag. It launches the built `.app` with:
+
+- An isolated temporary `PERSONAL_AGENT_STATE_ROOT`
+- A dedicated daemon socket and companion port
+- No interference from an already-running user daemon
+
+The check verifies:
+
+1. The app process starts successfully
+2. The Electron renderer exposes a page over CDP
+3. The initial route renders non-empty UI without startup errors
+4. The Knowledge route renders
+5. A conversation route renders
+
+### Manual smoke test
+
+If the automated check is unavailable, set:
+
+```bash
+PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE=1
+```
+
+The script will stop and ask you to manually test the built `.app` before continuing.
+
+## Retrying Publish
+
+If the version bump and build succeeded but the publish step failed:
 
 ```bash
 npm run release:publish
 ```
 
-## Built binary smoke test
+This runs the smoke test, push, and GitHub release creation without repeating the version bump and build steps.
 
-`npm run release:publish` runs an automated smoke test after signing/notarization and before pushing the tag or uploading release assets. The smoke test launches the built `.app` with an isolated temporary `PERSONAL_AGENT_STATE_ROOT`, daemon socket, and companion port so an already-running user daemon cannot block the release check.
+## Prerequisites
 
-The automated check verifies:
-
-1. the built app process starts
-2. the Electron renderer exposes a page over CDP
-3. the initial app route renders non-empty UI without startup-error text
-4. the Knowledge route renders
-5. the conversation route renders
-
-If you need to run the same check manually:
-
-```bash
-node scripts/smoke-desktop-release.mjs "<release-snapshot>/dist/release/mac-arm64/Personal Agent.app"
-```
-
-If the automated check is unavailable and you need to do the older manual gate, set `PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE=1`. The script will stop and ask you to test the built app from the release output, usually:
-
-```bash
-open -n "<release-snapshot>/dist/release/mac-arm64/Personal Agent.app"
-```
-
-Minimum smoke test:
-
-1. launch the built app successfully
-2. verify the shell loads without startup/beachball regressions
-3. open one conversation route
-4. open the Knowledge page and switch at least one file
-
-Only continue the publish prompt after the built binary passes. For non-interactive reruns where the exact built binary was already tested, set:
-
-```bash
-PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1 npm run release:publish
-```
-
-## Signing and notarization inputs
-
-`npm run release:publish` expects:
-
-- a local `Developer ID Application` certificate in Keychain
-- Apple notarization credentials
-
-Credential lookup order:
-
-1. already-exported shell environment
-2. file pointed to by `PERSONAL_AGENT_RELEASE_ENV`
-3. `.env` in the repo root
-4. `~/.config/personal-agent/release-env`
-
-The publish script accepts:
-
-- `APPLE_ID`
-- `APPLE_TEAM_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
-- `APPLE_PASSWORD` as a compatibility alias for `APPLE_APP_SPECIFIC_PASSWORD`
-
-If multiple signing identities exist, set `CSC_NAME`.
-
-## What gets published
-
-Expected public release assets:
-
-- `latest-mac.yml`
-- signed macOS `.zip`
-- `.zip.blockmap`
-- optionally `.dmg` and `.dmg.blockmap`
-
-Artifacts are uploaded to the source repo's GitHub Releases so the auto-updater can fetch them from the same repo.
-
-## Current scope
-
-- signed macOS desktop build
-- local notarization
-- GitHub release publish in the source repo's GitHub Releases
-
-## Practical rule
-
-If the goal is a downloadable macOS app on GitHub Releases, use the local signed release flow, smoke test the built binary before publishing, and then verify the uploaded assets.
-
-## Related docs
-
-- repo `AGENTS.md`
-- [Repo Layout](./repo-layout.md)
-- [Troubleshooting](./troubleshooting.md)
+- **Apple Developer account** — for signing and notarization
+- **GitHub access** — to push tags and create releases
+- **Notarization credentials** — configured in the build environment
+- **GitHub release repository** — configured for artifact uploads
