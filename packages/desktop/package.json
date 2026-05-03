@@ -11,7 +11,7 @@
   "main": "./dist/main.js",
   "scripts": {
     "prepare:remote-helper": "node scripts/prepare-remote-helper-bundle.mjs",
-    "build:ui": "vite build --config ui/vite.config.ts",
+    "build:ui": "cd ui && vite build",
     "build:server": "node scripts/build-server-bundle.mjs",
     "build:deps": "npm run prepare:remote-helper && npm --prefix ../core run build && npm --prefix ../daemon run build && npm run build:ui && npm run build:server",
     "build": "npm run clean && npm run build:deps && tsc --build --force",

@@ -12,12 +12,10 @@ function createTempDir(prefix: string): string {
 
 function seedDevRepo(repoRoot: string): void {
   mkdirSync(join(repoRoot, 'packages', 'daemon', 'dist'), { recursive: true });
-  mkdirSync(join(repoRoot, 'packages', 'desktop', 'server', 'dist'), { recursive: true });
-  mkdirSync(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'), { recursive: true });
+  mkdirSync(join(repoRoot, 'packages', 'desktop', 'dist'), { recursive: true });
   mkdirSync(join(repoRoot, 'packages', 'desktop', 'assets'), { recursive: true });
   writeFileSync(join(repoRoot, 'package.json'), '{"name":"personal-agent"}\n');
   writeFileSync(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
-  writeFileSync(join(repoRoot, 'packages', 'desktop', 'server', 'dist', 'index.js'), 'console.log("web");\n');
   writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'), 'png\n');
   writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'), 'png\n');
 }
@@ -71,7 +69,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.nodeCommand).toBe('/custom/node');
     expect(result.useElectronRunAsNode).toBe(false);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'));
     expect(result.desktopConfigFile).toBe(join(stateRoot, 'desktop', 'config.json'));
@@ -125,7 +123,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.nodeCommand).toBe('node');
     expect(result.useElectronRunAsNode).toBe(false);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'dist'));
   });
 
   it('can recover the repo root from a dev app bundle appRoot when cwd is elsewhere', () => {
@@ -148,6 +146,6 @@ describe('resolveDesktopRuntimePathsForContext', () => {
 
     expect(result.repoRoot).toBe(repoRoot);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'dist'));
   });
 });

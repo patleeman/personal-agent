@@ -106,7 +106,9 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
   );
   const webDistDir = resolveExistingFile(
     'desktop renderer dist directory',
-    isPackaged ? [resolve(appRoot, 'ui', 'dist')] : [resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist')],
+    isPackaged
+      ? [resolve(appRoot, 'ui', 'dist')]
+      : [resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist'), resolve(repoRoot, 'packages', 'desktop', 'dist')],
   );
   const trayTemplateIconFile = resolveExistingFile(
     'desktop tray icon',
