@@ -10,34 +10,22 @@
 
 ### Download and install
 
-1. Download the latest macOS `.zip` from [GitHub Releases](https://github.com/patleeman/personal-agent/releases/latest)
-2. Unzip and drag `Personal Agent.app` to Applications
+1. Download the latest macOS `.dmg` from [GitHub Releases](https://github.com/patleeman/personal-agent/releases/latest)
+2. Open the DMG and drag `Personal Agent.app` to Applications
 3. Open the app — the daemon starts automatically
-
-That's it. No Node.js, no npm, no build step needed for the desktop app.
 
 ### First run
 
+- Go to **Settings** to configure a provider, model, and other preferences
 - Open a **Conversation** to start chatting with the agent
 - Browse **Knowledge** to see the durable vault
 - Open **Automations** to inspect or schedule background work
-- Visit **Settings** to configure providers, models, instruction files, and more
 
 ---
 
 ## What is Personal Agent?
 
 Personal Agent is a native macOS app that runs a capable AI agent with durable memory, background automation, and a full tool ecosystem.
-
-Core design principle: **separate shipped code from durable knowledge from machine-local state** cleanly.
-
-| Layer                           | What lives there                          | Example                                       |
-| ------------------------------- | ----------------------------------------- | --------------------------------------------- |
-| **Repo-managed defaults**       | Shipped code, config schemas, prompts     | This repo                                     |
-| **Durable knowledge vault**     | Docs, skills, projects, instruction files | `~/Documents/personal-agent` or git-backed KB |
-| **Machine-local runtime state** | Conversations, logs, daemon state         | `~/.local/state/personal-agent`               |
-
-The durable rule: use a **conversation** when work is happening now, use the **vault** when knowledge should outlive the thread, and use daemon-backed surfaces for **runs**, **automations**, **queues**, and **reminders**.
 
 ### What it ships
 
