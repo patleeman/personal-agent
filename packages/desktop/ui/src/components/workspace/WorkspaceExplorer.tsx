@@ -1024,13 +1024,6 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
       const entry = workspaceEntryMap.get(workspacePath);
       if (!entry) return;
       if (entry.kind === 'directory') {
-        const directoryItem = model.getItem(workspaceEntryToTreePath(entry));
-        if (directoryItem?.isDirectory() && !directoryItem.isExpanded()) {
-          directoryItem.expand();
-        }
-        if (!nodes[entry.path]?.entries && !nodes[entry.path]?.loading) {
-          void loadDirectory(entry.path);
-        }
         return;
       }
       if (cwd && onOpenFile) {
@@ -1039,7 +1032,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
       }
       onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
     };
-  }, [cwd, loadDirectory, model, nodes, onDraftPrompt, onOpenFile, openWorkspaceFile, root, workspaceEntryMap]);
+  }, [cwd, onDraftPrompt, onOpenFile, openWorkspaceFile, root, workspaceEntryMap]);
 
   useEffect(() => {
     renameRef.current = ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
