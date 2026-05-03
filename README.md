@@ -1,157 +1,109 @@
-# personal-agent
+# Personal Agent
 
-`personal-agent` is an **Electron desktop app** for running a personal AI agent with durable state, conversations, knowledge management, and automations. It also ships an **iOS companion app** for phone access.
+**Desktop AI agent with durable state, conversations, knowledge management, and automations.** Ships an Electron desktop app, a background daemon, and an iOS companion.
 
-Core design: separate shipped code from durable knowledge from machine-local state cleanly.
+[Download the latest release](https://github.com/patleeman/personal-agent/releases/latest) — macOS arm64 only.
 
-- **repo-managed defaults** live in git
-- **durable knowledge** lives in a vault
-- **machine-local runtime state** lives under `~/.local/state/personal-agent`
-
-Conversations are for live execution. Reusable knowledge, workflows, reminders, runs, and automations live in explicit durable surfaces instead of getting buried in chat history.
-
-## What this repo contains
-
-`personal-agent` ships:
-
-- an **Electron desktop app** — the primary operator UI for conversations, knowledge, automations, and settings
-- an **iOS companion app** — native phone client for host APIs (chat, knowledge, automations, and more)
-- a **CLI** (`pa`) — launching the agent, managing the daemon, inspecting MCP, health checks
-- a **daemon** — runs, scheduled tasks, wakeups, reminders, companion pairing
-- a **knowledge system** — docs, instruction files, skills, and projects
-- **MCP integration** — external tool server support
-- built-in **internal skills**, and a **prompt catalog**
+---
 
 ## Quick start
 
-### Prerequisites
+### Download and install
 
-- **macOS** (the desktop app targets macOS arm64; no Windows or Linux build currently)
-- Node.js **20+**
-- npm **11+** recommended
-- Xcode (only needed for iOS companion development in the simulator)
-- macOS (the desktop app is macOS-only; the iOS companion requires Xcode for simulator builds)
+1. Download the latest macOS `.zip` from [GitHub Releases](https://github.com/patleeman/personal-agent/releases/latest)
+2. Unzip and drag `Personal Agent.app` to Applications
+3. Open the app — the daemon starts automatically
 
-### Install from source
+That's it. No Node.js, no npm, no build step needed for the desktop app.
 
-```bash
-npm install
-npm run build
-npm run build
-```
+### First run
 
-### Verify the install
+- Open a **Conversation** to start chatting with the agent
+- Browse **Knowledge** to see the durable vault
+- Open **Automations** to inspect or schedule background work
+- Visit **Settings** to configure providers, models, instruction files, and more
 
-The desktop app manages the local daemon runtime automatically. Start the Personal Agent desktop app from the build output or from the installed `.app` bundle.
+---
 
-### Start the desktop app
+## What is Personal Agent?
 
-```bash
-npm run desktop:start
-```
+Personal Agent is a native macOS app that runs a capable AI agent with durable memory, background automation, and a full tool ecosystem.
 
-This builds the Electron shell and opens the app. Electron serves the renderer through `personal-agent://app/`; there is no general-purpose local web UI server to open in a browser.
+Core design principle: **separate shipped code from durable knowledge from machine-local state** cleanly.
 
-### Start the TUI (terminal)
+| Layer                           | What lives there                          | Example                                       |
+| ------------------------------- | ----------------------------------------- | --------------------------------------------- |
+| **Repo-managed defaults**       | Shipped code, config schemas, prompts     | This repo                                     |
+| **Durable knowledge vault**     | Docs, skills, projects, instruction files | `~/Documents/personal-agent` or git-backed KB |
+| **Machine-local runtime state** | Conversations, logs, daemon state         | `~/.local/state/personal-agent`               |
 
-```bash
-pa tui
-```
+The durable rule: use a **conversation** when work is happening now, use the **vault** when knowledge should outlive the thread, and use daemon-backed surfaces for **runs**, **automations**, **queues**, and **reminders**.
 
-The TUI is useful for quick terminal-based sessions. For the full experience, use the desktop app.
+### What it ships
 
-## Core mental model
+- **Electron desktop app** — primary UI for conversations, knowledge, automations, and settings
+- **Background daemon** — runs, scheduled tasks, wakeups, reminders, companion pairing
+- **Knowledge system** — docs, instruction files, skills, and projects
+- **MCP integration** — external tool server support
+- **iOS companion app** — native phone client for chat, knowledge, and automations
 
-There are three important roots:
+---
 
-- **`<repo-root>`** — shipped defaults and code in this repo
-- **`<vault-root>`** — durable knowledge: docs, skills, projects, instruction files
-- **`<state-root>`** — machine-local runtime state, usually `~/.local/state/personal-agent`
+## Features
 
-The durable rule is simple:
+| Category                | Highlights                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| **Agent conversations** | Live sessions with tools, context attachments, streaming, checkpoints, artifacts        |
+| **Knowledge vault**     | Browse/edit durable docs, URL import, git-synced across machines                        |
+| **Automations**         | Scheduled recurring or one-time tasks, durable background runs, reminders               |
+| **Desktop UI**          | Workbench layout with rails for knowledge, files, diffs, artifacts, and browser         |
+| **Background daemon**   | Runs, scheduled tasks, wakeups, reminders, companion API, SSH remote connections        |
+| **iOS companion**       | Native phone client paired via QR code — chat, knowledge, share extension               |
+| **Agent tools**         | Web search, web fetch, apply patch, conversation inspection, checkpoints, browser tools |
+| **Skills system**       | Reusable agent workflow packages stored in the vault                                    |
+| **Model providers**     | OpenAI, Anthropic, Google — configurable API types, keys, base URLs                     |
+| **MCP**                 | Model Context Protocol servers for external tools                                       |
+| **Dictation**           | Local Whisper or cloud transcription for voice input                                    |
 
-- use a **conversation** when work is happening now
-- use the **vault** when knowledge should outlive the thread
-- use daemon-backed surfaces for **runs**, **automations**, **queues**, and **reminders**
+See the [full feature catalog](docs/features.md) for the complete list organized by surface.
 
-If something should still matter next week, do not leave the only copy in a conversation.
+---
 
-## The desktop-first experience
+## Documentation
 
-The Electron desktop app is the primary way to use personal-agent. It serves the React UI through a custom `personal-agent://app/` protocol and provides:
+All docs are in the [`docs/`](docs/) folder — written for agents first, humans second.
 
-- **Conversations** — live AI agent sessions with streaming, tools, artifacts, and checkpoints
-- **Knowledge** — browse and edit the durable knowledge vault, import URLs, manage docs
-- **Automations** — scheduled tasks and durable runs
-- **Settings** — model config, instruction files, MCP servers, companion pairing
+### Start here
 
-The desktop app runs the daemon in-process by default, so background behavior (runs, automations, reminders) stays active as long as the app is open.
+- [Getting Started](docs/getting-started.md) — install, first-run flow, vault setup
+- [How personal-agent works](docs/how-it-works.md) — state model and runtime layering
+- [Decision Guide](docs/decision-guide.md) — pick the right durable surface
+- [Features](docs/features.md) — complete feature catalog
 
-## The iOS companion
+### Key references
 
-The iOS companion app (under `apps/ios/PersonalAgentCompanion/`) is a native phone client that pairs with a running daemon companion API. It provides:
+- [Desktop App](docs/desktop-app.md) — runtime and UI surface
+- [Knowledge System](docs/knowledge-system.md) — docs, instruction files, skills, projects
+- [Conversations](docs/conversations.md) — conversation model, auto mode, async follow-through
+- [Configuration](docs/configuration.md) — file-based config, env vars, Settings UI
+- [iOS Companion](docs/ios-companion.md)
+- [Repo Layout](docs/repo-layout.md) — where code lives
+- [Release Cycle](docs/release-cycle.md)
 
-- conversation browsing, prompt sending, and live transcript streaming
-- knowledge vault browsing and editing with markdown tools
-- automation inspection
-- share extension for saving URLs and images into the vault
-- native drawing with PencilKit and Excalidraw-compatible export
+Built-in runtime behavior is documented in [`internal-skills/`](internal-skills/):
 
-See [iOS Companion](docs/ios-companion.md) for build and test instructions.
+- [Runs](internal-skills/runs/INDEX.md)
+- [Scheduled Tasks](internal-skills/scheduled-tasks/INDEX.md)
+- [Auto Mode](internal-skills/auto-mode/INDEX.md)
+- [Artifacts](internal-skills/artifacts/INDEX.md)
+- [Reminders and Alerts](internal-skills/alerts/INDEX.md)
+- [Skills and Capabilities](internal-skills/skills-and-capabilities/INDEX.md)
 
-## Common commands
-
-```bash
-# start the desktop app (the primary UI)
-npm run desktop:start
-
-# health / setup
-pa doctor
-pa status
-pa help
-
-# terminal interface
-pa tui
-
-# background runtime
-pa daemon status
-pa daemon logs
-
-# MCP
-pa mcp list --probe
-pa mcp info <server>/<tool>
-```
-
-Use `pa help <command>` for exact flags.
-
-There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa note`, or `pa node` commands. Runs and automations are managed through the desktop app, daemon APIs, or the runtime tools exposed inside conversations.
-
-## Repo layout
-
-### Workspace packages
-
-- `packages/desktop` — **Electron desktop app** — shell (`src/`) + React renderer (`ui/`) + local API server (`server/`)
-- `packages/daemon` — runs, automations, wakeups, daemon runtime
-- `packages/cli` — `pa` command-line tool
-- `packages/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
-
-### Shipped resources and clients
-
-- `apps/ios/PersonalAgentCompanion/` — **native iOS companion app**
-- `internal-skills/` — built-in feature behavior docs
-- `prompt-catalog/` — prompt text owned by this repo
-- `docs/` — product semantics and current behavior
-
-## Dependencies
-
-The core AI runtime comes from `@mariozechner/pi-coding-agent` and `@mariozechner/pi-ai`, both published on the public npm registry. They install automatically with `npm install`.
-
-## Platform notes
-
-- **Desktop app**: macOS arm64 only. Signed release builds require an Apple Developer ID certificate. Local dev (`npm run desktop:start`) skips signing.
-- **iOS companion**: Xcode required. Simulator is free; device builds need an Apple Developer account.
+---
 
 ## Development
+
+For contributors building from source:
 
 ```bash
 npm install
@@ -160,32 +112,29 @@ npm test
 npm run lint
 ```
 
-Useful dev entry points:
+Useful dev commands:
 
 ```bash
-npm run desktop:start     # launch the Electron app
-npm run desktop:dev       # same dev launcher
-npm run ios:dev           # iOS companion against local dev host
-npm run ab:run -- --session smoke-check --command "ab open personal-agent://app/ && ab wait 1000 && ab snapshot -i"
+npm run desktop:start      # launch the Electron app
+npm run desktop:dev        # same dev launcher
+npm run ios:dev            # iOS companion against local dev host
 ```
 
-To skip code signing for local Electron builds:
+Platform prerequisites:
 
-```bash
-export CSC_IDENTITY_AUTO_DISCOVERY=false
-npm run desktop:start
-```
+- **macOS arm64** (the desktop app targets macOS; no Windows or Linux build)
+- **Node.js 20+** and **npm 11+** recommended
+- **Xcode** (only needed for iOS companion development)
 
-Notes:
+Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to skip code signing for local Electron builds.
 
-- Use the repo `agent-browser` wrapper via `npm run ab:run` instead of raw `agent-browser`.
-- The iOS companion app requires Xcode and can be tested in the simulator.
-- If you change product behavior, update the relevant docs in `docs/` or `internal-skills/`.
-- Exact tool arguments come from runtime tool schemas, not from README prose.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for PR policy and issue guidelines.
+
+---
 
 ## Release flow
 
-Desktop releases are built, signed, notarized, and published locally.
+Desktop releases are built, signed, notarized, and published to GitHub Releases locally.
 
 ```bash
 npm run release:desktop:patch
@@ -193,45 +142,10 @@ npm run release:desktop:minor
 npm run release:desktop:major
 ```
 
-If the version bump already happened and you just need to retry publish:
+See [`docs/release-cycle.md`](docs/release-cycle.md) for the full details.
 
-```bash
-npm run release:publish
-```
-
-See [`docs/release-cycle.md`](docs/release-cycle.md) for the real details.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, PR workflow, and local dev tips.
+---
 
 ## License
 
-Licensed under the [MIT License](LICENSE). See the LICENSE file for details.
-
-## Documentation map
-
-The docs in this repo are written for agents first, humans second.
-
-Start here:
-
-- [`docs/README.md`](docs/README.md) — docs map and path vocabulary
-- [`docs/getting-started.md`](docs/getting-started.md) — install and first-run flow
-- [`docs/decision-guide.md`](docs/decision-guide.md) — pick the right durable surface
-- [`docs/how-it-works.md`](docs/how-it-works.md) — state model and runtime layering
-- [`docs/knowledge-system.md`](docs/knowledge-system.md) — docs, instruction files, skills, and projects
-- [`docs/conversations.md`](docs/conversations.md) — conversation model, auto mode, async follow-through
-- [`docs/desktop-app.md`](docs/desktop-app.md) — desktop app runtime and UI surface
-- [`docs/ios-companion.md`](docs/ios-companion.md) — native iOS companion app and host API model
-- [`docs/command-line.md`](docs/command-line.md) — `pa` command map
-- [`docs/repo-layout.md`](docs/repo-layout.md) — where code should live
-- [`internal-skills/README.md`](internal-skills/README.md) — built-in runtime feature docs
-
-For built-in feature behavior, read the matching internal skill:
-
-- [`internal-skills/runs/INDEX.md`](internal-skills/runs/INDEX.md)
-- [`internal-skills/scheduled-tasks/INDEX.md`](internal-skills/scheduled-tasks/INDEX.md)
-- [`internal-skills/async-attention/INDEX.md`](internal-skills/async-attention/INDEX.md)
-- [`internal-skills/artifacts/INDEX.md`](internal-skills/artifacts/INDEX.md)
-- [`internal-skills/alerts/INDEX.md`](internal-skills/alerts/INDEX.md)
-- [`internal-skills/skills-and-capabilities/INDEX.md`](internal-skills/skills-and-capabilities/INDEX.md)
+[MIT](LICENSE)
