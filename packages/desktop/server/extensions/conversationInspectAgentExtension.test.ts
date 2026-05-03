@@ -2,50 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createConversationInspectAgentExtension } from './conversationInspectAgentExtension.js';
 
-const {
-  listConversationInspectSessionsMock,
-  formatConversationInspectSessionListMock,
-  searchConversationInspectSessionsMock,
-  formatConversationInspectSearchResultMock,
-  queryConversationInspectBlocksMock,
-  formatConversationInspectQueryResultMock,
-  outlineConversationInspectSessionMock,
-  formatConversationInspectOutlineResultMock,
-  readWindowConversationInspectBlocksMock,
-  diffConversationInspectBlocksMock,
-  formatConversationInspectDiffResultMock,
-} = vi.hoisted(() => ({
-  listConversationInspectSessionsMock: vi.fn(),
-  formatConversationInspectSessionListMock: vi.fn(),
-  searchConversationInspectSessionsMock: vi.fn(),
-  formatConversationInspectSearchResultMock: vi.fn(),
-  queryConversationInspectBlocksMock: vi.fn(),
-  formatConversationInspectQueryResultMock: vi.fn(),
-  outlineConversationInspectSessionMock: vi.fn(),
-  formatConversationInspectOutlineResultMock: vi.fn(),
-  readWindowConversationInspectBlocksMock: vi.fn(),
-  diffConversationInspectBlocksMock: vi.fn(),
-  formatConversationInspectDiffResultMock: vi.fn(),
+const { executeConversationInspectMock } = vi.hoisted(() => ({
+  executeConversationInspectMock: vi.fn(),
 }));
 
-vi.mock('../conversations/conversationInspectCapability.js', () => ({
-  CONVERSATION_INSPECT_ACTION_VALUES: ['list', 'search', 'query', 'diff', 'outline', 'read_window'],
-  CONVERSATION_INSPECT_BLOCK_TYPE_VALUES: ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'],
-  CONVERSATION_INSPECT_ORDER_VALUES: ['asc', 'desc'],
-  CONVERSATION_INSPECT_ROLE_VALUES: ['user', 'assistant', 'tool', 'context', 'summary', 'image', 'error'],
-  CONVERSATION_INSPECT_SEARCH_MODE_VALUES: ['phrase', 'allTerms', 'anyTerm'],
-  CONVERSATION_INSPECT_SCOPE_VALUES: ['all', 'live', 'running', 'archived'],
-  listConversationInspectSessions: listConversationInspectSessionsMock,
-  formatConversationInspectSessionList: formatConversationInspectSessionListMock,
-  searchConversationInspectSessions: searchConversationInspectSessionsMock,
-  formatConversationInspectSearchResult: formatConversationInspectSearchResultMock,
-  queryConversationInspectBlocks: queryConversationInspectBlocksMock,
-  formatConversationInspectQueryResult: formatConversationInspectQueryResultMock,
-  outlineConversationInspectSession: outlineConversationInspectSessionMock,
-  formatConversationInspectOutlineResult: formatConversationInspectOutlineResultMock,
-  readWindowConversationInspectBlocks: readWindowConversationInspectBlocksMock,
-  diffConversationInspectBlocks: diffConversationInspectBlocksMock,
-  formatConversationInspectDiffResult: formatConversationInspectDiffResultMock,
+vi.mock('../conversations/conversationInspectWorkerClient.js', () => ({
+  executeConversationInspect: executeConversationInspectMock,
 }));
 
 type RegisteredTool = Parameters<Parameters<typeof createConversationInspectAgentExtension>[0]>[0] extends never
@@ -81,17 +43,7 @@ function createToolContext(conversationId = 'conv-self') {
 }
 
 beforeEach(() => {
-  listConversationInspectSessionsMock.mockReset();
-  formatConversationInspectSessionListMock.mockReset();
-  searchConversationInspectSessionsMock.mockReset();
-  formatConversationInspectSearchResultMock.mockReset();
-  queryConversationInspectBlocksMock.mockReset();
-  formatConversationInspectQueryResultMock.mockReset();
-  outlineConversationInspectSessionMock.mockReset();
-  formatConversationInspectOutlineResultMock.mockReset();
-  readWindowConversationInspectBlocksMock.mockReset();
-  diffConversationInspectBlocksMock.mockReset();
-  formatConversationInspectDiffResultMock.mockReset();
+  executeConversationInspectMock.mockReset();
 });
 
 describe('conversation inspect agent extension', () => {
@@ -105,37 +57,52 @@ describe('conversation inspect agent extension', () => {
     expect(guidelines).toContain('hidden reasoning');
   });
 
-  it('dispatches list, search, query, outline, read_window, and diff actions to the capability layer', async () => {
-    listConversationInspectSessionsMock.mockReturnValue({
-      scope: 'running',
-      totalMatching: 1,
-      returnedCount: 1,
-      sessions: [{ id: 'conv-2' }],
+  it('dispatches all actions to the worker client with correct params', async () => {
+    executeConversationInspectMock.mockImplementation(async (action: string, _params: Record<string, unknown>) => {
+      if (action === 'list') {
+        return {
+          action: 'list',
+          result: { scope: 'running', totalMatching: 1, returnedCount: 1, sessions: [{ id: 'conv-2' }] },
+          text: 'list text',
+        };
+      }
+      if (action === 'search') {
+        return {
+          action: 'search',
+          result: { query: 'chrono', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'conv-2' }] },
+          text: 'search text',
+        };
+      }
+      if (action === 'query') {
+        return {
+          action: 'query',
+          result: { conversationId: 'conv-2', returnedBlocks: 1, blocks: [{ id: 'block-1' }] },
+          text: 'query text',
+        };
+      }
+      if (action === 'outline') {
+        return {
+          action: 'outline',
+          result: { conversationId: 'conv-2', anchors: [] },
+          text: 'outline text',
+        };
+      }
+      if (action === 'read_window') {
+        return {
+          action: 'read_window',
+          result: { conversationId: 'conv-2', returnedBlocks: 1, blocks: [{ id: 'block-1' }] },
+          text: 'read_window text',
+        };
+      }
+      if (action === 'diff') {
+        return {
+          action: 'diff',
+          result: { conversationId: 'conv-2', unchanged: false, returnedBlocks: 1, blocks: [{ id: 'block-2' }] },
+          text: 'diff text',
+        };
+      }
+      throw new Error(`Unknown action: ${action}`);
     });
-    formatConversationInspectSessionListMock.mockReturnValue('list text');
-    searchConversationInspectSessionsMock.mockReturnValue({
-      query: 'chrono',
-      totalMatching: 1,
-      returnedCount: 1,
-      matches: [{ conversationId: 'conv-2' }],
-    });
-    formatConversationInspectSearchResultMock.mockReturnValue('search text');
-    queryConversationInspectBlocksMock.mockReturnValue({ conversationId: 'conv-2', returnedBlocks: 1, blocks: [{ id: 'block-1' }] });
-    formatConversationInspectQueryResultMock.mockReturnValue('query text');
-    outlineConversationInspectSessionMock.mockReturnValue({ conversationId: 'conv-2', anchors: [] });
-    formatConversationInspectOutlineResultMock.mockReturnValue('outline text');
-    readWindowConversationInspectBlocksMock.mockReturnValue({
-      conversationId: 'conv-2',
-      returnedBlocks: 1,
-      blocks: [{ id: 'block-1' }],
-    });
-    diffConversationInspectBlocksMock.mockReturnValue({
-      conversationId: 'conv-2',
-      unchanged: false,
-      returnedBlocks: 1,
-      blocks: [{ id: 'block-2' }],
-    });
-    formatConversationInspectDiffResultMock.mockReturnValue('diff text');
 
     const tool = registerConversationInspectTool();
     const ctx = createToolContext('conv-self');
@@ -165,57 +132,66 @@ describe('conversation inspect agent extension', () => {
       ctx,
     );
 
-    expect(listConversationInspectSessionsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scope: 'running',
-        currentConversationId: 'conv-self',
-      }),
-    );
+    // list: includes currentConversationId from ctx, passes scope through
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('list', {
+      action: 'list',
+      scope: 'running',
+      currentConversationId: 'conv-self',
+    });
     expect(listResult.content[0]?.text).toBe('list text');
     expect(listResult.details).toMatchObject({ action: 'list', scope: 'running', totalMatching: 1 });
 
-    expect(searchConversationInspectSessionsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        query: 'chrono',
-        currentConversationId: 'conv-self',
-      }),
-    );
+    // search: includes currentConversationId from ctx
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('search', {
+      action: 'search',
+      query: 'chrono',
+      currentConversationId: 'conv-self',
+    });
     expect(searchResult.content[0]?.text).toBe('search text');
     expect(searchResult.details).toMatchObject({ action: 'search', query: 'chrono', totalMatching: 1 });
 
-    expect(queryConversationInspectBlocksMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-2',
-        text: 'chrono',
-      }),
-    );
+    // query: passes params through
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('query', {
+      action: 'query',
+      conversationId: 'conv-2',
+      text: 'chrono',
+    });
     expect(queryResult.content[0]?.text).toBe('query text');
     expect(queryResult.details).toMatchObject({ action: 'query', conversationId: 'conv-2' });
 
-    expect(outlineConversationInspectSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-2',
-      }),
-    );
+    // outline: passes params through
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('outline', {
+      action: 'outline',
+      conversationId: 'conv-2',
+    });
     expect(outlineResult.content[0]?.text).toBe('outline text');
     expect(outlineResult.details).toMatchObject({ action: 'outline', conversationId: 'conv-2' });
 
-    expect(readWindowConversationInspectBlocksMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-2',
-        aroundBlockId: 'block-1',
-      }),
-    );
-    expect(readWindowResult.content[0]?.text).toBe('query text');
+    // read_window: passes params through
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('read_window', {
+      action: 'read_window',
+      conversationId: 'conv-2',
+      aroundBlockId: 'block-1',
+    });
+    expect(readWindowResult.content[0]?.text).toBe('read_window text');
     expect(readWindowResult.details).toMatchObject({ action: 'read_window', conversationId: 'conv-2' });
 
-    expect(diffConversationInspectBlocksMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-2',
-        afterBlockId: 'block-1',
-      }),
-    );
+    // diff: passes params through
+    expect(executeConversationInspectMock).toHaveBeenCalledWith('diff', {
+      action: 'diff',
+      conversationId: 'conv-2',
+      afterBlockId: 'block-1',
+    });
     expect(diffResult.content[0]?.text).toBe('diff text');
     expect(diffResult.details).toMatchObject({ action: 'diff', conversationId: 'conv-2' });
+  });
+
+  it('forwards errors from the worker client', async () => {
+    executeConversationInspectMock.mockRejectedValue(new Error('worker exploded'));
+
+    const tool = registerConversationInspectTool();
+    const ctx = createToolContext('conv-self');
+
+    await expect(tool.execute('tool-1', { action: 'list' }, undefined, undefined, ctx)).rejects.toThrow('worker exploded');
   });
 });

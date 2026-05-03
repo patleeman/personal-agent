@@ -11,16 +11,11 @@ const outdir = resolve(packageRoot, 'server', 'dist');
 
 rmSync(outdir, { recursive: true, force: true });
 
-await build({
-  entryPoints: [resolve(packageRoot, 'server/app/localApi.ts')],
-  outfile: resolve(outdir, 'app/localApi.js'),
+const sharedEsbuildOptions = {
   bundle: true,
   platform: 'node',
   target: 'node20',
   format: 'esm',
-  banner: {
-    js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
-  },
   sourcemap: false,
   minify: true,
   legalComments: 'none',
@@ -34,4 +29,22 @@ await build({
     'electron',
     'jsdom',
   ],
-});
+};
+
+await Promise.all([
+  // Main server bundle
+  build({
+    ...sharedEsbuildOptions,
+    entryPoints: [resolve(packageRoot, 'server/app/localApi.ts')],
+    outfile: resolve(outdir, 'app/localApi.js'),
+    banner: {
+      js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
+    },
+  }),
+  // Conversation inspect worker — runs synchronous file I/O off the main thread
+  build({
+    ...sharedEsbuildOptions,
+    entryPoints: [resolve(packageRoot, 'server/conversations/conversationInspectWorker.ts')],
+    outfile: resolve(outdir, 'conversations/conversationInspectWorker.js'),
+  }),
+]);

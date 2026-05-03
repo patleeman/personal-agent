@@ -8,18 +8,8 @@ import {
   CONVERSATION_INSPECT_ROLE_VALUES,
   CONVERSATION_INSPECT_SCOPE_VALUES,
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
-  diffConversationInspectBlocks,
-  formatConversationInspectDiffResult,
-  formatConversationInspectOutlineResult,
-  formatConversationInspectQueryResult,
-  formatConversationInspectSearchResult,
-  formatConversationInspectSessionList,
-  listConversationInspectSessions,
-  outlineConversationInspectSession,
-  queryConversationInspectBlocks,
-  readWindowConversationInspectBlocks,
-  searchConversationInspectSessions,
 } from '../conversations/conversationInspectCapability.js';
+import { executeConversationInspect } from '../conversations/conversationInspectWorkerClient.js';
 
 const ConversationInspectToolParams = Type.Object({
   action: Type.String({ description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` }),
@@ -94,139 +84,23 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
       ],
       parameters: ConversationInspectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        switch (params.action) {
-          case 'list': {
-            const result = listConversationInspectSessions({
-              scope: params.scope,
-              cwd: params.cwd,
-              query: params.query,
-              limit: params.limit,
-              includeCurrent: params.includeCurrent,
-              currentConversationId: ctx.sessionManager.getSessionId(),
-            });
-
-            return {
-              content: [{ type: 'text' as const, text: formatConversationInspectSessionList(result) }],
-              details: {
-                action: 'list',
-                ...result,
-              },
-            };
-          }
-
-          case 'search': {
-            const result = searchConversationInspectSessions({
-              query: params.query,
-              scope: params.scope,
-              cwd: params.cwd,
-              limit: params.limit,
-              window: params.window,
-              searchMode: params.searchMode,
-              includeAroundMatches: params.includeAroundMatches,
-              includeCurrent: params.includeCurrent,
-              currentConversationId: ctx.sessionManager.getSessionId(),
-              maxSnippetCharacters: params.maxSnippetCharacters,
-              maxCharactersPerBlock: params.maxCharactersPerBlock,
-            });
-
-            return {
-              content: [{ type: 'text' as const, text: formatConversationInspectSearchResult(result) }],
-              details: {
-                action: 'search',
-                ...result,
-              },
-            };
-          }
-
-          case 'query': {
-            const result = queryConversationInspectBlocks({
-              conversationId: params.conversationId,
-              types: params.types,
-              roles: params.roles,
-              tools: params.tools,
-              text: params.text,
-              searchMode: params.searchMode,
-              afterBlockId: params.afterBlockId,
-              beforeBlockId: params.beforeBlockId,
-              aroundBlockId: params.aroundBlockId,
-              window: params.window,
-              includeAroundMatches: params.includeAroundMatches,
-              order: params.order,
-              limit: params.limit,
-              maxCharactersPerBlock: params.maxCharactersPerBlock,
-            });
-
-            return {
-              content: [{ type: 'text' as const, text: formatConversationInspectQueryResult(result) }],
-              details: {
-                action: 'query',
-                ...result,
-              },
-            };
-          }
-
-          case 'outline': {
-            const result = outlineConversationInspectSession({
-              conversationId: params.conversationId,
-              maxSnippetCharacters: params.maxSnippetCharacters,
-            });
-
-            return {
-              content: [{ type: 'text' as const, text: formatConversationInspectOutlineResult(result) }],
-              details: {
-                action: 'outline',
-                ...result,
-              },
-            };
-          }
-
-          case 'read_window': {
-            const result = readWindowConversationInspectBlocks({
-              conversationId: params.conversationId,
-              aroundBlockId: params.aroundBlockId,
-              window: params.window,
-              maxCharactersPerBlock: params.maxCharactersPerBlock,
-            });
-
-            return {
-              content: [{ type: 'text' as const, text: formatConversationInspectQueryResult(result) }],
-              details: {
-                action: 'read_window',
-                ...result,
-              },
-            };
-          }
-
-          case 'diff': {
-            const result = diffConversationInspectBlocks({
-              conversationId: params.conversationId,
-              knownSignature: params.knownSignature,
-              afterBlockId: params.afterBlockId,
-              types: params.types,
-              roles: params.roles,
-              tools: params.tools,
-              text: params.text,
-              searchMode: params.searchMode,
-              limit: params.limit,
-              maxCharactersPerBlock: params.maxCharactersPerBlock,
-            });
-
-            return {
-              content: [{ type: 'text' as const, text: formatConversationInspectDiffResult(result) }],
-              details: {
-                action: 'diff',
-                ...result,
-              },
-            };
-          }
-
-          default:
-            throw new Error(
-              `Unsupported conversation_inspect action ${JSON.stringify(params.action)}. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(
-                ', ',
-              )}.`,
-            );
+        // Build params that the worker will pass through to the capability functions.
+        // The worker runs in a dedicated thread so synchronous file I/O doesn't
+        // block the Electron main thread.
+        const workerParams: Record<string, unknown> = { ...params };
+        if (params.action === 'list' || params.action === 'search') {
+          workerParams.currentConversationId = ctx.sessionManager.getSessionId();
         }
+
+        const { action, result, text } = await executeConversationInspect(params.action as string, workerParams);
+
+        return {
+          content: [{ type: 'text' as const, text }],
+          details: {
+            action,
+            ...(result as Record<string, unknown>),
+          },
+        };
       },
     });
   };
