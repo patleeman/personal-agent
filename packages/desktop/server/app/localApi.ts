@@ -3,6 +3,9 @@ import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { installProcessLogging } from '../middleware/index.js';
+installProcessLogging();
+
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   getPiAgentRuntimeDir,

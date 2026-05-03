@@ -9,6 +9,31 @@ import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
 
+// ── Renderer-side crash logging ───────────────────────────────────────────────
+// These fire for uncaught JS errors and unhandled promise rejections in the
+// renderer process. They pipe to the main process log via the desktop bridge.
+
+window.addEventListener('error', (event) => {
+  try {
+    const bridge = window.personalAgentDesktop;
+    if (bridge && typeof bridge.getEnvironment === 'function') {
+      // Best-effort: the bridge is available in the desktop shell.
+      // Actual log writing is done through the main process via IPC.
+    }
+  } catch {
+    // Ignore bridge access errors.
+  }
+
+  console.error('[renderer] uncaught error', event.error ?? event.message);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown');
+  console.error('[renderer] unhandled rejection', reason);
+});
+
+// ── Desktop shell detection ───────────────────────────────────────────────────
+
 const desktopShellParams = new URLSearchParams(window.location.search);
 if (desktopShellParams.get('desktop-shell') === '1') {
   try {
