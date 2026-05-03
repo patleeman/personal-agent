@@ -9,9 +9,12 @@ import {
   clearActiveHiddenTurnAfterTerminalEvent,
   shouldSuppressLiveEventForHiddenTurn,
 } from './liveSessionHiddenTurns.js';
+import { readConversationAutoModeState } from './liveSessionStateBroadcasts.js';
 import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
 import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
+
+const AUTO_MODE_CONTROLLER_RETRY_MAX = 2;
 
 export interface LiveSessionEventHost {
   sessionId: string;
@@ -20,6 +23,7 @@ export interface LiveSessionEventHost {
   currentTurnError?: string | null;
   activeHiddenTurnCustomType?: string | null;
   pendingAutoModeContinuation?: boolean;
+  autoModeControllerRetryCount?: number;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
@@ -28,6 +32,7 @@ export interface LiveSessionEventHost {
 export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> {
   maybeAutoTitleConversation: (entry: TEntry) => void;
   requestConversationAutoModeContinuationTurn: (sessionId: string) => Promise<boolean>;
+  requestConversationAutoModeTurn: (sessionId: string) => Promise<boolean>;
   syncDurableConversationRun: (entry: TEntry, state: WebLiveConversationRunState) => Promise<void>;
   notifyLifecycleHandlers: (entry: TEntry, trigger: 'turn_end' | 'auto_compaction_end') => void;
   applyPendingConversationWorkingDirectoryChange: (entry: TEntry) => Promise<void>;
@@ -59,6 +64,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
       entry.pendingAutoModeContinuation = false;
       if (shouldContinueAutoMode) {
+        entry.autoModeControllerRetryCount = 0;
         queueMicrotask(() => {
           void Promise.resolve(callbacks.requestConversationAutoModeContinuationTurn(entry.sessionId)).catch((error) => {
             logWarn('conversation auto mode continuation request failed', {
@@ -68,6 +74,35 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
             });
           });
         });
+      } else {
+        // Agent did not call conversation_auto_control, or called "stop".
+        // If auto mode is still enabled (tool was ignored, not "stop"), retry.
+        const state = readConversationAutoModeState(entry);
+        if (state.enabled) {
+          const retryCount = (entry.autoModeControllerRetryCount ?? 0) + 1;
+          entry.autoModeControllerRetryCount = retryCount;
+          if (retryCount <= AUTO_MODE_CONTROLLER_RETRY_MAX) {
+            logWarn('auto mode controller tool was not invoked, retrying', {
+              sessionId: entry.sessionId,
+              retryCount,
+              maxRetries: AUTO_MODE_CONTROLLER_RETRY_MAX,
+            });
+            queueMicrotask(() => {
+              void Promise.resolve(callbacks.requestConversationAutoModeTurn(entry.sessionId)).catch((error) => {
+                logWarn('conversation auto mode controller retry failed', {
+                  sessionId: entry.sessionId,
+                  retryCount,
+                  message: error instanceof Error ? error.message : String(error),
+                });
+              });
+            });
+          } else {
+            logWarn('auto mode controller tool not invoked after max retries, stopping auto mode', {
+              sessionId: entry.sessionId,
+              retryCount: retryCount - 1,
+            });
+          }
+        }
       }
     }
     void callbacks.syncDurableConversationRun(entry, 'waiting');

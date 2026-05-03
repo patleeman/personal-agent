@@ -2,6 +2,8 @@
 
 The `apply_patch` tool applies structured file patches to the workspace. It handles file creation, deletion, updating, and moving through a declarative patch format with conflict detection.
 
+> **Model support:** `apply_patch` is only available for GPT-series models (any model whose ID starts with `gpt-`). Other models fall back to the standard `edit` and `write` tools.
+
 ## Supported Operations
 
 | Operation   | Marker                    | Description                                          |

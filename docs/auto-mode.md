@@ -11,25 +11,33 @@ User sends prompt
 Visible turn: agent responds, calls tools, produces output
        │
        ▼
-Hidden turn: agent reviews the output, can call more tools
+Hidden review turn: agent examines output, updates context file
        │
-       ▼
-If agent calls auto_mode_control "continue":
+       ├── agent calls auto_mode_control "continue"
+       │      │
+       │      ▼
+       │   Continuation hidden turn: agent continues the task
+       │      │
+       │      ▼
+       │   Another hidden review turn → loop until "stop"
        │
-       ▼
-       Another hidden turn runs
-
-If agent calls auto_mode_control "stop":
+       ├── agent calls auto_mode_control "stop"
+       │      │
+       │      ▼
+       │   Auto mode ends, waiting for user
        │
-       ▼
-       Auto mode ends, waiting for user
+       └── agent does not call auto_mode_control
+              │
+              ▼
+           Retry hidden review turn (up to 2 times)
+              │
+              ▼
+           If still no tool call → auto mode stops
 ```
-
-The hidden turn is invisible in the transcript. It does not appear as a visible message. Its tool calls and results are recorded but not displayed.
 
 ## Control Tool
 
-The agent controls auto mode through the `auto_mode_control` tool:
+Each hidden review turn must call the `auto_mode_control` tool exactly once:
 
 | Action     | When to use                                                            |
 | ---------- | ---------------------------------------------------------------------- |
@@ -44,10 +52,17 @@ The agent controls auto mode through the `auto_mode_control` tool:
 { "action": "stop", "reason": "blocked on failing tests" }
 ```
 
-### Wrong usage
+If the agent does not call the control tool, auto mode retries the review turn up to 2 times, then stops.
 
-- Calling `continue` when the task is already complete — this loops forever
-- Calling `stop` without a reason — the user sees no context about why it stopped
+## Persistent Context File
+
+Each auto-mode session has a persistent context file at:
+
+```
+<runtime-dir>/auto-context/<session-id>.md
+```
+
+The agent should read this file on each wakeup to orient itself and write to it after each action to persist state across turns. The harness does not parse or validate its content — structure it however works for the task.
 
 ## Use Cases
 
@@ -56,41 +71,32 @@ The agent controls auto mode through the `auto_mode_control` tool:
 After the agent generates code, the hidden turn runs tests or lints the output:
 
 1. Visible turn: agent writes a function
-2. Hidden turn: agent runs `npm run lint` on the generated code
-3. If lint fails, the hidden turn fixes issues and continues
-4. If lint passes, the hidden turn stops
+2. Hidden review turn: agent runs `npm run lint` on the generated code
+3. If lint fails, the continuation turn fixes issues
+4. If lint passes, review turn calls `stop`
 
 ### Self-correction
 
 The hidden turn checks the visible response for errors or missing details:
 
 1. Visible turn: agent answers a question
-2. Hidden turn: agent reviews the answer for factual accuracy
-3. If errors found, the hidden turn corrects them and continues
-4. If accurate, the hidden turn stops
+2. Hidden review turn: agent reviews the answer for factual accuracy
+3. If errors found, continuation turn corrects them
+4. If accurate, review turn calls `stop`
 
 ### Multi-step tasks
 
-The hidden turn queues the next logical step:
+Each step queues the next logical step:
 
-1. Visible turn: agent completes step 1 of a migration
-2. Hidden turn: agent verifies step 1, then queues step 2 via `continue`
-3. Step 2 runs as a new hidden turn
-4. This continues until all steps are done
-
-## Auto Mode vs Manual Follow-Up
-
-|                 | Auto mode                           | Manual follow-up               |
-| --------------- | ----------------------------------- | ------------------------------ |
-| Trigger         | Automatic after each turn           | User queues a message          |
-| Turn type       | Hidden                              | Visible                        |
-| Agent awareness | Agent knows it's in auto mode       | Agent sees normal user message |
-| Control         | Agent uses `auto_mode_control` tool | User controls timing           |
+1. Visible turn: agent completes step 1
+2. Hidden review turn: agent verifies step 1, updates context file, calls `continue`
+3. Continuation turn: agent executes step 2
+4. Loop repeats until all steps are done
 
 ## Hidden Turn Detection
 
-The agent can detect whether it is in a hidden review turn by checking the session context. The hidden turn has a distinct custom type (`auto-mode-hidden-review`) that extensions and the agent can identify.
+The hidden review turn and continuation turn have distinct custom types (`conversation_automation_post_turn_review` and `conversation_automation_auto_continue`). The agent can detect which type of turn it is in by inspecting the session context.
 
 ## Configuration
 
-Auto mode is enabled per-conversation. There is no global auto mode toggle. The agent enables it when appropriate for the task.
+Auto mode is enabled per-conversation through the conversation settings. There is no global auto mode toggle.

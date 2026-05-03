@@ -404,6 +404,7 @@ function wireSession(id: string, session: AgentSession, cwd: string, options: { 
     handleLiveSessionEvent(entry, event, {
       maybeAutoTitleConversation,
       requestConversationAutoModeContinuationTurn,
+      requestConversationAutoModeTurn,
       syncDurableConversationRun,
       notifyLifecycleHandlers: notifyEntryLifecycleHandlers,
       applyPendingConversationWorkingDirectoryChange,
