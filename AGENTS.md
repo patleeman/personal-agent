@@ -39,7 +39,7 @@ See `docs/release-cycle.md` for the fuller release notes.
 
 ## Docs are for agents
 
-The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it.
+The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it and keep it updated anytime you make a commit.
 
 ## Checkpoint when complete
 

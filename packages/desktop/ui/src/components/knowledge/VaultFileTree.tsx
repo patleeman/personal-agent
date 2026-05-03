@@ -1454,8 +1454,8 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 PA needs a git repo to store and sync durable docs. Add a repo URL in{' '}
                 <Link to="/settings#settings-general" className="text-accent hover:underline">
                   Settings
-                </Link>
-                {' '}— any git remote works, empty or existing.
+                </Link>{' '}
+                — any git remote works, empty or existing.
               </p>
             </div>
           </div>
