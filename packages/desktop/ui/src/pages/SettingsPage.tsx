@@ -2082,6 +2082,15 @@ export function SettingsPage() {
     return selectedModelProvider.models.find((model) => model.id === editingModelId) ?? null;
   }, [editingModelId, selectedModelProvider]);
 
+  const isEditingBuiltInOverride = useMemo(
+    () =>
+      editingModelId !== null &&
+      editingModelId !== NEW_MODEL_ID &&
+      editingProviderModel === null &&
+      builtInProviderModels.some((model) => model.id === editingModelId),
+    [editingModelId, editingProviderModel, builtInProviderModels],
+  );
+
   const selectedProvider = useMemo(() => {
     if (!providerAuthState || !selectedProviderId) {
       return null;
@@ -2858,6 +2867,32 @@ export function SettingsPage() {
       setModelDraft(createModelEditorDraft(model));
     }
 
+    setModelDraftError(null);
+    setModelDraftMessage(null);
+  }
+
+  function startEditingBuiltInModel(modelId: string) {
+    const builtInModel = builtInProviderModels.find((candidate) => candidate.id === modelId);
+    if (!builtInModel) {
+      return;
+    }
+
+    // Check if there's already a custom override for this built-in model
+    const existingOverride = selectedModelProvider?.models.find((candidate) => candidate.id === modelId) ?? null;
+    if (existingOverride) {
+      startEditingProviderModel(modelId);
+      return;
+    }
+
+    // Pre-fill the model editor with the built-in model's values so the user
+    // can create a custom override with changes (e.g. a different context window).
+    setEditingModelId(modelId);
+    setModelDraft({
+      ...createModelEditorDraft(null),
+      id: builtInModel.id,
+      name: builtInModel.name,
+      contextWindow: String(builtInModel.context),
+    });
     setModelDraftError(null);
     setModelDraftMessage(null);
   }
@@ -4362,16 +4397,41 @@ export function SettingsPage() {
                                   {builtInProviderModels.length > 0 && (
                                     <div className="space-y-1.5">
                                       <h4 className="text-[12px] font-medium text-secondary">Built-in models</h4>
-                                      <div className="grid gap-x-6 gap-y-1 md:grid-cols-2">
-                                        {builtInProviderModels.map((model) => (
-                                          <div
-                                            key={`${model.provider}/${model.id}`}
-                                            className="flex min-w-0 items-baseline gap-2 py-0.5 text-[12px]"
-                                          >
-                                            <span className="truncate font-medium text-primary">{model.id}</span>
-                                            <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
-                                          </div>
-                                        ))}
+                                      <div className="space-y-px">
+                                        {builtInProviderModels.map((model) => {
+                                          const hasOverride = selectedModelProvider?.models.some((candidate) => candidate.id === model.id);
+                                          return (
+                                            <button
+                                              key={`${model.provider}/${model.id}`}
+                                              type="button"
+                                              onClick={() => {
+                                                startEditingBuiltInModel(model.id);
+                                              }}
+                                              disabled={modelDraftAction !== null}
+                                              className={cx(
+                                                'group ui-list-row w-full justify-between px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                                editingModelId === model.id && !editingProviderModel
+                                                  ? 'ui-list-row-selected'
+                                                  : 'ui-list-row-hover',
+                                              )}
+                                              aria-pressed={editingModelId === model.id && !editingProviderModel}
+                                            >
+                                              <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
+                                                <span className="truncate font-medium text-primary">{model.id}</span>
+                                                <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
+                                              </div>
+                                              <div className="flex shrink-0 items-center gap-2">
+                                                {hasOverride ? (
+                                                  <span className="text-[11px] text-accent">Overridden</span>
+                                                ) : (
+                                                  <span className="text-[11px] text-dim/70 opacity-0 transition-opacity group-hover:opacity-100">
+                                                    Override
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   )}
@@ -4469,7 +4529,7 @@ export function SettingsPage() {
                                     </form>
                                   )}
 
-                                  {editingProviderModel && (
+                                  {(editingProviderModel || isEditingBuiltInOverride) && (
                                     <form
                                       className="space-y-4 border-t border-border-subtle pt-6"
                                       onSubmit={(event) => {
@@ -4478,7 +4538,9 @@ export function SettingsPage() {
                                       }}
                                     >
                                       <div className="space-y-1">
-                                        <h4 className="text-[13px] font-medium text-primary">Edit {editingProviderModel.id}</h4>
+                                        <h4 className="text-[13px] font-medium text-primary">
+                                          {editingProviderModel ? `Edit ${editingProviderModel.id}` : `Override ${modelDraft.id}`}
+                                        </h4>
                                       </div>
 
                                       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
