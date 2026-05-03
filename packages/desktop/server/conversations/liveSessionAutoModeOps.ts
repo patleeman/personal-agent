@@ -1,4 +1,7 @@
+import { join } from 'node:path';
+
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
+import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
@@ -12,6 +15,10 @@ import {
 } from './conversationAutoMode.js';
 import { ensureHiddenTurnState, hasQueuedOrActiveHiddenTurn, type LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
 import { repairDanglingToolCallContext } from './liveSessionRecovery.js';
+
+function buildAutoContextPath(sessionId: string): string {
+  return join(getPiAgentRuntimeDir(), 'auto-context', `${sessionId}.md`);
+}
 
 export interface LiveSessionAutoModeHost extends LiveSessionHiddenTurnState {
   session: AgentSession;
@@ -52,10 +59,11 @@ export async function requestLiveSessionAutoModeTurn(host: LiveSessionAutoModeHo
 
   try {
     repairDanglingToolCallContext(host.session);
+    const autoContextPath = buildAutoContextPath(host.session.sessionId);
     await host.session.sendCustomMessage(
       {
         customType: CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
-        content: CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
+        content: CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT.replaceAll('{autoContextPath}', autoContextPath),
         display: false,
         details: { source: 'conversation-auto-mode' },
       },
@@ -88,10 +96,11 @@ export async function requestLiveSessionAutoModeContinuationTurn(host: LiveSessi
   }
 
   repairDanglingToolCallContext(host.session);
+  const autoContextPath = buildAutoContextPath(host.session.sessionId);
   await host.session.sendCustomMessage(
     {
       customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-      content: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT,
+      content: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT.replaceAll('{autoContextPath}', autoContextPath),
       display: false,
       details: { source: 'conversation-auto-mode' },
     },
