@@ -632,8 +632,22 @@ export function broadcastConversationAutoModeState(sessionId: string, force = tr
   });
 }
 
-export async function requestConversationAutoModeTurn(sessionId: string): Promise<boolean> {
-  const entry = registry.get(sessionId);
+export async function requestConversationAutoModeTurn(sessionId: string, sessionFile?: string): Promise<boolean> {
+  let entry = registry.get(sessionId);
+
+  // If not found by session ID, try finding by session file path.
+  // This handles cases where the Pi session was recreated (e.g. after a fork)
+  // and the session ID changed but the file path stayed the same.
+  if (!entry && sessionFile) {
+    for (const [, candidate] of registry.entries()) {
+      const candidateFile = resolveLiveSessionFile(candidate.session);
+      if (candidateFile === sessionFile) {
+        entry = candidate;
+        break;
+      }
+    }
+  }
+
   if (!entry) {
     throw new Error(`Session ${sessionId} is not live`);
   }

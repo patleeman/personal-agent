@@ -12,6 +12,7 @@ import {
   requestConversationAutoModeTurn,
   setLiveSessionAutoModeState,
 } from '../conversations/liveSessions.js';
+import { logWarn } from '../middleware/index.js';
 
 const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
 
@@ -97,9 +98,22 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       clearCompactionRecoveryTimer(sessionId);
       const timer = setTimeout(() => {
         pendingCompactionRecoveryTimers.delete(sessionId);
-        void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch(() => undefined);
+        void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch((error) => {
+          logWarn('auto mode compaction recovery turn failed', {
+            sessionId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
       }, AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS);
       pendingCompactionRecoveryTimers.set(sessionId, timer);
+    });
+
+    pi.on('session_start', async (_event, ctx) => {
+      setAutoModeControlToolActive(pi, isAutoModeHiddenReviewTurn(ctx.sessionManager));
+    });
+
+    pi.on('before_agent_start', async (_event, ctx) => {
+      setAutoModeControlToolActive(pi, isAutoModeHiddenReviewTurn(ctx.sessionManager));
     });
 
     pi.on('session_start', async (_event, ctx) => {
@@ -174,7 +188,9 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
 
     pi.on('turn_end', async (_event, ctx) => {
       const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
-      if (!sessionId) {
+      const sessionFile = ctx.sessionManager.getSessionFile?.()?.trim();
+
+      if (!sessionId && !sessionFile) {
         return;
       }
 
@@ -188,7 +204,19 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       queueMicrotask(() => {
-        void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch(() => undefined);
+        void Promise.resolve(
+          sessionId
+            ? requestConversationAutoModeTurn(sessionId, sessionFile)
+            : sessionFile
+              ? requestConversationAutoModeTurn(sessionFile, sessionFile)
+              : Promise.resolve(false),
+        ).catch((error) => {
+          logWarn('auto mode turn_end request failed', {
+            sessionId,
+            sessionFile,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
       });
     });
   };
