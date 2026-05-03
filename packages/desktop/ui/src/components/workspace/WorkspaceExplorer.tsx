@@ -886,8 +886,12 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
         setFileState({ status: 'idle', data: file, error: null });
         if (file.gitStatus) {
           setDiffState({ status: 'loading', data: null, error: null });
-          const diff = await api.workspaceDiff(cwd, entry.path);
-          setDiffState({ status: 'idle', data: diff, error: null });
+          try {
+            const diff = await api.workspaceDiff(cwd, entry.path);
+            setDiffState({ status: 'idle', data: diff, error: null });
+          } catch {
+            setDiffState({ status: 'idle', data: null, error: null });
+          }
         }
       } catch (error) {
         setFileState({ status: 'idle', data: null, error: error instanceof Error ? error.message : String(error) });
@@ -1439,8 +1443,13 @@ export function WorkspaceFileDocument({
         setSaveState({ status: 'idle', error: null });
         if (file.gitStatus && !file.binary && !file.tooLarge) {
           setDiffState({ status: 'loading', data: null, error: null });
-          const diff = await api.workspaceDiff(cwd, path);
-          setDiffState({ status: 'idle', data: diff, error: null });
+          try {
+            const diff = await api.workspaceDiff(cwd, path);
+            setDiffState({ status: 'idle', data: diff, error: null });
+          } catch {
+            // Diff is best-effort; don't let a diff failure cascade.
+            setDiffState({ status: 'idle', data: null, error: null });
+          }
         }
       } catch (error) {
         setFileState({ status: 'idle', data: null, error: error instanceof Error ? error.message : String(error) });
@@ -1466,8 +1475,12 @@ export function WorkspaceFileDocument({
       setDraftContent(saved.content ?? draftContent);
       setSaveState({ status: 'idle', error: null });
       if (saved.gitStatus && !saved.binary && !saved.tooLarge) {
-        const diff = await api.workspaceDiff(cwd, saved.path);
-        setDiffState({ status: 'idle', data: diff, error: null });
+        try {
+          const diff = await api.workspaceDiff(cwd, saved.path);
+          setDiffState({ status: 'idle', data: diff, error: null });
+        } catch {
+          setDiffState({ status: 'idle', data: null, error: null });
+        }
       }
     } catch (error) {
       setSaveState({ status: 'idle', error: error instanceof Error ? error.message : String(error) });

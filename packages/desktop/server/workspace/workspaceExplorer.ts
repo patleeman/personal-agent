@@ -451,6 +451,27 @@ export function readWorkspaceDiffOverlay(cwd: string, relativePath: string): Wor
     diff = '';
   }
   const overlay = parseDiffOverlay(diff);
+
+  // Cap diff overlay to prevent renderer crashes from oversized responses.
+  const MAX_ADDED_LINES = 10_000;
+  const MAX_DELETED_BLOCKS = 1_000;
+  const totalDeletedLines = overlay.deletedBlocks.reduce((sum, block) => sum + block.lines.length, 0);
+
+  if (overlay.addedLines.length > MAX_ADDED_LINES) {
+    overlay.addedLines = overlay.addedLines.slice(0, MAX_ADDED_LINES);
+  }
+
+  if (overlay.deletedBlocks.length > MAX_DELETED_BLOCKS) {
+    // Keep earliest blocks so the diff context at the top of the file survives.
+    overlay.deletedBlocks = overlay.deletedBlocks.slice(0, MAX_DELETED_BLOCKS);
+  } else if (totalDeletedLines > MAX_ADDED_LINES * 2) {
+    // If individual blocks contain many lines each, truncate each block.
+    overlay.deletedBlocks = overlay.deletedBlocks.map((block) => ({
+      afterLine: block.afterLine,
+      lines: block.lines.slice(0, 500),
+    }));
+  }
+
   return { ...file, gitStatus: status, binary: file.binary, tooLarge: file.tooLarge, ...overlay };
 }
 
