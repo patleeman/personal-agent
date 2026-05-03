@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,20 @@ import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 import { normalizeWorkbenchBrowserBounds, WorkbenchBrowserViewController } from './workbench-browser.js';
+
+function logDesktopEvent(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+  try {
+    const { desktopLogsDir } = resolveDesktopRuntimePaths();
+    appendFileSync(desktopLogsDir + '/main.log', `[${new Date().toISOString()}] [desktop] [${level}] ${message}\n`, 'utf-8');
+  } catch {
+    // Best-effort logging. Fall back to stdout when the desktop log path is unavailable.
+    if (level === 'error') {
+      console.error(message);
+    } else {
+      console.warn(message);
+    }
+  }
+}
 
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -229,8 +244,48 @@ export class DesktopWindowController {
   >();
   private readonly workbenchBrowser = new WorkbenchBrowserViewController();
   private hasVisibleWindowsInAppMode: boolean | null = null;
+  private readonly rendererRecoveryState = new Map<
+    number,
+    { crashedAt: number; reloadAttempts: number; unresponsiveSince: number | null }
+  >();
 
   constructor(private readonly hostManager: HostManager) {}
+
+  /** Handle a renderer process being unexpectedly terminated (crash, OOM, killed). */
+  handleRendererProcessGone(webContentsId: number): void {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      return;
+    }
+
+    const now = Date.now();
+    const state = this.rendererRecoveryState.get(webContentsId);
+
+    // Reset the counter if the last crash was long enough ago.
+    if (state && now - state.crashedAt > 60_000) {
+      this.rendererRecoveryState.delete(webContentsId);
+    }
+
+    const attempts = (this.rendererRecoveryState.get(webContentsId)?.reloadAttempts ?? 0) + 1;
+    if (attempts > 3) {
+      logDesktopEvent(`Renderer (${webContentsId}) crashed ${attempts} times in 60s — not reloading.`, 'error');
+      return;
+    }
+
+    this.rendererRecoveryState.set(webContentsId, {
+      crashedAt: now,
+      reloadAttempts: attempts,
+      unresponsiveSince: null,
+    });
+
+    logDesktopEvent(`Renderer (${webContentsId}) process gone — reloading (attempt ${attempts}/3)…`, 'warn');
+
+    setTimeout(() => {
+      if (!tracked.window.isDestroyed()) {
+        tracked.window.webContents.reload();
+      }
+    }, 1_500);
+  }
 
   setQuitting(value: boolean): void {
     this.quitting = value;
@@ -589,6 +644,7 @@ export class DesktopWindowController {
     });
 
     this.configureExternalNavigation(window);
+    this.configureRendererRecovery(window, role);
 
     if (role === 'main') {
       window.on('close', (event) => {
@@ -653,6 +709,107 @@ export class DesktopWindowController {
 
       event.preventDefault();
       void shell.openExternal(navigationUrl);
+    });
+  }
+
+  private configureRendererRecovery(window: BrowserWindow, _role: ManagedWindowRole): void {
+    const webContents = window.webContents;
+    const webContentsId = webContents.id;
+
+    // Retry on transient load failures (DNS, connection refused, etc.).
+    webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
+      if (this.quitting) {
+        return;
+      }
+
+      // Only retry DNS/connection/name-resolution errors.
+      const transientCodes = new Set([
+        -105, // ERR_NAME_NOT_RESOLVED
+        -106, // ERR_INTERNET_DISCONNECTED
+        -109, // ERR_ADDRESS_UNREACHABLE
+        -110, // ERR_SSL_PROTOCOL_ERROR
+        -111, // ERR_ADDRESS_INVALID
+        -113, // ERR_CONNECTION_REFUSED
+        -116, // ERR_CONNECTION_TIMED_OUT
+        -118, // ERR_CONNECTION_RESET
+        -137, // ERR_NAME_RESOLUTION_FAILED
+        -138, // ERR_ICANN_NAME_COLLISION
+        -300, // ERR_FILE_NOT_FOUND
+        -501, // ERR_INSECURE_RESPONSE
+      ]);
+
+      if (!transientCodes.has(errorCode) || !validatedUrl) {
+        return;
+      }
+
+      logDesktopEvent(`Page load failed for ${webContentsId}: ${errorDescription} (${errorCode}) — retrying…`, 'warn');
+
+      setTimeout(() => {
+        if (!window.isDestroyed() && window.webContents.getURL() === validatedUrl) {
+          window.webContents.reload();
+        }
+      }, 1_500);
+    });
+
+    // Track unresponsive state so we can recover if it doesn't come back.
+    webContents.on('unresponsive', () => {
+      if (this.quitting) {
+        return;
+      }
+
+      const state = this.rendererRecoveryState.get(webContentsId);
+      if (!state || state.unresponsiveSince === null) {
+        this.rendererRecoveryState.set(webContentsId, {
+          crashedAt: state?.crashedAt ?? Date.now(),
+          reloadAttempts: state?.reloadAttempts ?? 0,
+          unresponsiveSince: Date.now(),
+        });
+      }
+
+      // Schedule a check — if still unresponsive after threshold, reload.
+      setTimeout(() => {
+        if (this.quitting) {
+          return;
+        }
+
+        if (window.isDestroyed()) {
+          return;
+        }
+
+        const currentState = this.rendererRecoveryState.get(webContentsId);
+        if (!currentState || currentState.unresponsiveSince === null) {
+          return;
+        }
+
+        const elapsed = Date.now() - currentState.unresponsiveSince;
+        if (elapsed < 8_000) {
+          return;
+        }
+
+        const attempts = currentState.reloadAttempts + 1;
+        if (attempts > 3) {
+          logDesktopEvent(`Renderer (${webContentsId}) unresponsive ${attempts} times — not reloading.`, 'error');
+          return;
+        }
+
+        this.rendererRecoveryState.set(webContentsId, {
+          ...currentState,
+          reloadAttempts: attempts,
+        });
+
+        logDesktopEvent(`Renderer (${webContentsId}) unresponsive for ${elapsed}ms — reloading (attempt ${attempts}/3).`, 'warn');
+        window.webContents.reload();
+      }, 8_000);
+    });
+
+    webContents.on('responsive', () => {
+      const state = this.rendererRecoveryState.get(webContentsId);
+      if (state) {
+        this.rendererRecoveryState.set(webContentsId, {
+          ...state,
+          unresponsiveSince: null,
+        });
+      }
     });
   }
 
