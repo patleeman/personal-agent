@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/core",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "license": "MIT",
   "description": "Core personal agent library",
   "repository": "github:user/personal-agent",
