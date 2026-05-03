@@ -75,7 +75,7 @@ function resolveDesktopWebDistDir(): string {
 
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim() || resolve(currentDir, '..', '..', '..');
-  return resolve(repoRoot, 'packages', 'desktop', 'dist');
+  return resolve(repoRoot, 'packages', 'desktop', 'ui', 'dist');
 }
 
 function resolveStaticFilePath(requestPath: string): string {
@@ -369,7 +369,7 @@ export function createDesktopProtocolHandler(options?: {
     }
 
     const filePath = resolveStaticFilePath(url.pathname);
-    const fallbackPath = resolveStaticFilePath('/ui/index.html');
+    const fallbackPath = resolveStaticFilePath('/index.html');
     const targetPath = url.pathname.startsWith('/assets/') || url.pathname === '/favicon.ico' ? filePath : fallbackPath;
 
     try {
