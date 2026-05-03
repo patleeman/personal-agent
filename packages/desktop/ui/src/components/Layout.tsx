@@ -1453,6 +1453,13 @@ export function Layout() {
   const [activeWorkspaceFile, setActiveWorkspaceFile] = useState<{ cwd: string; path: string } | null>(null);
   const [activeWorkbenchTool, setActiveWorkbenchTool] = useState<WorkbenchRailMode>('knowledge');
   const [selectedCheckpointByConversation, setSelectedCheckpointByConversation] = useState<Record<string, string | null>>({});
+  const [selectedToolByConversation, setSelectedToolByConversation] = useState<Record<string, WorkbenchRailMode>>({});
+  const [selectedFileByConversation, setSelectedFileByConversation] = useState<Record<string, string | null>>({});
+  const [selectedArtifactByConversation, setSelectedArtifactByConversation] = useState<Record<string, string | null>>({});
+  const [selectedRunByConversation, setSelectedRunByConversation] = useState<Record<string, string | null>>({});
+  const [selectedWorkspaceFileByConversation, setSelectedWorkspaceFileByConversation] = useState<
+    Record<string, { cwd: string; path: string } | null>
+  >({});
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left' });
@@ -1552,11 +1559,19 @@ export function Layout() {
     appLayoutMode === 'workbench' &&
     (location.pathname.startsWith('/conversations') || location.pathname.startsWith('/automations'));
   const activeConversationId = getActiveConversationId(location.pathname);
-  const activeWorkbenchKnowledgeFileId = showWorkbench ? searchParams.get('file') : null;
-  const activeWorkbenchArtifactId = showWorkbench && activeConversationId ? getConversationArtifactIdFromSearch(location.search) : null;
+  const activeWorkbenchKnowledgeFileId = showWorkbench
+    ? (searchParams.get('file') ?? (activeConversationId ? selectedFileByConversation[activeConversationId] : null) ?? null)
+    : null;
+  const activeWorkbenchArtifactId =
+    showWorkbench && activeConversationId
+      ? (getConversationArtifactIdFromSearch(location.search) ?? selectedArtifactByConversation[activeConversationId] ?? null)
+      : null;
   const activeWorkbenchCheckpointFromSearch =
     showWorkbench && activeConversationId ? getConversationCheckpointIdFromSearch(location.search) : null;
-  const activeWorkbenchRunFromSearch = showWorkbench && activeConversationId ? getConversationRunIdFromSearch(location.search) : null;
+  const activeWorkbenchRunFromSearch =
+    showWorkbench && activeConversationId
+      ? (getConversationRunIdFromSearch(location.search) ?? selectedRunByConversation[activeConversationId] ?? null)
+      : null;
   const activeWorkbenchCheckpointId = activeConversationId
     ? (activeWorkbenchCheckpointFromSearch ?? selectedCheckpointByConversation[activeConversationId] ?? null)
     : null;
@@ -1564,6 +1579,18 @@ export function Layout() {
   const previousActiveConversationIdRef = useRef<string | null>(activeConversationId);
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
+  const setActiveConversationTool = useCallback(
+    (tool: WorkbenchRailMode) => {
+      if (activeConversationId) {
+        setSelectedToolByConversation((current) => ({
+          ...current,
+          [activeConversationId]: tool,
+        }));
+      }
+      setActiveWorkbenchTool(tool);
+    },
+    [activeConversationId],
+  );
   const setActiveConversationCheckpoint = useCallback(
     (checkpointId: string | null) => {
       if (!activeConversationId) {
@@ -1594,33 +1621,88 @@ export function Layout() {
     // Run selection is URL-backed.
   }, []);
 
+  // Cwd change: clear workspace file if its cwd no longer matches
   useEffect(() => {
     setActiveWorkspaceFile((current) => (current && current.cwd === activeWorkspaceCwd ? current : null));
   }, [activeWorkspaceCwd]);
 
+  // Save/restore per-conversation window state + runs reset when switching conversations
   useEffect(() => {
     const previousConversationId = previousActiveConversationIdRef.current;
     previousActiveConversationIdRef.current = activeConversationId;
 
-    if (
-      shouldResetWorkbenchRunsOnConversationChange({
-        previousConversationId,
-        activeConversationId,
-        activeTool: activeWorkbenchTool,
-        activeRunId: activeWorkbenchRunFromSearch,
-      })
-    ) {
-      setActiveWorkbenchTool('knowledge');
-      setSearchParams(
-        (current) => {
-          const next = new URLSearchParams(current);
-          next.delete('run');
-          return next;
-        },
-        { replace: true },
-      );
+    if (previousConversationId === activeConversationId || !previousConversationId) {
+      return;
     }
-  }, [activeConversationId, activeWorkbenchRunFromSearch, activeWorkbenchTool, setSearchParams]);
+
+    // Save outgoing conversation state
+    setSelectedToolByConversation((current) => ({
+      ...current,
+      [previousConversationId]: activeWorkbenchTool,
+    }));
+    setSelectedFileByConversation((current) => ({
+      ...current,
+      [previousConversationId]: activeWorkbenchKnowledgeFileId,
+    }));
+    setSelectedArtifactByConversation((current) => ({
+      ...current,
+      [previousConversationId]: activeWorkbenchArtifactId,
+    }));
+    setSelectedRunByConversation((current) => ({
+      ...current,
+      [previousConversationId]: activeWorkbenchRunFromSearch,
+    }));
+    setSelectedWorkspaceFileByConversation((current) => ({
+      ...current,
+      [previousConversationId]: activeWorkspaceFile,
+    }));
+
+    // Restore incoming conversation state
+    if (activeConversationId) {
+      // Restore tool: prefer saved per-conversation state; fall back to
+      // knowledge unless we were on runs (reset to avoid stale run context).
+      const savedTool = selectedToolByConversation[activeConversationId];
+      if (savedTool) {
+        setActiveWorkbenchTool(savedTool);
+      } else if (
+        shouldResetWorkbenchRunsOnConversationChange({
+          previousConversationId,
+          activeConversationId,
+          activeTool: activeWorkbenchTool,
+          activeRunId: activeWorkbenchRunFromSearch,
+        })
+      ) {
+        setActiveWorkbenchTool('knowledge');
+        setSearchParams(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.delete('run');
+            return next;
+          },
+          { replace: true },
+        );
+      } else {
+        setActiveWorkbenchTool('knowledge');
+      }
+
+      const savedFile = selectedWorkspaceFileByConversation[activeConversationId];
+      if (savedFile && savedFile.cwd === activeWorkspaceCwd) {
+        setActiveWorkspaceFile(savedFile);
+      } else {
+        setActiveWorkspaceFile(null);
+      }
+    }
+  }, [
+    activeConversationId,
+    activeWorkbenchArtifactId,
+    activeWorkbenchKnowledgeFileId,
+    activeWorkbenchRunFromSearch,
+    activeWorkbenchTool,
+    activeWorkspaceCwd,
+    activeWorkspaceFile,
+    selectedToolByConversation,
+    selectedWorkspaceFileByConversation,
+  ]);
 
   useEffect(() => {
     if (!activeConversationId || !activeWorkbenchCheckpointFromSearch) {
@@ -1631,7 +1713,7 @@ export function Layout() {
       ...current,
       [activeConversationId]: activeWorkbenchCheckpointFromSearch,
     }));
-    setActiveWorkbenchTool('diffs');
+    setActiveConversationTool('diffs');
     setActiveWorkspaceFile(null);
   }, [activeConversationId, activeWorkbenchCheckpointFromSearch]);
 
@@ -1640,7 +1722,7 @@ export function Layout() {
       return;
     }
 
-    setActiveWorkbenchTool('runs');
+    setActiveConversationTool('runs');
     setActiveWorkspaceFile(null);
   }, [activeConversationId, activeWorkbenchRunFromSearch]);
 
@@ -1649,7 +1731,7 @@ export function Layout() {
       return;
     }
 
-    setActiveWorkbenchTool('knowledge');
+    setActiveConversationTool('knowledge');
     setActiveWorkspaceFile(null);
   }, [activeWorkbenchKnowledgeFileId]);
 
@@ -1832,7 +1914,7 @@ export function Layout() {
         handleZenModeChange(false);
       }
       handleAppLayoutModeChange('workbench');
-      setActiveWorkbenchTool('browser');
+      setActiveConversationTool('browser');
     }
 
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
@@ -1921,7 +2003,7 @@ export function Layout() {
                         runId={activeWorkbenchRunId}
                         workspaceFile={activeWorkspaceFile}
                         activeTool={activeWorkbenchTool}
-                        onActiveToolChange={setActiveWorkbenchTool}
+                        onActiveToolChange={setActiveConversationTool}
                         onMissingCheckpoint={clearActiveConversationCheckpoint}
                         scrollToCheckpointFile={scrollToCheckpointFile}
                         workspaceCwd={activeWorkspaceCwd}
@@ -1943,7 +2025,7 @@ export function Layout() {
                             activeRunId={activeWorkbenchRunId}
                             activeWorkspaceFile={activeWorkspaceFile}
                             activeTool={activeWorkbenchTool}
-                            onActiveToolChange={setActiveWorkbenchTool}
+                            onActiveToolChange={setActiveConversationTool}
                             onCheckpointSelect={setActiveConversationCheckpoint}
                             onRunSelect={setActiveConversationRun}
                             onWorkspaceFileSelect={setActiveWorkspaceFile}
