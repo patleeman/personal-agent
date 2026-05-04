@@ -408,7 +408,7 @@ function CurrentAutomationRow({ task }: { task: ScheduledTaskSummary }) {
   return (
     <Link
       to={`/automations/${encodeURIComponent(task.id)}`}
-      className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 border-t border-border-subtle py-6 text-primary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+      className="group grid gap-3 border-t border-border-subtle py-5 text-primary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-6"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span className={`h-3 w-3 shrink-0 rounded-full border ${statusDotClass(task)}`} aria-hidden="true" />
@@ -424,7 +424,7 @@ function CurrentAutomationRow({ task }: { task: ScheduledTaskSummary }) {
           </div>
         </div>
       </div>
-      <div className="shrink-0 text-right text-[14px] text-secondary">{schedule}</div>
+      <div className="text-[13px] text-secondary sm:shrink-0 sm:text-right sm:text-[14px]">{schedule}</div>
     </Link>
   );
 }
@@ -453,7 +453,7 @@ function AutomationsOverview({
 
   return (
     <div className="h-full overflow-y-auto">
-      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-14">
+      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
         <AppPageIntro
           title="Automations"
           summary={pageMeta}
@@ -516,7 +516,7 @@ function DetailSection({ title, children }: { title: string; children: ReactNode
 
 function SummaryCell({ label, value, className = '' }: { label: string; value: ReactNode; className?: string }) {
   return (
-    <div className="min-w-0 border-t border-border-subtle py-4 md:border-l md:border-t-0 md:first:border-l-0 md:first:pl-0 md:pl-5">
+    <div className="min-w-0 border-t border-border-subtle py-4 first:border-t-0 sm:border-t sm:[&:nth-child(-n+2)]:border-t-0">
       <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</div>
       <div className={`mt-2 break-words text-[14px] leading-5 text-primary ${className}`}>{value}</div>
     </div>
@@ -707,7 +707,7 @@ function AutomationDetailView({
   return (
     <>
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[88rem]" contentClassName="space-y-8">
+        <AppPageLayout shellClassName="max-w-[56rem]" contentClassName="space-y-7">
           <div className="space-y-5">
             <button
               type="button"
@@ -717,21 +717,23 @@ function AutomationDetailView({
               ← Automations
             </button>
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-4">
               <div className="min-w-0 space-y-2">
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 items-start gap-3">
                   <span className={`h-3 w-3 shrink-0 rounded-full border ${statusDotClass(effectiveSummary)}`} aria-hidden="true" />
-                  <h1 className="break-words text-[34px] font-semibold tracking-tight text-primary sm:text-[40px]">{title}</h1>
+                  <h1 className="break-words text-pretty text-[28px] font-semibold leading-[1.08] tracking-tight text-primary sm:text-[32px]">
+                    {title}
+                  </h1>
                 </div>
-                <p className="text-[14px] text-secondary">
+                <div className="flex flex-wrap gap-x-2 gap-y-1 text-[13px] leading-5 text-secondary sm:text-[14px]">
                   <span className={status.cls}>{status.text}</span>
-                  <span className="mx-2 text-dim">·</span>
+                  <span className="text-dim">·</span>
                   <span>{projectLabel}</span>
-                  <span className="mx-2 text-dim">·</span>
+                  <span className="text-dim">·</span>
                   <span>{threadLabel}</span>
-                  <span className="mx-2 text-dim">·</span>
+                  <span className="text-dim">·</span>
                   <span>{scheduleLabel}</span>
-                </p>
+                </div>
               </div>
 
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -760,9 +762,9 @@ function AutomationDetailView({
             </div>
           </div>
 
-          <div className="grid gap-8">
-            <div className="min-w-0 space-y-8">
-              <section className="grid border-y border-border-subtle">
+          <div className="grid gap-7">
+            <div className="min-w-0 space-y-7">
+              <section className="grid gap-x-6 border-y border-border-subtle sm:grid-cols-2">
                 <SummaryCell
                   label="Last run"
                   value={lastRunLabel}
@@ -842,57 +844,49 @@ function AutomationDetailView({
                 {taskRuns.length === 0 ? (
                   <p className="text-[14px] text-secondary">No executions yet.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border-subtle">
-                    <div className="grid min-w-[58rem] grid-cols-[7rem_minmax(12rem,1fr)_7rem_6rem_minmax(10rem,1fr)_6rem] border-b border-border-subtle px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-dim">
-                      <div>Status</div>
-                      <div>Run</div>
-                      <div>Started</div>
-                      <div>Duration</div>
-                      <div>Result</div>
-                      <div>Actions</div>
-                    </div>
-                    <div className="divide-y divide-border-subtle">
+                  <div>
+                    <div className="space-y-3">
                       {taskRuns.slice(0, 6).map((run) => {
                         const runStatus = runStatusText(run);
                         const moment = getRunMoment(run);
                         const isBad = runStatus.cls === 'text-danger';
                         return (
-                          <div
-                            key={run.runId}
-                            className="grid min-w-[58rem] grid-cols-[7rem_minmax(12rem,1fr)_7rem_6rem_minmax(10rem,1fr)_6rem] items-center gap-0 px-4 py-3 text-[13px]"
-                          >
-                            <div className={`flex items-center gap-2 ${runStatus.cls}`}>
-                              <span
-                                className={`h-2 w-2 rounded-full ${
-                                  isBad ? 'bg-danger' : runStatus.cls === 'text-success' ? 'bg-success' : 'bg-secondary'
-                                }`}
-                              />
-                              {runStatus.text}
-                            </div>
-                            <div className="truncate text-primary">{run.runId}</div>
-                            <div className="text-secondary">{moment.at ? timeAgo(moment.at) : '—'}</div>
-                            <div className="text-secondary">{formatRunDuration(run)}</div>
-                            <div className={isBad ? 'truncate text-danger' : 'truncate text-secondary'}>{runResultText(run)}</div>
-                            <div className="flex gap-2 text-accent">
-                              <button
-                                type="button"
-                                onClick={() => window.open(getRunLogsPath(run), '_blank')}
-                                className="hover:text-primary"
-                              >
-                                Logs
-                              </button>
-                              {isBad && (
+                          <div key={run.runId} className="border-t border-border-subtle py-3 text-[13px]">
+                            <div className="flex min-w-0 items-center justify-between gap-3">
+                              <div className={`flex min-w-0 items-center gap-2 ${runStatus.cls}`}>
+                                <span
+                                  className={`h-2 w-2 rounded-full ${
+                                    isBad ? 'bg-danger' : runStatus.cls === 'text-success' ? 'bg-success' : 'bg-secondary'
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                                <span className="truncate">{runStatus.text}</span>
+                              </div>
+                              <div className="flex shrink-0 gap-3 text-accent">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    void handleRunNow();
-                                  }}
+                                  onClick={() => window.open(getRunLogsPath(run), '_blank')}
                                   className="hover:text-primary"
                                 >
-                                  Rerun
+                                  Logs
                                 </button>
-                              )}
+                                {isBad && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void handleRunNow();
+                                    }}
+                                    className="hover:text-primary"
+                                  >
+                                    Rerun
+                                  </button>
+                                )}
+                              </div>
                             </div>
+                            <p className="mt-2 truncate font-mono text-[12px] text-dim">{run.runId}</p>
+                            <p className="mt-1 text-secondary">
+                              {moment.at ? timeAgo(moment.at) : 'No start timestamp'} · {formatRunDuration(run)} · {runResultText(run)}
+                            </p>
                           </div>
                         );
                       })}
