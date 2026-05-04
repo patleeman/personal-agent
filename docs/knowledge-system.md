@@ -44,7 +44,7 @@ Reusable workflows defined as markdown with a standard structure:
 
 Skills are loaded by the runtime and available to the agent through skill commands. Each skill is a self-contained procedure the agent can follow.
 
-Skill `profile` metadata is treated as ownership/reference data only. Runtime skill discovery loads every valid skill under `<vault-root>/skills`; do not use profiles to hide or reveal skills.
+Skill metadata is reference-only. Runtime skill discovery loads every valid skill under `<vault-root>/skills`; do not hide or reveal skills through runtime scopes.
 
 ### Projects
 
@@ -54,7 +54,7 @@ Structured work packages with milestones, tasks, and durable status. See [Projec
 
 AGENTS.md files are auto-discovered by Pi from the working directory and its parents. They are assembled into the system prompt as a "Project Context" section. The canonical locations, in load order:
 
-1. **Agent dir** — `<state-root>/pi-agent-runtime/AGENTS.md` (materialized from profile layers)
+1. **Agent dir** — `<state-root>/pi-agent-runtime/AGENTS.md` (materialized from vault and local layers)
 2. **CWD up to root** — `AGENTS.md` or `CLAUDE.md` from the current directory and each parent
 
 Duplicates are skipped — the first file with a given absolute path wins.

@@ -4,10 +4,10 @@ Runs are detached agent work units. They execute shell commands or agent tasks i
 
 ## Run Types
 
-| Type          | Description                                              |
-| ------------- | -------------------------------------------------------- |
-| Shell command | Executes a bash command in the background                |
-| Agent task    | Runs an agent with a prompt, optional model, and profile |
+| Type          | Description                                    |
+| ------------- | ---------------------------------------------- |
+| Shell command | Executes a bash command in the background      |
+| Agent task    | Runs an agent with a prompt and optional model |
 
 ## Run Lifecycle
 
@@ -48,23 +48,22 @@ The agent starts runs using the `run` tool.
   "taskSlug": "review-pr",
   "prompt": "Review the changes in this PR and summarize",
   "model": "openai-codex/gpt-4o",
-  "profile": "default",
   "cwd": "/path/to/project"
 }
 ```
 
 ## Run Tool Reference
 
-| Action        | Parameters                                                                                            | Description                             |
-| ------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `list`        | —                                                                                                     | List all durable runs                   |
-| `get`         | `runId`                                                                                               | Get run details                         |
-| `logs`        | `runId`, `tail?`                                                                                      | Get run output logs (max 1000 lines)    |
-| `start`       | `taskSlug`, `command`, `cwd?`, `deliverResultToConversation?`                                         | Start a shell command run               |
-| `start_agent` | `taskSlug`, `prompt`, `model?`, `profile?`, `cwd?`, `defer?`, `cron?`, `deliverResultToConversation?` | Start an agent task run                 |
-| `rerun`       | `runId`                                                                                               | Re-execute a completed run              |
-| `follow_up`   | `runId`, `prompt`                                                                                     | Send a follow-up prompt to an agent run |
-| `cancel`      | `runId`                                                                                               | Cancel a running run                    |
+| Action        | Parameters                                                                                | Description                             |
+| ------------- | ----------------------------------------------------------------------------------------- | --------------------------------------- |
+| `list`        | —                                                                                         | List all durable runs                   |
+| `get`         | `runId`                                                                                   | Get run details                         |
+| `logs`        | `runId`, `tail?`                                                                          | Get run output logs (max 1000 lines)    |
+| `start`       | `taskSlug`, `command`, `cwd?`, `deliverResultToConversation?`                             | Start a shell command run               |
+| `start_agent` | `taskSlug`, `prompt`, `model?`, `cwd?`, `defer?`, `cron?`, `deliverResultToConversation?` | Start an agent task run                 |
+| `rerun`       | `runId`                                                                                   | Re-execute a completed run              |
+| `follow_up`   | `runId`, `prompt`                                                                         | Send a follow-up prompt to an agent run |
+| `cancel`      | `runId`                                                                                   | Cancel a running run                    |
 
 ### Start options for agent tasks
 

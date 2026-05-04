@@ -5,8 +5,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 import { getDurableAgentFilePath, getProfilesRoot, getVaultRoot } from '@personal-agent/core';
-import { listProfiles, resolveResourceProfile } from '@personal-agent/core';
-import type { Express, Request } from 'express';
+import { resolveResourceProfile } from '@personal-agent/core';
+import type { Express } from 'express';
 
 import { buildRecentReadUsage, listMemoryDocs, listSkillsForProfile, normalizeMemoryPath } from '../knowledge/memoryDocs.js';
 import { logError } from '../middleware/index.js';
@@ -18,36 +18,14 @@ let _getCurrentProfile: () => string = () => {
 };
 let _repoRoot = process.cwd();
 
-const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
-
 function initializeMemoryRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot'>): void {
   _getCurrentProfile = context.getCurrentProfile;
   _repoRoot = context.getRepoRoot();
 }
 
-function resolveRequestedProfileFromQuery(req: Request): string {
-  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string' ? req.query[VIEW_PROFILE_QUERY_PARAM].trim() : '';
-
-  if (!requestedProfile) {
-    return _getCurrentProfile();
-  }
-
-  const availableProfiles = listProfiles({
-    repoRoot: _repoRoot,
-    profilesRoot: getProfilesRoot(),
-  });
-  if (!availableProfiles.includes(requestedProfile)) {
-    throw new Error(`Unknown profile: ${requestedProfile}`);
-  }
-
-  return requestedProfile;
-}
-
-function inferAgentSource(filePath: string, profile: string): string {
-  const profilesRoot = getProfilesRoot();
+function inferAgentSource(filePath: string): string {
   const baseAgentFile = getDurableAgentFilePath(getVaultRoot());
-  if (filePath === baseAgentFile) return 'shared';
-  if (filePath.startsWith(`${profilesRoot}/${profile}/`)) return 'profile';
+  if (filePath === baseAgentFile) return 'vault';
   if (filePath.includes('/skills/')) return 'global';
   return 'project';
 }
@@ -60,18 +38,18 @@ export function registerMemoryNotesRoutes(
 
   router.get('/api/memory', (req, res) => {
     try {
-      const profile = resolveRequestedProfileFromQuery(req);
-      const resolvedProfile = resolveResourceProfile(profile, {
+      void req;
+      const resolvedProfile = resolveResourceProfile(_getCurrentProfile(), {
         repoRoot: _repoRoot,
         profilesRoot: getProfilesRoot(),
       });
       const agentsMd = resolvedProfile.agentsFiles.map((filePath) => ({
-        source: inferAgentSource(filePath, profile),
+        source: inferAgentSource(filePath),
         path: filePath,
         exists: existsSync(filePath),
         content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : undefined,
       }));
-      const skills = listSkillsForProfile(profile);
+      const skills = listSkillsForProfile(_getCurrentProfile());
       const memoryDocs = listMemoryDocs();
       const usageByPath = buildRecentReadUsage([...skills.map((item) => item.path), ...memoryDocs.map((item) => item.path)]);
 
@@ -93,11 +71,11 @@ export function registerMemoryNotesRoutes(
         }
       }
 
-      res.json({ profile, agentsMd, skills, memoryDocs });
+      res.json({ agentsMd, skills, memoryDocs });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
-      res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
+      res.status(500).json({ error: message });
     }
   });
 

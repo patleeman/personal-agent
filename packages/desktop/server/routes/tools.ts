@@ -1,7 +1,7 @@
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import { listProfiles, readPackageSourceTargetState } from '@personal-agent/core';
+import { readPackageSourceTargetState } from '@personal-agent/core';
 import { buildMergedMcpConfigDocument, inspectCliBinary, readBundledSkillMcpManifests, readMcpConfigDocument } from '@personal-agent/core';
-import type { Express, Request, Response } from 'express';
+import type { Express, Response } from 'express';
 
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
 import { logError } from '../middleware/index.js';
@@ -13,10 +13,6 @@ let getCurrentProfileFn: () => string = () => {
 
 let getRepoRootFn: () => string = () => {
   throw new Error('getRepoRoot not initialized for tools routes');
-};
-
-let getProfilesRootFn: () => string = () => {
-  throw new Error('getProfilesRoot not initialized for tools routes');
 };
 
 let buildLiveSessionResourceOptionsFn: (profile: string) => LiveSessionResourceOptions = () => {
@@ -31,14 +27,11 @@ let withTemporaryProfileAgentDirFn: <T>(profile: string, run: (agentDir: string)
   throw new Error('withTemporaryProfileAgentDir not initialized for tools routes');
 };
 
-const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
-
 function initializeToolsRoutesContext(
   context: Pick<
     ServerRouteContext,
     | 'getCurrentProfile'
     | 'getRepoRoot'
-    | 'getProfilesRoot'
     | 'buildLiveSessionResourceOptions'
     | 'buildLiveSessionExtensionFactories'
     | 'withTemporaryProfileAgentDir'
@@ -46,47 +39,13 @@ function initializeToolsRoutesContext(
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
-  getProfilesRootFn = context.getProfilesRoot;
   buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
   buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
   withTemporaryProfileAgentDirFn = context.withTemporaryProfileAgentDir;
 }
 
-function resolveRequestedProfileFromQuery(req: Request): string {
-  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string' ? req.query[VIEW_PROFILE_QUERY_PARAM].trim() : '';
-
-  if (!requestedProfile) {
-    return getCurrentProfileFn();
-  }
-
-  const availableProfiles = listProfiles({
-    repoRoot: getRepoRootFn(),
-    profilesRoot: getProfilesRootFn(),
-  });
-
-  if (!availableProfiles.includes(requestedProfile)) {
-    throw new Error(`Unknown profile: ${requestedProfile}`);
-  }
-
-  return requestedProfile;
-}
-
-function buildPackageInstallState(profile = getCurrentProfileFn()) {
-  const profileTargets = listProfiles({
-    repoRoot: getRepoRootFn(),
-    profilesRoot: getProfilesRootFn(),
-  }).map((profileName) => ({
-    ...readPackageSourceTargetState('profile', profileName, {
-      repoRoot: getRepoRootFn(),
-      profilesRoot: getProfilesRootFn(),
-    }),
-    profileName,
-    current: profileName === profile,
-  }));
-
+function buildPackageInstallState() {
   return {
-    currentProfile: profile,
-    profileTargets,
     localTarget: readPackageSourceTargetState('local', { repoRoot: getRepoRootFn() }),
   };
 }
@@ -102,11 +61,11 @@ function buildMcpCallbackUrl(input: { callbackHost?: string; callbackPort?: numb
   return `http://${host}:${port}${path}`;
 }
 
-async function handleToolsRequest(req: Request, res: Response): Promise<void> {
+async function handleToolsRequest(_req: unknown, res: Response): Promise<void> {
   try {
-    const profile = resolveRequestedProfileFromQuery(req);
-    const resourceOptions = buildLiveSessionResourceOptionsFn(profile);
-    const details = await withTemporaryProfileAgentDirFn(profile, (agentDir) =>
+    const runtimeName = getCurrentProfileFn();
+    const resourceOptions = buildLiveSessionResourceOptionsFn(runtimeName);
+    const details = await withTemporaryProfileAgentDirFn(runtimeName, (agentDir) =>
       inspectAvailableTools(getRepoRootFn(), {
         ...resourceOptions,
         agentDir,
@@ -147,7 +106,6 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
     ];
 
     res.json({
-      profile,
       ...details,
       dependentCliTools,
       mcp: {
@@ -196,7 +154,7 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
       message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
+    res.status(500).json({ error: message });
   }
 }
 
@@ -206,7 +164,6 @@ export function registerToolsRoutes(
     ServerRouteContext,
     | 'getCurrentProfile'
     | 'getRepoRoot'
-    | 'getProfilesRoot'
     | 'buildLiveSessionResourceOptions'
     | 'buildLiveSessionExtensionFactories'
     | 'withTemporaryProfileAgentDir'

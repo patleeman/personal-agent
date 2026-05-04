@@ -225,7 +225,7 @@ The platform should expose deferred resume management directly.
 
 Useful additions:
 
-- list deferred resumes for the current conversation/profile
+- list deferred resumes for the current conversation
 - cancel a deferred resume by id
 - replace an existing deferred resume instead of stacking a new one
 - show active deferred resumes in the web UI and agent tool surface

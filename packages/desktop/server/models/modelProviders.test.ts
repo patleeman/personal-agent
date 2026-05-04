@@ -40,7 +40,6 @@ describe('readModelProvidersState', () => {
     const dir = createTempDir();
 
     expect(readModelProvidersState('assistant', { profilesDir: dir })).toEqual({
-      profile: 'shared',
       filePath: join(dir, 'shared', 'models.json'),
       providers: [],
     });

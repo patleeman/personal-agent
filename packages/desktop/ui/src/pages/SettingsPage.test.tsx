@@ -166,8 +166,6 @@ describe('SettingsPage', () => {
             ],
           },
           packageInstall: {
-            currentProfile: 'assistant',
-            profileTargets: [],
             localTarget: {
               target: 'local',
               settingsPath: '/tmp/packages.json',

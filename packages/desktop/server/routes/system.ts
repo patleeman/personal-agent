@@ -7,10 +7,6 @@ import { logError } from '../middleware/index.js';
 import { type AppEventTopic } from '../shared/appEvents.js';
 import type { ServerRouteContext } from './context.js';
 
-let getCurrentProfileFn: () => string = () => {
-  throw new Error('getCurrentProfile not initialized for system routes');
-};
-
 let getRepoRootFn: () => string = () => {
   throw new Error('getRepoRoot not initialized for system routes');
 };
@@ -22,7 +18,7 @@ let listTasksForCurrentProfileFn: () => unknown[] = () => {
 function initializeSystemRoutesContext(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listTasksForCurrentProfile'>,
 ): void {
-  getCurrentProfileFn = context.getCurrentProfile;
+  void context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
   listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
 }
@@ -46,9 +42,7 @@ export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = ['sessions', 'tasks', '
 
 function handleStatus(_req: Request, res: Response): void {
   try {
-    const profile = getCurrentProfileFn();
     res.json({
-      profile,
       repoRoot: getRepoRootFn(),
       appRevision: process.env.PERSONAL_AGENT_APP_REVISION,
     });

@@ -95,13 +95,12 @@ describe('registerToolsRoutes', () => {
     process.env = originalEnv;
   });
 
-  it('returns tool inspection details and package install state for the requested profile', async () => {
+  it('returns tool inspection details and package install state', async () => {
     const { getHandler } = createHarness({ currentProfile: 'assistant', repoRoot: '/repo', profilesRoot: '/profiles' });
     const handler = getHandler('/api/tools');
     const res = createResponse();
 
     process.env.PERSONAL_AGENT_OP_BIN = 'op-custom';
-    listProfilesMock.mockReturnValue(['assistant', 'other']);
     inspectAvailableToolsMock.mockResolvedValueOnce({
       tools: [{ id: 'shell' }],
       toolsets: [{ id: 'default' }],
@@ -109,8 +108,8 @@ describe('registerToolsRoutes', () => {
     readBundledSkillMcpManifestsMock.mockReturnValue([
       {
         skillName: 'jira-helper',
-        skillDir: '/skills/other/jira-helper',
-        manifestPath: '/skills/other/jira-helper/mcp.json',
+        skillDir: '/skills/assistant/jira-helper',
+        manifestPath: '/skills/assistant/jira-helper/mcp.json',
         serverNames: ['atlassian'],
       },
     ]);
@@ -120,7 +119,7 @@ describe('registerToolsRoutes', () => {
       baseServerNames: ['github'],
       searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
       bundledServerCount: 1,
-      manifestPaths: ['/skills/other/jira-helper/mcp.json'],
+      manifestPaths: ['/skills/assistant/jira-helper/mcp.json'],
       document: {
         mcpServers: {
           github: {
@@ -168,19 +167,17 @@ describe('registerToolsRoutes', () => {
       command: 'op-custom',
       exists: true,
     });
-    readPackageSourceTargetStateMock.mockImplementation((target: string, arg1: unknown) => {
-      if (target === 'profile') {
-        return { installedSources: [`profile:${String(arg1)}`] };
-      }
+    readPackageSourceTargetStateMock.mockImplementation((target: string) => {
+      expect(target).toBe('local');
       return { installedSources: ['local:pkg'] };
     });
 
     await handler({ query: { viewProfile: 'other' } }, res);
 
     expect(inspectAvailableToolsMock).toHaveBeenCalledWith('/repo', {
-      profileMarker: 'other',
-      additionalSkillPaths: ['/skills/other/jira-helper'],
-      agentDir: '/tmp/other-agent-dir',
+      profileMarker: 'assistant',
+      additionalSkillPaths: ['/skills/assistant/jira-helper'],
+      agentDir: '/tmp/assistant-agent-dir',
       extensionFactories: ['extension-factory'],
     });
     expect(inspectCliBinaryMock).toHaveBeenCalledWith({
@@ -188,7 +185,6 @@ describe('registerToolsRoutes', () => {
       cwd: '/repo',
     });
     expect(res.json).toHaveBeenCalledWith({
-      profile: 'other',
       tools: [{ id: 'shell' }],
       toolsets: [{ id: 'default' }],
       dependentCliTools: [
@@ -214,10 +210,10 @@ describe('registerToolsRoutes', () => {
             cwd: undefined,
             url: 'https://mcp.atlassian.com/v1/mcp',
             source: 'skill',
-            sourcePath: '/skills/other/jira-helper/mcp.json',
+            sourcePath: '/skills/assistant/jira-helper/mcp.json',
             skillName: 'jira-helper',
-            skillPath: '/skills/other/jira-helper',
-            manifestPath: '/skills/other/jira-helper/mcp.json',
+            skillPath: '/skills/assistant/jira-helper',
+            manifestPath: '/skills/assistant/jira-helper/mcp.json',
             hasOAuth: true,
             callbackUrl: 'http://localhost:3118/callback',
             authorizeResource: 'https://datadoghq.atlassian.net/',
@@ -244,41 +240,22 @@ describe('registerToolsRoutes', () => {
         bundledSkills: [
           {
             skillName: 'jira-helper',
-            skillPath: '/skills/other/jira-helper',
-            manifestPath: '/skills/other/jira-helper/mcp.json',
+            skillPath: '/skills/assistant/jira-helper',
+            manifestPath: '/skills/assistant/jira-helper/mcp.json',
             serverNames: ['atlassian'],
             overriddenServerNames: [],
           },
         ],
       },
       packageInstall: {
-        currentProfile: 'assistant',
-        profileTargets: [
-          {
-            installedSources: ['profile:assistant'],
-            profileName: 'assistant',
-            current: true,
-          },
-          {
-            installedSources: ['profile:other'],
-            profileName: 'other',
-            current: false,
-          },
-        ],
         localTarget: { installedSources: ['local:pkg'] },
       },
     });
   });
 
-  it('rejects unknown profiles for tool inspection and logs unexpected request failures', async () => {
+  it('logs unexpected tool inspection failures', async () => {
     const { getHandler } = createHarness();
     const handler = getHandler('/api/tools');
-
-    listProfilesMock.mockReturnValueOnce(['assistant']);
-    const unknownRes = createResponse();
-    await handler({ query: { viewProfile: 'missing' } }, unknownRes);
-    expect(unknownRes.status).toHaveBeenCalledWith(400);
-    expect(unknownRes.json).toHaveBeenCalledWith({ error: 'Unknown profile: missing' });
 
     inspectAvailableToolsMock.mockRejectedValueOnce(new Error('inspect failed'));
     const failureRes = createResponse();

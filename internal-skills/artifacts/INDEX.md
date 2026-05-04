@@ -47,7 +47,7 @@ Behavior by kind:
 
 Conversation artifacts live in local runtime state because they are conversation-bound:
 
-- `~/.local/state/personal-agent/pi-agent/state/conversation-artifacts/<profile>/<conversationId>/<artifactId>.json`
+- `~/.local/state/personal-agent/pi-agent/state/conversation-artifacts/<conversationId>/<artifactId>.json`
 
 They are not portable durable page files.
 

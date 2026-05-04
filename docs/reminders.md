@@ -74,7 +74,7 @@ When a reminder fires:
 
 |             | Reminders              | Scheduled Tasks                  |
 | ----------- | ---------------------- | -------------------------------- |
-| Scope       | Conversation-bound     | Profile-bound                    |
+| Scope       | Conversation-bound     | App-wide                         |
 | Trigger     | Delay or absolute time | Cron or one-time                 |
 | Target      | Always a conversation  | Background agent or conversation |
 | Alert       | In-app notification    | Optional callback                |

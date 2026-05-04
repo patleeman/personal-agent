@@ -191,8 +191,6 @@ describe('SettingsPage provider model editor', () => {
         bundledSkills: [],
       },
       packageInstall: {
-        currentProfile: 'assistant',
-        profileTargets: [],
         localTarget: {
           target: 'local',
           settingsPath: '/tmp/packages.json',

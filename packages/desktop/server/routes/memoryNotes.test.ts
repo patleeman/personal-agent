@@ -111,7 +111,7 @@ describe('registerMemoryNotesRoutes', () => {
     resolveResourceProfileMock.mockReset();
   });
 
-  it('lists memory data for the requested profile and applies recent usage metadata', () => {
+  it('lists memory data and applies recent usage metadata', () => {
     const { getHandler } = createHarness({ profile: 'assistant', repoRoot: '/repo' });
     const handler = getHandler('/api/memory');
     const res = createResponse();
@@ -124,9 +124,8 @@ describe('registerMemoryNotesRoutes', () => {
       { id: 'wiki', path: '/notes/Wiki.md' },
     ];
 
-    listProfilesMock.mockReturnValueOnce(['assistant', 'other']);
     resolveResourceProfileMock.mockReturnValueOnce({
-      agentsFiles: ['/profiles/other/AGENTS.md', '/shared/skills/agent-browser/SKILL.md', '/vault/AGENTS.md'],
+      agentsFiles: ['/config/local/AGENTS.md', '/shared/skills/agent-browser/SKILL.md', '/vault/AGENTS.md'],
     });
     existsSyncMock.mockImplementation((path: string) => path !== '/vault/AGENTS.md');
     readFileSyncMock.mockImplementation((path: string) => `content:${path}`);
@@ -155,11 +154,8 @@ describe('registerMemoryNotesRoutes', () => {
 
     handler({ query: { viewProfile: 'other' } }, res);
 
-    expect(listProfilesMock).toHaveBeenCalledWith({
-      repoRoot: '/repo',
-      profilesRoot: '/profiles',
-    });
-    expect(resolveResourceProfileMock).toHaveBeenCalledWith('other', {
+    expect(listProfilesMock).not.toHaveBeenCalled();
+    expect(resolveResourceProfileMock).toHaveBeenCalledWith('assistant', {
       repoRoot: '/repo',
       profilesRoot: '/profiles',
     });
@@ -170,13 +166,12 @@ describe('registerMemoryNotesRoutes', () => {
       '/notes/Wiki.md',
     ]);
     expect(res.json).toHaveBeenCalledWith({
-      profile: 'other',
       agentsMd: [
         {
-          source: 'profile',
-          path: '/profiles/other/AGENTS.md',
+          source: 'project',
+          path: '/config/local/AGENTS.md',
           exists: true,
-          content: 'content:/profiles/other/AGENTS.md',
+          content: 'content:/config/local/AGENTS.md',
         },
         {
           source: 'global',
@@ -185,7 +180,7 @@ describe('registerMemoryNotesRoutes', () => {
           content: 'content:/shared/skills/agent-browser/SKILL.md',
         },
         {
-          source: 'shared',
+          source: 'vault',
           path: '/vault/AGENTS.md',
           exists: false,
           content: undefined,
@@ -220,15 +215,9 @@ describe('registerMemoryNotesRoutes', () => {
     });
   });
 
-  it('rejects unknown profiles and reports lookup failures with route-specific status codes', () => {
+  it('reports memory lookup failures', () => {
     const { getHandler } = createHarness();
     const handler = getHandler('/api/memory');
-
-    listProfilesMock.mockReturnValueOnce(['assistant']);
-    const unknownRes = createResponse();
-    handler({ query: { viewProfile: 'missing' } }, unknownRes);
-    expect(unknownRes.status).toHaveBeenCalledWith(400);
-    expect(unknownRes.json).toHaveBeenCalledWith({ error: 'Unknown profile: missing' });
 
     resolveResourceProfileMock.mockImplementationOnce(() => {
       throw new Error('resolve failed');

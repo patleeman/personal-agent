@@ -989,7 +989,6 @@ export interface MemoryDocItem {
 }
 
 export interface MemoryData {
-  profile: string;
   agentsMd: MemoryAgentsItem[];
   skills: MemorySkillItem[];
   memoryDocs: MemoryDocItem[];
@@ -1010,7 +1009,6 @@ export interface VaultFileListResult {
 }
 
 export interface AppStatus {
-  profile: string;
   repoRoot: string;
   projectCount: number;
   appRevision?: string;
@@ -1070,7 +1068,6 @@ export interface ModelProviderConfig {
 }
 
 export interface ModelProviderState {
-  profile: string;
   filePath: string;
   providers: ModelProviderConfig[];
 }
@@ -1238,19 +1235,12 @@ interface ConfiguredPackageSource {
 }
 
 interface PackageSourceTargetState {
-  target: 'profile' | 'local';
+  target: 'local';
   settingsPath: string;
   packages: ConfiguredPackageSource[];
 }
 
-interface ProfilePackageSourceTargetState extends PackageSourceTargetState {
-  profileName: string;
-  current: boolean;
-}
-
 interface PackageInstallState {
-  currentProfile: string;
-  profileTargets: ProfilePackageSourceTargetState[];
   localTarget: PackageSourceTargetState;
 }
 
@@ -1262,7 +1252,6 @@ export interface InjectedPromptMessage {
 }
 
 export interface ToolsState {
-  profile: string;
   cwd: string;
   activeTools: string[];
   tools: AgentToolInfo[];

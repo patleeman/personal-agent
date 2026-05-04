@@ -39,7 +39,7 @@ describe('api desktop reads', () => {
 
   it('uses app-protocol fetches for desktop reads instead of bridge fast paths', async () => {
     const fetchMock = createFetchRouter({
-      '/api/status': createJsonResponse({ profile: 'assistant', repoRoot: '/repo', appRevision: 'rev-1' }),
+      '/api/status': createJsonResponse({ repoRoot: '/repo', appRevision: 'rev-1' }),
       '/api/sessions': createJsonResponse([{ id: 'conversation-1', title: 'Conversation 1' }]),
       '/api/conversations/conversation-1/bootstrap?tailBlocks=12': createJsonResponse({
         conversationId: 'conversation-1',
@@ -76,7 +76,7 @@ describe('api desktop reads', () => {
     const context = await api.liveSessionContext('live-1');
     const openTabs = await api.openConversationTabs();
 
-    expect(status).toMatchObject({ profile: 'assistant' });
+    expect(status).toMatchObject({ repoRoot: '/repo' });
     expect(sessions).toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
     expect(bootstrap.liveSession.live).toBe(false);
     expect(attachments.attachments).toHaveLength(1);

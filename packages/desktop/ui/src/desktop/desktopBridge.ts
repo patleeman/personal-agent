@@ -220,8 +220,8 @@ export interface PersonalAgentDesktopBridge {
   readDefaultCwd(): Promise<DefaultCwdState>;
   updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
   readVaultFiles(): Promise<VaultFileListResult>;
-  readMemory?(options?: { profile?: string }): Promise<MemoryData>;
-  readTools?(options?: { profile?: string }): Promise<ToolsState>;
+  readMemory?(): Promise<MemoryData>;
+  readTools?(): Promise<ToolsState>;
   pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<FolderPickerResult>;
   captureScreenshot(): Promise<DesktopScreenshotCaptureResult>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;

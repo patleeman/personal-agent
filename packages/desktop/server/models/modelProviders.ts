@@ -40,7 +40,6 @@ export interface ModelProviderConfig {
 }
 
 export interface ModelProviderState {
-  profile: string;
   filePath: string;
   providers: ModelProviderConfig[];
 }
@@ -324,7 +323,6 @@ export function readModelProvidersState(profile: string, options: ModelProviderF
     .sort((left, right) => left.id.localeCompare(right.id));
 
   return {
-    profile: normalizedProfile,
     filePath,
     providers,
   };

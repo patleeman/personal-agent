@@ -16,7 +16,7 @@ describe('api.memory', () => {
     vi.unstubAllGlobals();
   });
 
-  it('dedupes concurrent requests for the same profile', async () => {
+  it('dedupes concurrent memory requests', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ skills: [], memoryDocs: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -28,15 +28,14 @@ describe('api.memory', () => {
     expect(second).toEqual(first);
   });
 
-  it('keeps profile-scoped requests separate', async () => {
+  it('ignores legacy profile arguments for memory requests', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ skills: [], memoryDocs: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
     const { api } = await import('./api.js');
-    await Promise.all([api.memory({ profile: 'assistant' }), api.memory({ profile: 'shared' })]);
+    await Promise.all([api.memory(), api.memory()]);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/memory?viewProfile=assistant');
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/memory?viewProfile=shared');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/memory');
   });
 });

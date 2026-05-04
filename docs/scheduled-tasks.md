@@ -14,7 +14,6 @@ Each scheduled task has these fields:
 | `targetType`           | `"background-agent"` or `"conversation"` | Where the task executes                        |
 | `prompt`               | string                                   | Prompt to execute when the task fires          |
 | `model`                | string                                   | Optional model override                        |
-| `profile`              | string                                   | Profile to use for execution                   |
 | `cwd`                  | string                                   | Working directory                              |
 | `timeoutSeconds`       | number                                   | Per-run timeout                                |
 | `catchUpWindowSeconds` | number                                   | Missed-run catch-up window                     |
@@ -89,7 +88,7 @@ The `scheduled_task` tool manages tasks from within a conversation:
 
 | Action     | Description                 |
 | ---------- | --------------------------- |
-| `list`     | List tasks for a profile    |
+| `list`     | List tasks                  |
 | `get`      | Get a task by ID            |
 | `save`     | Create or update a task     |
 | `delete`   | Delete a task               |

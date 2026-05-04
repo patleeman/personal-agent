@@ -34,7 +34,6 @@ describe('api desktop transport', () => {
       .fn()
       .mockResolvedValueOnce(
         createJsonResponse({
-          profile: 'assistant',
           agentsMd: [],
           skills: [
             {
@@ -49,7 +48,6 @@ describe('api desktop transport', () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          profile: 'assistant',
           cwd: '/repo',
           activeTools: [],
           tools: [],
@@ -77,20 +75,19 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const memory = await api.memory();
-    const tools = await api.tools({ profile: 'assistant' });
+    const tools = await api.tools();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/memory');
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/tools?viewProfile=assistant');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/tools');
     expect(memory.skills[0]?.name).toBe('checkpoint');
-    expect(tools.profile).toBe('assistant');
+    expect(tools.cwd).toBe('/repo');
   });
 
   it('uses dedicated desktop capability bridges on the local Electron host', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(createJsonResponse({})));
     vi.stubGlobal('fetch', fetchMock);
     const readAppStatus = vi.fn().mockResolvedValue({
-      profile: 'assistant',
       repoRoot: '/repo',
       appRevision: 'rev-1',
     });
@@ -491,7 +488,6 @@ describe('api desktop transport', () => {
     expect(abortLiveSession).toHaveBeenCalledWith('live-1');
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
     expect(status).toEqual({
-      profile: 'assistant',
       repoRoot: '/repo',
       appRevision: 'rev-1',
     });
@@ -1294,7 +1290,7 @@ describe('api desktop transport', () => {
   it('falls back to HTTP for desktop runtime status bridges on non-local hosts', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', appRevision: 'rev-2' }))
+      .mockResolvedValueOnce(createJsonResponse({ repoRoot: '/remote-repo', appRevision: 'rev-2' }))
       .mockResolvedValueOnce(
         createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }),
       );
@@ -1323,7 +1319,7 @@ describe('api desktop transport', () => {
     expect(readDaemonState).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/status', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/daemon', { method: 'GET', cache: 'no-store' });
-    expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', appRevision: 'rev-2' });
+    expect(status).toEqual({ repoRoot: '/remote-repo', appRevision: 'rev-2' });
     expect(daemon).toEqual({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } });
   });
 

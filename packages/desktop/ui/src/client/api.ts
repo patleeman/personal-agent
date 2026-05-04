@@ -172,15 +172,6 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   return `data:${blob.type || 'application/octet-stream'};base64,${bytesToBase64(bytes)}`;
 }
 
-function withViewProfile(path: string, profile?: string): string {
-  if (!profile) {
-    return path;
-  }
-
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}viewProfile=${encodeURIComponent(profile)}`;
-}
-
 const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
 const KNOWLEDGE_BASE_CACHE_TTL_MS = 3_000;
 let pendingKnowledgeBaseRequest: Promise<KnowledgeBaseState> | null = null;
@@ -188,18 +179,14 @@ let cachedKnowledgeBaseState: KnowledgeBaseState | null = null;
 let cachedKnowledgeBaseReadAtMs = 0;
 let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
 
-function buildMemoryRequestKey(options?: { profile?: string }): string {
-  return options?.profile?.trim() || '__current__';
-}
-
-async function getMemoryData(options?: { profile?: string }): Promise<MemoryData> {
-  const cacheKey = buildMemoryRequestKey(options);
+async function getMemoryData(): Promise<MemoryData> {
+  const cacheKey = '__current__';
   const pending = pendingMemoryRequests.get(cacheKey);
   if (pending) {
     return pending;
   }
 
-  const request = get<MemoryData>(withViewProfile('/memory', options?.profile)).finally(() => {
+  const request = get<MemoryData>('/memory').finally(() => {
     pendingMemoryRequests.delete(cacheKey);
   });
   pendingMemoryRequests.set(cacheKey, request);
@@ -468,7 +455,7 @@ export const api = {
   vaultFiles: async () => {
     return get<VaultFileListResult>('/vault-files');
   },
-  tools: async (options?: { profile?: string }) => get<ToolsState>(withViewProfile('/tools', options?.profile)),
+  tools: async () => get<ToolsState>('/tools'),
   setModel: async (model: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
@@ -791,7 +778,7 @@ export const api = {
   pickFiles: async (cwd?: string) => post<FilePickerResult>('/file-picker', cwd !== undefined ? { cwd } : {}),
 
   // ── Memory browser ────────────────────────────────────────────────────────
-  memory: (options?: { profile?: string }) => getMemoryData(options),
+  memory: () => getMemoryData(),
 
   markConversationAttentionRead: async (id: string, read = true) => {
     const desktopBridge = getDesktopBridge();

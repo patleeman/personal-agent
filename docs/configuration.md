@@ -4,12 +4,11 @@ Personal Agent uses layered file-based configuration with environment variable o
 
 ## Config File Locations
 
-| File                                | Purpose                   | Precedence |
-| ----------------------------------- | ------------------------- | ---------- |
-| `<config-root>/config.json`         | Machine-level base config | Lowest     |
-| `<config-root>/local/config.json`   | Local overrides           | Medium     |
-| `<config-root>/profiles/<profile>/` | Profile-scoped settings   | High       |
-| Environment variables               | Runtime overrides         | Highest    |
+| File                              | Purpose                   | Precedence |
+| --------------------------------- | ------------------------- | ---------- |
+| `<config-root>/config.json`       | Machine-level base config | Lowest     |
+| `<config-root>/local/config.json` | Local overrides           | Medium     |
+| Environment variables             | Runtime overrides         | Highest    |
 
 `<config-root>` defaults to `<state-root>/config`. `<state-root>` defaults to `~/.local/state/personal-agent`.
 
@@ -52,28 +51,6 @@ Personal Agent uses layered file-based configuration with environment variable o
 | `GOOGLE_API_KEY`            | Google AI API key       | `AIza...`                   |
 | `EXA_API_KEY`               | Exa search API key      |                             |
 | `MCP_CONFIG_PATH`           | MCP servers config path | `/path/to/mcp_servers.json` |
-
-## Profile Configuration
-
-Profiles bundle model, provider, and instruction file settings. Each profile is a directory under `<config-root>/profiles/<profile-name>/` containing its own config.
-
-Select a profile in Settings or set it in config.json:
-
-```json
-{
-  "activeProfile": "work",
-  "profiles": {
-    "work": {
-      "defaultProvider": "anthropic",
-      "instructionFiles": ["instructions/work.md"]
-    },
-    "personal": {
-      "defaultProvider": "openai",
-      "instructionFiles": ["instructions/personal.md"]
-    }
-  }
-}
-```
 
 ## Vault Root Resolution
 

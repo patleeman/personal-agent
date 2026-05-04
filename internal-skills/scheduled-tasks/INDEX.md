@@ -54,7 +54,6 @@ Legacy scheduled-task files are Markdown with YAML frontmatter.
 id: daily-status
 enabled: true
 cron: '0 9 * * 1-5'
-profile: 'assistant'
 model: 'openai-codex/gpt-5.4'
 cwd: '~/agent-workspace'
 timeoutSeconds: 1800
@@ -96,7 +95,6 @@ Model and timeout still exist internally for background-agent targets, but the d
 | `enabled`        | no       | defaults to `true`                           |
 | `cron`           | yes\*    | recurring 5-field cron                       |
 | `at`             | yes\*    | one-time timestamp parseable by `Date.parse` |
-| `profile`        | no       | profile to run under                         |
 | `provider`       | no       | optional if paired with `model`              |
 | `model`          | no       | full model ref, or combined with `provider`  |
 | `cwd`            | no       | working directory for the run                |
