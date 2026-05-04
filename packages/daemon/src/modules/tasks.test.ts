@@ -9,6 +9,7 @@ import {
   appendAutomationActivityEntry,
   closeAutomationDbs,
   createStoredAutomation,
+  DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS,
   listAutomationActivityEntries,
   listStoredAutomations,
   loadAutomationRuntimeStateMap,
@@ -206,7 +207,14 @@ describe('tasks module scheduling', () => {
     legacyDb.close();
 
     const automations = listStoredAutomations({ dbPath });
-    expect(automations[0]).toEqual(expect.objectContaining({ id: 'legacy-task', profile: 'shared', runtimeScope: 'shared' }));
+    expect(automations[0]).toEqual(
+      expect.objectContaining({
+        id: 'legacy-task',
+        profile: 'shared',
+        runtimeScope: 'shared',
+        catchUpWindowSeconds: DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS,
+      }),
+    );
 
     const migratedDb = openSqliteDatabase(dbPath);
     const columns = migratedDb.prepare('PRAGMA table_info(automations)').all() as Array<{ name: string }>;
@@ -313,6 +321,24 @@ describe('tasks module scheduling', () => {
         at: '2026-03-02T10:00:00.000Z',
       }),
     );
+  });
+
+  it('defaults cron automations to a short catch-up window', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    const automation = createStoredAutomation({
+      dbPath,
+      id: 'default-catch-up',
+      profile: 'assistant',
+      title: 'Default catch-up',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: 60,
+      prompt: 'Run maintenance.',
+    });
+
+    expect(automation.catchUpWindowSeconds).toBe(DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS);
   });
 
   it('rejects malformed one-time automation timestamps when storing tasks', () => {
@@ -1374,7 +1400,7 @@ Run hourly task
 
     saveAutomationSchedulerState({ lastEvaluatedAt: '2026-03-02T09:59:30.000Z' }, { dbPath: resolveRuntimeDbPath(stateRoot) });
 
-    let currentTime = new Date('2026-03-02T11:05:00.000Z');
+    let currentTime = new Date('2026-03-02T11:20:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
 
     const module = createTasksModule(
@@ -1399,7 +1425,7 @@ Run hourly task
     expect(runTask).not.toHaveBeenCalled();
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
 
-    currentTime = new Date('2026-03-02T11:05:30.000Z');
+    currentTime = new Date('2026-03-02T11:20:30.000Z');
     await module.handleEvent(createTimerEvent(), context);
 
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
@@ -1414,7 +1440,7 @@ Run hourly task
       }),
     ]);
     const persistedState = loadAutomationSchedulerState({ dbPath: resolveRuntimeDbPath(stateRoot) });
-    expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:05:30.000Z');
+    expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:20:30.000Z');
 
     await module.stop?.(context);
   });

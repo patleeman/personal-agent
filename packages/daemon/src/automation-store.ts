@@ -15,6 +15,7 @@ export type AutomationTargetType = 'background-agent' | 'conversation';
 export type AutomationConversationBehavior = 'steer' | 'followUp';
 
 const MAX_AUTOMATION_DURATION_SECONDS = 7 * 24 * 60 * 60;
+export const DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS = 15 * 60;
 
 export interface StoredAutomation extends ParsedTaskDefinition {
   runtimeScope: string;
@@ -424,6 +425,13 @@ function migrateAutomationSchema(db: SqliteDatabase): void {
     columnNames = readAutomationColumnNames(db);
   }
 
+  db.prepare(
+    `UPDATE automations
+     SET catch_up_window_seconds = ?
+     WHERE schedule_type = 'cron'
+       AND (catch_up_window_seconds IS NULL OR catch_up_window_seconds <= 0)`,
+  ).run(DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS);
+
   if (!columnNames.has('profile')) {
     return;
   }
@@ -474,7 +482,10 @@ function migrateAutomationSchema(db: SqliteDatabase): void {
         model_ref,
         thinking_level,
         timeout_seconds,
-        catch_up_window_seconds,
+        CASE
+          WHEN schedule_type = 'cron' THEN COALESCE(NULLIF(catch_up_window_seconds, 0), ${DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS})
+          ELSE catch_up_window_seconds
+        END,
         target_type,
         conversation_behavior,
         created_at,
@@ -754,9 +765,10 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
   const targetType = normalizeAutomationTargetTypeForSelection(input.targetType ?? undefined);
   const conversationBehavior =
     targetType === 'conversation' ? readAutomationConversationBehavior(input.conversationBehavior ?? undefined) : undefined;
-  const catchUpWindowSeconds =
-    !cron || input.catchUpWindowSeconds == null
-      ? undefined
+  const catchUpWindowSeconds = !cron
+    ? undefined
+    : input.catchUpWindowSeconds == null
+      ? DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS
       : readOptionalPositiveInteger(input.catchUpWindowSeconds, MAX_AUTOMATION_DURATION_SECONDS);
 
   if (input.catchUpWindowSeconds != null && cron && !catchUpWindowSeconds) {

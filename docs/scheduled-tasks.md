@@ -6,20 +6,20 @@ Scheduled tasks are persistent automations managed by the daemon. They run on a 
 
 Each scheduled task has these fields:
 
-| Field                  | Type                                     | Description                                    |
-| ---------------------- | ---------------------------------------- | ---------------------------------------------- |
-| `title`                | string                                   | Human-readable name                            |
-| `cron`                 | string                                   | Cron expression for recurring schedule         |
-| `at`                   | string                                   | ISO timestamp or natural language for one-time |
-| `targetType`           | `"background-agent"` or `"conversation"` | Where the task executes                        |
-| `prompt`               | string                                   | Prompt to execute when the task fires          |
-| `model`                | string                                   | Optional model override                        |
-| `cwd`                  | string                                   | Working directory                              |
-| `timeoutSeconds`       | number                                   | Per-run timeout                                |
-| `catchUpWindowSeconds` | number                                   | Missed-run catch-up window                     |
-| `threadMode`           | `"dedicated"`, `"existing"`, or `"none"` | Thread binding                                 |
-| `threadConversationId` | string                                   | Existing conversation ID for thread binding    |
-| `enabled`              | boolean                                  | Whether the task is active                     |
+| Field                  | Type                                     | Description                                                   |
+| ---------------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| `title`                | string                                   | Human-readable name                                           |
+| `cron`                 | string                                   | Cron expression for recurring schedule                        |
+| `at`                   | string                                   | ISO timestamp or natural language for one-time                |
+| `targetType`           | `"background-agent"` or `"conversation"` | Where the task executes                                       |
+| `prompt`               | string                                   | Prompt to execute when the task fires                         |
+| `model`                | string                                   | Optional model override                                       |
+| `cwd`                  | string                                   | Working directory                                             |
+| `timeoutSeconds`       | number                                   | Per-run timeout                                               |
+| `catchUpWindowSeconds` | number                                   | Missed-run catch-up window; cron tasks default to 900 seconds |
+| `threadMode`           | `"dedicated"`, `"existing"`, or `"none"` | Thread binding                                                |
+| `threadConversationId` | string                                   | Existing conversation ID for thread binding                   |
+| `enabled`              | boolean                                  | Whether the task is active                                    |
 
 ## Schedule Formats
 
@@ -53,7 +53,7 @@ ISO timestamps or natural language:
 
 ## Catch-Up Window
 
-If the daemon was offline when a scheduled time passed, the catch-up window controls whether the missed execution fires when the daemon restarts. Set in seconds. A 5-minute window (`300`) means: if the daemon was offline for less than 5 minutes past the scheduled time, the task runs on restart.
+If the daemon was offline when a scheduled time passed, the catch-up window controls whether the missed execution fires when the daemon restarts. Set in seconds. Cron automations default to 15 minutes (`900`) so a short app restart, laptop wake, or daemon restart does not silently skip the run. A 5-minute window (`300`) means: if the daemon was offline for less than 5 minutes past the scheduled time, the task runs on restart.
 
 ## Execution Flow
 

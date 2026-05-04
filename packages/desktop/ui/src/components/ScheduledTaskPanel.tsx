@@ -37,6 +37,7 @@ const FIELD_LABEL_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.14em]
 const FIELD_HELP_CLASS = 'text-[12px] leading-relaxed text-secondary';
 const MAX_SCHEDULED_TASK_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const MAX_CATCH_UP_WINDOW_MINUTES = MAX_SCHEDULED_TASK_DURATION_SECONDS / 60;
+const DEFAULT_CATCH_UP_WINDOW_MINUTES = 15;
 
 interface TaskFormState {
   title: string;
@@ -78,7 +79,7 @@ function createDefaultTaskFormState(): TaskFormState {
     threadConversationId: '',
     model: '',
     thinkingLevel: '',
-    catchUpWindowMinutes: '',
+    catchUpWindowMinutes: String(DEFAULT_CATCH_UP_WINDOW_MINUTES),
     prompt: '',
   };
 }
