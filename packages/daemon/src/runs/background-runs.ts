@@ -116,12 +116,10 @@ function normalizeAgentSpec(spec: BackgroundRunAgentSpec | undefined): Backgroun
     throw new Error('Background agent run prompt must be non-empty.');
   }
 
-  const profile = spec.profile?.trim();
   const model = spec.model?.trim();
 
   return {
     prompt,
-    ...(profile ? { profile } : {}),
     ...(model ? { model } : {}),
     ...(spec.noSession === true ? { noSession: true } : {}),
   };
@@ -206,7 +204,6 @@ function buildScheduleRunInputFromBackgroundRun(
     target = {
       type: 'agent',
       prompt: agent.prompt,
-      ...(agent.profile ? { profile: agent.profile } : {}),
       ...(agent.model ? { model: agent.model } : {}),
       ...(agent.noSession === true ? { noSession: true } : {}),
     };

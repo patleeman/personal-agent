@@ -286,7 +286,6 @@ describe('run agent extension', () => {
       agent: {
         prompt: 'Fix the build errors and report back.',
         model: 'openai-codex/gpt-5.4',
-        profile: 'datadog',
       },
       source: {
         type: 'tool',
@@ -335,7 +334,6 @@ describe('run agent extension', () => {
       expect(result.isError).not.toBe(true);
       expect(createStoredAutomationMock).toHaveBeenCalledWith({
         id: 'monitor-build',
-        profile: 'assistant',
         title: 'monitor-build',
         enabled: true,
         cron: undefined,
@@ -444,7 +442,7 @@ describe('run agent extension', () => {
         cwd: '/tmp/workspace',
       });
       expect(setTaskCallbackBindingMock).toHaveBeenCalledWith({
-        profile: 'assistant',
+        profile: 'shared',
         taskId: 'deploy-watch',
         conversationId: 'conv-callback',
         sessionFile: '/tmp/sessions/conv-callback.jsonl',
@@ -490,7 +488,6 @@ describe('run agent extension', () => {
       cwd: '/tmp/workspace',
       agent: {
         prompt: 'Watch the deployment and report back.',
-        profile: 'assistant',
       },
       source: {
         type: 'tool',
@@ -500,7 +497,7 @@ describe('run agent extension', () => {
       callbackConversation: {
         conversationId: 'conv-callback',
         sessionFile: '/tmp/sessions/conv-callback.jsonl',
-        profile: 'assistant',
+        profile: 'shared',
         repoRoot: '/repo',
       },
       checkpointPayload: {

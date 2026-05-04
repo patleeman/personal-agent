@@ -58,6 +58,7 @@ export interface TargetConversation {
 export interface TargetAgent {
   type: 'agent';
   prompt: string;
+  /** @deprecated Ignored; agent runs always use the shared runtime scope. */
   profile?: string;
   model?: string;
   noSession?: boolean;
@@ -231,7 +232,6 @@ function buildRunSpec(input: ScheduleRunInput): Record<string, unknown> {
       ...('command' in input.target ? { command: input.target.command } : {}),
       ...('cwd' in input.target ? { cwd: input.target.cwd } : {}),
       ...('argv' in input.target ? { argv: input.target.argv } : {}),
-      ...('profile' in input.target ? { profile: input.target.profile } : {}),
       ...('model' in input.target ? { model: input.target.model } : {}),
       ...('noSession' in input.target ? { noSession: input.target.noSession } : {}),
     },

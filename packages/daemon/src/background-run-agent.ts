@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 export interface BackgroundRunAgentSpec {
   prompt: string;
+  /** @deprecated Ignored; background agents always use the shared runtime scope. */
   profile?: string;
   model?: string;
   noSession?: boolean;
@@ -27,10 +28,6 @@ function resolveBackgroundAgentCliEntryPath(): string | undefined {
 export function buildBackgroundAgentArgv(spec: BackgroundRunAgentSpec): string[] {
   const cliEntryPath = resolveBackgroundAgentCliEntryPath();
   const argv = cliEntryPath ? [process.execPath, cliEntryPath, '--plain', 'tui'] : ['pa', '--plain', 'tui'];
-
-  if (spec.profile) {
-    argv.push('--profile', spec.profile);
-  }
 
   argv.push('--');
 

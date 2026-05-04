@@ -59,8 +59,7 @@ describe('background runs', () => {
     expect(record.shellCommand).toBeUndefined();
     expect(record.argv).toContain('tui');
     expect(record.argv).toContain('--plain');
-    expect(record.argv).toContain('--profile');
-    expect(record.argv).toContain('datadog');
+    expect(record.argv).not.toContain('--profile');
     expect(record.argv).toContain('--model');
     expect(record.argv).toContain('openai-codex/gpt-5.4');
     expect(record.argv).toContain('-p');
@@ -75,7 +74,7 @@ describe('background runs', () => {
     const target = manifest?.spec.target as Record<string, unknown>;
     expect(target?.type).toBe('agent');
     expect(target?.prompt).toBe('Review the latest diff');
-    expect(target?.profile).toBe('datadog');
+    expect(target).not.toHaveProperty('profile');
     expect(target?.model).toBe('openai-codex/gpt-5.4');
 
     const metadata = manifest?.spec.metadata as Record<string, unknown>;

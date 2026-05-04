@@ -25,9 +25,7 @@ const RunToolParams = Type.Object({
   command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
   prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent, or the follow-up prompt for follow_up.' })),
   model: Type.Optional(Type.String({ description: 'Optional full model ref for start_agent, for example openai-codex/gpt-5.4.' })),
-  profile: Type.Optional(
-    Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' }),
-  ),
+  profile: Type.Optional(Type.String({ description: 'Deprecated. Ignored; agent runs use the shared runtime scope.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
   deliverResultToConversation: Type.Optional(
@@ -266,7 +264,7 @@ export function createRunAgentExtension(options: {
                   ? {
                       conversationId,
                       sessionFile: conversationFile,
-                      profile: options.getCurrentProfile(),
+                      profile: 'shared',
                       repoRoot: options.repoRoot,
                     }
                   : undefined;
@@ -330,12 +328,14 @@ export function createRunAgentExtension(options: {
                   ? {
                       conversationId,
                       sessionFile: conversationFile,
-                      profile: options.getCurrentProfile(),
+                      profile: 'shared',
                       repoRoot: options.repoRoot,
                     }
                   : undefined;
               const model = readOptionalString(params.model);
-              const profile = readOptionalString(params.profile) || options.getCurrentProfile();
+              void readOptionalString(params.profile);
+              void options.getCurrentProfile();
+              const profile = 'shared';
               const defer = readOptionalString(params.defer);
               const cron = readOptionalString(params.cron);
               const at = readOptionalString(params.at);
@@ -357,7 +357,6 @@ export function createRunAgentExtension(options: {
                 if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
                 const automation = createStoredAutomation({
                   id: taskSlug,
-                  profile,
                   title: taskSlug,
                   enabled: true,
                   cron,
@@ -431,7 +430,6 @@ export function createRunAgentExtension(options: {
                 agent: {
                   prompt,
                   ...(model ? { model } : {}),
-                  ...(profile ? { profile } : {}),
                 },
                 source: {
                   type: 'tool',
