@@ -4,7 +4,6 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-
 const DIRS: string[] = [];
 const origAuth = process.env.PERSONAL_AGENT_MCP_AUTH_DIR;
 

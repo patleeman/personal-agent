@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DaemonConfig } from '../config.js';
-import { getCompanionRuntimeProvider, resolveCompanionRuntime,setCompanionRuntimeProvider } from './runtime.js';
+import { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from './runtime.js';
 
 describe('companion runtime provider', () => {
   it('returns undefined initially', () => {

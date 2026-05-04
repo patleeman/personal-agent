@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { readRequiredBase64 } from './transcription.js';
 
 describe('readRequiredBase64', () => {

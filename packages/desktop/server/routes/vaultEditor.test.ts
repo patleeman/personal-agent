@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { decodeVaultImageDataUrl, buildVaultImageUploadFileName } from './vaultEditor.js';
+
+import { buildVaultImageUploadFileName, decodeVaultImageDataUrl } from './vaultEditor.js';
 
 describe('decodeVaultImageDataUrl', () => {
   it('decodes a valid data URL', () => {

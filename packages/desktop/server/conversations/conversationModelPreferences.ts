@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import { getSupportedThinkingLevels, type Api, type Model } from '@mariozechner/pi-ai';
+import { type Api, getSupportedThinkingLevels, type Model } from '@mariozechner/pi-ai';
 import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
 
 import {

@@ -18,8 +18,5 @@
       "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts"]
     }
   },
-  "ignore": [
-    "packages/desktop/server/**/*.ts",
-    "electron-builder.config.mjs"
-  ]
+  "ignore": ["packages/desktop/server/**/*.ts", "electron-builder.config.mjs"]
 }
