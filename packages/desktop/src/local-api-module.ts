@@ -7,6 +7,7 @@ import type {
   DesktopConversationStateBridgeEvent,
   DesktopConversationStateSubscriptionRequest,
 } from './hosts/types.js';
+import { LocalApiWorkerClient } from './local-api-worker-client.js';
 
 export type DesktopAppBridgeEvent =
   | { type: 'open' }
@@ -48,6 +49,7 @@ export interface LocalApiModule {
   readDesktopDefaultCwd(): Promise<unknown>;
   updateDesktopDefaultCwd(cwd: string | null): Promise<unknown>;
   readDesktopVaultFiles(): Promise<unknown>;
+  readDesktopKnowledgeBase(): Promise<unknown>;
   pickDesktopFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown>;
   readDesktopConversationTitleSettings(): Promise<unknown>;
   updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
@@ -304,6 +306,48 @@ export interface LocalApiModule {
 export type LocalApiModuleLoader = () => Promise<LocalApiModule>;
 
 let localApiModulePromise: Promise<LocalApiModule> | null = null;
+let workerBackedLocalApiModule: LocalApiModule | null = null;
+
+const MAIN_PROCESS_LOCAL_API_METHODS = new Set<keyof LocalApiModule>([
+  'subscribeDesktopConversationState',
+  'subscribeDesktopLocalApiStream',
+  'subscribeDesktopAppEvents',
+  'subscribeDesktopProviderOAuthLogin',
+  'setDesktopWorkbenchBrowserToolHost',
+]);
+
+const WORKER_LOCAL_API_METHODS = new Set<keyof LocalApiModule>([
+  'readDesktopAppStatus',
+  'readDesktopDaemonState',
+  'readDesktopSessionMeta',
+  'readDesktopSessionSearchIndex',
+  'readDesktopModels',
+  'readDesktopDefaultCwd',
+  'readDesktopVaultFiles',
+  'readDesktopKnowledgeBase',
+  'pickDesktopFolder',
+  'readDesktopConversationTitleSettings',
+  'readDesktopConversationPlansWorkspace',
+  'readDesktopModelProviders',
+  'readDesktopProviderAuth',
+  'readDesktopScheduledTaskDetail',
+  'readDesktopScheduledTaskLog',
+  'readDesktopDurableRun',
+  'readDesktopDurableRunLog',
+  'readDesktopConversationBootstrap',
+  'createDesktopConversationCheckpoint',
+  'readDesktopConversationArtifacts',
+  'readDesktopConversationArtifact',
+  'readDesktopConversationCheckpoints',
+  'readDesktopConversationCheckpoint',
+  'readDesktopConversationAttachments',
+  'readDesktopConversationAttachment',
+  'readDesktopConversationAttachmentAsset',
+  'readDesktopConversationDeferredResumes',
+  'readDesktopConversationModelPreferences',
+  'readDesktopSessionDetail',
+  'readDesktopSessionBlock',
+]);
 
 function resolveDevLocalApiModuleFilePath(currentDir: string): string {
   return resolve(currentDir, '..', 'server', 'dist', 'app', 'localApi.js');
@@ -395,6 +439,49 @@ export function loadRawLocalApiModule(): Promise<LocalApiModule> {
   return localApiModulePromise;
 }
 
+export function createWorkerBackedLocalApiModule(
+  input: {
+    workerClient?: Pick<LocalApiWorkerClient, 'call'>;
+    loadRawModule?: () => Promise<LocalApiModule>;
+  } = {},
+): LocalApiModule {
+  const workerClient = input.workerClient ?? new LocalApiWorkerClient();
+  const loadRawModule = input.loadRawModule ?? loadRawLocalApiModule;
+
+  return new Proxy(
+    {},
+    {
+      get(_target, property) {
+        if (typeof property !== 'string') {
+          return undefined;
+        }
+        if (property === 'then') {
+          return undefined;
+        }
+
+        const methodName = property as keyof LocalApiModule;
+        if (MAIN_PROCESS_LOCAL_API_METHODS.has(methodName) || !WORKER_LOCAL_API_METHODS.has(methodName)) {
+          return async (...args: unknown[]) => {
+            const module = await loadRawModule();
+            const method = module[methodName];
+            if (typeof method !== 'function') {
+              throw new Error(`Unknown local API method: ${property}`);
+            }
+
+            return (method as (...methodArgs: unknown[]) => unknown).apply(module, args);
+          };
+        }
+
+        return (...args: unknown[]) => workerClient.call(property, args);
+      },
+    },
+  ) as LocalApiModule;
+}
+
 export function loadLocalApiModule(): Promise<LocalApiModule> {
-  return loadRawLocalApiModule();
+  if (!workerBackedLocalApiModule) {
+    workerBackedLocalApiModule = createWorkerBackedLocalApiModule();
+  }
+
+  return Promise.resolve(workerBackedLocalApiModule);
 }

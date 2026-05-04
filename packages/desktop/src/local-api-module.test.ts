@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { importLocalApiModuleWithFallback, resolveLocalApiModuleUrl } from './local-api-module.js';
+import { createWorkerBackedLocalApiModule, importLocalApiModuleWithFallback, resolveLocalApiModuleUrl } from './local-api-module.js';
 
 describe('resolveLocalApiModuleUrl', () => {
   it('resolves the dev local API module from the desktop server build output', () => {
@@ -68,5 +68,51 @@ describe('importLocalApiModuleWithFallback', () => {
 
     expect(loadModule).toHaveBeenCalledTimes(1);
     expect(loadModule).toHaveBeenCalledWith('file:///primary/localApi.js');
+  });
+});
+
+describe('createWorkerBackedLocalApiModule', () => {
+  it('dispatches normal local API methods through the worker client', async () => {
+    const workerClient = {
+      call: vi.fn().mockResolvedValue({ ok: true }),
+    };
+    const loadRawModule = vi.fn();
+    const module = createWorkerBackedLocalApiModule({ workerClient, loadRawModule });
+
+    await expect(module.readDesktopSessionDetail({ sessionId: 'conversation-1', tailBlocks: 20 })).resolves.toEqual({ ok: true });
+
+    expect(workerClient.call).toHaveBeenCalledWith('readDesktopSessionDetail', [{ sessionId: 'conversation-1', tailBlocks: 20 }]);
+    expect(loadRawModule).not.toHaveBeenCalled();
+  });
+
+  it('keeps subscription methods in the main process because callbacks cannot cross worker boundaries', async () => {
+    const unsubscribe = vi.fn();
+    const subscribeDesktopLocalApiStream = vi.fn().mockResolvedValue(unsubscribe);
+    const workerClient = {
+      call: vi.fn(),
+    };
+    const loadRawModule = vi.fn().mockResolvedValue({ subscribeDesktopLocalApiStream });
+    const module = createWorkerBackedLocalApiModule({ workerClient, loadRawModule });
+    const onEvent = vi.fn();
+
+    await expect(module.subscribeDesktopLocalApiStream('/api/events', onEvent)).resolves.toBe(unsubscribe);
+
+    expect(subscribeDesktopLocalApiStream).toHaveBeenCalledWith('/api/events', onEvent);
+    expect(workerClient.call).not.toHaveBeenCalled();
+  });
+
+  it('keeps generic API dispatch in the main process so mutable live-session routes share state with subscriptions', async () => {
+    const dispatchDesktopLocalApiRequest = vi.fn().mockResolvedValue({ statusCode: 200, headers: {}, body: new Uint8Array() });
+    const workerClient = {
+      call: vi.fn(),
+    };
+    const loadRawModule = vi.fn().mockResolvedValue({ dispatchDesktopLocalApiRequest });
+    const module = createWorkerBackedLocalApiModule({ workerClient, loadRawModule });
+    const request = { method: 'POST' as const, path: '/api/live-sessions/live-1/prompt', body: { text: 'hello' } };
+
+    await expect(module.dispatchDesktopLocalApiRequest(request)).resolves.toEqual({ statusCode: 200, headers: {}, body: new Uint8Array() });
+
+    expect(dispatchDesktopLocalApiRequest).toHaveBeenCalledWith(request);
+    expect(workerClient.call).not.toHaveBeenCalled();
   });
 });

@@ -31,7 +31,13 @@ Electron main process
     │       ├── Automations
     │       └── Settings
     │
-    ├── Daemon (child process)
+    ├── Local API worker threads
+    │       │
+    │       ├── Session parsing and search
+    │       ├── Git/checkpoint operations
+    │       └── Vault and knowledge-base reads/writes
+    │
+    ├── Daemon (in-process runtime)
     │       │
     │       ├── Runs
     │       ├── Scheduled tasks
@@ -43,6 +49,7 @@ Electron main process
 ```
 
 - Electron owns the UI surface through the `personal-agent://app/` protocol
+- Freeze-prone local API work runs behind worker-thread RPC; do not import or execute heavy desktop server capabilities directly on the Electron main thread
 - The daemon owns durable background behavior
 - The desktop app consumes server-pushed events for sessions, runs, tasks, and daemon status
 - API snapshots serve as the fallback when the event stream is unavailable

@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
@@ -157,15 +157,25 @@ export class LocalHostController implements HostController {
 
   async readDirectory(path?: string | null) {
     const targetPath = resolve(path?.trim() || process.cwd());
-    const stat = statSync(targetPath, { throwIfNoEntry: false });
-    if (!stat) {
+    let targetStat;
+    try {
+      targetStat = await stat(targetPath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        throw new Error(`Directory not found: ${targetPath}`);
+      }
+      throw error;
+    }
+
+    if (!targetStat) {
       throw new Error(`Directory not found: ${targetPath}`);
     }
-    if (!stat.isDirectory()) {
+    if (!targetStat.isDirectory()) {
       throw new Error(`Not a directory: ${targetPath}`);
     }
 
-    const entries = readdirSync(targetPath, { withFileTypes: true })
+    const entries = (await readdir(targetPath, { withFileTypes: true }))
       .map((entry) => ({
         name: entry.name,
         path: resolve(targetPath, entry.name),
