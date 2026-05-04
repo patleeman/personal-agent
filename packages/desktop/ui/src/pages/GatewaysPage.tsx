@@ -196,47 +196,49 @@ export function GatewaysPage() {
           </div>
         </section>
 
-        {/* Slack channel attach */}
-        <section className="max-w-4xl">
-          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Attach Slack MCP channel</h2>
-          <div className="mt-3 border-t border-border-subtle pt-4 space-y-3">
-            <p className="text-[13px] text-secondary">Search Slack through MCP and attach one active channel.</p>
-            <div className="flex gap-2">
-              <input
-                className="ui-input min-w-0 flex-1"
-                value={slackQuery}
-                onChange={(e) => setSlackQuery(e.target.value)}
-                placeholder="Search channels…"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void searchSlackChannels();
-                }}
-              />
-              <ToolbarButton
-                className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                onClick={searchSlackChannels}
-                disabled={busy !== null || !slackQuery.trim()}
-              >
-                Search
-              </ToolbarButton>
-            </div>
-            {slackChannels.length > 0 ? (
-              <div className="border-t border-border-subtle">
-                {slackChannels.map((channel) => (
-                  <button
-                    key={channel.id}
-                    type="button"
-                    className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
-                    onClick={() => void attachSlackChannel(channel)}
-                    disabled={busy !== null}
-                  >
-                    <span>{channel.name}</span>
-                    <span className="text-[12px] text-dim">{channel.id}</span>
-                  </button>
-                ))}
+        {/* Slack channel attach — only show when Slack MCP is not yet connected */}
+        {!slackConnection ? (
+          <section className="max-w-4xl">
+            <h2 className="text-[18px] font-semibold tracking-tight text-primary">Slack MCP</h2>
+            <div className="mt-3 border-t border-border-subtle pt-5 space-y-3">
+              <p className="text-[13px] text-secondary">Search Slack through MCP and attach an active channel as a gateway.</p>
+              <div className="flex gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface/70 px-3 py-1.5 text-[13px] text-primary placeholder:text-dim outline-none transition-colors focus:border-accent/50 disabled:opacity-50"
+                  value={slackQuery}
+                  onChange={(e) => setSlackQuery(e.target.value)}
+                  placeholder="Search channels…"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void searchSlackChannels();
+                  }}
+                />
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                  onClick={searchSlackChannels}
+                  disabled={busy !== null || !slackQuery.trim()}
+                >
+                  Search
+                </ToolbarButton>
               </div>
-            ) : null}
-          </div>
-        </section>
+              {slackChannels.length > 0 ? (
+                <div className="border-t border-border-subtle">
+                  {slackChannels.map((channel) => (
+                    <button
+                      key={channel.id}
+                      type="button"
+                      className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
+                      onClick={() => void attachSlackChannel(channel)}
+                      disabled={busy !== null}
+                    >
+                      <span>{channel.name}</span>
+                      <span className="text-[12px] text-dim">{channel.id}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {/* Activity */}
         <GatewayActivity events={state.events} />
