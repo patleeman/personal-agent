@@ -16,6 +16,11 @@ import {
 
 const tempDirs: string[] = [];
 const originalStateRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
+const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function pngData(label: string): string {
+  return Buffer.concat([pngHeader, Buffer.from(label)]).toString('base64');
+}
 
 beforeEach(() => {
   const dir = mkdtempSync(join(tmpdir(), 'pa-image-probe-store-'));
@@ -35,7 +40,7 @@ afterEach(async () => {
 
 describe('image probe attachment store', () => {
   it('assigns stable content IDs and persists attachments for later lookup', () => {
-    const data = Buffer.from('image-bytes').toString('base64');
+    const data = pngData('image-bytes');
     const stored = rememberImageProbeAttachments('session-1', [{ type: 'image', data, mimeType: 'image/png', name: 'screen.png' }]);
 
     expect(stored[0]).toMatchObject({ id: expect.stringMatching(/^img_[a-f0-9]{12}$/), data, mimeType: 'image/png', name: 'screen.png' });
@@ -44,7 +49,7 @@ describe('image probe attachment store', () => {
   });
 
   it('can reload persisted metadata when the process-local cache is empty for a new session lookup', () => {
-    const data = Buffer.from('persistent-image').toString('base64');
+    const data = pngData('persistent-image');
     const stored = rememberImageProbeAttachments('session-persisted', [
       { type: 'image', data, mimeType: 'image/png', name: 'persisted.png' },
     ]);
@@ -58,7 +63,7 @@ describe('image probe attachment store', () => {
   });
 
   it('rejects excessive image counts and oversized images', () => {
-    const data = Buffer.from('ok').toString('base64');
+    const data = pngData('ok');
     expect(() =>
       rememberImageProbeAttachments(
         'session-many',
@@ -73,8 +78,21 @@ describe('image probe attachment store', () => {
 
     expect(() =>
       rememberImageProbeAttachments('session-large', [
-        { type: 'image', data: Buffer.alloc(MAX_IMAGE_PROBE_IMAGE_BYTES + 1).toString('base64'), mimeType: 'image/png', name: 'huge.png' },
+        {
+          type: 'image',
+          data: Buffer.concat([pngHeader, Buffer.alloc(MAX_IMAGE_PROBE_IMAGE_BYTES)]).toString('base64'),
+          mimeType: 'image/png',
+          name: 'huge.png',
+        },
       ]),
     ).toThrow('too large for image probing');
+  });
+
+  it('rejects files that are labelled as images but do not contain supported image bytes', () => {
+    expect(() =>
+      rememberImageProbeAttachments('session-invalid', [
+        { type: 'image', data: Buffer.from('not-an-image').toString('base64'), mimeType: 'image/png', name: 'fake.png' },
+      ]),
+    ).toThrow('not a supported image file');
   });
 });

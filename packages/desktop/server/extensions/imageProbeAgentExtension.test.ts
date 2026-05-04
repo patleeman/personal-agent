@@ -95,6 +95,7 @@ describe('image probe agent extension', () => {
     expect(session.prompt).toHaveBeenCalledWith(expect.stringContaining('Act as its eyes'), {
       images: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
     });
+    expect(session.prompt).toHaveBeenCalledWith(expect.stringContaining('Fully describe the relevant visual parts'), expect.any(Object));
     expect(session.prompt).toHaveBeenCalledWith(expect.stringContaining('img_abc123abc123: screen.png (image/png)'), expect.any(Object));
     expect(result.content).toEqual([{ type: 'text', text: 'The screenshot shows an error.' }]);
     expect(result.details).toMatchObject({ imageIds: ['img_abc123abc123'], model: 'gpt-4o', provider: 'openai' });
@@ -123,5 +124,30 @@ describe('image probe agent extension', () => {
         modelRegistry: { getAvailable: () => [{ provider: 'local', id: 'text-only', input: ['text'] }] },
       } as never),
     ).rejects.toThrow('Configured vision model is not available or does not accept images');
+  });
+
+  it('returns classified, user-actionable failures from the vision subagent', async () => {
+    const session = {
+      subscribe: vi.fn(() => vi.fn()),
+      prompt: vi.fn(async () => {
+        throw new Error('402 insufficient credits');
+      }),
+      dispose: vi.fn(),
+    };
+    createAgentSessionMock.mockResolvedValue({ session });
+    const tool = registerTool();
+
+    const result = await tool.execute('tool-1', { imageIds: ['img_abc123abc123'], question: 'What is visible?' }, undefined, undefined, {
+      cwd: '/repo',
+      sessionManager: { getSessionId: () => 'session-1' },
+      modelRegistry: { getAvailable: () => [{ provider: 'openai', id: 'gpt-4o', input: ['text', 'image'] }] },
+    } as never);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('billing or credit problem'),
+    });
+    expect(session.dispose).toHaveBeenCalled();
   });
 });

@@ -52,6 +52,24 @@ function resolvePreferredVisionModel(models: unknown[], modelRef: string): unkno
   return models.find((model) => (model as { id?: unknown }).id === normalized) ?? null;
 }
 
+function classifyVisionProbeFailure(error: unknown, modelRef: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  if (/(402|insufficient|payment required|credits|billing)/.test(normalized)) {
+    return `The configured vision model could not analyze the image because the provider reported a billing or credit problem. Check the provider account for ${modelRef}. Error: ${message}`;
+  }
+  if (/(does not support|not support|multimodal|image input|image_url|unsupported)/.test(normalized)) {
+    return `The configured vision model does not appear to support this image request. Pick a different image-capable vision model in Settings. Model: ${modelRef}. Error: ${message}`;
+  }
+  if (/(too large|payload|413|content_too_large|request_too_large|exceeds|size limit)/.test(normalized)) {
+    return `The selected image is too large for the configured vision model. Try a smaller screenshot or compressed image. Model: ${modelRef}. Error: ${message}`;
+  }
+  if (/(invalid image|unsupported format|corrupt|decode|mime)/.test(normalized)) {
+    return `The vision model rejected the image format or could not decode the image. Try a PNG or JPEG screenshot. Error: ${message}`;
+  }
+  return `The configured vision model failed while analyzing the image. Model: ${modelRef}. Error: ${message}`;
+}
+
 export function createImageProbeAgentExtension(options: { getPreferredVisionModel: () => string }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
@@ -85,29 +103,32 @@ export function createImageProbeAgentExtension(options: { getPreferredVisionMode
           throw new Error(`Configured vision model is not available or does not accept images: ${preferredVisionModel || '(unset)'}`);
         }
 
-        const { session } = await createAgentSession({
-          cwd: ctx.cwd,
-          model: model as never,
-          modelRegistry: ctx.modelRegistry,
-          sessionManager: SessionManager.inMemory(ctx.cwd),
-          noTools: 'all',
-        });
-
         const assistantTexts: string[] = [];
-        const unsubscribe = session.subscribe((event) => {
-          if (event.type === 'message_end' && event.message.role === 'assistant') {
-            const text = extractTextContent(event.message.content).trim();
-            if (text) assistantTexts.push(text);
-          }
-        });
-
+        let session: Awaited<ReturnType<typeof createAgentSession>>['session'] | null = null;
+        let unsubscribe: (() => void) | null = null;
         try {
           if (signal?.aborted) throw new Error('Image probe was aborted.');
+          session = (
+            await createAgentSession({
+              cwd: ctx.cwd,
+              model: model as never,
+              modelRegistry: ctx.modelRegistry,
+              sessionManager: SessionManager.inMemory(ctx.cwd),
+              noTools: 'all',
+            })
+          ).session;
+          unsubscribe = session.subscribe((event) => {
+            if (event.type === 'message_end' && event.message.role === 'assistant') {
+              const text = extractTextContent(event.message.content).trim();
+              if (text) assistantTexts.push(text);
+            }
+          });
           const prompt = [
             'You are a vision probe for a text-only agent.',
             '',
             'The calling agent cannot see the attached images. Act as its eyes.',
-            'Answer the question directly, but include enough visual detail and evidence for the calling agent to reason from your answer without seeing the image.',
+            'Fully describe the relevant visual parts of the image, then answer the question directly.',
+            'Include enough visual detail and evidence for the calling agent to reason from your answer without seeing the image.',
             '',
             'Guidelines:',
             '- Start with the direct answer.',
@@ -127,9 +148,21 @@ export function createImageProbeAgentExtension(options: { getPreferredVisionMode
           await session.prompt(prompt, {
             images: attachments.map((image) => ({ type: 'image' as const, data: image.data, mimeType: image.mimeType })),
           });
+        } catch (error) {
+          return {
+            content: [{ type: 'text' as const, text: classifyVisionProbeFailure(error, preferredVisionModel) }],
+            details: {
+              imageIds: attachments.map((image) => image.id),
+              availableImageIds: availableAttachments.map((image) => image.id),
+              imagePaths: attachments.map((image) => image.path),
+              model: (model as { provider?: string; id?: string }).id,
+              provider: (model as { provider?: string; id?: string }).provider,
+            },
+            isError: true,
+          };
         } finally {
-          unsubscribe();
-          session.dispose();
+          unsubscribe?.();
+          session?.dispose();
         }
 
         const text = assistantTexts.at(-1)?.trim() || '(vision subagent returned no text)';

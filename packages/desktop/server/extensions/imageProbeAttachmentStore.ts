@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { join } from 'node:path';
 
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
@@ -46,13 +46,32 @@ function safeFileName(value: string | undefined, fallback: string): string {
   return cleaned || fallback;
 }
 
-function extensionForImage(image: PromptImageAttachment): string {
-  const fromName = image.name ? extname(image.name).trim() : '';
-  if (fromName) return fromName;
-  if (image.mimeType === 'image/jpeg') return '.jpg';
-  if (image.mimeType === 'image/webp') return '.webp';
-  if (image.mimeType === 'image/gif') return '.gif';
+function fileExtensionForMimeType(mimeType: string): string {
+  if (mimeType === 'image/jpeg') return '.jpg';
+  if (mimeType === 'image/webp') return '.webp';
+  if (mimeType === 'image/gif') return '.gif';
+  if (mimeType === 'image/bmp') return '.bmp';
   return '.png';
+}
+
+function detectImageMimeType(buffer: Buffer): string | null {
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'image/png';
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  const header = buffer.subarray(0, 12).toString('ascii');
+  if (header.startsWith('GIF87a') || header.startsWith('GIF89a')) {
+    return 'image/gif';
+  }
+  if (buffer.length >= 12 && header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+  if (buffer.length >= 2 && header.startsWith('BM')) {
+    return 'image/bmp';
+  }
+  return null;
 }
 
 function imageIdForData(data: string): { id: string; buffer: Buffer } {
@@ -102,8 +121,13 @@ function readPersistedImageProbeAttachments(sessionId: string): Map<string, Stor
       if (!normalized || !existsSync(normalized.path)) {
         continue;
       }
-      const data = readFileSync(normalized.path).toString('base64');
-      next.set(normalized.id, { type: 'image', data, ...normalized });
+      const buffer = readFileSync(normalized.path);
+      const detectedMimeType = detectImageMimeType(buffer);
+      if (!detectedMimeType) {
+        continue;
+      }
+      const data = buffer.toString('base64');
+      next.set(normalized.id, { type: 'image', data, ...normalized, mimeType: detectedMimeType });
     }
     return next;
   } catch {
@@ -148,16 +172,20 @@ export function rememberImageProbeAttachments(sessionId: string, images: PromptI
   const sessionAttachments = getSessionAttachments(sessionId);
   const stored = images.map((image, index) => {
     const { id, buffer } = imageIdForData(image.data);
+    const detectedMimeType = detectImageMimeType(buffer);
+    if (!detectedMimeType) {
+      throw new Error(`Image ${image.name?.trim() || index + 1} is not a supported image file.`);
+    }
     if (buffer.byteLength > MAX_IMAGE_PROBE_IMAGE_BYTES) {
       throw new Error(
         `Image ${image.name?.trim() || index + 1} is too large for image probing (${buffer.byteLength} bytes; max ${MAX_IMAGE_PROBE_IMAGE_BYTES}).`,
       );
     }
-    const fallbackName = `image-${index + 1}${extensionForImage(image)}`;
+    const fallbackName = `image-${index + 1}${fileExtensionForMimeType(detectedMimeType)}`;
     const fileName = `${stamp}-${index + 1}-${id}-${safeFileName(image.name, fallbackName)}`;
     const path = join(dir, fileName);
     writeFileSync(path, buffer);
-    const attachment = { ...image, id, path, sizeBytes: buffer.byteLength };
+    const attachment = { ...image, id, path, mimeType: detectedMimeType, sizeBytes: buffer.byteLength };
     sessionAttachments.set(id, attachment);
     return attachment;
   });

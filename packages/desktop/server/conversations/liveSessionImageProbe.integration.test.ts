@@ -63,7 +63,10 @@ afterEach(async () => {
 
 describe('text-only live session image probing flow', () => {
   it('stores text-only prompt images, exposes stable IDs, and sends selected bytes to the vision subagent', async () => {
-    const originalImageData = Buffer.from('fake-image-pixels').toString('base64');
+    const originalImageData = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from('fake-image-pixels'),
+    ]).toString('base64');
     const entry = {
       sessionId: 'session-e2e',
       session: {
