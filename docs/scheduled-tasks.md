@@ -71,16 +71,17 @@ Scheduler tick ──► Check due tasks ──► For each due task:
 
 ## Task Activity
 
-Each execution records an activity entry:
+Skipped and missed scheduler decisions are recorded as automation activity:
 
-| Field       | Description                     |
-| ----------- | ------------------------------- |
-| `timestamp` | When it ran                     |
-| `outcome`   | `success`, `failure`, `timeout` |
-| `error`     | Error message (if failed)       |
-| `runId`     | Associated run ID               |
+| Field              | Description                              |
+| ------------------ | ---------------------------------------- |
+| `createdAt`        | When the scheduler recorded the decision |
+| `outcome`          | `skipped` or `catch-up-started`          |
+| `count`            | Number of missed scheduled slots         |
+| `firstScheduledAt` | First missed scheduled slot              |
+| `lastScheduledAt`  | Latest missed scheduled slot             |
 
-Activity is viewable in the Automations UI.
+Activity is viewable in the Automations UI. Skipped cron slots outside the catch-up window and overlap skips also raise an active alert so missed automations are visible instead of silent. Normal executions still write durable run records and logs.
 
 ## Agent Tool Reference
 

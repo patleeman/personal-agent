@@ -1,4 +1,10 @@
-import { listProfileActivityEntries, loadDeferredResumeState, openSqliteDatabase, setTaskCallbackBinding } from '@personal-agent/core';
+import {
+  getAlert,
+  listProfileActivityEntries,
+  loadDeferredResumeState,
+  openSqliteDatabase,
+  setTaskCallbackBinding,
+} from '@personal-agent/core';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -1558,6 +1564,17 @@ Run hourly task
         lastScheduledAt: '2026-03-02T10:00:00.000Z',
       }),
     ]);
+    expect(getAlert({ stateRoot, profile: 'assistant', alertId: 'automation-skipped-morning-brief' })).toEqual(
+      expect.objectContaining({
+        kind: 'task-failed',
+        severity: 'disruptive',
+        status: 'active',
+        title: 'Automation skipped: Morning brief',
+        sourceKind: 'scheduled-task',
+        sourceId: 'morning-brief',
+        requiresAck: true,
+      }),
+    );
 
     currentTime = new Date('2026-03-02T10:10:30.000-05:00');
     await module.handleEvent(createTimerEvent(), context);

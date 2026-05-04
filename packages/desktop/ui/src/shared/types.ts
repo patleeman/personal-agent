@@ -308,6 +308,7 @@ export interface ScheduledTaskDetail {
   prompt: string;
   lastStatus?: string;
   lastRunAt?: string;
+  schedulerLastEvaluatedAt?: string;
   activity?: ScheduledTaskActivityEntry[];
   threadMode: ScheduledTaskThreadMode;
   threadConversationId?: string;

@@ -13,6 +13,7 @@ import {
   deleteStoredAutomation,
   ensureAutomationThread,
   listAutomationActivityEntries,
+  loadAutomationSchedulerState,
   normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   type StoredAutomation,
@@ -43,6 +44,7 @@ function initializeTaskRoutesContext(context: Pick<ServerRouteContext, 'getCurre
 
 function buildTaskDetailResponse(task: StoredAutomation, runtime?: TaskRuntimeEntry, activity: AutomationActivityEntry[] = []) {
   const metadata = toScheduledTaskMetadata(task);
+  const schedulerState = loadAutomationSchedulerState();
   return {
     ...(runtime ?? {}),
     id: metadata.id,
@@ -63,6 +65,7 @@ function buildTaskDetailResponse(task: StoredAutomation, runtime?: TaskRuntimeEn
     activity,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
+    ...(schedulerState.lastEvaluatedAt ? { schedulerLastEvaluatedAt: schedulerState.lastEvaluatedAt } : {}),
     ...buildScheduledTaskThreadDetail(task),
   };
 }

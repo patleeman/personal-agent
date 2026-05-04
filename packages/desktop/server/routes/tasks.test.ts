@@ -8,6 +8,7 @@ const {
   existsSyncMock,
   findTaskForProfileMock,
   listAutomationActivityEntriesMock,
+  loadAutomationSchedulerStateMock,
   invalidateAppTopicsMock,
   loadScheduledTasksForProfileMock,
   logErrorMock,
@@ -27,6 +28,7 @@ const {
   existsSyncMock: vi.fn(),
   findTaskForProfileMock: vi.fn(),
   listAutomationActivityEntriesMock: vi.fn(),
+  loadAutomationSchedulerStateMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   loadScheduledTasksForProfileMock: vi.fn(),
   logErrorMock: vi.fn(),
@@ -56,6 +58,7 @@ vi.mock('@personal-agent/daemon', () => ({
   deleteStoredAutomation: deleteStoredAutomationMock,
   ensureAutomationThread: ensureAutomationThreadMock,
   listAutomationActivityEntries: listAutomationActivityEntriesMock,
+  loadAutomationSchedulerState: loadAutomationSchedulerStateMock,
   normalizeAutomationTargetTypeForSelection: normalizeAutomationTargetTypeForSelectionMock,
   startScheduledTaskRun: startScheduledTaskRunMock,
   updateStoredAutomation: updateStoredAutomationMock,
@@ -156,6 +159,8 @@ describe('registerTaskRoutes', () => {
     findTaskForProfileMock.mockReset();
     listAutomationActivityEntriesMock.mockReset();
     listAutomationActivityEntriesMock.mockReturnValue([]);
+    loadAutomationSchedulerStateMock.mockReset();
+    loadAutomationSchedulerStateMock.mockReturnValue({});
     invalidateAppTopicsMock.mockReset();
     loadScheduledTasksForProfileMock.mockReset();
     logErrorMock.mockReset();

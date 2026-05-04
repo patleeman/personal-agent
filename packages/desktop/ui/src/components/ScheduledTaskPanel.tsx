@@ -62,6 +62,12 @@ export function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: 
   return { text: 'never run', cls: 'text-dim' };
 }
 
+function formatScheduledTaskActivity(entry: NonNullable<ScheduledTaskDetail['activity']>[number]): string {
+  const scheduledAt = entry.count === 1 ? entry.firstScheduledAt : `${entry.firstScheduledAt} → ${entry.lastScheduledAt}`;
+  const outcome = entry.outcome === 'catch-up-started' ? 'caught up' : 'skipped';
+  return `${outcome} ${entry.count} scheduled ${entry.count === 1 ? 'run' : 'runs'} · ${scheduledAt}`;
+}
+
 export function shouldShowTaskModelControls(state: Pick<TaskFormState, 'targetType'>): boolean {
   return state.targetType === 'background-agent' || state.targetType === 'conversation';
 }
@@ -1268,8 +1274,28 @@ export function ScheduledTaskPanel({
               <p className="ui-detail-value">{taskDetail.timeoutSeconds}s</p>
             </div>
           )}
+          {taskDetail.schedulerLastEvaluatedAt && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">scheduler</span>
+              <p className="ui-detail-value">checked {timeAgo(taskDetail.schedulerLastEvaluatedAt)}</p>
+            </div>
+          )}
         </div>
       </div>
+
+      {taskDetail.activity && taskDetail.activity.length > 0 && (
+        <div className="border-t border-border-subtle pt-3">
+          <p className="ui-section-label mb-2">Recent scheduler activity</p>
+          <div className="space-y-2">
+            {taskDetail.activity.slice(0, 5).map((entry) => (
+              <div key={entry.id} className="text-[12px] leading-relaxed">
+                <p className={entry.outcome === 'skipped' ? 'text-danger' : 'text-secondary'}>{formatScheduledTaskActivity(entry)}</p>
+                <p className="text-[11px] text-dim">recorded {timeAgo(entry.createdAt)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-border-subtle pt-3">
         <p className="ui-section-label mb-2">Prompt</p>

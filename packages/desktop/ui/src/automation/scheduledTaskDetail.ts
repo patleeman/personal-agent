@@ -64,6 +64,7 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     isOptionalPositiveInteger(record.catchUpWindowSeconds) &&
     isOptionalString(record.lastStatus) &&
     isOptionalString(record.lastRunAt) &&
+    isOptionalString(record.schedulerLastEvaluatedAt) &&
     isOptionalActivity(record.activity) &&
     isOptionalString(record.threadConversationId) &&
     isOptionalString(record.threadTitle)

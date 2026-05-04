@@ -4,6 +4,7 @@ import {
   loadDeferredResumeState,
   resolveDeferredResumeStateFile,
   saveDeferredResumeState,
+  upsertAlert,
 } from '@personal-agent/core';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
@@ -238,6 +239,34 @@ function toMissedTaskActivityDetails(input: { task: ParsedTaskDefinition; missed
   return sections.join('\n\n');
 }
 
+function upsertSkippedTaskAlert(input: {
+  task: StoredAutomation;
+  stateRoot: string;
+  detectedAt: string;
+  body: string;
+  activityId?: string;
+}): void {
+  upsertAlert({
+    stateRoot: input.stateRoot,
+    profile: input.task.profile,
+    alert: {
+      id: `automation-skipped-${input.task.id}`,
+      profile: input.task.profile,
+      kind: 'task-failed',
+      severity: 'disruptive',
+      status: 'active',
+      title: `Automation skipped: ${input.task.title ?? input.task.id}`,
+      body: input.body,
+      createdAt: input.detectedAt,
+      updatedAt: input.detectedAt,
+      ...(input.activityId ? { activityId: input.activityId } : {}),
+      sourceKind: 'scheduled-task',
+      sourceId: input.task.id,
+      requiresAck: true,
+    },
+  });
+}
+
 function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition): TaskRuntimeState {
   const existing = taskState.tasks[task.key];
 
@@ -435,7 +464,7 @@ export function createTasksModule(config: TasksModuleConfig, dependencies: Tasks
     );
 
     try {
-      appendAutomationActivityEntry(
+      const activity = appendAutomationActivityEntry(
         task.id,
         {
           kind: 'missed',
@@ -448,6 +477,16 @@ export function createTasksModule(config: TasksModuleConfig, dependencies: Tasks
         },
         { dbPath: runtimeDbPath },
       );
+
+      if (details.outcome === 'skipped') {
+        upsertSkippedTaskAlert({
+          task,
+          stateRoot: context.paths.stateRoot,
+          detectedAt: details.detectedAt,
+          body: toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }),
+          activityId: activity.id,
+        });
+      }
     } catch (error) {
       context.logger.warn(`failed to record missed task activity id=${task.id}: ${(error as Error).message}`);
     }
@@ -1107,6 +1146,22 @@ export function createTasksModule(config: TasksModuleConfig, dependencies: Tasks
           record.lastRunAt = nowIso;
           record.lastError = 'Task skipped because a previous run is still active';
           state.skippedRuns += 1;
+          try {
+            upsertSkippedTaskAlert({
+              task,
+              stateRoot: context.paths.stateRoot,
+              detectedAt: nowIso,
+              body: [
+                'Reason:\nA previous automation run was still active when this schedule fired.',
+                `Task:\n${task.title ?? task.id}`,
+                `Schedule:\n${formatTaskSchedule(task)}`,
+                `Skipped run:\n${minuteKey}`,
+                'Next step:\nInspect the active run or increase the schedule interval if this keeps happening.',
+              ].join('\n\n'),
+            });
+          } catch (error) {
+            context.logger.warn(`failed to alert skipped task id=${task.id}: ${(error as Error).message}`);
+          }
           continue;
         }
 

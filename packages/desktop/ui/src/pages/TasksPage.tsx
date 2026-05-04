@@ -188,10 +188,16 @@ function formatSeconds(value: number | undefined): string {
   return `${value}s`;
 }
 
-function formatScheduleTypeLabel(task: Pick<ScheduledTaskSummary, 'cron' | 'at' | 'scheduleType'>): string {
-  if (task.cron) return 'Cron';
-  if (task.at || task.scheduleType === 'at') return 'Once';
-  return capitalizeFirst(task.scheduleType || 'Manual');
+function formatScheduleTypeLabel(task: Pick<ScheduledTaskSummary, 'cron' | 'at' | 'scheduleType'> | null | undefined): string {
+  if (task?.cron) return 'Cron';
+  if (task?.at || task?.scheduleType === 'at') return 'Once';
+  return capitalizeFirst(task?.scheduleType || 'Manual');
+}
+
+function formatTaskActivity(entry: NonNullable<ScheduledTaskDetail['activity']>[number]): string {
+  const range = entry.count === 1 ? entry.firstScheduledAt : `${entry.firstScheduledAt} → ${entry.lastScheduledAt}`;
+  const outcome = entry.outcome === 'catch-up-started' ? 'Caught up' : 'Skipped';
+  return `${outcome} ${entry.count} scheduled ${entry.count === 1 ? 'run' : 'runs'} · ${range}`;
 }
 
 function getRunLogsPath(run: DurableRunRecord): string | undefined {
@@ -543,13 +549,13 @@ function AutomationDetailView({
   const latestRunFailed = latestRun
     ? runNeedsAttention(latestRun) || latestRun.status?.status === 'failed' || latestRun.status?.status === 'interrupted'
     : isFailedTaskStatus(effectiveSummary?.lastStatus);
-  const lastRunLabel = effectiveSummary.lastRunAt
+  const lastRunLabel = effectiveSummary?.lastRunAt
     ? `${isFailedTaskStatus(effectiveSummary.lastStatus) ? 'Failed' : 'Ran'} ${timeAgo(effectiveSummary.lastRunAt)}`
     : '—';
-  const modelLabel = detail?.model ?? effectiveSummary.model ?? 'Default';
-  const threadLabel = detail?.threadTitle ?? effectiveSummary.threadTitle ?? formatThreadModeLabel(detail?.threadMode);
+  const modelLabel = detail?.model ?? effectiveSummary?.model ?? 'Default';
+  const threadLabel = detail?.threadTitle ?? effectiveSummary?.threadTitle ?? formatThreadModeLabel(detail?.threadMode);
   const timeoutLabel = formatSeconds(detail?.timeoutSeconds);
-  const catchUpLabel = formatSeconds(detail?.catchUpWindowSeconds ?? effectiveSummary.catchUpWindowSeconds);
+  const catchUpLabel = formatSeconds(detail?.catchUpWindowSeconds ?? effectiveSummary?.catchUpWindowSeconds);
   const scheduleTypeLabel = formatScheduleTypeLabel(effectiveSummary);
 
   async function handleCopyPrompt() {
@@ -687,9 +693,9 @@ function AutomationDetailView({
             </div>
           </div>
 
-          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid gap-8">
             <div className="min-w-0 space-y-8">
-              <section className="grid border-y border-border-subtle md:grid-cols-5">
+              <section className="grid border-y border-border-subtle">
                 <SummaryCell
                   label="Last run"
                   value={lastRunLabel}
@@ -826,9 +832,22 @@ function AutomationDetailView({
                   </div>
                 )}
               </DetailSection>
+
+              {detail?.activity && detail.activity.length > 0 && (
+                <DetailSection title="Scheduler activity">
+                  <div className="space-y-3">
+                    {detail.activity.slice(0, 5).map((entry) => (
+                      <div key={entry.id} className="grid gap-1 text-[13px] leading-6 sm:grid-cols-[minmax(0,1fr)_8rem] sm:items-start">
+                        <p className={entry.outcome === 'skipped' ? 'text-danger' : 'text-secondary'}>{formatTaskActivity(entry)}</p>
+                        <p className="text-left text-[12px] text-dim sm:text-right">{timeAgo(entry.createdAt)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </DetailSection>
+              )}
             </div>
 
-            <aside className="border-t border-border-subtle pt-1 xl:border-l xl:border-t-0 xl:pl-6">
+            <aside className="border-t border-border-subtle pt-1">
               <RailSection title="Schedule">
                 <RailLine label="Type">{scheduleTypeLabel}</RailLine>
                 <RailLine label="Time">{scheduleLabel}</RailLine>
@@ -843,6 +862,7 @@ function AutomationDetailView({
               <RailSection title="Runtime">
                 <RailLine label="Model">{modelLabel}</RailLine>
                 <RailLine label="Timeout">{timeoutLabel}</RailLine>
+                <RailLine label="Scheduler">{detail?.schedulerLastEvaluatedAt ? timeAgo(detail.schedulerLastEvaluatedAt) : '—'}</RailLine>
                 <RailLine label="Retries">{effectiveSummary.lastAttemptCount ?? 0}</RailLine>
               </RailSection>
               <RailSection title="Alerts">
