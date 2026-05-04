@@ -5,7 +5,7 @@ import { api } from '../client/api';
 import type { GatewayConnection, GatewayEvent, GatewayState, GatewayThreadBinding } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 
-const EMPTY_GATEWAY_STATE: GatewayState = { providers: [], connections: [], bindings: [], events: [] };
+const EMPTY_GATEWAY_STATE: GatewayState = { providers: [], connections: [], bindings: [], events: [], chatTargets: [] };
 
 export function GatewaysPage() {
   const [state, setState] = useState<GatewayState>(EMPTY_GATEWAY_STATE);
@@ -13,9 +13,9 @@ export function GatewaysPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const telegramConnection = state.connections.find((connection) => connection.provider === 'telegram') ?? null;
+  const telegramConnection = state.connections.find((c) => c.provider === 'telegram') ?? null;
   const telegramBinding = telegramConnection
-    ? (state.bindings.find((binding) => binding.connectionId === telegramConnection.id && binding.provider === 'telegram') ?? null)
+    ? (state.bindings.find((b) => b.connectionId === telegramConnection.id && b.provider === 'telegram') ?? null)
     : null;
 
   useEffect(() => {
@@ -75,32 +75,34 @@ export function GatewaysPage() {
 
   return (
     <div className="h-full overflow-auto bg-base px-8 py-8 text-primary">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-7">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        {/* Header */}
         <header className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Gateways</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-secondary">
-              Route external apps into conversation threads. Provider credentials live in Settings; routing and health live here.
+            <p className="mt-1 text-sm leading-relaxed text-secondary">
+              Route external apps into conversation threads.{' '}
+              <Link to="/settings#settings-gateways" className="text-accent hover:underline">
+                Provider credentials in Settings.
+              </Link>
             </p>
           </div>
-          <button className="ui-toolbar-button bg-accent text-white hover:bg-accent/90" onClick={ensureTelegram} disabled={busy !== null}>
-            {telegramConnection ? 'Refresh Telegram' : '+ Connect Telegram'}
+          <button className="ui-toolbar-button shrink-0" onClick={ensureTelegram} disabled={busy !== null}>
+            {telegramConnection ? 'Refresh' : '+ Connect Telegram'}
           </button>
         </header>
 
-        {error ? <p className="rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p> : null}
-        {loading ? <p className="text-sm text-dim">Loading gateways…</p> : null}
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
+        {loading ? <p className="text-sm text-dim">Loading…</p> : null}
 
-        <section className="space-y-3">
-          <div className="flex items-baseline justify-between">
+        {/* Gateways list */}
+        <section>
+          <div className="flex items-baseline justify-between mb-4">
             <p className="ui-section-label">Connected</p>
-            <Link className="text-xs text-secondary hover:text-primary" to="/settings">
-              Provider config in Settings →
-            </Link>
           </div>
 
           {telegramConnection ? (
-            <GatewayCard
+            <GatewayRow
               connection={telegramConnection}
               binding={telegramBinding}
               busy={busy}
@@ -109,11 +111,9 @@ export function GatewaysPage() {
               onDetach={detachTelegram}
             />
           ) : (
-            <div className="rounded-2xl border border-border-subtle bg-surface p-6">
-              <p className="font-medium">No gateways connected</p>
-              <p className="mt-1 max-w-xl text-sm leading-6 text-secondary">
-                Connect Telegram to let messages create and drive conversation threads through a managed gateway.
-              </p>
+            <div className="py-4">
+              <p className="text-sm text-secondary">No gateways connected.</p>
+              <p className="mt-1 text-sm text-dim">Save a Telegram bot token in Settings, then connect it here.</p>
               <button className="ui-toolbar-button mt-4" onClick={ensureTelegram} disabled={busy !== null}>
                 Connect Telegram
               </button>
@@ -121,13 +121,14 @@ export function GatewaysPage() {
           )}
         </section>
 
+        {/* Activity */}
         <GatewayActivity events={state.events} />
       </div>
     </div>
   );
 }
 
-function GatewayCard({
+function GatewayRow({
   connection,
   binding,
   busy,
@@ -143,30 +144,32 @@ function GatewayCard({
   onDetach: () => void;
 }) {
   const active = connection.enabled && (connection.status === 'active' || connection.status === 'connected');
-  const statusTone =
-    connection.status === 'needs_attention' ? 'text-danger' : connection.status === 'paused' ? 'text-warning' : 'text-accent';
+  const statusDot =
+    connection.status === 'needs_attention'
+      ? 'bg-danger'
+      : connection.status === 'paused'
+        ? 'bg-warning'
+        : active
+          ? 'bg-success'
+          : 'bg-dim';
+  const statusLabel =
+    connection.status === 'needs_attention'
+      ? 'Needs attention'
+      : connection.status === 'paused'
+        ? 'Paused'
+        : active
+          ? 'Active'
+          : formatStatus(connection.status);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-border-subtle bg-surface shadow-sm">
-      <div className="flex items-center gap-4 px-5 py-4">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-500 text-xs font-bold text-white">TG</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">Telegram</h2>
-            <span className={`rounded-full bg-elevated px-2 py-0.5 text-[11px] font-semibold ${statusTone}`}>
-              {formatStatus(connection.status)}
-            </span>
-            {active ? <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">Active</span> : null}
-          </div>
-          <p className="mt-1 truncate text-sm text-secondary">
-            {binding ? (
-              <>
-                Routing to <span className="font-medium text-primary">{binding.conversationTitle || binding.conversationId}</span>
-              </>
-            ) : (
-              'No thread attached'
-            )}
-          </p>
+    <div className="space-y-4">
+      {/* Name + status + actions */}
+      <div className="flex items-center gap-3">
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-500 text-[11px] font-bold text-white">TG</div>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="font-medium">Telegram</span>
+          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+          <span className="text-[12px] text-secondary">{statusLabel}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {binding ? (
@@ -184,52 +187,51 @@ function GatewayCard({
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-3 border-t border-border-subtle text-sm max-md:grid-cols-1">
-        <GatewayStat label="Attached thread" value={binding?.conversationTitle || binding?.conversationId || 'None'} muted={!binding} />
-        <GatewayStat
-          label="Telegram target"
-          value={binding?.externalChatLabel || binding?.externalChatId || 'None'}
+
+      {/* Metadata row */}
+      <dl className="grid grid-cols-3 gap-6 border-t border-border-subtle pt-4 text-sm max-sm:grid-cols-1">
+        <GatewayMeta label="Thread" value={binding?.conversationTitle || binding?.conversationId || '—'} muted={!binding} />
+        <GatewayMeta
+          label="Telegram chat"
+          value={binding?.externalChatLabel || binding?.externalChatId || '—'}
           muted={!binding?.externalChatId}
         />
-        <GatewayStat label="Updated" value={timeAgoCompact(new Date(connection.updatedAt).getTime())} />
-      </div>
-    </article>
+        <GatewayMeta label="Updated" value={timeAgoCompact(new Date(connection.updatedAt).getTime())} />
+      </dl>
+    </div>
   );
 }
 
-function GatewayStat({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) {
+function GatewayMeta({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) {
   return (
-    <div className="border-r border-border-subtle px-5 py-3 last:border-r-0 max-md:border-r-0 max-md:border-t">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{label}</p>
-      <p className={muted ? 'mt-1 text-secondary' : 'mt-1 text-primary'}>{value}</p>
+    <div>
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</dt>
+      <dd className={`mt-1 truncate ${muted ? 'text-secondary' : 'text-primary'}`}>{value}</dd>
     </div>
   );
 }
 
 function GatewayActivity({ events }: { events: GatewayEvent[] }) {
-  const rows = useMemo(() => events.slice(0, 8), [events]);
+  const rows = useMemo(() => events.slice(0, 10), [events]);
   return (
-    <section className="space-y-3">
-      <div className="flex items-baseline justify-between">
+    <section>
+      <div className="mb-4 flex items-baseline justify-between">
         <p className="ui-section-label">Recent activity</p>
-        <p className="text-xs text-dim">Last 100 events are retained</p>
+        <p className="text-xs text-dim">Last 100 retained</p>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-border-subtle bg-surface">
-        {rows.length === 0 ? (
-          <p className="px-5 py-4 text-sm text-secondary">No gateway activity yet.</p>
-        ) : (
-          rows.map((event) => (
-            <div
-              key={event.id}
-              className="grid grid-cols-[7rem_1fr_auto] items-center gap-4 border-t border-border-subtle px-5 py-3 text-sm first:border-t-0"
-            >
-              <span className="text-xs text-dim">{timeAgoCompact(new Date(event.createdAt).getTime())}</span>
-              <span>{event.message}</span>
-              <span className="text-xs capitalize text-secondary">{event.kind}</span>
+      {rows.length === 0 ? (
+        <p className="text-sm text-secondary">No activity yet.</p>
+      ) : (
+        <div className="space-y-0 divide-y divide-border-subtle">
+          {rows.map((event) => (
+            <div key={event.id} className="flex items-baseline gap-6 py-2.5 text-sm">
+              <span className="w-20 shrink-0 text-xs text-dim">{timeAgoCompact(new Date(event.createdAt).getTime())}</span>
+              <span className="min-w-0 flex-1">{event.message}</span>
+              <span className="shrink-0 text-xs capitalize text-dim">{event.kind}</span>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
