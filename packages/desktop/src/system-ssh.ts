@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 
 const SSH_TIMEOUT_SECONDS = '10';
 
@@ -6,20 +6,34 @@ function baseSshOptions(): string[] {
   return ['-o', 'BatchMode=yes', '-o', `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`, '-o', 'ServerAliveInterval=30'];
 }
 
-export function runSshCommand(target: string, command: string): string {
-  const result = spawnSync('ssh', [...baseSshOptions(), target, command], {
-    env: process.env,
-    encoding: 'utf-8',
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const rendered = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim();
-    throw new Error(rendered || `ssh ${target} failed with exit code ${String(result.status)}`);
-  }
+function runProcess(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
 
-  return result.stdout;
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      const renderedStdout = Buffer.concat(stdout).toString('utf-8');
+      const renderedStderr = Buffer.concat(stderr).toString('utf-8');
+      if (code === 0) {
+        resolve(renderedStdout);
+        return;
+      }
+
+      const rendered = `${renderedStderr}${renderedStdout}`.trim();
+      reject(new Error(rendered || `${command} ${args.join(' ')} failed with exit code ${String(code)}`));
+    });
+  });
+}
+
+export function runSshCommand(target: string, command: string): Promise<string> {
+  return runProcess('ssh', [...baseSshOptions(), target, command]);
 }
 
 export function spawnSshTunnel(input: { target: string; localPort: number; remotePort: number }): ChildProcess {
@@ -46,56 +60,38 @@ export function spawnSshTunnel(input: { target: string; localPort: number; remot
   );
 }
 
-export function uploadFileOverScp(input: { target: string; localPath: string; remotePath: string }): void {
-  const result = spawnSync(
-    'scp',
-    ['-q', '-o', 'BatchMode=yes', '-o', `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`, input.localPath, `${input.target}:${input.remotePath}`],
-    {
-      env: process.env,
-      encoding: 'utf-8',
-    },
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const rendered = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim();
-    throw new Error(rendered || `scp upload to ${input.target}:${input.remotePath} failed with exit code ${String(result.status)}`);
-  }
+export function uploadFileOverScp(input: { target: string; localPath: string; remotePath: string }): Promise<void> {
+  return runProcess('scp', [
+    '-q',
+    '-o',
+    'BatchMode=yes',
+    '-o',
+    `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`,
+    input.localPath,
+    `${input.target}:${input.remotePath}`,
+  ]).then(() => undefined);
 }
 
-export function uploadDirectoryOverScp(input: { target: string; localPath: string; remotePath: string }): void {
-  const result = spawnSync(
-    'scp',
-    ['-qr', '-o', 'BatchMode=yes', '-o', `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`, input.localPath, `${input.target}:${input.remotePath}`],
-    {
-      env: process.env,
-      encoding: 'utf-8',
-    },
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const rendered = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim();
-    throw new Error(rendered || `scp upload to ${input.target}:${input.remotePath} failed with exit code ${String(result.status)}`);
-  }
+export function uploadDirectoryOverScp(input: { target: string; localPath: string; remotePath: string }): Promise<void> {
+  return runProcess('scp', [
+    '-qr',
+    '-o',
+    'BatchMode=yes',
+    '-o',
+    `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`,
+    input.localPath,
+    `${input.target}:${input.remotePath}`,
+  ]).then(() => undefined);
 }
 
-export function downloadFileOverScp(input: { target: string; remotePath: string; localPath: string }): void {
-  const result = spawnSync(
-    'scp',
-    ['-q', '-o', 'BatchMode=yes', '-o', `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`, `${input.target}:${input.remotePath}`, input.localPath],
-    {
-      env: process.env,
-      encoding: 'utf-8',
-    },
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const rendered = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim();
-    throw new Error(rendered || `scp download from ${input.target}:${input.remotePath} failed with exit code ${String(result.status)}`);
-  }
+export function downloadFileOverScp(input: { target: string; remotePath: string; localPath: string }): Promise<void> {
+  return runProcess('scp', [
+    '-q',
+    '-o',
+    'BatchMode=yes',
+    '-o',
+    `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`,
+    `${input.target}:${input.remotePath}`,
+    input.localPath,
+  ]).then(() => undefined);
 }

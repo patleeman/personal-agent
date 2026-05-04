@@ -84,13 +84,13 @@ function buildSshConnectionProbeCommand(): string {
   ].join('; ');
 }
 
-export function testSshConnection(input: { sshTarget: string }): DesktopSshConnectionTestResult {
+export async function testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult> {
   const sshTarget = input.sshTarget.trim();
   if (!sshTarget) {
     throw new Error('SSH target is required.');
   }
 
-  const output = runSshCommand(sshTarget, `sh -lc '${buildSshConnectionProbeCommand()}'`).trim();
+  const output = (await runSshCommand(sshTarget, `sh -lc '${buildSshConnectionProbeCommand()}'`)).trim();
   const [rawOs = '', rawArch = '', homeDirectory = '', tempDirectory = '', cacheDirectory = ''] = output.split(/\r?\n/);
   const platform = parseRemotePlatform({ os: rawOs, arch: rawArch });
   const osLabel = platform.os === 'darwin' ? 'macOS' : 'Linux';
@@ -126,7 +126,7 @@ export class SshHostController implements HostController {
   }
 
   async ensureRunning(): Promise<void> {
-    runSshCommand(this.record.sshTarget, 'printf ok');
+    await runSshCommand(this.record.sshTarget, 'printf ok');
   }
 
   async getBaseUrl(): Promise<string> {

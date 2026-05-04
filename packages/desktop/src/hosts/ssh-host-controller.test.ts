@@ -19,17 +19,17 @@ describe('testSshConnection', () => {
     vi.clearAllMocks();
   });
 
-  it('rejects blank SSH targets', () => {
-    expect(() => testSshConnection({ sshTarget: '   ' })).toThrow('SSH target is required.');
+  it('rejects blank SSH targets', async () => {
+    await expect(testSshConnection({ sshTarget: '   ' })).rejects.toThrow('SSH target is required.');
     expect(mocks.runSshCommand).not.toHaveBeenCalled();
   });
 
-  it('parses the probed platform and runtime cache details', () => {
-    mocks.runSshCommand.mockReturnValue(
+  it('parses the probed platform and runtime cache details', async () => {
+    mocks.runSshCommand.mockResolvedValue(
       ['Darwin', 'arm64', '/Users/patrick', '/var/folders/example/T/', '/Users/patrick/.cache/personal-agent/ssh-runtime'].join('\n'),
     );
 
-    expect(testSshConnection({ sshTarget: ' user@bender ' })).toEqual({
+    await expect(testSshConnection({ sshTarget: ' user@bender ' })).resolves.toEqual({
       ok: true,
       sshTarget: 'user@bender',
       os: 'darwin',

@@ -175,7 +175,7 @@ export class SshRemoteConversationRuntime {
         });
       }
       this.platformPromise = (async () => {
-        const output = runSshCommand(this.sshTarget, 'uname -s && uname -m');
+        const output = await runSshCommand(this.sshTarget, 'uname -s && uname -m');
         const [rawOs = '', rawArch = ''] = output.trim().split(/\r?\n/);
         return parseRemotePlatform({ os: rawOs, arch: rawArch });
       })();
@@ -208,7 +208,7 @@ export class SshRemoteConversationRuntime {
         message: `Loading ${pathLabel} on ${this.hostLabel}…`,
       });
       const command = [`${renderRemotePathForShell(remoteHelperPath)}`, 'list-dir', '--path', quoteForShell(normalizedPath)].join(' ');
-      const output = runSshCommand(this.sshTarget, renderRemoteCommand(command)).trim();
+      const output = (await runSshCommand(this.sshTarget, renderRemoteCommand(command))).trim();
       this.emitStatus({
         ...context,
         stage: 'browse',
@@ -308,13 +308,13 @@ export class SshRemoteConversationRuntime {
       const remotePiPath = buildRemotePiPath(piBinary.version, platform);
       const remoteHelperPath = buildRemoteHelperPath(helperBinary.version, platform);
 
-      runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteRunDir)}`);
+      await runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteRunDir)}`);
       if (typeof input.sessionContent === 'string') {
-        this.uploadSessionContent(remoteSessionFile, input.sessionContent);
+        await this.uploadSessionContent(remoteSessionFile, input.sessionContent);
       } else if (typeof input.fallbackSessionContent === 'string') {
-        const remoteSessionExists = this.remoteFileExists(remoteSessionFile);
+        const remoteSessionExists = await this.remoteFileExists(remoteSessionFile);
         if (!remoteSessionExists) {
-          this.uploadSessionContent(remoteSessionFile, input.fallbackSessionContent);
+          await this.uploadSessionContent(remoteSessionFile, input.fallbackSessionContent);
         }
       }
 
@@ -337,7 +337,7 @@ export class SshRemoteConversationRuntime {
         quoteForShell(normalizedCwd),
         ...(remoteAgentDir ? ['--agent-dir', renderRemotePathForShell(remoteAgentDir)] : []),
       ].join(' ');
-      const output = runSshCommand(this.sshTarget, renderRemoteCommand(launchCommand)).trim();
+      const output = (await runSshCommand(this.sshTarget, renderRemoteCommand(launchCommand))).trim();
       const runtimeInfo = JSON.parse(output) as HelperRuntimeInfo;
       if (!isHelperRuntimeInfo(runtimeInfo)) {
         throw new Error(`Remote helper for ${this.hostLabel} returned malformed runtime info.`);
@@ -456,7 +456,7 @@ export class SshRemoteConversationRuntime {
 
     if (removeRunDir) {
       const remoteRunDir = buildRemoteConversationRunDir(conversationId);
-      runSshCommand(this.sshTarget, `rm -rf ${renderRemotePathForShell(remoteRunDir)}`);
+      await runSshCommand(this.sshTarget, `rm -rf ${renderRemotePathForShell(remoteRunDir)}`);
     }
   }
 
@@ -466,7 +466,7 @@ export class SshRemoteConversationRuntime {
     const tempFile = join(tempDir, 'session.jsonl');
 
     try {
-      downloadFileOverScp({
+      await downloadFileOverScp({
         target: this.sshTarget,
         remotePath: remoteSessionFile,
         localPath: tempFile,
@@ -499,12 +499,12 @@ export class SshRemoteConversationRuntime {
     this.disposeConnection();
   }
 
-  private uploadSessionContent(remoteSessionFile: string, content: string): void {
+  private async uploadSessionContent(remoteSessionFile: string, content: string): Promise<void> {
     const tempDir = mkdtempSync(join(tmpdir(), 'personal-agent-remote-upload-'));
     const tempFile = join(tempDir, 'session.jsonl');
     try {
       writeFileSync(tempFile, stripRemoteMetadataFromSessionContent(content), 'utf-8');
-      uploadFileOverScp({
+      await uploadFileOverScp({
         target: this.sshTarget,
         localPath: tempFile,
         remotePath: remoteSessionFile,
@@ -514,9 +514,9 @@ export class SshRemoteConversationRuntime {
     }
   }
 
-  private remoteFileExists(remotePath: string): boolean {
+  private async remoteFileExists(remotePath: string): Promise<boolean> {
     try {
-      runSshCommand(this.sshTarget, `test -f ${renderRemotePathForShell(remotePath)}`);
+      await runSshCommand(this.sshTarget, `test -f ${renderRemotePathForShell(remotePath)}`);
       return true;
     } catch {
       return false;
@@ -534,14 +534,14 @@ export class SshRemoteConversationRuntime {
     const remotePackageJson = `${remoteDir}/package.json`;
     const localBundleDir = dirname(localPath);
     const remoteBundleParentDir = dirname(remoteDir);
-    runSshCommand(
+    await runSshCommand(
       this.sshTarget,
       `mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)} && test -x ${renderRemotePathForShell(remoteBinary)} && test -f ${renderRemotePathForShell(
         remotePackageJson,
       )} || true`,
     );
     try {
-      runSshCommand(
+      await runSshCommand(
         this.sshTarget,
         `test -x ${renderRemotePathForShell(remoteBinary)} && test -f ${renderRemotePathForShell(remotePackageJson)}`,
       );
@@ -553,12 +553,12 @@ export class SshRemoteConversationRuntime {
         status: 'running',
         message: `Copying Pi to ${this.hostLabel}…`,
       });
-      runSshCommand(
+      await runSshCommand(
         this.sshTarget,
         `rm -rf ${renderRemotePathForShell(remoteDir)} && mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)}`,
       );
-      uploadDirectoryOverScp({ target: this.sshTarget, localPath: localBundleDir, remotePath: remoteBundleParentDir });
-      runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
+      await uploadDirectoryOverScp({ target: this.sshTarget, localPath: localBundleDir, remotePath: remoteBundleParentDir });
+      await runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
   }
 
@@ -571,12 +571,12 @@ export class SshRemoteConversationRuntime {
     }
 
     const remoteAgentDir = buildRemotePiAgentDir();
-    runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteAgentDir)}`);
+    await runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteAgentDir)}`);
     if (existsSync(localAuthPath)) {
-      uploadFileOverScp({ target: this.sshTarget, localPath: localAuthPath, remotePath: buildRemotePiAgentAuthPath() });
+      await uploadFileOverScp({ target: this.sshTarget, localPath: localAuthPath, remotePath: buildRemotePiAgentAuthPath() });
     }
     if (existsSync(localSettingsPath)) {
-      uploadFileOverScp({ target: this.sshTarget, localPath: localSettingsPath, remotePath: buildRemotePiAgentSettingsPath() });
+      await uploadFileOverScp({ target: this.sshTarget, localPath: localSettingsPath, remotePath: buildRemotePiAgentSettingsPath() });
     }
     return remoteAgentDir;
   }
@@ -589,12 +589,12 @@ export class SshRemoteConversationRuntime {
   ): Promise<void> {
     const remoteDir = buildRemoteHelperDir(version, platform);
     const remoteBinary = buildRemoteHelperPath(version, platform);
-    runSshCommand(
+    await runSshCommand(
       this.sshTarget,
       `mkdir -p ${renderRemotePathForShell(remoteDir)} && test -x ${renderRemotePathForShell(remoteBinary)} || true`,
     );
     try {
-      runSshCommand(this.sshTarget, `test -x ${renderRemotePathForShell(remoteBinary)}`);
+      await runSshCommand(this.sshTarget, `test -x ${renderRemotePathForShell(remoteBinary)}`);
       return;
     } catch {
       this.emitStatus({
@@ -603,8 +603,8 @@ export class SshRemoteConversationRuntime {
         status: 'running',
         message: `Copying remote helper to ${this.hostLabel}…`,
       });
-      uploadFileOverScp({ target: this.sshTarget, localPath, remotePath: remoteBinary });
-      runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
+      await uploadFileOverScp({ target: this.sshTarget, localPath, remotePath: remoteBinary });
+      await runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
   }
 
