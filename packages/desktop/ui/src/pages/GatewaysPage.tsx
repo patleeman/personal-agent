@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../client/api';
+import { AppPageIntro, AppPageLayout, ToolbarButton } from '../components/ui';
 import type { GatewayConnection, GatewayEvent, GatewayState, GatewayThreadBinding } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 
@@ -17,6 +18,12 @@ export function GatewaysPage() {
   const telegramBinding = telegramConnection
     ? (state.bindings.find((b) => b.connectionId === telegramConnection.id && b.provider === 'telegram') ?? null)
     : null;
+  const slackConnection = state.connections.find((c) => c.provider === 'slack_mcp') ?? null;
+  const slackBinding = slackConnection
+    ? (state.bindings.find((b) => b.connectionId === slackConnection.id && b.provider === 'slack_mcp') ?? null)
+    : null;
+  const [slackQuery, setSlackQuery] = useState('');
+  const [slackChannels, setSlackChannels] = useState<Array<{ id: string; name: string; isPrivate?: boolean }>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,57 +80,167 @@ export function GatewaysPage() {
     }
   }
 
+  async function searchSlackChannels() {
+    if (!slackQuery.trim()) return;
+    setBusy('slack-search');
+    setError(null);
+    try {
+      setSlackChannels((await api.searchSlackMcpChannels(slackQuery.trim())).channels);
+    } catch (err) {
+      setError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function attachSlackChannel(channel: { id: string; name: string }) {
+    setBusy('slack-attach');
+    setError(null);
+    try {
+      setState(await api.attachSlackMcpChannel({ channelId: channel.id, channelLabel: channel.name }));
+      setSlackChannels([]);
+      setSlackQuery('');
+    } catch (err) {
+      setError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function detachSlack() {
+    if (!slackBinding) return;
+    setBusy('slack-detach');
+    setError(null);
+    try {
+      setState(await api.detachGatewayConversation(slackBinding.conversationId, 'slack_mcp'));
+    } catch (err) {
+      setError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const hasAnyConnection = telegramConnection || slackConnection;
+
   return (
-    <div className="h-full overflow-auto bg-base px-8 py-8 text-primary">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        {/* Header */}
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Gateways</h1>
-            <p className="mt-1 text-sm leading-relaxed text-secondary">
+    <div className="h-full overflow-y-auto">
+      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
+        <AppPageIntro
+          title="Gateways"
+          summary={
+            <>
               Route external apps into conversation threads.{' '}
               <Link to="/settings#settings-gateways" className="text-accent hover:underline">
                 Provider credentials in Settings.
               </Link>
-            </p>
+            </>
+          }
+          actions={
+            <ToolbarButton
+              className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+              onClick={ensureTelegram}
+              disabled={busy !== null}
+            >
+              {telegramConnection ? 'Refresh' : '+ Connect Telegram'}
+            </ToolbarButton>
+          }
+        />
+
+        {error ? <p className="text-[13px] text-danger">{error}</p> : null}
+        {loading ? <p className="text-[13px] text-dim">Loading…</p> : null}
+
+        {/* Connected gateways */}
+        <section className="max-w-4xl">
+          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Connected</h2>
+          <div className="mt-3 border-t border-border-subtle">
+            {telegramConnection ? (
+              <GatewayRow
+                connection={telegramConnection}
+                binding={telegramBinding}
+                busy={busy}
+                icon="TG"
+                iconBg="bg-sky-500"
+                title="Telegram"
+                targetLabel="Telegram chat"
+                onPause={() => updateTelegram(false)}
+                onResume={() => updateTelegram(true)}
+                onDetach={detachTelegram}
+                showPauseResume
+              />
+            ) : null}
+            {slackConnection ? (
+              <GatewayRow
+                connection={slackConnection}
+                binding={slackBinding}
+                busy={busy}
+                icon="SL"
+                iconBg="bg-purple-600"
+                title="Slack MCP"
+                targetLabel="Slack channel"
+                onDetach={detachSlack}
+              />
+            ) : null}
+            {!hasAnyConnection ? (
+              <div className="py-6 text-[14px] text-secondary">
+                <p>No gateways connected.</p>
+                <p className="mt-1 text-[13px] text-dim">Save provider credentials in Settings, then connect gateways here.</p>
+                <ToolbarButton
+                  className="mt-4 rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                  onClick={ensureTelegram}
+                  disabled={busy !== null}
+                >
+                  Connect Telegram
+                </ToolbarButton>
+              </div>
+            ) : null}
           </div>
-          <button className="ui-toolbar-button shrink-0" onClick={ensureTelegram} disabled={busy !== null}>
-            {telegramConnection ? 'Refresh' : '+ Connect Telegram'}
-          </button>
-        </header>
+        </section>
 
-        {error ? <p className="text-sm text-danger">{error}</p> : null}
-        {loading ? <p className="text-sm text-dim">Loading…</p> : null}
-
-        {/* Gateways list */}
-        <section>
-          <div className="flex items-baseline justify-between mb-4">
-            <p className="ui-section-label">Connected</p>
-          </div>
-
-          {telegramConnection ? (
-            <GatewayRow
-              connection={telegramConnection}
-              binding={telegramBinding}
-              busy={busy}
-              onPause={() => updateTelegram(false)}
-              onResume={() => updateTelegram(true)}
-              onDetach={detachTelegram}
-            />
-          ) : (
-            <div className="py-4">
-              <p className="text-sm text-secondary">No gateways connected.</p>
-              <p className="mt-1 text-sm text-dim">Save a Telegram bot token in Settings, then connect it here.</p>
-              <button className="ui-toolbar-button mt-4" onClick={ensureTelegram} disabled={busy !== null}>
-                Connect Telegram
-              </button>
+        {/* Slack channel attach */}
+        <section className="max-w-4xl">
+          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Attach Slack MCP channel</h2>
+          <div className="mt-3 border-t border-border-subtle pt-4 space-y-3">
+            <p className="text-[13px] text-secondary">Search Slack through MCP and attach one active channel.</p>
+            <div className="flex gap-2">
+              <input
+                className="ui-input min-w-0 flex-1"
+                value={slackQuery}
+                onChange={(e) => setSlackQuery(e.target.value)}
+                placeholder="Search channels…"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void searchSlackChannels();
+                }}
+              />
+              <ToolbarButton
+                className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                onClick={searchSlackChannels}
+                disabled={busy !== null || !slackQuery.trim()}
+              >
+                Search
+              </ToolbarButton>
             </div>
-          )}
+            {slackChannels.length > 0 ? (
+              <div className="border-t border-border-subtle">
+                {slackChannels.map((channel) => (
+                  <button
+                    key={channel.id}
+                    type="button"
+                    className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
+                    onClick={() => void attachSlackChannel(channel)}
+                    disabled={busy !== null}
+                  >
+                    <span>{channel.name}</span>
+                    <span className="text-[12px] text-dim">{channel.id}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </section>
 
         {/* Activity */}
         <GatewayActivity events={state.events} />
-      </div>
+      </AppPageLayout>
     </div>
   );
 }
@@ -132,16 +249,26 @@ function GatewayRow({
   connection,
   binding,
   busy,
+  icon,
+  iconBg,
+  title,
+  targetLabel,
   onPause,
   onResume,
   onDetach,
+  showPauseResume = false,
 }: {
   connection: GatewayConnection;
   binding: GatewayThreadBinding | null;
   busy: string | null;
-  onPause: () => void;
-  onResume: () => void;
+  icon: string;
+  iconBg: string;
+  title: string;
+  targetLabel: string;
+  onPause?: () => void;
+  onResume?: () => void;
   onDetach: () => void;
+  showPauseResume?: boolean;
 }) {
   const active = connection.enabled && (connection.status === 'active' || connection.status === 'connected');
   const statusDot =
@@ -162,37 +289,43 @@ function GatewayRow({
           : formatStatus(connection.status);
 
   return (
-    <div className="space-y-4">
-      {/* Name + status + actions */}
-      <div className="flex items-center gap-3">
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-500 text-[11px] font-bold text-white">TG</div>
+    <div className="grid gap-3 border-t border-border-subtle py-5 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-md text-[10px] font-bold text-white ${iconBg}`}>{icon}</div>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="font-medium">Telegram</span>
-          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
-          <span className="text-[12px] text-secondary">{statusLabel}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {binding ? (
-            <Link className="ui-toolbar-button" to={`/conversations/${encodeURIComponent(binding.conversationId)}`}>
-              Open thread
-            </Link>
-          ) : null}
-          {binding ? (
-            <button className="ui-toolbar-button" onClick={onDetach} disabled={busy !== null}>
-              Detach
-            </button>
-          ) : null}
-          <button className="ui-toolbar-button" onClick={active ? onPause : onResume} disabled={busy !== null}>
-            {active ? 'Pause' : 'Resume'}
-          </button>
+          <span className="text-[14px] font-medium">{title}</span>
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
+          <span className="text-[13px] text-secondary">{statusLabel}</span>
         </div>
       </div>
-
-      {/* Metadata row */}
-      <dl className="grid grid-cols-3 gap-6 border-t border-border-subtle pt-4 text-sm max-sm:grid-cols-1">
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {binding ? (
+          <Link
+            className="ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+            to={`/conversations/${encodeURIComponent(binding.conversationId)}`}
+          >
+            Open thread
+          </Link>
+        ) : null}
+        {binding ? (
+          <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] shadow-none" onClick={onDetach} disabled={busy !== null}>
+            Detach
+          </ToolbarButton>
+        ) : null}
+        {showPauseResume && onPause && onResume ? (
+          <ToolbarButton
+            className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+            onClick={active ? onPause : onResume}
+            disabled={busy !== null}
+          >
+            {active ? 'Pause' : 'Resume'}
+          </ToolbarButton>
+        ) : null}
+      </div>
+      <dl className="grid grid-cols-3 gap-6 text-[13px] sm:col-span-2 max-sm:grid-cols-1">
         <GatewayMeta label="Thread" value={binding?.conversationTitle || binding?.conversationId || '—'} muted={!binding} />
         <GatewayMeta
-          label="Telegram chat"
+          label={targetLabel}
           value={binding?.externalChatLabel || binding?.externalChatId || '—'}
           muted={!binding?.externalChatId}
         />
@@ -214,24 +347,24 @@ function GatewayMeta({ label, value, muted = false }: { label: string; value: st
 function GatewayActivity({ events }: { events: GatewayEvent[] }) {
   const rows = useMemo(() => events.slice(0, 10), [events]);
   return (
-    <section>
-      <div className="mb-4 flex items-baseline justify-between">
-        <p className="ui-section-label">Recent activity</p>
-        <p className="text-xs text-dim">Last 100 retained</p>
+    <section className="max-w-4xl">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-[18px] font-semibold tracking-tight text-primary">Recent activity</h2>
+        <p className="text-[12px] text-dim">Last 100 retained</p>
       </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-secondary">No activity yet.</p>
-      ) : (
-        <div className="space-y-0 divide-y divide-border-subtle">
-          {rows.map((event) => (
-            <div key={event.id} className="flex items-baseline gap-6 py-2.5 text-sm">
-              <span className="w-20 shrink-0 text-xs text-dim">{timeAgoCompact(new Date(event.createdAt).getTime())}</span>
+      <div className="mt-3 border-t border-border-subtle">
+        {rows.length === 0 ? (
+          <p className="py-6 text-[14px] text-secondary">No activity yet.</p>
+        ) : (
+          rows.map((event) => (
+            <div key={event.id} className="flex items-baseline gap-6 border-t border-border-subtle py-3 text-[13px] first:border-t-0">
+              <span className="w-20 shrink-0 text-[12px] text-dim">{timeAgoCompact(new Date(event.createdAt).getTime())}</span>
               <span className="min-w-0 flex-1">{event.message}</span>
-              <span className="shrink-0 text-xs capitalize text-dim">{event.kind}</span>
+              <span className="shrink-0 text-[12px] capitalize text-secondary">{event.kind}</span>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </section>
   );
 }
