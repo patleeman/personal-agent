@@ -1467,6 +1467,12 @@ export const api = {
   saveTelegramGatewayToken: async (token: string) =>
     post<{ configured: boolean; state: GatewayState }>('/gateways/telegram/token', { token }),
   deleteTelegramGatewayToken: async () => del<{ configured: boolean; state: GatewayState }>('/gateways/telegram/token'),
+  searchSlackMcpChannels: async (query: string) =>
+    get<{ channels: Array<{ id: string; name: string; isPrivate?: boolean }> }>(
+      `/gateways/slack-mcp/channels?query=${encodeURIComponent(query)}`,
+    ),
+  attachSlackMcpChannel: async (input: { channelId: string; channelLabel?: string }) =>
+    post<GatewayState>('/gateways/slack-mcp/channel', input),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-export type GatewayProviderId = 'telegram';
+export type GatewayProviderId = 'telegram' | 'slack_mcp';
 export type GatewayStatus = 'needs_config' | 'connected' | 'active' | 'paused' | 'needs_attention';
 
 export interface GatewayConnection {
@@ -36,6 +36,7 @@ export interface GatewayChatTarget {
   externalChatLabel?: string;
   conversationId: string;
   conversationTitle?: string;
+  lastExternalMessageId?: string;
   repliesEnabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -70,6 +71,7 @@ interface PersistedGatewayState {
 }
 
 const TELEGRAM_PROVIDER: GatewayProviderId = 'telegram';
+const SLACK_MCP_PROVIDER: GatewayProviderId = 'slack_mcp';
 
 export function resolveGatewayStateFile(stateRoot: string, profile: string): string {
   return join(stateRoot, 'gateways', `${sanitizeProfileName(profile)}.json`);
@@ -154,6 +156,7 @@ export function upsertGatewayChatTarget(input: {
   externalChatLabel?: string;
   conversationId: string;
   conversationTitle?: string;
+  lastExternalMessageId?: string;
   repliesEnabled?: boolean;
 }): GatewayChatTarget {
   return updateGatewayState(input, (state) => {
@@ -167,6 +170,7 @@ export function upsertGatewayChatTarget(input: {
       existing.externalChatLabel = input.externalChatLabel ?? existing.externalChatLabel;
       existing.conversationId = input.conversationId;
       existing.conversationTitle = input.conversationTitle ?? existing.conversationTitle;
+      existing.lastExternalMessageId = input.lastExternalMessageId ?? existing.lastExternalMessageId;
       existing.repliesEnabled = input.repliesEnabled ?? existing.repliesEnabled;
       existing.updatedAt = now;
       return existing;
@@ -180,6 +184,7 @@ export function upsertGatewayChatTarget(input: {
       externalChatLabel: input.externalChatLabel,
       conversationId: input.conversationId,
       conversationTitle: input.conversationTitle,
+      lastExternalMessageId: input.lastExternalMessageId,
       repliesEnabled: input.repliesEnabled ?? true,
       createdAt: now,
       updatedAt: now,
@@ -400,6 +405,12 @@ function toPublicGatewayState(state: PersistedGatewayState): GatewayState {
         implemented: true,
         configurationLocation: 'settings',
       },
+      {
+        id: SLACK_MCP_PROVIDER,
+        label: 'Slack MCP',
+        implemented: true,
+        configurationLocation: 'settings',
+      },
     ],
     connections: state.connections,
     bindings: state.bindings,
@@ -439,7 +450,11 @@ function appendGatewayEvent(state: PersistedGatewayState, event: Omit<GatewayEve
 }
 
 function providerLabel(provider: GatewayProviderId): string {
-  return provider === 'telegram' ? 'Telegram' : provider;
+  return provider === 'telegram' ? 'Telegram' : provider === 'slack_mcp' ? 'Slack MCP' : provider;
+}
+
+function isGatewayProviderId(value: unknown): value is GatewayProviderId {
+  return value === 'telegram' || value === 'slack_mcp';
 }
 
 function sanitizeProfileName(profile: string): string {
@@ -449,7 +464,7 @@ function sanitizeProfileName(profile: string): string {
 function isGatewayConnection(value: unknown): value is GatewayConnection {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as GatewayConnection;
-  return typeof candidate.id === 'string' && candidate.provider === 'telegram' && isGatewayStatus(candidate.status);
+  return typeof candidate.id === 'string' && isGatewayProviderId(candidate.provider) && isGatewayStatus(candidate.status);
 }
 
 function isGatewayThreadBinding(value: unknown): value is GatewayThreadBinding {
@@ -457,7 +472,7 @@ function isGatewayThreadBinding(value: unknown): value is GatewayThreadBinding {
   const candidate = value as GatewayThreadBinding;
   return (
     typeof candidate.id === 'string' &&
-    candidate.provider === 'telegram' &&
+    isGatewayProviderId(candidate.provider) &&
     typeof candidate.connectionId === 'string' &&
     typeof candidate.conversationId === 'string'
   );
@@ -468,7 +483,7 @@ function isGatewayChatTarget(value: unknown): value is GatewayChatTarget {
   const candidate = value as GatewayChatTarget;
   return (
     typeof candidate.id === 'string' &&
-    candidate.provider === 'telegram' &&
+    isGatewayProviderId(candidate.provider) &&
     typeof candidate.connectionId === 'string' &&
     typeof candidate.externalChatId === 'string' &&
     typeof candidate.conversationId === 'string'
@@ -478,7 +493,7 @@ function isGatewayChatTarget(value: unknown): value is GatewayChatTarget {
 function isGatewayEvent(value: unknown): value is GatewayEvent {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as GatewayEvent;
-  return typeof candidate.id === 'string' && candidate.provider === 'telegram' && typeof candidate.message === 'string';
+  return typeof candidate.id === 'string' && isGatewayProviderId(candidate.provider) && typeof candidate.message === 'string';
 }
 
 function isGatewayStatus(value: unknown): value is GatewayStatus {

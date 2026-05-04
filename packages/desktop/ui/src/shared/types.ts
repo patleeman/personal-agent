@@ -492,7 +492,7 @@ export interface SessionMeta {
 
 // ── Gateways ─────────────────────────────────────────────────────────────────
 
-export type GatewayProviderId = 'telegram';
+export type GatewayProviderId = 'telegram' | 'slack_mcp';
 export type GatewayStatus = 'needs_config' | 'connected' | 'active' | 'paused' | 'needs_attention';
 
 export interface GatewayProviderSummary {
@@ -534,6 +534,7 @@ export interface GatewayChatTarget {
   externalChatLabel?: string;
   conversationId: string;
   conversationTitle?: string;
+  lastExternalMessageId?: string;
   repliesEnabled: boolean;
   createdAt: string;
   updatedAt: string;
