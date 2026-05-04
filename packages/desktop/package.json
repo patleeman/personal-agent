@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/desktop",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "license": "MIT",
   "description": "Personal Agent Electron desktop shell",
   "repository": "github:user/personal-agent",
