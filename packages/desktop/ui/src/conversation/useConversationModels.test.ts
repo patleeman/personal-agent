@@ -17,12 +17,14 @@ describe('useConversationModels', () => {
     const { result } = renderHook(() => useConversationModels(false));
     expect(result.current.models).toEqual([]);
     expect(result.current.defaultModel).toBe('');
+    expect(result.current.defaultVisionModel).toBe('');
   });
 
   it('fetches models when enabled', async () => {
     mockModels.mockResolvedValue({
       models: [{ id: 'gpt-5', name: 'GPT-5', provider: 'openai' }],
       currentModel: 'gpt-5',
+      currentVisionModel: 'openai/gpt-4o',
       currentThinkingLevel: 'high',
       currentServiceTier: 'standard',
     });
@@ -31,6 +33,7 @@ describe('useConversationModels', () => {
 
     await waitFor(() => expect(result.current.models.length).toBeGreaterThan(0));
     expect(result.current.defaultModel).toBe('gpt-5');
+    expect(result.current.defaultVisionModel).toBe('openai/gpt-4o');
     expect(result.current.defaultThinkingLevel).toBe('high');
     expect(result.current.defaultServiceTier).toBe('standard');
   });

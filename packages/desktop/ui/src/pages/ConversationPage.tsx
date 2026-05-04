@@ -1300,7 +1300,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   });
 
   // Model
-  const { models, defaultModel, defaultThinkingLevel, defaultServiceTier } = useConversationModels(shouldLoadModels);
+  const { models, defaultModel, defaultVisionModel, defaultThinkingLevel, defaultServiceTier } = useConversationModels(shouldLoadModels);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   const [currentServiceTier, setCurrentServiceTier] = useState<string>('');
@@ -1312,6 +1312,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         defaultModel,
         models,
       }),
+    [currentModel, defaultModel, models],
+  );
+  const selectedComposerModel = useMemo(
+    () => models.find((model) => model.id === (currentModel || defaultModel)) ?? null,
     [currentModel, defaultModel, models],
   );
   const createLiveSessionPreferenceInput = useMemo(
@@ -1764,6 +1768,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [mentionIdx, setMentionIdx] = useState(0);
   const keyboardInset = useVisualViewportKeyboardInset();
   const [attachments, setAttachments] = useState<File[]>([]);
+  const showTextOnlyImageHint =
+    attachments.length > 0 && selectedComposerModel !== null && !selectedComposerModel.input?.includes('image') && !defaultVisionModel;
   const [screenshotCaptureBusy, setScreenshotCaptureBusy] = useState(false);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
   const [pendingBrowserComments, setPendingBrowserComments] = useReloadState<PendingBrowserComment[]>({
@@ -6397,6 +6403,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 />
               </div>
             )}
+
+            {showTextOnlyImageHint ? (
+              <p className="mb-2 text-[12px] text-secondary">
+                This model is text-only. Set a vision model in Settings to let it inspect attached images with probe_image.
+              </p>
+            ) : null}
 
             <div
               className={cx(
