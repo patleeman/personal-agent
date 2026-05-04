@@ -69,12 +69,17 @@ Duplicate the current active branch into a new conversation file. Useful before 
 
 While the agent is processing, you can queue additional messages. The composer remains active during streaming.
 
-| Delivery mode | When it arrives                                                                              |
-| ------------- | -------------------------------------------------------------------------------------------- |
-| Steering      | After the current assistant turn finishes executing its tool calls, before the next LLM call |
-| Follow-up     | After the agent completes all work (all tool calls finished)                                 |
+| Mode      | How to send                                                    | What happens                                                                                                                                          |
+| --------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Steer     | Press Enter while the agent is streaming                       | Queues guidance for the current turn. It is injected after the current assistant turn finishes its tool calls, before the next LLM call.              |
+| Follow-up | Hold Option/Alt and press Enter while the agent is streaming   | Queues a new prompt after the agent completes all current work. Use this when the next instruction should not interrupt the current chain of thought. |
+| Parallel  | Hold Command/Ctrl and press Enter while the agent is streaming | Starts a side conversation from the current context. The result can be imported back into the main thread, skipped, cancelled, or opened separately.  |
 
-Queued messages appear in the composer area. Press Escape to abort and restore queued messages to the editor. Alt+Up to retrieve queued messages back.
+When auto mode has a hidden turn pending, normal submits become follow-ups. Holding Command/Ctrl still starts a parallel side conversation.
+
+Queued steer and follow-up prompts appear in the queue shelf above the composer. Use `restore` to pull a queued prompt back into the composer. Press Escape to abort the active response and restore queued messages to the editor. Press Alt+Up to retrieve queued messages back.
+
+Parallel prompts appear in the Parallel shelf. A running parallel prompt can be cancelled. A completed or failed parallel prompt can be imported into the main thread, skipped, or opened as its own conversation.
 
 ## Conversation Inspect
 
