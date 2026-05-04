@@ -28,6 +28,19 @@ export interface GatewayThreadBinding {
   updatedAt: string;
 }
 
+export interface GatewayChatTarget {
+  id: string;
+  provider: GatewayProviderId;
+  connectionId: string;
+  externalChatId: string;
+  externalChatLabel?: string;
+  conversationId: string;
+  conversationTitle?: string;
+  repliesEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GatewayEvent {
   id: string;
   provider: GatewayProviderId;
@@ -41,6 +54,7 @@ export interface GatewayState {
   providers: Array<{ id: GatewayProviderId; label: string; implemented: boolean; configurationLocation: 'settings' }>;
   connections: GatewayConnection[];
   bindings: GatewayThreadBinding[];
+  chatTargets: GatewayChatTarget[];
   events: GatewayEvent[];
 }
 
@@ -51,6 +65,7 @@ interface PersistedGatewayState {
   version: number;
   connections: GatewayConnection[];
   bindings: GatewayThreadBinding[];
+  chatTargets: GatewayChatTarget[];
   events: GatewayEvent[];
 }
 
@@ -131,6 +146,76 @@ export function attachGatewayConversation(input: {
   return readGatewayState(input);
 }
 
+export function upsertGatewayChatTarget(input: {
+  stateRoot: string;
+  profile: string;
+  provider: GatewayProviderId;
+  externalChatId: string;
+  externalChatLabel?: string;
+  conversationId: string;
+  conversationTitle?: string;
+  repliesEnabled?: boolean;
+}): GatewayChatTarget {
+  return updateGatewayState(input, (state) => {
+    const connection = ensureConnectionInState(state, input.provider);
+    const now = new Date().toISOString();
+    const existing = state.chatTargets.find(
+      (target) =>
+        target.provider === input.provider && target.connectionId === connection.id && target.externalChatId === input.externalChatId,
+    );
+    if (existing) {
+      existing.externalChatLabel = input.externalChatLabel ?? existing.externalChatLabel;
+      existing.conversationId = input.conversationId;
+      existing.conversationTitle = input.conversationTitle ?? existing.conversationTitle;
+      existing.repliesEnabled = input.repliesEnabled ?? existing.repliesEnabled;
+      existing.updatedAt = now;
+      return existing;
+    }
+
+    const target: GatewayChatTarget = {
+      id: `${connection.id}:chat:${input.externalChatId}`,
+      provider: input.provider,
+      connectionId: connection.id,
+      externalChatId: input.externalChatId,
+      externalChatLabel: input.externalChatLabel,
+      conversationId: input.conversationId,
+      conversationTitle: input.conversationTitle,
+      repliesEnabled: input.repliesEnabled ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    state.chatTargets.push(target);
+    return target;
+  });
+}
+
+export function findGatewayChatTarget(input: {
+  stateRoot: string;
+  profile: string;
+  provider: GatewayProviderId;
+  externalChatId: string;
+}): GatewayChatTarget | null {
+  const state = readPersistedGatewayState(resolveGatewayStateFile(input.stateRoot, input.profile));
+  const connection = state.connections.find((candidate) => candidate.provider === input.provider);
+  if (!connection) {
+    return null;
+  }
+  return (
+    state.chatTargets.find(
+      (target) =>
+        target.provider === input.provider && target.connectionId === connection.id && target.externalChatId === input.externalChatId,
+    ) ?? null
+  );
+}
+
+export function hasGatewayBinding(input: { stateRoot: string; profile: string; provider: GatewayProviderId }): boolean {
+  const state = readPersistedGatewayState(resolveGatewayStateFile(input.stateRoot, input.profile));
+  const connection = state.connections.find((candidate) => candidate.provider === input.provider);
+  return Boolean(
+    connection && state.bindings.some((binding) => binding.provider === input.provider && binding.connectionId === connection.id),
+  );
+}
+
 export function detachGatewayConversation(input: {
   stateRoot: string;
   profile: string;
@@ -147,6 +232,11 @@ export function detachGatewayConversation(input: {
 
     state.bindings = state.bindings.filter(
       (binding) => !(binding.conversationId === input.conversationId && (!input.provider || binding.provider === input.provider)),
+    );
+    state.chatTargets = state.chatTargets.map((target) =>
+      target.conversationId === input.conversationId && (!input.provider || target.provider === input.provider)
+        ? { ...target, repliesEnabled: false, updatedAt: new Date().toISOString() }
+        : target,
     );
     for (const binding of removed) {
       appendGatewayEvent(state, {
@@ -174,6 +264,9 @@ export function detachArchivedGatewayConversations(input: { stateRoot: string; p
     }
 
     state.bindings = state.bindings.filter((binding) => !ids.has(binding.conversationId));
+    state.chatTargets = state.chatTargets.map((target) =>
+      ids.has(target.conversationId) ? { ...target, repliesEnabled: false, updatedAt: new Date().toISOString() } : target,
+    );
     for (const binding of removed) {
       appendGatewayEvent(state, {
         provider: binding.provider,
@@ -222,6 +315,7 @@ function readPersistedGatewayState(file: string): PersistedGatewayState {
       version: GATEWAY_STATE_VERSION,
       connections: Array.isArray(parsed.connections) ? parsed.connections.filter(isGatewayConnection) : [],
       bindings: Array.isArray(parsed.bindings) ? parsed.bindings.filter(isGatewayThreadBinding) : [],
+      chatTargets: Array.isArray(parsed.chatTargets) ? parsed.chatTargets.filter(isGatewayChatTarget) : [],
       events: Array.isArray(parsed.events) ? parsed.events.filter(isGatewayEvent).slice(-MAX_GATEWAY_EVENTS) : [],
     };
   } catch {
@@ -243,7 +337,7 @@ function updateGatewayState<T>(input: { stateRoot: string; profile: string }, up
 }
 
 function createDefaultGatewayState(): PersistedGatewayState {
-  return { version: GATEWAY_STATE_VERSION, connections: [], bindings: [], events: [] };
+  return { version: GATEWAY_STATE_VERSION, connections: [], bindings: [], chatTargets: [], events: [] };
 }
 
 function toPublicGatewayState(state: PersistedGatewayState): GatewayState {
@@ -258,6 +352,7 @@ function toPublicGatewayState(state: PersistedGatewayState): GatewayState {
     ],
     connections: state.connections,
     bindings: state.bindings,
+    chatTargets: state.chatTargets,
     events: state.events.slice(-MAX_GATEWAY_EVENTS).reverse(),
   };
 }
@@ -313,6 +408,18 @@ function isGatewayThreadBinding(value: unknown): value is GatewayThreadBinding {
     typeof candidate.id === 'string' &&
     candidate.provider === 'telegram' &&
     typeof candidate.connectionId === 'string' &&
+    typeof candidate.conversationId === 'string'
+  );
+}
+
+function isGatewayChatTarget(value: unknown): value is GatewayChatTarget {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as GatewayChatTarget;
+  return (
+    typeof candidate.id === 'string' &&
+    candidate.provider === 'telegram' &&
+    typeof candidate.connectionId === 'string' &&
+    typeof candidate.externalChatId === 'string' &&
     typeof candidate.conversationId === 'string'
   );
 }

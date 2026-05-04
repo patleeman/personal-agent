@@ -526,6 +526,19 @@ export interface GatewayThreadBinding {
   updatedAt: string;
 }
 
+export interface GatewayChatTarget {
+  id: string;
+  provider: GatewayProviderId;
+  connectionId: string;
+  externalChatId: string;
+  externalChatLabel?: string;
+  conversationId: string;
+  conversationTitle?: string;
+  repliesEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GatewayEvent {
   id: string;
   provider: GatewayProviderId;
@@ -539,6 +552,7 @@ export interface GatewayState {
   providers: GatewayProviderSummary[];
   connections: GatewayConnection[];
   bindings: GatewayThreadBinding[];
+  chatTargets: GatewayChatTarget[];
   events: GatewayEvent[];
 }
 

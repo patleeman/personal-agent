@@ -1,6 +1,12 @@
 import type { Express, Request, Response } from 'express';
 
 import {
+  compactLiveSessionCapability,
+  createLiveSessionCapability,
+  submitLiveSessionPromptCapability,
+} from '../conversations/liveSessionCapability.js';
+import { getAvailableModelObjects, renameSession, updateLiveSessionModelPreferences } from '../conversations/liveSessions.js';
+import {
   attachGatewayConversation,
   detachGatewayConversation,
   ensureGatewayConnection,
@@ -9,6 +15,8 @@ import {
   readGatewayState,
   updateGatewayConnectionStatus,
 } from '../gateways/gatewayState.js';
+import { readTelegramBotToken, removeTelegramBotToken, writeTelegramBotToken } from '../gateways/telegramAuth.js';
+import { TelegramGatewayRuntime } from '../gateways/telegramGateway.js';
 import { logError } from '../middleware/index.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import type { ServerRouteContext } from './context.js';
@@ -19,14 +27,78 @@ let getCurrentProfileFn: () => string = () => {
 let getStateRootFn: () => string = () => {
   throw new Error('getStateRoot not initialized for gateway routes');
 };
+let getAuthFileFn: () => string = () => {
+  throw new Error('getAuthFile not initialized for gateway routes');
+};
+let routeContext: ServerRouteContext | null = null;
+let telegramRuntime: TelegramGatewayRuntime | null = null;
 
-function initializeGatewayRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getStateRoot'>): void {
+function initializeGatewayRoutesContext(context: ServerRouteContext): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getStateRootFn = context.getStateRoot;
+  getAuthFileFn = context.getAuthFile;
+  routeContext = context;
 }
 
 function currentGatewayContext(): { stateRoot: string; profile: string } {
   return { stateRoot: getStateRootFn(), profile: getCurrentProfileFn() };
+}
+
+function liveSessionContext(context: ServerRouteContext) {
+  return {
+    getCurrentProfile: context.getCurrentProfile,
+    getRepoRoot: context.getRepoRoot,
+    getDefaultWebCwd: context.getDefaultWebCwd,
+    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
+    flushLiveDeferredResumes: context.flushLiveDeferredResumes,
+    listTasksForCurrentProfile: context.listTasksForCurrentProfile,
+    listMemoryDocs: context.listMemoryDocs,
+  };
+}
+
+function ensureTelegramRuntime(): TelegramGatewayRuntime {
+  if (!routeContext) {
+    throw new Error('Gateway routes are not initialized');
+  }
+  if (telegramRuntime) {
+    return telegramRuntime;
+  }
+  const context = routeContext;
+  telegramRuntime = new TelegramGatewayRuntime({
+    stateRoot: context.getStateRoot(),
+    profile: context.getCurrentProfile(),
+    authFile: context.getAuthFile(),
+    readBotToken: () => readTelegramBotToken(context.getAuthFile()),
+    createConversation: async (input) => {
+      const created = await createLiveSessionCapability({}, liveSessionContext(context));
+      renameSession(created.id, input.title);
+      return { id: created.id };
+    },
+    submitPrompt: async (input) => {
+      await submitLiveSessionPromptCapability(
+        { conversationId: input.conversationId, text: input.text, images: input.images },
+        liveSessionContext(context),
+      );
+    },
+    renameConversation: (conversationId, title) => renameSession(conversationId, title),
+    compactConversation: async (conversationId) => {
+      await compactLiveSessionCapability({ conversationId });
+    },
+    archiveConversation: async (conversationId) => {
+      detachGatewayConversation({
+        stateRoot: context.getStateRoot(),
+        profile: context.getCurrentProfile(),
+        provider: 'telegram',
+        conversationId,
+      });
+    },
+    getCurrentModel: () => null,
+    setModel: async (conversationId, model) => {
+      await updateLiveSessionModelPreferences(conversationId, { model }, getAvailableModelObjects());
+    },
+  });
+  return telegramRuntime;
 }
 
 function readProvider(value: unknown): GatewayProviderId | null {
@@ -51,10 +123,7 @@ function handleGatewayError(res: Response, err: unknown): void {
   res.status(500).json({ error: String(err) });
 }
 
-export function registerGatewayRoutes(
-  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getStateRoot'>,
-): void {
+export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>, context: ServerRouteContext): void {
   initializeGatewayRoutesContext(context);
 
   router.get('/api/gateways', (_req, res) => {
@@ -90,7 +159,57 @@ export function registerGatewayRoutes(
       }
       const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : undefined;
       const statusMessage = readOptionalString(req.body?.statusMessage);
-      res.json(updateGatewayConnectionStatus({ ...currentGatewayContext(), provider, status, enabled, statusMessage }));
+      const state = updateGatewayConnectionStatus({ ...currentGatewayContext(), provider, status, enabled, statusMessage });
+      if (provider === 'telegram') {
+        if (enabled === false || status === 'paused' || status === 'needs_attention') {
+          ensureTelegramRuntime().stop();
+        } else {
+          ensureTelegramRuntime().start();
+        }
+      }
+      res.json(state);
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  router.get('/api/gateways/telegram/token', (_req, res) => {
+    try {
+      res.json({ configured: readTelegramBotToken(getAuthFileFn()) !== null });
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  router.post('/api/gateways/telegram/token', (req: Request, res: Response) => {
+    try {
+      const token = readOptionalString(req.body?.token);
+      if (!token) {
+        res.status(400).json({ error: 'token required' });
+        return;
+      }
+      writeTelegramBotToken(getAuthFileFn(), token);
+      ensureGatewayConnection({ ...currentGatewayContext(), provider: 'telegram' });
+      const state = updateGatewayConnectionStatus({ ...currentGatewayContext(), provider: 'telegram', status: 'active', enabled: true });
+      ensureTelegramRuntime().start();
+      res.json({ configured: true, state });
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  router.delete('/api/gateways/telegram/token', (_req, res) => {
+    try {
+      removeTelegramBotToken(getAuthFileFn());
+      ensureTelegramRuntime().stop();
+      const state = updateGatewayConnectionStatus({
+        ...currentGatewayContext(),
+        provider: 'telegram',
+        status: 'needs_config',
+        enabled: false,
+        statusMessage: 'Telegram bot token removed',
+      });
+      res.json({ configured: false, state });
     } catch (err) {
       handleGatewayError(res, err);
     }

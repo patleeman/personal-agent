@@ -14,6 +14,8 @@ The first implemented provider is Telegram, behind a generic gateway model.
 - Assistant replies mirror back to Telegram only when the gateway is enabled, attached, and the conversation has a Telegram chat target.
 - User messages typed in the desktop composer stay local; they do not send directly to Telegram.
 
+The runtime stores Telegram bot tokens in the auth store under the `telegram` provider id. Saving a token enables the managed long-poll service; removing the token stops it and marks Telegram as needing configuration.
+
 ## UI surfaces
 
 The sidebar has a top-level **Gateways** item. The page shows connected gateways, routing state, health, and recent activity. It intentionally does not expose bot tokens or provider secrets.

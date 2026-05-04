@@ -1463,6 +1463,10 @@ export const api = {
     del<GatewayState>(
       `/gateways/bindings/${encodeURIComponent(conversationId)}${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`,
     ),
+  telegramGatewayToken: async () => get<{ configured: boolean }>('/gateways/telegram/token'),
+  saveTelegramGatewayToken: async (token: string) =>
+    post<{ configured: boolean; state: GatewayState }>('/gateways/telegram/token', { token }),
+  deleteTelegramGatewayToken: async () => del<{ configured: boolean; state: GatewayState }>('/gateways/telegram/token'),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────
