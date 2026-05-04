@@ -1,4 +1,7 @@
-import { createAgentSession, type ExtensionAPI, SessionManager } from '@mariozechner/pi-coding-agent';
+import { join } from 'node:path';
+
+import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } from '@mariozechner/pi-coding-agent';
+import { getPiAgentRuntimeDir } from '@personal-agent/core';
 import { Type } from '@sinclair/typebox';
 
 import { getImageProbeAttachments, getImageProbeAttachmentsById } from './imageProbeAttachmentStore.js';
@@ -34,6 +37,27 @@ function extractTextContent(content: unknown): string {
     })
     .filter(Boolean)
     .join('\n');
+}
+
+function collectAssistantTextsFromSession(session: Awaited<ReturnType<typeof createAgentSession>>['session']): string[] {
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  return messages
+    .filter((message) => message.role === 'assistant')
+    .map((message) => extractTextContent(message.content).trim())
+    .filter(Boolean);
+}
+
+function getAssistantErrorMessage(session: Awaited<ReturnType<typeof createAgentSession>>['session']): string | null {
+  const messages = Array.isArray(session.messages) ? session.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== 'assistant') continue;
+    const errorMessage = (message as { errorMessage?: unknown }).errorMessage;
+    if (typeof errorMessage === 'string' && errorMessage.trim()) {
+      return errorMessage.trim();
+    }
+  }
+  return null;
 }
 
 function resolvePreferredVisionModel(models: unknown[], modelRef: string): unknown | null {
@@ -112,6 +136,7 @@ export function createImageProbeAgentExtension(options: { getPreferredVisionMode
             await createAgentSession({
               cwd: ctx.cwd,
               model: model as never,
+              authStorage: AuthStorage.create(join(getPiAgentRuntimeDir(), 'auth.json')),
               modelRegistry: ctx.modelRegistry,
               sessionManager: SessionManager.inMemory(ctx.cwd),
               noTools: 'all',
@@ -148,6 +173,13 @@ export function createImageProbeAgentExtension(options: { getPreferredVisionMode
           await session.prompt(prompt, {
             images: attachments.map((image) => ({ type: 'image' as const, data: image.data, mimeType: image.mimeType })),
           });
+          const assistantError = getAssistantErrorMessage(session);
+          if (assistantError) {
+            throw new Error(assistantError);
+          }
+          if (assistantTexts.length === 0) {
+            assistantTexts.push(...collectAssistantTextsFromSession(session));
+          }
         } catch (error) {
           return {
             content: [{ type: 'text' as const, text: classifyVisionProbeFailure(error, preferredVisionModel) }],

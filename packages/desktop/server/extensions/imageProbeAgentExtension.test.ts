@@ -7,6 +7,9 @@ const { createAgentSessionMock, getImageProbeAttachmentsMock, getImageProbeAttac
 }));
 
 vi.mock('@mariozechner/pi-coding-agent', () => ({
+  AuthStorage: {
+    create: vi.fn((path: string) => ({ path })),
+  },
   createAgentSession: createAgentSessionMock,
   SessionManager: {
     inMemory: vi.fn((cwd: string) => ({ cwd })),
@@ -90,7 +93,10 @@ describe('image probe agent extension', () => {
     );
 
     expect(createAgentSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ model: { provider: 'openai', id: 'gpt-4o', input: ['text', 'image'] } }),
+      expect.objectContaining({
+        authStorage: expect.objectContaining({ path: expect.stringContaining('auth.json') }),
+        model: { provider: 'openai', id: 'gpt-4o', input: ['text', 'image'] },
+      }),
     );
     expect(session.prompt).toHaveBeenCalledWith(expect.stringContaining('Act as its eyes'), {
       images: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
@@ -149,5 +155,35 @@ describe('image probe agent extension', () => {
       text: expect.stringContaining('billing or credit problem'),
     });
     expect(session.dispose).toHaveBeenCalled();
+  });
+
+  it('returns classified failures when the vision subagent records an assistant error message', async () => {
+    const session = {
+      messages: [
+        {
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          errorMessage: '404 model: old-vision-model',
+        },
+      ],
+      subscribe: vi.fn(() => vi.fn()),
+      prompt: vi.fn(async () => {}),
+      dispose: vi.fn(),
+    };
+    createAgentSessionMock.mockResolvedValue({ session });
+    const tool = registerTool({ preferredVisionModel: 'anthropic/old-vision-model' });
+
+    const result = await tool.execute('tool-1', { imageIds: ['img_abc123abc123'], question: 'What is visible?' }, undefined, undefined, {
+      cwd: '/repo',
+      sessionManager: { getSessionId: () => 'session-1' },
+      modelRegistry: { getAvailable: () => [{ provider: 'anthropic', id: 'old-vision-model', input: ['text', 'image'] }] },
+    } as never);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('failed while analyzing the image'),
+    });
   });
 });
