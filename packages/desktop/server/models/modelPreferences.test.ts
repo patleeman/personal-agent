@@ -24,6 +24,7 @@ describe('readSavedModelPreferences', () => {
     const dir = createTempDir();
     expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({
       currentModel: '',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -37,6 +38,7 @@ describe('readSavedModelPreferences', () => {
 
     expect(readSavedModelPreferences(file)).toEqual({
       currentModel: 'gpt-5.4',
+      currentVisionModel: '',
       currentThinkingLevel: 'xhigh',
       currentServiceTier: 'priority',
       currentPresetId: '',
@@ -50,6 +52,7 @@ describe('readSavedModelPreferences', () => {
 
     expect(readSavedModelPreferences(file)).toEqual({
       currentModel: '',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -65,6 +68,7 @@ describe('normalizeSavedModelPreferences', () => {
 
     expect(normalizeSavedModelPreferences(file, [{ id: 'claude-sonnet-4-6', provider: 'anthropic' }])).toEqual({
       currentModel: 'claude-sonnet-4-6',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -82,6 +86,7 @@ describe('normalizeSavedModelPreferences', () => {
 
     expect(normalizeSavedModelPreferences(file, [{ id: 'gpt-5.4', provider: 'openai-codex' }])).toEqual({
       currentModel: 'gpt-5.4',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -104,6 +109,7 @@ describe('normalizeSavedModelPreferences', () => {
       ]),
     ).toEqual({
       currentModel: 'gpt-5.4',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -127,6 +133,7 @@ describe('normalizeSavedModelPreferences', () => {
       ]),
     ).toEqual({
       currentModel: 'gpt-5.4',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -150,6 +157,7 @@ describe('writeSavedModelPreferences', () => {
 
     expect(readSavedModelPreferences(file)).toEqual({
       currentModel: 'gpt-5.4',
+      currentVisionModel: '',
       currentThinkingLevel: 'high',
       currentServiceTier: 'priority',
       currentPresetId: '',
@@ -163,6 +171,25 @@ describe('writeSavedModelPreferences', () => {
     });
   });
 
+  it('writes and reads the preferred vision model separately from the default model', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+
+    writeSavedModelPreferences({ visionModel: 'openai/gpt-4o' }, file, [{ id: 'gpt-4o', provider: 'openai' }]);
+
+    expect(readSavedModelPreferences(file, [{ id: 'gpt-4o', provider: 'openai' }])).toEqual({
+      currentModel: '',
+      currentVisionModel: 'openai/gpt-4o',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      currentPresetId: '',
+    });
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
+      defaultVisionProvider: 'openai',
+      defaultVisionModel: 'gpt-4o',
+    });
+  });
+
   it('clears persisted preferences when given empty values', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
@@ -171,16 +198,19 @@ describe('writeSavedModelPreferences', () => {
       JSON.stringify({
         defaultProvider: 'openai-codex',
         defaultModel: 'gpt-5.4',
+        defaultVisionProvider: 'openai',
+        defaultVisionModel: 'gpt-4o',
         defaultThinkingLevel: 'xhigh',
         defaultServiceTier: 'priority',
         theme: 'cobalt2',
       }),
     );
 
-    writeSavedModelPreferences({ model: '', thinkingLevel: '', serviceTier: '' }, file);
+    writeSavedModelPreferences({ model: '', visionModel: '', thinkingLevel: '', serviceTier: '' }, file);
 
     expect(readSavedModelPreferences(file)).toEqual({
       currentModel: '',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',
@@ -240,6 +270,7 @@ describe('writeSavedModelPreferences', () => {
 
     expect(readSavedModelPreferences(file)).toEqual({
       currentModel: '',
+      currentVisionModel: '',
       currentThinkingLevel: '',
       currentServiceTier: '',
       currentPresetId: '',

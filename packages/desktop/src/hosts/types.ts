@@ -165,6 +165,7 @@ export interface DesktopProviderOAuthInputRequest {
 
 export interface DesktopModelPreferencesUpdateRequest {
   model?: string | null;
+  visionModel?: string | null;
   thinkingLevel?: string | null;
   serviceTier?: string | null;
 }

@@ -1806,7 +1806,7 @@ export function SettingsPage() {
   const [instructionFilesDraft, setInstructionFilesDraft] = useState<string[]>([]);
   const [savingInstructionFiles, setSavingInstructionFiles] = useState(false);
   const [instructionFilesSaveError, setInstructionFilesSaveError] = useState<string | null>(null);
-  const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | 'serviceTier' | null>(null);
+  const [savingPreference, setSavingPreference] = useState<'model' | 'visionModel' | 'thinking' | 'serviceTier' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [knowledgeBaseRepoUrlDraft, setKnowledgeBaseRepoUrlDraft] = useState('');
   const [knowledgeBaseBranchDraft, setKnowledgeBaseBranchDraft] = useState('main');
@@ -1987,6 +1987,11 @@ export function SettingsPage() {
   }, [visibleQuickLinks]);
 
   const groupedModels = useMemo(() => groupModelsByProvider(modelState?.models ?? []), [modelState?.models]);
+  const imageCapableModels = useMemo(
+    () => (modelState?.models ?? []).filter((model) => model.input?.includes('image')),
+    [modelState?.models],
+  );
+  const groupedImageCapableModels = useMemo(() => groupModelsByProvider(imageCapableModels), [imageCapableModels]);
 
   const selectedModel = useMemo(() => {
     if (!modelState?.currentModel) {
@@ -1995,6 +2000,11 @@ export function SettingsPage() {
 
     return modelState.models.find((model) => model.id === modelState.currentModel) ?? null;
   }, [modelState]);
+
+  const selectedVisionModel = useMemo(
+    () => findModelByRef(modelState?.models ?? [], modelState?.currentVisionModel ?? ''),
+    [modelState?.currentVisionModel, modelState?.models],
+  );
 
   const selectedModelServiceTierOptions = useMemo(() => getModelSelectableServiceTierOptions(selectedModel), [selectedModel]);
   const selectedModelSupportsFastMode = useMemo(
@@ -2553,14 +2563,18 @@ export function SettingsPage() {
   }
 
   async function handleModelPreferenceChange(
-    input: { model?: string; thinkingLevel?: string; serviceTier?: string },
-    field: 'model' | 'thinking' | 'serviceTier',
+    input: { model?: string; visionModel?: string; thinkingLevel?: string; serviceTier?: string },
+    field: 'model' | 'visionModel' | 'thinking' | 'serviceTier',
   ) {
     if (!modelState || savingPreference !== null) {
       return;
     }
 
     if (field === 'model' && (!input.model || input.model === modelState.currentModel)) {
+      return;
+    }
+
+    if (field === 'visionModel' && input.visionModel === modelState.currentVisionModel) {
       return;
     }
 
@@ -3566,6 +3580,37 @@ export function SettingsPage() {
                     </select>
                     <p className="ui-card-meta">
                       {savingPreference === 'model' ? 'Saving default model...' : formatModelSummary(selectedModel, 'No model selected.')}
+                    </p>
+
+                    <label className="ui-card-meta pt-1" htmlFor="settings-vision-model">
+                      Vision model for text-only chats
+                    </label>
+                    <select
+                      id="settings-vision-model"
+                      value={modelState.currentVisionModel}
+                      onChange={(event) => {
+                        void handleModelPreferenceChange({ visionModel: event.target.value }, 'visionModel');
+                      }}
+                      disabled={savingPreference !== null || imageCapableModels.length === 0}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Not configured</option>
+                      {groupedImageCapableModels.map(([provider, models]) => (
+                        <optgroup key={provider} label={provider}>
+                          {models.map((model) => (
+                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                              {model.name} · {formatContextWindowLabel(model.context)} ctx
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {savingPreference === 'visionModel'
+                        ? 'Saving vision model…'
+                        : modelState.currentVisionModel
+                          ? `Text-only image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
+                          : 'Required before text-only models can inspect uploaded images.'}
                     </p>
 
                     <label className="ui-card-meta pt-1" htmlFor="settings-thinking">

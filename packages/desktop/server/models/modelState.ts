@@ -3,18 +3,26 @@ import { normalizeSavedModelPreferences } from './modelPreferences.js';
 import { getSupportedServiceTiersForModel, modelSupportsServiceTier } from './modelServiceTiers.js';
 
 const BUILT_IN_MODELS = [
-  { id: 'claude-opus-4-6', provider: 'anthropic', name: 'Claude Opus 4.6', context: 200_000 },
-  { id: 'claude-sonnet-4-6', provider: 'anthropic', name: 'Claude Sonnet 4.6', context: 200_000 },
-  { id: 'claude-haiku-4-6', provider: 'anthropic', name: 'Claude Haiku 4.6', context: 200_000 },
-  { id: 'gpt-5.5', provider: 'openai-codex', name: 'GPT-5.5', context: 400_000 },
-  { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 128_000 },
-  { id: 'gpt-5.4-mini', provider: 'openai-codex', name: 'GPT-5.4 Mini', context: 128_000 },
-  { id: 'gpt-5.2', provider: 'openai-codex', name: 'GPT-5.2', context: 128_000 },
-  { id: 'gpt-5.1-codex-mini', provider: 'openai-codex', name: 'GPT-5.1 Codex Mini', context: 128_000 },
-  { id: 'gpt-4o', provider: 'openai', name: 'GPT-4o', context: 128_000 },
-  { id: 'gemini-2.5-pro', provider: 'google', name: 'Gemini 2.5 Pro', context: 1_000_000 },
-  { id: 'gemini-3.1-pro-high', provider: 'google', name: 'Gemini 3.1 Pro High', context: 1_000_000 },
+  { id: 'claude-opus-4-6', provider: 'anthropic', name: 'Claude Opus 4.6', context: 200_000, input: ['text', 'image'] },
+  { id: 'claude-sonnet-4-6', provider: 'anthropic', name: 'Claude Sonnet 4.6', context: 200_000, input: ['text', 'image'] },
+  { id: 'claude-haiku-4-6', provider: 'anthropic', name: 'Claude Haiku 4.6', context: 200_000, input: ['text', 'image'] },
+  { id: 'gpt-5.5', provider: 'openai-codex', name: 'GPT-5.5', context: 400_000, input: ['text', 'image'] },
+  { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 128_000, input: ['text', 'image'] },
+  { id: 'gpt-5.4-mini', provider: 'openai-codex', name: 'GPT-5.4 Mini', context: 128_000, input: ['text', 'image'] },
+  { id: 'gpt-5.2', provider: 'openai-codex', name: 'GPT-5.2', context: 128_000, input: ['text', 'image'] },
+  { id: 'gpt-5.1-codex-mini', provider: 'openai-codex', name: 'GPT-5.1 Codex Mini', context: 128_000, input: ['text'] },
+  { id: 'gpt-4o', provider: 'openai', name: 'GPT-4o', context: 128_000, input: ['text', 'image'] },
+  { id: 'gemini-2.5-pro', provider: 'google', name: 'Gemini 2.5 Pro', context: 1_000_000, input: ['text', 'image'] },
+  { id: 'gemini-3.1-pro-high', provider: 'google', name: 'Gemini 3.1 Pro High', context: 1_000_000, input: ['text', 'image'] },
 ] as const;
+
+function readModelInput(model: unknown): Array<'text' | 'image'> {
+  const input = (model as { input?: unknown } | undefined)?.input;
+  if (!Array.isArray(input)) {
+    return ['text'];
+  }
+  return input.includes('image') ? ['text', 'image'] : ['text'];
+}
 
 export function listModelDefinitions() {
   try {
@@ -23,6 +31,7 @@ export function listModelDefinitions() {
       provider: model.provider,
       name: model.name,
       context: model.contextWindow ?? model.context ?? 128_000,
+      input: readModelInput(model),
       supportedServiceTiers: getSupportedServiceTiersForModel(model),
     }));
   } catch {
@@ -43,6 +52,7 @@ export function readModelState(settingsFile: string) {
 
   return {
     currentModel,
+    currentVisionModel: saved.currentVisionModel ?? '',
     currentThinkingLevel: saved.currentThinkingLevel,
     currentServiceTier: modelSupportsServiceTier(selectedModel, saved.currentServiceTier) ? saved.currentServiceTier : '',
     models,

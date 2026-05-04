@@ -107,16 +107,26 @@ export function registerModelRoutes(
 
   router.patch('/api/models/current', (req, res) => {
     try {
-      const { model, thinkingLevel, serviceTier } = req.body as { model?: string; thinkingLevel?: string; serviceTier?: string };
-      if (typeof model !== 'string' && typeof thinkingLevel !== 'string' && typeof serviceTier !== 'string') {
-        res.status(400).json({ error: 'model, thinkingLevel, or serviceTier required' });
+      const { model, visionModel, thinkingLevel, serviceTier } = req.body as {
+        model?: string;
+        visionModel?: string;
+        thinkingLevel?: string;
+        serviceTier?: string;
+      };
+      if (
+        typeof model !== 'string' &&
+        typeof visionModel !== 'string' &&
+        typeof thinkingLevel !== 'string' &&
+        typeof serviceTier !== 'string'
+      ) {
+        res.status(400).json({ error: 'model, visionModel, thinkingLevel, or serviceTier required' });
         return;
       }
 
       const models = listModelDefinitions();
       persistSettingsWrite(
         (settingsFile) => {
-          writeSavedModelPreferences({ model, thinkingLevel, serviceTier }, settingsFile, models);
+          writeSavedModelPreferences({ model, visionModel, thinkingLevel, serviceTier }, settingsFile, models);
         },
         {
           runtimeSettingsFile: SETTINGS_FILE,

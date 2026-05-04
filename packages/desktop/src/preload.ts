@@ -95,8 +95,12 @@ const desktopBridge = {
   readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
   transcribeFile: (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string; model?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:transcribe-file`, input),
-  updateModelPreferences: (input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-model-preferences`, input),
+  updateModelPreferences: (input: {
+    model?: string | null;
+    visionModel?: string | null;
+    thinkingLevel?: string | null;
+    serviceTier?: string | null;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-model-preferences`, input),
   readDefaultCwd: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-default-cwd`),
   updateDefaultCwd: (cwd: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-default-cwd`, cwd),
   readVaultFiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-vault-files`),

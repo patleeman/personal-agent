@@ -1,11 +1,18 @@
 import { createAgentSession, type ExtensionAPI, SessionManager } from '@mariozechner/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
 
-import { getImageProbeAttachments } from './imageProbeAttachmentStore.js';
+import { getImageProbeAttachments, getImageProbeAttachmentsById } from './imageProbeAttachmentStore.js';
 
 const ImageProbeParams = Type.Object({
+  imageIds: Type.Array(Type.String({ pattern: '^img_[a-f0-9]{12}$' }), {
+    minItems: 1,
+    maxItems: 8,
+    description: 'One or more attached image IDs to inspect, for example ["img_a1b2c3d4e5f6"].',
+  }),
   question: Type.String({
-    description: 'The specific question to ask the vision subagent about the latest image attachments.',
+    minLength: 1,
+    maxLength: 8000,
+    description: 'The specific question to ask the vision subagent about the selected image attachments.',
   }),
 });
 
@@ -29,32 +36,53 @@ function extractTextContent(content: unknown): string {
     .join('\n');
 }
 
-function findVisionModel(models: unknown[]): unknown | null {
-  return models.find((model) => modelAcceptsImages(model)) ?? null;
+function resolvePreferredVisionModel(models: unknown[], modelRef: string): unknown | null {
+  const normalized = modelRef.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const slashIndex = normalized.indexOf('/');
+  if (slashIndex > 0 && slashIndex < normalized.length - 1) {
+    const provider = normalized.slice(0, slashIndex);
+    const id = normalized.slice(slashIndex + 1);
+    return models.find((model) => (model as { provider?: unknown }).provider === provider && (model as { id?: unknown }).id === id) ?? null;
+  }
+
+  return models.find((model) => (model as { id?: unknown }).id === normalized) ?? null;
 }
 
-export function createImageProbeAgentExtension(): (pi: ExtensionAPI) => void {
+export function createImageProbeAgentExtension(options: { getPreferredVisionModel: () => string }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
       name: 'probe_image',
       label: 'Probe Image',
-      description: 'Ask a vision-capable subagent about the latest image attachments when the current model cannot see images.',
-      promptSnippet: 'Use probe_image to inspect latest image attachments when this model cannot receive image input directly.',
+      description: 'Ask the configured vision subagent about selected image attachments when the current model cannot see images.',
+      promptSnippet:
+        'Use probe_image with explicit imageIds to inspect attached images when this model cannot receive image input directly.',
       promptGuidelines: [
-        'If the user attached images and the prompt says this model cannot see them directly, call probe_image before answering image-specific questions.',
-        'Ask focused follow-up questions with probe_image when you need more visual detail; each call can inspect the same latest attachments from a different angle.',
+        'If the user attached images and the prompt says this model cannot see them directly, call probe_image with the listed image IDs before answering image-specific questions.',
+        'Pass one or more imageIds in a single call. For comparisons, pass all images that should be compared and ask the comparison question directly.',
+        'Ask focused follow-up questions with probe_image when you need more visual detail; each call can inspect the same image IDs from a different angle.',
         'Do not claim to have seen an image unless probe_image returned enough detail or the image was already described in conversation context.',
       ],
       parameters: ImageProbeParams,
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-        const attachments = getImageProbeAttachments(ctx.sessionManager.getSessionId());
+        const availableAttachments = getImageProbeAttachments(ctx.sessionManager.getSessionId());
+        const attachments = getImageProbeAttachmentsById(ctx.sessionManager.getSessionId(), params.imageIds);
         if (attachments.length === 0) {
-          throw new Error('No image attachments are available to probe for this conversation.');
+          throw new Error('None of the requested image IDs are available to probe for this conversation.');
+        }
+        if (attachments.length !== params.imageIds.length) {
+          const foundIds = new Set(attachments.map((attachment) => attachment.id));
+          const missing = params.imageIds.filter((id) => !foundIds.has(id));
+          throw new Error(`Unknown image ID${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}`);
         }
 
-        const model = findVisionModel(ctx.modelRegistry.getAvailable());
-        if (!model) {
-          throw new Error('No configured image-capable model is available for image probing.');
+        const preferredVisionModel = options.getPreferredVisionModel();
+        const model = resolvePreferredVisionModel(ctx.modelRegistry.getAvailable(), preferredVisionModel);
+        if (!model || !modelAcceptsImages(model)) {
+          throw new Error(`Configured vision model is not available or does not accept images: ${preferredVisionModel || '(unset)'}`);
         }
 
         const { session } = await createAgentSession({
@@ -76,8 +104,23 @@ export function createImageProbeAgentExtension(): (pi: ExtensionAPI) => void {
         try {
           if (signal?.aborted) throw new Error('Image probe was aborted.');
           const prompt = [
-            'You are a focused vision subagent. Answer the user question using only the attached image(s).',
-            'Be precise. If the image does not show enough evidence, say so.',
+            'You are a vision probe for a text-only agent.',
+            '',
+            'The calling agent cannot see the attached images. Act as its eyes.',
+            'Answer the question directly, but include enough visual detail and evidence for the calling agent to reason from your answer without seeing the image.',
+            '',
+            'Guidelines:',
+            '- Start with the direct answer.',
+            '- Then describe the visual evidence that supports it.',
+            '- Quote visible text exactly when relevant.',
+            '- Mention uncertainty, occlusion, low resolution, or ambiguity.',
+            '- Include nearby or contextual visual details likely relevant to the caller intent.',
+            '- Do not give one-word answers unless the question explicitly asks for one.',
+            '- Do not invent hidden state, off-screen content, or user intent beyond what is visible.',
+            '- When multiple images are provided, refer to each image by ID.',
+            '',
+            'Selected images:',
+            ...attachments.map((image) => `- ${image.id}: ${image.name?.trim() || 'unnamed image'} (${image.mimeType})`),
             '',
             `Question: ${params.question}`,
           ].join('\n');
@@ -93,7 +136,8 @@ export function createImageProbeAgentExtension(): (pi: ExtensionAPI) => void {
         return {
           content: [{ type: 'text' as const, text }],
           details: {
-            imageCount: attachments.length,
+            imageIds: attachments.map((image) => image.id),
+            availableImageIds: availableAttachments.map((image) => image.id),
             imagePaths: attachments.map((image) => image.path),
             model: (model as { provider?: string; id?: string }).id,
             provider: (model as { provider?: string; id?: string }).provider,

@@ -5,6 +5,7 @@ const SERVICE_TIERS = new Set(['auto', 'default', 'flex', 'priority', 'scale']);
 
 export interface SavedModelPreferences {
   currentModel: string;
+  currentVisionModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
   currentPresetId: string;
@@ -69,6 +70,13 @@ function resolveModelPreference(model: string, models: readonly ModelPreferenceO
   };
 }
 
+function formatModelRef(preference: { model: string; provider: string }): string {
+  if (!preference.model) {
+    return '';
+  }
+  return preference.provider ? `${preference.provider}/${preference.model}` : preference.model;
+}
+
 function normalizeSettingsDefaultModelProvider(settings: Record<string, unknown>, models: readonly ModelPreferenceOption[]): boolean {
   const defaultModel = readNonEmptyString(settings.defaultModel);
   if (!defaultModel || models.length === 0) {
@@ -122,12 +130,19 @@ export function normalizeSavedModelPreferences(settingsFile: string, models: rea
 export function readSavedModelPreferences(settingsFile: string, models: readonly ModelPreferenceOption[] = []): SavedModelPreferences {
   const parsed = readSettingsObject(settingsFile);
   const defaultModel = readNonEmptyString(parsed.defaultModel);
+  const defaultVisionModel = readNonEmptyString(parsed.defaultVisionModel);
+  const defaultVisionProvider = readNonEmptyString(parsed.defaultVisionProvider);
   const defaultThinkingLevel = readNonEmptyString(parsed.defaultThinkingLevel);
   const defaultServiceTier = readServiceTier(parsed.defaultServiceTier);
 
   const resolved = resolveModelPreference(defaultModel, models);
+  const resolvedVision = resolveModelPreference(
+    defaultVisionProvider && defaultVisionModel ? `${defaultVisionProvider}/${defaultVisionModel}` : defaultVisionModel,
+    models,
+  );
   return {
     currentModel: resolved.model,
+    currentVisionModel: formatModelRef(resolvedVision),
     currentThinkingLevel: defaultThinkingLevel,
     currentServiceTier: defaultServiceTier,
     currentPresetId: '',
@@ -137,6 +152,7 @@ export function readSavedModelPreferences(settingsFile: string, models: readonly
 export function writeSavedModelPreferences(
   input: {
     model?: string | null;
+    visionModel?: string | null;
     thinkingLevel?: string | null;
     serviceTier?: string | null;
   },
@@ -161,6 +177,24 @@ export function writeSavedModelPreferences(
         settings.defaultProvider = resolved.provider;
       } else {
         delete settings.defaultProvider;
+      }
+    }
+  }
+
+  if (input.visionModel !== undefined) {
+    const modelValue = input.visionModel ?? '';
+    const normalizedModel = readNonEmptyString(modelValue);
+
+    if (!normalizedModel) {
+      delete settings.defaultVisionModel;
+      delete settings.defaultVisionProvider;
+    } else {
+      const resolved = resolveModelPreference(normalizedModel, models);
+      settings.defaultVisionModel = resolved.model;
+      if (resolved.provider) {
+        settings.defaultVisionProvider = resolved.provider;
+      } else {
+        delete settings.defaultVisionProvider;
       }
     }
   }

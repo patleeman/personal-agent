@@ -1075,11 +1075,17 @@ export async function readDesktopModels() {
 
 export async function updateDesktopModelPreferences(input: {
   model?: string | null;
+  visionModel?: string | null;
   thinkingLevel?: string | null;
   serviceTier?: string | null;
 }) {
-  if (typeof input.model !== 'string' && typeof input.thinkingLevel !== 'string' && typeof input.serviceTier !== 'string') {
-    throw new Error('model, thinkingLevel, or serviceTier required');
+  if (
+    typeof input.model !== 'string' &&
+    typeof input.visionModel !== 'string' &&
+    typeof input.thinkingLevel !== 'string' &&
+    typeof input.serviceTier !== 'string'
+  ) {
+    throw new Error('model, visionModel, thinkingLevel, or serviceTier required');
   }
 
   const models = readModelState(DEFAULT_RUNTIME_SETTINGS_FILE).models;
@@ -1088,6 +1094,7 @@ export async function updateDesktopModelPreferences(input: {
       writeSavedModelPreferences(
         {
           model: input.model,
+          visionModel: input.visionModel,
           thinkingLevel: input.thinkingLevel,
           serviceTier: input.serviceTier,
         },

@@ -386,9 +386,10 @@ describe('model routes', () => {
 
     expect(desktopRes.json).toHaveBeenCalledWith({
       currentModel: 'model-a',
+      currentVisionModel: '',
       currentThinkingLevel: 'high',
       currentServiceTier: '',
-      models: [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
+      models: [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, input: ['text'], supportedServiceTiers: [] }],
     });
 
     getAvailableModelsMock.mockReturnValue([]);
@@ -403,6 +404,7 @@ describe('model routes', () => {
 
     expect(emptyRes.json).toHaveBeenCalledWith({
       currentModel: '',
+      currentVisionModel: '',
       currentThinkingLevel: 'medium',
       currentServiceTier: '',
       models: [],
@@ -429,14 +431,14 @@ describe('model routes', () => {
     const invalidModelRes = createResponse();
     patchHandler('/api/models/current')(createRequest({ body: {} }), invalidModelRes);
     expect(invalidModelRes.status).toHaveBeenCalledWith(400);
-    expect(invalidModelRes.json).toHaveBeenCalledWith({ error: 'model, thinkingLevel, or serviceTier required' });
+    expect(invalidModelRes.json).toHaveBeenCalledWith({ error: 'model, visionModel, thinkingLevel, or serviceTier required' });
 
     const modelRes = createResponse();
     patchHandler('/api/models/current')(createRequest({ body: { model: 'model-b', thinkingLevel: 'medium' } }), modelRes);
     expect(writeSavedModelPreferencesMock).toHaveBeenCalledWith(
-      { model: 'model-b', thinkingLevel: 'medium', serviceTier: undefined },
+      { model: 'model-b', visionModel: undefined, thinkingLevel: 'medium', serviceTier: undefined },
       expect.any(String),
-      [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
+      [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, input: ['text'], supportedServiceTiers: [] }],
     );
     expect(modelRes.json).toHaveBeenCalledWith({ ok: true });
 

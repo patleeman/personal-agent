@@ -25,7 +25,9 @@ import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
 import webToolsExtension from '../extensions/web-tools/index.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 
 export interface RuntimeStateLogger {
   warn: (message: string, fields?: Record<string, unknown>) => void;
@@ -102,6 +104,10 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
     }
   }
 
+  function getPreferredVisionModel(): string {
+    return readSavedModelPreferences(DEFAULT_RUNTIME_SETTINGS_FILE).currentVisionModel;
+  }
+
   /**
    * Wraps an extension factory to discard any systemPrompt return from
    * before_agent_start. The system prompt is assembled exclusively from
@@ -158,7 +164,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
       createConversationTitleAgentExtension({
         setConversationTitle: renameSession,
       }),
-      createImageProbeAgentExtension(),
+      ...(getPreferredVisionModel() ? [createImageProbeAgentExtension({ getPreferredVisionModel })] : []),
       ...(hasOpenAiImageProvider() ? [createImageAgentExtension()] : []),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),

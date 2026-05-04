@@ -1021,11 +1021,13 @@ export interface ModelInfo {
   provider: string;
   name: string;
   context: number;
+  input?: Array<'text' | 'image'>;
   supportedServiceTiers?: ModelServiceTier[];
 }
 
 export interface ModelState {
   currentModel: string;
+  currentVisionModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
   models: ModelInfo[];

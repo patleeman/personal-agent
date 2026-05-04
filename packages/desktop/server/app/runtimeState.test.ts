@@ -31,6 +31,7 @@ const {
   renameSessionMock,
   requestConversationWorkingDirectoryChangeMock,
   authStorageMock,
+  readSavedModelPreferencesMock,
 } = vi.hoisted(() => {
   const authStorageMock = {
     hasAuth: vi.fn(() => false),
@@ -66,6 +67,7 @@ const {
     renameSessionMock: vi.fn(),
     requestConversationWorkingDirectoryChangeMock: vi.fn(),
     authStorageMock,
+    readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
   };
 });
 
@@ -166,6 +168,14 @@ vi.mock('@mariozechner/pi-coding-agent', () => ({
   AuthStorage: authStorageMock,
 }));
 
+vi.mock('../models/modelPreferences.js', () => ({
+  readSavedModelPreferences: readSavedModelPreferencesMock,
+}));
+
+vi.mock('../ui/settingsPersistence.js', () => ({
+  DEFAULT_RUNTIME_SETTINGS_FILE: '/runtime/settings.json',
+}));
+
 import { createRuntimeState } from './runtimeState.js';
 
 const resolvedShared = {
@@ -201,6 +211,8 @@ describe('createRuntimeState', () => {
     createWorkbenchBrowserAgentExtensionMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
     requestConversationWorkingDirectoryChangeMock.mockReset();
+    readSavedModelPreferencesMock.mockClear();
+    readSavedModelPreferencesMock.mockReturnValue({ currentVisionModel: 'openai/gpt-4o' });
     authStorageMock.hasAuth.mockReset();
     authStorageMock.hasAuth.mockReturnValue(false);
     authStorageMock.create.mockClear();
@@ -254,6 +266,7 @@ describe('createRuntimeState', () => {
     expect(createConversationTitleAgentExtensionMock).toHaveBeenCalledWith({
       setConversationTitle: renameSessionMock,
     });
+    expect(createImageProbeAgentExtensionMock).toHaveBeenCalledWith({ getPreferredVisionModel: expect.any(Function) });
 
     const changeWorkingDirectoryOptions = createChangeWorkingDirectoryAgentExtensionMock.mock.calls[0]?.[0] as {
       requestConversationWorkingDirectoryChange: (input: Record<string, unknown>) => Promise<unknown>;
@@ -290,6 +303,18 @@ describe('createRuntimeState', () => {
     expect(materializeRuntimeResourcesToAgentDirMock).toHaveBeenCalledWith(resolvedShared, temporaryAgentDir);
     expect(existsSync(temporaryAgentDir)).toBe(false);
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not register image probing until a preferred vision model is configured', () => {
+    readSavedModelPreferencesMock.mockReturnValue({ currentVisionModel: '' });
+    const state = createRuntimeState({
+      repoRoot: '/repo-root',
+      agentDir: '/agent-dir',
+      logger: createLogger(),
+    });
+
+    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(16);
+    expect(createImageProbeAgentExtensionMock).not.toHaveBeenCalled();
   });
 
   it('logs initial materialization failures', async () => {

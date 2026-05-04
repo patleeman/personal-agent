@@ -127,6 +127,7 @@ export class LocalHostController implements HostController {
 
   async updateModelPreferences(input: {
     model?: string | null;
+    visionModel?: string | null;
     thinkingLevel?: string | null;
     serviceTier?: string | null;
   }): Promise<{ ok: true }> {

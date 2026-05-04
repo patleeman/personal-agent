@@ -464,7 +464,7 @@ export const api = {
 
     return patch<{ ok: boolean }>('/models/current', { model });
   },
-  updateModelPreferences: async (input: { model?: string; thinkingLevel?: string; serviceTier?: string }) => {
+  updateModelPreferences: async (input: { model?: string; visionModel?: string; thinkingLevel?: string; serviceTier?: string }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
       return desktopBridge.updateModelPreferences(input);

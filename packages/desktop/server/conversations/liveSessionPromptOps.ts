@@ -1,6 +1,8 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 
-import { rememberImageProbeAttachments } from '../extensions/imageProbeAttachmentStore.js';
+import { rememberImageProbeAttachments, type StoredImageProbeAttachment } from '../extensions/imageProbeAttachmentStore.js';
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import type { PromptImageAttachment } from './liveSessionQueue.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
 
@@ -34,16 +36,20 @@ function liveSessionModelAcceptsImages(model: unknown): boolean {
   return Array.isArray(input) && input.includes('image');
 }
 
-function appendImageProbeNotice(text: string, images: PromptImageAttachment[]): string {
-  const names = images
-    .map((image, index) => image.name?.trim() || `image ${index + 1}`)
-    .map((name) => `- ${name}`)
-    .join('\n');
+function getPreferredVisionModel(): string {
+  return readSavedModelPreferences(DEFAULT_RUNTIME_SETTINGS_FILE).currentVisionModel;
+}
+
+function appendImageProbeNotice(text: string, images: StoredImageProbeAttachment[], preferredVisionModel: string): string {
+  const names = images.map((image) => `- ${image.id}: ${image.name?.trim() || 'unnamed image'} (${image.mimeType})`).join('\n');
+  const instruction = preferredVisionModel
+    ? 'Use the probe_image tool with explicit imageIds to inspect these image(s) before answering image-specific questions.'
+    : 'No preferred vision model is configured, so image probing is unavailable. Ask the user to configure a preferred vision model before analyzing these images.';
   const notice = [
     '[Image attachments received]',
     `The user attached ${images.length} image${images.length === 1 ? '' : 's'}, but the current model cannot receive image input directly.`,
-    'Use the probe_image tool to inspect the latest attached image(s) before answering image-specific questions.',
-    names ? `Images:\n${names}` : '',
+    instruction,
+    names ? `Attached image IDs:\n${names}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -62,15 +68,13 @@ export async function runPromptOnLiveEntry<TEntry extends LiveSessionPromptHost>
 ): Promise<void> {
   const { session } = entry;
   const hasImages = Boolean(images && images.length > 0);
-  const shouldUseImageProbe = hasImages && !liveSessionModelAcceptsImages(session.model);
-  const promptText = shouldUseImageProbe ? appendImageProbeNotice(text, images ?? []) : text;
+  const shouldUseTextOnlyImageHandling = hasImages && !liveSessionModelAcceptsImages(session.model);
+  const preferredVisionModel = shouldUseTextOnlyImageHandling ? getPreferredVisionModel() : '';
+  const storedImages = shouldUseTextOnlyImageHandling && images ? rememberImageProbeAttachments(entry.sessionId, images) : [];
+  const promptText = shouldUseTextOnlyImageHandling ? appendImageProbeNotice(text, storedImages, preferredVisionModel) : text;
 
   if (behavior === undefined) {
     callbacks.repairLiveSessionTranscriptTail(entry.sessionId);
-  }
-
-  if (shouldUseImageProbe && images) {
-    rememberImageProbeAttachments(entry.sessionId, images);
   }
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {
@@ -90,7 +94,7 @@ export async function runPromptOnLiveEntry<TEntry extends LiveSessionPromptHost>
   };
 
   try {
-    await runPrompt(!shouldUseImageProbe);
+    await runPrompt(!shouldUseTextOnlyImageHandling);
   } catch (error) {
     if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
       throw error;

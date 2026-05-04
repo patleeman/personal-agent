@@ -41,6 +41,7 @@ export interface LocalApiModule {
   readDesktopModels(): Promise<unknown>;
   updateDesktopModelPreferences(input: {
     model?: string | null;
+    visionModel?: string | null;
     thinkingLevel?: string | null;
     serviceTier?: string | null;
   }): Promise<{ ok: true }>;
