@@ -99,6 +99,7 @@ const PATH = {
   workspaceAdd:
     'M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z M3.75 9.75h16.5 M15.75 11.25v4.5 M13.5 13.5h4.5',
   automations: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  gateways: 'M5 12h5m4 0h5M9 8l3-3 3 3M9 16l3 3 3-3M10 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z',
   settings:
     'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close: 'M6 18 18 6M6 6l12 12',
@@ -3483,6 +3484,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
             label="Automations"
             forceActive={location.pathname.startsWith('/automations')}
           />
+          <TopNavItem to="/gateways" icon={PATH.gateways} label="Gateways" forceActive={location.pathname.startsWith('/gateways')} />
           {!hideKnowledgeNav ? (
             <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
           ) : null}

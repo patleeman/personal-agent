@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react';
+
+import { api } from '../../client/api';
+import type { GatewayState } from '../../shared/types';
 import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon, RemoteExecutionIcon } from './ConversationComposerChrome';
 import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from './ConversationContextUsageIndicator';
@@ -43,6 +47,8 @@ export function ConversationComposerMeta({
   gitSummaryPresentation,
   hasGitSummary,
   sessionTokens,
+  conversationId,
+  conversationTitle,
 }: {
   showExecutionTargetPicker: boolean;
   selectedExecutionTargetId: string;
@@ -79,6 +85,8 @@ export function ConversationComposerMeta({
   gitSummaryPresentation: ConversationGitSummaryPresentation;
   hasGitSummary: boolean;
   sessionTokens: ConversationContextUsageTokens | null;
+  conversationId?: string | null;
+  conversationTitle?: string;
 }) {
   return (
     <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
@@ -200,6 +208,10 @@ export function ConversationComposerMeta({
                 />
               </>
             )}
+
+            {!draft && conversationId ? (
+              <GatewayComposerControl conversationId={conversationId} conversationTitle={conversationTitle} />
+            ) : null}
           </div>
         ) : conversationCwdEditorOpen ? (
           <form
@@ -287,5 +299,119 @@ export function ConversationComposerMeta({
         {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
       </div>
     </div>
+  );
+}
+
+function GatewayComposerControl({ conversationId, conversationTitle }: { conversationId: string; conversationTitle?: string }) {
+  const [state, setState] = useState<GatewayState | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const binding = state?.bindings.find((item) => item.provider === 'telegram' && item.conversationId === conversationId) ?? null;
+  const connection = state?.connections.find((item) => item.provider === 'telegram') ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .gateways()
+      .then((next) => {
+        if (!cancelled) setState(next);
+      })
+      .catch(() => {
+        if (!cancelled) setState(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
+
+  async function attach() {
+    setBusy(true);
+    try {
+      setState(
+        await api.attachGatewayConversation({
+          provider: 'telegram',
+          conversationId,
+          ...(conversationTitle ? { conversationTitle } : {}),
+        }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function detach() {
+    setBusy(true);
+    try {
+      setState(await api.detachGatewayConversation(conversationId, 'telegram'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const statusLabel = connection ? connection.status.replace(/_/g, ' ') : 'not connected';
+  const title = binding
+    ? `Telegram attached: ${binding.externalChatLabel || binding.conversationTitle || conversationTitle || conversationId}`
+    : 'Attach Telegram gateway';
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        className={cx(
+          'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface/45 hover:text-primary',
+          binding ? 'text-accent' : connection?.status === 'needs_attention' ? 'text-danger' : 'text-secondary',
+        )}
+        title={title}
+        aria-label={title}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <TelegramIcon />
+      </button>
+      {open ? (
+        <div className="absolute left-0 z-30 mt-1 w-60 rounded-xl border border-border-subtle bg-popover p-2 text-left text-[12px] shadow-xl">
+          <div className="px-2 py-1.5">
+            <p className="font-medium text-primary">Telegram</p>
+            <p className="mt-0.5 text-dim">Status: {statusLabel}</p>
+            <p className="mt-0.5 truncate text-dim">Target: {binding?.externalChatLabel || binding?.conversationTitle || 'Not attached'}</p>
+          </div>
+          <div className="my-1 border-t border-border-subtle" />
+          <button
+            type="button"
+            className="w-full rounded-md px-2 py-1.5 text-left text-secondary hover:bg-surface/60 hover:text-primary"
+            onClick={attach}
+            disabled={busy}
+          >
+            {binding ? 'Change/reattach this thread' : 'Attach this thread'}
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-md px-2 py-1.5 text-left text-secondary hover:bg-surface/60 hover:text-primary disabled:opacity-40"
+            onClick={detach}
+            disabled={busy || !binding}
+          >
+            Detach
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TelegramIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 4 3.75 11.25 10.5 13.5 13.5 20.25 21 4Z" />
+      <path d="m10.5 13.5 4.5-4.5" />
+    </svg>
   );
 }

@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 
+import { detachArchivedGatewayConversations } from '../gateways/gatewayState.js';
 import { logError } from '../middleware/index.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
@@ -9,9 +10,15 @@ import type { ServerRouteContext } from './context.js';
 let getUiSettingsFileFn: () => string = () => {
   throw new Error('getUiSettingsFile not initialized for UI preference routes');
 };
+let getCurrentProfileFn: () => string = () => 'default';
+let getStateRootFn: () => string = () => '';
 
-function initializeUiPreferenceRoutesContext(context: Pick<ServerRouteContext, 'getSettingsFile'>): void {
+function initializeUiPreferenceRoutesContext(
+  context: Pick<ServerRouteContext, 'getSettingsFile' | 'getCurrentProfile' | 'getStateRoot'>,
+): void {
   getUiSettingsFileFn = context.getSettingsFile;
+  getCurrentProfileFn = context.getCurrentProfile;
+  getStateRootFn = context.getStateRoot;
 }
 
 function handleOpenConversationLayoutReadRequest(_req: Request, res: Response): void {
@@ -92,6 +99,15 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
       { runtimeSettingsFile: getUiSettingsFileFn() },
     );
 
+    const archivedIds = archivedConversationIds ?? archivedSessionIds;
+    if (Array.isArray(archivedIds)) {
+      detachArchivedGatewayConversations({
+        stateRoot: getStateRootFn(),
+        profile: getCurrentProfileFn(),
+        conversationIds: archivedIds.filter((id): id is string => typeof id === 'string'),
+      });
+    }
+
     if (
       sessionIds !== undefined ||
       pinnedSessionIds !== undefined ||
@@ -122,7 +138,7 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
 
 export function registerUiPreferenceRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getSettingsFile'>,
+  context: Pick<ServerRouteContext, 'getSettingsFile' | 'getCurrentProfile' | 'getStateRoot'>,
 ): void {
   initializeUiPreferenceRoutesContext(context);
   router.get('/api/ui/open-conversations', handleOpenConversationLayoutReadRequest);

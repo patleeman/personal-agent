@@ -117,6 +117,9 @@ const SettingsPage = lazyRouteWithRecovery('settings-page', () =>
 const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () =>
   import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })),
 );
+const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
+  import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
+);
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -433,6 +436,7 @@ export function App() {
                         <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
                         <Route path="automations" element={suspendRoute(<TasksPage />)} />
                         <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
+                        <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                       </Route>
                     </Routes>

@@ -490,6 +490,58 @@ export interface SessionMeta {
   attachedContextDocs?: ConversationContextDocRef[];
 }
 
+// ── Gateways ─────────────────────────────────────────────────────────────────
+
+export type GatewayProviderId = 'telegram';
+export type GatewayStatus = 'needs_config' | 'connected' | 'active' | 'paused' | 'needs_attention';
+
+export interface GatewayProviderSummary {
+  id: GatewayProviderId;
+  label: string;
+  implemented: boolean;
+  configurationLocation: 'settings';
+}
+
+export interface GatewayConnection {
+  id: string;
+  provider: GatewayProviderId;
+  label: string;
+  status: GatewayStatus;
+  enabled: boolean;
+  statusMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GatewayThreadBinding {
+  id: string;
+  provider: GatewayProviderId;
+  connectionId: string;
+  conversationId: string;
+  conversationTitle?: string;
+  externalChatId?: string;
+  externalChatLabel?: string;
+  repliesEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GatewayEvent {
+  id: string;
+  provider: GatewayProviderId;
+  conversationId?: string;
+  kind: 'inbound' | 'outbound' | 'routing' | 'status' | 'error';
+  message: string;
+  createdAt: string;
+}
+
+export interface GatewayState {
+  providers: GatewayProviderSummary[];
+  connections: GatewayConnection[];
+  bindings: GatewayThreadBinding[];
+  events: GatewayEvent[];
+}
+
 export type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
 
 export interface ConversationSummaryRecord {

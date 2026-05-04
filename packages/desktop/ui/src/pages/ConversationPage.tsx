@@ -6680,6 +6680,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 gitSummaryPresentation={gitSummaryPresentation}
                 hasGitSummary={hasGitSummary}
                 sessionTokens={sessionTokens}
+                conversationId={id ?? null}
+                conversationTitle={title}
               />
             ) : null}
           </div>

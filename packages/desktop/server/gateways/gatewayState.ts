@@ -1,0 +1,328 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+export type GatewayProviderId = 'telegram';
+export type GatewayStatus = 'needs_config' | 'connected' | 'active' | 'paused' | 'needs_attention';
+
+export interface GatewayConnection {
+  id: string;
+  provider: GatewayProviderId;
+  label: string;
+  status: GatewayStatus;
+  enabled: boolean;
+  statusMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GatewayThreadBinding {
+  id: string;
+  provider: GatewayProviderId;
+  connectionId: string;
+  conversationId: string;
+  conversationTitle?: string;
+  externalChatId?: string;
+  externalChatLabel?: string;
+  repliesEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GatewayEvent {
+  id: string;
+  provider: GatewayProviderId;
+  conversationId?: string;
+  kind: 'inbound' | 'outbound' | 'routing' | 'status' | 'error';
+  message: string;
+  createdAt: string;
+}
+
+export interface GatewayState {
+  providers: Array<{ id: GatewayProviderId; label: string; implemented: boolean; configurationLocation: 'settings' }>;
+  connections: GatewayConnection[];
+  bindings: GatewayThreadBinding[];
+  events: GatewayEvent[];
+}
+
+const GATEWAY_STATE_VERSION = 1;
+const MAX_GATEWAY_EVENTS = 100;
+
+interface PersistedGatewayState {
+  version: number;
+  connections: GatewayConnection[];
+  bindings: GatewayThreadBinding[];
+  events: GatewayEvent[];
+}
+
+const TELEGRAM_PROVIDER: GatewayProviderId = 'telegram';
+
+export function resolveGatewayStateFile(stateRoot: string, profile: string): string {
+  return join(stateRoot, 'gateways', `${sanitizeProfileName(profile)}.json`);
+}
+
+export function readGatewayState(input: { stateRoot: string; profile: string }): GatewayState {
+  const state = readPersistedGatewayState(resolveGatewayStateFile(input.stateRoot, input.profile));
+  return toPublicGatewayState(state);
+}
+
+export function ensureGatewayConnection(input: { stateRoot: string; profile: string; provider: GatewayProviderId }): GatewayConnection {
+  return updateGatewayState(input, (state) => {
+    const existing = state.connections.find((connection) => connection.provider === input.provider);
+    if (existing) {
+      return existing;
+    }
+
+    const now = new Date().toISOString();
+    const connection: GatewayConnection = {
+      id: `${input.provider}-default`,
+      provider: input.provider,
+      label: providerLabel(input.provider),
+      status: 'needs_config',
+      enabled: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    state.connections.push(connection);
+    appendGatewayEvent(state, {
+      provider: input.provider,
+      kind: 'status',
+      message: `${connection.label} gateway created`,
+    });
+    return connection;
+  });
+}
+
+export function attachGatewayConversation(input: {
+  stateRoot: string;
+  profile: string;
+  provider: GatewayProviderId;
+  conversationId: string;
+  conversationTitle?: string;
+  externalChatId?: string;
+  externalChatLabel?: string;
+}): GatewayState {
+  updateGatewayState(input, (state) => {
+    const connection = ensureConnectionInState(state, input.provider);
+    const now = new Date().toISOString();
+    connection.status = connection.status === 'needs_config' ? 'needs_config' : 'connected';
+    connection.updatedAt = now;
+
+    state.bindings = state.bindings.filter((binding) => !(binding.provider === input.provider && binding.connectionId === connection.id));
+    state.bindings.push({
+      id: `${connection.id}:${input.conversationId}`,
+      provider: input.provider,
+      connectionId: connection.id,
+      conversationId: input.conversationId,
+      conversationTitle: input.conversationTitle,
+      externalChatId: input.externalChatId,
+      externalChatLabel: input.externalChatLabel,
+      repliesEnabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    appendGatewayEvent(state, {
+      provider: input.provider,
+      conversationId: input.conversationId,
+      kind: 'routing',
+      message: `${providerLabel(input.provider)} attached to ${input.conversationTitle || input.conversationId}`,
+    });
+    return connection;
+  });
+  return readGatewayState(input);
+}
+
+export function detachGatewayConversation(input: {
+  stateRoot: string;
+  profile: string;
+  provider?: GatewayProviderId;
+  conversationId: string;
+}): GatewayState {
+  updateGatewayState(input, (state) => {
+    const removed = state.bindings.filter(
+      (binding) => binding.conversationId === input.conversationId && (!input.provider || binding.provider === input.provider),
+    );
+    if (removed.length === 0) {
+      return null;
+    }
+
+    state.bindings = state.bindings.filter(
+      (binding) => !(binding.conversationId === input.conversationId && (!input.provider || binding.provider === input.provider)),
+    );
+    for (const binding of removed) {
+      appendGatewayEvent(state, {
+        provider: binding.provider,
+        conversationId: binding.conversationId,
+        kind: 'routing',
+        message: `${providerLabel(binding.provider)} detached from ${binding.conversationTitle || binding.conversationId}`,
+      });
+    }
+    return null;
+  });
+  return readGatewayState({ stateRoot: input.stateRoot, profile: input.profile });
+}
+
+export function detachArchivedGatewayConversations(input: { stateRoot: string; profile: string; conversationIds: string[] }): GatewayState {
+  const ids = new Set(input.conversationIds.map((id) => id.trim()).filter(Boolean));
+  if (ids.size === 0) {
+    return readGatewayState(input);
+  }
+
+  updateGatewayState(input, (state) => {
+    const removed = state.bindings.filter((binding) => ids.has(binding.conversationId));
+    if (removed.length === 0) {
+      return null;
+    }
+
+    state.bindings = state.bindings.filter((binding) => !ids.has(binding.conversationId));
+    for (const binding of removed) {
+      appendGatewayEvent(state, {
+        provider: binding.provider,
+        conversationId: binding.conversationId,
+        kind: 'routing',
+        message: `${providerLabel(binding.provider)} detached because the thread was archived`,
+      });
+    }
+    return null;
+  });
+  return readGatewayState(input);
+}
+
+export function updateGatewayConnectionStatus(input: {
+  stateRoot: string;
+  profile: string;
+  provider: GatewayProviderId;
+  status: GatewayStatus;
+  enabled?: boolean;
+  statusMessage?: string;
+}): GatewayState {
+  updateGatewayState(input, (state) => {
+    const connection = ensureConnectionInState(state, input.provider);
+    connection.status = input.status;
+    connection.enabled = input.enabled ?? connection.enabled;
+    connection.statusMessage = input.statusMessage;
+    connection.updatedAt = new Date().toISOString();
+    appendGatewayEvent(state, {
+      provider: input.provider,
+      kind: input.status === 'needs_attention' ? 'error' : 'status',
+      message: input.statusMessage || `${connection.label} is ${input.status.replace(/_/g, ' ')}`,
+    });
+    return connection;
+  });
+  return readGatewayState(input);
+}
+
+function readPersistedGatewayState(file: string): PersistedGatewayState {
+  if (!existsSync(file)) {
+    return createDefaultGatewayState();
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Partial<PersistedGatewayState>;
+    return {
+      version: GATEWAY_STATE_VERSION,
+      connections: Array.isArray(parsed.connections) ? parsed.connections.filter(isGatewayConnection) : [],
+      bindings: Array.isArray(parsed.bindings) ? parsed.bindings.filter(isGatewayThreadBinding) : [],
+      events: Array.isArray(parsed.events) ? parsed.events.filter(isGatewayEvent).slice(-MAX_GATEWAY_EVENTS) : [],
+    };
+  } catch {
+    return createDefaultGatewayState();
+  }
+}
+
+function writePersistedGatewayState(file: string, state: PersistedGatewayState): void {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ ...state, events: state.events.slice(-MAX_GATEWAY_EVENTS) }, null, 2)}\n`, 'utf-8');
+}
+
+function updateGatewayState<T>(input: { stateRoot: string; profile: string }, update: (state: PersistedGatewayState) => T): T {
+  const file = resolveGatewayStateFile(input.stateRoot, input.profile);
+  const state = readPersistedGatewayState(file);
+  const result = update(state);
+  writePersistedGatewayState(file, state);
+  return result;
+}
+
+function createDefaultGatewayState(): PersistedGatewayState {
+  return { version: GATEWAY_STATE_VERSION, connections: [], bindings: [], events: [] };
+}
+
+function toPublicGatewayState(state: PersistedGatewayState): GatewayState {
+  return {
+    providers: [
+      {
+        id: TELEGRAM_PROVIDER,
+        label: 'Telegram',
+        implemented: true,
+        configurationLocation: 'settings',
+      },
+    ],
+    connections: state.connections,
+    bindings: state.bindings,
+    events: state.events.slice(-MAX_GATEWAY_EVENTS).reverse(),
+  };
+}
+
+function ensureConnectionInState(state: PersistedGatewayState, provider: GatewayProviderId): GatewayConnection {
+  const existing = state.connections.find((connection) => connection.provider === provider);
+  if (existing) {
+    return existing;
+  }
+
+  const now = new Date().toISOString();
+  const connection: GatewayConnection = {
+    id: `${provider}-default`,
+    provider,
+    label: providerLabel(provider),
+    status: 'needs_config',
+    enabled: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.connections.push(connection);
+  return connection;
+}
+
+function appendGatewayEvent(state: PersistedGatewayState, event: Omit<GatewayEvent, 'id' | 'createdAt'>): void {
+  const createdAt = new Date().toISOString();
+  state.events.push({
+    id: `gateway-event-${createdAt}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt,
+    ...event,
+  });
+  state.events = state.events.slice(-MAX_GATEWAY_EVENTS);
+}
+
+function providerLabel(provider: GatewayProviderId): string {
+  return provider === 'telegram' ? 'Telegram' : provider;
+}
+
+function sanitizeProfileName(profile: string): string {
+  return profile.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'default';
+}
+
+function isGatewayConnection(value: unknown): value is GatewayConnection {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as GatewayConnection;
+  return typeof candidate.id === 'string' && candidate.provider === 'telegram' && isGatewayStatus(candidate.status);
+}
+
+function isGatewayThreadBinding(value: unknown): value is GatewayThreadBinding {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as GatewayThreadBinding;
+  return (
+    typeof candidate.id === 'string' &&
+    candidate.provider === 'telegram' &&
+    typeof candidate.connectionId === 'string' &&
+    typeof candidate.conversationId === 'string'
+  );
+}
+
+function isGatewayEvent(value: unknown): value is GatewayEvent {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as GatewayEvent;
+  return typeof candidate.id === 'string' && candidate.provider === 'telegram' && typeof candidate.message === 'string';
+}
+
+function isGatewayStatus(value: unknown): value is GatewayStatus {
+  return value === 'needs_config' || value === 'connected' || value === 'active' || value === 'paused' || value === 'needs_attention';
+}

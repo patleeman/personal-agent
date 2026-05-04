@@ -28,6 +28,9 @@ import type {
   DurableRunListResult,
   FilePickerResult,
   FolderPickerResult,
+  GatewayProviderId,
+  GatewayState,
+  GatewayStatus,
   InjectedPromptMessage,
   InstructionFilesState,
   KnowledgeBaseState,
@@ -1442,6 +1445,24 @@ export const api = {
       ...(surfaceId ? { surfaceId } : {}),
     });
   },
+
+  gateways: async () => get<GatewayState>('/gateways'),
+  ensureGatewayConnection: async (provider: GatewayProviderId) => post<GatewayState>('/gateways/connections', { provider }),
+  updateGatewayConnection: async (
+    provider: GatewayProviderId,
+    input: { status: GatewayStatus; enabled?: boolean; statusMessage?: string },
+  ) => patch<GatewayState>(`/gateways/connections/${encodeURIComponent(provider)}`, input),
+  attachGatewayConversation: async (input: {
+    provider: GatewayProviderId;
+    conversationId: string;
+    conversationTitle?: string;
+    externalChatId?: string;
+    externalChatLabel?: string;
+  }) => post<GatewayState>('/gateways/bindings', input),
+  detachGatewayConversation: async (conversationId: string, provider?: GatewayProviderId) =>
+    del<GatewayState>(
+      `/gateways/bindings/${encodeURIComponent(conversationId)}${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`,
+    ),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────

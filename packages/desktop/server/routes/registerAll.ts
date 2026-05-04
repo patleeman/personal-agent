@@ -5,6 +5,7 @@ import { registerConversationTitlesRoutes } from './conversationTitles.js';
 import { registerDaemonRoutes } from './daemon.js';
 import { registerFilePickerRoutes } from './filePicker.js';
 import { registerFolderPickerRoutes } from './folderPicker.js';
+import { registerGatewayRoutes } from './gateways.js';
 import { registerLiveSessionRoutes } from './liveSessions.js';
 import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerModelRoutes } from './models.js';
@@ -32,6 +33,8 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerSystemRoutes(app, context);
 
   registerUiPreferenceRoutes(app, context);
+
+  registerGatewayRoutes(app, context);
 
   registerConversationRoutes(app, context);
 
