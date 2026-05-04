@@ -160,6 +160,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-conversation-attention`, input),
   readScheduledTasks: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-tasks`),
   readScheduledTaskDetail: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-detail`, taskId),
+  readScheduledTaskSchedulerHealth: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-scheduler-health`),
   readScheduledTaskLog: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-log`, taskId),
   deleteScheduledTask: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-scheduled-task`, taskId),
   createScheduledTask: (input: {

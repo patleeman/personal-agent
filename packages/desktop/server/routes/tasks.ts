@@ -13,7 +13,6 @@ import {
   deleteStoredAutomation,
   ensureAutomationThread,
   listAutomationActivityEntries,
-  loadAutomationSchedulerState,
   normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   type StoredAutomation,
@@ -21,6 +20,7 @@ import {
 } from '@personal-agent/daemon';
 import type { Express } from 'express';
 
+import { readScheduledTaskSchedulerHealth } from '../automation/scheduledTaskCapability.js';
 import { loadScheduledTasksForProfile, type TaskRuntimeEntry, toScheduledTaskMetadata } from '../automation/scheduledTasks.js';
 import {
   applyScheduledTaskThreadBinding,
@@ -44,7 +44,7 @@ function initializeTaskRoutesContext(context: Pick<ServerRouteContext, 'getCurre
 
 function buildTaskDetailResponse(task: StoredAutomation, runtime?: TaskRuntimeEntry, activity: AutomationActivityEntry[] = []) {
   const metadata = toScheduledTaskMetadata(task);
-  const schedulerState = loadAutomationSchedulerState();
+  const schedulerHealth = readScheduledTaskSchedulerHealth(task.profile);
   return {
     ...(runtime ?? {}),
     id: metadata.id,
@@ -65,7 +65,7 @@ function buildTaskDetailResponse(task: StoredAutomation, runtime?: TaskRuntimeEn
     activity,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
-    ...(schedulerState.lastEvaluatedAt ? { schedulerLastEvaluatedAt: schedulerState.lastEvaluatedAt } : {}),
+    ...(schedulerHealth.lastEvaluatedAt ? { schedulerLastEvaluatedAt: schedulerHealth.lastEvaluatedAt } : {}),
     ...buildScheduledTaskThreadDetail(task),
   };
 }
@@ -112,6 +112,18 @@ export function registerTaskRoutes(
       });
 
       res.json(tasks);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/tasks/scheduler-health', (_req, res) => {
+    try {
+      res.json(readScheduledTaskSchedulerHealth(getCurrentProfileFn()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

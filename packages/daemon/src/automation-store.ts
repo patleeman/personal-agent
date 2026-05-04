@@ -59,13 +59,13 @@ export interface AutomationSchedulerState {
   lastEvaluatedAt?: string;
 }
 
-export type AutomationActivityKind = 'missed';
+export type AutomationActivityKind = 'missed' | 'run-failed';
 export type AutomationActivityOutcome = 'skipped' | 'catch-up-started';
 
-export interface AutomationActivityEntry {
+export interface AutomationMissedActivityEntry {
   id: string;
   automationId: string;
-  kind: AutomationActivityKind;
+  kind: 'missed';
   createdAt: string;
   count: number;
   firstScheduledAt: string;
@@ -73,6 +73,16 @@ export interface AutomationActivityEntry {
   exampleScheduledAt: string[];
   outcome: AutomationActivityOutcome;
 }
+
+export interface AutomationRunFailedActivityEntry {
+  id: string;
+  automationId: string;
+  kind: 'run-failed';
+  createdAt: string;
+  message: string;
+}
+
+export type AutomationActivityEntry = AutomationMissedActivityEntry | AutomationRunFailedActivityEntry;
 
 type StoredAutomationRow = {
   id: string;
@@ -620,6 +630,22 @@ function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationAct
   if (!createdAt) {
     return undefined;
   }
+
+  if (row.kind === 'run-failed') {
+    const message = readOptionalString(payload?.message);
+    if (!message) {
+      return undefined;
+    }
+
+    return {
+      id: `${row.automation_id}:${row.seq}`,
+      automationId: row.automation_id,
+      kind: 'run-failed',
+      createdAt,
+      message,
+    };
+  }
+
   const count = typeof payload?.count === 'number' && Number.isSafeInteger(payload.count) && payload.count > 0 ? payload.count : undefined;
   const firstScheduledAt = typeof payload?.firstScheduledAt === 'string' ? normalizeIsoTimestamp(payload.firstScheduledAt) : undefined;
   const lastScheduledAt = typeof payload?.lastScheduledAt === 'string' ? normalizeIsoTimestamp(payload.lastScheduledAt) : undefined;
@@ -1118,8 +1144,53 @@ export function appendAutomationActivityEntry(
   }
 
   const createdAt = readAutomationActivityTimestamp(input.createdAt, 'createdAt');
-  if (input.kind !== 'missed') {
+  if (input.kind !== 'missed' && input.kind !== 'run-failed') {
     throw new Error(`Unsupported automation activity kind: ${input.kind}`);
+  }
+
+  if (input.kind === 'run-failed') {
+    const message = readRequiredString(input.message, 'message');
+    const db = openAutomationDb(options.dbPath);
+    let insertedSeq: number | bigint | undefined;
+    db.transaction(() => {
+      const insertResult = db
+        .prepare(
+          `
+          INSERT INTO automation_activity (automation_id, kind, created_at, payload_json)
+          VALUES (?, ?, ?, ?)
+        `,
+        )
+        .run(normalizedAutomationId, 'run-failed', createdAt, JSON.stringify({ message })) as { lastInsertRowid?: number | bigint };
+      insertedSeq = insertResult.lastInsertRowid;
+      db.prepare(
+        `
+        DELETE FROM automation_activity
+        WHERE automation_id = ?
+          AND seq NOT IN (
+            SELECT seq
+            FROM automation_activity
+            WHERE automation_id = ?
+            ORDER BY created_at DESC, seq DESC
+            LIMIT ?
+          )
+      `,
+      ).run(normalizedAutomationId, normalizedAutomationId, AUTOMATION_ACTIVITY_RETENTION_LIMIT);
+    })();
+
+    const row = db
+      .prepare(
+        `
+        SELECT seq, automation_id, kind, created_at, payload_json
+        FROM automation_activity
+        WHERE seq = ?
+      `,
+      )
+      .get(insertedSeq) as AutomationActivityRow | undefined;
+    const entry = row ? rowToAutomationActivityEntry(row) : undefined;
+    if (!entry) {
+      throw new Error('Failed to read automation activity entry after insert.');
+    }
+    return entry;
   }
 
   if (!Number.isSafeInteger(input.count) || input.count <= 0) {

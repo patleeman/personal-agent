@@ -453,6 +453,7 @@ export interface HostController {
   markConversationAttention?(input: DesktopConversationAttentionRequest): Promise<{ ok: true }>;
   readScheduledTasks?(): Promise<unknown>;
   readScheduledTaskDetail?(taskId: string): Promise<unknown>;
+  readScheduledTaskSchedulerHealth?(): Promise<unknown>;
   readScheduledTaskLog?(taskId: string): Promise<{ path: string; log: string }>;
   deleteScheduledTask?(taskId: string): Promise<unknown>;
   createScheduledTask?(input: Omit<DesktopScheduledTaskUpdateRequest, 'taskId'>): Promise<unknown>;

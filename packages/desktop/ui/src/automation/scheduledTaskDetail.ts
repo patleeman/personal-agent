@@ -23,10 +23,16 @@ function isOptionalActivity(value: unknown): boolean {
         }
 
         const record = entry as Record<string, unknown>;
+        if (typeof record.id !== 'string' || typeof record.createdAt !== 'string') {
+          return false;
+        }
+
+        if (record.kind === 'run-failed') {
+          return typeof record.message === 'string';
+        }
+
         return (
-          typeof record.id === 'string' &&
           record.kind === 'missed' &&
-          typeof record.createdAt === 'string' &&
           Number.isSafeInteger(record.count) &&
           (record.count as number) > 0 &&
           typeof record.firstScheduledAt === 'string' &&

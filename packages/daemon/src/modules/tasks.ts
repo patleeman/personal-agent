@@ -267,6 +267,40 @@ function upsertSkippedTaskAlert(input: {
   });
 }
 
+function upsertTaskRunFailureAlert(input: {
+  task: StoredAutomation;
+  stateRoot: string;
+  detectedAt: string;
+  message: string;
+  activityId?: string;
+}): void {
+  upsertAlert({
+    stateRoot: input.stateRoot,
+    profile: input.task.profile,
+    alert: {
+      id: `automation-run-failed-${input.task.id}`,
+      profile: input.task.profile,
+      kind: 'task-failed',
+      severity: 'disruptive',
+      status: 'active',
+      title: `Automation failed to start: ${input.task.title ?? input.task.id}`,
+      body: [
+        'Reason:',
+        input.message,
+        '',
+        `Task: ${input.task.title ?? input.task.id}`,
+        `Schedule: ${formatTaskSchedule(input.task)}`,
+      ].join('\n'),
+      createdAt: input.detectedAt,
+      updatedAt: input.detectedAt,
+      ...(input.activityId ? { activityId: input.activityId } : {}),
+      sourceKind: 'scheduled-task',
+      sourceId: input.task.id,
+      requiresAck: true,
+    },
+  });
+}
+
 function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition): TaskRuntimeState {
   const existing = taskState.tasks[task.key];
 
@@ -858,14 +892,36 @@ export function createTasksModule(config: TasksModuleConfig, dependencies: Tasks
     const runPromise = executeTaskRun(task, record, context, controller, options)
       .catch((error) => {
         const message = (error as Error).message;
+        const failedAt = now().toISOString();
         record.running = false;
         record.runningStartedAt = undefined;
         record.lastStatus = 'failed';
-        record.lastFailureAt = now().toISOString();
+        record.lastRunAt = failedAt;
+        record.lastFailureAt = failedAt;
         record.lastError = message;
         state.failedRuns += 1;
         state.lastError = message;
         context.logger.warn(`task execution crash id=${task.id} error=${message}`);
+        try {
+          const activity = appendAutomationActivityEntry(
+            task.id,
+            {
+              kind: 'run-failed',
+              createdAt: failedAt,
+              message,
+            },
+            { dbPath: runtimeDbPath },
+          );
+          upsertTaskRunFailureAlert({
+            task,
+            stateRoot: context.paths.stateRoot,
+            detectedAt: failedAt,
+            message,
+            activityId: activity.id,
+          });
+        } catch (activityError) {
+          context.logger.warn(`failed to record task start failure id=${task.id}: ${(activityError as Error).message}`);
+        }
       })
       .finally(() => {
         activeRuns.delete(task.key);

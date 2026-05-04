@@ -466,6 +466,13 @@ function nextMinuteAfter(nowMs: number): Date {
   return next;
 }
 
+function previousMinuteBefore(nowMs: number): Date {
+  const previous = new Date(nowMs);
+  previous.setSeconds(0, 0);
+  previous.setMinutes(previous.getMinutes() - 1);
+  return previous;
+}
+
 export function getNextTaskRunAt(task: { enabled?: boolean; cron?: string; at?: string }, nowMs = Date.now()): Date | null {
   if (task.enabled === false) {
     return null;
@@ -498,6 +505,39 @@ export function getNextTaskRunAt(task: { enabled?: boolean; cron?: string; at?: 
       return new Date(cursor);
     }
     cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+
+  return null;
+}
+
+export function getPreviousTaskRunAt(task: { enabled?: boolean; cron?: string; at?: string }, nowMs = Date.now()): Date | null {
+  if (task.enabled === false || !Number.isSafeInteger(nowMs)) {
+    return null;
+  }
+
+  if (task.at) {
+    const normalizedAt = task.at.trim();
+    const match = normalizedAt.match(ISO_TIMESTAMP_PATTERN);
+    const atMs = match && hasValidIsoDateParts(match) ? Date.parse(normalizedAt) : Number.NaN;
+    return Number.isFinite(atMs) && atMs <= nowMs ? new Date(atMs) : null;
+  }
+
+  if (!task.cron) {
+    return null;
+  }
+
+  const parsed = parseCronForNextRun(task.cron);
+  if (!parsed) {
+    return null;
+  }
+
+  const cursor = previousMinuteBefore(nowMs);
+  const limitMs = nowMs - 366 * 24 * 60 * 60 * 1000;
+  while (cursor.getTime() >= limitMs) {
+    if (cronMatchesNextRun(parsed, cursor)) {
+      return new Date(cursor);
+    }
+    cursor.setMinutes(cursor.getMinutes() - 1);
   }
 
   return null;

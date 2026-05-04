@@ -3,13 +3,13 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAppData, useSseConnection } from '../app/contexts';
 import { getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention } from '../automation/runPresentation';
-import { formatTaskNextRunCountdown, formatTaskSchedule, getNextTaskRunAt } from '../automation/taskSchedule';
+import { formatTaskNextRunCountdown, formatTaskSchedule, getNextTaskRunAt, getPreviousTaskRunAt } from '../automation/taskSchedule';
 import { api } from '../client/api';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { ensureConversationTabOpen } from '../session/sessionTabs';
-import type { DurableRunRecord, ScheduledTaskDetail, ScheduledTaskSummary } from '../shared/types';
+import type { DurableRunRecord, ScheduledTaskDetail, ScheduledTaskSchedulerHealth, ScheduledTaskSummary } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 
 function isFailedTaskStatus(status: string | undefined): boolean {
@@ -195,9 +195,55 @@ function formatScheduleTypeLabel(task: Pick<ScheduledTaskSummary, 'cron' | 'at' 
 }
 
 function formatTaskActivity(entry: NonNullable<ScheduledTaskDetail['activity']>[number]): string {
+  if (entry.kind === 'run-failed') {
+    return `Run failed before execution · ${entry.message}`;
+  }
+
   const range = entry.count === 1 ? entry.firstScheduledAt : `${entry.firstScheduledAt} → ${entry.lastScheduledAt}`;
   const outcome = entry.outcome === 'catch-up-started' ? 'Caught up' : 'Skipped';
   return `${outcome} ${entry.count} scheduled ${entry.count === 1 ? 'run' : 'runs'} · ${range}`;
+}
+
+function schedulerHealthText(health: ScheduledTaskSchedulerHealth | null | undefined): { text: string; cls: string } {
+  if (!health?.lastEvaluatedAt) {
+    return { text: 'Scheduler has not checked automations yet.', cls: 'border-warning/30 bg-warning/10 text-warning' };
+  }
+
+  if (health.status === 'stale') {
+    return { text: `Scheduler stale. Last checked ${timeAgo(health.lastEvaluatedAt)}.`, cls: 'border-danger/35 bg-danger/10 text-danger' };
+  }
+
+  return {
+    text: `Scheduler healthy. Last checked ${timeAgo(health.lastEvaluatedAt)}.`,
+    cls: 'border-border-subtle bg-surface/35 text-secondary',
+  };
+}
+
+function formatExpectedActual(input: {
+  expectedAt: Date | null;
+  lastRunAt?: string;
+  lastStatus?: string;
+  activity?: ScheduledTaskDetail['activity'];
+}): string {
+  if (!input.expectedAt) {
+    return 'No expected run yet.';
+  }
+
+  const expectedMs = input.expectedAt.getTime();
+  const lastRunMs = input.lastRunAt ? Date.parse(input.lastRunAt) : Number.NaN;
+  const latestActivity = input.activity?.[0];
+  const activityMs = latestActivity?.kind === 'missed' ? Date.parse(latestActivity.lastScheduledAt) : Number.NaN;
+  const expectedLabel = timeAgo(input.expectedAt.toISOString());
+
+  if (Number.isFinite(activityMs) && activityMs >= expectedMs) {
+    return `Expected ${expectedLabel}; ${latestActivity?.outcome === 'catch-up-started' ? 'catch-up started' : 'skipped'}.`;
+  }
+
+  if (Number.isFinite(lastRunMs) && lastRunMs >= expectedMs) {
+    return `Expected ${expectedLabel}; ${isFailedTaskStatus(input.lastStatus) ? 'failed' : 'ran'}.`;
+  }
+
+  return `Expected ${expectedLabel}; no recorded run yet.`;
 }
 
 function getRunLogsPath(run: DurableRunRecord): string | undefined {
@@ -383,7 +429,15 @@ function CurrentAutomationRow({ task }: { task: ScheduledTaskSummary }) {
   );
 }
 
-function AutomationsOverview({ tasks, onCreate }: { tasks: ScheduledTaskSummary[]; onCreate: () => void }) {
+function AutomationsOverview({
+  tasks,
+  schedulerHealth,
+  onCreate,
+}: {
+  tasks: ScheduledTaskSummary[];
+  schedulerHealth?: ScheduledTaskSchedulerHealth | null;
+  onCreate: () => void;
+}) {
   const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
   const enabledCount = tasks.filter((task) => task.enabled).length;
   const attentionCount = tasks.filter((task) => isFailedTaskStatus(task.lastStatus)).length;
@@ -409,6 +463,12 @@ function AutomationsOverview({ tasks, onCreate }: { tasks: ScheduledTaskSummary[
             </ToolbarButton>
           }
         />
+
+        {schedulerHealth && (
+          <div className={`max-w-4xl border px-4 py-3 text-[13px] leading-6 ${schedulerHealthText(schedulerHealth).cls}`}>
+            {schedulerHealthText(schedulerHealth).text}
+          </div>
+        )}
 
         <section className="max-w-4xl">
           <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
@@ -537,7 +597,14 @@ function AutomationDetailView({
   const targetLabel = effectiveSummary ? formatTargetLabel(effectiveSummary) : 'Job';
   const projectLabel = effectiveSummary ? formatProjectLabel(effectiveSummary) : 'local';
   const nextRunAt = effectiveSummary ? getNextTaskRunAt(effectiveSummary, nowMs) : null;
+  const expectedRunAt = effectiveSummary ? getPreviousTaskRunAt(effectiveSummary, nowMs) : null;
   const nextRunLabel = nextRunAt ? formatTaskNextRunCountdown(nextRunAt, nowMs) : '—';
+  const expectedActualLabel = formatExpectedActual({
+    expectedAt: expectedRunAt,
+    lastRunAt: effectiveSummary?.lastRunAt,
+    lastStatus: effectiveSummary?.lastStatus,
+    activity: detail?.activity,
+  });
   const prompt = detail?.prompt ?? effectiveSummary?.prompt ?? '';
   const taskRuns = useMemo(
     () => sortAutomationRuns((runs?.runs ?? []).filter((run) => getRunTaskId(run) === effectiveSummary?.id)),
@@ -702,6 +769,7 @@ function AutomationDetailView({
                   className={isFailedTaskStatus(effectiveSummary.lastStatus) ? 'text-danger' : ''}
                 />
                 <SummaryCell label="Next run" value={nextRunLabel} />
+                <SummaryCell label="Expected vs actual" value={expectedActualLabel} />
                 <SummaryCell label="Schedule" value={scheduleLabel} />
                 <SummaryCell label="Target" value={targetLabel} />
                 <SummaryCell label="Model" value={modelLabel} />
@@ -838,7 +906,9 @@ function AutomationDetailView({
                   <div className="space-y-3">
                     {detail.activity.slice(0, 5).map((entry) => (
                       <div key={entry.id} className="grid gap-1 text-[13px] leading-6 sm:grid-cols-[minmax(0,1fr)_8rem] sm:items-start">
-                        <p className={entry.outcome === 'skipped' ? 'text-danger' : 'text-secondary'}>{formatTaskActivity(entry)}</p>
+                        <p className={entry.kind === 'run-failed' || entry.outcome === 'skipped' ? 'text-danger' : 'text-secondary'}>
+                          {formatTaskActivity(entry)}
+                        </p>
                         <p className="text-left text-[12px] text-dim sm:text-right">{timeAgo(entry.createdAt)}</p>
                       </div>
                     ))}
@@ -916,6 +986,7 @@ export function TasksPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
   const { tasks, setTasks } = useAppData();
   const { status: sseStatus } = useSseConnection();
+  const { data: schedulerHealth, refetch: refetchSchedulerHealth } = useApi(() => api.taskSchedulerHealth(), 'task-scheduler-health');
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const isLoading = tasks === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
   const visibleError =
@@ -927,11 +998,11 @@ export function TasksPage() {
   const refreshTasks = useCallback(async () => {
     setRefreshError(null);
     try {
-      await refreshTaskSnapshot(setTasks);
+      await Promise.all([refreshTaskSnapshot(setTasks), refetchSchedulerHealth({ resetLoading: false })]);
     } catch (nextError) {
       setRefreshError(nextError instanceof Error ? nextError.message : String(nextError));
     }
-  }, [setTasks]);
+  }, [refetchSchedulerHealth, setTasks]);
 
   useEffect(() => {
     if (tasks === null && sseStatus === 'offline') {
@@ -963,7 +1034,7 @@ export function TasksPage() {
             onRefreshTasks={() => refreshTasks()}
           />
         ) : (
-          <AutomationsOverview tasks={tasks} onCreate={() => navigate('/automations?new=1')} />
+          <AutomationsOverview tasks={tasks} schedulerHealth={schedulerHealth} onCreate={() => navigate('/automations?new=1')} />
         ))}
       {composerMode === 'create' && <CreateTaskModal onClose={closeComposer} />}
       {composerMode === 'edit' && selectedId && <EditTaskModal id={selectedId} onClose={closeComposer} />}

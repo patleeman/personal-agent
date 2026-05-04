@@ -42,6 +42,7 @@ import type {
   ProviderAuthState,
   ProviderOAuthLoginState,
   ScheduledTaskDetail,
+  ScheduledTaskSchedulerHealth,
   ScheduledTaskSummary,
   SessionDetailResult,
   SessionMeta,
@@ -285,6 +286,7 @@ export interface PersonalAgentDesktopBridge {
   markConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;
   readScheduledTasks(): Promise<ScheduledTaskSummary[]>;
   readScheduledTaskDetail(taskId: string): Promise<ScheduledTaskDetail>;
+  readScheduledTaskSchedulerHealth?(): Promise<ScheduledTaskSchedulerHealth>;
   readScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;
   deleteScheduledTask(taskId: string): Promise<{ ok: true; deleted: boolean }>;
   createScheduledTask(input: {

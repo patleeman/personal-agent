@@ -1584,6 +1584,64 @@ Run hourly task
     await module.stop?.(context);
   });
 
+  it('records activity and alerts when a due automation fails before creating a run', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'broken-thread',
+      profile: 'assistant',
+      title: 'Broken thread',
+      enabled: true,
+      cron: '* * * * *',
+      targetType: 'conversation',
+      prompt: 'Run maintenance.',
+    });
+    setStoredAutomationThreadBinding('broken-thread', { dbPath, mode: 'none' });
+
+    const currentTime = new Date('2026-03-02T10:10:00.000Z');
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 1,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask: vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString())),
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+    await waitForCondition(() => listAutomationActivityEntries('broken-thread', { dbPath }).length === 1);
+
+    expect(listAutomationActivityEntries('broken-thread', { dbPath })).toEqual([
+      expect.objectContaining({
+        automationId: 'broken-thread',
+        kind: 'run-failed',
+        message: 'Conversation automation @broken-thread requires a thread.',
+      }),
+    ]);
+    expect(getAlert({ stateRoot, profile: 'assistant', alertId: 'automation-run-failed-broken-thread' })).toEqual(
+      expect.objectContaining({
+        kind: 'task-failed',
+        status: 'active',
+        title: 'Automation failed to start: Broken thread',
+        sourceKind: 'scheduled-task',
+        sourceId: 'broken-thread',
+      }),
+    );
+
+    await module.stop?.(context);
+  });
+
   it('skips overlapping cron runs when prior run is still active', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');

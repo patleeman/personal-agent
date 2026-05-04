@@ -104,6 +104,7 @@ export interface LocalApiModule {
   markDesktopConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;
   readDesktopScheduledTasks(): Promise<unknown>;
   readDesktopScheduledTaskDetail(taskId: string): Promise<unknown>;
+  readDesktopScheduledTaskSchedulerHealth(): Promise<unknown>;
   readDesktopScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;
   deleteDesktopScheduledTask(taskId: string): Promise<unknown>;
   createDesktopScheduledTask(input: {

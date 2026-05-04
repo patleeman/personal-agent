@@ -532,6 +532,16 @@ export function registerDesktopIpc(options: {
     return controller.readScheduledTaskDetail(taskId);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-scheduled-task-scheduler-health`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id) ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readScheduledTaskSchedulerHealth) {
+      throw new Error('Dedicated desktop task scheduler health is only available for the local host.');
+    }
+
+    return controller.readScheduledTaskSchedulerHealth();
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-scheduled-task-log`, async (event, taskId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id) ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);

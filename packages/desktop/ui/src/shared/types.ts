@@ -279,16 +279,23 @@ export interface ScheduledTaskSummary {
 
 type ScheduledTaskThreadMode = 'dedicated' | 'existing' | 'none';
 
-export interface ScheduledTaskActivityEntry {
-  id: string;
-  kind: 'missed';
-  createdAt: string;
-  count: number;
-  firstScheduledAt: string;
-  lastScheduledAt: string;
-  exampleScheduledAt: string[];
-  outcome: 'skipped' | 'catch-up-started';
-}
+export type ScheduledTaskActivityEntry =
+  | {
+      id: string;
+      kind: 'missed';
+      createdAt: string;
+      count: number;
+      firstScheduledAt: string;
+      lastScheduledAt: string;
+      exampleScheduledAt: string[];
+      outcome: 'skipped' | 'catch-up-started';
+    }
+  | {
+      id: string;
+      kind: 'run-failed';
+      createdAt: string;
+      message: string;
+    };
 
 export interface ScheduledTaskDetail {
   id: string;
@@ -313,6 +320,13 @@ export interface ScheduledTaskDetail {
   threadMode: ScheduledTaskThreadMode;
   threadConversationId?: string;
   threadTitle?: string;
+}
+
+export interface ScheduledTaskSchedulerHealth {
+  status: 'healthy' | 'stale' | 'unknown';
+  lastEvaluatedAt?: string;
+  staleAfterSeconds: number;
+  checkedAt: string;
 }
 
 interface DurableRunSource {

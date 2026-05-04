@@ -63,6 +63,10 @@ export function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: 
 }
 
 function formatScheduledTaskActivity(entry: NonNullable<ScheduledTaskDetail['activity']>[number]): string {
+  if (entry.kind === 'run-failed') {
+    return `run failed before execution · ${entry.message}`;
+  }
+
   const scheduledAt = entry.count === 1 ? entry.firstScheduledAt : `${entry.firstScheduledAt} → ${entry.lastScheduledAt}`;
   const outcome = entry.outcome === 'catch-up-started' ? 'caught up' : 'skipped';
   return `${outcome} ${entry.count} scheduled ${entry.count === 1 ? 'run' : 'runs'} · ${scheduledAt}`;
@@ -1289,7 +1293,9 @@ export function ScheduledTaskPanel({
           <div className="space-y-2">
             {taskDetail.activity.slice(0, 5).map((entry) => (
               <div key={entry.id} className="text-[12px] leading-relaxed">
-                <p className={entry.outcome === 'skipped' ? 'text-danger' : 'text-secondary'}>{formatScheduledTaskActivity(entry)}</p>
+                <p className={entry.kind === 'run-failed' || entry.outcome === 'skipped' ? 'text-danger' : 'text-secondary'}>
+                  {formatScheduledTaskActivity(entry)}
+                </p>
                 <p className="text-[11px] text-dim">recorded {timeAgo(entry.createdAt)}</p>
               </div>
             ))}

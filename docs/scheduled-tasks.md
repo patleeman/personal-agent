@@ -83,6 +83,8 @@ Skipped and missed scheduler decisions are recorded as automation activity:
 
 Activity is viewable in the Automations UI. Skipped cron slots outside the catch-up window and overlap skips also raise an active alert so missed automations are visible instead of silent. Normal executions still write durable run records and logs.
 
+The Automations page also shows scheduler health from the daemon scheduler state. If the scheduler has not checked schedules within the stale window, the UI surfaces a warning and raises an active alert. Automation detail pages show the latest expected scheduled slot next to the actual recorded result, so a missing run is visible without spelunking through logs. Failures that happen before a durable run can be created are recorded as automation activity and alerted separately.
+
 ## Agent Tool Reference
 
 The `scheduled_task` tool manages tasks from within a conversation:

@@ -19,6 +19,7 @@ const {
   updateStoredAutomationMock,
   applyScheduledTaskThreadBindingMock,
   buildScheduledTaskThreadDetailMock,
+  readScheduledTaskSchedulerHealthMock,
   resolveScheduledTaskThreadBindingMock,
 } = vi.hoisted(() => ({
   clearTaskCallbackBindingMock: vi.fn(),
@@ -41,6 +42,7 @@ const {
   updateStoredAutomationMock: vi.fn(),
   applyScheduledTaskThreadBindingMock: vi.fn(),
   buildScheduledTaskThreadDetailMock: vi.fn(),
+  readScheduledTaskSchedulerHealthMock: vi.fn(),
   resolveScheduledTaskThreadBindingMock: vi.fn(),
 }));
 
@@ -76,6 +78,10 @@ vi.mock('../automation/taskService.js', () => ({
 vi.mock('../automation/scheduledTasks.js', () => ({
   loadScheduledTasksForProfile: loadScheduledTasksForProfileMock,
   toScheduledTaskMetadata: toScheduledTaskMetadataMock,
+}));
+
+vi.mock('../automation/scheduledTaskCapability.js', () => ({
+  readScheduledTaskSchedulerHealth: readScheduledTaskSchedulerHealthMock,
 }));
 
 vi.mock('../automation/scheduledTaskThreads.js', () => ({
@@ -171,6 +177,12 @@ describe('registerTaskRoutes', () => {
     updateStoredAutomationMock.mockReset();
     applyScheduledTaskThreadBindingMock.mockReset();
     buildScheduledTaskThreadDetailMock.mockReset();
+    readScheduledTaskSchedulerHealthMock.mockReset();
+    readScheduledTaskSchedulerHealthMock.mockReturnValue({
+      status: 'unknown',
+      staleAfterSeconds: 900,
+      checkedAt: '2026-04-09T15:00:00.000Z',
+    });
     resolveScheduledTaskThreadBindingMock.mockReset();
     toScheduledTaskMetadataMock.mockImplementation((task: TestTask) => toMetadata(task));
     applyScheduledTaskThreadBindingMock.mockImplementation(

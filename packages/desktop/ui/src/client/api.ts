@@ -45,6 +45,7 @@ import type {
   ProviderAuthState,
   ProviderOAuthLoginState,
   ScheduledTaskDetail,
+  ScheduledTaskSchedulerHealth,
   ScheduledTaskSummary,
   SessionDetailResult,
   SessionMeta,
@@ -630,6 +631,13 @@ export const api = {
       return desktopBridge.readScheduledTaskDetail(id);
     }
     return get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`);
+  },
+  taskSchedulerHealth: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge?.readScheduledTaskSchedulerHealth && (await shouldUseDesktopLocalCapabilities())) {
+      return desktopBridge.readScheduledTaskSchedulerHealth();
+    }
+    return get<ScheduledTaskSchedulerHealth>('/tasks/scheduler-health');
   },
   createTask: async (input: {
     title: string;

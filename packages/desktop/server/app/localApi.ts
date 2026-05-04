@@ -35,6 +35,7 @@ import {
   listScheduledTasksCapability,
   readScheduledTaskCapability,
   readScheduledTaskLogCapability,
+  readScheduledTaskSchedulerHealth,
   runScheduledTaskCapability,
   updateScheduledTaskCapability,
 } from '../automation/scheduledTaskCapability.js';
@@ -1364,6 +1365,11 @@ export async function readDesktopScheduledTasks() {
 export async function readDesktopScheduledTaskDetail(taskId: string) {
   await getLocalRoutes();
   return readScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
+}
+
+export async function readDesktopScheduledTaskSchedulerHealth() {
+  await getLocalRoutes();
+  return readScheduledTaskSchedulerHealth(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant');
 }
 
 export async function readDesktopScheduledTaskLog(taskId: string) {

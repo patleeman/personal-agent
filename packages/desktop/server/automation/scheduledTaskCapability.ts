@@ -1,12 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import { clearTaskCallbackBinding, getTaskCallbackBinding, setTaskCallbackBinding } from '@personal-agent/core';
+import { clearTaskCallbackBinding, getTaskCallbackBinding, setTaskCallbackBinding, upsertAlert } from '@personal-agent/core';
 import {
   type AutomationActivityEntry,
   createStoredAutomation,
   deleteStoredAutomation,
   ensureAutomationThread,
   listAutomationActivityEntries,
+  loadAutomationSchedulerState,
   normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   type StoredAutomation,
@@ -23,6 +24,8 @@ import {
   type ScheduledTaskThreadInput,
 } from './scheduledTaskThreads.js';
 import { findTaskForProfile, readRequiredTaskId } from './taskService.js';
+
+const SCHEDULER_STALE_AFTER_SECONDS = 15 * 60;
 
 export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadInput {
   title: string;
@@ -122,6 +125,7 @@ export function buildScheduledTaskDetail(
   activity: AutomationActivityEntry[] = [],
 ) {
   const metadata = toScheduledTaskMetadata(task);
+  const schedulerState = loadAutomationSchedulerState();
   return {
     ...(runtime ?? {}),
     id: metadata.id,
@@ -154,7 +158,43 @@ export function buildScheduledTaskDetail(
       : {}),
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
+    ...(schedulerState.lastEvaluatedAt ? { schedulerLastEvaluatedAt: schedulerState.lastEvaluatedAt } : {}),
     ...buildScheduledTaskThreadDetail(task),
+  };
+}
+
+export function readScheduledTaskSchedulerHealth(profile: string) {
+  const checkedAt = new Date().toISOString();
+  const lastEvaluatedAt = loadAutomationSchedulerState().lastEvaluatedAt;
+  const lastEvaluatedAtMs = lastEvaluatedAt ? Date.parse(lastEvaluatedAt) : Number.NaN;
+  const ageSeconds = Number.isFinite(lastEvaluatedAtMs) ? Math.floor((Date.now() - lastEvaluatedAtMs) / 1000) : undefined;
+  const status = ageSeconds === undefined ? 'unknown' : ageSeconds > SCHEDULER_STALE_AFTER_SECONDS ? 'stale' : 'healthy';
+
+  if (status === 'stale') {
+    upsertAlert({
+      profile,
+      alert: {
+        id: 'automation-scheduler-stale',
+        profile,
+        kind: 'blocked',
+        severity: 'disruptive',
+        status: 'active',
+        title: 'Automation scheduler is stale',
+        body: `The automation scheduler has not checked schedules since ${lastEvaluatedAt}. Open Automations or daemon status to inspect it.`,
+        createdAt: checkedAt,
+        updatedAt: checkedAt,
+        sourceKind: 'automation-scheduler',
+        sourceId: 'scheduler',
+        requiresAck: true,
+      },
+    });
+  }
+
+  return {
+    status,
+    ...(lastEvaluatedAt ? { lastEvaluatedAt } : {}),
+    staleAfterSeconds: SCHEDULER_STALE_AFTER_SECONDS,
+    checkedAt,
   };
 }
 
