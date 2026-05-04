@@ -24,7 +24,7 @@ Summarize yesterday's progress.
     expect(task.id).toBe('daily-status');
     expect(task.enabled).toBe(true);
     expect(task.schedule.type).toBe('cron');
-    expect(task.profile).toBe('assistant');
+    expect(task.profile).toBe('shared');
     expect(task.modelRef).toBe('openai-codex/gpt-5.4');
     expect(task.cwd).toContain('agent-workspace');
     expect(task.timeoutSeconds).toBe(900);

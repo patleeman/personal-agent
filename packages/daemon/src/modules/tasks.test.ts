@@ -165,6 +165,56 @@ describe('tasks module scheduling', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
+  it('migrates legacy automation profile columns to shared runtime scope', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    const legacyDb = openSqliteDatabase(dbPath);
+    legacyDb.exec(`
+      CREATE TABLE automations (
+        id TEXT PRIMARY KEY,
+        profile TEXT NOT NULL,
+        title TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        schedule_type TEXT NOT NULL,
+        cron TEXT,
+        at TEXT,
+        prompt TEXT NOT NULL,
+        cwd TEXT,
+        model_ref TEXT,
+        timeout_seconds INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        legacy_file_path TEXT
+      );
+    `);
+    legacyDb
+      .prepare(
+        'INSERT INTO automations (id, profile, title, enabled, schedule_type, cron, prompt, timeout_seconds, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        'legacy-task',
+        'datadog',
+        'Legacy task',
+        1,
+        'cron',
+        '0 * * * *',
+        'Run legacy task.',
+        1800,
+        '2026-03-02T10:00:00.000Z',
+        '2026-03-02T10:00:00.000Z',
+      );
+    legacyDb.close();
+
+    const automations = listStoredAutomations({ dbPath });
+    expect(automations[0]).toEqual(expect.objectContaining({ id: 'legacy-task', profile: 'shared', runtimeScope: 'shared' }));
+
+    const migratedDb = openSqliteDatabase(dbPath);
+    const columns = migratedDb.prepare('PRAGMA table_info(automations)').all() as Array<{ name: string }>;
+    expect(columns.map((column) => column.name)).toContain('runtime_scope');
+    expect(columns.map((column) => column.name)).not.toContain('profile');
+    migratedDb.close();
+  });
+
   it('rejects fractional automation timeouts when storing tasks', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
@@ -1597,7 +1647,7 @@ Run hourly task
       return Object.keys(state.resumes).length === 1;
     });
 
-    const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'shared' });
     expect(activityEntries).toHaveLength(1);
     expect(activityEntries[0]?.entry.summary).toContain('Scheduled task @watch-prod completed');
 

@@ -463,7 +463,11 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
         };
       })();
 
-  const profile = readOptionalString(section.attributes, 'profile') ?? DEFAULT_PROFILE;
+  // Legacy task files may still carry a profile key. The runtime no longer
+  // partitions scheduled tasks by profile, so normalize all imported tasks to
+  // the shared runtime scope.
+  void readOptionalString(section.attributes, 'profile');
+  const profile = DEFAULT_PROFILE;
 
   const provider = readOptionalString(section.attributes, 'provider');
   const model = readOptionalString(section.attributes, 'model');

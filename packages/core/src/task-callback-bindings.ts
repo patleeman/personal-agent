@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'path';
 import type { AlertSeverity } from './alerts.js';
 import { getStateRoot } from './runtime/paths.js';
 
-const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const DEFAULT_RUNTIME_SCOPE = 'shared';
 
 export interface TaskCallbackBinding {
   taskId: string;
@@ -48,13 +48,8 @@ function normalizeNotify(value: unknown): AlertSeverity | 'none' {
   return 'none';
 }
 
-function assertProfile(profile: string): string {
-  const normalized = profile.trim();
-  if (!PROFILE_NAME_PATTERN.test(normalized)) {
-    throw new Error(`Invalid profile name "${profile}".`);
-  }
-
-  return normalized;
+function normalizeRuntimeScope(_profile: string): string {
+  return DEFAULT_RUNTIME_SCOPE;
 }
 
 function resolveStateRoot(stateRoot?: string): string {
@@ -80,7 +75,7 @@ function parseBinding(value: unknown): TaskCallbackBinding | undefined {
 
   return {
     taskId,
-    profile,
+    profile: normalizeRuntimeScope(profile),
     conversationId,
     sessionFile,
     createdAt,
@@ -95,17 +90,34 @@ function parseBinding(value: unknown): TaskCallbackBinding | undefined {
 }
 
 export function resolveTaskCallbackBindingsFile(options: { profile: string; stateRoot?: string }): string {
-  return join(resolveStateRoot(options.stateRoot), 'pi-agent', 'state', 'task-callback-bindings', `${assertProfile(options.profile)}.json`);
+  return join(
+    resolveStateRoot(options.stateRoot),
+    'pi-agent',
+    'state',
+    'task-callback-bindings',
+    `${normalizeRuntimeScope(options.profile)}.json`,
+  );
+}
+
+function resolveLegacyTaskCallbackBindingsFile(options: { profile: string; stateRoot?: string }): string | undefined {
+  const legacyProfile = options.profile.trim();
+  if (!legacyProfile || legacyProfile === DEFAULT_RUNTIME_SCOPE) {
+    return undefined;
+  }
+
+  return join(resolveStateRoot(options.stateRoot), 'pi-agent', 'state', 'task-callback-bindings', `${legacyProfile}.json`);
 }
 
 export function loadTaskCallbackBindings(options: { profile: string; stateRoot?: string }): Record<string, TaskCallbackBinding> {
   const path = resolveTaskCallbackBindingsFile(options);
-  if (!existsSync(path)) {
+  const legacyPath = resolveLegacyTaskCallbackBindingsFile(options);
+  const readablePath = existsSync(path) ? path : legacyPath && existsSync(legacyPath) ? legacyPath : undefined;
+  if (!readablePath) {
     return {};
   }
 
   try {
-    const raw = readFileSync(path, 'utf-8').trim();
+    const raw = readFileSync(readablePath, 'utf-8').trim();
     if (raw.length === 0) {
       return {};
     }
@@ -165,7 +177,7 @@ export function setTaskCallbackBinding(options: {
   const timestamp = normalizeIsoTimestamp(options.updatedAt, new Date().toISOString());
   const next: TaskCallbackBinding = {
     taskId: options.taskId,
-    profile: assertProfile(options.profile),
+    profile: normalizeRuntimeScope(options.profile),
     conversationId: options.conversationId,
     sessionFile: options.sessionFile,
     createdAt: existing?.createdAt ?? timestamp,
@@ -179,7 +191,7 @@ export function setTaskCallbackBinding(options: {
   };
 
   bindings[options.taskId] = next;
-  saveTaskCallbackBindings({ profile: options.profile, stateRoot: options.stateRoot, bindings });
+  saveTaskCallbackBindings({ profile: normalizeRuntimeScope(options.profile), stateRoot: options.stateRoot, bindings });
   return next;
 }
 

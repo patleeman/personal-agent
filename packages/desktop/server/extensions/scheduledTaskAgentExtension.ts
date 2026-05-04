@@ -35,7 +35,7 @@ type ScheduledTaskAction = (typeof SCHEDULED_TASK_ACTION_VALUES)[number];
 
 const ScheduledTaskToolParams = Type.Object({
   action: Type.Union(SCHEDULED_TASK_ACTION_VALUES.map((value) => Type.Literal(value))),
-  profile: Type.Optional(Type.String({ description: 'Profile whose task dir should be inspected. Defaults to the active profile.' })),
+  profile: Type.Optional(Type.String({ description: 'Deprecated. Ignored; scheduled tasks use the shared runtime scope.' })),
   taskId: Type.Optional(Type.String({ description: 'Task id for get/save/delete/run/validate.' })),
   title: Type.Optional(Type.String({ description: 'Human-readable title for the automation. Defaults to taskId.' })),
   enabled: Type.Optional(Type.Boolean({ description: 'Whether the task is enabled when saving.' })),
@@ -309,12 +309,14 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
         'Use this tool when the user wants recurring automation, one-time scheduled prompts, or task inspection.',
         'Use save to create or update a task definition, validate to check definitions, and run to trigger one immediately.',
         'Use targetType="conversation" when the scheduled prompt should wake or continue a thread instead of starting a background job.',
-        'Keep tasks high-signal: clear schedule, explicit profile, and a concise prompt body.',
+        'Keep tasks high-signal: clear schedule and a concise prompt body.',
       ],
       parameters: ScheduledTaskToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         try {
-          const profile = readOptionalString(params.profile) ?? options.getCurrentProfile();
+          void readOptionalString(params.profile);
+          void options.getCurrentProfile();
+          const profile = 'shared';
 
           switch (params.action as ScheduledTaskAction) {
             case 'list': {
@@ -404,7 +406,6 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                   })
                 : createStoredAutomation({
                     id: taskId,
-                    profile,
                     title: readOptionalString(params.title) ?? taskId,
                     enabled: params.enabled ?? true,
                     cron: params.cron,
@@ -524,7 +525,7 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
                   {
                     type: 'text' as const,
                     text: valid
-                      ? `Validated ${loaded.tasks.length} scheduled task${loaded.tasks.length === 1 ? '' : 's'} for profile ${profile}.`
+                      ? `Validated ${loaded.tasks.length} scheduled task${loaded.tasks.length === 1 ? '' : 's'}.`
                       : `Validation failed for ${loaded.parseErrors.length} task file${loaded.parseErrors.length === 1 ? '' : 's'}: ${loaded.parseErrors
                           .map((entry) => `${entry.filePath}: ${entry.error}`)
                           .join('; ')}`,
