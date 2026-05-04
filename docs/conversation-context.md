@@ -38,7 +38,7 @@ Images, PDFs, and other binary files can be attached to individual messages:
 | Drag        | Drag file into the composer               |
 | File picker | Use the attachment button in the composer |
 
-Images are sent to the model as image content. Other binary formats are stored as conversation attachments but may not be visible to all models.
+Images are sent to image-capable models as image content. For text-only models, PA saves the latest images locally and gives the agent a `probe_image` tool that asks an image-capable subagent focused questions about them. Other binary formats are stored as conversation attachments but may not be visible to all models.
 
 ## Context Loading Order
 

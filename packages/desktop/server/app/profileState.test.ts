@@ -21,6 +21,7 @@ const {
   createScheduledTaskAgentExtensionMock,
   createWorkbenchBrowserAgentExtensionMock,
   createImageAgentExtensionMock,
+  createImageProbeAgentExtensionMock,
   createMcpAgentExtensionMock,
   webToolsExtensionMock,
   gptApplyPatchExtensionMock,
@@ -55,6 +56,7 @@ const {
     createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
     createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
     createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
+    createImageProbeAgentExtensionMock: vi.fn(() => 'image-probe-extension'),
     createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
     webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
     gptApplyPatchExtensionMock: vi.fn(() => 'gpt-apply-patch-extension'),
@@ -127,6 +129,10 @@ vi.mock('../extensions/imageAgentExtension.js', () => ({
   createImageAgentExtension: createImageAgentExtensionMock,
 }));
 
+vi.mock('../extensions/imageProbeAgentExtension.js', () => ({
+  createImageProbeAgentExtension: createImageProbeAgentExtensionMock,
+}));
+
 vi.mock('../extensions/mcpAgentExtension.js', () => ({
   createMcpAgentExtension: createMcpAgentExtensionMock,
 }));
@@ -193,6 +199,7 @@ describe('createProfileState', () => {
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
     createWorkbenchBrowserAgentExtensionMock.mockClear();
+    createImageProbeAgentExtensionMock.mockClear();
     requestConversationWorkingDirectoryChangeMock.mockReset();
     authStorageMock.hasAuth.mockReset();
     authStorageMock.hasAuth.mockReturnValue(false);
@@ -226,7 +233,7 @@ describe('createProfileState', () => {
     const factories = state.buildLiveSessionExtensionFactories();
     // All factories are wrapped by guardSystemPromptOverride so each
     // element is a function. Verify count and that each delegates correctly.
-    expect(factories).toHaveLength(16);
+    expect(factories).toHaveLength(17);
     factories.forEach((factory) => {
       expect(typeof factory).toBe('function');
     });

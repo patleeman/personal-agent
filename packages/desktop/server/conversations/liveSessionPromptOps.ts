@@ -1,5 +1,6 @@
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 
+import { rememberImageProbeAttachments } from '../extensions/imageProbeAttachmentStore.js';
 import type { PromptImageAttachment } from './liveSessionQueue.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
 
@@ -28,6 +29,27 @@ export function isLikelyUnsupportedImageInputError(error: unknown): boolean {
   return mentionsImageInput && indicatesUnsupported;
 }
 
+function liveSessionModelAcceptsImages(model: unknown): boolean {
+  const input = (model as { input?: unknown } | undefined)?.input;
+  return Array.isArray(input) && input.includes('image');
+}
+
+function appendImageProbeNotice(text: string, images: PromptImageAttachment[]): string {
+  const names = images
+    .map((image, index) => image.name?.trim() || `image ${index + 1}`)
+    .map((name) => `- ${name}`)
+    .join('\n');
+  const notice = [
+    '[Image attachments received]',
+    `The user attached ${images.length} image${images.length === 1 ? '' : 's'}, but the current model cannot receive image input directly.`,
+    'Use the probe_image tool to inspect the latest attached image(s) before answering image-specific questions.',
+    names ? `Images:\n${names}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `${text.trim()}\n\n${notice}`.trim();
+}
+
 export async function runPromptOnLiveEntry<TEntry extends LiveSessionPromptHost>(
   entry: TEntry,
   text: string,
@@ -40,29 +62,35 @@ export async function runPromptOnLiveEntry<TEntry extends LiveSessionPromptHost>
 ): Promise<void> {
   const { session } = entry;
   const hasImages = Boolean(images && images.length > 0);
+  const shouldUseImageProbe = hasImages && !liveSessionModelAcceptsImages(session.model);
+  const promptText = shouldUseImageProbe ? appendImageProbeNotice(text, images ?? []) : text;
 
   if (behavior === undefined) {
     callbacks.repairLiveSessionTranscriptTail(entry.sessionId);
   }
 
+  if (shouldUseImageProbe && images) {
+    rememberImageProbeAttachments(entry.sessionId, images);
+  }
+
   const runPrompt = async (allowImages: boolean): Promise<void> => {
     if (behavior === 'steer') {
-      await (allowImages && hasImages ? session.steer(text, images) : session.steer(text));
+      await (allowImages && hasImages ? session.steer(promptText, images) : session.steer(promptText));
       callbacks.broadcastQueueState(entry, true);
       return;
     }
 
     if (behavior === 'followUp') {
-      await (allowImages && hasImages ? session.followUp(text, images) : session.followUp(text));
+      await (allowImages && hasImages ? session.followUp(promptText, images) : session.followUp(promptText));
       callbacks.broadcastQueueState(entry, true);
       return;
     }
 
-    await (allowImages && hasImages ? session.prompt(text, { images }) : session.prompt(text));
+    await (allowImages && hasImages ? session.prompt(promptText, { images }) : session.prompt(promptText));
   };
 
   try {
-    await runPrompt(true);
+    await runPrompt(!shouldUseImageProbe);
   } catch (error) {
     if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
       throw error;

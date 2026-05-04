@@ -17,6 +17,7 @@ import { createConversationQueueAgentExtension } from '../extensions/conversatio
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
 import gptApplyPatchExtension from '../extensions/gpt-apply-patch/index.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
+import { createImageProbeAgentExtension } from '../extensions/imageProbeAgentExtension.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
@@ -155,6 +156,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       createConversationTitleAgentExtension({
         setConversationTitle: renameSession,
       }),
+      createImageProbeAgentExtension(),
       ...(hasOpenAiImageProvider() ? [createImageAgentExtension()] : []),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
