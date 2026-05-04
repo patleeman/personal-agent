@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPiResourceArgs,
   installPackageSource,
-  listProfiles,
-  materializeProfileToAgentDir,
+  listRuntimeScopes,
+  materializeRuntimeResourcesToAgentDir,
   mergeJsonFiles,
   readPackageSourceTargetState,
   resolveLocalProfileSettingsFilePath,
-  resolveResourceProfile,
+  resolveRuntimeResources,
 } from './index.js';
 
 const originalEnv = process.env;
@@ -29,13 +29,13 @@ function createTempRepo(): string {
   return dir;
 }
 
-function createTempProfilesRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
-  const profilesRoot = join(root, 'sync', '_profiles');
-  mkdirSync(profilesRoot, { recursive: true });
+function createTempRuntimeConfigRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-config-'));
+  const runtimeConfigRoot = join(root, 'sync', '_profiles');
+  mkdirSync(runtimeConfigRoot, { recursive: true });
   process.env.PERSONAL_AGENT_VAULT_ROOT = join(root, 'sync');
   tempDirs.push(root);
-  return profilesRoot;
+  return runtimeConfigRoot;
 }
 
 function writeFile(path: string, content: string): void {
@@ -43,28 +43,28 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
-describe('resources profile loader', () => {
-  it('exposes a single shared profile', () => {
+describe('runtime resource loader', () => {
+  it('exposes a single shared runtime scope', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({}));
+    writeFile(join(runtimeConfigRoot, 'datadog', 'settings.json'), JSON.stringify({}));
 
-    const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+    const profiles = listRuntimeScopes({ repoRoot: repo, runtimeConfigRoot });
     expect(profiles).toEqual(['shared']);
   });
 
   it('resolves durable resources plus local overlays', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
+    const syncRoot = join(runtimeConfigRoot, '..');
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
-    writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
-    writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
+    writeFile(join(runtimeConfigRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
+    writeFile(join(runtimeConfigRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
     writeFile(
       join(syncRoot, 'skills', 'shared-skill', 'SKILL.md'),
       '---\nname: shared-skill\ndescription: Shared\nprofiles:\n  - shared\n---\n',
@@ -76,9 +76,9 @@ describe('resources profile loader', () => {
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
-    const resolved = resolveResourceProfile('datadog', {
+    const resolved = resolveRuntimeResources('datadog', {
       repoRoot: repo,
-      profilesRoot,
+      runtimeConfigRoot,
       localProfileDir: local,
     });
 
@@ -88,15 +88,15 @@ describe('resources profile loader', () => {
       join(syncRoot, 'AGENTS.md'),
       join(local, 'agent', 'AGENTS.md'),
     ]);
-    expect(resolved.settingsFiles).toEqual([join(profilesRoot, 'shared', 'settings.json'), join(local, 'agent', 'settings.json')]);
+    expect(resolved.settingsFiles).toEqual([join(runtimeConfigRoot, 'shared', 'settings.json'), join(local, 'agent', 'settings.json')]);
     expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'datadog-skill'), join(syncRoot, 'skills', 'shared-skill')]);
     expect(resolved.extensionEntries).toEqual([]);
   });
 
   it('includes configured machine instruction files in the materialized AGENTS stack', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
+    const syncRoot = join(runtimeConfigRoot, '..');
     const configRoot = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
     tempDirs.push(configRoot);
 
@@ -111,9 +111,9 @@ describe('resources profile loader', () => {
     );
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configRoot, 'config.json');
 
-    const resolved = resolveResourceProfile('shared', {
+    const resolved = resolveRuntimeResources('shared', {
       repoRoot: repo,
-      profilesRoot,
+      runtimeConfigRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
 
@@ -126,8 +126,8 @@ describe('resources profile loader', () => {
 
   it('includes configured machine skill directories alongside durable skills', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
+    const syncRoot = join(runtimeConfigRoot, '..');
     const configRoot = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
     const externalSkillsDir = mkdtempSync(join(tmpdir(), 'personal-agent-extra-skills-'));
     tempDirs.push(configRoot, externalSkillsDir);
@@ -149,9 +149,9 @@ describe('resources profile loader', () => {
     );
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configRoot, 'config.json');
 
-    const resolved = resolveResourceProfile('shared', {
+    const resolved = resolveRuntimeResources('shared', {
       repoRoot: repo,
-      profilesRoot,
+      runtimeConfigRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
 
@@ -160,8 +160,8 @@ describe('resources profile loader', () => {
 
   it('includes skill dirs regardless of profile metadata', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
+    const syncRoot = join(runtimeConfigRoot, '..');
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
@@ -176,9 +176,9 @@ metadata:
 `,
     );
 
-    const resolved = resolveResourceProfile('shared', {
+    const resolved = resolveRuntimeResources('shared', {
       repoRoot: repo,
-      profilesRoot,
+      runtimeConfigRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
 
@@ -204,8 +204,8 @@ metadata:
 
   it('materializes merged files into runtime agent dir', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
+    const syncRoot = join(runtimeConfigRoot, '..');
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
     process.env.PERSONAL_AGENT_VAULT_ROOT = syncRoot;
@@ -215,7 +215,7 @@ metadata:
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(
-      join(profilesRoot, 'shared', 'settings.json'),
+      join(runtimeConfigRoot, 'shared', 'settings.json'),
       JSON.stringify({
         datadog: true,
         defaultProvider: 'openai-codex',
@@ -233,8 +233,8 @@ description: Commit and push the agent's current work.
 `,
     );
 
-    const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
-    const result = materializeProfileToAgentDir(resolved, runtime);
+    const resolved = resolveRuntimeResources('datadog', { repoRoot: repo, runtimeConfigRoot });
+    const result = materializeRuntimeResourcesToAgentDir(resolved, runtime);
     const runtimeSettings = JSON.parse(readFileSync(join(runtime, 'settings.json'), 'utf-8')) as Record<string, unknown>;
     const runtimePrompt = readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8');
 
@@ -251,33 +251,13 @@ description: Commit and push the agent's current work.
     expect(runtimeSettings.defaultThinkingLevel).toBe('high');
   });
 
-  it('installs package sources into the selected durable settings file', () => {
+  it('installs package sources into local settings', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(profilesRoot, 'assistant', 'settings.json'), JSON.stringify({ packages: ['/existing-package'] }));
-
-    const profileInstall = installPackageSource({
-      repoRoot: repo,
-      profilesRoot,
-      localProfileDir: local,
-      profileName: 'assistant',
-      source: 'https://github.com/davebcn87/pi-autoresearch',
-      target: 'profile',
-      sourceBaseDir: repo,
-    });
-
-    expect(profileInstall.installed).toBe(true);
-    expect(profileInstall.settingsPath).toBe(join(profilesRoot, 'assistant', 'settings.json'));
-
-    const profileState = readPackageSourceTargetState('profile', 'assistant', { repoRoot: repo, profilesRoot, localProfileDir: local });
-    expect(profileState.packages).toEqual([
-      { source: '/existing-package', filtered: false },
-      { source: 'https://github.com/davebcn87/pi-autoresearch', filtered: false },
-    ]);
+    writeFile(join(local, 'settings.json'), JSON.stringify({ packages: ['/existing-package'] }));
 
     const localInstall = installPackageSource({
       repoRoot: repo,
@@ -289,18 +269,22 @@ description: Commit and push the agent's current work.
 
     expect(localInstall.installed).toBe(true);
     expect(localInstall.settingsPath).toBe(resolveLocalProfileSettingsFilePath({ localProfileDir: local }));
+    expect(readPackageSourceTargetState('local', { repoRoot: repo, localProfileDir: local }).packages).toEqual([
+      { source: '/existing-package', filtered: false },
+      { source: join(repo, 'local-package'), filtered: false },
+    ]);
   });
 
   it('builds pi args from resource directories', () => {
     const repo = createTempRepo();
-    const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
+    const runtimeConfigRoot = createTempRuntimeConfigRoot();
+    const syncRoot = join(runtimeConfigRoot, '..');
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(syncRoot, 'skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n# Test\n');
 
-    const resolved = resolveResourceProfile('shared', {
+    const resolved = resolveRuntimeResources('shared', {
       repoRoot: repo,
-      profilesRoot,
+      runtimeConfigRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
     const args = buildPiResourceArgs(resolved);
@@ -314,11 +298,11 @@ description: Commit and push the agent's current work.
     const repo = createTempRepo();
     const root = mkdtempSync(join(tmpdir(), 'personal-agent-legacy-sync-'));
     const syncRoot = join(root, 'sync');
-    const profilesRoot = join(syncRoot, '_profiles');
+    const runtimeConfigRoot = join(syncRoot, '_profiles');
     tempDirs.push(root);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-5.4' }));
+    writeFile(join(runtimeConfigRoot, 'shared', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-5.4' }));
     writeFile(
       join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'),
       `---
@@ -329,18 +313,18 @@ description: Commit your work.
 `,
     );
 
-    const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+    const profiles = listRuntimeScopes({ repoRoot: repo, runtimeConfigRoot });
     expect(profiles).toEqual(['shared']);
 
-    const resolved = resolveResourceProfile('default', {
+    const resolved = resolveRuntimeResources('default', {
       repoRoot: repo,
       vaultRoot: syncRoot,
-      profilesRoot,
+      runtimeConfigRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
 
     expect(resolved.agentsFiles).toEqual([join(repo, 'defaults/agent/AGENTS.md')]);
-    expect(resolved.settingsFiles).toContain(join(profilesRoot, 'shared', 'settings.json'));
+    expect(resolved.settingsFiles).toContain(join(runtimeConfigRoot, 'shared', 'settings.json'));
     expect(resolved.skillDirs).toEqual([join(syncRoot, '_skills', 'checkpoint')]);
   });
 });

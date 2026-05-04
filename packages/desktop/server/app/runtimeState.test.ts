@@ -6,8 +6,8 @@ const {
   getProfilesRootMock,
   getStateRootMock,
   writeMergedMcpConfigFileMock,
-  materializeProfileToAgentDirMock,
-  resolveResourceProfileMock,
+  materializeRuntimeResourcesToAgentDirMock,
+  resolveRuntimeResourcesMock,
   createArtifactAgentExtensionMock,
   createCheckpointAgentExtensionMock,
   createAskUserQuestionAgentExtensionMock,
@@ -40,8 +40,8 @@ const {
   return {
     getProfilesRootMock: vi.fn(() => '/profiles-root'),
     getStateRootMock: vi.fn(() => '/state-root'),
-    materializeProfileToAgentDirMock: vi.fn(),
-    resolveResourceProfileMock: vi.fn(),
+    materializeRuntimeResourcesToAgentDirMock: vi.fn(),
+    resolveRuntimeResourcesMock: vi.fn(),
     writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
     createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
     createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
@@ -72,8 +72,8 @@ const {
 vi.mock('@personal-agent/core', () => ({
   getProfilesRoot: getProfilesRootMock,
   getStateRoot: getStateRootMock,
-  materializeProfileToAgentDir: materializeProfileToAgentDirMock,
-  resolveResourceProfile: resolveResourceProfileMock,
+  materializeRuntimeResourcesToAgentDir: materializeRuntimeResourcesToAgentDirMock,
+  resolveRuntimeResources: resolveRuntimeResourcesMock,
   writeMergedMcpConfigFile: writeMergedMcpConfigFileMock,
 }));
 
@@ -166,7 +166,7 @@ vi.mock('@mariozechner/pi-coding-agent', () => ({
   AuthStorage: authStorageMock,
 }));
 
-import { createProfileState } from './profileState.js';
+import { createRuntimeState } from './runtimeState.js';
 
 const resolvedShared = {
   extensionEntries: ['/ext/shared'],
@@ -181,13 +181,13 @@ function createLogger() {
   };
 }
 
-describe('createProfileState', () => {
+describe('createRuntimeState', () => {
   beforeEach(() => {
     getProfilesRootMock.mockClear();
     getStateRootMock.mockClear();
-    materializeProfileToAgentDirMock.mockReset();
-    resolveResourceProfileMock.mockReset();
-    resolveResourceProfileMock.mockReturnValue(resolvedShared);
+    materializeRuntimeResourcesToAgentDirMock.mockReset();
+    resolveRuntimeResourcesMock.mockReset();
+    resolveRuntimeResourcesMock.mockReturnValue(resolvedShared);
     createArtifactAgentExtensionMock.mockClear();
     createAskUserQuestionAgentExtensionMock.mockClear();
     createChangeWorkingDirectoryAgentExtensionMock.mockClear();
@@ -211,14 +211,14 @@ describe('createProfileState', () => {
 
   it('materializes the shared runtime and builds live session helpers', async () => {
     const logger = createLogger();
-    const state = createProfileState({
+    const state = createRuntimeState({
       repoRoot: '/repo-root',
       agentDir: '/agent-dir',
       logger,
     });
 
-    expect(materializeProfileToAgentDirMock).toHaveBeenCalledWith(resolvedShared, '/agent-dir');
-    expect(state.getCurrentProfile()).toBe('shared');
+    expect(materializeRuntimeResourcesToAgentDirMock).toHaveBeenCalledWith(resolvedShared, '/agent-dir');
+    expect(state.getRuntimeScope()).toBe('shared');
     expect(process.env.PERSONAL_AGENT_ACTIVE_PROFILE).toBe('shared');
     expect(process.env.PERSONAL_AGENT_PROFILE).toBe('shared');
     expect(process.env.PERSONAL_AGENT_REPO_ROOT).toBe('/repo-root');
@@ -281,31 +281,31 @@ describe('createProfileState', () => {
 
     let temporaryAgentDir = '';
     await expect(
-      state.withTemporaryProfileAgentDir('ignored', async (profileAgentDir) => {
-        temporaryAgentDir = profileAgentDir;
-        expect(existsSync(profileAgentDir)).toBe(true);
+      state.withTemporaryRuntimeAgentDir(async (runtimeAgentDir) => {
+        temporaryAgentDir = runtimeAgentDir;
+        expect(existsSync(runtimeAgentDir)).toBe(true);
         return 'done';
       }),
     ).resolves.toBe('done');
-    expect(materializeProfileToAgentDirMock).toHaveBeenCalledWith(resolvedShared, temporaryAgentDir);
+    expect(materializeRuntimeResourcesToAgentDirMock).toHaveBeenCalledWith(resolvedShared, temporaryAgentDir);
     expect(existsSync(temporaryAgentDir)).toBe(false);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('logs initial materialization failures', async () => {
-    materializeProfileToAgentDirMock.mockImplementationOnce(() => {
+    materializeRuntimeResourcesToAgentDirMock.mockImplementationOnce(() => {
       throw new Error('initial materialize failed');
     });
 
     const logger = createLogger();
-    createProfileState({
+    createRuntimeState({
       repoRoot: '/repo-root',
       agentDir: '/agent-dir',
       logger,
     });
 
-    expect(logger.warn).toHaveBeenCalledWith('failed to materialize initial profile', {
-      profile: 'shared',
+    expect(logger.warn).toHaveBeenCalledWith('failed to materialize runtime resources', {
+      runtimeScope: 'shared',
       message: 'initial materialize failed',
     });
   });

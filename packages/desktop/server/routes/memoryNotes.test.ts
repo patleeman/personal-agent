@@ -7,13 +7,13 @@ const {
   getProfilesRootMock,
   getVaultRootMock,
   listMemoryDocsMock,
-  listProfilesMock,
+  listRuntimeScopesMock,
   listSkillsForProfileMock,
   listVaultFilesMock,
   logErrorMock,
   normalizeMemoryPathMock,
   readFileSyncMock,
-  resolveResourceProfileMock,
+  resolveRuntimeResourcesMock,
 } = vi.hoisted(() => ({
   buildRecentReadUsageMock: vi.fn(),
   existsSyncMock: vi.fn(),
@@ -21,13 +21,13 @@ const {
   getProfilesRootMock: vi.fn(() => '/profiles'),
   getVaultRootMock: vi.fn(() => '/vault'),
   listMemoryDocsMock: vi.fn(),
-  listProfilesMock: vi.fn(),
+  listRuntimeScopesMock: vi.fn(),
   listSkillsForProfileMock: vi.fn(),
   listVaultFilesMock: vi.fn(),
   logErrorMock: vi.fn(),
   normalizeMemoryPathMock: vi.fn((path: string) => path),
   readFileSyncMock: vi.fn(),
-  resolveResourceProfileMock: vi.fn(),
+  resolveRuntimeResourcesMock: vi.fn(),
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -43,8 +43,8 @@ vi.mock('@personal-agent/core', () => ({
   getDurableAgentFilePath: getDurableAgentFilePathMock,
   getProfilesRoot: getProfilesRootMock,
   getVaultRoot: getVaultRootMock,
-  listProfiles: listProfilesMock,
-  resolveResourceProfile: resolveResourceProfileMock,
+  listRuntimeScopes: listRuntimeScopesMock,
+  resolveRuntimeResources: resolveRuntimeResourcesMock,
 }));
 
 vi.mock('../knowledge/memoryDocs.js', () => ({
@@ -102,13 +102,13 @@ describe('registerMemoryNotesRoutes', () => {
     getProfilesRootMock.mockClear();
     getVaultRootMock.mockClear();
     listMemoryDocsMock.mockReset();
-    listProfilesMock.mockReset();
+    listRuntimeScopesMock.mockReset();
     listSkillsForProfileMock.mockReset();
     listVaultFilesMock.mockReset();
     logErrorMock.mockReset();
     normalizeMemoryPathMock.mockClear();
     readFileSyncMock.mockReset();
-    resolveResourceProfileMock.mockReset();
+    resolveRuntimeResourcesMock.mockReset();
   });
 
   it('lists memory data and applies recent usage metadata', () => {
@@ -124,7 +124,7 @@ describe('registerMemoryNotesRoutes', () => {
       { id: 'wiki', path: '/notes/Wiki.md' },
     ];
 
-    resolveResourceProfileMock.mockReturnValueOnce({
+    resolveRuntimeResourcesMock.mockReturnValueOnce({
       agentsFiles: ['/config/local/AGENTS.md', '/shared/skills/agent-browser/SKILL.md', '/vault/AGENTS.md'],
     });
     existsSyncMock.mockImplementation((path: string) => path !== '/vault/AGENTS.md');
@@ -152,12 +152,11 @@ describe('registerMemoryNotesRoutes', () => {
       ]),
     );
 
-    handler({ query: { viewProfile: 'other' } }, res);
+    handler({ query: {} }, res);
 
-    expect(listProfilesMock).not.toHaveBeenCalled();
-    expect(resolveResourceProfileMock).toHaveBeenCalledWith('assistant', {
+    expect(listRuntimeScopesMock).not.toHaveBeenCalled();
+    expect(resolveRuntimeResourcesMock).toHaveBeenCalledWith('assistant', {
       repoRoot: '/repo',
-      profilesRoot: '/profiles',
     });
     expect(buildRecentReadUsageMock).toHaveBeenCalledWith([
       '/skills/agent-browser/SKILL.md',
@@ -219,7 +218,7 @@ describe('registerMemoryNotesRoutes', () => {
     const { getHandler } = createHarness();
     const handler = getHandler('/api/memory');
 
-    resolveResourceProfileMock.mockImplementationOnce(() => {
+    resolveRuntimeResourcesMock.mockImplementationOnce(() => {
       throw new Error('resolve failed');
     });
     const failureRes = createResponse();

@@ -4,7 +4,7 @@ const {
   buildMergedMcpConfigDocumentMock,
   inspectAvailableToolsMock,
   inspectCliBinaryMock,
-  listProfilesMock,
+  listRuntimeScopesMock,
   logErrorMock,
   readBundledSkillMcpManifestsMock,
   readMcpConfigDocumentMock,
@@ -13,7 +13,7 @@ const {
   buildMergedMcpConfigDocumentMock: vi.fn(),
   inspectAvailableToolsMock: vi.fn(),
   inspectCliBinaryMock: vi.fn(),
-  listProfilesMock: vi.fn(),
+  listRuntimeScopesMock: vi.fn(),
   logErrorMock: vi.fn(),
   readBundledSkillMcpManifestsMock: vi.fn(),
   readMcpConfigDocumentMock: vi.fn(),
@@ -23,7 +23,7 @@ const {
 vi.mock('@personal-agent/core', () => ({
   buildMergedMcpConfigDocument: buildMergedMcpConfigDocumentMock,
   inspectCliBinary: inspectCliBinaryMock,
-  listProfiles: listProfilesMock,
+  listRuntimeScopes: listRuntimeScopesMock,
   readBundledSkillMcpManifests: readBundledSkillMcpManifestsMock,
   readMcpConfigDocument: readMcpConfigDocumentMock,
   readPackageSourceTargetState: readPackageSourceTargetStateMock,
@@ -48,7 +48,7 @@ function createResponse() {
   };
 }
 
-function createHarness(options?: { currentProfile?: string; repoRoot?: string; profilesRoot?: string }) {
+function createHarness(options?: { repoRoot?: string; profilesRoot?: string }) {
   const getHandlers = new Map<string, Handler>();
   const app = {
     get: vi.fn((path: string, handler: Handler) => {
@@ -57,16 +57,15 @@ function createHarness(options?: { currentProfile?: string; repoRoot?: string; p
   };
 
   registerToolsRoutes(app as never, {
-    getCurrentProfile: () => options?.currentProfile ?? 'assistant',
+    getCurrentProfile: () => 'shared',
     getRepoRoot: () => options?.repoRoot ?? '/repo',
     getProfilesRoot: () => options?.profilesRoot ?? '/profiles',
-    buildLiveSessionResourceOptions: (profile: string) =>
+    buildLiveSessionResourceOptions: () =>
       ({
-        profileMarker: profile,
-        additionalSkillPaths: [`/skills/${profile}/jira-helper`],
+        additionalSkillPaths: ['/skills/runtime/jira-helper'],
       }) as never,
     buildLiveSessionExtensionFactories: () => ['extension-factory'] as never,
-    withTemporaryProfileAgentDir: async <T>(profile: string, run: (agentDir: string) => Promise<T>) => run(`/tmp/${profile}-agent-dir`),
+    withTemporaryProfileAgentDir: async <T>(_profile: string, run: (agentDir: string) => Promise<T>) => run('/tmp/runtime-agent-dir'),
   });
 
   return {
@@ -83,7 +82,7 @@ describe('registerToolsRoutes', () => {
     };
     inspectAvailableToolsMock.mockReset();
     inspectCliBinaryMock.mockReset();
-    listProfilesMock.mockReset();
+    listRuntimeScopesMock.mockReset();
     logErrorMock.mockReset();
     buildMergedMcpConfigDocumentMock.mockReset();
     readBundledSkillMcpManifestsMock.mockReset();
@@ -96,7 +95,7 @@ describe('registerToolsRoutes', () => {
   });
 
   it('returns tool inspection details and package install state', async () => {
-    const { getHandler } = createHarness({ currentProfile: 'assistant', repoRoot: '/repo', profilesRoot: '/profiles' });
+    const { getHandler } = createHarness({ repoRoot: '/repo', profilesRoot: '/profiles' });
     const handler = getHandler('/api/tools');
     const res = createResponse();
 
@@ -108,8 +107,8 @@ describe('registerToolsRoutes', () => {
     readBundledSkillMcpManifestsMock.mockReturnValue([
       {
         skillName: 'jira-helper',
-        skillDir: '/skills/assistant/jira-helper',
-        manifestPath: '/skills/assistant/jira-helper/mcp.json',
+        skillDir: '/skills/runtime/jira-helper',
+        manifestPath: '/skills/runtime/jira-helper/mcp.json',
         serverNames: ['atlassian'],
       },
     ]);
@@ -119,7 +118,7 @@ describe('registerToolsRoutes', () => {
       baseServerNames: ['github'],
       searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
       bundledServerCount: 1,
-      manifestPaths: ['/skills/assistant/jira-helper/mcp.json'],
+      manifestPaths: ['/skills/runtime/jira-helper/mcp.json'],
       document: {
         mcpServers: {
           github: {
@@ -172,12 +171,11 @@ describe('registerToolsRoutes', () => {
       return { installedSources: ['local:pkg'] };
     });
 
-    await handler({ query: { viewProfile: 'other' } }, res);
+    await handler({ query: {} }, res);
 
     expect(inspectAvailableToolsMock).toHaveBeenCalledWith('/repo', {
-      profileMarker: 'assistant',
-      additionalSkillPaths: ['/skills/assistant/jira-helper'],
-      agentDir: '/tmp/assistant-agent-dir',
+      additionalSkillPaths: ['/skills/runtime/jira-helper'],
+      agentDir: '/tmp/runtime-agent-dir',
       extensionFactories: ['extension-factory'],
     });
     expect(inspectCliBinaryMock).toHaveBeenCalledWith({
@@ -210,10 +208,10 @@ describe('registerToolsRoutes', () => {
             cwd: undefined,
             url: 'https://mcp.atlassian.com/v1/mcp',
             source: 'skill',
-            sourcePath: '/skills/assistant/jira-helper/mcp.json',
+            sourcePath: '/skills/runtime/jira-helper/mcp.json',
             skillName: 'jira-helper',
-            skillPath: '/skills/assistant/jira-helper',
-            manifestPath: '/skills/assistant/jira-helper/mcp.json',
+            skillPath: '/skills/runtime/jira-helper',
+            manifestPath: '/skills/runtime/jira-helper/mcp.json',
             hasOAuth: true,
             callbackUrl: 'http://localhost:3118/callback',
             authorizeResource: 'https://datadoghq.atlassian.net/',
@@ -240,8 +238,8 @@ describe('registerToolsRoutes', () => {
         bundledSkills: [
           {
             skillName: 'jira-helper',
-            skillPath: '/skills/assistant/jira-helper',
-            manifestPath: '/skills/assistant/jira-helper/mcp.json',
+            skillPath: '/skills/runtime/jira-helper',
+            manifestPath: '/skills/runtime/jira-helper/mcp.json',
             serverNames: ['atlassian'],
             overriddenServerNames: [],
           },

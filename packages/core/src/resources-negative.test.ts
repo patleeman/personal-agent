@@ -4,7 +4,13 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { buildPiResourceArgs, listProfiles, materializeProfileToAgentDir, mergeJsonFiles, resolveResourceProfile } from './index.js';
+import {
+  buildPiResourceArgs,
+  listRuntimeScopes,
+  materializeRuntimeResourcesToAgentDir,
+  mergeJsonFiles,
+  resolveRuntimeResources,
+} from './index.js';
 
 const tempDirs: string[] = [];
 const originalEnv = { ...process.env };
@@ -15,13 +21,13 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function createTempProfilesRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
-  const profilesRoot = join(root, 'sync', 'profiles');
-  mkdirSync(profilesRoot, { recursive: true });
+function createTempRuntimeConfigRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-config-'));
+  const runtimeConfigRoot = join(root, 'sync', 'profiles');
+  mkdirSync(runtimeConfigRoot, { recursive: true });
   process.env.PERSONAL_AGENT_VAULT_ROOT = join(root, 'sync');
   tempDirs.push(root);
-  return profilesRoot;
+  return runtimeConfigRoot;
 }
 
 function writeFile(path: string, content: string): void {
@@ -35,40 +41,40 @@ afterEach(async () => {
 });
 
 describe('resources negative tests', () => {
-  describe('resolveResourceProfile error cases', () => {
-    it('throws on invalid profile name with path traversal', () => {
+  describe('resolveRuntimeResources error cases', () => {
+    it('throws on invalid runtime scope name with path traversal', () => {
       const repo = createTempDir('personal-agent-resources-');
-      expect(() => resolveResourceProfile('../../../etc/passwd', { repoRoot: repo })).toThrow('Invalid profile name');
+      expect(() => resolveRuntimeResources('../../../etc/passwd', { repoRoot: repo })).toThrow('Invalid runtime scope name');
     });
 
-    it('resolves empty profile names as shared when shared defaults exist', () => {
+    it('resolves empty runtime scope names as shared when shared defaults exist', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('', { repoRoot: repo, profilesRoot });
+      const resolved = resolveRuntimeResources('', { repoRoot: repo, runtimeConfigRoot });
       expect(resolved.name).toBe('shared');
     });
 
-    it('resolves non-existent profile names to the shared profile', () => {
+    it('resolves non-existent runtime scope names to shared', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('nonexistent', { repoRoot: repo, profilesRoot });
+      const resolved = resolveRuntimeResources('nonexistent', { repoRoot: repo, runtimeConfigRoot });
       expect(resolved.name).toBe('shared');
     });
 
-    it('handles profile with no durable resources but local overlay', () => {
+    it('handles a runtime scope with no durable resources but local overlay', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
       const local = createTempDir('personal-agent-local-');
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
       writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
 
-      const resolved = resolveResourceProfile('shared', {
+      const resolved = resolveRuntimeResources('shared', {
         repoRoot: repo,
-        profilesRoot,
+        runtimeConfigRoot,
         localProfileDir: local,
       });
 
@@ -97,22 +103,22 @@ describe('resources negative tests', () => {
     });
   });
 
-  describe('materializeProfileToAgentDir edge cases', () => {
+  describe('materializeRuntimeResourcesToAgentDir edge cases', () => {
     it('writes APPEND_SYSTEM with durable vault guidance even when no other system append content exists', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
       const runtime = createTempDir('personal-agent-runtime-');
-      const syncRoot = join(profilesRoot, '..');
+      const syncRoot = join(runtimeConfigRoot, '..');
 
       process.env.PERSONAL_AGENT_VAULT_ROOT = syncRoot;
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', {
+      const resolved = resolveRuntimeResources('shared', {
         repoRoot: repo,
-        profilesRoot,
+        runtimeConfigRoot,
         localProfileDir: join(repo, '.local-profile'),
       });
-      materializeProfileToAgentDir(resolved, runtime);
+      materializeRuntimeResourcesToAgentDir(resolved, runtime);
 
       const appendSystemPath = join(runtime, 'APPEND_SYSTEM.md');
       expect(existsSync(appendSystemPath)).toBe(true);
@@ -121,59 +127,59 @@ describe('resources negative tests', () => {
 
     it('handles runtime directory that does not exist', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
       const runtime = join(createTempDir('personal-agent-parent-'), 'nested', 'runtime');
 
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', {
+      const resolved = resolveRuntimeResources('shared', {
         repoRoot: repo,
-        profilesRoot,
+        runtimeConfigRoot,
         localProfileDir: join(repo, '.local-profile'),
       });
-      const result = materializeProfileToAgentDir(resolved, runtime);
+      const result = materializeRuntimeResourcesToAgentDir(resolved, runtime);
 
       expect(result.writtenFiles.length).toBeGreaterThan(0);
     });
   });
 
-  describe('listProfiles edge cases', () => {
-    it('always includes the shared profile', () => {
+  describe('listRuntimeScopes edge cases', () => {
+    it('always includes the shared runtime scope', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
 
-      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+      const profiles = listRuntimeScopes({ repoRoot: repo, runtimeConfigRoot });
       expect(profiles).toEqual(['shared']);
     });
 
-    it('ignores legacy profile directories', () => {
+    it('ignores legacy runtime scope directories', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      mkdirSync(join(profilesRoot, 'incomplete'), { recursive: true });
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
+      mkdirSync(join(runtimeConfigRoot, 'incomplete'), { recursive: true });
 
-      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+      const profiles = listRuntimeScopes({ repoRoot: repo, runtimeConfigRoot });
       expect(profiles).toEqual(['shared']);
     });
 
-    it('does not list legacy profile directories with special characters', () => {
+    it('does not list legacy runtime scope directories with special characters', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      mkdirSync(join(profilesRoot, 'test-profile_v2'), { recursive: true });
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
+      mkdirSync(join(runtimeConfigRoot, 'test-profile_v2'), { recursive: true });
 
-      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+      const profiles = listRuntimeScopes({ repoRoot: repo, runtimeConfigRoot });
       expect(profiles).toEqual(['shared']);
     });
   });
 
   describe('buildPiResourceArgs edge cases', () => {
-    it('handles profile with no resource directories', () => {
+    it('handles a runtime scope with no resource directories', () => {
       const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
+      const runtimeConfigRoot = createTempRuntimeConfigRoot();
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', {
+      const resolved = resolveRuntimeResources('shared', {
         repoRoot: repo,
-        profilesRoot,
+        runtimeConfigRoot,
         localProfileDir: join(repo, '.local-profile'),
       });
       const emptyResolved = {

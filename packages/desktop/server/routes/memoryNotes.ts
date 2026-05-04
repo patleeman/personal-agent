@@ -4,8 +4,8 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 
-import { getDurableAgentFilePath, getProfilesRoot, getVaultRoot } from '@personal-agent/core';
-import { resolveResourceProfile } from '@personal-agent/core';
+import { getDurableAgentFilePath, getVaultRoot } from '@personal-agent/core';
+import { resolveRuntimeResources } from '@personal-agent/core';
 import type { Express } from 'express';
 
 import { buildRecentReadUsage, listMemoryDocs, listSkillsForProfile, normalizeMemoryPath } from '../knowledge/memoryDocs.js';
@@ -39,11 +39,10 @@ export function registerMemoryNotesRoutes(
   router.get('/api/memory', (req, res) => {
     try {
       void req;
-      const resolvedProfile = resolveResourceProfile(_getCurrentProfile(), {
+      const resolvedResources = resolveRuntimeResources(_getCurrentProfile(), {
         repoRoot: _repoRoot,
-        profilesRoot: getProfilesRoot(),
       });
-      const agentsMd = resolvedProfile.agentsFiles.map((filePath) => ({
+      const agentsMd = resolvedResources.agentsFiles.map((filePath) => ({
         source: inferAgentSource(filePath),
         path: filePath,
         exists: existsSync(filePath),

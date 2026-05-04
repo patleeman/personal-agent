@@ -7,10 +7,10 @@ import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-con
 import { listUnifiedSkillNodeDirs, loadUnifiedNodes } from './nodes.js';
 import {
   getDurableAgentFilePath,
-  getDurableProfileDir,
-  getDurableProfileModelsFilePath,
-  getDurableProfilesDir as getCanonicalDurableProfilesDir,
-  getDurableProfileSettingsFilePath,
+  getDurableProfileDir as getDurableRuntimeConfigDir,
+  getDurableProfileModelsFilePath as getDurableRuntimeModelsFilePath,
+  getDurableProfilesDir as getCanonicalRuntimeConfigRoot,
+  getDurableProfileSettingsFilePath as getDurableRuntimeSettingsFilePath,
   getDurableSkillsDir,
   getDurableTasksDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
@@ -31,17 +31,17 @@ function buildVaultRootAppendSystemChunk(vaultRoot: string = getVaultRoot()): st
   ].join('\n');
 }
 
-export interface ProfileLayer {
+export interface ResourceLayer {
   name: string;
   agentDir: string;
 }
 
-export interface ResolvedResourceProfile {
+export interface ResolvedRuntimeResources {
   name: string;
   repoRoot: string;
   vaultRoot: string;
-  profilesRoot: string;
-  layers: ProfileLayer[];
+  runtimeConfigRoot: string;
+  layers: ResourceLayer[];
   extensionDirs: string[];
   extensionEntries: string[];
   skillDirs: string[];
@@ -56,14 +56,14 @@ export interface ResolvedResourceProfile {
   modelsFiles: string[];
 }
 
-export interface ResolveProfileOptions {
+export interface ResolveResourceOptions {
   repoRoot?: string;
   vaultRoot?: string;
   localProfileDir?: string;
-  profilesRoot?: string;
+  runtimeConfigRoot?: string;
 }
 
-export type PackageInstallTarget = 'profile' | 'local';
+export type PackageInstallTarget = 'local';
 
 export interface ConfiguredPackageSource {
   source: string;
@@ -76,10 +76,9 @@ export interface PackageSourceTargetState {
   packages: ConfiguredPackageSource[];
 }
 
-export interface InstallPackageSourceOptions extends ResolveProfileOptions {
+export interface InstallPackageSourceOptions extends ResolveResourceOptions {
   source: string;
   target: PackageInstallTarget;
-  profileName?: string;
   sourceBaseDir?: string;
 }
 
@@ -245,7 +244,7 @@ function extractPackageSource(entry: unknown): string | undefined {
   return typeof source === 'string' ? source : undefined;
 }
 
-export function resolveLocalProfileDir(options: ResolveProfileOptions = {}): string {
+export function resolveLocalProfileDir(options: ResolveResourceOptions = {}): string {
   const explicit = options.localProfileDir;
 
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
@@ -255,7 +254,7 @@ export function resolveLocalProfileDir(options: ResolveProfileOptions = {}): str
   return getCanonicalLocalProfileDir();
 }
 
-export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptions = {}): string {
+export function resolveLocalProfileSettingsFilePath(options: ResolveResourceOptions = {}): string {
   const localProfileDir = resolveLocalProfileDir(options);
   const nestedAgentDir = join(localProfileDir, 'agent');
 
@@ -274,14 +273,14 @@ export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptio
   return join(localProfileDir, 'settings.json');
 }
 
-export function resolveProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
-  validateProfileName(profileName || 'shared');
-  return getDurableProfileSettingsFilePath(profileName || 'shared', resolveProfilesRoot(options));
+export function resolveRuntimeSettingsFilePath(runtimeScope: string, options: ResolveResourceOptions = {}): string {
+  validateRuntimeScopeName(runtimeScope || 'shared');
+  return getDurableRuntimeSettingsFilePath(runtimeScope || 'shared', resolveRuntimeConfigRoot(options));
 }
 
-export function resolveProfileModelsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
-  validateProfileName(profileName || 'shared');
-  return getDurableProfileModelsFilePath(profileName || 'shared', resolveProfilesRoot(options));
+export function resolveRuntimeModelsFilePath(runtimeScope: string, options: ResolveResourceOptions = {}): string {
+  validateRuntimeScopeName(runtimeScope || 'shared');
+  return getDurableRuntimeModelsFilePath(runtimeScope || 'shared', resolveRuntimeConfigRoot(options));
 }
 
 function readConfiguredPackageEntries(settingsPath: string): unknown[] {
@@ -297,24 +296,6 @@ function readConfiguredPackageEntries(settingsPath: string): unknown[] {
   }
 
   return [...value];
-}
-
-function readWritableProfileSettingsObject(profileName: string, options: ResolveProfileOptions = {}): Record<string, unknown> {
-  const canonicalPath = resolveProfileSettingsFilePath(profileName, options);
-  if (existsSync(canonicalPath)) {
-    return readSettingsObject(canonicalPath);
-  }
-
-  return {};
-}
-
-function readWritableProfilePackageEntries(profileName: string, options: ResolveProfileOptions = {}): unknown[] {
-  const canonicalPath = resolveProfileSettingsFilePath(profileName, options);
-  if (existsSync(canonicalPath)) {
-    return readConfiguredPackageEntries(canonicalPath);
-  }
-
-  return [];
 }
 
 export function readConfiguredPackageSources(settingsPath: string): ConfiguredPackageSource[] {
@@ -344,57 +325,20 @@ export function readConfiguredPackageSources(settingsPath: string): ConfiguredPa
     .filter((entry): entry is ConfiguredPackageSource => entry !== null);
 }
 
-export function readPackageSourceTargetState(
-  target: PackageInstallTarget,
-  profileNameOrOptions?: string | ResolveProfileOptions,
-  maybeOptions: ResolveProfileOptions = {},
-): PackageSourceTargetState {
-  const profileName = typeof profileNameOrOptions === 'string' ? profileNameOrOptions : undefined;
-  const options = typeof profileNameOrOptions === 'string' ? maybeOptions : (profileNameOrOptions ?? maybeOptions);
-
-  const settingsPath =
-    target === 'local' ? resolveLocalProfileSettingsFilePath(options) : resolveProfileSettingsFilePath(profileName ?? 'shared', options);
+export function readPackageSourceTargetState(target: PackageInstallTarget, options: ResolveResourceOptions = {}): PackageSourceTargetState {
+  const settingsPath = resolveLocalProfileSettingsFilePath(options);
 
   return {
     target,
     settingsPath,
-    packages:
-      target === 'local'
-        ? readConfiguredPackageSources(settingsPath)
-        : readWritableProfilePackageEntries(profileName ?? 'shared', options)
-            .map((entry) => {
-              if (typeof entry === 'string') {
-                return {
-                  source: entry,
-                  filtered: false,
-                } satisfies ConfiguredPackageSource;
-              }
-
-              if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-                return null;
-              }
-
-              const source = extractPackageSource(entry);
-              if (!source) {
-                return null;
-              }
-
-              return {
-                source,
-                filtered: true,
-              } satisfies ConfiguredPackageSource;
-            })
-            .filter((entry): entry is ConfiguredPackageSource => entry !== null),
+    packages: readConfiguredPackageSources(settingsPath),
   };
 }
 
 export function installPackageSource(options: InstallPackageSourceOptions): InstallPackageSourceResult {
-  const profileName = options.profileName ?? 'shared';
-  const settingsPath =
-    options.target === 'local' ? resolveLocalProfileSettingsFilePath(options) : resolveProfileSettingsFilePath(profileName, options);
+  const settingsPath = resolveLocalProfileSettingsFilePath(options);
   const normalizedSource = normalizePackageSource(options.source, options.sourceBaseDir ?? process.cwd());
-  const configuredPackages =
-    options.target === 'local' ? readConfiguredPackageEntries(settingsPath) : readWritableProfilePackageEntries(profileName, options);
+  const configuredPackages = readConfiguredPackageEntries(settingsPath);
   const settingsDir = dirname(settingsPath);
   const alreadyPresent = configuredPackages.some((entry) => {
     const source = extractPackageSource(entry);
@@ -415,7 +359,7 @@ export function installPackageSource(options: InstallPackageSourceOptions): Inst
     };
   }
 
-  const settings = options.target === 'local' ? readSettingsObject(settingsPath) : readWritableProfileSettingsObject(profileName, options);
+  const settings = readSettingsObject(settingsPath);
   settings.packages = [...configuredPackages, normalizedSource];
   writeSettingsObject(settingsPath, settings);
 
@@ -437,7 +381,7 @@ export function getRepoDefaultsAgentDir(explicitRepoRoot?: string): string {
   return join(getRepoRoot(explicitRepoRoot), 'defaults', 'agent');
 }
 
-function resolveVaultRoot(options: ResolveProfileOptions = {}): string {
+function resolveVaultRoot(options: ResolveResourceOptions = {}): string {
   const explicit = options.vaultRoot ?? process.env.PERSONAL_AGENT_VAULT_ROOT;
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
     return resolve(expandHomePath(explicit.trim()));
@@ -446,25 +390,25 @@ function resolveVaultRoot(options: ResolveProfileOptions = {}): string {
   return resolve(getVaultRoot());
 }
 
-function resolveProfilesRoot(options: ResolveProfileOptions = {}): string {
-  const explicit = options.profilesRoot ?? process.env.PERSONAL_AGENT_PROFILES_ROOT;
+function resolveRuntimeConfigRoot(options: ResolveResourceOptions = {}): string {
+  const explicit = options.runtimeConfigRoot ?? process.env.PERSONAL_AGENT_PROFILES_ROOT;
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
     return resolve(expandHomePath(explicit.trim()));
   }
 
-  return resolve(getCanonicalDurableProfilesDir());
+  return resolve(getCanonicalRuntimeConfigRoot());
 }
 
-function getProfileDir(profileName: string, options: ResolveProfileOptions = {}): string {
-  return getDurableProfileDir(profileName || 'shared', resolveProfilesRoot(options));
+function getRuntimeConfigDir(runtimeScope: string, options: ResolveResourceOptions = {}): string {
+  return getDurableRuntimeConfigDir(runtimeScope || 'shared', resolveRuntimeConfigRoot(options));
 }
 
-export function listProfiles(options: ResolveProfileOptions = {}): string[] {
+export function listRuntimeScopes(options: ResolveResourceOptions = {}): string[] {
   void options;
   return ['shared'];
 }
 
-function collectLayerDirs(layers: ProfileLayer[], relativePath: string): string[] {
+function collectLayerDirs(layers: ResourceLayer[], relativePath: string): string[] {
   const dirs = layers
     .map((layer) => existingDir(join(layer.agentDir, relativePath)))
     .filter((value): value is string => value !== undefined);
@@ -472,7 +416,7 @@ function collectLayerDirs(layers: ProfileLayer[], relativePath: string): string[
   return dedupe(dirs);
 }
 
-function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string[] {
+function collectLayerFiles(layers: ResourceLayer[], relativePath: string): string[] {
   const files = layers
     .map((layer) => existingFile(join(layer.agentDir, relativePath)))
     .filter((value): value is string => value !== undefined);
@@ -591,26 +535,26 @@ function discoverFilesWithExtensions(rootDir: string, extensions: string[]): str
   return dedupe(output);
 }
 
-function validateProfileName(profileName: string): void {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(profileName)) {
+function validateRuntimeScopeName(runtimeScope: string): void {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(runtimeScope)) {
     throw new Error(
-      `Invalid profile name "${profileName}". ` + 'Profile names may only include letters, numbers, dashes, and underscores.',
+      `Invalid runtime scope name "${runtimeScope}". ` + 'Runtime scope names may only include letters, numbers, dashes, and underscores.',
     );
   }
 }
 
-function resolveSharedVaultAgentFile(options: ResolveProfileOptions = {}): string | undefined {
+function resolveSharedVaultAgentFile(options: ResolveResourceOptions = {}): string | undefined {
   return existingFile(getDurableAgentFilePath(resolveVaultRoot(options)));
 }
 
-function resolveDurableAgentFiles(_profileName: string, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableAgentFiles(_runtimeScope: string, options: ResolveResourceOptions = {}): string[] {
   const sharedAgent = resolveSharedVaultAgentFile(options);
   return sharedAgent ? [sharedAgent] : [];
 }
 
-function resolveDurableSettingsFiles(_profileName: string, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableSettingsFiles(_runtimeScope: string, options: ResolveResourceOptions = {}): string[] {
   const output: string[] = [];
-  const sharedSettings = existingFile(resolveProfileSettingsFilePath('shared', options));
+  const sharedSettings = existingFile(resolveRuntimeSettingsFilePath('shared', options));
 
   if (sharedSettings) {
     output.push(sharedSettings);
@@ -619,9 +563,9 @@ function resolveDurableSettingsFiles(_profileName: string, options: ResolveProfi
   return dedupe(output);
 }
 
-function resolveDurableModelsFiles(_profileName: string, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableModelsFiles(_runtimeScope: string, options: ResolveResourceOptions = {}): string[] {
   const output: string[] = [];
-  const sharedModels = existingFile(resolveProfileModelsFilePath('shared', options));
+  const sharedModels = existingFile(resolveRuntimeModelsFilePath('shared', options));
 
   if (sharedModels) {
     output.push(sharedModels);
@@ -630,26 +574,26 @@ function resolveDurableModelsFiles(_profileName: string, options: ResolveProfile
   return dedupe(output);
 }
 
-export function resolveResourceProfile(name: string, options: ResolveProfileOptions = {}): ResolvedResourceProfile {
-  validateProfileName(name || 'shared');
-  const profileName = 'shared';
+export function resolveRuntimeResources(name: string, options: ResolveResourceOptions = {}): ResolvedRuntimeResources {
+  validateRuntimeScopeName(name || 'shared');
+  const runtimeScope = 'shared';
 
   const repoRoot = getRepoRoot(options.repoRoot);
   const vaultRoot = resolveVaultRoot(options);
-  const profilesRoot = resolveProfilesRoot(options);
+  const runtimeConfigRoot = resolveRuntimeConfigRoot(options);
 
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   const localBase = resolveLocalProfileDir(options);
   const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
 
-  const durableAgentFiles = resolveDurableAgentFiles(profileName, options);
+  const durableAgentFiles = resolveDurableAgentFiles(runtimeScope, options);
   const configuredInstructionFiles = resolveConfiguredInstructionFiles();
   const configuredSkillDirs = resolveConfiguredSkillDirs();
-  const durableSettingsFiles = resolveDurableSettingsFiles(profileName, options);
-  const durableModelsFiles = resolveDurableModelsFiles(profileName, options);
-  const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { vaultRoot });
+  const durableSettingsFiles = resolveDurableSettingsFiles(runtimeScope, options);
+  const durableModelsFiles = resolveDurableModelsFiles(runtimeScope, options);
+  const durableSkillDirs = listUnifiedSkillNodeDirs(runtimeScope, { vaultRoot });
 
-  const layers: ProfileLayer[] = [];
+  const layers: ResourceLayer[] = [];
 
   if (repoDefaultsAgentDir) {
     layers.push({ name: 'defaults', agentDir: repoDefaultsAgentDir });
@@ -660,8 +604,8 @@ export function resolveResourceProfile(name: string, options: ResolveProfileOpti
     durableSettingsFiles.length > 0 ||
     durableModelsFiles.length > 0 ||
     durableSkillDirs.length > 0 ||
-    existsSync(getProfileDir(profileName, options)) ||
-    profileName === 'shared'
+    existsSync(getRuntimeConfigDir(runtimeScope, options)) ||
+    runtimeScope === 'shared'
   ) {
     layers.push({ name: 'durable', agentDir: vaultRoot });
   }
@@ -690,10 +634,10 @@ export function resolveResourceProfile(name: string, options: ResolveProfileOpti
   const themeEntries = dedupe(themeDirs.flatMap((dir) => discoverFilesWithExtensions(dir, ['.json'])));
 
   return {
-    name: profileName,
+    name: runtimeScope,
     repoRoot,
     vaultRoot,
-    profilesRoot,
+    runtimeConfigRoot,
     layers,
     extensionDirs,
     extensionEntries,
@@ -778,10 +722,10 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   themeMode: 'system',
 };
 
-function mergeMaterializedSettings(profileSettingsFiles: string[], targetSettingsPath: string): Record<string, unknown> {
+function mergeMaterializedSettings(settingsFiles: string[], targetSettingsPath: string): Record<string, unknown> {
   let merged: Record<string, unknown> = { ...DEFAULT_SETTINGS };
 
-  for (const path of profileSettingsFiles) {
+  for (const path of settingsFiles) {
     const layerSettings = readJsonFile(path);
     merged = deepMerge(merged, layerSettings);
   }
@@ -797,7 +741,7 @@ function mergeMaterializedSettings(profileSettingsFiles: string[], targetSetting
   return merged;
 }
 
-export interface MaterializeProfileResult {
+export interface MaterializeRuntimeResourcesResult {
   agentDir: string;
   writtenFiles: string[];
 }
@@ -842,7 +786,10 @@ function listAvailableInternalSkills(repoRoot: string): Array<{ name: string; ti
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, agentDir: string): MaterializeProfileResult {
+export function materializeRuntimeResourcesToAgentDir(
+  resources: ResolvedRuntimeResources,
+  agentDir: string,
+): MaterializeRuntimeResourcesResult {
   const targetDir = resolve(agentDir);
   mkdirSync(targetDir, { recursive: true });
 
@@ -863,7 +810,7 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
   };
 
   const materializedSettings =
-    profile.settingsFiles.length > 0 ? mergeMaterializedSettings(profile.settingsFiles, join(targetDir, 'settings.json')) : null;
+    resources.settingsFiles.length > 0 ? mergeMaterializedSettings(resources.settingsFiles, join(targetDir, 'settings.json')) : null;
 
   if (materializedSettings) {
     writeOrRemove('settings.json', JSON.stringify(materializedSettings, null, 2));
@@ -871,22 +818,22 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
     writeOrRemove('settings.json', undefined);
   }
 
-  if (profile.modelsFiles.length > 0) {
-    const models = mergeJsonFiles(profile.modelsFiles);
+  if (resources.modelsFiles.length > 0) {
+    const models = mergeJsonFiles(resources.modelsFiles);
     writeOrRemove('models.json', JSON.stringify(models, null, 2));
   } else {
     writeOrRemove('models.json', undefined);
   }
 
-  if (profile.agentsFiles.length > 0) {
-    const agentsContent = combineMarkdownFiles(profile.agentsFiles);
+  if (resources.agentsFiles.length > 0) {
+    const agentsContent = combineMarkdownFiles(resources.agentsFiles);
     writeOrRemove('AGENTS.md', `${agentsContent}\n`);
   } else {
     writeOrRemove('AGENTS.md', undefined);
   }
 
-  if (profile.systemPromptFile) {
-    const systemContent = readFileSync(profile.systemPromptFile, 'utf-8');
+  if (resources.systemPromptFile) {
+    const systemContent = readFileSync(resources.systemPromptFile, 'utf-8');
     writeOrRemove('SYSTEM.md', systemContent);
   } else {
     writeOrRemove('SYSTEM.md', undefined);
@@ -894,24 +841,24 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
 
   // Build template variables for the system prompt
   const templateVariables: SystemPromptTemplateVariables = {
-    repo_root: profile.repoRoot,
-    vault_root: profile.vaultRoot,
-    agents_edit_target: getDurableAgentFilePath(profile.vaultRoot),
-    skills_dir: getDurableSkillsDir(profile.vaultRoot),
+    repo_root: resources.repoRoot,
+    vault_root: resources.vaultRoot,
+    agents_edit_target: getDurableAgentFilePath(resources.vaultRoot),
+    skills_dir: getDurableSkillsDir(resources.vaultRoot),
     tasks_dir: getDurableTasksDir(getSyncRoot(getStateRoot())),
-    docs_dir: join(profile.repoRoot, 'docs'),
-    docs_index: join(profile.repoRoot, 'docs', 'README.md'),
-    feature_docs_dir: join(profile.repoRoot, 'internal-skills'),
-    feature_docs_index: join(profile.repoRoot, 'internal-skills', 'README.md'),
+    docs_dir: join(resources.repoRoot, 'docs'),
+    docs_index: join(resources.repoRoot, 'docs', 'README.md'),
+    feature_docs_dir: join(resources.repoRoot, 'internal-skills'),
+    feature_docs_index: join(resources.repoRoot, 'internal-skills', 'README.md'),
   };
 
-  const internalSkills = listAvailableInternalSkills(profile.repoRoot);
+  const internalSkills = listAvailableInternalSkills(resources.repoRoot);
   if (internalSkills.length > 0) {
     templateVariables.available_internal_skills = internalSkills;
   }
 
   try {
-    const { nodes } = loadUnifiedNodes({ vaultRoot: profile.vaultRoot });
+    const { nodes } = loadUnifiedNodes({ vaultRoot: resources.vaultRoot });
     const vaultSkills = nodes
       .filter((node) => node.kinds.includes('skill'))
       .map((node) => ({
@@ -929,10 +876,10 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
   }
 
   const generatedAppendContent = renderSystemPromptTemplate(templateVariables);
-  const fileAppendContent = profile.appendSystemFiles.length > 0 ? combineMarkdownFiles(profile.appendSystemFiles) : undefined;
+  const fileAppendContent = resources.appendSystemFiles.length > 0 ? combineMarkdownFiles(resources.appendSystemFiles) : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
-    buildVaultRootAppendSystemChunk(profile.vaultRoot),
+    buildVaultRootAppendSystemChunk(resources.vaultRoot),
     fileAppendContent ?? '',
   ]);
 
@@ -949,10 +896,10 @@ export interface BuildPiArgsOptions {
   includeNoDiscoveryFlags?: boolean;
 }
 
-export function getExtensionDependencyDirs(profile: ResolvedResourceProfile): string[] {
+export function getExtensionDependencyDirs(resources: ResolvedRuntimeResources): string[] {
   const dependencyDirs: string[] = [];
 
-  for (const extensionDir of profile.extensionDirs) {
+  for (const extensionDir of resources.extensionDirs) {
     if (!existsSync(extensionDir)) {
       continue;
     }
@@ -978,26 +925,26 @@ export function getExtensionDependencyDirs(profile: ResolvedResourceProfile): st
   return dedupe(dependencyDirs);
 }
 
-export function buildPiResourceArgs(profile: ResolvedResourceProfile, options: BuildPiArgsOptions = {}): string[] {
+export function buildPiResourceArgs(resources: ResolvedRuntimeResources, options: BuildPiArgsOptions = {}): string[] {
   const args: string[] = [];
 
   if (options.includeNoDiscoveryFlags !== false) {
     args.push('--no-extensions', '--no-skills', '--no-prompt-templates', '--no-themes');
   }
 
-  for (const extensionEntry of profile.extensionEntries) {
+  for (const extensionEntry of resources.extensionEntries) {
     args.push('-e', extensionEntry);
   }
 
-  for (const skillDir of profile.skillDirs) {
+  for (const skillDir of resources.skillDirs) {
     args.push('--skill', skillDir);
   }
 
-  for (const promptEntry of profile.promptEntries) {
+  for (const promptEntry of resources.promptEntries) {
     args.push('--prompt-template', promptEntry);
   }
 
-  for (const themeEntry of profile.themeEntries) {
+  for (const themeEntry of resources.themeEntries) {
     args.push('--theme', themeEntry);
   }
 

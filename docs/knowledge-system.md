@@ -69,7 +69,7 @@ The final system prompt is assembled exclusively from file-based layers, in orde
 4. **Skills** — appended as available skill references
 5. **Date and working directory** — appended last by Pi
 
-Extensions cannot modify the system prompt at runtime. Any extension that returns `{ systemPrompt }` from `before_agent_start` is silently discarded by a guard in `profileState.ts`. To influence the system prompt, write content to one of the file-based layers above.
+Extensions cannot modify the system prompt at runtime. Any extension that returns `{ systemPrompt }` from `before_agent_start` is silently discarded by a guard in `runtimeState.ts`. To influence the system prompt, write content to one of the file-based layers above.
 
 ## Loading Order
 

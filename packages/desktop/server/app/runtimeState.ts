@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { AuthStorage, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
-import { materializeProfileToAgentDir, resolveResourceProfile } from '@personal-agent/core';
+import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 
 import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
@@ -27,31 +27,33 @@ import webToolsExtension from '../extensions/web-tools/index.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 
-export interface ProfileStateLogger {
+export interface RuntimeStateLogger {
   warn: (message: string, fields?: Record<string, unknown>) => void;
 }
 
-export interface CreateProfileStateOptions {
+export interface CreateRuntimeStateOptions {
   repoRoot: string;
   agentDir: string;
-  logger: ProfileStateLogger;
+  logger: RuntimeStateLogger;
 }
 
-export interface ProfileState {
-  getCurrentProfile: () => string;
-  materializeWebProfile: (profile: string) => void;
+export interface RuntimeState {
+  getRuntimeScope: () => string;
+  materializeRuntimeResources: () => void;
   buildLiveSessionExtensionFactories: () => ExtensionFactory[];
-  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions;
-  withTemporaryProfileAgentDir: <T>(profile: string, run: (agentDir: string) => Promise<T>) => Promise<T>;
+  buildLiveSessionResourceOptions: () => LiveSessionResourceOptions;
+  withTemporaryRuntimeAgentDir: <T>(run: (agentDir: string) => Promise<T>) => Promise<T>;
 }
 
-export function createProfileState(options: CreateProfileStateOptions): ProfileState {
-  const { repoRoot, agentDir, logger } = options;
-  const currentProfile = 'shared';
+const DEFAULT_RUNTIME_SCOPE = 'shared';
 
-  function applyProfileEnvironment(profile: string, mcpConfigPath?: string | null): void {
-    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = profile;
-    process.env.PERSONAL_AGENT_PROFILE = profile;
+export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeState {
+  const { repoRoot, agentDir, logger } = options;
+  const runtimeScope = DEFAULT_RUNTIME_SCOPE;
+
+  function applyRuntimeEnvironment(mcpConfigPath?: string | null): void {
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = runtimeScope;
+    process.env.PERSONAL_AGENT_PROFILE = runtimeScope;
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
 
     if (mcpConfigPath) {
@@ -62,12 +64,12 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     delete process.env.MCP_CONFIG_PATH;
   }
 
-  function materializeWebProfile(profile: string): void {
-    const resolved = resolveResourceProfile(profile, {
+  function materializeRuntimeResources(): void {
+    const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
       profilesRoot: getProfilesRoot(),
     });
-    materializeProfileToAgentDir(resolved, agentDir);
+    materializeRuntimeResourcesToAgentDir(resolved, agentDir);
     const materializedMcpConfigPath = join(agentDir, 'mcp_servers.json');
     const mergedMcpConfig = writeMergedMcpConfigFile({
       outputPath: materializedMcpConfigPath,
@@ -75,20 +77,20 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       env: process.env,
       skillDirs: resolved.skillDirs,
     });
-    applyProfileEnvironment(profile, mergedMcpConfig.bundledServerCount > 0 ? materializedMcpConfigPath : null);
+    applyRuntimeEnvironment(mergedMcpConfig.bundledServerCount > 0 ? materializedMcpConfigPath : null);
   }
 
   try {
-    materializeWebProfile(currentProfile);
+    materializeRuntimeResources();
   } catch (error) {
-    logger.warn('failed to materialize initial profile', {
-      profile: currentProfile,
+    logger.warn('failed to materialize runtime resources', {
+      runtimeScope,
       message: (error as Error).message,
     });
   }
 
-  function getCurrentProfile(): string {
-    return currentProfile;
+  function getRuntimeScope(): string {
+    return runtimeScope;
   }
 
   function hasOpenAiImageProvider(): boolean {
@@ -137,18 +139,18 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
       createScheduledTaskAgentExtension({
-        getCurrentProfile,
+        getCurrentProfile: getRuntimeScope,
       }),
       createAskUserQuestionAgentExtension(),
       createChangeWorkingDirectoryAgentExtension({
         requestConversationWorkingDirectoryChange: (input) =>
           requestConversationWorkingDirectoryChange(input, {
-            ...buildLiveSessionResourceOptions(getCurrentProfile()),
+            ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
           }),
       }),
       createRunAgentExtension({
-        getCurrentProfile,
+        getCurrentProfile: getRuntimeScope,
         repoRoot,
         profilesRoot: getProfilesRoot(),
       }),
@@ -161,16 +163,16 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
         repoRoot,
-        getCurrentProfile,
+        getCurrentProfile: getRuntimeScope,
       }),
       createCheckpointAgentExtension({
         stateRoot: getStateRoot(),
-        getCurrentProfile,
+        getCurrentProfile: getRuntimeScope,
       }),
       createMcpAgentExtension(),
       createWorkbenchBrowserAgentExtension(),
       createConversationAutoModeAgentExtension(),
-      createConversationQueueAgentExtension({ getCurrentProfile }),
+      createConversationQueueAgentExtension({ getCurrentProfile: getRuntimeScope }),
       createReminderAgentExtension(),
       webToolsExtension,
       gptApplyPatchExtension,
@@ -179,8 +181,8 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     ].map(guardSystemPromptOverride);
   }
 
-  function buildLiveSessionResourceOptions(profile = getCurrentProfile()): LiveSessionResourceOptions {
-    const resolved = resolveResourceProfile(profile, {
+  function buildLiveSessionResourceOptions(): LiveSessionResourceOptions {
+    const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
       profilesRoot: getProfilesRoot(),
     });
@@ -193,24 +195,24 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     };
   }
 
-  function withTemporaryProfileAgentDir<T>(profile: string, run: (profileAgentDir: string) => Promise<T>): Promise<T> {
-    const resolved = resolveResourceProfile(profile, {
+  function withTemporaryRuntimeAgentDir<T>(run: (runtimeAgentDir: string) => Promise<T>): Promise<T> {
+    const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
       profilesRoot: getProfilesRoot(),
     });
-    const profileAgentDir = mkdtempSync(join(tmpdir(), 'pa-web-profile-inspect-'));
-    materializeProfileToAgentDir(resolved, profileAgentDir);
+    const runtimeAgentDir = mkdtempSync(join(tmpdir(), 'pa-web-runtime-inspect-'));
+    materializeRuntimeResourcesToAgentDir(resolved, runtimeAgentDir);
 
-    return run(profileAgentDir).finally(() => {
-      rmSync(profileAgentDir, { recursive: true, force: true });
+    return run(runtimeAgentDir).finally(() => {
+      rmSync(runtimeAgentDir, { recursive: true, force: true });
     });
   }
 
   return {
-    getCurrentProfile,
-    materializeWebProfile,
+    getRuntimeScope,
+    materializeRuntimeResources,
     buildLiveSessionExtensionFactories,
     buildLiveSessionResourceOptions,
-    withTemporaryProfileAgentDir,
+    withTemporaryRuntimeAgentDir,
   };
 }

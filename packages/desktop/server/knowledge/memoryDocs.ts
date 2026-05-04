@@ -13,13 +13,12 @@ import {
   getDurableAgentFilePath,
   getDurableNotesDir,
   getDurableSkillsDir,
-  getProfilesRoot,
   getVaultRoot,
   listUnifiedSkillNodeDirs,
   loadMemoryPackageReferences,
   loadUnifiedNodes,
 } from '@personal-agent/core';
-import { resolveResourceProfile } from '@personal-agent/core';
+import { resolveRuntimeResources } from '@personal-agent/core';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 
 // ── Memory path utilities ─────────────────────────────────────────────────────
@@ -33,7 +32,7 @@ export function normalizeMemoryPath(value: unknown): string {
   }
 }
 
-export function isEditableMemoryFilePath(filePath: string, _profile: string): boolean {
+export function isEditableMemoryFilePath(filePath: string, _runtimeScope: string): boolean {
   if (!filePath || typeof filePath !== 'string') return false;
   const normalized = normalizeMemoryPath(filePath);
   if (!normalized) return false;
@@ -124,9 +123,9 @@ export function ensureMemoryDocsDir(): string {
 
 export function clearMemoryBrowserCaches(): void {}
 
-export function warmMemoryBrowserCaches(profile: string): void {
+export function warmMemoryBrowserCaches(runtimeScope: string): void {
   void listMemoryDocs();
-  void listSkillsForProfile(profile);
+  void listSkillsForProfile(runtimeScope);
 }
 
 export interface RecentReadUsageEntry {
@@ -161,22 +160,11 @@ export function findMemoryDocById(memoryId: string, options: { includeSearchText
 
 // ── Skills ────────────────────────────────────────────────────────────────────
 
-function inferSkillSource(filePath: string, profile: string): string {
-  const profilesRoot = getProfilesRoot();
+function inferSkillSource(filePath: string): string {
   const vaultRoot = getVaultRoot();
-  const profileSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'skills'));
-  const profileLegacySkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', 'skills'));
-  const profileLegacyHiddenSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', '.skills'));
   const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(vaultRoot));
   const normalizedFilePath = normalizeMemoryPath(filePath);
 
-  if (
-    normalizedFilePath.startsWith(`${profileSkillDir}/`) ||
-    normalizedFilePath.startsWith(`${profileLegacySkillDir}/`) ||
-    normalizedFilePath.startsWith(`${profileLegacyHiddenSkillDir}/`)
-  ) {
-    return 'profile';
-  }
   if (normalizedFilePath.startsWith(`${sharedSkillsDir}/`)) {
     return 'global';
   }
@@ -207,15 +195,6 @@ function parseSkillFrontmatter(filePath: string): Record<string, unknown> {
   }
 }
 
-function skillMatchesProfile(frontmatter: Record<string, unknown>, profile: string): boolean {
-  const profiles = frontmatter.profiles;
-  if (!Array.isArray(profiles) || profiles.length === 0) {
-    return true;
-  }
-
-  return profiles.some((entry) => typeof entry === 'string' && entry.trim() === profile);
-}
-
 export interface SkillItem {
   name: string;
   source: string;
@@ -236,10 +215,8 @@ export interface CreatedSkillDoc {
 }
 
 export function listSkillsForProfile(profile: string): SkillItem[] {
-  const profilesRoot = getProfilesRoot();
-  const resolved = resolveResourceProfile(profile, {
+  const resolved = resolveRuntimeResources(profile, {
     repoRoot: process.cwd(),
-    profilesRoot,
   });
 
   const seenPaths = new Set<string>();
@@ -257,10 +234,6 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
       seenPaths.add(normalizedPath);
 
       const frontmatter = parseSkillFrontmatter(filePath);
-      if (!skillMatchesProfile(frontmatter, profile)) {
-        continue;
-      }
-
       const name =
         typeof frontmatter.id === 'string' && frontmatter.id.trim().length > 0
           ? frontmatter.id.trim()
@@ -281,7 +254,7 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
 
       skills.push({
         name,
-        source: inferSkillSource(filePath, profile),
+        source: inferSkillSource(filePath),
         description,
         path: filePath,
       });
@@ -293,7 +266,7 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
 }
 
 export function createSkillDoc(input: CreatedSkillDoc): SkillItem {
-  const profile = input.profile.trim();
+  void input.profile;
   const title = input.title.trim();
   const description = input.description.trim();
   const created = createUnifiedNode({
@@ -301,7 +274,7 @@ export function createSkillDoc(input: CreatedSkillDoc): SkillItem {
     title,
     summary: description || `Skill for ${title}.`,
     body: input.body?.trim() || `# ${title}\n\n${description || `Use this skill for ${title}.`}`,
-    tags: ['type:skill', `profile:${profile}`],
+    tags: ['type:skill'],
     force: input.force,
   });
 

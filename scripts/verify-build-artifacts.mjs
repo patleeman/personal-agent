@@ -8,7 +8,6 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const requiredArtifacts = [
   'packages/core/dist/index.js',
-  'packages/core/dist/profile/index.js',
   'packages/core/dist/runtime/index.js',
   'packages/core/dist/resources.js',
   'packages/core/dist/prompt-catalog.js',

@@ -166,8 +166,8 @@ import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { pickFolderCapability, readVaultFilesCapability } from '../workspace/workspaceDesktopCapability.js';
 import { startConversationRecovery, startDeferredResumeLoop } from './bootstrap.js';
 import { type DesktopLocalApiStreamEvent, subscribeDesktopLocalApiStreamByUrl } from './localApiStreams.js';
-import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
+import { createRuntimeState } from './runtimeState.js';
 
 type RouteHandler = (req: LocalApiRequest, res: LocalApiResponse) => unknown;
 
@@ -429,7 +429,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
   const authFile = join(agentDir, 'auth.json');
   const settingsFile = DEFAULT_RUNTIME_SETTINGS_FILE;
 
-  const profileState = createProfileState({
+  const runtimeState = createRuntimeState({
     repoRoot,
     agentDir,
     logger: {
@@ -440,7 +440,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
   });
 
   const flushLiveDeferredResumes = createLiveDeferredResumeFlusher({
-    getCurrentProfile: profileState.getCurrentProfile,
+    getCurrentProfile: runtimeState.getRuntimeScope,
     getRepoRoot: () => repoRoot,
     getStateRoot,
     resolveDaemonRoot,
@@ -456,18 +456,18 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     repoRoot,
     settingsFile,
     authFile,
-    getCurrentProfile: profileState.getCurrentProfile,
-    materializeWebProfile: profileState.materializeWebProfile,
+    getCurrentProfile: runtimeState.getRuntimeScope,
+    materializeWebProfile: () => runtimeState.materializeRuntimeResources(),
     getStateRoot,
     serverPort: 0,
     getDefaultWebCwd: () => process.cwd(),
     resolveRequestedCwd,
-    buildLiveSessionResourceOptions: profileState.buildLiveSessionResourceOptions,
-    buildLiveSessionExtensionFactories: profileState.buildLiveSessionExtensionFactories,
+    buildLiveSessionResourceOptions: runtimeState.buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories: runtimeState.buildLiveSessionExtensionFactories,
     flushLiveDeferredResumes,
     getSavedUiPreferences: () => readSavedUiPreferences(settingsFile),
     listTasksForCurrentProfile: () => {
-      const loaded = loadScheduledTasksForProfile(profileState.getCurrentProfile());
+      const loaded = loadScheduledTasksForProfile(runtimeState.getRuntimeScope());
       const runtimeById = new Map(loaded.runtimeEntries.flatMap((task) => (task.id ? [[task.id, task] as const] : [])));
 
       return loaded.tasks.map((task) => {
@@ -506,14 +506,14 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
         updated: doc.updated,
       })),
     listSkillsForCurrentProfile: () =>
-      listSkillsForProfile(profileState.getCurrentProfile()).map((skill) => ({
+      listSkillsForProfile(runtimeState.getRuntimeScope()).map((skill) => ({
         name: skill.name,
         source: skill.source,
         description: skill.description,
         path: skill.path,
       })),
     listProfileAgentItems: () => [],
-    withTemporaryProfileAgentDir: profileState.withTemporaryProfileAgentDir,
+    withTemporaryProfileAgentDir: (_profile, run) => runtimeState.withTemporaryRuntimeAgentDir(run),
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   });
 
