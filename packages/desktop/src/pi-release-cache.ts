@@ -1,6 +1,6 @@
-import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { mkdtempSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { chmod, cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,19 +39,28 @@ function renderPiReleaseAssetName(platform: RemotePlatformInfo): string {
   throw new Error(`Unsupported Pi release platform: ${platform.key}`);
 }
 
-function run(command: string, args: string[], cwd?: string): void {
-  const result = spawnSync(command, args, {
-    cwd,
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe'],
+function run(command: string, args: string[], cwd?: string): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+
+      const rendered = `${Buffer.concat(stderr).toString('utf-8')}${Buffer.concat(stdout).toString('utf-8')}`.trim();
+      reject(new Error(rendered || `${command} ${args.join(' ')} failed`));
+    });
   });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    const rendered = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim();
-    throw new Error(rendered || `${command} ${args.join(' ')} failed`);
-  }
 }
 
 async function downloadRelease(url: string, outputPath: string): Promise<void> {
@@ -65,7 +74,7 @@ async function downloadRelease(url: string, outputPath: string): Promise<void> {
     throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
   }
 
-  writeFileSync(outputPath, Buffer.from(await response.arrayBuffer()));
+  await writeFile(outputPath, Buffer.from(await response.arrayBuffer()));
 }
 
 function resolveCacheRoot(): string {
@@ -133,7 +142,7 @@ export async function ensurePiReleaseBinary(
   if (existsSync(binaryPath) && statSync(binaryPath).isFile() && existsSync(packageJsonPath)) {
     return { version, path: binaryPath, assetName };
   }
-  rmSync(bundleDir, { recursive: true, force: true });
+  await rm(bundleDir, { recursive: true, force: true });
   mkdirSync(bundleDir, { recursive: true, mode: 0o700 });
 
   const archivePath = resolveArchivePath(version, assetName);
@@ -144,19 +153,19 @@ export async function ensurePiReleaseBinary(
   }
 
   onProgress?.({ phase: 'extracting', version, assetName });
-  const extractDir = mkdtempSync(join(tmpdir(), `personal-agent-pi-release-${platform.key}-`));
+  const extractDir = await mkdtemp(join(tmpdir(), `personal-agent-pi-release-${platform.key}-`));
   try {
-    run('tar', ['-xzf', archivePath, '-C', extractDir]);
+    await run('tar', ['-xzf', archivePath, '-C', extractDir]);
     const extractedBundleDir = findExtractedPiBundleDir(extractDir);
     if (!extractedBundleDir) {
       throw new Error(`Pi release archive ${assetName} did not contain a pi binary.`);
     }
     for (const entry of readdirSync(extractedBundleDir, { withFileTypes: true })) {
-      cpSync(resolve(extractedBundleDir, entry.name), resolve(bundleDir, entry.name), { recursive: true });
+      await cp(resolve(extractedBundleDir, entry.name), resolve(bundleDir, entry.name), { recursive: true });
     }
-    chmodSync(binaryPath, 0o755);
+    await chmod(binaryPath, 0o755);
     return { version, path: binaryPath, assetName };
   } finally {
-    rmSync(extractDir, { recursive: true, force: true });
+    await rm(extractDir, { recursive: true, force: true });
   }
 }
