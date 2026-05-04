@@ -1,26 +1,9 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { renderSystemPromptTemplate } from '@personal-agent/core';
 
-function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-export default function daemonRunOrchestrationPromptExtension(pi: ExtensionAPI): void {
-  pi.on('before_agent_start', (event) => {
-    const prompt = event.prompt?.trim() ?? '';
-    if (prompt.length === 0 || prompt.startsWith('/')) {
-      return;
-    }
-
-    const rendered = renderSystemPromptTemplate({
-      current_date: formatDate(new Date()),
-    });
-
-    return {
-      systemPrompt: rendered,
-    };
-  });
+// No-op. System prompt modifications are handled exclusively through
+// file-based layers (SYSTEM.md, APPEND_SYSTEM.md, AGENTS.md from CWD).
+// This previously registered a before_agent_start handler that returned
+// { systemPrompt } which broke Pi's system prompt assembly pipeline.
+export default function daemonRunOrchestrationPromptExtension(_pi: ExtensionAPI): void {
+  // No-op
 }

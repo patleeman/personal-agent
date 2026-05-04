@@ -223,26 +223,14 @@ describe('createProfileState', () => {
       additionalThemePaths: ['/themes/shared.json'],
     });
 
-    expect(state.buildLiveSessionExtensionFactories()).toEqual([
-      'scheduled-task-extension',
-      'ask-user-question-extension',
-      'change-working-directory-extension',
-      'run-extension',
-      'conversation-inspect-extension',
-      'conversation-title-extension',
-      'artifact-extension',
-      'checkpoint-extension',
-      'mcp-extension',
-      'workbench-browser-extension',
-      'conversation-auto-mode-extension',
-      'conversation-queue-extension',
-      'reminder-extension',
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Function),
-    ]);
+    const factories = state.buildLiveSessionExtensionFactories();
+    // All factories are wrapped by guardSystemPromptOverride so each
+    // element is a function. Verify count and that each delegates correctly.
+    expect(factories).toHaveLength(16);
+    factories.forEach((factory) => {
+      expect(typeof factory).toBe('function');
+    });
+    // Verify the originals were called with correct args (below)
     expect(createScheduledTaskAgentExtensionMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),
     });

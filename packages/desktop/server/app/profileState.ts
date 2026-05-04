@@ -15,10 +15,8 @@ import { createConversationAutoModeAgentExtension } from '../extensions/conversa
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
 import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
-import daemonRunOrchestrationPromptExtension from '../extensions/daemon-run-orchestration-prompt/index.js';
 import gptApplyPatchExtension from '../extensions/gpt-apply-patch/index.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
-import knowledgeBaseExtension from '../extensions/knowledge-base/index.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
@@ -101,6 +99,40 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     }
   }
 
+  /**
+   * Wraps an extension factory to discard any systemPrompt return from
+   * before_agent_start. The system prompt is assembled exclusively from
+   * file layers (SYSTEM.md, APPEND_SYSTEM.md, AGENTS.md from CWD).
+   * Extensions that need to influence the system prompt should write to
+   * those files during setup, not override at runtime.
+   */
+  function guardSystemPromptOverride(factory: ExtensionFactory): ExtensionFactory {
+    return (pi: ExtensionAPI) => {
+      const guardedPi = new Proxy(pi, {
+        get(target, prop, receiver) {
+          if (prop === 'on') {
+            return (event: string, handler: (...args: unknown[]) => unknown) => {
+              if (event === 'before_agent_start') {
+                const wrappedHandler = async (...args: unknown[]) => {
+                  const result = await handler(...args);
+                  if (result && typeof result === 'object' && 'systemPrompt' in (result as Record<string, unknown>)) {
+                    logger.warn('Extension attempted to override system prompt via before_agent_start — discarded');
+                    return undefined;
+                  }
+                  return result;
+                };
+                return Reflect.apply(target.on, target, [event, wrappedHandler]);
+              }
+              return Reflect.apply(target.on, target, [event, handler]);
+            };
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+      factory(guardedPi);
+    };
+  }
+
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
       createScheduledTaskAgentExtension({
@@ -140,10 +172,9 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       createReminderAgentExtension(),
       webToolsExtension,
       gptApplyPatchExtension,
-      knowledgeBaseExtension,
+
       openaiNativeCompactionExtension,
-      daemonRunOrchestrationPromptExtension,
-    ];
+    ].map(guardSystemPromptOverride);
   }
 
   function buildLiveSessionResourceOptions(profile = getCurrentProfile()): LiveSessionResourceOptions {

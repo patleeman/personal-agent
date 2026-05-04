@@ -2,6 +2,15 @@
 
 personal-agent is a personal AI agent runtime.
 
+## System prompt constraints
+
+**Never modify the system prompt via extension `before_agent_start` handlers.**
+Returning `{ systemPrompt }` from that event is structurally blocked by a guard
+in `profileState.ts`. To influence the system prompt, write to the file-based
+layers: `defaults/agent/AGENTS.md` (repo defaults), the vault root `AGENTS.md`,
+or a CWD `AGENTS.md`. See `docs/knowledge-system.md` for the full assembly
+pipeline.
+
 ## Development
 
 - Prefer correct full implementations over backwards-compatibility layers. I don't want to implement the fastest smallest improvement most of the time.

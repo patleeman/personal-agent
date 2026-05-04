@@ -4,17 +4,21 @@ import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
-import { listUnifiedSkillNodeDirs } from './nodes.js';
+import { listUnifiedSkillNodeDirs, loadUnifiedNodes } from './nodes.js';
 import {
   getDurableAgentFilePath,
   getDurableProfileDir,
   getDurableProfileModelsFilePath,
   getDurableProfilesDir as getCanonicalDurableProfilesDir,
   getDurableProfileSettingsFilePath,
+  getDurableSkillsDir,
+  getDurableTasksDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
+  getStateRoot,
+  getSyncRoot,
   getVaultRoot,
 } from './runtime/paths.js';
-import { renderSystemPromptTemplate } from './system-prompt-template.js';
+import { renderSystemPromptTemplate, type SystemPromptTemplateVariables } from './system-prompt-template.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -798,6 +802,46 @@ export interface MaterializeProfileResult {
   writtenFiles: string[];
 }
 
+function parseFrontmatterValue(contents: string, key: string): string | undefined {
+  const match = contents.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+  return match?.[1]?.trim();
+}
+
+function listAvailableInternalSkills(repoRoot: string): Array<{ name: string; title?: string; description: string; path: string }> {
+  const featureDocsDir = join(repoRoot, 'internal-skills');
+  if (!existsSync(featureDocsDir)) {
+    return [];
+  }
+
+  return readdirSync(featureDocsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const path = join(featureDocsDir, entry.name, 'INDEX.md');
+      if (!existsSync(path)) {
+        return null;
+      }
+
+      const contents = readFileSync(path, 'utf-8');
+      const title = parseFrontmatterValue(contents, 'title') ?? contents.match(/^#\\s+(.+)$/m)?.[1]?.trim() ?? entry.name;
+      const description =
+        parseFrontmatterValue(contents, 'summary') ??
+        contents
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .find((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('---') && !line.includes(': ')) ??
+        '';
+
+      return {
+        name: parseFrontmatterValue(contents, 'id') ?? entry.name,
+        title,
+        description,
+        path,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, agentDir: string): MaterializeProfileResult {
   const targetDir = resolve(agentDir);
   mkdirSync(targetDir, { recursive: true });
@@ -848,7 +892,50 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
     writeOrRemove('SYSTEM.md', undefined);
   }
 
-  const generatedAppendContent = renderSystemPromptTemplate();
+  // Build template variables for the system prompt
+  const templateVariables: SystemPromptTemplateVariables = {
+    active_profile: profile.name,
+    active_profile_dir: join(profile.profilesRoot, profile.name),
+    repo_root: profile.repoRoot,
+    vault_root: profile.vaultRoot,
+    agents_edit_target: getDurableAgentFilePath(profile.vaultRoot),
+    skills_dir: getDurableSkillsDir(profile.vaultRoot),
+    tasks_dir: getDurableTasksDir(getSyncRoot(getStateRoot())),
+    docs_dir: join(profile.repoRoot, 'docs'),
+    docs_index: join(profile.repoRoot, 'docs', 'README.md'),
+    feature_docs_dir: join(profile.repoRoot, 'internal-skills'),
+    feature_docs_index: join(profile.repoRoot, 'internal-skills', 'README.md'),
+  };
+
+  const internalSkills = listAvailableInternalSkills(profile.repoRoot);
+  if (internalSkills.length > 0) {
+    templateVariables.available_internal_skills = internalSkills;
+  }
+
+  try {
+    const { nodes } = loadUnifiedNodes({ vaultRoot: profile.vaultRoot });
+    const vaultSkills = nodes
+      .filter((node) => node.kinds.includes('skill'))
+      .filter(
+        (node) =>
+          node.profiles.length === 0 ||
+          node.profiles.some((value) => value.toLowerCase() === profile.name.toLowerCase() || value.toLowerCase() === 'shared'),
+      )
+      .map((node) => ({
+        name: node.id,
+        description: (node.summary || node.description || '').trim(),
+        path: node.filePath,
+      }))
+      .filter((node) => node.description.length > 0)
+      .sort((left, right) => left.name.localeCompare(right.name));
+    if (vaultSkills.length > 0) {
+      templateVariables.available_skills = vaultSkills;
+    }
+  } catch {
+    // Silently skip vault skills if nodes can't be loaded
+  }
+
+  const generatedAppendContent = renderSystemPromptTemplate(templateVariables);
   const fileAppendContent = profile.appendSystemFiles.length > 0 ? combineMarkdownFiles(profile.appendSystemFiles) : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',

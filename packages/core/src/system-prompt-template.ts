@@ -1,6 +1,9 @@
 import * as nunjucks from 'nunjucks';
 
-export type SystemPromptTemplateVariables = Record<string, string | number | boolean | null | undefined>;
+export type SystemPromptTemplateVariables = Record<
+  string,
+  string | number | boolean | null | undefined | Array<Record<string, string | undefined>>
+>;
 
 export const SYSTEM_PROMPT_TEMPLATE = `# Identity & Goal
 
