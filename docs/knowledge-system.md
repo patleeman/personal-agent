@@ -25,7 +25,7 @@ Selected in Settings or listed in config.json:
 }
 ```
 
-Profile-scoped instruction files live under `<config-root>/profiles/<profile>/`.
+Machine-local instruction files live under the config root and can be selected in Settings.
 
 ### Docs
 
@@ -44,7 +44,7 @@ Reusable workflows defined as markdown with a standard structure:
 
 Skills are loaded by the runtime and available to the agent through skill commands. Each skill is a self-contained procedure the agent can follow.
 
-Profile-scoped skills can opt into the shared runtime by adding `profile:shared` to either top-level `tags` or `metadata.tags` in `SKILL.md`. This lets a Datadog-owned skill keep `metadata.profile: datadog` for ownership while still appearing in the shared agent's available skills list.
+Skill `profile` metadata is treated as ownership/reference data only. Runtime skill discovery loads every valid skill under `<vault-root>/skills`; do not use profiles to hide or reveal skills.
 
 ### Projects
 

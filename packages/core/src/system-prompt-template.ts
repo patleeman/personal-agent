@@ -40,7 +40,7 @@ Durable storage split: AGENTS.md (role + context), skills (procedures), note nod
 
 Load order: AGENTS.md → Skills → Notes. Only load what's relevant.
 
-Layered instructions: active profile's AGENTS.md defines identity and preferences. cwd's AGENTS.md defines repo rules. Synthesize both; repo rules take precedence in that directory.
+Layered instructions: the vault root AGENTS.md defines durable identity and preferences. cwd's AGENTS.md defines repo rules. Synthesize both; repo rules take precedence in that directory.
 
 When writing docs, use human-readable titles, one-sentence summaries, plain-English openings, and high-signal prose. No template filler or empty index pages.
 
@@ -50,15 +50,9 @@ Prefer durable runs for multi-step or long-running work — one run per task. Us
 
 # Technical Context
 
-## Profile Context
-- active_profile: {{ active_profile }}
-- active_profile_dir: {{ active_profile_dir }}
+## Runtime Context
 - repo_root: {{ repo_root }}
 - vault_root: {{ vault_root }}
-{% if requested_profile and requested_profile != active_profile %}
-- requested_profile: {{ requested_profile }}
-- note: requested profile was missing; using "{{ active_profile }}"
-{% endif %}
 
 ## Write Targets
 - AGENTS.md: {{ agents_edit_target }}

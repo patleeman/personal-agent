@@ -894,8 +894,6 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
 
   // Build template variables for the system prompt
   const templateVariables: SystemPromptTemplateVariables = {
-    active_profile: profile.name,
-    active_profile_dir: join(profile.profilesRoot, profile.name),
     repo_root: profile.repoRoot,
     vault_root: profile.vaultRoot,
     agents_edit_target: getDurableAgentFilePath(profile.vaultRoot),
@@ -916,11 +914,6 @@ export function materializeProfileToAgentDir(profile: ResolvedResourceProfile, a
     const { nodes } = loadUnifiedNodes({ vaultRoot: profile.vaultRoot });
     const vaultSkills = nodes
       .filter((node) => node.kinds.includes('skill'))
-      .filter(
-        (node) =>
-          node.profiles.length === 0 ||
-          node.profiles.some((value) => value.toLowerCase() === profile.name.toLowerCase() || value.toLowerCase() === 'shared'),
-      )
       .map((node) => ({
         name: node.id,
         description: (node.summary || node.description || '').trim(),

@@ -89,7 +89,7 @@ describe('resources profile loader', () => {
       join(local, 'agent', 'AGENTS.md'),
     ]);
     expect(resolved.settingsFiles).toEqual([join(profilesRoot, 'shared', 'settings.json'), join(local, 'agent', 'settings.json')]);
-    expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'shared-skill')]);
+    expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'datadog-skill'), join(syncRoot, 'skills', 'shared-skill')]);
     expect(resolved.extensionEntries).toEqual([]);
   });
 
@@ -158,7 +158,7 @@ describe('resources profile loader', () => {
     expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'vault-skill'), join(externalSkillsDir, 'machine-skill')]);
   });
 
-  it('includes skills scoped to shared through metadata tags', () => {
+  it('includes skill dirs regardless of profile metadata', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
     const syncRoot = join(profilesRoot, '..');
@@ -171,7 +171,6 @@ name: datadog-helper
 description: Use for Datadog helper workflows.
 metadata:
   profile: datadog
-  tags: profile:shared
 ---
 # Datadog Helper
 `,

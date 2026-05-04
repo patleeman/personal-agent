@@ -1507,15 +1507,10 @@ export function migrateLegacyNodes(options: ResolveNodesOptions = {}): LegacyNod
 }
 
 export function listUnifiedSkillNodeDirs(profile: string, options: ResolveNodesOptions = {}): string[] {
+  void profile;
   const loaded = loadUnifiedNodes(options);
-  const normalizedProfile = profile.trim().toLowerCase();
   return loaded.nodes
     .filter((node) => node.kinds.includes('skill'))
-    .filter(
-      (node) =>
-        node.profiles.length === 0 ||
-        node.profiles.some((value) => value.toLowerCase() === normalizedProfile || value.toLowerCase() === 'shared'),
-    )
     .map((node) => node.dirPath)
     .sort((left, right) => left.localeCompare(right));
 }
