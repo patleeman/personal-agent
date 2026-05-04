@@ -5,7 +5,9 @@ import {
   createLiveSessionCapability,
   submitLiveSessionPromptCapability,
 } from '../conversations/liveSessionCapability.js';
+import { registerLiveSessionLifecycleHandler } from '../conversations/liveSessionLifecycle.js';
 import { getAvailableModelObjects, renameSession, updateLiveSessionModelPreferences } from '../conversations/liveSessions.js';
+import { readSessionBlocks } from '../conversations/sessions.js';
 import {
   attachGatewayConversation,
   detachGatewayConversation,
@@ -32,12 +34,27 @@ let getAuthFileFn: () => string = () => {
 };
 let routeContext: ServerRouteContext | null = null;
 let telegramRuntime: TelegramGatewayRuntime | null = null;
+let lifecycleRegistered = false;
+const lastTelegramDeliveryByConversation = new Map<string, string>();
 
 function initializeGatewayRoutesContext(context: ServerRouteContext): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getStateRootFn = context.getStateRoot;
   getAuthFileFn = context.getAuthFile;
   routeContext = context;
+  if (!lifecycleRegistered) {
+    lifecycleRegistered = true;
+    registerLiveSessionLifecycleHandler(async (event) => {
+      if (event.trigger !== 'turn_end') return;
+      const text = readLatestAssistantText(event.conversationId);
+      if (!text) return;
+      if (lastTelegramDeliveryByConversation.get(event.conversationId) === text) return;
+      const delivered = await ensureTelegramRuntime().deliverAssistantReply({ conversationId: event.conversationId, text });
+      if (delivered) {
+        lastTelegramDeliveryByConversation.set(event.conversationId, text);
+      }
+    });
+  }
 }
 
 function currentGatewayContext(): { stateRoot: string; profile: string } {
@@ -115,6 +132,12 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function readLatestAssistantText(conversationId: string): string | null {
+  const detail = readSessionBlocks(conversationId, { tailBlocks: 20 });
+  const block = [...(detail?.blocks ?? [])].reverse().find((candidate) => candidate.type === 'text');
+  return block && block.type === 'text' && block.text.trim() ? block.text.trim() : null;
+}
+
 function handleGatewayError(res: Response, err: unknown): void {
   logError('request handler error', {
     message: err instanceof Error ? err.message : String(err),
@@ -125,6 +148,13 @@ function handleGatewayError(res: Response, err: unknown): void {
 
 export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>, context: ServerRouteContext): void {
   initializeGatewayRoutesContext(context);
+
+  const initialTelegramState = readGatewayState(currentGatewayContext()).connections.find(
+    (connection) => connection.provider === 'telegram',
+  );
+  if (initialTelegramState?.enabled && readTelegramBotToken(getAuthFileFn())) {
+    ensureTelegramRuntime().start();
+  }
 
   router.get('/api/gateways', (_req, res) => {
     try {

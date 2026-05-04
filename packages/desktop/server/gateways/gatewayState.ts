@@ -208,6 +208,57 @@ export function findGatewayChatTarget(input: {
   );
 }
 
+export function findGatewayChatTargetByConversation(input: {
+  stateRoot: string;
+  profile: string;
+  provider: GatewayProviderId;
+  conversationId: string;
+}): GatewayChatTarget | null {
+  const state = readPersistedGatewayState(resolveGatewayStateFile(input.stateRoot, input.profile));
+  const connection = state.connections.find((candidate) => candidate.provider === input.provider && candidate.enabled);
+  if (!connection) {
+    return null;
+  }
+
+  const attached = state.bindings.some(
+    (binding) =>
+      binding.provider === input.provider && binding.connectionId === connection.id && binding.conversationId === input.conversationId,
+  );
+  if (!attached) {
+    return null;
+  }
+
+  return (
+    state.chatTargets.find(
+      (target) =>
+        target.provider === input.provider &&
+        target.connectionId === connection.id &&
+        target.conversationId === input.conversationId &&
+        target.repliesEnabled,
+    ) ?? null
+  );
+}
+
+export function recordGatewayEvent(input: {
+  stateRoot: string;
+  profile: string;
+  provider: GatewayProviderId;
+  conversationId?: string;
+  kind: GatewayEvent['kind'];
+  message: string;
+}): GatewayState {
+  updateGatewayState(input, (state) => {
+    appendGatewayEvent(state, {
+      provider: input.provider,
+      conversationId: input.conversationId,
+      kind: input.kind,
+      message: input.message,
+    });
+    return null;
+  });
+  return readGatewayState(input);
+}
+
 export function hasGatewayBinding(input: { stateRoot: string; profile: string; provider: GatewayProviderId }): boolean {
   const state = readPersistedGatewayState(resolveGatewayStateFile(input.stateRoot, input.profile));
   const connection = state.connections.find((candidate) => candidate.provider === input.provider);

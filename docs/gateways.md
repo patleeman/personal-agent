@@ -12,9 +12,10 @@ The first implemented provider is Telegram, behind a generic gateway model.
 - If a Telegram message arrives with no attached gateway thread, Personal Agent creates/reuses the chat conversation and attaches it.
 - Later inbound messages from other Telegram chats create/reuse their own conversations but do not steal the attached thread.
 - Assistant replies mirror back to Telegram only when the gateway is enabled, attached, and the conversation has a Telegram chat target.
+- Completed assistant replies are delivered back to Telegram after each turn when the conversation has an enabled Telegram chat target and is the attached gateway thread.
 - User messages typed in the desktop composer stay local; they do not send directly to Telegram.
 
-The runtime stores Telegram bot tokens in the auth store under the `telegram` provider id. Saving a token enables the managed long-poll service; removing the token stops it and marks Telegram as needing configuration.
+The runtime stores Telegram bot tokens in the auth store under the `telegram` provider id. Save or remove the token from **Settings → Gateways**. Saving a token enables the managed long-poll service; removing the token stops it and marks Telegram as needing configuration.
 
 ## UI surfaces
 

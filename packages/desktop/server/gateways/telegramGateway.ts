@@ -1,4 +1,11 @@
-import { attachGatewayConversation, findGatewayChatTarget, hasGatewayBinding, upsertGatewayChatTarget } from './gatewayState.js';
+import {
+  attachGatewayConversation,
+  findGatewayChatTarget,
+  findGatewayChatTargetByConversation,
+  hasGatewayBinding,
+  recordGatewayEvent,
+  upsertGatewayChatTarget,
+} from './gatewayState.js';
 import { formatTelegramGatewayHelp, parseTelegramGatewayCommand } from './telegramCommands.js';
 
 interface TelegramChat {
@@ -103,6 +110,30 @@ export class TelegramGatewayRuntime {
       text: text || 'Please review this Telegram photo.',
       images,
     });
+  }
+
+  async deliverAssistantReply(input: { conversationId: string; text: string }): Promise<boolean> {
+    const text = input.text.trim();
+    if (!text) return false;
+
+    const target = findGatewayChatTargetByConversation({
+      stateRoot: this.dependencies.stateRoot,
+      profile: this.dependencies.profile,
+      provider: 'telegram',
+      conversationId: input.conversationId,
+    });
+    if (!target) return false;
+
+    await this.sendMessage(target.externalChatId, text);
+    recordGatewayEvent({
+      stateRoot: this.dependencies.stateRoot,
+      profile: this.dependencies.profile,
+      provider: 'telegram',
+      conversationId: input.conversationId,
+      kind: 'outbound',
+      message: `Delivered assistant reply to ${target.externalChatLabel || target.externalChatId}`,
+    });
+    return true;
   }
 
   private async ensureChatTarget(input: {

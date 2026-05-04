@@ -52,6 +52,7 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-general', label: 'General', summary: 'Defaults and knowledge base' },
   { id: 'settings-dictation', label: 'Dictation', summary: 'Transcription provider and model' },
   { id: 'settings-skills', label: 'Skills', summary: 'Folders, wrappers, and instructions' },
+  { id: 'settings-gateways', label: 'Gateways', summary: 'External app credentials' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
   { id: 'settings-daemon', label: 'Daemon', summary: 'Background runtime and wake behavior' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
@@ -1800,6 +1801,12 @@ export function SettingsPage() {
     error: providerAuthError,
     refetch: refetchProviderAuth,
   } = useApi(api.providerAuth);
+  const {
+    data: telegramTokenState,
+    loading: telegramTokenLoading,
+    error: telegramTokenError,
+    refetch: refetchTelegramToken,
+  } = useApi(api.telegramGatewayToken);
   const [skillFoldersDraft, setSkillFoldersDraft] = useState<string[]>([]);
   const [savingSkillFolders, setSavingSkillFolders] = useState(false);
   const [skillFoldersSaveError, setSkillFoldersSaveError] = useState<string | null>(null);
@@ -1845,6 +1852,10 @@ export function SettingsPage() {
   const [providerCredentialAction, setProviderCredentialAction] = useState<'saveKey' | 'remove' | null>(null);
   const [providerCredentialError, setProviderCredentialError] = useState<string | null>(null);
   const [providerCredentialNotice, setProviderCredentialNotice] = useState<string | null>(null);
+  const [telegramTokenDraft, setTelegramTokenDraft] = useState('');
+  const [telegramTokenAction, setTelegramTokenAction] = useState<'save' | 'remove' | null>(null);
+  const [telegramTokenNotice, setTelegramTokenNotice] = useState<string | null>(null);
+  const [telegramTokenSaveError, setTelegramTokenSaveError] = useState<string | null>(null);
   const [oauthLoginState, setOauthLoginState] = useState<ProviderOAuthLoginState | null>(null);
   const [oauthAction, setOauthAction] = useState<'start' | 'submit' | 'cancel' | null>(null);
   const [oauthInputValue, setOauthInputValue] = useState('');
@@ -3160,6 +3171,47 @@ export function SettingsPage() {
     }
   }
 
+  async function handleSaveTelegramToken() {
+    const token = telegramTokenDraft.trim();
+    if (!token || telegramTokenAction !== null) {
+      setTelegramTokenSaveError('Telegram bot token is required.');
+      return;
+    }
+
+    setTelegramTokenAction('save');
+    setTelegramTokenNotice(null);
+    setTelegramTokenSaveError(null);
+    try {
+      await api.saveTelegramGatewayToken(token);
+      setTelegramTokenDraft('');
+      setTelegramTokenNotice('Saved Telegram bot token and started the gateway.');
+      await refetchTelegramToken({ resetLoading: false });
+    } catch (error) {
+      setTelegramTokenSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTelegramTokenAction(null);
+    }
+  }
+
+  async function handleRemoveTelegramToken() {
+    if (telegramTokenAction !== null) return;
+    const confirmed = window.confirm('Remove the Telegram bot token and stop the gateway?');
+    if (!confirmed) return;
+
+    setTelegramTokenAction('remove');
+    setTelegramTokenNotice(null);
+    setTelegramTokenSaveError(null);
+    try {
+      await api.deleteTelegramGatewayToken();
+      setTelegramTokenNotice('Removed Telegram bot token and stopped the gateway.');
+      await refetchTelegramToken({ resetLoading: false });
+    } catch (error) {
+      setTelegramTokenSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTelegramTokenAction(null);
+    }
+  }
+
   async function handleStartProviderOAuthLogin() {
     if (!selectedProvider || !selectedProvider.oauthSupported || oauthAction !== null) {
       return;
@@ -4055,6 +4107,68 @@ export function SettingsPage() {
                     Current theme: {theme}
                     {themePreference === 'system' ? ' (auto)' : ''}
                   </span>
+                </div>
+              </SettingsPanel>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="settings-gateways"
+            label="Gateways"
+            description="Credentials for external app gateways. Routing is managed from the Gateways page."
+            className="order-3"
+          >
+            <div className="space-y-0">
+              <SettingsPanel title="Telegram" description="Store the bot token used by the managed Telegram long-poll gateway.">
+                <div className="space-y-3">
+                  {telegramTokenLoading && !telegramTokenState ? <p className="ui-card-meta">Loading Telegram gateway config…</p> : null}
+                  {telegramTokenError && !telegramTokenState ? (
+                    <p className="text-[12px] text-danger">Failed to load Telegram gateway config: {telegramTokenError}</p>
+                  ) : null}
+                  <p className="ui-card-meta">
+                    Status:{' '}
+                    <span className={telegramTokenState?.configured ? 'text-success' : 'text-dim'}>
+                      {telegramTokenState?.configured ? 'Bot token stored' : 'No bot token stored'}
+                    </span>
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1 text-[12px] text-secondary">
+                      Bot token
+                      <input
+                        type="password"
+                        value={telegramTokenDraft}
+                        onChange={(event) => setTelegramTokenDraft(event.target.value)}
+                        placeholder="123456:ABC-DEF…"
+                        className={`${INPUT_CLASS} mt-1`}
+                        disabled={telegramTokenAction !== null}
+                      />
+                    </label>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        className={ACTION_BUTTON_CLASS}
+                        disabled={telegramTokenAction !== null || telegramTokenDraft.trim().length === 0}
+                        onClick={() => {
+                          void handleSaveTelegramToken();
+                        }}
+                      >
+                        {telegramTokenAction === 'save' ? 'Saving…' : 'Save token'}
+                      </button>
+                      <button
+                        type="button"
+                        className={ACTION_BUTTON_CLASS}
+                        disabled={telegramTokenAction !== null || !telegramTokenState?.configured}
+                        onClick={() => {
+                          void handleRemoveTelegramToken();
+                        }}
+                      >
+                        {telegramTokenAction === 'remove' ? 'Removing…' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                  {telegramTokenNotice ? <p className="text-[12px] text-success">{telegramTokenNotice}</p> : null}
+                  {telegramTokenSaveError ? <p className="text-[12px] text-danger">{telegramTokenSaveError}</p> : null}
+                  <p className="ui-card-meta">Use the Gateways page to attach, pause, and inspect Telegram routing.</p>
                 </div>
               </SettingsPanel>
             </div>
