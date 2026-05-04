@@ -11,6 +11,8 @@ MCP servers are defined in `mcp_servers.json`. The runtime searches for this fil
 3. `~/.mcp_servers.json`
 4. `~/.config/mcp/mcp_servers.json`
 
+Skills can also bundle MCP server definitions in an `mcp.json` file next to `SKILL.md`. Bundled skill MCP servers are merged into the discovered MCP config at runtime. If a bundled server and an explicit `mcp_servers.json` entry use the same server name, the explicit config wins.
+
 ### Local servers
 
 Local servers are launched as subprocesses:
@@ -49,6 +51,31 @@ Remote servers connect over HTTP/WebSocket:
 ```
 
 Remote servers may require OAuth authentication. The runtime handles the OAuth flow when configured.
+
+### Skill-bundled servers
+
+Skill packages can ship MCP server definitions alongside their workflow docs:
+
+```text
+<vault-root>/skills/<skill-name>/
+├── SKILL.md
+└── mcp.json
+```
+
+`mcp.json` uses the same server entry shape as `mcp_servers.json`:
+
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "pa",
+      "args": ["mcp", "serve", "atlassian"]
+    }
+  }
+}
+```
+
+Skill-bundled servers are useful when a skill depends on a specific MCP server. Keep secrets out of `mcp.json`; pass credentials through environment variables, OAuth, or local machine config instead.
 
 ## MCP Tool Reference
 

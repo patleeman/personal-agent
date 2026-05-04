@@ -38,11 +38,14 @@ Reusable workflows defined as markdown with a standard structure:
 ```
 <vault-root>/skills/<skill-name>/
 ├── SKILL.md       # Main skill definition
+├── mcp.json       # Optional bundled MCP server definitions
 ├── examples/      # Optional supporting files
 └── assets/        # Optional images or data
 ```
 
 Skills are loaded by the runtime and available to the agent through skill commands. Each skill is a self-contained procedure the agent can follow.
+
+If a skill needs external tools, it may include `mcp.json` with the same `mcpServers` format used by `mcp_servers.json`. Bundled skill MCP servers are merged into runtime MCP configuration, and explicit user config wins on server-name conflicts. See [MCP](mcp.md).
 
 Skill metadata is reference-only. Runtime skill discovery loads every valid skill under `<vault-root>/skills`; do not hide or reveal skills through runtime scopes.
 
