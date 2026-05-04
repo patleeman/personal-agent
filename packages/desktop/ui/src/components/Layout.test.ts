@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { SessionMeta } from '../shared/types';
 import {
+  clearWorkbenchOnlySearchParamsForCompact,
   readStoredPanelWidth,
   readStoredWorkbenchExplorerOpen,
   resolveActiveWorkspaceCwd,
@@ -108,6 +109,12 @@ describe('Layout workbench rail state', () => {
         activeRunId: 'run-1',
       }),
     ).toBe(true);
+  });
+
+  it('clears workbench-only diff and run params when switching to compact mode', () => {
+    expect(clearWorkbenchOnlySearchParamsForCompact('checkpoint=abc123&run=run-1&file=notes%2Ftodo.md&artifact=artifact-1')).toBe(
+      'file=notes%2Ftodo.md&artifact=artifact-1',
+    );
   });
 });
 

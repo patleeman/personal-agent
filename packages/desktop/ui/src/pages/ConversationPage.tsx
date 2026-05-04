@@ -491,6 +491,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
+  const previousSelectedCheckpointIdRef = useRef<string | null | undefined>(undefined);
+  const previousSelectedRunIdRef = useRef<string | null | undefined>(undefined);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const artifactOpensInWorkbenchPane = appLayoutMode === 'workbench' && new URLSearchParams(location.search).get('view') !== 'zen';
   const { versions } = useAppEvents();
@@ -591,7 +593,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!selectedCheckpointId || appLayoutMode === 'workbench') {
+    const previousSelectedCheckpointId = previousSelectedCheckpointIdRef.current;
+    previousSelectedCheckpointIdRef.current = selectedCheckpointId;
+
+    if (!selectedCheckpointId || selectedCheckpointId === previousSelectedCheckpointId || appLayoutMode === 'workbench') {
       return;
     }
 
@@ -600,7 +605,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [appLayoutMode, selectedCheckpointId]);
 
   useEffect(() => {
-    if (!selectedRunId || appLayoutMode === 'workbench') {
+    const previousSelectedRunId = previousSelectedRunIdRef.current;
+    previousSelectedRunIdRef.current = selectedRunId;
+
+    if (!selectedRunId || selectedRunId === previousSelectedRunId || appLayoutMode === 'workbench') {
       return;
     }
 

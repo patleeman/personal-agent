@@ -218,6 +218,13 @@ export function shouldResetWorkbenchRunsOnConversationChange(input: {
   return input.activeTool === 'runs' || input.activeRunId !== null;
 }
 
+export function clearWorkbenchOnlySearchParamsForCompact(search: string): string {
+  const next = new URLSearchParams(search);
+  next.delete('checkpoint');
+  next.delete('run');
+  return next.toString();
+}
+
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
   const [desiredWidth, setDesiredWidth] = useState(() => readStoredPanelWidth(storageKey, initial, min));
 
@@ -1813,10 +1820,17 @@ export function Layout() {
           }
         : null));
 
-  const handleAppLayoutModeChange = useCallback((mode: AppLayoutMode) => {
-    setAppLayoutMode(mode);
-    writeAppLayoutMode(mode);
-  }, []);
+  const handleAppLayoutModeChange = useCallback(
+    (mode: AppLayoutMode) => {
+      setAppLayoutMode(mode);
+      writeAppLayoutMode(mode);
+
+      if (mode === 'compact') {
+        setSearchParams((current) => new URLSearchParams(clearWorkbenchOnlySearchParamsForCompact(current.toString())), { replace: true });
+      }
+    },
+    [setSearchParams],
+  );
 
   const handleZenModeChange = useCallback(
     (enabled: boolean) => {
