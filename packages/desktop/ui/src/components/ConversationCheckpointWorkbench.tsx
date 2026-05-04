@@ -23,6 +23,10 @@ function parentPath(path: string): string {
   return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
 }
 
+function expandedFilePathSet(files: Array<{ path: string }>): Set<string> {
+  return new Set(files.map((file) => file.path));
+}
+
 function DiffViewToggle({ currentView, onChange }: { currentView: DiffViewMode; onChange: (nextView: DiffViewMode) => void }) {
   return (
     <div className="ui-segmented-control" role="tablist" aria-label="Diff view">
@@ -159,6 +163,7 @@ export function ConversationDiffRailContent({
   const [filesByCheckpoint, setFilesByCheckpoint] = useState<Record<string, DiffRailFile[]>>({});
   const { result: uncommitted, loading: uncommittedLoading } = useUncommittedDiff(workspaceCwd);
   const uncommittedSelected = activeCheckpointId === UNCOMMITTED_SENTINEL;
+  const latestCheckpointId = checkpoints[0]?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +256,7 @@ export function ConversationDiffRailContent({
         {checkpoints.map((checkpoint) => {
           const selected = checkpoint.id === activeCheckpointId;
           const files = filesByCheckpoint[checkpoint.id];
+          const showFiles = selected || (!activeCheckpointId && checkpoint.id === latestCheckpointId);
           return (
             <div key={checkpoint.id} className={cx('rounded-lg', selected && 'bg-elevated/70')}>
               <button
@@ -271,7 +277,7 @@ export function ConversationDiffRailContent({
                   strokeWidth="1.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="mt-0.5 shrink-0 text-dim"
+                  className={cx('mt-0.5 shrink-0 text-dim transition-transform', showFiles && 'rotate-90')}
                   aria-hidden="true"
                 >
                   <path d="m8.5 5.5 5 6.5-5 6.5" />
@@ -291,49 +297,53 @@ export function ConversationDiffRailContent({
                   </div>
                 </div>
               </button>
-              <div className="pb-1 pl-7 pr-1">
-                {files ? (
-                  files.slice(0, 12).map((file) => (
-                    <button
-                      key={`${checkpoint.id}:${file.path}:${file.previousPath ?? ''}`}
-                      type="button"
-                      onClick={() => {
-                        if (checkpoint.id === activeCheckpointId && onScrollToFile) {
-                          onScrollToFile(file.path);
-                        } else {
-                          onOpenCheckpoint(checkpoint.id);
-                        }
-                      }}
-                      className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
-                      title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="shrink-0 text-dim group-hover:text-secondary"
-                        aria-hidden="true"
+              {showFiles ? (
+                <div className="pb-1 pl-7 pr-1">
+                  {files ? (
+                    files.slice(0, 12).map((file) => (
+                      <button
+                        key={`${checkpoint.id}:${file.path}:${file.previousPath ?? ''}`}
+                        type="button"
+                        onClick={() => {
+                          if (checkpoint.id === activeCheckpointId && onScrollToFile) {
+                            onScrollToFile(file.path);
+                          } else {
+                            onOpenCheckpoint(checkpoint.id);
+                          }
+                        }}
+                        className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
+                        title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
                       >
-                        <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
-                        <path d="M14.25 3.75V6.75h3" />
-                      </svg>
-                      <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
-                      <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
-                      <span className="shrink-0 font-mono text-[10px] tabular-nums">
-                        <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <div className="px-2 py-1.5 text-[11px] text-dim">Loading files…</div>
-                )}
-                {files && files.length > 12 ? <div className="px-2 py-1 text-[10px] text-dim">+{files.length - 12} more files</div> : null}
-              </div>
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="shrink-0 text-dim group-hover:text-secondary"
+                          aria-hidden="true"
+                        >
+                          <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
+                          <path d="M14.25 3.75V6.75h3" />
+                        </svg>
+                        <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
+                        <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums">
+                          <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-2 py-1.5 text-[11px] text-dim">Loading files…</div>
+                  )}
+                  {files && files.length > 12 ? (
+                    <div className="px-2 py-1 text-[10px] text-dim">+{files.length - 12} more files</div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -489,6 +499,7 @@ export function ConversationCheckpointWorkbenchPane({
       .then((result) => {
         if (!cancelled) {
           setCheckpoint(result.checkpoint);
+          setExpandedFiles(expandedFilePathSet(result.checkpoint.files));
         }
       })
       .catch((err: unknown) => {
@@ -715,8 +726,8 @@ function UncommittedDiffPaneView({
   const selectedFilePath = activeFilePath ?? files[0]?.path ?? null;
 
   useEffect(() => {
-    setExpandedFiles(new Set());
-  }, [result]);
+    setExpandedFiles(expandedFilePathSet(files));
+  }, [files]);
 
   useEffect(() => {
     setActiveFilePath((current) => current ?? files[0]?.path ?? null);
