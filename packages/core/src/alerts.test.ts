@@ -1,10 +1,18 @@
-import { mkdtempSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { acknowledgeAlert, countActiveAlerts, dismissAlert, getAlert, listAlerts, upsertAlert } from './alerts.js';
+import {
+  acknowledgeAlert,
+  countActiveAlerts,
+  dismissAlert,
+  getAlert,
+  listAlerts,
+  resolveProfileAlertsStateFile,
+  upsertAlert,
+} from './alerts.js';
 
 const tempDirs: string[] = [];
 
@@ -43,9 +51,57 @@ describe('alerts', () => {
     });
 
     expect(countActiveAlerts({ stateRoot, profile: 'datadog' })).toBe(1);
+    expect(resolveProfileAlertsStateFile({ stateRoot, profile: 'datadog' })).toBe(
+      join(stateRoot, 'pi-agent', 'state', 'alerts', 'shared.json'),
+    );
     expect(listAlerts({ stateRoot, profile: 'datadog' })).toEqual([
-      expect.objectContaining({ id: 'reminder-1', title: 'Watch the prod gates', status: 'active', wakeupId: 'resume_123' }),
+      expect.objectContaining({
+        id: 'reminder-1',
+        profile: 'shared',
+        title: 'Watch the prod gates',
+        status: 'active',
+        wakeupId: 'resume_123',
+      }),
     ]);
+  });
+
+  it('reads legacy per-profile alert files and writes updates to shared state', () => {
+    const stateRoot = createTempDir('pa-alerts-');
+    const legacyPath = join(stateRoot, 'pi-agent', 'state', 'alerts', 'datadog.json');
+    mkdirSync(join(stateRoot, 'pi-agent', 'state', 'alerts'), { recursive: true });
+    writeFileSync(
+      legacyPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          alerts: {
+            'legacy-alert': {
+              profile: 'datadog',
+              kind: 'reminder',
+              severity: 'disruptive',
+              status: 'active',
+              title: 'Legacy alert',
+              body: 'Old profile-scoped alert.',
+              createdAt: '2026-03-26T13:00:00.000Z',
+              sourceKind: 'legacy',
+              sourceId: 'legacy-alert',
+              requiresAck: true,
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(listAlerts({ stateRoot, profile: 'datadog' })).toEqual([expect.objectContaining({ id: 'legacy-alert', profile: 'shared' })]);
+
+    acknowledgeAlert({ stateRoot, profile: 'datadog', alertId: 'legacy-alert', at: '2026-03-26T13:01:00.000Z' });
+
+    expect(existsSync(join(stateRoot, 'pi-agent', 'state', 'alerts', 'shared.json'))).toBe(true);
+    expect(getAlert({ stateRoot, profile: 'shared', alertId: 'legacy-alert' })).toEqual(
+      expect.objectContaining({ status: 'acknowledged', profile: 'shared' }),
+    );
   });
 
   it('acknowledges and dismisses alerts without losing the durable record', () => {

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'path';
 
 import { getStateRoot } from './runtime/paths.js';
 
-const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const DEFAULT_RUNTIME_SCOPE = 'shared';
 
 export type AlertKind = 'reminder' | 'approval-needed' | 'blocked' | 'task-completed' | 'task-failed' | 'deferred-resume' | 'task-callback';
 export type AlertSeverity = 'passive' | 'disruptive';
@@ -39,13 +39,8 @@ export interface ResolveAlertOptions {
   stateRoot?: string;
 }
 
-function assertProfile(profile: string): string {
-  const normalized = profile.trim();
-  if (!PROFILE_NAME_PATTERN.test(normalized)) {
-    throw new Error(`Invalid profile name "${profile}".`);
-  }
-
-  return normalized;
+function normalizeRuntimeScope(_profile: string): string {
+  return DEFAULT_RUNTIME_SCOPE;
 }
 
 function resolveStateRoot(stateRoot?: string): string {
@@ -123,7 +118,7 @@ function parseAlertRecord(value: unknown): AlertRecord | undefined {
 
   const alert: AlertRecord = {
     id,
-    profile,
+    profile: normalizeRuntimeScope(profile),
     kind: normalizeKind(value.kind),
     severity: normalizeSeverity(value.severity),
     status: normalizeStatus(value.status),
@@ -172,18 +167,28 @@ export function createEmptyAlertState(): AlertStateFile {
 }
 
 export function resolveProfileAlertsStateFile(options: ResolveAlertOptions): string {
-  const profile = assertProfile(options.profile);
-  return join(resolveStateRoot(options.stateRoot), 'pi-agent', 'state', 'alerts', `${profile}.json`);
+  return join(resolveStateRoot(options.stateRoot), 'pi-agent', 'state', 'alerts', `${normalizeRuntimeScope(options.profile)}.json`);
+}
+
+function resolveLegacyProfileAlertsStateFile(options: ResolveAlertOptions): string | undefined {
+  const legacyProfile = options.profile.trim();
+  if (!legacyProfile || legacyProfile === DEFAULT_RUNTIME_SCOPE) {
+    return undefined;
+  }
+
+  return join(resolveStateRoot(options.stateRoot), 'pi-agent', 'state', 'alerts', `${legacyProfile}.json`);
 }
 
 export function loadAlertState(options: ResolveAlertOptions): AlertStateFile {
   const path = resolveProfileAlertsStateFile(options);
-  if (!existsSync(path)) {
+  const legacyPath = resolveLegacyProfileAlertsStateFile(options);
+  const readablePath = existsSync(path) ? path : legacyPath && existsSync(legacyPath) ? legacyPath : undefined;
+  if (!readablePath) {
     return createEmptyAlertState();
   }
 
   try {
-    const raw = readFileSync(path, 'utf-8').trim();
+    const raw = readFileSync(readablePath, 'utf-8').trim();
     if (raw.length === 0) {
       return createEmptyAlertState();
     }
@@ -259,7 +264,7 @@ export function upsertAlert(
   const updatedAt = normalizeIsoTimestamp(options.alert.updatedAt, createdAt);
   const next: AlertRecord = {
     ...options.alert,
-    profile: assertProfile(options.alert.profile),
+    profile: normalizeRuntimeScope(options.alert.profile),
     createdAt,
     updatedAt,
   };
