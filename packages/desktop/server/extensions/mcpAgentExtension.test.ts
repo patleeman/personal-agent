@@ -4,15 +4,15 @@ import { createMcpAgentExtension } from './mcpAgentExtension.js';
 
 type ExtensionAPI = ReturnType<typeof createMcpAgentExtension> extends (api: infer A) => unknown ? A : never;
 
-function createMockApi(): { api: ExtensionAPI; registeredHandler: (params: unknown) => Promise<unknown> } {
-  let handler: ((params: unknown) => Promise<unknown>) | undefined;
+function createMockApi(): { api: ExtensionAPI; registeredExecute: (params: unknown) => Promise<unknown> } {
+  let execute: ((toolCallId: string, params: unknown) => Promise<unknown>) | undefined;
   return {
     api: {
-      registerTool: vi.fn((tool: { name: string; handler: (params: unknown) => Promise<unknown> }) => {
-        handler = tool.handler;
+      registerTool: vi.fn((tool: { name: string; execute: (toolCallId: string, params: unknown) => Promise<unknown> }) => {
+        execute = tool.execute;
       }),
     } as unknown as ExtensionAPI,
-    registeredHandler: () => handler!,
+    registeredExecute: (params: unknown) => execute!('tool-call-id', params),
   };
 }
 
@@ -29,10 +29,10 @@ vi.mock('@personal-agent/core', () => ({
 const core = await import('@personal-agent/core');
 
 function buildHandler() {
-  const { api, registeredHandler } = createMockApi();
+  const { api, registeredExecute } = createMockApi();
   const ext = createMcpAgentExtension();
   ext(api);
-  return registeredHandler();
+  return registeredExecute;
 }
 
 describe('mcpAgentExtension', () => {
@@ -315,13 +315,13 @@ describe('mcpAgentExtension', () => {
 
   describe('registerTool', () => {
     it('registers the mcp tool on the API', () => {
-      const { api, registeredHandler } = createMockApi();
+      const { api, registeredExecute } = createMockApi();
       const ext = createMcpAgentExtension();
       const result = ext(api);
 
       expect(api.registerTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'mcp' }));
       expect(result).toBe(api);
-      expect(registeredHandler()).toBeDefined();
+      expect(registeredExecute).toBeDefined();
     });
   });
 });

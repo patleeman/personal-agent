@@ -63,7 +63,7 @@ export function createMcpAgentExtension(): ExtensionAPI {
       description:
         'Inspect and call MCP (Model Context Protocol) servers. Supports listing configured servers, inspecting tools, calling tools, searching tools, and managing OAuth authentication.',
       parameters: McpToolParams,
-      handler: (async (rawParams: unknown) => {
+      execute: (async (_toolCallId: string, rawParams: unknown) => {
         const params = rawParams as typeof McpToolParams.static;
         const stderrLogs: string[] = [];
 
@@ -305,7 +305,10 @@ export function createMcpAgentExtension(): ExtensionAPI {
             },
           };
         }
-      }) as (params: unknown) => Promise<{
+      }) as (
+        _toolCallId: string,
+        params: unknown,
+      ) => Promise<{
         content: Array<{ type: 'text'; text: string }>;
         isError?: boolean;
         details?: Record<string, unknown>;
