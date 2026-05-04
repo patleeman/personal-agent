@@ -12,13 +12,18 @@ Type a message and press Enter to send it to the agent. The agent processes the 
 
 The composer is the text input area at the bottom of the conversation view.
 
-| Feature           | How                                      |
-| ----------------- | ---------------------------------------- |
-| Send message      | Enter                                    |
-| New line          | Shift+Enter                              |
-| File reference    | Type `@` to fuzzy-search workspace files |
-| Image paste       | Ctrl+V or drag image into composer       |
-| Binary attachment | Drag file into composer                  |
+| Feature            | How                                                           |
+| ------------------ | ------------------------------------------------------------- |
+| Send message       | Enter                                                         |
+| New line           | Shift+Enter                                                   |
+| File / note / task | Type `@` to fuzzy-search files, notes, automations, or skills |
+| Slash commands     | Type `/` to open the command menu                             |
+| Run bash command   | Type `!<command>` to run a shell command inline               |
+| Image paste        | Ctrl+V or drag image into composer                            |
+| Binary attachment  | Drag file into composer                                       |
+| Reply quoting      | Select text in a message, then click "Reply" to quote it      |
+| Clear composer     | Ctrl+C when composer is focused                               |
+| Recall history     | ↑/↓ cycles through recent prompts                             |
 
 ## Session Lifecycle
 
@@ -65,6 +70,18 @@ Navigate the conversation tree to any previous point and continue from there wit
 
 Duplicate the current active branch into a new conversation file. Useful before making experimental changes.
 
+## Send Modifiers
+
+The send button changes behavior based on streaming state and modifier keys. You can also hold a modifier when pressing Enter.
+
+| Modifier                 | While idle                          | While streaming                     |
+| ------------------------ | ----------------------------------- | ----------------------------------- |
+| Enter (no modifier)      | Send message                        | Steer (interrupts current turn)     |
+| **Alt+Enter**            | Follow-up (queues after completion) | Follow-up (queues after completion) |
+| **Ctrl+Enter / ⌘+Enter** | Parallel (runs alongside)           | Parallel (runs alongside)           |
+
+The button label reflects the current mode: **Send** → **Steer** → **Follow up** → **Parallel**.
+
 ## Async Follow-Through
 
 While the agent is processing, you can queue additional messages. The composer remains active during streaming.
@@ -80,6 +97,72 @@ When auto mode has a hidden turn pending, normal submits become follow-ups. Hold
 Queued steer and follow-up prompts appear in the queue shelf above the composer. Use `restore` to pull a queued prompt back into the composer. Press Escape to abort the active response and restore queued messages to the editor. Press Alt+Up to retrieve queued messages back.
 
 Parallel prompts appear in the Parallel shelf. A running parallel prompt can be cancelled. A completed or failed parallel prompt can be imported into the main thread, skipped, or opened as its own conversation.
+
+## Slash Commands
+
+Type `/` in the composer to open the command menu. Commands execute immediately — they don't get sent to the agent. Some trigger UI actions, others inject text into the composer.
+
+| Command              | Action                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `/model`             | Open model selector                                                                   |
+| `/compact`           | Manually compact session context (optionally pass guidance)                           |
+| `/export`            | Export session to HTML file                                                           |
+| `/name`              | Set session display name                                                              |
+| `/session`           | Show session info and stats                                                           |
+| `/fork`              | Fork a new conversation from a previous message                                       |
+| `/summarize-fork`    | Duplicate + compact thread into a new conversation                                    |
+| `/new`               | Start a new conversation                                                              |
+| `/reload`            | Reload extensions, skills, prompts, and themes                                        |
+| `/page`              | Create or reference a page for this conversation                                      |
+| `/draw`              | Create an Excalidraw drawing attachment                                               |
+| `/drawings`          | Attach an existing saved drawing                                                      |
+| `/resume` / `/defer` | Schedule this conversation to continue later (usage: `/resume 10m continue checking`) |
+| `/clear`             | Clear the composer                                                                    |
+| `/image`             | Open file picker to attach an image                                                   |
+| `/copy`              | Copy the last agent message to clipboard                                              |
+| `/skill:<name>`      | Trigger a skill by name                                                               |
+
+The following commands send a prompt to the agent instead of executing directly:
+
+| Command           | Sends                                              |
+| ----------------- | -------------------------------------------------- |
+| `/run <cmd>`      | "Run this shell command and show me the output: …" |
+| `/search <query>` | "Search the web for: …"                            |
+| `/summarize`      | "Summarize our conversation so far concisely."     |
+| `/think [topic]`  | "Think step-by-step about: …"                      |
+
+## Bash Commands
+
+The composer supports inline bash execution. The entire input line must start with `!` or `!!`.
+
+| Syntax        | Behavior                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `!<command>`  | Runs the shell command. Output streams into the conversation.                             |
+| `!!<command>` | Same, but excludes the command and output from the agent's context (reduces token usage). |
+
+Examples:
+
+```
+!git status
+!!npm test
+```
+
+Bash commands create or reuse a live session in the conversation's working directory.
+
+## Mention Menu
+
+Type `@` in the composer to search and reference items. The menu surfaces:
+
+- **Files** — workspace files by path
+- **Notes** — memory documents by title
+- **Tasks** — named automations by ID
+- **Skills** — registered skills
+
+Select an item to insert its reference (`@<id>`). The referenced content is injected into the agent's context when the message is sent.
+
+## Reply Quoting
+
+Select any portion of text in a conversation message. A **Reply** action appears that quotes the selection into the composer as a blockquote, making it easy to reference or respond to specific parts of a response.
 
 ## Conversation Inspect
 
