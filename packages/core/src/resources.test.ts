@@ -158,6 +158,34 @@ describe('resources profile loader', () => {
     expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'vault-skill'), join(externalSkillsDir, 'machine-skill')]);
   });
 
+  it('includes skills scoped to shared through metadata tags', () => {
+    const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
+    const syncRoot = join(profilesRoot, '..');
+
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(
+      join(syncRoot, 'skills', 'datadog-helper', 'SKILL.md'),
+      `---
+name: datadog-helper
+description: Use for Datadog helper workflows.
+metadata:
+  profile: datadog
+  tags: profile:shared
+---
+# Datadog Helper
+`,
+    );
+
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
+
+    expect(resolved.skillDirs).toEqual([join(syncRoot, 'skills', 'datadog-helper')]);
+  });
+
   it('merges json files in layer order', () => {
     const repo = createTempRepo();
     const fileA = join(repo, 'a.json');

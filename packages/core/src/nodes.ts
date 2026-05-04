@@ -188,6 +188,17 @@ function readStringArray(value: unknown): string[] {
   ];
 }
 
+function readStringList(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+
+  return readStringArray(value);
+}
+
 function normalizeTag(value: string): string {
   return value.trim();
 }
@@ -524,12 +535,19 @@ function parseSkillNode(filePath: string): UnifiedNodeRecord {
   const description = readOptionalString(attributes.description);
   const summary =
     readOptionalString(metadata.summary) ?? description ?? extractFirstParagraph(section.body) ?? `Skill package for ${title}.`;
-  const status = readOptionalString(metadata.status) ?? 'active';
+  const skillTags = normalizeTags([...readStringList(attributes.tags), ...readStringList(metadata.tags)]);
+  const status = readOptionalString(metadata.status) ?? collectTagValues(skillTags, 'status')[0] ?? 'active';
   const profiles = dedupeStrings([
     ...readStringArray(attributes.profiles).map((value) => value.toLowerCase()),
-    ...(readOptionalString(metadata.profile) ? [readOptionalString(metadata.profile) as string] : []),
+    ...(readOptionalString(metadata.profile) ? [(readOptionalString(metadata.profile) as string).toLowerCase()] : []),
+    ...collectTagValues(skillTags, 'profile').map((value) => value.toLowerCase()),
   ]);
-  const tags = normalizeTags(['type:skill', ...(status ? [`status:${status}`] : []), ...profiles.map((profile) => `profile:${profile}`)]);
+  const tags = normalizeTags([
+    'type:skill',
+    ...skillTags,
+    ...(status ? [`status:${status}`] : []),
+    ...profiles.map((profile) => `profile:${profile}`),
+  ]);
   const searchText = buildSearchText({
     id,
     title,

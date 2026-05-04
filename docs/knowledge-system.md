@@ -44,6 +44,8 @@ Reusable workflows defined as markdown with a standard structure:
 
 Skills are loaded by the runtime and available to the agent through skill commands. Each skill is a self-contained procedure the agent can follow.
 
+Profile-scoped skills can opt into the shared runtime by adding `profile:shared` to either top-level `tags` or `metadata.tags` in `SKILL.md`. This lets a Datadog-owned skill keep `metadata.profile: datadog` for ownership while still appearing in the shared agent's available skills list.
+
 ### Projects
 
 Structured work packages with milestones, tasks, and durable status. See [Projects](projects.md).
