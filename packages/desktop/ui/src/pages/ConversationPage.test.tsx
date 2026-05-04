@@ -15,6 +15,7 @@ import {
   resolveDisplayedConversationPendingStatusLabel,
   shouldAutoDispatchPendingInitialPrompt,
   shouldDeferConversationFileRefresh,
+  shouldEnableMessageForkControls,
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
@@ -125,6 +126,15 @@ describe('desktop conversation state fallback', () => {
     ];
 
     expect(replaceConversationMetaInSessionList(sessions, 'conv-123', sessions[0]!)).toBe(sessions);
+  });
+
+  it('keeps message fork controls available for saved conversations while they stream', () => {
+    expect(shouldEnableMessageForkControls({ renderingStaleTranscript: false, conversationId: 'conv-123' })).toBe(true);
+  });
+
+  it('hides message fork controls for stale transcripts and drafts', () => {
+    expect(shouldEnableMessageForkControls({ renderingStaleTranscript: true, conversationId: 'conv-123' })).toBe(false);
+    expect(shouldEnableMessageForkControls({ renderingStaleTranscript: false, conversationId: undefined })).toBe(false);
   });
 
   it('uses the dedicated desktop state only while the local subscription is healthy', () => {

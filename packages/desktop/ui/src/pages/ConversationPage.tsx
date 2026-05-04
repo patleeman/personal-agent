@@ -481,6 +481,16 @@ function hasBlockingOverlayOpen(): boolean {
   return typeof document !== 'undefined' && hasBlockingConversationOverlay();
 }
 
+export function shouldEnableMessageForkControls({
+  renderingStaleTranscript,
+  conversationId,
+}: {
+  renderingStaleTranscript: boolean;
+  conversationId: string | undefined;
+}): boolean {
+  return !renderingStaleTranscript && Boolean(conversationId);
+}
+
 // ── ConversationPage ──────────────────────────────────────────────────────────
 
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
@@ -6113,7 +6123,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 isCompacting={renderingStaleTranscript ? false : stream.isCompacting}
                 pendingStatusLabel={renderingStaleTranscript ? null : displayedPendingAssistantStatusLabel}
                 performanceMode={conversationPerformanceMode}
-                onForkMessage={!renderingStaleTranscript && id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+                onForkMessage={
+                  shouldEnableMessageForkControls({ renderingStaleTranscript, conversationId: id })
+                    ? forkConversationFromMessage
+                    : undefined
+                }
                 onRewindMessage={!renderingStaleTranscript && id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
                 onReplyToSelection={renderingStaleTranscript ? undefined : handleReplyToSelection}
                 onHydrateMessage={renderingStaleTranscript ? undefined : hydrateHistoricalBlock}
