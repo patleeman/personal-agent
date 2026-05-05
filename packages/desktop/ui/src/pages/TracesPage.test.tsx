@@ -96,7 +96,7 @@ describe('TracesPage', () => {
         <TracesPage />
       </MemoryRouter>,
     );
-    expect(html).toContain('Active Sessions');
+    expect(html).toContain('Traced Sessions');
     expect(html).toContain('Runs Today');
     expect(html).toContain('Total Cost');
     expect(html).toContain('Tokens Today');

@@ -8,7 +8,6 @@ export function TracesModelUsage({
   models,
   throughput,
   totalTokens,
-  totalCost,
   tokensInput,
   tokensOutput,
   tokensCached,
@@ -17,7 +16,6 @@ export function TracesModelUsage({
   models: TraceModelUsage[];
   throughput: TraceThroughput[];
   totalTokens: number;
-  totalCost: number;
   tokensInput: number;
   tokensOutput: number;
   tokensCached: number;
@@ -114,9 +112,9 @@ export function TracesModelUsage({
           />
           <CacheRow label="Hit rate" value={`${cacheHitRate}%`} pct={cacheHitRate / 100} color="bg-success" />
           <CacheRow
-            label="Est. savings"
-            value={`$${(totalCost * (cacheHitRate / 100) * 0.5).toFixed(2)}`}
-            pct={cacheHitRate / 100}
+            label="Cacheable in"
+            value={formatNumber(tokensInput + tokensCached)}
+            pct={Math.min((tokensInput + tokensCached) / Math.max(totalTokens, 1), 1)}
             color="bg-success"
           />
           <div className="mt-2 pt-2 border-t border-border-subtle text-[11px] text-dim">

@@ -42,14 +42,7 @@ function ToolCard({ tool }: { tool: TraceToolHealth }) {
   const hasTrouble = tool.errors > 0 && successRate < 95;
   const dotClass = tool.errors === 0 ? 'bg-success' : hasTrouble ? 'bg-danger' : 'bg-warning';
 
-  // Generate mock sparkline data from tool stats (proportional to call count)
-  const sparkBars = Array.from({ length: 10 }, (_, i) => {
-    const base = tool.calls / 10;
-    const noise = Math.sin(i * 1.5) * base * 0.3;
-    const errBars = tool.errors > 0 && i % 3 === 1 ? Math.min(tool.errors / 3, base * 0.5) : 0;
-    return { ok: Math.max(0, base + noise - errBars), err: errBars };
-  });
-  const maxSpark = Math.max(...sparkBars.map((b) => b.ok + b.err), 1);
+  const okCalls = tool.calls - tool.errors;
 
   return (
     <div className={`rounded-lg p-3 border ${hasTrouble ? 'border-danger/20 bg-danger/[0.03]' : 'border-transparent bg-elevated'}`}>
@@ -69,16 +62,12 @@ function ToolCard({ tool }: { tool: TraceToolHealth }) {
         <Stat label="Max Latency" value={formatDuration(tool.maxLatencyMs)} />
       </div>
       <div className="mt-2.5 pt-2 border-t border-border-subtle/50">
-        <div className="flex items-end gap-0.5 h-6">
-          {sparkBars.map((b, i) => (
-            <div key={i} className="flex-1 flex flex-col justify-end" style={{ height: '100%' }}>
-              {b.err > 0 && <div className="w-full bg-danger rounded-t" style={{ height: `${(b.err / maxSpark) * 100}%` }} />}
-              <div className="w-full bg-success/60 rounded-t" style={{ height: `${(b.ok / maxSpark) * 100}%` }} />
-            </div>
-          ))}
+        <div className="flex h-2 overflow-hidden rounded-full bg-surface">
+          <div className="bg-success/70" style={{ width: `${tool.calls > 0 ? (okCalls / tool.calls) * 100 : 0}%` }} />
+          {tool.errors > 0 && <div className="bg-danger" style={{ width: `${(tool.errors / tool.calls) * 100}%` }} />}
         </div>
         <div className="flex justify-between text-[9px] text-dim mt-1">
-          <span>{tool.calls - tool.errors} ok</span>
+          <span>{okCalls} ok</span>
           {tool.errors > 0 && <span className="text-danger">{tool.errors} err</span>}
         </div>
       </div>

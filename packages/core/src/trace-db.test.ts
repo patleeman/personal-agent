@@ -112,6 +112,7 @@ describe('trace-db', () => {
     expect(result.activeSessions).toBeGreaterThanOrEqual(2);
     expect(result.totalCost).toBeGreaterThan(0);
     expect(result.tokensTotal).toBeGreaterThan(0);
+    expect(result.tokensTotal).toBe(result.tokensInput + result.tokensCached + result.tokensOutput);
     expect(result.toolCalls).toBe(4);
     expect(result.toolErrors).toBe(1);
   });

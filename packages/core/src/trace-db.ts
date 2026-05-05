@@ -388,7 +388,7 @@ export function querySummary(since: string): TraceSummary {
     .prepare(
       `
     SELECT
-      COALESCE(SUM(tokens_input + tokens_output), 0) as tokens_total,
+      COALESCE(SUM(tokens_input + tokens_cached_input + tokens_output), 0) as tokens_total,
       COALESCE(SUM(tokens_input), 0) as tokens_input,
       COALESCE(SUM(tokens_output), 0) as tokens_output,
       COALESCE(SUM(tokens_cached_input), 0) as tokens_cached,

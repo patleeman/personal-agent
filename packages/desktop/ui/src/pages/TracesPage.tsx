@@ -97,7 +97,6 @@ export function TracesPage() {
             models={modelUsage}
             throughput={throughput ?? []}
             totalTokens={modelUsage.reduce((total, model) => total + model.tokens, 0)}
-            totalCost={summary.totalCost}
             tokensInput={summary.tokensInput}
             tokensOutput={summary.tokensOutput}
             tokensCached={summary.tokensCached}
@@ -163,10 +162,10 @@ function TimeRangeSelector({ value, onChange }: { value: TraceRange; onChange: (
 function PulseRow({ summary }: { summary: NonNullable<ReturnType<typeof useTracesData>['summary']> }) {
   const cards = [
     {
-      label: 'Active Sessions',
+      label: 'Traced Sessions',
       value: String(summary.activeSessions),
       cls: 'text-accent',
-      trend: `${summary.activeSessions > 0 ? '✦' : '—'} live`,
+      trend: `${summary.activeSessions > 0 ? '✦' : '—'} observed in range`,
       dot: summary.activeSessions > 0,
     },
     {
@@ -185,7 +184,7 @@ function PulseRow({ summary }: { summary: NonNullable<ReturnType<typeof useTrace
       label: 'Tokens Today',
       value: formatTokens(summary.tokensTotal),
       cls: 'text-success',
-      trend: `in ${formatTokens(summary.tokensInput)} · out ${formatTokens(summary.tokensOutput)}`,
+      trend: `in ${formatTokens(summary.tokensInput)} · cached ${formatTokens(summary.tokensCached)} · out ${formatTokens(summary.tokensOutput)}`,
     },
     {
       label: 'Tool Errors',

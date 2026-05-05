@@ -17,7 +17,7 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
     );
   }
 
-  const values = data.map((d) => d.tokensInput + d.tokensOutput);
+  const values = data.map(tokenTotal);
   const max = Math.max(...values, 1);
 
   // Bucket into weeks (groups of 7)
@@ -53,13 +53,13 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
           {weeks.map((week, wi) => (
             <div key={wi} className="flex flex-col gap-0.5">
               {week.map((day, di) => {
-                const v = day.tokensInput + day.tokensOutput;
+                const v = tokenTotal(day);
                 const lvl = level(v);
                 return (
                   <div
                     key={di}
                     className={`w-3 h-3 rounded-sm ${cellColors[lvl]}`}
-                    title={`${day.date}: ${formatNumber(v)} tokens (in: ${formatNumber(day.tokensInput)}, out: ${formatNumber(day.tokensOutput)})`}
+                    title={`${day.date}: ${formatNumber(v)} tokens (in: ${formatNumber(day.tokensInput)}, cached: ${formatNumber(day.tokensCached)}, out: ${formatNumber(day.tokensOutput)})`}
                   />
                 );
               })}
@@ -76,15 +76,44 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
           <span>More</span>
           <span className="ml-4 text-warning">● Peak: {formatNumber(max)} tokens</span>
           <span className="ml-auto">
-            In: <span className="text-accent">{((data.reduce((a, d) => a + d.tokensInput, 0) / total) * 100).toFixed(0)}%</span>
+            In:{' '}
+            <span className="text-accent">
+              {pct(
+                data.reduce((a, d) => a + d.tokensInput, 0),
+                total,
+              )}
+            </span>
           </span>
           <span>
-            Out: <span className="text-success">{((data.reduce((a, d) => a + d.tokensOutput, 0) / total) * 100).toFixed(0)}%</span>
+            Cached:{' '}
+            <span className="text-warning">
+              {pct(
+                data.reduce((a, d) => a + d.tokensCached, 0),
+                total,
+              )}
+            </span>
+          </span>
+          <span>
+            Out:{' '}
+            <span className="text-success">
+              {pct(
+                data.reduce((a, d) => a + d.tokensOutput, 0),
+                total,
+              )}
+            </span>
           </span>
         </div>
       </div>
     </div>
   );
+}
+
+function tokenTotal(day: TraceTokenDaily): number {
+  return day.tokensInput + day.tokensCached + day.tokensOutput;
+}
+
+function pct(value: number, total: number): string {
+  return total > 0 ? `${((value / total) * 100).toFixed(0)}%` : '0%';
 }
 
 function formatNumber(n: number): string {
