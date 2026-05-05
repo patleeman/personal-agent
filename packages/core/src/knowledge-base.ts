@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import {
@@ -91,6 +92,8 @@ const KNOWLEDGE_BASE_LOCAL_CHANGE_QUIET_MS = 2 * 60 * 1_000;
 const KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_SYNC_LOCK_STALE_MS = 5 * 60 * 1_000;
+const KNOWLEDGE_BASE_MIN_FILE_RATIO = 0.5;
+const SYNC_BACKUP_PREFIX = 'pa-kb-sync-backup-';
 const LOCAL_STATE_FILE_NAME = 'state.json';
 const RECOVERY_INDEX_FILE_NAME = 'recovery-index.json';
 const SYNC_LOCK_DIR_NAME = 'sync.lock';
@@ -648,6 +651,7 @@ export class KnowledgeBaseManager {
   private interval: NodeJS.Timeout | null = null;
   private syncInProgress = false;
   private activeSyncLockTimestamp: string | null = null;
+  private syncBackupDir: string | null = null;
 
   constructor(options: KnowledgeBaseManagerOptions = {}) {
     this.stateRoot = resolve(options.stateRoot ?? getStateRoot());
@@ -821,6 +825,72 @@ export class KnowledgeBaseManager {
     this.runtimeState.recoveredEntryCount = nextCount;
   }
 
+  private backupWorkingTree(root: string, snapshot: Snapshot): string {
+    const backupDir = mkdtempSync(join(tmpdir(), SYNC_BACKUP_PREFIX));
+    this.syncBackupDir = backupDir;
+
+    for (const relativePath of Object.keys(snapshot)) {
+      const sourcePath = join(root, relativePath);
+      if (!existsSync(sourcePath)) {
+        continue;
+      }
+      const destPath = join(backupDir, relativePath);
+      ensureParentDirectory(destPath);
+      writeFileSync(destPath, readFileSync(sourcePath));
+    }
+
+    return backupDir;
+  }
+
+  private restoreWorkingTree(backupDir: string, root: string, snapshot: Snapshot): void {
+    for (const relativePath of Object.keys(snapshot)) {
+      const sourcePath = join(backupDir, relativePath);
+      if (!existsSync(sourcePath)) {
+        continue;
+      }
+      const destPath = join(root, relativePath);
+      ensureParentDirectory(destPath);
+      writeFileSync(destPath, readFileSync(sourcePath));
+    }
+  }
+
+  private cleanupSyncBackup(): void {
+    if (this.syncBackupDir) {
+      try {
+        rmSync(this.syncBackupDir, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup
+      }
+      this.syncBackupDir = null;
+    }
+  }
+
+  private validateSyncResult(baseSnapshot: Snapshot, finalPaths: Set<string>): { valid: boolean; reason?: string } {
+    const baseFileCount = Object.keys(baseSnapshot).length;
+    const resultFileCount = finalPaths.size;
+
+    if (baseFileCount === 0) {
+      return { valid: true };
+    }
+
+    if (resultFileCount === 0) {
+      return {
+        valid: false,
+        reason: `Sync would produce an empty working tree (${resultFileCount} files) from a base with ${baseFileCount} files. Aborting sync to prevent data loss.`,
+      };
+    }
+
+    const ratio = resultFileCount / baseFileCount;
+    if (ratio < KNOWLEDGE_BASE_MIN_FILE_RATIO) {
+      return {
+        valid: false,
+        reason: `Sync would drop ${baseFileCount - resultFileCount} of ${baseFileCount} files (ratio ${ratio.toFixed(3)} < minimum ${KNOWLEDGE_BASE_MIN_FILE_RATIO}). Aborting sync to prevent data loss.`,
+      };
+    }
+
+    return { valid: true };
+  }
+
   private tryAcquireSyncLock(timestamp: string): boolean {
     ensureParentDirectory(this.syncLockMetadataPath);
 
@@ -860,6 +930,8 @@ export class KnowledgeBaseManager {
   private releaseSyncLock(): void {
     const activeTimestamp = this.activeSyncLockTimestamp;
     this.activeSyncLockTimestamp = null;
+    this.cleanupSyncBackup();
+
     if (!activeTimestamp) {
       return;
     }
@@ -1051,59 +1123,75 @@ export class KnowledgeBaseManager {
         ...Object.keys(baseSnapshot),
       ]);
 
-      for (const path of Object.keys(workingSnapshot)) {
-        deleteFileIfExists(join(root, path), root);
-      }
+      // Back up the current working tree before destroying it, so we can
+      // restore if something goes wrong during the merge/checkout phase.
+      const backupDir = this.backupWorkingTree(root, workingSnapshot);
 
-      this.checkoutRemoteBase(root, config.branch, true);
-
-      const finalPaths = new Set<string>(Object.keys(remoteSnapshot));
-
-      // Guard: if the remote snapshot is unexpectedly empty (shouldn't reach here
-      // due to the safety check above, but defend against it anyway), bail out.
-      if (finalPaths.size === 0 && Object.keys(baseSnapshot).length > 0) {
-        throw new Error('Remote snapshot is empty but previous state has content — aborting sync to prevent data loss');
-      }
-
-      for (const resolution of resolutions) {
-        const timestampForRecovery = syncTimestamp;
-        const localContent = localContents.get(resolution.path) ?? null;
-        const remoteContent = resolution.remoteExists ? readRemoteFileBuffer(root, config.branch, resolution.path) : null;
-
-        if (resolution.winner === 'remote') {
-          if (resolution.localExists && localContent && (!remoteContent || !localContent.equals(remoteContent))) {
-            this.writeRecoveryCopy(resolution.path, localContent, timestampForRecovery);
-          }
-
-          if (!resolution.remoteExists) {
-            finalPaths.delete(resolution.path);
-            deleteFileIfExists(join(root, resolution.path), root);
-          }
-          continue;
-        }
-
-        if (resolution.remoteExists && remoteContent && (!localContent || !remoteContent.equals(localContent))) {
-          this.writeRecoveryCopy(resolution.path, remoteContent, timestampForRecovery);
-        }
-
-        if (!resolution.localExists || !localContent) {
-          finalPaths.delete(resolution.path);
-          deleteFileIfExists(join(root, resolution.path), root);
-          continue;
-        }
-
-        const absolutePath = join(root, resolution.path);
-        ensureParentDirectory(absolutePath);
-        writeFileSync(absolutePath, localContent);
-        finalPaths.add(resolution.path);
-      }
-
-      for (const path of managedExistingPaths) {
-        if (!finalPaths.has(path)) {
+      try {
+        for (const path of Object.keys(workingSnapshot)) {
           deleteFileIfExists(join(root, path), root);
         }
+
+        this.checkoutRemoteBase(root, config.branch, true);
+
+        const finalPaths = new Set<string>(Object.keys(remoteSnapshot));
+
+        // Guard: if the remote snapshot is unexpectedly empty, bail out.
+        if (finalPaths.size === 0 && Object.keys(baseSnapshot).length > 0) {
+          this.restoreWorkingTree(backupDir, root, workingSnapshot);
+          throw new Error('Remote snapshot is empty but previous state has content — aborting sync to prevent data loss');
+        }
+
+        for (const resolution of resolutions) {
+          const localContent = localContents.get(resolution.path) ?? null;
+          const remoteContent = resolution.remoteExists ? readRemoteFileBuffer(root, config.branch, resolution.path) : null;
+
+          if (resolution.winner === 'remote') {
+            if (resolution.localExists && localContent && (!remoteContent || !localContent.equals(remoteContent))) {
+              this.writeRecoveryCopy(resolution.path, localContent, syncTimestamp);
+            }
+
+            if (!resolution.remoteExists) {
+              finalPaths.delete(resolution.path);
+              deleteFileIfExists(join(root, resolution.path), root);
+            }
+            continue;
+          }
+
+          if (resolution.remoteExists && remoteContent && (!localContent || !remoteContent.equals(localContent))) {
+            this.writeRecoveryCopy(resolution.path, remoteContent, syncTimestamp);
+          }
+
+          if (!resolution.localExists || !localContent) {
+            finalPaths.delete(resolution.path);
+            deleteFileIfExists(join(root, resolution.path), root);
+            continue;
+          }
+
+          const absolutePath = join(root, resolution.path);
+          ensureParentDirectory(absolutePath);
+          writeFileSync(absolutePath, localContent);
+          finalPaths.add(resolution.path);
+        }
+
+        for (const path of managedExistingPaths) {
+          if (!finalPaths.has(path)) {
+            deleteFileIfExists(join(root, path), root);
+          }
+        }
+
+        // Validate the sync result before committing. If the file count
+        // dropped catastrophically, restore the backup and abort.
+        const validation = this.validateSyncResult(baseSnapshot, finalPaths);
+        if (!validation.valid) {
+          this.restoreWorkingTree(backupDir, root, workingSnapshot);
+          throw new Error(validation.reason);
+        }
+      } finally {
+        this.cleanupSyncBackup();
       }
 
+      // Only reach here if validation passed — the working tree is in good shape.
       this.stageAndCommitIfNeeded(root, config.branch, syncTimestamp);
 
       const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, syncTimestamp);
