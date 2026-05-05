@@ -52,15 +52,22 @@ const DEFAULT_POLL_MS = 15_000;
 const SLOW_RETRY_MS = 60_000;
 
 /**
- * Slack's official MCP server config. The clientId is Slack's fixed app ID
- * for the Claude plugin — required by Slack's confidential OAuth model.
- * https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/
+ * Slack MCP server config using Claude Code's registered OAuth client.
+ *
+ * Slack requires a fixed, marketplace-approved app client ID — no dynamic
+ * registration. We reuse Claude Code's client (the same one used by
+ * `claude plugin install slack`) so Personal Agent is treated as a known
+ * integration by Slack admins.
+ *
+ * Source: https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/
+ * Claude Code config: { type:"http", url, oauth: { clientId, callbackPort:3118 } }
  */
 const SLACK_MCP_SERVER_CONFIG: McpServerConfig = {
   name: 'slack',
   transport: 'remote',
   args: [],
   url: 'https://mcp.slack.com/mcp',
+  // callbackPort must match the redirect_uri registered for this client
   callbackPort: 3118,
   oauthClientInfo: {
     client_id: '1601185624273.8899143856786',
