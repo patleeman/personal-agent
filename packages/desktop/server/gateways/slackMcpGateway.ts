@@ -21,12 +21,6 @@ interface SlackMcpMessage {
   subtype?: string;
 }
 
-export interface SlackMcpChannelSummary {
-  id: string;
-  name: string;
-  isPrivate?: boolean;
-}
-
 export interface SlackMcpGatewayRuntimeDependencies {
   stateRoot: string;
   profile: string;
@@ -142,11 +136,6 @@ export class SlackMcpGatewayRuntime {
     if (this.polling) {
       await this.ensureConnected().catch(() => undefined);
     }
-  }
-
-  async searchChannels(query: string): Promise<SlackMcpChannelSummary[]> {
-    const result = await this.callSlackTool('slack_search_channels', { query, limit: 10, response_format: 'detailed' });
-    return extractSlackChannels(result).slice(0, 10);
   }
 
   /** Save the channel config (like Telegram's chat ID save) without binding a thread yet. */
@@ -513,21 +502,6 @@ function extractSlackMessages(value: unknown): SlackMcpMessage[] {
   const unique = new Map<string, SlackMcpMessage>();
   for (const message of candidates) unique.set(message.ts, message);
   return [...unique.values()];
-}
-
-function extractSlackChannels(value: unknown): SlackMcpChannelSummary[] {
-  const root = unwrapMcpResult(value);
-  return findArrays(root)
-    .flatMap((array) => array)
-    .map((item) => {
-      if (!item || typeof item !== 'object') return null;
-      const record = item as Record<string, unknown>;
-      const id = stringValue(record.id) || stringValue(record.channel_id) || stringValue(record.channelId);
-      const name = stringValue(record.name) || stringValue(record.channel_name) || stringValue(record.label) || id;
-      if (!id || !name) return null;
-      return { id, name, isPrivate: Boolean(record.is_private ?? record.isPrivate) };
-    })
-    .filter((item): item is SlackMcpChannelSummary => item !== null);
 }
 
 function extractSlackMessageTs(value: unknown): string | null {

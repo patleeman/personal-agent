@@ -57,9 +57,7 @@ export function GatewaysPage() {
   const [slackAuthLoading, setSlackAuthLoading] = useState(true);
   const [slackAuthError, setSlackAuthError] = useState<string | null>(null);
   const [slackAuthNotice, setSlackAuthNotice] = useState<string | null>(null);
-  const [slackQuery, setSlackQuery] = useState('');
-  const [slackChannels, setSlackChannels] = useState<Array<{ id: string; name: string; isPrivate?: boolean }>>([]);
-  const [slackSearchComplete, setSlackSearchComplete] = useState(false);
+  const [slackInput, setSlackInput] = useState('');
   const [slackChannelNotice, setSlackChannelNotice] = useState<string | null>(null);
   const [slackChannelError, setSlackChannelError] = useState<string | null>(null);
   const [slackThreadId, setSlackThreadId] = useState('');
@@ -326,9 +324,7 @@ export function GatewaysPage() {
       const result = await api.disconnectSlackMcp();
       setState(result.state);
       setSlackAuthState({ authenticated: result.authenticated });
-      setSlackChannels([]);
-      setSlackQuery('');
-      setSlackSearchComplete(false);
+      setSlackInput('');
       setSlackAuthNotice('Slack disconnected.');
     } catch (err) {
       setSlackAuthError(formatGatewayError(err));
@@ -337,31 +333,26 @@ export function GatewaysPage() {
     }
   }
 
-  async function searchSlackChannels() {
-    if (!slackQuery.trim()) return;
-    setBusy('slack-search');
-    setSlackChannelError(null);
-    setSlackSearchComplete(false);
-    try {
-      setSlackChannels((await api.searchSlackMcpChannels(slackQuery.trim())).channels);
-      setSlackSearchComplete(true);
-    } catch (err) {
-      setSlackChannelError(formatGatewayError(err));
-    } finally {
-      setBusy(null);
-    }
+  function parseSlackChannelInput(raw: string): { id: string; name: string } | null {
+    const trimmed = raw.trim();
+    // Slack archive URL: https://xxx.slack.com/archives/C0B1AHPH4ET
+    const urlMatch = trimmed.match(/\/archives\/(C[A-Z0-9]+)/i);
+    if (urlMatch) return { id: urlMatch[1].toUpperCase(), name: urlMatch[1].toUpperCase() };
+    // Raw channel ID (starts with C followed by alphanumeric)
+    if (/^C[A-Z0-9]{8,}$/i.test(trimmed)) return { id: trimmed.toUpperCase(), name: trimmed.toUpperCase() };
+    return null;
   }
 
-  async function saveSlackChannel(channel: { id: string; name: string }) {
+  async function saveSlackChannel() {
+    const parsed = parseSlackChannelInput(slackInput);
+    if (!parsed) return;
     setBusy('slack-channel-save');
     setSlackChannelError(null);
     setSlackChannelNotice(null);
     try {
-      setState(await api.saveSlackMcpChannel({ channelId: channel.id, channelLabel: channel.name }));
-      setSlackChannels([]);
-      setSlackQuery('');
-      setSlackSearchComplete(false);
-      setSlackChannelNotice(`Channel #${channel.name} saved.`);
+      setState(await api.saveSlackMcpChannel({ channelId: parsed.id, channelLabel: parsed.name }));
+      setSlackInput('');
+      setSlackChannelNotice(`Channel ${parsed.name} saved.`);
     } catch (err) {
       setSlackChannelError(formatGatewayError(err));
     } finally {
@@ -627,47 +618,28 @@ export function GatewaysPage() {
             {slackAuthenticated ? (
               <div className="border-t border-border-subtle pt-4">
                 <h3 className="text-[13px] font-medium text-primary">Channel config</h3>
-                <p className="mt-1 text-[12px] text-secondary">Search for a channel and save it as the Slack gateway source.</p>
+                <p className="mt-1 text-[12px] text-secondary">
+                  Paste a Slack channel URL or channel ID (C…). In Slack, right-click a channel → Copy link.
+                </p>
                 <div className="mt-3 flex gap-2">
                   <input
                     className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface/70 px-3 py-1.5 text-[13px] text-primary placeholder:text-dim outline-none transition-colors focus:border-accent/50 disabled:opacity-50"
-                    value={slackQuery}
-                    onChange={(e) => {
-                      setSlackQuery(e.target.value);
-                      setSlackSearchComplete(false);
-                    }}
-                    placeholder="Search channels…"
+                    value={slackInput}
+                    onChange={(e) => setSlackInput(e.target.value)}
+                    placeholder="https://…/archives/C… or C0B1AHPH4ET"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') void searchSlackChannels();
+                      if (e.key === 'Enter') void saveSlackChannel();
                     }}
                     disabled={busy !== null}
                   />
                   <ToolbarButton
                     className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-                    onClick={searchSlackChannels}
-                    disabled={busy !== null || !slackQuery.trim()}
+                    onClick={saveSlackChannel}
+                    disabled={busy !== null || !parseSlackChannelInput(slackInput)}
                   >
-                    {busy === 'slack-search' ? 'Searching…' : 'Search'}
+                    {busy === 'slack-channel-save' ? 'Saving…' : 'Save'}
                   </ToolbarButton>
                 </div>
-                {slackChannels.length > 0 ? (
-                  <div className="mt-2 border-t border-border-subtle">
-                    {slackChannels.map((channel) => (
-                      <button
-                        key={channel.id}
-                        type="button"
-                        className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
-                        onClick={() => void saveSlackChannel(channel)}
-                        disabled={busy !== null}
-                      >
-                        <span>#{channel.name}</span>
-                        <span className="text-[12px] text-dim">{channel.id}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : slackSearchComplete ? (
-                  <p className="mt-2 text-[13px] text-secondary">No Slack channels found.</p>
-                ) : null}
                 {slackChannelNotice ? <p className="mt-2 text-[12px] text-success">{slackChannelNotice}</p> : null}
                 {slackChannelError ? <p className="mt-2 text-[12px] text-danger">{slackChannelError}</p> : null}
               </div>

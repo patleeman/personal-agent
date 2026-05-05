@@ -382,19 +382,6 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
     }
   });
 
-  router.get('/api/gateways/slack-mcp/channels', async (req: Request, res: Response) => {
-    try {
-      const query = readOptionalString(req.query.query);
-      if (!query) {
-        res.status(400).json({ error: 'query required' });
-        return;
-      }
-      res.json({ channels: await ensureSlackMcpRuntime().searchChannels(query) });
-    } catch (err) {
-      handleGatewayError(res, err);
-    }
-  });
-
   // Save the channel target (like Telegram's /chat endpoint — no thread attached yet)
   router.post('/api/gateways/slack-mcp/channel', async (req: Request, res: Response) => {
     try {

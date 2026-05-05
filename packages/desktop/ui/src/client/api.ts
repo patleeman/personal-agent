@@ -1469,10 +1469,6 @@ export const api = {
   slackMcpAuthState: async () => get<{ authenticated: boolean }>('/gateways/slack-mcp/auth'),
   connectSlackMcp: async () => post<{ authenticated: boolean; state: GatewayState }>('/gateways/slack-mcp/auth', {}),
   disconnectSlackMcp: async () => del<{ authenticated: boolean; state: GatewayState }>('/gateways/slack-mcp/auth'),
-  searchSlackMcpChannels: async (query: string) =>
-    get<{ channels: Array<{ id: string; name: string; isPrivate?: boolean }> }>(
-      `/gateways/slack-mcp/channels?query=${encodeURIComponent(query)}`,
-    ),
   saveSlackMcpChannel: async (input: { channelId: string; channelLabel?: string }) =>
     post<GatewayState>('/gateways/slack-mcp/channel', input),
   attachSlackMcpChannel: async (input: {
