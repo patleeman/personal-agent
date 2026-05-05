@@ -48,9 +48,21 @@ export function GatewaysPage() {
   const slackBinding = slackConnection
     ? (state.bindings.find((b) => b.connectionId === slackConnection.id && b.provider === 'slack_mcp') ?? null)
     : null;
+  const slackChatTarget = slackConnection
+    ? (state.chatTargets.find((t) => t.connectionId === slackConnection.id && t.provider === 'slack_mcp') ?? null)
+    : null;
+  const configuredSlackChannelId = slackChatTarget?.externalChatId || slackBinding?.externalChatId || '';
+  const configuredSlackChannelLabel = slackChatTarget?.externalChatLabel || slackBinding?.externalChatLabel || configuredSlackChannelId;
+  const [slackAuthState, setSlackAuthState] = useState<{ authenticated: boolean } | null>(null);
+  const [slackAuthLoading, setSlackAuthLoading] = useState(true);
+  const [slackAuthError, setSlackAuthError] = useState<string | null>(null);
+  const [slackAuthNotice, setSlackAuthNotice] = useState<string | null>(null);
   const [slackQuery, setSlackQuery] = useState('');
   const [slackChannels, setSlackChannels] = useState<Array<{ id: string; name: string; isPrivate?: boolean }>>([]);
   const [slackSearchComplete, setSlackSearchComplete] = useState(false);
+  const [slackChannelNotice, setSlackChannelNotice] = useState<string | null>(null);
+  const [slackChannelError, setSlackChannelError] = useState<string | null>(null);
+  const [slackThreadId, setSlackThreadId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +144,32 @@ export function GatewaysPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .slackMcpAuthState()
+      .then((next) => {
+        if (!cancelled) setSlackAuthState(next);
+      })
+      .catch((err) => {
+        if (!cancelled) setSlackAuthError(formatGatewayError(err));
+      })
+      .finally(() => {
+        if (!cancelled) setSlackAuthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSlackThreadId((current) => {
+      if (current && openThreadIdSet.has(current)) return current;
+      if (slackBinding?.conversationId && openThreadIdSet.has(slackBinding.conversationId)) return slackBinding.conversationId;
+      return openSessions[0]?.id ?? '';
+    });
+  }, [openSessions, openThreadIdSet, slackBinding?.conversationId]);
 
   async function saveTelegramToken() {
     const token = telegramTokenDraft.trim();
@@ -262,29 +300,100 @@ export function GatewaysPage() {
     }
   }
 
-  async function searchSlackChannels() {
-    if (!slackQuery.trim()) return;
-    setBusy('slack-search');
-    setError(null);
-    setSlackSearchComplete(false);
+  async function connectSlack() {
+    setBusy('slack-connect');
+    setSlackAuthNotice(null);
+    setSlackAuthError(null);
     try {
-      setSlackChannels((await api.searchSlackMcpChannels(slackQuery.trim())).channels);
-      setSlackSearchComplete(true);
+      const result = await api.connectSlackMcp();
+      setState(result.state);
+      setSlackAuthState({ authenticated: result.authenticated });
+      setSlackAuthNotice('Slack connected. Search for a channel to attach.');
     } catch (err) {
-      setError(formatGatewayError(err));
+      setSlackAuthError(formatGatewayError(err));
     } finally {
       setBusy(null);
     }
   }
 
-  async function attachSlackChannel(channel: { id: string; name: string }) {
-    setBusy('slack-attach');
-    setError(null);
+  async function disconnectSlack() {
+    const confirmed = window.confirm('Disconnect Slack and remove stored credentials?');
+    if (!confirmed) return;
+    setBusy('slack-disconnect');
+    setSlackAuthNotice(null);
+    setSlackAuthError(null);
     try {
-      setState(await api.attachSlackMcpChannel({ channelId: channel.id, channelLabel: channel.name }));
+      const result = await api.disconnectSlackMcp();
+      setState(result.state);
+      setSlackAuthState({ authenticated: result.authenticated });
       setSlackChannels([]);
       setSlackQuery('');
       setSlackSearchComplete(false);
+      setSlackAuthNotice('Slack disconnected.');
+    } catch (err) {
+      setSlackAuthError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function searchSlackChannels() {
+    if (!slackQuery.trim()) return;
+    setBusy('slack-search');
+    setSlackChannelError(null);
+    setSlackSearchComplete(false);
+    try {
+      setSlackChannels((await api.searchSlackMcpChannels(slackQuery.trim())).channels);
+      setSlackSearchComplete(true);
+    } catch (err) {
+      setSlackChannelError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveSlackChannel(channel: { id: string; name: string }) {
+    setBusy('slack-channel-save');
+    setSlackChannelError(null);
+    setSlackChannelNotice(null);
+    try {
+      setState(await api.saveSlackMcpChannel({ channelId: channel.id, channelLabel: channel.name }));
+      setSlackChannels([]);
+      setSlackQuery('');
+      setSlackSearchComplete(false);
+      setSlackChannelNotice(`Channel #${channel.name} saved.`);
+    } catch (err) {
+      setSlackChannelError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function attachSlackThread() {
+    const thread = sessions.find((s) => s.id === slackThreadId) ?? null;
+    if (!slackThreadId) {
+      if (slackBinding) {
+        await detachSlack();
+        return;
+      }
+      setError('Choose an open thread or leave it detached.');
+      return;
+    }
+    if (!configuredSlackChannelId || !thread) {
+      setError('Save a Slack channel and choose an open thread.');
+      return;
+    }
+    setBusy('slack-attach');
+    setError(null);
+    try {
+      setState(
+        await api.attachSlackMcpChannel({
+          conversationId: thread.id,
+          conversationTitle: thread.title || thread.id,
+          externalChatId: configuredSlackChannelId,
+          externalChatLabel: configuredSlackChannelLabel,
+        }),
+      );
     } catch (err) {
       setError(formatGatewayError(err));
     } finally {
@@ -305,7 +414,7 @@ export function GatewaysPage() {
     }
   }
 
-  const hasVisibleSlackConnection = slackConnection && slackBinding;
+  const slackAuthenticated = slackAuthState?.authenticated === true;
   const telegramConfigured = telegramTokenState?.configured === true;
   const showTelegramTokenEditor = !telegramConfigured || telegramTokenEditing;
 
@@ -479,25 +588,47 @@ export function GatewaysPage() {
           </div>
         </section>
 
-        {/* Slack channel attach — show until Slack MCP is attached to a channel */}
+        {/* Slack MCP gateway */}
         <section className="max-w-4xl">
           <h2 className="text-[18px] font-semibold tracking-tight text-primary">Slack MCP</h2>
-          <div className="mt-3 border-t border-border-subtle pt-5 space-y-3">
-            {hasVisibleSlackConnection ? (
-              <GatewayRow
-                connection={slackConnection}
-                binding={slackBinding}
-                busy={busy}
-                icon="SL"
-                iconBg="bg-purple-600"
-                title="Slack MCP"
-                targetLabel="Slack channel"
-                onDetach={detachSlack}
-              />
-            ) : (
-              <>
-                <p className="text-[13px] text-secondary">Search Slack through MCP and attach an active channel as a gateway.</p>
-                <div className="flex gap-2">
+          <div className="mt-3 space-y-3 border-t border-border-subtle pt-5">
+            <p className="text-[13px] text-secondary">
+              Connect via Slack OAuth, pick a channel, then attach it to whichever thread should handle incoming messages.
+            </p>
+
+            {/* Auth */}
+            {slackAuthLoading && !slackAuthState ? <p className="text-[13px] text-dim">Loading Slack config…</p> : null}
+            {slackAuthError && !slackAuthState ? (
+              <p className="text-[13px] text-danger">Failed to load Slack config: {slackAuthError}</p>
+            ) : null}
+            <p className="text-[13px] text-secondary">
+              Status:{' '}
+              <span className={slackAuthenticated ? 'text-success' : 'text-dim'}>{slackAuthenticated ? 'Connected' : 'Not connected'}</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {!slackAuthenticated ? (
+                <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] shadow-none" disabled={busy !== null} onClick={connectSlack}>
+                  {busy === 'slack-connect' ? 'Connecting…' : 'Connect Slack'}
+                </ToolbarButton>
+              ) : (
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                  disabled={busy !== null}
+                  onClick={disconnectSlack}
+                >
+                  {busy === 'slack-disconnect' ? 'Disconnecting…' : 'Disconnect'}
+                </ToolbarButton>
+              )}
+            </div>
+            {slackAuthNotice ? <p className="text-[12px] text-success">{slackAuthNotice}</p> : null}
+            {slackAuthError && slackAuthState ? <p className="text-[12px] text-danger">{slackAuthError}</p> : null}
+
+            {/* Channel picker */}
+            {slackAuthenticated ? (
+              <div className="border-t border-border-subtle pt-4">
+                <h3 className="text-[13px] font-medium text-primary">Channel config</h3>
+                <p className="mt-1 text-[12px] text-secondary">Search for a channel and save it as the Slack gateway source.</p>
+                <div className="mt-3 flex gap-2">
                   <input
                     className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface/70 px-3 py-1.5 text-[13px] text-primary placeholder:text-dim outline-none transition-colors focus:border-accent/50 disabled:opacity-50"
                     value={slackQuery}
@@ -509,35 +640,92 @@ export function GatewaysPage() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') void searchSlackChannels();
                     }}
+                    disabled={busy !== null}
                   />
                   <ToolbarButton
-                    className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                    className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
                     onClick={searchSlackChannels}
                     disabled={busy !== null || !slackQuery.trim()}
                   >
-                    Search
+                    {busy === 'slack-search' ? 'Searching…' : 'Search'}
                   </ToolbarButton>
                 </div>
                 {slackChannels.length > 0 ? (
-                  <div className="border-t border-border-subtle">
+                  <div className="mt-2 border-t border-border-subtle">
                     {slackChannels.map((channel) => (
                       <button
                         key={channel.id}
                         type="button"
                         className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
-                        onClick={() => void attachSlackChannel(channel)}
+                        onClick={() => void saveSlackChannel(channel)}
                         disabled={busy !== null}
                       >
-                        <span>{channel.name}</span>
+                        <span>#{channel.name}</span>
                         <span className="text-[12px] text-dim">{channel.id}</span>
                       </button>
                     ))}
                   </div>
                 ) : slackSearchComplete ? (
-                  <p className="text-[13px] text-secondary">No Slack channels found.</p>
+                  <p className="mt-2 text-[13px] text-secondary">No Slack channels found.</p>
                 ) : null}
-              </>
-            )}
+                {slackChannelNotice ? <p className="mt-2 text-[12px] text-success">{slackChannelNotice}</p> : null}
+                {slackChannelError ? <p className="mt-2 text-[12px] text-danger">{slackChannelError}</p> : null}
+              </div>
+            ) : null}
+
+            {/* Thread attachment — mirrors Telegram */}
+            {slackAuthenticated ? (
+              <div className="border-t border-border-subtle pt-4">
+                <h3 className="text-[13px] font-medium text-primary">Thread attachment</h3>
+                <p className="mt-1 text-[12px] text-secondary">Attach the saved channel to whichever thread should handle it right now.</p>
+                {sessionsError ? <p className="mt-2 text-[12px] text-danger">Failed to load threads: {sessionsError}</p> : null}
+                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                  <label className="min-w-0 text-[12px] text-secondary">
+                    Thread
+                    <select
+                      className={`${INPUT_CLASS} mt-1`}
+                      value={slackThreadId}
+                      onChange={(e) => setSlackThreadId(e.target.value)}
+                      disabled={busy !== null || sessions.length === 0}
+                    >
+                      <option value="">No thread (detached)</option>
+                      {openSessions.map((session) => (
+                        <option key={session.id} value={session.id}>
+                          {session.title || session.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <ToolbarButton
+                    className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                    disabled={busy !== null || !configuredSlackChannelId || (!slackThreadId && !slackBinding)}
+                    onClick={attachSlackThread}
+                  >
+                    {busy === 'slack-attach'
+                      ? 'Attaching…'
+                      : !slackThreadId && slackBinding
+                        ? 'Detach thread'
+                        : slackBinding
+                          ? 'Update attachment'
+                          : 'Attach thread'}
+                  </ToolbarButton>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Status row when connected */}
+            {slackBinding && slackConnection ? (
+              <GatewayRow
+                connection={slackConnection}
+                binding={slackBinding}
+                busy={busy}
+                icon="SL"
+                iconBg="bg-purple-600"
+                title="Slack MCP"
+                targetLabel="Slack channel"
+                onDetach={detachSlack}
+              />
+            ) : null}
           </div>
         </section>
 

@@ -1,3 +1,4 @@
+import { authenticateMcpServerDirect, clearMcpServerAuthDirect, hasStoredMcpServerTokens } from '@personal-agent/core';
 import type { Express, Request, Response } from 'express';
 
 import {
@@ -24,7 +25,7 @@ import {
   updateGatewayConnectionStatus,
   upsertGatewayChatTarget,
 } from '../gateways/gatewayState.js';
-import { SlackMcpGatewayRuntime } from '../gateways/slackMcpGateway.js';
+import { SLACK_MCP_SERVER_CONFIG, SlackMcpGatewayRuntime } from '../gateways/slackMcpGateway.js';
 import { readTelegramBotToken, removeTelegramBotToken, writeTelegramBotToken } from '../gateways/telegramAuth.js';
 import { TelegramGatewayRuntime } from '../gateways/telegramGateway.js';
 import { logError } from '../middleware/index.js';
@@ -336,6 +337,51 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
     }
   });
 
+  router.get('/api/gateways/slack-mcp/auth', (_req, res) => {
+    try {
+      res.json({ authenticated: hasStoredMcpServerTokens(SLACK_MCP_SERVER_CONFIG) });
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  router.post('/api/gateways/slack-mcp/auth', async (_req, res) => {
+    try {
+      const result = await authenticateMcpServerDirect(SLACK_MCP_SERVER_CONFIG, { timeoutMs: 120_000 });
+      if (result.error) {
+        res.status(500).json({ error: result.error });
+        return;
+      }
+      ensureGatewayConnection({ ...currentGatewayContext(), provider: 'slack_mcp' });
+      const state = updateGatewayConnectionStatus({
+        ...currentGatewayContext(),
+        provider: 'slack_mcp',
+        status: 'connected',
+        enabled: true,
+      });
+      res.json({ authenticated: true, state });
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  router.delete('/api/gateways/slack-mcp/auth', async (_req, res) => {
+    try {
+      await clearMcpServerAuthDirect(SLACK_MCP_SERVER_CONFIG);
+      ensureSlackMcpRuntime().stop();
+      const state = updateGatewayConnectionStatus({
+        ...currentGatewayContext(),
+        provider: 'slack_mcp',
+        status: 'needs_config',
+        enabled: false,
+        statusMessage: 'Slack disconnected',
+      });
+      res.json({ authenticated: false, state });
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
   router.get('/api/gateways/slack-mcp/channels', async (req: Request, res: Response) => {
     try {
       const query = readOptionalString(req.query.query);
@@ -349,6 +395,7 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
     }
   });
 
+  // Save the channel target (like Telegram's /chat endpoint — no thread attached yet)
   router.post('/api/gateways/slack-mcp/channel', async (req: Request, res: Response) => {
     try {
       const channelId = readOptionalString(req.body?.channelId);
@@ -357,7 +404,28 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         return;
       }
       ensureGatewayConnection({ ...currentGatewayContext(), provider: 'slack_mcp' });
-      await ensureSlackMcpRuntime().attachChannel({ channelId, channelLabel: readOptionalString(req.body?.channelLabel) });
+      ensureSlackMcpRuntime().saveChannel({ channelId, channelLabel: readOptionalString(req.body?.channelLabel) });
+      res.json(readGatewayState(currentGatewayContext()));
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  // Attach the saved channel to a specific conversation thread
+  router.post('/api/gateways/slack-mcp/attach', async (req: Request, res: Response) => {
+    try {
+      const conversationId = readOptionalString(req.body?.conversationId);
+      const externalChatId = readOptionalString(req.body?.externalChatId);
+      if (!conversationId || !externalChatId) {
+        res.status(400).json({ error: 'conversationId and externalChatId required' });
+        return;
+      }
+      await ensureSlackMcpRuntime().attachChannelToConversation({
+        conversationId,
+        conversationTitle: readOptionalString(req.body?.conversationTitle) ?? conversationId,
+        externalChatId,
+        externalChatLabel: readOptionalString(req.body?.externalChatLabel),
+      });
       invalidateAppTopics('sessions');
       res.json(readGatewayState(currentGatewayContext()));
     } catch (err) {

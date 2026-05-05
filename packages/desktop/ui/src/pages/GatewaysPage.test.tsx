@@ -96,7 +96,8 @@ describe('GatewaysPage', () => {
   let detachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
   let attachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
   let searchSlackMcpChannelsMock: ReturnType<typeof vi.spyOn>;
-  let attachSlackMcpChannelMock: ReturnType<typeof vi.spyOn>;
+  let saveSlackMcpChannelMock: ReturnType<typeof vi.spyOn>;
+  let slackMcpAuthStateMock: ReturnType<typeof vi.spyOn>;
   let telegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
   let saveTelegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
   let deleteTelegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
@@ -111,7 +112,9 @@ describe('GatewaysPage', () => {
     detachGatewayConversationMock = vi.spyOn(api, 'detachGatewayConversation');
     attachGatewayConversationMock = vi.spyOn(api, 'attachGatewayConversation');
     searchSlackMcpChannelsMock = vi.spyOn(api, 'searchSlackMcpChannels');
-    attachSlackMcpChannelMock = vi.spyOn(api, 'attachSlackMcpChannel');
+    saveSlackMcpChannelMock = vi.spyOn(api, 'saveSlackMcpChannel');
+    vi.spyOn(api, 'attachSlackMcpChannel');
+    slackMcpAuthStateMock = vi.spyOn(api, 'slackMcpAuthState').mockResolvedValue({ authenticated: false });
     vi.spyOn(api, 'sessions').mockResolvedValue([
       {
         id: 'thread-1',
@@ -383,6 +386,7 @@ describe('GatewaysPage', () => {
   });
 
   it('renders a connected Slack MCP gateway', async () => {
+    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
     gatewaysMock.mockResolvedValue(
       createGatewayState({
         connections: [
@@ -423,28 +427,23 @@ describe('GatewaysPage', () => {
     expect(container.textContent).not.toContain('Pause');
   });
 
-  it('shows Slack search when Slack MCP exists without a channel binding', async () => {
-    gatewaysMock.mockResolvedValue(
-      createGatewayState({
-        connections: [
-          {
-            id: 'sl-1',
-            provider: 'slack_mcp',
-            label: 'Slack Workspace',
-            status: 'active',
-            enabled: true,
-            createdAt: '2026-05-04T00:00:00Z',
-            updatedAt: '2026-05-04T12:00:00Z',
-          },
-        ],
-        bindings: [],
-      }),
-    );
+  it('shows Slack search when authenticated', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
     const { container } = renderPage();
     await flushAsyncWork();
 
     expect(container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]')).toBeTruthy();
-    expect(container.textContent).not.toContain('Slack channel—');
+  });
+
+  it('hides Slack search when not authenticated', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    slackMcpAuthStateMock.mockResolvedValue({ authenticated: false });
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]')).toBeNull();
+    expect(container.textContent).toContain('Connect Slack');
   });
 
   it('formats activity kinds for display', async () => {
@@ -679,8 +678,8 @@ describe('GatewaysPage', () => {
   });
 
   it('searches Slack channels', async () => {
-    const emptyState = createGatewayState();
-    gatewaysMock.mockResolvedValue(emptyState);
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
     searchSlackMcpChannelsMock.mockResolvedValue({
       channels: [
         { id: 'C001', name: 'general' },
@@ -706,6 +705,7 @@ describe('GatewaysPage', () => {
 
   it('shows an empty Slack search result', async () => {
     gatewaysMock.mockResolvedValue(createGatewayState());
+    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
     searchSlackMcpChannelsMock.mockResolvedValue({ channels: [] });
 
     const { container } = renderPage();
@@ -722,41 +722,27 @@ describe('GatewaysPage', () => {
     expect(container.textContent).toContain('No Slack channels found.');
   });
 
-  it('attaches a Slack channel from search results', async () => {
-    const emptyState = createGatewayState();
-    gatewaysMock.mockResolvedValue(emptyState);
+  it('saves a Slack channel from search results', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
     searchSlackMcpChannelsMock.mockResolvedValue({
       channels: [{ id: 'C001', name: 'general' }],
     });
-
-    const connectedState = createGatewayState({
-      connections: [
-        {
-          id: 'sl-1',
-          provider: 'slack_mcp',
-          label: 'Slack Workspace',
-          status: 'active',
-          enabled: true,
-          createdAt: '2026-05-04T00:00:00Z',
-          updatedAt: '2026-05-04T12:00:00Z',
-        },
-      ],
-      bindings: [
-        {
-          id: 'b-sl-1',
-          provider: 'slack_mcp',
-          connectionId: 'sl-1',
-          conversationId: 'conv-def',
-          conversationTitle: 'Slack Thread',
-          externalChatId: 'C001',
-          externalChatLabel: 'general',
-          repliesEnabled: true,
-          createdAt: '2026-05-04T00:00:00Z',
-          updatedAt: '2026-05-04T12:00:00Z',
-        },
-      ],
-    });
-    attachSlackMcpChannelMock.mockResolvedValue(connectedState);
+    saveSlackMcpChannelMock.mockResolvedValue(
+      createGatewayState({
+        connections: [
+          {
+            id: 'sl-1',
+            provider: 'slack_mcp',
+            label: 'Slack',
+            status: 'connected',
+            enabled: true,
+            createdAt: '2026-05-04T00:00:00Z',
+            updatedAt: '2026-05-04T12:00:00Z',
+          },
+        ],
+      }),
+    );
 
     const { container } = renderPage();
     await flushAsyncWork();
@@ -767,18 +753,15 @@ describe('GatewaysPage', () => {
     await flushAsyncWork();
 
     const channelBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'general' || btn.textContent?.includes('C001'),
+      (btn) => btn.textContent?.includes('general') || btn.textContent?.includes('C001'),
     );
     expect(channelBtn).toBeTruthy();
 
     click(channelBtn!);
     await flushAsyncWork();
 
-    expect(attachSlackMcpChannelMock).toHaveBeenCalledWith({
-      channelId: 'C001',
-      channelLabel: 'general',
-    });
-    expect(container.textContent).toContain('Slack MCP');
+    expect(saveSlackMcpChannelMock).toHaveBeenCalledWith({ channelId: 'C001', channelLabel: 'general' });
+    expect(container.textContent).toContain('Channel #general saved.');
   });
 
   it('renders recent activity events', async () => {

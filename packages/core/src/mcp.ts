@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
@@ -1142,6 +1142,59 @@ export async function authenticateMcpServer(
   });
 }
 
+/**
+ * Trigger OAuth auth for a server config directly (no config-file lookup).
+ * Connects to the server which initiates the browser OAuth flow if not already authenticated.
+ */
+export async function authenticateMcpServerDirect(
+  server: McpServerConfig,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+    log?: (message: string) => void;
+  } = {},
+): Promise<McpOperationResult<McpServerInfo>> {
+  const cwd = process.cwd();
+  const env = options.env ?? process.env;
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const stderrLogs: string[] = [];
+
+  try {
+    const connection = await openMcpClient(server, {
+      configPath: cwd,
+      cwd,
+      env,
+      timeoutMs,
+      log: (message) => {
+        stderrLogs.push(message);
+        options.log?.(message);
+      },
+    });
+
+    try {
+      const toolsResult = await withTimeout(connection.client.listTools(), timeoutMs, `Listing tools for ${server.name}`);
+      const tools = toolsResult.tools.map((tool) => ({ name: tool.name, description: tool.description }));
+      const info: McpServerInfo = {
+        server: server.name,
+        transport: connection.transportName,
+        toolCount: tools.length,
+        tools,
+        rawOutput: '',
+      };
+      return { stdout: '', stderr: '', exitCode: 0, data: info };
+    } finally {
+      await connection.close();
+    }
+  } catch (error) {
+    return {
+      stdout: '',
+      stderr: stderrLogs.join('\n'),
+      exitCode: 1,
+      error: formatMcpOperationError(error, server),
+    };
+  }
+}
+
 export async function clearMcpServerAuth(
   serverName: string,
   options: {
@@ -1163,6 +1216,37 @@ export async function clearMcpServerAuth(
     Object.entries(server.headers ?? {}).map(([key, value]) => [key, substituteEnvVars(value, env)]),
   );
   const serverUrlHash = getMcpServerUrlHash(server.url, server.authorizeResource, resolvedHeaders);
+  await Promise.all([
+    deleteConfigFile(serverUrlHash, 'tokens.json'),
+    deleteConfigFile(serverUrlHash, 'client_info.json'),
+    deleteConfigFile(serverUrlHash, 'code_verifier.txt'),
+    deleteConfigFile(serverUrlHash, 'discovery.json'),
+  ]);
+}
+
+/**
+ * Check whether tokens exist on disk for the given server config.
+ * Does not make any network calls.
+ */
+export function hasStoredMcpServerTokens(server: McpServerConfig): boolean {
+  if (server.transport !== 'remote' || !server.url) return false;
+  const hash = getMcpServerUrlHash(server.url, server.authorizeResource, {});
+  // Mirror getPersonalAgentMcpBaseDir / getMcpAuthConfigDir from mcp-auth-storage.ts
+  const baseDir = process.env.PERSONAL_AGENT_MCP_AUTH_DIR?.trim()
+    ? join(process.env.PERSONAL_AGENT_MCP_AUTH_DIR.trim(), 'v1')
+    : join(homedir(), '.local', 'state', 'personal-agent', 'auth', 'mcp', 'v1');
+  return existsSync(join(baseDir, `${hash}_tokens.json`));
+}
+
+/**
+ * Clear stored OAuth tokens for a server config directly (no config-file lookup).
+ */
+export async function clearMcpServerAuthDirect(server: McpServerConfig): Promise<void> {
+  if (server.transport !== 'remote' || !server.url) {
+    throw new Error(`MCP server ${server.name} does not use remote OAuth auth state`);
+  }
+
+  const serverUrlHash = getMcpServerUrlHash(server.url, server.authorizeResource, {});
   await Promise.all([
     deleteConfigFile(serverUrlHash, 'tokens.json'),
     deleteConfigFile(serverUrlHash, 'client_info.json'),

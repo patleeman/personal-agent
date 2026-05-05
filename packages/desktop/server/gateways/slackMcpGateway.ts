@@ -62,7 +62,7 @@ const SLOW_RETRY_MS = 60_000;
  * Source: https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/
  * Claude Code config: { type:"http", url, oauth: { clientId, callbackPort:3118 } }
  */
-const SLACK_MCP_SERVER_CONFIG: McpServerConfig = {
+export const SLACK_MCP_SERVER_CONFIG: McpServerConfig = {
   name: 'slack',
   transport: 'remote',
   args: [],
@@ -106,22 +106,38 @@ export class SlackMcpGatewayRuntime {
     return extractSlackChannels(result).slice(0, 10);
   }
 
-  async attachChannel(input: { channelId: string; channelLabel?: string }): Promise<{ conversationId: string; title: string }> {
+  /** Save the channel config (like Telegram's chat ID save) without binding a thread yet. */
+  saveChannel(input: { channelId: string; channelLabel?: string }): void {
     const externalChatId = input.channelId.trim();
     if (!externalChatId) throw new Error('Slack channel id required');
-    const title = `Slack: ${input.channelLabel || externalChatId}`;
-    const created = await this.dependencies.createConversation({ title });
-    await this.dependencies.renameConversation(created.id, title);
-
-    void this.dependencies.notifyNewConversation?.(created.id);
     upsertGatewayChatTarget({
       stateRoot: this.dependencies.stateRoot,
       profile: this.dependencies.profile,
       provider: 'slack_mcp',
       externalChatId,
       externalChatLabel: input.channelLabel,
-      conversationId: created.id,
-      conversationTitle: title,
+      conversationId: '',
+      conversationTitle: '',
+      lastExternalMessageId: String(Date.now() / 1000),
+      repliesEnabled: false,
+    });
+  }
+
+  /** Attach the saved channel to a specific conversation thread. */
+  async attachChannelToConversation(input: {
+    conversationId: string;
+    conversationTitle: string;
+    externalChatId: string;
+    externalChatLabel?: string;
+  }): Promise<void> {
+    upsertGatewayChatTarget({
+      stateRoot: this.dependencies.stateRoot,
+      profile: this.dependencies.profile,
+      provider: 'slack_mcp',
+      externalChatId: input.externalChatId,
+      externalChatLabel: input.externalChatLabel,
+      conversationId: input.conversationId,
+      conversationTitle: input.conversationTitle,
       lastExternalMessageId: String(Date.now() / 1000),
       repliesEnabled: true,
     });
@@ -129,10 +145,10 @@ export class SlackMcpGatewayRuntime {
       stateRoot: this.dependencies.stateRoot,
       profile: this.dependencies.profile,
       provider: 'slack_mcp',
-      conversationId: created.id,
-      conversationTitle: title,
-      externalChatId,
-      externalChatLabel: input.channelLabel,
+      conversationId: input.conversationId,
+      conversationTitle: input.conversationTitle,
+      externalChatId: input.externalChatId,
+      externalChatLabel: input.externalChatLabel,
     });
     updateGatewayConnectionStatus({
       stateRoot: this.dependencies.stateRoot,
@@ -145,12 +161,11 @@ export class SlackMcpGatewayRuntime {
       stateRoot: this.dependencies.stateRoot,
       profile: this.dependencies.profile,
       provider: 'slack_mcp',
-      conversationId: created.id,
+      conversationId: input.conversationId,
       kind: 'routing',
-      message: `Slack MCP attached to ${input.channelLabel || externalChatId}`,
+      message: `Slack MCP attached to ${input.externalChatLabel || input.externalChatId}`,
     });
     this.start();
-    return { conversationId: created.id, title };
   }
 
   async handleTurnEnd(conversationId: string, assistantText: string | null): Promise<boolean> {
