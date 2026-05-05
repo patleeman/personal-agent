@@ -20,6 +20,129 @@ vi.mock('../traces/tracePersistence.js', () => ({
 
 import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 
+// ── Streaming lifecycle callbacks ────────────────────────────────────────────
+
+describe('streaming lifecycle callbacks', () => {
+  function makeEntry(overrides: Record<string, unknown> = {}) {
+    return {
+      sessionId: 'sess-1',
+      session: {} as any,
+      title: 'Test',
+      ...overrides,
+    } as any;
+  }
+
+  function makeCallbacks() {
+    return {
+      requestConversationAutoModeContinuationTurn: vi.fn().mockResolvedValue(false),
+      requestConversationAutoModeTurn: vi.fn().mockResolvedValue(false),
+      syncDurableConversationRun: vi.fn().mockResolvedValue(undefined),
+      notifyLifecycleHandlers: vi.fn(),
+      applyPendingConversationWorkingDirectoryChange: vi.fn().mockResolvedValue(undefined),
+      scheduleContextUsage: vi.fn(),
+      publishSessionMetaChanged: vi.fn(),
+      broadcastQueueState: vi.fn(),
+      broadcastTitle: vi.fn(),
+      broadcastStats: vi.fn(),
+      clearContextUsageTimer: vi.fn(),
+      broadcastContextUsage: vi.fn(),
+      broadcastSnapshot: vi.fn(),
+      broadcast: vi.fn(),
+      tryImportReadyParallelJobs: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it('agent_start marks durable run as running and publishes meta change', () => {
+    const entry = makeEntry();
+    const cbs = makeCallbacks();
+    handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
+    expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'running');
+    expect(cbs.publishSessionMetaChanged).toHaveBeenCalledWith('sess-1');
+  });
+
+  it('agent_end marks durable run as waiting', () => {
+    const entry = makeEntry({
+      traceRunStartedAtMs: Date.now(),
+      traceRunTurnCount: 1,
+      traceRunStepCount: 0,
+    });
+    const cbs = makeCallbacks();
+    handleLiveSessionEvent(entry, { type: 'agent_end', messages: [] } as any, cbs);
+    expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'waiting');
+    expect(cbs.clearContextUsageTimer).toHaveBeenCalled();
+    expect(cbs.broadcastContextUsage).toHaveBeenCalled();
+  });
+
+  it('turn_end marks durable run as waiting and notifies lifecycle handlers', () => {
+    const entry = makeEntry();
+    const cbs = makeCallbacks();
+    handleLiveSessionEvent(entry, { type: 'turn_end', message: {}, toolResults: [] } as any, cbs);
+    expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'waiting');
+    expect(cbs.notifyLifecycleHandlers).toHaveBeenCalledWith(entry, 'turn_end');
+    expect(cbs.publishSessionMetaChanged).toHaveBeenCalledWith('sess-1');
+    expect(cbs.clearContextUsageTimer).toHaveBeenCalled();
+  });
+
+  it('agent_start then agent_end broadcasts to subscribers via broadcast', () => {
+    const entry = makeEntry({ traceRunStartedAtMs: Date.now(), traceRunTurnCount: 0, traceRunStepCount: 0 });
+    const cbs = makeCallbacks();
+    handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
+    handleLiveSessionEvent(entry, { type: 'agent_end', messages: [] } as any, cbs);
+    const broadcastedTypes = cbs.broadcast.mock.calls.map((c: any[]) => c[1]?.type);
+    expect(broadcastedTypes).toContain('agent_start');
+    expect(broadcastedTypes).toContain('agent_end');
+  });
+
+  it('records current turn error from assistant message_end with error stop reason', () => {
+    const entry = makeEntry({ currentTurnError: null });
+    const cbs = makeCallbacks();
+    handleLiveSessionEvent(
+      entry,
+      {
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          stopReason: 'error',
+          errorMessage: 'server overloaded',
+          content: [],
+        },
+      } as any,
+      cbs,
+    );
+    expect(entry.currentTurnError).toBe('server overloaded');
+  });
+
+  it('does not set currentTurnError for non-error assistant messages', () => {
+    const entry = makeEntry({ currentTurnError: null });
+    const cbs = makeCallbacks();
+    handleLiveSessionEvent(
+      entry,
+      {
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          stopReason: 'stop',
+          content: [{ type: 'text', text: 'Done.' }],
+        },
+      } as any,
+      cbs,
+    );
+    expect(entry.currentTurnError).toBeNull();
+  });
+
+  it('schedules context usage update on agent_start, message_update, and tool events', () => {
+    const entry = makeEntry();
+    const cbs = makeCallbacks();
+    const events: any[] = [
+      { type: 'agent_start' },
+      { type: 'message_update', message: {}, assistantMessageEvent: { type: 'text_delta', delta: 'hi' } },
+      { type: 'tool_execution_start', toolCallId: 'tc-1', toolName: 'bash', args: {} },
+    ];
+    for (const event of events) handleLiveSessionEvent(entry, event, cbs);
+    expect(cbs.scheduleContextUsage).toHaveBeenCalledTimes(events.length);
+  });
+});
+
 describe('trace persistence hooks', () => {
   const mockSession = {
     sessionId: 'test-session',

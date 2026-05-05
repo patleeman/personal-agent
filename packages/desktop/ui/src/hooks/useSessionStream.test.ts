@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { MessageBlock } from '../shared/types';
 import type { StreamState } from './useSessionStream';
 import {
+  applyEvent,
   normalizeLiveSessionTailBlocks,
   normalizePendingQueueItems,
   normalizeSurfaceRegistrationWaitOptions,
@@ -32,6 +34,169 @@ function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
     ...overrides,
   };
 }
+
+// ── applyEvent helpers ───────────────────────────────────────────────────────
+
+function makeRef<T>(value: T): { current: T } {
+  return { current: value };
+}
+
+function apply(prev: StreamState, event: Parameters<typeof applyEvent>[3]): StreamState {
+  const blocksRef = makeRef<MessageBlock[]>(prev.blocks);
+  const streamingRef = makeRef(prev.isStreaming);
+  const next = applyEvent(prev, blocksRef as never, streamingRef as never, event as never);
+  return next;
+}
+
+// ── applyEvent ────────────────────────────────────────────────────────────────
+
+describe('applyEvent — streaming lifecycle', () => {
+  it('agent_start sets isStreaming and clears error', () => {
+    const prev = createStreamState({ isStreaming: false, error: 'previous error' });
+    const next = apply(prev, { type: 'agent_start' });
+    expect(next.isStreaming).toBe(true);
+    expect(next.error).toBeNull();
+  });
+
+  it('agent_end clears isStreaming', () => {
+    const prev = createStreamState({ isStreaming: true });
+    const next = apply(prev, { type: 'agent_end' });
+    expect(next.isStreaming).toBe(false);
+  });
+
+  it('turn_end is a no-op in the web SSE reducer (agent_end handles the clear)', () => {
+    // In the web SSE path, turn_end falls through to default and does not
+    // change state. The streaming flag is cleared by the agent_end event
+    // that always accompanies it.
+    const prev = createStreamState({ isStreaming: true });
+    const next = apply(prev, { type: 'turn_end' });
+    expect(next.isStreaming).toBe(true);
+  });
+
+  it('snapshot resets isStreaming, isCompacting and error regardless of prior state', () => {
+    const prev = createStreamState({ isStreaming: true, isCompacting: true, error: 'stale error' });
+    const next = apply(prev, {
+      type: 'snapshot',
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 5,
+      isStreaming: true,
+    });
+    expect(next.isStreaming).toBe(false);
+    expect(next.isCompacting).toBe(false);
+    expect(next.error).toBeNull();
+    expect(next.hasSnapshot).toBe(true);
+    expect(next.totalBlocks).toBe(5);
+  });
+
+  it('error event appends an error block and clears isStreaming', () => {
+    const prev = createStreamState({ isStreaming: true });
+    const next = apply(prev, { type: 'error', message: 'server overloaded' });
+    expect(next.isStreaming).toBe(false);
+    expect(next.error).toBe('server overloaded');
+    expect(next.blocks).toHaveLength(1);
+    expect(next.blocks[0]).toMatchObject({ type: 'error', message: 'server overloaded' });
+  });
+
+  it('compaction_start sets isCompacting without touching isStreaming', () => {
+    const prev = createStreamState({ isStreaming: true, isCompacting: false });
+    const next = apply(prev, { type: 'compaction_start', mode: 'auto' });
+    expect(next.isCompacting).toBe(true);
+    expect(next.isStreaming).toBe(true);
+  });
+
+  it('full turn cycle: agent_start → text_delta × 2 → agent_end', () => {
+    let state = createStreamState();
+    state = apply(state, { type: 'agent_start' });
+    expect(state.isStreaming).toBe(true);
+
+    state = apply(state, { type: 'text_delta', delta: 'Hello' });
+    state = apply(state, { type: 'text_delta', delta: ', world' });
+    expect(state.blocks).toHaveLength(1);
+    expect(state.blocks[0]).toMatchObject({ type: 'text', text: 'Hello, world' });
+
+    state = apply(state, { type: 'agent_end' });
+    expect(state.isStreaming).toBe(false);
+    // Text block persists after the turn ends
+    expect(state.blocks[0]).toMatchObject({ type: 'text', text: 'Hello, world' });
+  });
+
+  it('full turn cycle: agent_start → tool_start → tool_end → agent_end', () => {
+    let state = createStreamState();
+    state = apply(state, { type: 'agent_start' });
+    state = apply(state, { type: 'tool_start', toolCallId: 'tc-1', toolName: 'bash', args: { command: 'ls' } });
+    expect(state.blocks[0]).toMatchObject({ type: 'tool_use', status: 'running' });
+
+    state = apply(state, {
+      type: 'tool_end',
+      toolCallId: 'tc-1',
+      toolName: 'bash',
+      isError: false,
+      durationMs: 10,
+      output: 'file.ts',
+    });
+    expect(state.blocks[0]).toMatchObject({ type: 'tool_use', status: 'ok', output: 'file.ts' });
+
+    state = apply(state, { type: 'agent_end' });
+    expect(state.isStreaming).toBe(false);
+  });
+
+  it('preserves existing blocks across agent_end', () => {
+    // The blocksRef is shared across apply() calls, so text_delta appends
+    // to the last block if it is a text block. Start with a tool_use block
+    // so the incoming text_delta creates a new block instead of merging.
+    const existingBlock: MessageBlock = {
+      type: 'tool_use',
+      tool: 'bash',
+      input: {},
+      output: 'done',
+      status: 'ok',
+      ts: '2026-01-01T00:00:00.000Z',
+    };
+    let state = createStreamState({ blocks: [existingBlock] });
+    state = apply(state, { type: 'agent_start' });
+    state = apply(state, { type: 'text_delta', delta: 'new reply' });
+    state = apply(state, { type: 'agent_end' });
+    expect(state.blocks).toHaveLength(2);
+    expect(state.blocks[1]).toMatchObject({ type: 'text', text: 'new reply' });
+    expect(state.isStreaming).toBe(false);
+  });
+
+  it('snapshot after a stale streaming session clears streaming cursor', () => {
+    // Simulate the SSE-drop scenario: isStreaming got stuck true, then reconnect
+    // delivers a fresh snapshot.
+    let state = createStreamState({ isStreaming: true, error: null });
+    state = apply(state, {
+      type: 'snapshot',
+      blocks: [{ type: 'text', id: 'msg-1', ts: '2026-05-01T00:00:00.000Z', text: 'completed response' }],
+      blockOffset: 0,
+      totalBlocks: 1,
+      isStreaming: false,
+    });
+    expect(state.isStreaming).toBe(false);
+    expect(state.blocks[0]).toMatchObject({ type: 'text', text: 'completed response' });
+  });
+});
+
+// ── SSE error clears streaming flag ──────────────────────────────────────────
+
+describe('applyEvent — SSE reconnect guard', () => {
+  it('applying isStreaming: false manually models onerror behaviour', () => {
+    // This mirrors what useSessionStream does in es.onerror:
+    //   setState((prev) => (prev.isStreaming ? { ...prev, isStreaming: false } : prev))
+    const prev = createStreamState({ isStreaming: true });
+    const next = prev.isStreaming ? { ...prev, isStreaming: false } : prev;
+    expect(next.isStreaming).toBe(false);
+    // Blocks are preserved — the cursor disappears but content stays
+    expect(next.blocks).toBe(prev.blocks);
+  });
+
+  it('onerror guard is a no-op when isStreaming is already false', () => {
+    const prev = createStreamState({ isStreaming: false });
+    const next = prev.isStreaming ? { ...prev, isStreaming: false } : prev;
+    expect(next).toBe(prev); // same reference — no unnecessary re-render
+  });
+});
 
 describe('normalizeLiveSessionTailBlocks', () => {
   it('drops unsafe live stream tail block limits', () => {

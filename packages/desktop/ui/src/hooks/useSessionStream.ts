@@ -811,7 +811,7 @@ function readLiveTerminalBashDetails(toolName: string, args: Record<string, unkn
   };
 }
 
-function applyEvent(
+export function applyEvent(
   prev: StreamState,
   blocksRef: React.MutableRefObject<MessageBlock[]>,
   streamingRef: React.MutableRefObject<boolean>,

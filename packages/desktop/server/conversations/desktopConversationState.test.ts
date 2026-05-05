@@ -231,6 +231,69 @@ describe('desktopConversationState reducer', () => {
   });
 });
 
+describe('desktopConversationState reducer — streaming lifecycle', () => {
+  it('agent_start sets isStreaming and clears error', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, { type: 'agent_start' } as never);
+    expect(state.isStreaming).toBe(true);
+    expect(state.error).toBeNull();
+  });
+
+  it('agent_end clears isStreaming', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, { type: 'agent_start' } as never);
+    state = applyDesktopConversationStreamEvent(state, { type: 'agent_end' } as never);
+    expect(state.isStreaming).toBe(false);
+  });
+
+  it('turn_end clears isStreaming', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, { type: 'agent_start' } as never);
+    state = applyDesktopConversationStreamEvent(state, { type: 'turn_end' } as never);
+    expect(state.isStreaming).toBe(false);
+  });
+
+  it('snapshot resets isStreaming and isCompacting regardless of prior state', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, { type: 'agent_start' } as never);
+    state = applyDesktopConversationStreamEvent(state, { type: 'compaction_start', mode: 'auto' } as never);
+    expect(state.isStreaming).toBe(true);
+    expect(state.isCompacting).toBe(true);
+
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'snapshot',
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 3,
+      isStreaming: false,
+    } as never);
+    expect(state.isStreaming).toBe(false);
+    expect(state.isCompacting).toBe(false);
+    expect(state.hasSnapshot).toBe(true);
+    expect(state.totalBlocks).toBe(3);
+  });
+
+  it('error event appends error block and clears isStreaming', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, { type: 'agent_start' } as never);
+    state = applyDesktopConversationStreamEvent(state, { type: 'error', message: 'server overloaded' } as never);
+    expect(state.isStreaming).toBe(false);
+    expect(state.error).toBe('server overloaded');
+    expect(state.blocks).toHaveLength(1);
+    expect(state.blocks[0]).toMatchObject({ type: 'error', message: 'server overloaded' });
+  });
+});
+
 describe('readDesktopConversationState', () => {
   it('builds the unified local state from the live registry for active conversations', async () => {
     readConversationSessionMetaCapabilityMock.mockReturnValue({
