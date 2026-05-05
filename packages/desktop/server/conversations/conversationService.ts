@@ -343,6 +343,11 @@ function buildSyntheticLiveSessionSnapshot(
 }
 
 function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[number] | null | undefined): boolean {
+  // lastDurableRunState is sourced synchronously from the entry; prefer it over
+  // liveEntry.isStreaming which includes the delayed session.isStreaming flag.
+  if (liveEntry?.lastDurableRunState === 'waiting') {
+    return false;
+  }
   return Boolean(
     liveEntry?.isStreaming ||
     liveEntry?.hasPendingHiddenTurn ||

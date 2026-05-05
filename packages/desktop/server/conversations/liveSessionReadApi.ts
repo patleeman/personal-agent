@@ -23,9 +23,16 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
     sessionFile: resolveLiveSessionFile(entry.session) ?? '',
     title: resolveTitle(entry),
     isStreaming:
-      (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
-      entry.lastDurableRunState === 'running' ||
-      entry.lastDurableRunState === 'recovering',
+      // lastDurableRunState is the authoritative state — it transitions to 'waiting'
+      // synchronously in syncLiveSessionDurableRun before session.isStreaming is
+      // cleared by the agent runtime. Without this guard the conversation appears
+      // permanently 'running' because agent_end listeners (handleLiveSessionEvent)
+      // fire before the agent's finishRun() sets isStreaming = false.
+      entry.lastDurableRunState === 'waiting'
+        ? false
+        : (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
+          entry.lastDurableRunState === 'running' ||
+          entry.lastDurableRunState === 'recovering',
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
   }));
