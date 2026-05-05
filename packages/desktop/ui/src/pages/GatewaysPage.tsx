@@ -19,6 +19,7 @@ export function GatewaysPage() {
   const [telegramTokenLoading, setTelegramTokenLoading] = useState(true);
   const [telegramTokenError, setTelegramTokenError] = useState<string | null>(null);
   const [telegramTokenDraft, setTelegramTokenDraft] = useState('');
+  const [telegramTokenEditing, setTelegramTokenEditing] = useState(false);
   const [telegramTokenNotice, setTelegramTokenNotice] = useState<string | null>(null);
   const [telegramTokenSaveError, setTelegramTokenSaveError] = useState<string | null>(null);
 
@@ -84,6 +85,7 @@ export function GatewaysPage() {
       setState(result.state);
       setTelegramTokenState({ configured: result.configured });
       setTelegramTokenDraft('');
+      setTelegramTokenEditing(false);
       setTelegramTokenNotice('Telegram bot saved. The gateway will attach chats when messages arrive.');
     } catch (err) {
       setTelegramTokenSaveError(formatGatewayError(err));
@@ -103,6 +105,8 @@ export function GatewaysPage() {
       const result = await api.deleteTelegramGatewayToken();
       setState(result.state);
       setTelegramTokenState({ configured: result.configured });
+      setTelegramTokenDraft('');
+      setTelegramTokenEditing(false);
       setTelegramTokenNotice('Telegram bot removed.');
     } catch (err) {
       setTelegramTokenSaveError(formatGatewayError(err));
@@ -178,6 +182,8 @@ export function GatewaysPage() {
 
   const hasVisibleSlackConnection = slackConnection && slackBinding;
   const hasAnyConnection = telegramConnection || hasVisibleSlackConnection;
+  const telegramConfigured = telegramTokenState?.configured === true;
+  const showTelegramTokenEditor = !telegramConfigured || telegramTokenEditing;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -201,35 +207,64 @@ export function GatewaysPage() {
                 {telegramTokenState?.configured ? 'Bot token stored' : 'No bot token stored'}
               </span>
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="min-w-0 flex-1 text-[12px] text-secondary">
-                Bot token
-                <input
-                  type="password"
-                  value={telegramTokenDraft}
-                  onChange={(event) => setTelegramTokenDraft(event.target.value)}
-                  placeholder="123456:ABC-DEF…"
-                  className={`${INPUT_CLASS} mt-1`}
-                  disabled={busy !== null}
-                />
-              </label>
-              <div className="flex shrink-0 gap-2">
+            {showTelegramTokenEditor ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <label className="min-w-0 flex-1 text-[12px] text-secondary">
+                  Bot token
+                  <input
+                    type="password"
+                    value={telegramTokenDraft}
+                    onChange={(event) => setTelegramTokenDraft(event.target.value)}
+                    placeholder="123456:ABC-DEF…"
+                    className={`${INPUT_CLASS} mt-1`}
+                    disabled={busy !== null}
+                  />
+                </label>
+                <div className="flex shrink-0 gap-2">
+                  <ToolbarButton
+                    className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                    disabled={busy !== null || telegramTokenDraft.trim().length === 0}
+                    onClick={saveTelegramToken}
+                  >
+                    {busy === 'telegram-token-save' ? 'Saving…' : telegramConfigured ? 'Save token' : 'Add bot'}
+                  </ToolbarButton>
+                  {telegramConfigured ? (
+                    <ToolbarButton
+                      className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setTelegramTokenDraft('');
+                        setTelegramTokenEditing(false);
+                        setTelegramTokenSaveError(null);
+                      }}
+                    >
+                      Cancel
+                    </ToolbarButton>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
                 <ToolbarButton
                   className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-                  disabled={busy !== null || telegramTokenDraft.trim().length === 0}
-                  onClick={saveTelegramToken}
+                  disabled={busy !== null}
+                  onClick={() => {
+                    setTelegramTokenEditing(true);
+                    setTelegramTokenNotice(null);
+                    setTelegramTokenSaveError(null);
+                  }}
                 >
-                  {busy === 'telegram-token-save' ? 'Saving…' : telegramTokenState?.configured ? 'Update bot' : 'Add bot'}
+                  Replace token
                 </ToolbarButton>
                 <ToolbarButton
                   className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-                  disabled={busy !== null || !telegramTokenState?.configured}
+                  disabled={busy !== null}
                   onClick={removeTelegramToken}
                 >
-                  {busy === 'telegram-token-remove' ? 'Removing…' : 'Remove'}
+                  {busy === 'telegram-token-remove' ? 'Removing…' : 'Remove bot'}
                 </ToolbarButton>
               </div>
-            </div>
+            )}
             {telegramTokenNotice ? <p className="text-[12px] text-success">{telegramTokenNotice}</p> : null}
             {telegramTokenSaveError ? <p className="text-[12px] text-danger">{telegramTokenSaveError}</p> : null}
           </div>

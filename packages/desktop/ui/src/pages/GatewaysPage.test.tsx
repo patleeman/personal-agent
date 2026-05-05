@@ -149,13 +149,39 @@ describe('GatewaysPage', () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    const removeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Remove');
+    const removeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Remove bot');
     expect(removeButton).toBeTruthy();
     click(removeButton!);
     await flushAsyncWork();
 
     expect(deleteTelegramGatewayTokenMock).toHaveBeenCalled();
     expect(container.textContent).toContain('No bot token stored');
+  });
+
+  it('lets users replace an existing Telegram bot token', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    telegramGatewayTokenMock.mockResolvedValue({ configured: true });
+    saveTelegramGatewayTokenMock.mockResolvedValue({ configured: true, state: createGatewayState() });
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="123456:ABC-DEF…"]')).toBeFalsy();
+    const replaceButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Replace token');
+    expect(replaceButton).toBeTruthy();
+    click(replaceButton!);
+    await flushAsyncWork();
+
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="123456:ABC-DEF…"]');
+    expect(input).toBeTruthy();
+    typeInput(input!, 'new-token');
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Save token');
+    expect(saveButton).toBeTruthy();
+    click(saveButton!);
+    await flushAsyncWork();
+
+    expect(saveTelegramGatewayTokenMock).toHaveBeenCalledWith('new-token');
+    expect(container.textContent).toContain('Replace token');
   });
 
   it('displays error from API', async () => {
