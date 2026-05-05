@@ -164,11 +164,20 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: EmptyParams,
       async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const snapshot = await (await requireActiveWorkbenchBrowser(conversationId)).snapshot(conversationId);
-        return {
-          content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
-          details: snapshot as Record<string, unknown>,
-        };
+        try {
+          const snapshot = await (await requireActiveWorkbenchBrowser(conversationId)).snapshot(conversationId);
+          return {
+            content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
+            details: snapshot as Record<string, unknown>,
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [{ type: 'text' as const, text: `Browser snapshot failed: ${message}` }],
+            isError: true,
+            details: { action: 'snapshot', error: message },
+          };
+        }
       },
     });
 
@@ -190,17 +199,31 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: CdpParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const result = await (
-          await requireActiveWorkbenchBrowser(conversationId)
-        ).cdp({
-          conversationId,
-          command: params.command,
-          ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
-        });
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
-          details: result as Record<string, unknown>,
-        };
+        try {
+          const result = await (
+            await requireActiveWorkbenchBrowser(conversationId)
+          ).cdp({
+            conversationId,
+            command: params.command,
+            ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
+          });
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
+            details: result as Record<string, unknown>,
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Browser CDP command failed: ${message}. Try browser_snapshot first to check the browser state.`,
+              },
+            ],
+            isError: true,
+            details: { action: 'cdp', error: message },
+          };
+        }
       },
     });
 
@@ -220,26 +243,40 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: EmptyParams,
       async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const screenshot = (await (await requireActiveWorkbenchBrowser(conversationId)).screenshot(conversationId)) as {
-          dataBase64?: string;
-          mimeType?: string;
-          url?: string;
-          title?: string;
-          viewport?: unknown;
-          capturedAt?: string;
-        };
-        return {
-          content: [
-            { type: 'text' as const, text: 'Captured Workbench Browser screenshot.' },
-            { type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' },
-          ],
-          details: {
-            url: screenshot.url,
-            title: screenshot.title,
-            viewport: screenshot.viewport,
-            capturedAt: screenshot.capturedAt,
-          },
-        };
+        try {
+          const screenshot = (await (await requireActiveWorkbenchBrowser(conversationId)).screenshot(conversationId)) as {
+            dataBase64?: string;
+            mimeType?: string;
+            url?: string;
+            title?: string;
+            viewport?: unknown;
+            capturedAt?: string;
+          };
+          return {
+            content: [
+              { type: 'text' as const, text: 'Captured Workbench Browser screenshot.' },
+              { type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' },
+            ],
+            details: {
+              url: screenshot.url,
+              title: screenshot.title,
+              viewport: screenshot.viewport,
+              capturedAt: screenshot.capturedAt,
+            },
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Browser screenshot failed: ${message}. Try browser_snapshot first to check the browser state.`,
+              },
+            ],
+            isError: true,
+            details: { action: 'screenshot', error: message },
+          };
+        }
       },
     });
   };
