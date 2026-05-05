@@ -7,6 +7,7 @@ export type ConversationContextMenuAction =
   | 'open-in-new-window'
   | 'duplicate'
   | 'summarize-and-new'
+  | 'attach-to-gateway'
   | 'copy-working-directory'
   | 'copy-id'
   | 'copy-deeplink';
@@ -19,6 +20,7 @@ export interface ConversationContextMenuInput {
   canOpenInNewWindow?: boolean;
   canDuplicate?: boolean;
   canSummarizeAndNew?: boolean;
+  canAttachToGateway?: boolean;
   canCopyWorkingDirectory?: boolean;
   canCopyId?: boolean;
   canCopyDeeplink?: boolean;
@@ -60,6 +62,7 @@ export function buildConversationContextMenuTemplate(
   const conversationSection: MenuItemConstructorOptions[] = [];
   const windowSection: MenuItemConstructorOptions[] = [];
   const creationSection: MenuItemConstructorOptions[] = [];
+  const gatewaySection: MenuItemConstructorOptions[] = [];
   const copySection: MenuItemConstructorOptions[] = [];
 
   if (input.pinAction === 'pin') {
@@ -108,6 +111,14 @@ export function buildConversationContextMenuTemplate(
     });
   }
 
+  if (input.canAttachToGateway) {
+    gatewaySection.push({
+      label: 'Attach to Gateway',
+      enabled: !menuDisabled,
+      click: () => onSelect('attach-to-gateway'),
+    });
+  }
+
   if (input.canCopyWorkingDirectory) {
     copySection.push({
       label: 'Copy Working Directory',
@@ -132,7 +143,7 @@ export function buildConversationContextMenuTemplate(
     });
   }
 
-  return joinMenuSections([conversationSection, windowSection, creationSection, copySection]);
+  return joinMenuSections([conversationSection, windowSection, creationSection, gatewaySection, copySection]);
 }
 
 export async function showConversationContextMenu(

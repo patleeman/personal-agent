@@ -66,6 +66,7 @@ export type DesktopConversationContextMenuAction =
   | 'open-in-new-window'
   | 'duplicate'
   | 'summarize-and-new'
+  | 'attach-to-gateway'
   | 'copy-working-directory'
   | 'copy-id'
   | 'copy-deeplink';
@@ -84,6 +85,7 @@ interface DesktopConversationContextMenuRequest {
   canOpenInNewWindow?: boolean;
   canDuplicate?: boolean;
   canSummarizeAndNew?: boolean;
+  canAttachToGateway?: boolean;
   canCopyWorkingDirectory?: boolean;
   canCopyId?: boolean;
   canCopyDeeplink?: boolean;

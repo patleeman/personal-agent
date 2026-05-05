@@ -52,7 +52,7 @@ import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { type ConversationShelf, type OpenConversationDropPosition, replaceConversationLayout } from '../session/sessionTabs';
-import type { SessionMeta } from '../shared/types';
+import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
 import { emitKBEvent } from './knowledge/knowledgeEvents';
@@ -84,6 +84,19 @@ function MoreActionsIcon({ size = 12 }: { size?: number }) {
       <circle cx="6" cy="6" r="1.15" />
       <circle cx="10" cy="6" r="1.15" />
     </svg>
+  );
+}
+
+function GatewayRailIcon({ provider }: { provider: 'telegram' | 'slack_mcp' }) {
+  const label = provider === 'telegram' ? 'Telegram gateway attached' : 'Slack gateway attached';
+  return (
+    <span
+      className="grid h-3.5 min-w-3.5 shrink-0 place-items-center rounded-sm bg-accent/15 px-0.5 text-[8px] font-semibold text-accent"
+      title={label}
+      aria-label={label}
+    >
+      {provider === 'telegram' ? 'TG' : 'SL'}
+    </span>
   );
 }
 
@@ -1347,10 +1360,12 @@ function OpenConversationRow({
   onOpenInNewWindow,
   onDuplicate,
   onSummarizeAndNew,
+  onAttachToGateway,
   onCopyWorkingDirectory,
   onCopyId,
   onCopyDeeplink,
   onPrefetch,
+  gatewayProviders = [],
   isAutomation = false,
   automationTitle,
   onDragStart,
@@ -1371,10 +1386,12 @@ function OpenConversationRow({
   onOpenInNewWindow?: () => boolean | Promise<boolean>;
   onDuplicate?: () => boolean | Promise<boolean>;
   onSummarizeAndNew?: () => boolean | Promise<boolean>;
+  onAttachToGateway?: () => boolean | Promise<boolean>;
   onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
   onCopyId?: () => boolean | Promise<boolean>;
   onCopyDeeplink?: () => boolean | Promise<boolean>;
   onPrefetch?: () => void;
+  gatewayProviders?: Array<'telegram' | 'slack_mcp'>;
   isAutomation?: boolean;
   automationTitle?: string;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
@@ -1397,6 +1414,7 @@ function OpenConversationRow({
     onOpenInNewWindow ||
     onDuplicate ||
     onSummarizeAndNew ||
+    onAttachToGateway ||
     onCopyWorkingDirectory ||
     onCopyId ||
     onCopyDeeplink,
@@ -1407,6 +1425,7 @@ function OpenConversationRow({
     Number(Boolean(onOpenInNewWindow)) +
     Number(Boolean(onDuplicate)) +
     Number(Boolean(onSummarizeAndNew)) +
+    Number(Boolean(onAttachToGateway)) +
     Number(Boolean(onCopyWorkingDirectory)) +
     Number(Boolean(onCopyId)) +
     Number(Boolean(onCopyDeeplink));
@@ -1573,6 +1592,9 @@ function OpenConversationRow({
           await runMenuAction('summarize', onSummarizeAndNew);
         }
         return;
+      case 'attach-to-gateway':
+        await onAttachToGateway?.();
+        return;
       case 'copy-working-directory':
         await onCopyWorkingDirectory?.();
         return;
@@ -1611,6 +1633,7 @@ function OpenConversationRow({
           canOpenInNewWindow: Boolean(onOpenInNewWindow),
           canDuplicate: Boolean(onDuplicate),
           canSummarizeAndNew: Boolean(onSummarizeAndNew),
+          canAttachToGateway: Boolean(onAttachToGateway),
           canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
           canCopyId: Boolean(onCopyId),
           canCopyDeeplink: Boolean(onCopyDeeplink),
@@ -1697,6 +1720,9 @@ function OpenConversationRow({
                 <Ico d={PATH.pin} size={11} />
               </span>
             ) : null}
+            {gatewayProviders.map((provider) => (
+              <GatewayRailIcon key={provider} provider={provider} />
+            ))}
             <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>
           </div>
         </div>
@@ -1841,6 +1867,24 @@ function OpenConversationRow({
                 {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
               </button>
             ) : null}
+            {onAttachToGateway ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={async () => {
+                  const succeeded = await onAttachToGateway();
+                  if (succeeded !== false) {
+                    setMenuOpen(false);
+                  }
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                Attach to Gateway
+              </button>
+            ) : null}
             {onCopyWorkingDirectory ? (
               <button
                 type="button"
@@ -1946,7 +1990,23 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   const conversationSurfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const sidebarNoticeTimeoutRef = useRef<number | null>(null);
   const [sidebarNotice, setSidebarNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
+  const [gatewayState, setGatewayState] = useState<GatewayState | null>(null);
   const [addWorkspaceBusy, setAddWorkspaceBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .gateways()
+      .then((next) => {
+        if (!cancelled) setGatewayState(next);
+      })
+      .catch(() => {
+        if (!cancelled) setGatewayState(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [versions.sessions]);
 
   useEffect(() => {
     try {
@@ -2900,6 +2960,15 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     [copyTextToClipboard, showSidebarNotice],
   );
 
+  const handleAttachConversationToGateway = useCallback(
+    async (conversationId: string) => {
+      openSession(conversationId);
+      navigate(`/conversations/${encodeURIComponent(conversationId)}?gateway=1`);
+      return true;
+    },
+    [navigate, openSession],
+  );
+
   const handleOpenConversationInNewWindow = useCallback(
     async (conversationId: string) => {
       const desktopBridge = getDesktopBridge();
@@ -3411,6 +3480,11 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
         : null;
 
     const isAutomationRunning = runningAutomationConversationIdSet.has(session.id);
+    const gatewayProviders =
+      gatewayState?.bindings
+        .filter((binding) => binding.conversationId === session.id)
+        .map((binding) => binding.provider)
+        .filter((provider, index, providers) => providers.indexOf(provider) === index) ?? [];
 
     return (
       <OpenConversationRow
@@ -3437,10 +3511,12 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
         onOpenInNewWindow={!isDraftTab ? () => handleOpenConversationInNewWindow(session.id) : undefined}
         onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
         onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
+        onAttachToGateway={!isDraftTab ? () => handleAttachConversationToGateway(session.id) : undefined}
         onCopyWorkingDirectory={!isDraftTab && session.cwd?.trim() ? () => handleCopyConversationWorkingDirectory(session.cwd) : undefined}
         onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}
         onCopyDeeplink={!isDraftTab ? () => handleCopyConversationDeeplink(session.id) : undefined}
         onPrefetch={!isDraftTab ? () => prefetchConversation(session.id) : undefined}
+        gatewayProviders={gatewayProviders}
         onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
         onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
         onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
@@ -3485,6 +3561,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
             forceActive={location.pathname.startsWith('/automations')}
           />
           <TopNavItem to="/gateways" icon={PATH.gateways} label="Gateways" forceActive={location.pathname.startsWith('/gateways')} />
+          <TopNavItem to="/traces" icon={PATH.list} label="Traces" forceActive={location.pathname.startsWith('/traces')} />
           {!hideKnowledgeNav ? (
             <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
           ) : null}

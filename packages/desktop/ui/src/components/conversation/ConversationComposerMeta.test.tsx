@@ -48,10 +48,10 @@ describe('ConversationComposerMeta', () => {
   it('renders draft local workspace controls', () => {
     const html = renderToString(<ConversationComposerMeta {...baseProps} />);
 
-    expect(html).toContain('Execution target');
     expect(html).toContain('Workspace folder');
     expect(html).toContain('/repo');
     expect(html).toContain('Choose folder');
+    expect(html).toContain('Conversation options');
   });
 
   it('renders draft remote workspace controls', () => {

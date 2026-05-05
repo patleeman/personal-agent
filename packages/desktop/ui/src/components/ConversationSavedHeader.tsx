@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent } from 'react';
 
 interface ConversationSavedHeaderProps {
   title: string;
@@ -8,7 +8,6 @@ interface ConversationSavedHeaderProps {
   cwdDraft: string;
   cwdError?: string | null;
   cwdSaveBusy?: boolean;
-  actions?: ReactNode;
   onCwdDraftChange: (value: string) => void;
   onCancelEditingCwd: () => void;
   onSaveCwd: () => void;
@@ -22,7 +21,6 @@ export function ConversationSavedHeader({
   cwdDraft,
   cwdError,
   cwdSaveBusy = false,
-  actions,
   onCwdDraftChange,
   onCancelEditingCwd,
   onSaveCwd,
@@ -80,7 +78,6 @@ export function ConversationSavedHeader({
           </button>
         </form>
       )}
-      {actions ? <div>{actions}</div> : null}
       {cwdError && <p className="text-[11px] text-danger/80">{cwdError}</p>}
     </div>
   );

@@ -49,6 +49,7 @@ export function ConversationComposerMeta({
   sessionTokens,
   conversationId,
   conversationTitle,
+  openGatewayPickerSignal,
 }: {
   showExecutionTargetPicker: boolean;
   selectedExecutionTargetId: string;
@@ -87,46 +88,19 @@ export function ConversationComposerMeta({
   sessionTokens: ConversationContextUsageTokens | null;
   conversationId?: string | null;
   conversationTitle?: string;
+  openGatewayPickerSignal?: string | null;
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    if (openGatewayPickerSignal) {
+      setMoreOpen(true);
+    }
+  }, [openGatewayPickerSignal]);
+
   return (
     <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
-        {showExecutionTargetPicker ? (
-          <label className="relative inline-flex min-w-0 items-center">
-            <span className="sr-only">Execution target</span>
-            <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
-            <select
-              value={selectedExecutionTargetId}
-              onChange={(event) => {
-                onSelectExecutionTarget(event.target.value);
-              }}
-              disabled={continueInBusy}
-              aria-label="Execution target"
-              className="h-7 min-w-[8.25rem] max-w-[12rem] appearance-none rounded-md bg-transparent pl-6 pr-7 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary disabled:opacity-50"
-            >
-              {executionTargetOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <svg
-              aria-hidden="true"
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="pointer-events-none absolute right-2 text-dim/70"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </label>
-        ) : null}
-
         {remoteOperationInlineStatus ? (
           <span className={cx(remoteOperationStatusKind === 'error' ? 'text-danger/85' : 'text-accent/80')}>
             {remoteOperationInlineStatus}
@@ -208,10 +182,6 @@ export function ConversationComposerMeta({
                 />
               </>
             )}
-
-            {!draft && conversationId ? (
-              <GatewayComposerControl conversationId={conversationId} conversationTitle={conversationTitle} />
-            ) : null}
           </div>
         ) : conversationCwdEditorOpen ? (
           <form
@@ -297,17 +267,64 @@ export function ConversationComposerMeta({
           ) : null
         ) : null}
         {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
+        <div className="relative">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-secondary transition-colors hover:bg-surface/45 hover:text-primary"
+            aria-label="Conversation options"
+            title="Conversation options"
+            onClick={() => setMoreOpen((current) => !current)}
+          >
+            <MoreIcon />
+          </button>
+          {moreOpen ? (
+            <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-subtle bg-popover p-2 text-left text-[12px] shadow-xl">
+              {showExecutionTargetPicker ? (
+                <label className="block px-2 py-1.5 text-[11px] text-secondary">
+                  Run on
+                  <span className="relative mt-1 flex min-w-0 items-center">
+                    <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
+                    <select
+                      value={selectedExecutionTargetId}
+                      onChange={(event) => {
+                        onSelectExecutionTarget(event.target.value);
+                      }}
+                      disabled={continueInBusy}
+                      aria-label="Execution target"
+                      className="h-8 w-full appearance-none rounded-md border border-border-subtle bg-surface/45 pl-7 pr-7 text-[12px] text-primary outline-none focus:border-accent/50 disabled:opacity-50"
+                    >
+                      {executionTargetOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+              ) : null}
+              {!draft && conversationId ? (
+                <GatewayComposerControl conversationId={conversationId} conversationTitle={conversationTitle} />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
 }
 
+type GatewayProviderChoice = 'telegram' | 'slack_mcp';
+
 function GatewayComposerControl({ conversationId, conversationTitle }: { conversationId: string; conversationTitle?: string }) {
   const [state, setState] = useState<GatewayState | null>(null);
-  const [open, setOpen] = useState(false);
+  const [provider, setProvider] = useState<GatewayProviderChoice>('telegram');
   const [busy, setBusy] = useState(false);
-  const binding = state?.bindings.find((item) => item.provider === 'telegram' && item.conversationId === conversationId) ?? null;
-  const connection = state?.connections.find((item) => item.provider === 'telegram') ?? null;
+  const connection = state?.connections.find((item) => item.provider === provider) ?? null;
+  const binding = state?.bindings.find((item) => item.provider === provider && item.conversationId === conversationId) ?? null;
+  const existingBinding = state?.bindings.find((item) => item.provider === provider) ?? null;
+  const chatTarget = state?.chatTargets.find((item) => item.provider === provider && item.connectionId === connection?.id) ?? null;
+  const externalChatId = chatTarget?.externalChatId || existingBinding?.externalChatId || '';
+  const externalChatLabel = chatTarget?.externalChatLabel || existingBinding?.externalChatLabel || externalChatId;
 
   useEffect(() => {
     let cancelled = false;
@@ -325,13 +342,16 @@ function GatewayComposerControl({ conversationId, conversationTitle }: { convers
   }, [conversationId]);
 
   async function attach() {
+    if (!externalChatId) return;
     setBusy(true);
     try {
       setState(
         await api.attachGatewayConversation({
-          provider: 'telegram',
+          provider,
           conversationId,
           ...(conversationTitle ? { conversationTitle } : {}),
+          externalChatId,
+          externalChatLabel,
         }),
       );
     } finally {
@@ -342,62 +362,56 @@ function GatewayComposerControl({ conversationId, conversationTitle }: { convers
   async function detach() {
     setBusy(true);
     try {
-      setState(await api.detachGatewayConversation(conversationId, 'telegram'));
+      setState(await api.detachGatewayConversation(conversationId, provider));
     } finally {
       setBusy(false);
     }
   }
 
-  const statusLabel = connection ? connection.status.replace(/_/g, ' ') : 'not connected';
-  const title = binding
-    ? `Telegram attached: ${binding.externalChatLabel || binding.conversationTitle || conversationTitle || conversationId}`
-    : 'Attach Telegram gateway';
+  const providerLabel = provider === 'telegram' ? 'Telegram' : 'Slack';
+  const statusLabel = connection ? connection.status.replace(/_/g, ' ') : 'not configured';
 
   return (
-    <div className="relative shrink-0">
-      <button
-        type="button"
-        className={cx(
-          'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface/45 hover:text-primary',
-          binding ? 'text-accent' : connection?.status === 'needs_attention' ? 'text-danger' : 'text-secondary',
-        )}
-        title={title}
-        aria-label={title}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <TelegramIcon />
-      </button>
-      {open ? (
-        <div className="absolute left-0 z-30 mt-1 w-60 rounded-xl border border-border-subtle bg-popover p-2 text-left text-[12px] shadow-xl">
-          <div className="px-2 py-1.5">
-            <p className="font-medium text-primary">Telegram</p>
-            <p className="mt-0.5 text-dim">Status: {statusLabel}</p>
-            <p className="mt-0.5 truncate text-dim">Target: {binding?.externalChatLabel || binding?.conversationTitle || 'Not attached'}</p>
-          </div>
-          <div className="my-1 border-t border-border-subtle" />
-          <button
-            type="button"
-            className="w-full rounded-md px-2 py-1.5 text-left text-secondary hover:bg-surface/60 hover:text-primary"
-            onClick={attach}
-            disabled={busy}
-          >
-            {binding ? 'Change/reattach this thread' : 'Attach this thread'}
-          </button>
-          <button
-            type="button"
-            className="w-full rounded-md px-2 py-1.5 text-left text-secondary hover:bg-surface/60 hover:text-primary disabled:opacity-40"
-            onClick={detach}
-            disabled={busy || !binding}
-          >
-            Detach
-          </button>
-        </div>
-      ) : null}
+    <div className="border-t border-border-subtle px-2 py-2">
+      <label className="block text-[11px] text-secondary">
+        Gateway
+        <select
+          value={provider}
+          onChange={(event) => setProvider(event.target.value as GatewayProviderChoice)}
+          className="mt-1 h-8 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[12px] text-primary outline-none focus:border-accent/50"
+        >
+          <option value="telegram">Telegram</option>
+          <option value="slack_mcp">Slack</option>
+        </select>
+      </label>
+      <div className="mt-2 rounded-lg bg-surface/35 px-2 py-1.5 text-[11px] text-dim">
+        <p>Status: {statusLabel}</p>
+        <p className="truncate">Target: {externalChatLabel || 'No saved target'}</p>
+        {binding ? <p className="text-accent">Attached to this thread</p> : null}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          className="ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+          onClick={attach}
+          disabled={busy || !externalChatId}
+        >
+          {busy ? 'Working…' : binding ? `Reattach ${providerLabel}` : `Attach ${providerLabel}`}
+        </button>
+        <button
+          type="button"
+          className="ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+          onClick={detach}
+          disabled={busy || !binding}
+        >
+          Detach
+        </button>
+      </div>
     </div>
   );
 }
 
-function TelegramIcon() {
+function MoreIcon() {
   return (
     <svg
       width="15"
@@ -410,8 +424,9 @@ function TelegramIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M21 4 3.75 11.25 10.5 13.5 13.5 20.25 21 4Z" />
-      <path d="m10.5 13.5 4.5-4.5" />
+      <path d="M12 12h.01" />
+      <path d="M19 12h.01" />
+      <path d="M5 12h.01" />
     </svg>
   );
 }

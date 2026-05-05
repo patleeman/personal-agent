@@ -54,6 +54,7 @@ const desktopBridge = {
     canOpenInNewWindow?: boolean;
     canDuplicate?: boolean;
     canSummarizeAndNew?: boolean;
+    canAttachToGateway?: boolean;
     canCopyWorkingDirectory?: boolean;
     canCopyId?: boolean;
     canCopyDeeplink?: boolean;
