@@ -168,11 +168,12 @@ describe('trace-db', () => {
 
   it('queryCacheEfficiency maps token cache columns', () => {
     const series = queryCacheEfficiency(fiveHoursAgo);
-    expect(series[0]).toMatchObject({ totalInput: 1000, cachedInput: 250, hitRate: 25 });
+    expect(series[0]).toMatchObject({ totalInput: 1250, cachedInput: 250, hitRate: 20 });
 
     const aggregate = queryCacheEfficiencyAggregate(fiveHoursAgo);
     expect(aggregate.totalInput).toBeGreaterThan(0);
     expect(aggregate.totalCached).toBeGreaterThan(0);
+    expect(aggregate.overallHitRate).toBeLessThanOrEqual(100);
   });
 
   it('queryTokensDaily returns daily aggregation', () => {

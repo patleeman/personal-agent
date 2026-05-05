@@ -949,7 +949,7 @@ export function queryCacheEfficiency(since: string): CacheEfficiencyPoint[] {
   const rows = db
     .prepare(
       `
-    SELECT ts, model_id, tokens_input as total_input, tokens_cached_input as cached_input
+    SELECT ts, model_id, tokens_input + tokens_cached_input as total_input, tokens_cached_input as cached_input
     FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
     ORDER BY ts ASC LIMIT 200
   `,
@@ -994,7 +994,7 @@ export function queryCacheEfficiencyAggregate(since: string): {
   const rows = db
     .prepare(
       `
-    SELECT COALESCE(model_id, '') as model_id, SUM(tokens_input) as total_input, SUM(tokens_cached_input) as total_cached
+    SELECT COALESCE(model_id, '') as model_id, SUM(tokens_input + tokens_cached_input) as total_input, SUM(tokens_cached_input) as total_cached
     FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
     GROUP BY model_id ORDER BY total_input DESC
   `,
