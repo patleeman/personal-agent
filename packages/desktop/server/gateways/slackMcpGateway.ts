@@ -314,10 +314,10 @@ export class SlackMcpGatewayRuntime {
       .sort((left, right) => left.ts.localeCompare(right.ts));
     if (messages.length === 0) return;
 
-    let latestTs = target.updatedAt;
+    let latestTs = target.lastExternalMessageId ?? '';
     const lines: string[] = [];
     for (const message of messages) {
-      latestTs = latestTs.localeCompare(message.ts) > 0 ? latestTs : message.ts;
+      latestTs = message.ts > latestTs ? message.ts : latestTs;
       const author = await this.resolveDisplayName(message.user || message.username || 'unknown');
       lines.push(`[${formatSlackTs(message.ts)}] ${author}: ${message.text.trim()}`);
     }
