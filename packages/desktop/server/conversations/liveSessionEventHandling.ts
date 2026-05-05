@@ -43,6 +43,7 @@ export interface LiveSessionEventHost {
   traceRunStartedAtMs?: number | null;
   traceRunTurnCount?: number;
   traceRunStepCount?: number;
+  tracePersistedTokens?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number };
 }
 
 export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> {
@@ -199,7 +200,29 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   if (event.type === 'agent_end') {
     try {
       const stats = entry.session.getSessionStats();
-      callbacks.broadcastStats(entry, stats.tokens, stats.cost, {
+      // getSessionStats() returns cumulative session totals — compute per-run deltas
+      const prev = entry.tracePersistedTokens ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+      const deltaTokens = {
+        input: stats.tokens.input - prev.input,
+        output: stats.tokens.output - prev.output,
+        cacheRead: stats.tokens.cacheRead - prev.cacheRead,
+        cacheWrite: stats.tokens.cacheWrite - prev.cacheWrite,
+        total:
+          stats.tokens.input -
+          prev.input +
+          (stats.tokens.output - prev.output) +
+          (stats.tokens.cacheRead - prev.cacheRead) +
+          (stats.tokens.cacheWrite - prev.cacheWrite),
+      };
+      const deltaCost = stats.cost - prev.cost;
+      entry.tracePersistedTokens = {
+        input: stats.tokens.input,
+        output: stats.tokens.output,
+        cacheRead: stats.tokens.cacheRead,
+        cacheWrite: stats.tokens.cacheWrite,
+        cost: stats.cost,
+      };
+      callbacks.broadcastStats(entry, deltaTokens, deltaCost, {
         runId: entry.traceRunId ?? undefined,
         turnCount: entry.traceRunTurnCount ?? 0,
         stepCount: entry.traceRunStepCount ?? 0,
