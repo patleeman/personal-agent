@@ -120,7 +120,8 @@ export function GatewaysPage() {
     }
   }
 
-  const hasAnyConnection = telegramConnection || slackConnection;
+  const hasVisibleSlackConnection = slackConnection && slackBinding;
+  const hasAnyConnection = telegramConnection || hasVisibleSlackConnection;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -168,7 +169,7 @@ export function GatewaysPage() {
                 showPauseResume
               />
             ) : null}
-            {slackConnection ? (
+            {hasVisibleSlackConnection ? (
               <GatewayRow
                 connection={slackConnection}
                 binding={slackBinding}
@@ -196,8 +197,8 @@ export function GatewaysPage() {
           </div>
         </section>
 
-        {/* Slack channel attach — only show when Slack MCP is not yet connected */}
-        {!slackConnection ? (
+        {/* Slack channel attach — show until Slack MCP is attached to a channel */}
+        {!slackBinding ? (
           <section className="max-w-4xl">
             <h2 className="text-[18px] font-semibold tracking-tight text-primary">Slack MCP</h2>
             <div className="mt-3 border-t border-border-subtle pt-5 space-y-3">
@@ -362,7 +363,7 @@ function GatewayActivity({ events }: { events: GatewayEvent[] }) {
             <div key={event.id} className="flex items-baseline gap-6 border-t border-border-subtle py-3 text-[13px] first:border-t-0">
               <span className="w-20 shrink-0 text-[12px] text-dim">{timeAgoCompact(event.createdAt)}</span>
               <span className="min-w-0 flex-1">{event.message}</span>
-              <span className="shrink-0 text-[12px] capitalize text-secondary">{event.kind}</span>
+              <span className="shrink-0 text-[12px] text-secondary">{formatActivityKind(event.kind)}</span>
             </div>
           ))
         )}
@@ -373,6 +374,11 @@ function GatewayActivity({ events }: { events: GatewayEvent[] }) {
 
 function formatStatus(status: string): string {
   return status.replace(/_/g, ' ');
+}
+
+function formatActivityKind(kind: string): string {
+  const normalized = kind.replace(/_/g, ' ');
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 function formatGatewayError(error: unknown): string {

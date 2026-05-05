@@ -611,9 +611,12 @@ describe('tasks module scheduling', () => {
       { dbPath },
     );
 
-    expect(listAutomationActivityEntries('non-iso-activity-example-time', { dbPath })[0]?.exampleScheduledAt).toEqual([
-      '2026-03-02T10:00:00.000Z',
-    ]);
+    const [entry] = listAutomationActivityEntries('non-iso-activity-example-time', { dbPath });
+    expect(entry?.kind).toBe('missed');
+    if (entry?.kind !== 'missed') {
+      throw new Error('Expected missed activity entry.');
+    }
+    expect(entry.exampleScheduledAt).toEqual(['2026-03-02T10:00:00.000Z']);
   });
 
   it('sanitizes malformed persisted automation runtime state', () => {

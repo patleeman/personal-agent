@@ -83,6 +83,9 @@ export interface AutomationRunFailedActivityEntry {
 }
 
 export type AutomationActivityEntry = AutomationMissedActivityEntry | AutomationRunFailedActivityEntry;
+export type AutomationActivityEntryInput =
+  | Omit<AutomationMissedActivityEntry, 'id' | 'automationId'>
+  | Omit<AutomationRunFailedActivityEntry, 'id' | 'automationId'>;
 
 type StoredAutomationRow = {
   id: string;
@@ -632,7 +635,7 @@ function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationAct
   }
 
   if (row.kind === 'run-failed') {
-    const message = readOptionalString(payload?.message);
+    const message = typeof payload?.message === 'string' ? readOptionalString(payload.message) : undefined;
     if (!message) {
       return undefined;
     }
@@ -650,7 +653,13 @@ function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationAct
   const firstScheduledAt = typeof payload?.firstScheduledAt === 'string' ? normalizeIsoTimestamp(payload.firstScheduledAt) : undefined;
   const lastScheduledAt = typeof payload?.lastScheduledAt === 'string' ? normalizeIsoTimestamp(payload.lastScheduledAt) : undefined;
   const exampleScheduledAt = Array.isArray(payload?.exampleScheduledAt)
-    ? payload.exampleScheduledAt.flatMap((value) => (typeof value === 'string' ? (normalizeIsoTimestamp(value) ?? []) : []))
+    ? payload.exampleScheduledAt.flatMap((value): string[] => {
+        if (typeof value !== 'string') {
+          return [];
+        }
+        const normalized = normalizeIsoTimestamp(value);
+        return normalized ? [normalized] : [];
+      })
     : [];
   const outcome = payload?.outcome === 'catch-up-started' || payload?.outcome === 'skipped' ? payload.outcome : undefined;
 
@@ -1134,7 +1143,7 @@ export function listAutomationActivityEntries(
 
 export function appendAutomationActivityEntry(
   automationId: string,
-  input: Omit<AutomationActivityEntry, 'id' | 'automationId'>,
+  input: AutomationActivityEntryInput,
   options: { dbPath?: string } = {},
 ): AutomationActivityEntry {
   const normalizedAutomationId = readRequiredString(automationId, 'automationId');
@@ -1144,10 +1153,6 @@ export function appendAutomationActivityEntry(
   }
 
   const createdAt = readAutomationActivityTimestamp(input.createdAt, 'createdAt');
-  if (input.kind !== 'missed' && input.kind !== 'run-failed') {
-    throw new Error(`Unsupported automation activity kind: ${input.kind}`);
-  }
-
   if (input.kind === 'run-failed') {
     const message = readRequiredString(input.message, 'message');
     const db = openAutomationDb(options.dbPath);

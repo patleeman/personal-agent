@@ -202,6 +202,50 @@ describe('GatewaysPage', () => {
     expect(container.textContent).not.toContain('Pause');
   });
 
+  it('shows Slack search when Slack MCP exists without a channel binding', async () => {
+    gatewaysMock.mockResolvedValue(
+      createGatewayState({
+        connections: [
+          {
+            id: 'sl-1',
+            provider: 'slack_mcp',
+            label: 'Slack Workspace',
+            status: 'active',
+            enabled: true,
+            createdAt: '2026-05-04T00:00:00Z',
+            updatedAt: '2026-05-04T12:00:00Z',
+          },
+        ],
+        bindings: [],
+      }),
+    );
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]')).toBeTruthy();
+    expect(container.textContent).not.toContain('Slack channel—');
+  });
+
+  it('formats activity kinds for display', async () => {
+    gatewaysMock.mockResolvedValue(
+      createGatewayState({
+        events: [
+          {
+            id: 'evt-1',
+            provider: 'slack_mcp',
+            kind: 'routing',
+            message: 'Slack MCP channel attached',
+            createdAt: '2026-05-04T12:00:00Z',
+          },
+        ],
+      }),
+    );
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain('Routing');
+  });
+
   it('renders Telegram in paused state', async () => {
     gatewaysMock.mockResolvedValue(
       createGatewayState({
@@ -584,8 +628,8 @@ describe('GatewaysPage', () => {
     expect(container.textContent).toContain('Recent activity');
     expect(container.textContent).toContain('Received message from user');
     expect(container.textContent).toContain('Replied to user');
-    expect(container.textContent).toContain('inbound');
-    expect(container.textContent).toContain('outbound');
+    expect(container.textContent).toContain('Inbound');
+    expect(container.textContent).toContain('Outbound');
   });
 
   it('shows no activity message when events are empty', async () => {
