@@ -21,7 +21,6 @@ import type {
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
   ConversationSummaryRecord,
-  ConversationTitleSettingsState,
   DaemonState,
   DefaultCwdState,
   DeferredResumeSummary,
@@ -577,22 +576,6 @@ export const api = {
     }
 
     return post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/cancel`);
-  },
-  conversationTitleSettings: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
-      return desktopBridge.readConversationTitleSettings();
-    }
-
-    return get<ConversationTitleSettingsState>('/conversation-titles/settings');
-  },
-  updateConversationTitleSettings: async (input: { enabled?: boolean; model?: string | null }) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
-      return desktopBridge.updateConversationTitleSettings(input);
-    }
-
-    return patch<ConversationTitleSettingsState>('/conversation-titles/settings', input);
   },
   openConversationTabs: async () => {
     const desktopBridge = getDesktopBridge();

@@ -21,7 +21,6 @@ import {
   requestConversationAutoModeTurn as requestConversationAutoModeTurnForEntry,
   setLiveSessionAutoModeState as setLiveSessionAutoModeStateForEntry,
 } from './liveSessionAutoModeFacade.js';
-import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
 import { branchLiveSession, forkLiveSession } from './liveSessionBranching.js';
@@ -169,7 +168,6 @@ interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState 
   cwd: string;
   listeners: Set<LiveListener>;
   title: string;
-  autoTitleRequested: boolean;
   lastContextUsageJson: string | null;
   lastQueueStateJson: string | null;
   lastParallelStateJson?: string | null;
@@ -312,15 +310,6 @@ async function syncDurableConversationRun(
   await syncLiveSessionDurableRun(entry, state, input);
 }
 
-function maybeAutoTitleConversation(entry: LiveEntry): void {
-  requestLiveSessionAutoTitle({
-    entry,
-    settingsFile: SETTINGS_FILE,
-    isCurrent: () => registry.get(entry.sessionId) === entry,
-    applyTitle: (title) => applySessionTitle(entry, title),
-  });
-}
-
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
   const usage = getLiveSessionContextUsage(entry);
   if (usage) {
@@ -390,14 +379,13 @@ export function takeOverSessionControl(sessionId: string, surfaceId: string): Li
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
-function wireSession(id: string, session: AgentSession, cwd: string, options: { autoTitleRequested?: boolean } = {}) {
+function wireSession(id: string, session: AgentSession, cwd: string) {
   const entry: LiveEntry = {
     sessionId: id,
     session,
     cwd,
     listeners: new Set(),
     title: resolveStableSessionTitle(session),
-    autoTitleRequested: options.autoTitleRequested ?? false,
     lastContextUsageJson: null,
     lastQueueStateJson: null,
     lastParallelStateJson: null,
@@ -415,7 +403,6 @@ function wireSession(id: string, session: AgentSession, cwd: string, options: { 
   registry.set(id, entry);
   publishSessionMetaChanged(id);
   void syncDurableConversationRun(entry, session.isStreaming ? 'running' : 'waiting', { force: true });
-  maybeAutoTitleConversation(entry);
   if (entry.parallelJobs.length > 0) {
     queueMicrotask(() => {
       void tryImportReadyParallelJobs(entry);
@@ -424,7 +411,6 @@ function wireSession(id: string, session: AgentSession, cwd: string, options: { 
 
   session.subscribe((event) =>
     handleLiveSessionEvent(entry, event, {
-      maybeAutoTitleConversation,
       requestConversationAutoModeContinuationTurn,
       requestConversationAutoModeTurn,
       syncDurableConversationRun,

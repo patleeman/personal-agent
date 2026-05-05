@@ -42,7 +42,6 @@ export interface LiveSessionEventHost {
 }
 
 export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> {
-  maybeAutoTitleConversation: (entry: TEntry) => void;
   requestConversationAutoModeContinuationTurn: (sessionId: string) => Promise<boolean>;
   requestConversationAutoModeTurn: (sessionId: string) => Promise<boolean>;
   syncDurableConversationRun: (entry: TEntry, state: WebLiveConversationRunState) => Promise<void>;
@@ -69,9 +68,6 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
 
   if (event.type === 'turn_end') {
-    if (!activeHiddenTurnCustomType) {
-      callbacks.maybeAutoTitleConversation(entry);
-    }
     if (activeHiddenTurnCustomType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
       const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
       entry.pendingAutoModeContinuation = false;
@@ -158,9 +154,6 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'agent_end') {
-    if (!entry.activeHiddenTurnCustomType) {
-      callbacks.maybeAutoTitleConversation(entry);
-    }
     void callbacks.syncDurableConversationRun(entry, 'waiting');
   }
 

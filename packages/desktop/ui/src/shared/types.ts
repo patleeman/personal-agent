@@ -1237,12 +1237,6 @@ export interface ProviderOAuthLoginState {
 
 export type ProviderOAuthLoginStreamEvent = { type: 'snapshot'; data: ProviderOAuthLoginState };
 
-export interface ConversationTitleSettingsState {
-  enabled: boolean;
-  currentModel: string;
-  effectiveModel: string;
-}
-
 interface ToolParameterSchema {
   type?: string;
   description?: string;

@@ -1,17 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import { type Api, completeSimple, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
-import { requirePromptCatalogEntry } from '@personal-agent/core';
+import { type ThinkingLevel } from '@mariozechner/pi-ai';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.4-mini';
 const DEFAULT_REASONING: ThinkingLevel = 'minimal';
 const DEFAULT_MAX_MESSAGES = 8;
 const DEFAULT_MAX_TITLE_LENGTH = 80;
-const DEFAULT_MAX_MESSAGE_LENGTH = 1_200;
 const MAX_TITLE_SOURCE_MESSAGES = 32;
 const MAX_TITLE_LENGTH = 160;
-const MAX_TITLE_MESSAGE_LENGTH = 4_000;
 
 export interface ConversationAutoTitleSettings {
   enabled: boolean;
@@ -25,18 +22,6 @@ export interface ConversationAutoTitleSettings {
 export interface ConversationTitleSourceMessage {
   role: 'user' | 'assistant';
   text: string;
-}
-
-export interface ConversationTitleMessageInput {
-  role?: string;
-  content?: unknown;
-}
-
-export interface ConversationTitleModelRegistry {
-  getAvailable(): Model<Api>[];
-  getApiKeyAndHeaders(
-    model: Model<Api>,
-  ): Promise<{ ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string }>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -112,159 +97,6 @@ export function readConversationAutoTitleSettings(settingsFile: string): Convers
   };
 }
 
-function normalizeContent(content: unknown): Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }> {
-  if (Array.isArray(content)) {
-    return content as Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }>;
-  }
-
-  if (typeof content === 'string' && content.length > 0) {
-    return [{ type: 'text', text: content }];
-  }
-
-  return [];
-}
-
-function hasValidImageContentBlock(block: { data?: unknown; mimeType?: unknown }): boolean {
-  if (typeof block.mimeType !== 'string' || !block.mimeType.trim().toLowerCase().startsWith('image/')) {
-    return false;
-  }
-
-  if (typeof block.data !== 'string') {
-    return false;
-  }
-
-  const data = block.data.trim();
-  if (!data || data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
-    return false;
-  }
-
-  return Buffer.from(data, 'base64').length > 0;
-}
-
-function normalizeWhitespace(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-function truncateText(text: string, maxLength: number): string {
-  const normalized = normalizeWhitespace(text);
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  const slice = normalized.slice(0, maxLength).trim();
-  const lastSpace = slice.lastIndexOf(' ');
-  return lastSpace > Math.floor(maxLength / 2) ? slice.slice(0, lastSpace).trim() : slice;
-}
-
-function summarizeUserMessage(content: unknown): string {
-  const blocks = normalizeContent(content);
-  const text = blocks
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text ?? '')
-    .join('\n')
-    .trim();
-  const imageCount = blocks.filter((block) => block.type === 'image' && hasValidImageContentBlock(block)).length;
-
-  const attachmentLabel = imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '';
-
-  if (text && attachmentLabel) {
-    return normalizeWhitespace(`${text} ${attachmentLabel}`);
-  }
-
-  if (text) {
-    return normalizeWhitespace(text);
-  }
-
-  return attachmentLabel;
-}
-
-function summarizeAssistantMessage(content: unknown): string {
-  const blocks = normalizeContent(content);
-  return normalizeWhitespace(
-    blocks
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text ?? '')
-      .join('\n'),
-  );
-}
-
-export function collectConversationTitleSourceMessages(
-  messages: ConversationTitleMessageInput[],
-  maxMessages = DEFAULT_MAX_MESSAGES,
-): ConversationTitleSourceMessage[] {
-  const messageLimit =
-    Number.isSafeInteger(maxMessages) && maxMessages > 0 ? Math.min(MAX_TITLE_SOURCE_MESSAGES, maxMessages) : DEFAULT_MAX_MESSAGES;
-  const collected: ConversationTitleSourceMessage[] = [];
-
-  for (const message of messages) {
-    if (message.role === 'user') {
-      const text = summarizeUserMessage(message.content);
-      if (text) {
-        collected.push({ role: 'user', text });
-      }
-      continue;
-    }
-
-    if (message.role === 'assistant') {
-      const text = summarizeAssistantMessage(message.content);
-      if (text) {
-        collected.push({ role: 'assistant', text });
-      }
-    }
-  }
-
-  if (messageLimit > 0 && collected.length > messageLimit) {
-    return collected.slice(-messageLimit);
-  }
-
-  return collected;
-}
-
-export function hasAssistantTitleSourceMessage(messages: ConversationTitleMessageInput[]): boolean {
-  return collectConversationTitleSourceMessages(messages).some((message) => message.role === 'assistant');
-}
-
-export function buildConversationTitleTranscript(
-  messages: ConversationTitleMessageInput[],
-  options: { maxMessages?: number; maxMessageLength?: number } = {},
-): string {
-  const sourceMessages = collectConversationTitleSourceMessages(messages, options.maxMessages ?? DEFAULT_MAX_MESSAGES);
-  if (!sourceMessages.some((message) => message.role === 'user') || !sourceMessages.some((message) => message.role === 'assistant')) {
-    return '';
-  }
-
-  const maxMessageLength =
-    Number.isSafeInteger(options.maxMessageLength) && (options.maxMessageLength as number) > 0
-      ? Math.min(MAX_TITLE_MESSAGE_LENGTH, options.maxMessageLength as number)
-      : DEFAULT_MAX_MESSAGE_LENGTH;
-  return sourceMessages
-    .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${truncateText(message.text, maxMessageLength)}`)
-    .join('\n');
-}
-
-function extractAssistantText(content: unknown): string {
-  if (!Array.isArray(content)) {
-    return typeof content === 'string' ? content : '';
-  }
-
-  return content
-    .filter(
-      (block): block is { type: 'text'; text?: string } =>
-        Boolean(block) && typeof block === 'object' && (block as { type?: string }).type === 'text',
-    )
-    .map((block) => block.text ?? '')
-    .join('\n');
-}
-
-function readCompletionError(response: unknown): string | null {
-  if (!isRecord(response) || response.stopReason !== 'error') {
-    return null;
-  }
-
-  const errorMessage = readNonEmptyString(response.errorMessage);
-  return errorMessage || 'Conversation title generation failed.';
-}
-
 export function normalizeGeneratedConversationTitle(title: string | null | undefined, maxLength = DEFAULT_MAX_TITLE_LENGTH): string | null {
   if (typeof title !== 'string') {
     return null;
@@ -294,81 +126,17 @@ export function normalizeGeneratedConversationTitle(title: string | null | undef
   return truncateText(normalized, titleLimit);
 }
 
-function resolveConversationTitleModel(
-  modelRegistry: ConversationTitleModelRegistry,
-  settings: ConversationAutoTitleSettings,
-): Model<Api> | null {
-  const availableModels = modelRegistry.getAvailable();
-  return availableModels.find((model) => model.provider === settings.provider && model.id === settings.model) ?? null;
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
-export async function generateConversationTitle(options: {
-  messages: ConversationTitleMessageInput[];
-  modelRegistry: ConversationTitleModelRegistry;
-  settings?: ConversationAutoTitleSettings;
-  settingsFile?: string;
-  now?: number;
-}): Promise<string | null> {
-  const settings = options.settings ?? readConversationAutoTitleSettings(options.settingsFile ?? '');
-  if (!settings.enabled) {
-    return null;
+function truncateText(text: string, maxLength: number): string {
+  const normalized = normalizeWhitespace(text);
+  if (normalized.length <= maxLength) {
+    return normalized;
   }
 
-  const transcript = buildConversationTitleTranscript(options.messages, { maxMessages: settings.maxMessages });
-  if (!transcript) {
-    return null;
-  }
-
-  const model = resolveConversationTitleModel(options.modelRegistry, settings);
-  if (!model) {
-    return null;
-  }
-
-  const authResult = await options.modelRegistry.getApiKeyAndHeaders(model);
-  if (!authResult.ok) {
-    return null;
-  }
-
-  const response = await completeSimple(
-    model,
-    {
-      systemPrompt: requirePromptCatalogEntry('utilities/conversation-title.md'),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: [
-                'Write a short, scan-friendly title for this conversation.',
-                `Optimize for a narrow one-line sidebar where only the first 24-32 characters may be visible. Put the most distinguishing words first and keep it under ${settings.maxTitleLength} characters.`,
-                'Prefer a compact label, not a sentence fragment.',
-                'Action-first is fine when it is clear and specific.',
-                'Avoid filler prefixes like "Page:", "Screen:", "Header:", or "When we...".',
-                'Focus on the main thread, not the latest micro-step or temporary status.',
-                'Return only the title.',
-                '',
-                transcript,
-              ].join('\n'),
-            },
-          ],
-          timestamp: options.now ?? Date.now(),
-        },
-      ],
-    },
-    {
-      apiKey: authResult.apiKey,
-      headers: authResult.headers,
-      reasoning: settings.reasoning,
-      maxTokens: 32,
-      cacheRetention: 'none',
-    },
-  );
-
-  const errorMessage = readCompletionError(response);
-  if (errorMessage) {
-    throw new Error(errorMessage);
-  }
-
-  return normalizeGeneratedConversationTitle(extractAssistantText(response.content), settings.maxTitleLength);
+  const slice = normalized.slice(0, maxLength).trim();
+  const lastSpace = slice.lastIndexOf(' ');
+  return lastSpace > Math.floor(maxLength / 2) ? slice.slice(0, lastSpace).trim() : slice;
 }

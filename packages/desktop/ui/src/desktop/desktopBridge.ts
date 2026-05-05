@@ -11,7 +11,6 @@ import type {
   ConversationCommitCheckpointSummary,
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
-  ConversationTitleSettingsState,
   DaemonState,
   DefaultCwdState,
   DeferredResumeSummary,
@@ -228,8 +227,6 @@ export interface PersonalAgentDesktopBridge {
   readTools?(): Promise<ToolsState>;
   pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<FolderPickerResult>;
   captureScreenshot(): Promise<DesktopScreenshotCaptureResult>;
-  readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
-  updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;
   readOpenConversationTabs(): Promise<{
     sessionIds: string[];

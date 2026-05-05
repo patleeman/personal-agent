@@ -11,7 +11,7 @@ export async function createLiveSession(input: {
   settingsFile: string;
   persistentSessionDir: string;
   options?: LiveSessionLoaderOptions;
-  wireSession: (id: string, session: AgentSession, cwd: string, options?: { autoTitleRequested?: boolean }) => unknown;
+  wireSession: (id: string, session: AgentSession, cwd: string) => unknown;
 }): Promise<{ id: string; sessionFile: string }> {
   const options = input.options ?? {};
   const sessionManager = SessionManager.create(input.cwd, input.persistentSessionDir);
@@ -37,7 +37,7 @@ export async function createLiveSessionFromExisting(input: {
   settingsFile: string;
   persistentSessionDir: string;
   options?: LiveSessionLoaderOptions;
-  wireSession: (id: string, session: AgentSession, cwd: string, options?: { autoTitleRequested?: boolean }) => unknown;
+  wireSession: (id: string, session: AgentSession, cwd: string) => unknown;
 }): Promise<{ id: string; sessionFile: string }> {
   const options = input.options ?? {};
   const sessionManager = SessionManager.forkFrom(input.sessionFile, input.cwd, input.persistentSessionDir);
@@ -61,7 +61,7 @@ export async function resumeLiveSession(input: {
   settingsFile: string;
   options?: LiveSessionLoaderOptions & { cwdOverride?: string };
   findLiveSessionByFile: (sessionFile: string) => { id: string } | null;
-  wireSession: (id: string, session: AgentSession, cwd: string, options?: { autoTitleRequested?: boolean }) => unknown;
+  wireSession: (id: string, session: AgentSession, cwd: string) => unknown;
 }): Promise<{ id: string }> {
   const live = input.findLiveSessionByFile(input.sessionFile);
   if (live) {
@@ -85,9 +85,7 @@ export async function resumeLiveSession(input: {
   });
 
   const id = session.sessionId;
-  input.wireSession(id, session, cwd, {
-    autoTitleRequested: Boolean(session.sessionName?.trim()),
-  });
+  input.wireSession(id, session, cwd);
   queuePrewarmLiveSessionLoader(cwd, loaderOptions);
   return { id };
 }

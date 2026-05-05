@@ -1783,12 +1783,6 @@ export function SettingsPage() {
     refetch: refetchDefaultCwd,
   } = useApi(api.defaultCwd);
   const {
-    data: conversationTitleState,
-    loading: conversationTitleLoading,
-    error: conversationTitleError,
-    refetch: refetchConversationTitleSettings,
-  } = useApi(api.conversationTitleSettings);
-  const {
     data: transcriptionState,
     loading: transcriptionLoading,
     error: transcriptionError,
@@ -1816,8 +1810,6 @@ export function SettingsPage() {
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
   const [pathPickerTarget, setPathPickerTarget] = useState<'default-cwd' | 'skill-folders' | 'instruction-files' | null>(null);
-  const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
-  const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [transcriptionProviderDraft, setTranscriptionProviderDraft] = useState<TranscriptionProviderId | ''>('');
   const [transcriptionModelDraft, setTranscriptionModelDraft] = useState('base.en');
   const [savingTranscription, setSavingTranscription] = useState(false);
@@ -2010,16 +2002,6 @@ export function SettingsPage() {
   const selectedModelSupportsFastMode = useMemo(
     () => selectedModelServiceTierOptions.some((option) => option.value === 'priority'),
     [selectedModelServiceTierOptions],
-  );
-
-  const selectedConversationTitleModel = useMemo(
-    () => findModelByRef(modelState?.models ?? [], conversationTitleState?.currentModel ?? ''),
-    [conversationTitleState?.currentModel, modelState?.models],
-  );
-
-  const effectiveConversationTitleModel = useMemo(
-    () => findModelByRef(modelState?.models ?? [], conversationTitleState?.effectiveModel ?? ''),
-    [conversationTitleState?.effectiveModel, modelState?.models],
   );
 
   const availableModelProviderIds = useMemo(
@@ -2599,7 +2581,6 @@ export function SettingsPage() {
     try {
       await api.updateModelPreferences(input);
       await refetchModels({ resetLoading: false });
-      await refetchConversationTitleSettings({ resetLoading: false });
     } catch (error) {
       setModelError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2761,32 +2742,6 @@ export function SettingsPage() {
       window.clearTimeout(timeout);
     };
   }, [defaultCwdDirty, defaultCwdDraft, defaultCwdState, pickingDefaultCwd, savingDefaultCwd]);
-
-  async function handleConversationTitleSettingChange(input: { enabled?: boolean; model?: string | null }, field: 'enabled' | 'model') {
-    if (!conversationTitleState || savingConversationTitle !== null) {
-      return;
-    }
-
-    if (field === 'enabled' && input.enabled === conversationTitleState.enabled) {
-      return;
-    }
-
-    if (field === 'model' && (input.model ?? '') === conversationTitleState.currentModel) {
-      return;
-    }
-
-    setConversationTitleSaveError(null);
-    setSavingConversationTitle(field);
-
-    try {
-      await api.updateConversationTitleSettings(input);
-      await refetchConversationTitleSettings({ resetLoading: false });
-    } catch (error) {
-      setConversationTitleSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingConversationTitle(null);
-    }
-  }
 
   async function handleTranscriptionInstallModel() {
     if (installingTranscriptionModel) {
@@ -3848,78 +3803,6 @@ export function SettingsPage() {
                 ) : null}
 
                 {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
-              </SettingsPanel>
-
-              <SettingsPanel title="Conversation titles" description="Auto-title chats after the first assistant reply.">
-                {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
-                  <p className="ui-card-meta">Loading conversation title settings…</p>
-                ) : !conversationTitleState && conversationTitleError ? (
-                  <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
-                ) : !modelState && modelsError ? (
-                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                ) : conversationTitleState && modelState ? (
-                  <>
-                    <label
-                      className="inline-flex items-center gap-3 text-[14px] text-primary"
-                      htmlFor="settings-conversation-titles-enabled"
-                    >
-                      <input
-                        id="settings-conversation-titles-enabled"
-                        type="checkbox"
-                        checked={conversationTitleState.enabled}
-                        onChange={(event) => {
-                          void handleConversationTitleSettingChange({ enabled: event.target.checked }, 'enabled');
-                        }}
-                        disabled={savingConversationTitle !== null}
-                        className={CHECKBOX_CLASS}
-                      />
-                      <span>Generate titles automatically</span>
-                    </label>
-                    <p className="ui-card-meta">
-                      {savingConversationTitle === 'enabled'
-                        ? 'Saving auto-title setting…'
-                        : conversationTitleState.enabled
-                          ? 'Enabled after the first assistant reply.'
-                          : 'Disabled. New conversations keep the fallback title until renamed manually.'}
-                    </p>
-
-                    <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">
-                      Title model
-                    </label>
-                    <select
-                      id="settings-conversation-title-model"
-                      value={conversationTitleState.currentModel}
-                      onChange={(event) => {
-                        void handleConversationTitleSettingChange({ model: event.target.value || '' }, 'model');
-                      }}
-                      disabled={savingConversationTitle !== null || modelState.models.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="">Use default title model ({conversationTitleState.effectiveModel})</option>
-                      {groupedModels.map(([provider, models]) => (
-                        <optgroup key={provider} label={provider}>
-                          {models.map((model) => (
-                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                              {model.name} · {formatContextWindowLabel(model.context)} ctx
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingConversationTitle === 'model'
-                        ? 'Saving title model…'
-                        : conversationTitleState.currentModel
-                          ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
-                          : `Using default title model: ${formatModelSummary(
-                              effectiveConversationTitleModel,
-                              conversationTitleState.effectiveModel,
-                            )}`}
-                    </p>
-                  </>
-                ) : null}
-
-                {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
               </SettingsPanel>
             </div>
           </SettingsSection>

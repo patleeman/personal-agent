@@ -15,7 +15,6 @@ export interface LiveSessionMaintenanceHost {
   sessionId: string;
   session: AgentSession;
   title: string;
-  autoTitleRequested: boolean;
   lastCompactionSummaryTitle?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
 }
@@ -47,7 +46,6 @@ export function renameLiveSession<TEntry extends LiveSessionMaintenanceHost>(
     syncDurableConversationRun: (entry: TEntry, state: WebLiveConversationRunState, input: { force?: boolean }) => Promise<void>;
   },
 ): void {
-  entry.autoTitleRequested = true;
   callbacks.applySessionTitle(entry, name);
   void callbacks.syncDurableConversationRun(entry, entry.lastDurableRunState ?? (entry.session.isStreaming ? 'running' : 'waiting'), {
     force: true,

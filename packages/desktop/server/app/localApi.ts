@@ -159,7 +159,6 @@ import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
 import { invalidateAppTopics, subscribeAppEvents } from '../shared/appEvents.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
-import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from '../ui/conversationTitlePreferences.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
@@ -1151,21 +1150,6 @@ export async function pickDesktopFolder(input: { cwd?: string | null; prompt?: s
   return pickFolderCapability(input, {
     getDefaultWebCwd: context.getDefaultWebCwd,
     resolveRequestedCwd: context.resolveRequestedCwd,
-  });
-}
-
-export async function readDesktopConversationTitleSettings() {
-  return readSavedConversationTitlePreferences(DEFAULT_RUNTIME_SETTINGS_FILE);
-}
-
-export async function updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }) {
-  const { enabled, model } = input;
-  if (typeof enabled !== 'boolean' && typeof model !== 'string' && model !== null) {
-    throw new Error('enabled or model required');
-  }
-
-  return persistSettingsWrite((settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile), {
-    runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
   });
 }
 
