@@ -3561,7 +3561,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
             forceActive={location.pathname.startsWith('/automations')}
           />
           <TopNavItem to="/gateways" icon={PATH.gateways} label="Gateways" forceActive={location.pathname.startsWith('/gateways')} />
-          <TopNavItem to="/traces" icon={PATH.list} label="Traces" forceActive={location.pathname.startsWith('/traces')} />
+          <TopNavItem to="/telemetry" icon={PATH.list} label="Telemetry" forceActive={location.pathname.startsWith('/telemetry')} />
           {!hideKnowledgeNav ? (
             <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
           ) : null}
