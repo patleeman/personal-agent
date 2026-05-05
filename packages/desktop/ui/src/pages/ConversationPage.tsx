@@ -18,6 +18,7 @@ import {
   ConversationDraftEmptyAction,
   DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS,
 } from '../components/conversation/ConversationDraftEmptyAction';
+import { ConversationGatewayAttachAction } from '../components/conversation/ConversationGatewayAttachAction';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
@@ -1335,6 +1336,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedComposerModel = useMemo(
     () => models.find((model) => model.id === (currentModel || defaultModel)) ?? null,
     [currentModel, defaultModel, models],
+  );
+  const modelSupportsImages = useMemo(
+    () => models.find((m) => m.id === resolvedCurrentModelId)?.input?.includes('image') ?? true,
+    [resolvedCurrentModelId, models],
   );
   const createLiveSessionPreferenceInput = useMemo(
     () => ({
@@ -6087,6 +6092,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     onSaveCwd={() => {
                       void submitConversationCwdChange();
                     }}
+                    actions={id ? <ConversationGatewayAttachAction conversationId={id} conversationTitle={title || id} /> : undefined}
                   />
                 )}
               </div>
@@ -6574,6 +6580,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 screenshotCaptureBusy={screenshotCaptureBusy}
                 streamIsStreaming={stream.isStreaming}
                 models={models}
+                modelSupportsImages={modelSupportsImages}
                 currentModel={currentModel || model || defaultModel}
                 currentThinkingLevel={currentThinkingLevel}
                 currentServiceTier={currentServiceTier}
