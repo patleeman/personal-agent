@@ -119,7 +119,7 @@ describe('workbench browser agent extension', () => {
     setWorkbenchBrowserToolHost(null);
   });
 
-  it('rejects stale tool calls when the workbench browser is inactive', async () => {
+  it('returns inactive browser error from stale tool calls', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => false,
       snapshot: async () => ({ url: 'https://example.com/' }),
@@ -128,9 +128,12 @@ describe('workbench browser agent extension', () => {
     });
 
     const tools = collectTools();
-    await expect(tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never)).rejects.toThrow(
-      'Workbench Browser is not active',
-    );
+    const result = (await tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never)) as {
+      isError?: boolean;
+      content?: Array<{ text?: string }>;
+    };
+    expect(result.isError).toBe(true);
+    expect(result.content?.[0]?.text).toContain('Workbench Browser is not active');
 
     setWorkbenchBrowserToolHost(null);
   });

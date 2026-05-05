@@ -332,12 +332,15 @@ export class WorkbenchBrowserViewController {
 
   async snapshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserSnapshot> {
     const view = this.requireView(owner, sessionKey);
-    const raw = await cdpEvaluate(
-      view.webContents,
-      `(() => {
+    let raw: unknown;
+    try {
+      raw = await cdpEvaluate(
+        view.webContents,
+        `(() => {
       ${this.pageHelperSource()}
-      const title = document.title ? 'Title: ' + document.title + '\n' : '';
-      const url = location.href ? 'URL: ' + location.href + '\n' : '';
+      const nl = '\\n';
+      const title = document.title ? 'Title: ' + document.title + nl : '';
+      const url = location.href ? 'URL: ' + location.href + nl : '';
       const body = document.body ? document.body.innerText : '';
       const candidates = Array.from(document.querySelectorAll('a, button, input, textarea, select, [role], [tabindex], label, summary')).slice(0, 120);
       const elements = candidates.map((element, index) => {
@@ -357,7 +360,46 @@ export class WorkbenchBrowserViewController {
       }).filter(Boolean);
       return { text: (url + title + body).slice(0, ${MAX_SNAPSHOT_TEXT_LENGTH}), elements };
     })()`,
-    );
+      );
+    } catch {
+      // Fallback: if the complex evaluation fails (e.g. JS syntax issues on some pages),
+      // use simpler individual evaluations to get basic page state.
+      const fallbackTitle =
+        (await withCdp(view.webContents, async (send) =>
+          cdpRuntimeValue(
+            await send('Runtime.evaluate', {
+              expression: 'document.title',
+              returnByValue: true,
+            }),
+          ),
+        )) ?? '';
+      const fallbackUrl =
+        (await withCdp(view.webContents, async (send) =>
+          cdpRuntimeValue(
+            await send('Runtime.evaluate', {
+              expression: 'location.href',
+              returnByValue: true,
+            }),
+          ),
+        )) ?? '';
+      const fallbackBody =
+        (await withCdp(view.webContents, async (send) =>
+          cdpRuntimeValue(
+            await send('Runtime.evaluate', {
+              expression: "document.body ? document.body.innerText : ''",
+              returnByValue: true,
+            }),
+          ),
+        )) ?? '';
+      raw = {
+        text: (
+          (fallbackUrl ? 'URL: ' + String(fallbackUrl) + '\n' : '') +
+          (fallbackTitle ? 'Title: ' + String(fallbackTitle) + '\n' : '') +
+          String(fallbackBody)
+        ).slice(0, MAX_SNAPSHOT_TEXT_LENGTH),
+        elements: [],
+      };
+    }
 
     const rawSnapshot = raw && typeof raw === 'object' ? (raw as { text?: unknown; elements?: unknown }) : {};
     const text = typeof rawSnapshot.text === 'string' ? rawSnapshot.text : '';
