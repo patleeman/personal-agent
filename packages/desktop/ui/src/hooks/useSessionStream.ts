@@ -755,6 +755,10 @@ export function useSessionStream(
       es.onerror = () => {
         if (closed) return;
         es.close();
+        // Clear streaming state immediately so the cursor doesn't stay frozen
+        // during the reconnect window. The snapshot on reconnect will restore
+        // the real state.
+        setState((prev) => (prev.isStreaming ? { ...prev, isStreaming: false } : prev));
         api
           .liveSession(requestedSessionId)
           .then(() => {
