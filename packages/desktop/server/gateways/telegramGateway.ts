@@ -63,10 +63,32 @@ export interface TelegramGatewayRuntimeDependencies {
   fetch?: typeof fetch;
 }
 
+const TYPING_INTERVAL_MS = 4_000;
+
+class TypingIndicator {
+  private timer: NodeJS.Timeout | null = null;
+
+  constructor(private readonly send: () => Promise<void>) {}
+
+  start(): void {
+    if (this.timer) return;
+    void this.send().catch(() => undefined);
+    this.timer = setInterval(() => void this.send().catch(() => undefined), TYPING_INTERVAL_MS);
+  }
+
+  stop(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+}
+
 export class TelegramGatewayRuntime {
   private abortController: AbortController | null = null;
   private polling = false;
   private nextOffset = 0;
+  private typingIndicators = new Map<string, TypingIndicator>();
 
   constructor(private readonly dependencies: TelegramGatewayRuntimeDependencies) {}
 
@@ -83,6 +105,8 @@ export class TelegramGatewayRuntime {
     this.polling = false;
     this.abortController?.abort();
     this.abortController = null;
+    for (const indicator of this.typingIndicators.values()) indicator.stop();
+    this.typingIndicators.clear();
   }
 
   async processUpdate(update: TelegramUpdate): Promise<void> {
@@ -106,6 +130,7 @@ export class TelegramGatewayRuntime {
     }
 
     const images = message.photo?.length ? await this.loadTelegramPhotos(message.photo) : undefined;
+    this.startTyping(externalChatId);
     await this.dependencies.submitPrompt({
       conversationId: target.conversationId,
       text: text || 'Please review this Telegram photo.',
@@ -125,6 +150,7 @@ export class TelegramGatewayRuntime {
     });
     if (!target) return false;
 
+    this.stopTyping(target.externalChatId);
     await this.sendMessage(target.externalChatId, text);
     recordGatewayEvent({
       stateRoot: this.dependencies.stateRoot,
@@ -295,6 +321,20 @@ export class TelegramGatewayRuntime {
     if (!response.ok) return undefined;
     const bytes = new Uint8Array(await response.arrayBuffer());
     return [{ data: bytesToBase64(bytes), mimeType: response.headers.get('content-type') || 'image/jpeg', name: 'telegram-photo.jpg' }];
+  }
+
+  private startTyping(chatId: string): void {
+    if (this.typingIndicators.has(chatId)) return;
+    const token = this.dependencies.readBotToken();
+    if (!token) return;
+    const indicator = new TypingIndicator(() => this.telegramRequest(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }));
+    this.typingIndicators.set(chatId, indicator);
+    indicator.start();
+  }
+
+  private stopTyping(chatId: string): void {
+    this.typingIndicators.get(chatId)?.stop();
+    this.typingIndicators.delete(chatId);
   }
 
   private async sendMessage(chatId: string, text: string): Promise<void> {
