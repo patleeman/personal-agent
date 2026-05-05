@@ -704,6 +704,24 @@ describe('GatewaysPage', () => {
     expect(container.textContent).toContain('random');
   });
 
+  it('shows an empty Slack search result', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    searchSlackMcpChannelsMock.mockResolvedValue({ channels: [] });
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]');
+    expect(input).toBeTruthy();
+
+    typeInput(input!, 'missing-channel');
+    keyDown(input!, 'Enter');
+    await flushAsyncWork();
+
+    expect(searchSlackMcpChannelsMock).toHaveBeenCalledWith('missing-channel');
+    expect(container.textContent).toContain('No Slack channels found.');
+  });
+
   it('attaches a Slack channel from search results', async () => {
     const emptyState = createGatewayState();
     gatewaysMock.mockResolvedValue(emptyState);

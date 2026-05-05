@@ -50,6 +50,7 @@ export function GatewaysPage() {
     : null;
   const [slackQuery, setSlackQuery] = useState('');
   const [slackChannels, setSlackChannels] = useState<Array<{ id: string; name: string; isPrivate?: boolean }>>([]);
+  const [slackSearchComplete, setSlackSearchComplete] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,8 +266,10 @@ export function GatewaysPage() {
     if (!slackQuery.trim()) return;
     setBusy('slack-search');
     setError(null);
+    setSlackSearchComplete(false);
     try {
       setSlackChannels((await api.searchSlackMcpChannels(slackQuery.trim())).channels);
+      setSlackSearchComplete(true);
     } catch (err) {
       setError(formatGatewayError(err));
     } finally {
@@ -281,6 +284,7 @@ export function GatewaysPage() {
       setState(await api.attachSlackMcpChannel({ channelId: channel.id, channelLabel: channel.name }));
       setSlackChannels([]);
       setSlackQuery('');
+      setSlackSearchComplete(false);
     } catch (err) {
       setError(formatGatewayError(err));
     } finally {
@@ -497,7 +501,10 @@ export function GatewaysPage() {
                   <input
                     className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface/70 px-3 py-1.5 text-[13px] text-primary placeholder:text-dim outline-none transition-colors focus:border-accent/50 disabled:opacity-50"
                     value={slackQuery}
-                    onChange={(e) => setSlackQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSlackQuery(e.target.value);
+                      setSlackSearchComplete(false);
+                    }}
                     placeholder="Search channels…"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') void searchSlackChannels();
@@ -526,6 +533,8 @@ export function GatewaysPage() {
                       </button>
                     ))}
                   </div>
+                ) : slackSearchComplete ? (
+                  <p className="text-[13px] text-secondary">No Slack channels found.</p>
                 ) : null}
               </>
             )}

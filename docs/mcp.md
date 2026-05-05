@@ -41,6 +41,7 @@ Remote servers connect over HTTP/WebSocket:
 {
   "mcpServers": {
     "slack": {
+      "type": "remote",
       "url": "https://mcp.slack.com/mcp",
       "oauth": {
         "clientId": "your-client-id"
@@ -136,6 +137,7 @@ Full server entry format:
       "env": { "VAR": "value" },
 
       // Remote server (alternative to command/args)
+      "type": "remote",
       "url": "https://example.com/mcp",
 
       // Optional
