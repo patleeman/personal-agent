@@ -2,7 +2,6 @@ import type { AgentSession } from '@mariozechner/pi-coding-agent';
 
 import { rememberImageProbeAttachments, type StoredImageProbeAttachment } from '../extensions/imageProbeAttachmentStore.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
-import { logWarn } from '../shared/logging.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import type { PromptImageAttachment } from './liveSessionQueue.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
@@ -94,38 +93,14 @@ export async function runPromptOnLiveEntry<TEntry extends LiveSessionPromptHost>
     await (allowImages && hasImages ? session.prompt(promptText, { images }) : session.prompt(promptText));
   };
 
-  // Wrap each prompt call with a stuck-session watchdog. The pi-coding-agent
-  // auto-retry path can leave _retryPromise dangling if agent.continue() throws
-  // before starting a new run (e.g. "Agent is already processing"). In that
-  // case session.prompt() never resolves and the conversation appears frozen.
-  // The watchdog detects inactivity past a generous deadline and aborts the
-  // session, which calls abortRetry() and resolves the stuck promise.
-  const withStuckSessionWatchdog = async (fn: () => Promise<void>): Promise<void> => {
-    // Max time we'll wait for a single prompt + retry cycle: 10 minutes.
-    const STUCK_SESSION_TIMEOUT_MS = 10 * 60 * 1000;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        logWarn('stuck session watchdog fired — aborting to recover', { sessionId: entry.sessionId });
-        void session.abort().catch(() => {});
-        reject(new Error('Conversation response timed out and was aborted. Please try again.'));
-      }, STUCK_SESSION_TIMEOUT_MS);
-    });
-    try {
-      await Promise.race([fn(), timeoutPromise]);
-    } finally {
-      if (timeoutId !== null) clearTimeout(timeoutId);
-    }
-  };
-
   try {
-    await withStuckSessionWatchdog(() => runPrompt(!shouldUseTextOnlyImageHandling));
+    await runPrompt(!shouldUseTextOnlyImageHandling);
   } catch (error) {
     if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
       throw error;
     }
 
-    await withStuckSessionWatchdog(() => runPrompt(false));
+    await runPrompt(false);
   }
 }
 
