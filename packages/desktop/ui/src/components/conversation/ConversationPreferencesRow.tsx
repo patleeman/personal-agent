@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getModelSelectableServiceTierOptions, getModelThinkingLevelOptions, groupModelsByProvider } from '../../model/modelPreferences';
 import type { ModelInfo } from '../../shared/types';
-import { cx, IconButton, Pill } from '../ui';
+import { cx, IconButton } from '../ui';
 
 const COMPOSER_PREFERENCE_SELECT_CLASS =
   'h-8 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
@@ -72,12 +72,6 @@ function ConversationThinkingLevelSelect({
       </svg>
     </label>
   );
-}
-
-function isTextOnlyModel(modelId: string, models: ModelInfo[]): boolean {
-  const model = models.find((m) => m.id === modelId);
-  if (!model) return false;
-  return Array.isArray(model.input) && !model.input.includes('image');
 }
 
 function ConversationModelSelect({
@@ -201,11 +195,6 @@ function ConversationPreferenceToggle({
   );
 }
 
-function ConversationPreferencesRowTextOnlyPill({ modelId, models }: { modelId: string; models: ModelInfo[] }) {
-  if (!isTextOnlyModel(modelId, models)) return null;
-  return <Pill tone="warning">text-only</Pill>;
-}
-
 export function ConversationPreferencesRow({
   models,
   currentModel,
@@ -280,7 +269,6 @@ export function ConversationPreferencesRow({
             disabled={savingPreference !== null || models.length === 0}
             onChange={onSelectModel}
           />
-          <ConversationPreferencesRowTextOnlyPill modelId={currentModel} models={models} />
           <ConversationThinkingLevelSelect
             value={currentThinkingLevel}
             disabled={savingPreference !== null}
@@ -356,7 +344,6 @@ export function ConversationPreferencesRow({
                       setCompactMenuOpen(false);
                     }}
                   />
-                  <ConversationPreferencesRowTextOnlyPill modelId={currentModel} models={models} />
                 </div>
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
