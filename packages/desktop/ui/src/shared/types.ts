@@ -1522,6 +1522,7 @@ export interface TraceSummary {
   tokensInput: number;
   tokensOutput: number;
   tokensCached: number;
+  tokensCachedWrite: number;
   cacheHitRate: number;
   toolErrors: number;
   toolCalls: number;
@@ -1661,7 +1662,8 @@ export interface CacheEfficiencyAggregate {
   overallHitRate: number;
   totalInput: number;
   totalCached: number;
-  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number }>;
+  totalCachedWrite: number;
+  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number; totalCachedWrite: number }>;
 }
 
 export interface SystemPromptPoint {

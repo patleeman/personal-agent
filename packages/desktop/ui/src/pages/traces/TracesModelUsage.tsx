@@ -11,6 +11,7 @@ export function TracesModelUsage({
   tokensInput,
   tokensOutput,
   tokensCached,
+  tokensCachedWrite,
   cacheHitRate,
   cacheEfficiency,
 }: {
@@ -20,6 +21,7 @@ export function TracesModelUsage({
   tokensInput: number;
   tokensOutput: number;
   tokensCached: number;
+  tokensCachedWrite: number;
   cacheHitRate: number;
   cacheEfficiency?: CacheEfficiencyAggregate | null;
 }) {
@@ -41,8 +43,9 @@ export function TracesModelUsage({
             <Metric value={formatNumber(totalTokens)} label="Total" cls="text-accent" />
             <Metric value={formatNumber(tokensInput)} label="Input" />
             <Metric value={formatNumber(tokensOutput)} label="Output" />
-            <Metric value={formatNumber(tokensCached)} label="Cached In" cls="text-success" />
-            <Metric value={`${cacheHitRate}%`} label="Cache Hit" cls="text-warning" />
+            <Metric value={formatNumber(tokensCached)} label="Cache Read" cls="text-success" />
+            <Metric value={formatNumber(tokensCachedWrite)} label="Cache Write" cls="text-warning" />
+            <Metric value={`${cacheHitRate}%`} label="Cache Hit" cls="text-accent" />
           </div>
           {models.map((m) => {
             const hitRate = cacheByModel[m.modelId];

@@ -5,7 +5,7 @@
  */
 import { join } from 'node:path';
 
-import { AgentSession } from '@mariozechner/pi-coding-agent';
+import { AgentSession, estimateTokens } from '@mariozechner/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { publishAppEvent } from '../shared/appEvents.js';
@@ -317,23 +317,26 @@ async function syncDurableConversationRun(
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
   const usage = readLiveSessionContextUsageForEntry(entry);
   if (usage) {
-    const systemSeg = usage.segments?.find((s) => s.key === 'system');
     const userSeg = usage.segments?.find((s) => s.key === 'user');
     const assistantSeg = usage.segments?.find((s) => s.key === 'assistant');
     const toolSeg = usage.segments?.find((s) => s.key === 'tool');
     const summarySeg = usage.segments?.find((s) => s.key === 'summary');
+    // System prompt is not a message — estimate directly from the session's system prompt string
+    const systemPromptText = entry.session.systemPrompt ?? '';
+    const systemPromptTokens =
+      systemPromptText.length > 0 ? estimateTokens({ role: 'user', content: [{ type: 'text', text: systemPromptText }] }) : 0;
     persistTraceContext({
       sessionId: entry.sessionId,
       modelId: usage.modelId ?? entry.session.model?.id,
       totalTokens: usage.tokens ?? 0,
       contextWindow: usage.contextWindow ?? 0,
       pct: usage.percent != null ? Math.round(usage.percent * 100) / 100 : 0,
-      segSystem: systemSeg?.tokens ?? 0,
+      segSystem: systemPromptTokens,
       segUser: userSeg?.tokens ?? 0,
       segAssistant: assistantSeg?.tokens ?? 0,
       segTool: toolSeg?.tokens ?? 0,
       segSummary: summarySeg?.tokens ?? 0,
-      systemPromptTokens: systemSeg?.tokens ?? 0,
+      systemPromptTokens,
     });
   }
   broadcastLiveSessionContextUsage(entry, (event) => broadcast(entry, event), force);

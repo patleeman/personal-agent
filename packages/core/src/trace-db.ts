@@ -383,6 +383,7 @@ export interface TraceSummary {
   tokensInput: number;
   tokensOutput: number;
   tokensCached: number;
+  tokensCachedWrite: number;
   cacheHitRate: number;
   toolErrors: number;
   toolCalls: number;
@@ -398,6 +399,7 @@ export function querySummary(since: string): TraceSummary {
       COALESCE(SUM(tokens_input), 0) as tokens_input,
       COALESCE(SUM(tokens_output), 0) as tokens_output,
       COALESCE(SUM(tokens_cached_input), 0) as tokens_cached,
+      COALESCE(SUM(tokens_cached_write), 0) as tokens_cached_write,
       COALESCE(SUM(cost), 0) as total_cost,
       COUNT(DISTINCT session_id) as sessions_active
     FROM trace_stats WHERE ts >= ?
@@ -409,6 +411,7 @@ export function querySummary(since: string): TraceSummary {
     tokensInput: number;
     tokensOutput: number;
     tokensCached: number;
+    tokensCachedWrite: number;
     totalCost: number;
     sessionsActive: number;
   }>(rawStats);
@@ -428,7 +431,7 @@ export function querySummary(since: string): TraceSummary {
   const rawCount = db.prepare(`SELECT COUNT(DISTINCT id) as cnt FROM trace_stats WHERE ts >= ?`).get(since) as Record<string, unknown>;
   const count = mapRow<{ cnt: number }>(rawCount);
 
-  const cacheableInput = Number(stats.tokensInput) + Number(stats.tokensCached);
+  const cacheableInput = Number(stats.tokensInput) + Number(stats.tokensCached) + Number(stats.tokensCachedWrite);
   const hitRate = cacheableInput > 0 ? Math.round((Number(stats.tokensCached) / cacheableInput) * 100) : 0;
 
   return {
@@ -439,6 +442,7 @@ export function querySummary(since: string): TraceSummary {
     tokensInput: stats.tokensInput,
     tokensOutput: stats.tokensOutput,
     tokensCached: stats.tokensCached,
+    tokensCachedWrite: Number(stats.tokensCachedWrite),
     cacheHitRate: hitRate,
     toolErrors: errors.errors,
     toolCalls: errors.total,
@@ -982,7 +986,7 @@ export function queryCacheEfficiency(since: string): CacheEfficiencyPoint[] {
   const rows = db
     .prepare(
       `
-    SELECT ts, model_id, tokens_input + tokens_cached_input as total_input, tokens_cached_input as cached_input
+    SELECT ts, model_id, tokens_input + tokens_cached_input + tokens_cached_write as total_input, tokens_cached_input as cached_input
     FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
     ORDER BY ts ASC LIMIT 200
   `,
@@ -1021,31 +1025,41 @@ export function queryCacheEfficiencyAggregate(since: string): {
   overallHitRate: number;
   totalInput: number;
   totalCached: number;
-  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number }>;
+  totalCachedWrite: number;
+  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number; totalCachedWrite: number }>;
 } {
   const db = getTraceDb();
   const rows = db
     .prepare(
       `
-    SELECT COALESCE(model_id, '') as model_id, SUM(tokens_input + tokens_cached_input) as total_input, SUM(tokens_cached_input) as total_cached
+    SELECT COALESCE(model_id, '') as model_id,
+      SUM(tokens_input + tokens_cached_input + tokens_cached_write) as total_input,
+      SUM(tokens_cached_input) as total_cached,
+      SUM(tokens_cached_write) as total_cached_write
     FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
     GROUP BY model_id ORDER BY total_input DESC
   `,
     )
     .all(since) as Record<string, unknown>[];
-  const mapped = mapRows<{ modelId: string; totalInput: number; totalCached: number }>(rows);
+  const mapped = mapRows<{ modelId: string; totalInput: number; totalCached: number; totalCachedWrite: number }>(rows);
   const totals = mapped.reduce(
-    (acc, r) => ({ totalInput: acc.totalInput + Number(r.totalInput), totalCached: acc.totalCached + Number(r.totalCached) }),
-    { totalInput: 0, totalCached: 0 },
+    (acc, r) => ({
+      totalInput: acc.totalInput + Number(r.totalInput),
+      totalCached: acc.totalCached + Number(r.totalCached),
+      totalCachedWrite: acc.totalCachedWrite + Number(r.totalCachedWrite),
+    }),
+    { totalInput: 0, totalCached: 0, totalCachedWrite: 0 },
   );
   return {
     overallHitRate: totals.totalInput > 0 ? Math.round((totals.totalCached / totals.totalInput) * 10000) / 100 : 0,
     totalInput: totals.totalInput,
     totalCached: totals.totalCached,
+    totalCachedWrite: totals.totalCachedWrite,
     byModel: mapped.map((r) => ({
       modelId: r.modelId,
       totalInput: Number(r.totalInput),
       totalCached: Number(r.totalCached),
+      totalCachedWrite: Number(r.totalCachedWrite),
       hitRate: Number(r.totalInput) > 0 ? Math.round((Number(r.totalCached) / Number(r.totalInput)) * 10000) / 100 : 0,
     })),
   };

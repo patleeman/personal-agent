@@ -100,6 +100,7 @@ export function TracesPage() {
             tokensInput={summary.tokensInput}
             tokensOutput={summary.tokensOutput}
             tokensCached={summary.tokensCached}
+            tokensCachedWrite={summary.tokensCachedWrite}
             cacheHitRate={summary.cacheHitRate}
             cacheEfficiency={cacheEfficiency}
           />

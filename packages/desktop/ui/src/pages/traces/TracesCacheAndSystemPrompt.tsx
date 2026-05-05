@@ -30,7 +30,8 @@ export function TracesCacheAndSystemPrompt({
                   label="Overall Hit Rate"
                   cls={cacheEfficiency.overallHitRate > 30 ? 'text-success' : 'text-warning'}
                 />
-                <QuickStat value={fmt(cacheEfficiency.totalCached)} label="Cached Tokens" />
+                <QuickStat value={fmt(cacheEfficiency.totalCached)} label="Cache Read" />
+                <QuickStat value={fmt(cacheEfficiency.totalCachedWrite)} label="Cache Write" />
                 <QuickStat value={fmt(cacheEfficiency.totalInput)} label="Total Input" />
               </div>
               {cacheEfficiency.byModel.map((m) => {
