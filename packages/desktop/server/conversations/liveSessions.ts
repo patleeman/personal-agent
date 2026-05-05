@@ -387,6 +387,25 @@ export function takeOverSessionControl(sessionId: string, surfaceId: string): Li
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireSession(id: string, session: AgentSession, cwd: string) {
+  // Snapshot current cumulative session token totals so the delta logic in
+  // liveSessionEventHandling doesn't double-count tokens from before this wire
+  // (e.g. on reconnect after a crash or reload).
+  let initialPersistedTokens: LiveEntry['tracePersistedTokens'];
+  try {
+    const existing = session.getSessionStats();
+    if (existing.tokens.input > 0 || existing.tokens.cacheRead > 0 || existing.tokens.cacheWrite > 0) {
+      initialPersistedTokens = {
+        input: existing.tokens.input,
+        output: existing.tokens.output,
+        cacheRead: existing.tokens.cacheRead,
+        cacheWrite: existing.tokens.cacheWrite,
+        cost: existing.cost,
+      };
+    }
+  } catch {
+    // Non-fatal — start from zero if stats unavailable
+  }
+
   const entry: LiveEntry = {
     sessionId: id,
     session,
@@ -397,6 +416,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
     lastQueueStateJson: null,
     lastParallelStateJson: null,
     currentTurnError: null,
+    tracePersistedTokens: initialPersistedTokens,
     ...createLiveSessionHiddenTurnState(),
     pendingAutoModeContinuation: false,
     pendingAutoCompactionReason: null,

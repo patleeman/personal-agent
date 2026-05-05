@@ -139,6 +139,9 @@ function resolveTraceDbPath(stateRoot?: string): string {
   return join(resolveTraceDbDir(stateRoot), 'trace.db');
 }
 
+// Prune rows older than this many days on each DB open
+const TRACE_STATS_TTL_DAYS = 90;
+
 function getTraceDb(stateRoot?: string): SqliteDatabase {
   const path = resolveTraceDbPath(stateRoot);
   const cached = dbCache.get(path);
@@ -158,6 +161,20 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
       // Column already exists. SQLite's ADD COLUMN has no IF NOT EXISTS on older versions.
     }
   }
+
+  // Prune stale rows on open (fire-and-forget)
+  try {
+    const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare(`DELETE FROM trace_stats WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_context WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_tool_calls WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_compactions WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_queue WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_auto_mode WHERE ts < ?`).run(cutoff);
+  } catch {
+    // Non-fatal
+  }
+
   dbCache.set(path, db);
   return db;
 }
@@ -730,6 +747,7 @@ export interface TokenDailyRow {
   tokensInput: number;
   tokensOutput: number;
   tokensCached: number;
+  tokensCachedWrite: number;
   cost: number;
 }
 
@@ -743,6 +761,7 @@ export function queryTokensDaily(since: string): TokenDailyRow[] {
       SUM(tokens_input) as tokens_input,
       SUM(tokens_output) as tokens_output,
       SUM(tokens_cached_input) as tokens_cached,
+      SUM(tokens_cached_write) as tokens_cached_write,
       SUM(cost) as cost
     FROM trace_stats WHERE ts >= ?
     GROUP BY DATE(ts)
@@ -755,6 +774,7 @@ export function queryTokensDaily(since: string): TokenDailyRow[] {
     tokensInput: Number(r.tokensInput),
     tokensOutput: Number(r.tokensOutput),
     tokensCached: Number(r.tokensCached),
+    tokensCachedWrite: Number(r.tokensCachedWrite),
     cost: Number(r.cost),
   }));
 }

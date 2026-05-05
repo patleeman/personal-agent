@@ -172,11 +172,17 @@ describe('trace-db', () => {
 
   it('queryCacheEfficiency maps token cache columns', () => {
     const series = queryCacheEfficiency(fiveHoursAgo);
+    // totalInput = tokens_input + tokens_cached_input + tokens_cached_write = 1000 + 250 + 0 = 1250
     expect(series[0]).toMatchObject({ totalInput: 1250, cachedInput: 250, hitRate: 20 });
 
     const aggregate = queryCacheEfficiencyAggregate(fiveHoursAgo);
-    expect(aggregate.totalInput).toBeGreaterThan(0);
-    expect(aggregate.totalCached).toBeGreaterThan(0);
+    // gpt-4o: input=1500, cachedInput=250, cachedWrite=0 → totalInput=1750, totalCached=250
+    // gpt-4o-mini: input=300, cachedInput=0, cachedWrite=0 → totalInput=300, totalCached=0
+    // overall: 250 / (1750+300) = 250/2050 ≈ 12.2%
+    expect(aggregate.totalInput).toBe(2050);
+    expect(aggregate.totalCached).toBe(250);
+    expect(aggregate.totalCachedWrite).toBe(0);
+    expect(aggregate.overallHitRate).toBeGreaterThan(0);
     expect(aggregate.overallHitRate).toBeLessThanOrEqual(100);
   });
 

@@ -59,7 +59,7 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
                   <div
                     key={di}
                     className={`w-3 h-3 rounded-sm ${cellColors[lvl]}`}
-                    title={`${day.date}: ${formatNumber(v)} tokens (in: ${formatNumber(day.tokensInput)}, cached: ${formatNumber(day.tokensCached)}, out: ${formatNumber(day.tokensOutput)})`}
+                    title={`${day.date}: ${formatNumber(v)} tokens (in: ${formatNumber(day.tokensInput)}, cache read: ${formatNumber(day.tokensCached)}, cache write: ${formatNumber(day.tokensCachedWrite)}, out: ${formatNumber(day.tokensOutput)})`}
                   />
                 );
               })}
@@ -85,10 +85,19 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
             </span>
           </span>
           <span>
-            Cached:{' '}
+            Cache Read:{' '}
             <span className="text-warning">
               {pct(
                 data.reduce((a, d) => a + d.tokensCached, 0),
+                total,
+              )}
+            </span>
+          </span>
+          <span>
+            Cache Write:{' '}
+            <span className="text-warning">
+              {pct(
+                data.reduce((a, d) => a + d.tokensCachedWrite, 0),
                 total,
               )}
             </span>
@@ -109,7 +118,7 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
 }
 
 function tokenTotal(day: TraceTokenDaily): number {
-  return day.tokensInput + day.tokensCached + day.tokensOutput;
+  return day.tokensInput + day.tokensCached + day.tokensCachedWrite + day.tokensOutput;
 }
 
 function pct(value: number, total: number): string {

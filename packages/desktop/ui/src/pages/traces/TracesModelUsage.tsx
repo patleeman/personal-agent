@@ -67,26 +67,30 @@ export function TracesModelUsage({
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Cost Breakdown</div>
           <div className="flex flex-wrap gap-1 mb-3">
-            {models.slice(0, 4).map((m, i) => {
+            {(() => {
+              const top = models.slice(0, 4);
+              const totalCost = top.reduce((s, m) => s + m.cost, 0);
               const colors = [
                 'from-[#6c8aff] to-[#4a6ae0]',
                 'from-[#ff9f0a] to-[#e08500]',
                 'from-[#4cd964] to-[#2db84d]',
-                'from-[#6c8aff] to-[#4a6ae0]',
+                'from-[#ff6b6b] to-[#e04a4a]',
               ];
-              const sizes = [2, 1, 0.8, 0.5];
-              return (
-                <div
-                  key={m.modelId}
-                  className={`flex-${sizes[i] || 1} bg-gradient-to-br ${colors[i % colors.length]} rounded-lg p-2.5 min-h-[50px] flex flex-col justify-end`}
-                  style={{ flex: sizes[i] || 1 }}
-                >
-                  <div className="text-[11px] font-semibold text-white/90">{m.modelId}</div>
-                  <div className="text-[10px] font-mono text-white/70">${m.cost.toFixed(2)}</div>
-                  <div className="text-[9px] text-white/50">{formatNumber(m.tokens)} tok</div>
-                </div>
-              );
-            })}
+              return top.map((m, i) => {
+                const flexSize = totalCost > 0 ? Math.max((m.cost / totalCost) * 4, 0.3) : 1;
+                return (
+                  <div
+                    key={m.modelId}
+                    className={`bg-gradient-to-br ${colors[i % colors.length]} rounded-lg p-2.5 min-h-[50px] flex flex-col justify-end`}
+                    style={{ flex: flexSize }}
+                  >
+                    <div className="text-[11px] font-semibold text-white/90">{m.modelId}</div>
+                    <div className="text-[10px] font-mono text-white/70">${m.cost.toFixed(2)}</div>
+                    <div className="text-[9px] text-white/50">{formatNumber(m.tokens)} tok</div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
 
