@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../client/api';
 import { AppPageIntro, AppPageLayout, ToolbarButton } from '../components/ui';
+import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { GatewayConnection, GatewayEvent, GatewayState, GatewayThreadBinding, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 
@@ -26,6 +27,7 @@ export function GatewaysPage() {
   const [telegramChatError, setTelegramChatError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [openThreadIds, setOpenThreadIds] = useState(() => readGatewayOpenThreadIds());
   const [telegramChatIdDraft, setTelegramChatIdDraft] = useState('');
   const [telegramThreadId, setTelegramThreadId] = useState('');
 
@@ -37,6 +39,11 @@ export function GatewaysPage() {
     ? (state.chatTargets.find((target) => target.connectionId === telegramConnection.id && target.provider === 'telegram') ?? null)
     : null;
   const configuredTelegramChatId = telegramChatTarget?.externalChatId || telegramBinding?.externalChatId || '';
+  const openThreadIdSet = useMemo(() => new Set(openThreadIds), [openThreadIds]);
+  const openSessions = useMemo(() => {
+    const byId = new Map(sessions.map((session) => [session.id, session]));
+    return openThreadIds.map((threadId) => byId.get(threadId)).filter((session): session is SessionMeta => Boolean(session));
+  }, [openThreadIds, sessions]);
   const slackConnection = state.connections.find((c) => c.provider === 'slack_mcp') ?? null;
   const slackBinding = slackConnection
     ? (state.bindings.find((b) => b.connectionId === slackConnection.id && b.provider === 'slack_mcp') ?? null)
@@ -63,6 +70,15 @@ export function GatewaysPage() {
   }, []);
 
   useEffect(() => {
+    function handleConversationLayoutChanged() {
+      setOpenThreadIds(readGatewayOpenThreadIds());
+    }
+
+    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
+    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
+  }, []);
+
+  useEffect(() => {
     if (configuredTelegramChatId && !telegramChatIdDraft.trim()) {
       setTelegramChatIdDraft(configuredTelegramChatId);
     }
@@ -75,7 +91,6 @@ export function GatewaysPage() {
       .then((next) => {
         if (cancelled) return;
         setSessions(next);
-        setTelegramThreadId((current) => current || next[0]?.id || '');
       })
       .catch((err) => {
         if (!cancelled) setSessionsError(formatGatewayError(err));
@@ -84,6 +99,20 @@ export function GatewaysPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setTelegramThreadId((current) => {
+      if (current && openThreadIdSet.has(current)) {
+        return current;
+      }
+
+      if (telegramBinding?.conversationId && openThreadIdSet.has(telegramBinding.conversationId)) {
+        return telegramBinding.conversationId;
+      }
+
+      return openSessions[0]?.id ?? '';
+    });
+  }, [openSessions, openThreadIdSet, telegramBinding?.conversationId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,8 +228,16 @@ export function GatewaysPage() {
   async function attachTelegramChat() {
     const chatId = configuredTelegramChatId;
     const thread = sessions.find((session) => session.id === telegramThreadId) ?? null;
+    if (!telegramThreadId) {
+      if (telegramBinding) {
+        await detachTelegram();
+        return;
+      }
+      setError('Choose an open thread or leave it detached.');
+      return;
+    }
     if (!chatId || !thread) {
-      setError('Save a Telegram chat ID and choose a thread.');
+      setError('Save a Telegram chat ID and choose an open thread.');
       return;
     }
 
@@ -397,8 +434,8 @@ export function GatewaysPage() {
                     onChange={(event) => setTelegramThreadId(event.target.value)}
                     disabled={busy !== null || sessions.length === 0}
                   >
-                    {sessions.length === 0 ? <option value="">No threads available</option> : null}
-                    {sessions.map((session) => (
+                    <option value="">No thread (detached)</option>
+                    {openSessions.map((session) => (
                       <option key={session.id} value={session.id}>
                         {session.title || session.id}
                       </option>
@@ -407,10 +444,16 @@ export function GatewaysPage() {
                 </label>
                 <ToolbarButton
                   className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-                  disabled={busy !== null || !configuredTelegramChatId || !telegramThreadId}
+                  disabled={busy !== null || !configuredTelegramChatId || (!telegramThreadId && !telegramBinding)}
                   onClick={attachTelegramChat}
                 >
-                  {busy === 'telegram-attach' ? 'Attaching…' : telegramBinding ? 'Update attachment' : 'Attach thread'}
+                  {busy === 'telegram-attach'
+                    ? 'Attaching…'
+                    : !telegramThreadId && telegramBinding
+                      ? 'Detach thread'
+                      : telegramBinding
+                        ? 'Update attachment'
+                        : 'Attach thread'}
                 </ToolbarButton>
               </div>
             </div>
@@ -632,4 +675,9 @@ function formatActivityKind(kind: string): string {
 function formatGatewayError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return /Unexpected token.*doctype|not valid JSON/i.test(message) ? 'Gateway API is unavailable in this preview.' : message;
+}
+
+function readGatewayOpenThreadIds(): string[] {
+  const layout = readConversationLayout();
+  return [...layout.pinnedSessionIds, ...layout.sessionIds];
 }

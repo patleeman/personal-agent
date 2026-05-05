@@ -5,12 +5,29 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '../client/api';
+import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings';
 import type { GatewayState } from '../shared/types';
 import { GatewaysPage } from './GatewaysPage';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
 const mountedRoots: Root[] = [];
+
+function installLocalStorageMock() {
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => store.set(key, String(value)),
+    removeItem: (key: string) => store.delete(key),
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+  };
+  Object.defineProperty(window, 'localStorage', { value: storage, configurable: true });
+  Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
+}
 
 function createGatewayState(overrides?: Partial<GatewayState>): GatewayState {
   return {
@@ -86,6 +103,9 @@ describe('GatewaysPage', () => {
   let saveTelegramGatewayChatMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    installLocalStorageMock();
+    window.localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['thread-1']));
+    window.localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     gatewaysMock = vi.spyOn(api, 'gateways');
     updateGatewayConnectionMock = vi.spyOn(api, 'updateGatewayConnection');
     detachGatewayConversationMock = vi.spyOn(api, 'detachGatewayConversation');
@@ -103,6 +123,16 @@ describe('GatewaysPage', () => {
         title: 'Support thread',
         messageCount: 1,
       },
+      {
+        id: 'closed-thread',
+        file: '/tmp/closed-thread.jsonl',
+        timestamp: '2026-05-03T12:00:00Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'openai/gpt-4o',
+        title: 'Closed thread',
+        messageCount: 1,
+      },
     ]);
     telegramGatewayTokenMock = vi.spyOn(api, 'telegramGatewayToken').mockResolvedValue({ configured: false });
     saveTelegramGatewayTokenMock = vi.spyOn(api, 'saveTelegramGatewayToken');
@@ -118,6 +148,7 @@ describe('GatewaysPage', () => {
       });
     }
     document.body.innerHTML = '';
+    window.localStorage.clear();
   });
 
   it('shows loading state while fetching', async () => {
@@ -289,6 +320,19 @@ describe('GatewaysPage', () => {
       externalChatLabel: '123456789',
     });
     expect(container.textContent).toContain('Support thread');
+  });
+
+  it('limits Telegram thread attachment choices to open threads plus detached', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    telegramGatewayTokenMock.mockResolvedValue({ configured: true });
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const options = Array.from(container.querySelectorAll('select option')).map((option) => option.textContent?.trim());
+    expect(options).toContain('No thread (detached)');
+    expect(options).toContain('Support thread');
+    expect(options).not.toContain('Closed thread');
   });
 
   it('displays error from API', async () => {
