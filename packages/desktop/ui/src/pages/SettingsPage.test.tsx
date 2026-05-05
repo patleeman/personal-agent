@@ -280,6 +280,10 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.telegramGatewayToken) {
+        return buildUseApiResult({ configured: false });
+      }
+
       throw new Error(`Unexpected SettingsPage useApi call for key ${key ?? '<none>'}`);
     });
   });

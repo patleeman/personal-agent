@@ -331,7 +331,7 @@ function GatewayRow({
           value={binding?.externalChatLabel || binding?.externalChatId || '—'}
           muted={!binding?.externalChatId}
         />
-        <GatewayMeta label="Updated" value={timeAgoCompact(new Date(connection.updatedAt).getTime())} />
+        <GatewayMeta label="Updated" value={timeAgoCompact(connection.updatedAt)} />
       </dl>
     </div>
   );
@@ -360,7 +360,7 @@ function GatewayActivity({ events }: { events: GatewayEvent[] }) {
         ) : (
           rows.map((event) => (
             <div key={event.id} className="flex items-baseline gap-6 border-t border-border-subtle py-3 text-[13px] first:border-t-0">
-              <span className="w-20 shrink-0 text-[12px] text-dim">{timeAgoCompact(new Date(event.createdAt).getTime())}</span>
+              <span className="w-20 shrink-0 text-[12px] text-dim">{timeAgoCompact(event.createdAt)}</span>
               <span className="min-w-0 flex-1">{event.message}</span>
               <span className="shrink-0 text-[12px] capitalize text-secondary">{event.kind}</span>
             </div>
