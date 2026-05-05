@@ -2,7 +2,7 @@
  * Model Usage & Cost — 2×2 grid section
  */
 
-import type { TraceModelUsage, TraceThroughput } from '../../shared/types';
+import type { CacheEfficiencyAggregate, TraceModelUsage, TraceThroughput } from '../../shared/types';
 
 export function TracesModelUsage({
   models,
@@ -12,6 +12,7 @@ export function TracesModelUsage({
   tokensOutput,
   tokensCached,
   cacheHitRate,
+  cacheEfficiency,
 }: {
   models: TraceModelUsage[];
   throughput: TraceThroughput[];
@@ -20,8 +21,10 @@ export function TracesModelUsage({
   tokensOutput: number;
   tokensCached: number;
   cacheHitRate: number;
+  cacheEfficiency?: CacheEfficiencyAggregate | null;
 }) {
   const maxTokens = Math.max(...models.map((m) => m.tokens), 1);
+  const cacheByModel = Object.fromEntries((cacheEfficiency?.byModel ?? []).map((m) => [m.modelId, m.hitRate]));
 
   return (
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
@@ -41,15 +44,20 @@ export function TracesModelUsage({
             <Metric value={formatNumber(tokensCached)} label="Cached In" cls="text-success" />
             <Metric value={`${cacheHitRate}%`} label="Cache Hit" cls="text-warning" />
           </div>
-          {models.map((m) => (
-            <BarRow
-              key={m.modelId}
-              label={<span className="model-tag">{m.modelId}</span>}
-              value={formatNumber(m.tokens)}
-              pct={m.tokens / maxTokens}
-              color="bg-accent"
-            />
-          ))}
+          {models.map((m) => {
+            const hitRate = cacheByModel[m.modelId];
+            return (
+              <BarRow
+                key={m.modelId}
+                label={<span className="model-tag">{m.modelId}</span>}
+                value={formatNumber(m.tokens)}
+                pct={m.tokens / maxTokens}
+                color="bg-accent"
+                badge={hitRate != null ? `${hitRate}% cache` : undefined}
+                badgeCls={hitRate != null ? (hitRate > 30 ? 'text-success' : hitRate > 10 ? 'text-warning' : 'text-danger') : undefined}
+              />
+            );
+          })}
         </div>
 
         {/* Cell 2: Cost treemap */}
@@ -144,7 +152,21 @@ function QuickStat({ value, label, cls = '' }: { value: string; label: string; c
   );
 }
 
-function BarRow({ label, value, pct, color }: { label: React.ReactNode; value: string; pct: number; color: string }) {
+function BarRow({
+  label,
+  value,
+  pct,
+  color,
+  badge,
+  badgeCls,
+}: {
+  label: React.ReactNode;
+  value: string;
+  pct: number;
+  color: string;
+  badge?: string;
+  badgeCls?: string;
+}) {
   return (
     <div className="flex items-center gap-2.5 py-1.5">
       <div className="w-[100px] shrink-0 text-[12px] text-secondary">{label}</div>
@@ -152,6 +174,7 @@ function BarRow({ label, value, pct, color }: { label: React.ReactNode; value: s
         <div className={`h-full rounded ${color}`} style={{ width: `${Math.max(pct * 100, 2)}%` }} />
       </div>
       <div className="w-[70px] text-right font-mono text-[11px] text-secondary shrink-0">{value}</div>
+      {badge != null && <div className={`w-[80px] text-right font-mono text-[10px] shrink-0 ${badgeCls ?? 'text-dim'}`}>{badge}</div>}
     </div>
   );
 }

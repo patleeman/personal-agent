@@ -101,6 +101,7 @@ export function TracesPage() {
             tokensOutput={summary.tokensOutput}
             tokensCached={summary.tokensCached}
             cacheHitRate={summary.cacheHitRate}
+            cacheEfficiency={cacheEfficiency}
           />
         )}
 
