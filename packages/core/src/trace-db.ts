@@ -14,6 +14,7 @@ import { join } from 'path';
 
 import { getStateRoot } from './runtime/paths.js';
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite.js';
+import { applyMigrations, type Migration } from './sqlite-migrations.js';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -139,15 +140,53 @@ CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_ts ON trace_context
 CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id);
 `;
 
-const MIGRATIONS = [
-  `ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`,
-  `ALTER TABLE trace_stats ADD COLUMN tokens_cached_write INTEGER DEFAULT 0`,
-  `CREATE TABLE IF NOT EXISTS trace_suggested_context (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '', ts TEXT NOT NULL, pointer_ids TEXT NOT NULL DEFAULT '', pointer_count INTEGER NOT NULL DEFAULT 0)`,
-  `CREATE TABLE IF NOT EXISTS trace_context_pointer_inspect (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '', ts TEXT NOT NULL, inspected_conversation_id TEXT NOT NULL, was_suggested INTEGER NOT NULL DEFAULT 0)`,
-  `CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_ts ON trace_suggested_context(ts)`,
-  `CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_session ON trace_suggested_context(session_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_ts ON trace_context_pointer_inspect(ts)`,
-  `CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id)`,
+// ── Migrations ────────────────────────────────────────────────────────────────
+// Versioned, sequential migrations tracked via PRAGMA user_version.
+// Version 0 = pre-migration DB — all migrations run on first open.
+
+const TRACE_MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    description: 'Add duration_ms to trace_stats',
+    up: (db) => db.exec(`ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`),
+  },
+  {
+    version: 2,
+    description: 'Add tokens_cached_write to trace_stats',
+    up: (db) => db.exec(`ALTER TABLE trace_stats ADD COLUMN tokens_cached_write INTEGER DEFAULT 0`),
+  },
+  {
+    version: 3,
+    description: 'Add trace_suggested_context table and indexes',
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS trace_suggested_context (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        profile TEXT NOT NULL DEFAULT '',
+        ts TEXT NOT NULL,
+        pointer_ids TEXT NOT NULL DEFAULT '',
+        pointer_count INTEGER NOT NULL DEFAULT 0
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_ts ON trace_suggested_context(ts)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_session ON trace_suggested_context(session_id)`);
+    },
+  },
+  {
+    version: 4,
+    description: 'Add trace_context_pointer_inspect table and indexes',
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS trace_context_pointer_inspect (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        profile TEXT NOT NULL DEFAULT '',
+        ts TEXT NOT NULL,
+        inspected_conversation_id TEXT NOT NULL,
+        was_suggested INTEGER NOT NULL DEFAULT 0
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_ts ON trace_context_pointer_inspect(ts)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id)`);
+    },
+  },
 ];
 
 // ── Database management ───────────────────────────────────────────────────────
@@ -183,14 +222,15 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
   }
 
   const db = openSqliteDatabase(path);
+
+  // Enable WAL mode for concurrent read/write without contention
+  db.pragma('journal_mode=WAL');
+
+  // Apply baseline schema (all IF NOT EXISTS — safe to run on any DB)
   db.exec(SCHEMA);
-  for (const migration of MIGRATIONS) {
-    try {
-      db.exec(migration);
-    } catch {
-      // Column already exists. SQLite's ADD COLUMN has no IF NOT EXISTS on older versions.
-    }
-  }
+
+  // Apply versioned migrations tracked via PRAGMA user_version
+  applyMigrations(db, 'trace', TRACE_MIGRATIONS);
 
   // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {
@@ -1177,6 +1217,30 @@ export function querySystemPromptAggregate(since: string): {
     maxSystemPromptTokens: Number(m.maxTokens),
     samples: Number(m.samples),
   };
+}
+
+/**
+ * Return the set of conversation IDs that were suggested to a session.
+ * Used to determine `was_suggested` on inspect calls without relying on
+ * in-memory state that resets on server restart.
+ */
+export function querySessionSuggestedPointerIds(sessionId: string): Set<string> {
+  try {
+    const db = getTraceDb();
+    const rows = db
+      .prepare(`SELECT pointer_ids FROM trace_suggested_context WHERE session_id = ? AND pointer_ids != ''`)
+      .all(sessionId) as Array<{ pointer_ids: string }>;
+    const ids = new Set<string>();
+    for (const row of rows) {
+      for (const id of row.pointer_ids.split(',')) {
+        const trimmed = id.trim();
+        if (trimmed) ids.add(trimmed);
+      }
+    }
+    return ids;
+  } catch {
+    return new Set();
+  }
 }
 
 // ── Suggested Context Pointer Usage ──────────────────────────────────────────

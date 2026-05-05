@@ -2,19 +2,19 @@
  * Trace Persistence Hooks
  *
  * Wires trace-db writes into live session events.
- * Each hook is synchronous and fire-and-forget — never blocks the session loop.
+ * All writes are dispatched to the trace worker thread — never blocks the session loop.
  */
 
 import {
-  writeTraceAutoMode,
-  writeTraceCompaction,
-  writeTraceContext,
-  writeTraceContextPointerInspect,
-  writeTraceQueue,
-  writeTraceStats,
-  writeTraceSuggestedContext,
-  writeTraceToolCall,
-} from '@personal-agent/core';
+  traceWorkerAutoMode,
+  traceWorkerCompaction,
+  traceWorkerContext,
+  traceWorkerContextPointerInspect,
+  traceWorkerQueue,
+  traceWorkerStats,
+  traceWorkerSuggestedContext,
+  traceWorkerToolCall,
+} from './traceWorkerClient.js';
 
 // ── Stats hook ────────────────────────────────────────────────────────────────
 
@@ -31,19 +31,7 @@ export function persistTraceStats(params: {
   stepCount?: number;
   durationMs?: number;
 }): void {
-  writeTraceStats({
-    sessionId: params.sessionId,
-    runId: params.runId,
-    modelId: params.modelId,
-    tokensInput: params.tokensInput,
-    tokensOutput: params.tokensOutput,
-    tokensCachedInput: params.tokensCachedInput,
-    tokensCachedWrite: params.tokensCachedWrite,
-    cost: params.cost,
-    turnCount: params.turnCount,
-    stepCount: params.stepCount,
-    durationMs: params.durationMs,
-  });
+  traceWorkerStats(params);
 }
 
 // ── Context usage hook ────────────────────────────────────────────────────────
@@ -61,7 +49,7 @@ export function persistTraceContext(params: {
   segSummary?: number;
   systemPromptTokens?: number;
 }): void {
-  writeTraceContext(params);
+  traceWorkerContext(params);
 }
 
 // ── Tool call hook ────────────────────────────────────────────────────────────
@@ -75,7 +63,7 @@ export function persistTraceToolCall(params: {
   errorMessage?: string;
   conversationTitle?: string;
 }): void {
-  writeTraceToolCall(params);
+  traceWorkerToolCall(params);
 }
 
 // ── Compaction hook ───────────────────────────────────────────────────────────
@@ -87,7 +75,7 @@ export function persistTraceCompaction(params: {
   tokensAfter?: number;
   tokensSaved?: number;
 }): void {
-  writeTraceCompaction({
+  traceWorkerCompaction({
     sessionId: params.sessionId,
     reason: params.reason,
     tokensBefore: params.tokensBefore ?? 0,
@@ -104,21 +92,27 @@ export function persistTraceQueue(params: {
   itemType?: string;
   waitSeconds?: number;
 }): void {
-  writeTraceQueue(params);
+  traceWorkerQueue(params);
 }
+
+// ── Auto mode hook ────────────────────────────────────────────────────────────
 
 export function persistTraceAutoMode(params: { sessionId: string; enabled: boolean; stopReason?: string | null }): void {
-  writeTraceAutoMode(params);
+  traceWorkerAutoMode(params);
 }
 
+// ── Suggested context hook ────────────────────────────────────────────────────
+
 export function persistTraceSuggestedContext(params: { sessionId: string; pointerIds: string[] }): void {
-  writeTraceSuggestedContext(params);
+  traceWorkerSuggestedContext(params);
 }
+
+// ── Context pointer inspect hook ──────────────────────────────────────────────
 
 export function persistTraceContextPointerInspect(params: {
   sessionId: string;
   inspectedConversationId: string;
   wasSuggested: boolean;
 }): void {
-  writeTraceContextPointerInspect(params);
+  traceWorkerContextPointerInspect(params);
 }

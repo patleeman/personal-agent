@@ -10,7 +10,6 @@ import {
   resolveDurableRunsRoot,
 } from '@personal-agent/daemon';
 
-import { registerSuggestedPointers } from '../extensions/conversationInspectAgentExtension.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedTasksContext,
@@ -607,7 +606,6 @@ function buildPromptContextMessagesForSubmit(input: {
     if (pointers.pointers.length > 0) {
       const pointerIds = pointers.pointers.map((p) => p.sessionId);
       persistTraceSuggestedContext({ sessionId: input.conversationId, pointerIds });
-      registerSuggestedPointers(input.conversationId, pointerIds);
     }
 
     return {

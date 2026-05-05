@@ -47,4 +47,10 @@ await Promise.all([
     entryPoints: [resolve(packageRoot, 'server/conversations/conversationInspectWorker.ts')],
     outfile: resolve(outdir, 'conversations/conversationInspectWorker.js'),
   }),
+  // Trace worker — runs all trace-db writes off the main thread
+  build({
+    ...sharedEsbuildOptions,
+    entryPoints: [resolve(packageRoot, 'server/traces/traceWorker.ts')],
+    outfile: resolve(outdir, 'traces/traceWorker.js'),
+  }),
 ]);

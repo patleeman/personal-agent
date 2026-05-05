@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { querySessionSuggestedPointerIds } from '@personal-agent/core';
 import { Type } from '@sinclair/typebox';
 
 import {
@@ -9,23 +10,8 @@ import {
   CONVERSATION_INSPECT_SCOPE_VALUES,
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
 } from '../conversations/conversationInspectCapability.js';
-import { persistTraceContextPointerInspect } from '../traces/tracePersistence.js';
-
-// Per-session registry of suggested pointer IDs (populated by liveSessionCapability on each turn)
-// Key: sessionId, Value: set of suggested conversation IDs
-const suggestedPointerRegistry = new Map<string, Set<string>>();
-
-export function registerSuggestedPointers(sessionId: string, pointerIds: string[]): void {
-  let set = suggestedPointerRegistry.get(sessionId);
-  if (!set) {
-    set = new Set<string>();
-    suggestedPointerRegistry.set(sessionId, set);
-  }
-  for (const id of pointerIds) {
-    set.add(id);
-  }
-}
 import { executeConversationInspect } from '../conversations/conversationInspectWorkerClient.js';
+import { persistTraceContextPointerInspect } from '../traces/tracePersistence.js';
 
 const ConversationInspectToolParams = Type.Object({
   action: Type.String({ description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` }),
@@ -111,15 +97,15 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
 
         const { action, result, text } = await executeConversationInspect(params.action as string, workerParams);
 
-        // Track whether this inspect targets a suggested pointer
+        // Track whether this inspect targets a suggested pointer.
+        // Looks up the DB instead of an in-memory registry so it survives server restarts.
         const targetConversationId = typeof params.conversationId === 'string' ? params.conversationId : null;
         if (targetConversationId && currentSessionId) {
-          const suggested = suggestedPointerRegistry.get(currentSessionId);
-          const wasSuggested = suggested?.has(targetConversationId) ?? false;
+          const suggestedIds = querySessionSuggestedPointerIds(currentSessionId);
           persistTraceContextPointerInspect({
             sessionId: currentSessionId,
             inspectedConversationId: targetConversationId,
-            wasSuggested,
+            wasSuggested: suggestedIds.has(targetConversationId),
           });
         }
 
