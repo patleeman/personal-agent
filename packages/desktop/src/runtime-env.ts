@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { getDefaultStateRoot, getPiAgentRuntimeDir } from '@personal-agent/core';
@@ -72,6 +72,22 @@ function seedTestingAgentRuntimeFile(sourceFile: string, targetFile: string, opt
   copyFileSync(sourceFile, targetFile);
 }
 
+function seedTestingAuthFile(sourceFile: string, targetFile: string): void {
+  const stableAuth = readJsonRecord(sourceFile);
+  if (!stableAuth) {
+    return;
+  }
+
+  const testingAuth = readJsonRecord(targetFile) ?? {};
+  mkdirSync(dirname(targetFile), { recursive: true });
+  writeJsonRecord(targetFile, { ...testingAuth, ...stableAuth });
+}
+
+function writeJsonRecord(filePath: string, record: Record<string, unknown>): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`);
+}
+
 export function seedTestingRuntimeState(env: NodeJS.ProcessEnv = process.env): void {
   if (resolveDesktopLaunchPresentation(env).mode !== 'testing') {
     return;
@@ -88,7 +104,7 @@ export function seedTestingRuntimeState(env: NodeJS.ProcessEnv = process.env): v
     return;
   }
 
-  seedTestingAgentRuntimeFile(join(stableAgentDir, 'auth.json'), join(testingAgentDir, 'auth.json'), { overwrite: true });
+  seedTestingAuthFile(join(stableAgentDir, 'auth.json'), join(testingAgentDir, 'auth.json'));
   seedTestingAgentRuntimeFile(join(stableAgentDir, 'models.json'), join(testingAgentDir, 'models.json'));
 }
 

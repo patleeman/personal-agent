@@ -22,6 +22,8 @@ export function GatewaysPage() {
   const [telegramTokenEditing, setTelegramTokenEditing] = useState(false);
   const [telegramTokenNotice, setTelegramTokenNotice] = useState<string | null>(null);
   const [telegramTokenSaveError, setTelegramTokenSaveError] = useState<string | null>(null);
+  const [telegramChatNotice, setTelegramChatNotice] = useState<string | null>(null);
+  const [telegramChatError, setTelegramChatError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [telegramChatIdDraft, setTelegramChatIdDraft] = useState('');
@@ -111,6 +113,7 @@ export function GatewaysPage() {
     setBusy('telegram-token-save');
     setTelegramTokenNotice(null);
     setTelegramTokenSaveError(null);
+    setTelegramChatNotice(null);
     try {
       const result = await api.saveTelegramGatewayToken(token);
       setState(result.state);
@@ -132,6 +135,8 @@ export function GatewaysPage() {
     setBusy('telegram-token-remove');
     setTelegramTokenNotice(null);
     setTelegramTokenSaveError(null);
+    setTelegramChatNotice(null);
+    setTelegramChatError(null);
     try {
       const result = await api.deleteTelegramGatewayToken();
       setState(result.state);
@@ -174,16 +179,18 @@ export function GatewaysPage() {
   async function saveTelegramChatConfig() {
     const chatId = telegramChatIdDraft.trim();
     if (!chatId) {
-      setError('Enter a Telegram chat ID.');
+      setTelegramChatError('Enter a Telegram chat ID.');
       return;
     }
 
     setBusy('telegram-chat-save');
-    setError(null);
+    setTelegramChatNotice(null);
+    setTelegramChatError(null);
     try {
       setState(await api.saveTelegramGatewayChat(chatId));
+      setTelegramChatNotice('Telegram chat ID saved.');
     } catch (err) {
-      setError(formatGatewayError(err));
+      setTelegramChatError(formatGatewayError(err));
     } finally {
       setBusy(null);
     }
@@ -330,6 +337,7 @@ export function GatewaysPage() {
                     setTelegramTokenEditing(true);
                     setTelegramTokenNotice(null);
                     setTelegramTokenSaveError(null);
+                    setTelegramChatNotice(null);
                   }}
                 >
                   Replace token
@@ -354,7 +362,11 @@ export function GatewaysPage() {
                   Chat ID
                   <input
                     value={telegramChatIdDraft}
-                    onChange={(event) => setTelegramChatIdDraft(event.target.value)}
+                    onChange={(event) => {
+                      setTelegramChatIdDraft(event.target.value);
+                      setTelegramChatNotice(null);
+                      setTelegramChatError(null);
+                    }}
                     placeholder="123456789"
                     className={`${INPUT_CLASS} mt-1`}
                     disabled={busy !== null}
@@ -368,6 +380,8 @@ export function GatewaysPage() {
                   {busy === 'telegram-chat-save' ? 'Saving…' : configuredTelegramChatId ? 'Save chat ID' : 'Add chat ID'}
                 </ToolbarButton>
               </div>
+              {telegramChatNotice ? <p className="mt-2 text-[12px] text-success">{telegramChatNotice}</p> : null}
+              {telegramChatError ? <p className="mt-2 text-[12px] text-danger">{telegramChatError}</p> : null}
             </div>
 
             <div className="border-t border-border-subtle pt-4">

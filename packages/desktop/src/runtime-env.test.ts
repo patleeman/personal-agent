@@ -78,7 +78,7 @@ describe('desktop runtime environment overrides', () => {
     });
   });
 
-  it('refreshes existing testing auth from stable runtime on each launch', () => {
+  it('refreshes stable credentials without removing testing-only auth', () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-desktop-runtime-env-'));
     const stableAgentDir = join(root, 'personal-agent', 'pi-agent-runtime');
     const testingStateRoot = join(root, 'personal-agent-testing');
@@ -86,7 +86,13 @@ describe('desktop runtime environment overrides', () => {
     mkdirSync(stableAgentDir, { recursive: true });
     mkdirSync(testingAgentDir, { recursive: true });
     writeFileSync(join(stableAgentDir, 'auth.json'), JSON.stringify({ 'openai-codex': { accessToken: 'stable-token' } }));
-    writeFileSync(join(testingAgentDir, 'auth.json'), JSON.stringify({ 'openai-codex': { accessToken: 'testing-token' } }));
+    writeFileSync(
+      join(testingAgentDir, 'auth.json'),
+      JSON.stringify({
+        'openai-codex': { accessToken: 'testing-token' },
+        telegram: { type: 'api_key', key: 'telegram-token' },
+      }),
+    );
 
     const env: NodeJS.ProcessEnv = {
       PERSONAL_AGENT_DESKTOP_VARIANT: 'testing',
@@ -98,6 +104,7 @@ describe('desktop runtime environment overrides', () => {
 
     expect(JSON.parse(readFileSync(join(testingAgentDir, 'auth.json'), 'utf-8'))).toEqual({
       'openai-codex': { accessToken: 'stable-token' },
+      telegram: { type: 'api_key', key: 'telegram-token' },
     });
   });
 });

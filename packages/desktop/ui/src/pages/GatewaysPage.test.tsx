@@ -275,6 +275,7 @@ describe('GatewaysPage', () => {
     await flushAsyncWork();
 
     expect(saveTelegramGatewayChatMock).toHaveBeenCalledWith('123456789');
+    expect(container.textContent).toContain('Telegram chat ID saved.');
     const attachButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Attach thread');
     expect(attachButton).toBeTruthy();
     click(attachButton!);
