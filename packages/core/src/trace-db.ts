@@ -422,7 +422,8 @@ export function querySummary(since: string): TraceSummary {
   const rawCount = db.prepare(`SELECT COUNT(DISTINCT id) as cnt FROM trace_stats WHERE ts >= ?`).get(since) as Record<string, unknown>;
   const count = mapRow<{ cnt: number }>(rawCount);
 
-  const hitRate = stats.tokensTotal > 0 ? Math.round((stats.tokensCached / (stats.tokensInput + stats.tokensCached || 1)) * 100) : 0;
+  const cacheableInput = Number(stats.tokensInput) + Number(stats.tokensCached);
+  const hitRate = cacheableInput > 0 ? Math.round((Number(stats.tokensCached) / cacheableInput) * 100) : 0;
 
   return {
     activeSessions: stats.sessionsActive,
@@ -452,7 +453,7 @@ export function queryModelUsage(since: string): ModelUsageRow[] {
       `
     SELECT
       COALESCE(model_id, 'unknown') as model_id,
-      SUM(tokens_input + tokens_output) as tokens,
+      SUM(tokens_input + tokens_cached_input + tokens_output) as tokens,
       SUM(cost) as cost,
       COUNT(*) as calls
     FROM trace_stats WHERE ts >= ?
@@ -482,14 +483,19 @@ export function queryCostByConversation(since: string): CostByConversationRow[] 
     .prepare(
       `
     SELECT
-      COALESCE(c.conversation_title, 'Unknown') as conversation_title,
+      COALESCE(c.conversation_title, s.session_id) as conversation_title,
       COALESCE(s.model_id, 'unknown') as model_id,
-      SUM(s.tokens_input + s.tokens_output) as tokens,
+      SUM(s.tokens_input + s.tokens_cached_input + s.tokens_output) as tokens,
       SUM(s.cost) as cost
     FROM trace_stats s
-    LEFT JOIN trace_tool_calls c ON c.session_id = s.session_id
+    LEFT JOIN (
+      SELECT session_id, MAX(conversation_title) as conversation_title
+      FROM trace_tool_calls
+      WHERE conversation_title IS NOT NULL AND conversation_title != ''
+      GROUP BY session_id
+    ) c ON c.session_id = s.session_id
     WHERE s.ts >= ?
-    GROUP BY s.session_id
+    GROUP BY s.session_id, s.model_id, c.conversation_title
     ORDER BY cost DESC
     LIMIT 50
   `,
@@ -536,9 +542,30 @@ export function queryToolHealth(since: string): ToolHealthRow[] {
     errors: Number(r.errors),
     successRate: Number(r.calls) > 0 ? Math.round((1 - Number(r.errors) / Number(r.calls)) * 1000) / 10 : 100,
     avgLatencyMs: Number(r.avgLatencyMs) || 0,
-    p95LatencyMs: 0,
+    p95LatencyMs: queryToolLatencyP95(since, r.toolName),
     maxLatencyMs: Number(r.maxLatencyMs) || 0,
   }));
+}
+
+function queryToolLatencyP95(since: string, toolName: string): number {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT duration_ms
+    FROM trace_tool_calls
+    WHERE ts >= ? AND tool_name = ? AND duration_ms IS NOT NULL
+    ORDER BY duration_ms ASC
+  `,
+    )
+    .all(since, toolName) as Array<{ duration_ms: number }>;
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const index = Math.ceil(rows.length * 0.95) - 1;
+  return Number(rows[Math.max(0, Math.min(index, rows.length - 1))].duration_ms) || 0;
 }
 
 export interface ContextSessionRow {
@@ -734,18 +761,18 @@ export function queryThroughput(since: string): ThroughputRow[] {
       `
     SELECT
       COALESCE(model_id, 'unknown') as model_id,
-      SUM(tokens_input + tokens_output) as tokens,
-      COUNT(*) as samples
-    FROM trace_stats WHERE ts >= ?
+      SUM(tokens_input + tokens_cached_input + tokens_output) as tokens,
+      SUM(duration_ms) as duration_ms
+    FROM trace_stats WHERE ts >= ? AND duration_ms > 0
     GROUP BY model_id
     ORDER BY tokens DESC
   `,
     )
     .all(since) as Record<string, unknown>[];
-  const mapped = mapRows<{ modelId: string; tokens: number; samples: number }>(rows);
+  const mapped = mapRows<{ modelId: string; tokens: number; durationMs: number }>(rows);
   return mapped.map((r) => ({
     modelId: r.modelId,
-    avgTokensPerSec: Math.round(Number(r.tokens) / (Math.max(Number(r.samples), 1) * 10)),
+    avgTokensPerSec: Number(r.durationMs) > 0 ? Math.round(Number(r.tokens) / (Number(r.durationMs) / 1000)) : 0,
   }));
 }
 

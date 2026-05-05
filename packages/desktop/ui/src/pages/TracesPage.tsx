@@ -33,6 +33,7 @@ export function TracesPage() {
   const {
     summary,
     modelUsage,
+    throughput,
     toolHealth,
     contextSessions,
     compactions,
@@ -94,8 +95,8 @@ export function TracesPage() {
         {modelUsage && summary && (
           <TracesModelUsage
             models={modelUsage}
-            throughput={[]}
-            totalTokens={summary.tokensTotal}
+            throughput={throughput ?? []}
+            totalTokens={modelUsage.reduce((total, model) => total + model.tokens, 0)}
             totalCost={summary.totalCost}
             tokensInput={summary.tokensInput}
             tokensOutput={summary.tokensOutput}
@@ -119,7 +120,7 @@ export function TracesPage() {
         {/* ── Cache & System Prompt ── */}
         <TracesCacheAndSystemPrompt cacheEfficiency={cacheEfficiency} systemPrompt={systemPrompt} />
 
-        {/* ── Context Pressure        {/* ── Context Pressure ── */}
+        {/* ── Context Pressure ── */}
         <TracesContextPressure sessions={contextSessions ?? []} compactions={compactions ?? []} compactionAggs={compactionAggs} />
 
         {/* ── Agent Loop ── */}

@@ -19,8 +19,10 @@ import {
   queryCompactionAggregates,
   queryCompactions,
   queryContextSessions,
+  queryCostByConversation,
   queryModelUsage,
   querySummary,
+  queryThroughput,
   queryTokensDaily,
   queryToolHealth,
   writeTraceCompaction,
@@ -83,8 +85,8 @@ describe('trace-db', () => {
       durationMs: 700000,
     });
 
-    writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 1200 });
-    writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 800 });
+    writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 1200, conversationTitle: 'Test chat' });
+    writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 800, conversationTitle: 'Test chat' });
     writeTraceToolCall({ sessionId, toolName: 'read', status: 'error', errorMessage: 'File not found' });
     writeTraceToolCall({ sessionId, toolName: 'read', status: 'ok', durationMs: 400 });
 
@@ -130,6 +132,7 @@ describe('trace-db', () => {
     expect(bash!.calls).toBe(2);
     expect(bash!.errors).toBe(0);
     expect(bash!.successRate).toBe(100);
+    expect(bash!.p95LatencyMs).toBe(1200);
 
     const read = result.find((t) => t.toolName === 'read');
     expect(read).toBeDefined();
@@ -174,6 +177,22 @@ describe('trace-db', () => {
     expect(aggregate.totalInput).toBeGreaterThan(0);
     expect(aggregate.totalCached).toBeGreaterThan(0);
     expect(aggregate.overallHitRate).toBeLessThanOrEqual(100);
+  });
+
+  it('queryCostByConversation does not multiply stats by tool calls', () => {
+    const result = queryCostByConversation(fiveHoursAgo);
+    const chat = result.find((r) => r.conversationTitle === 'Test chat');
+
+    expect(chat).toBeDefined();
+    expect(chat!.cost).toBe(0.08);
+  });
+
+  it('queryThroughput uses recorded run duration', () => {
+    const result = queryThroughput(fiveHoursAgo);
+    const gpt4 = result.find((r) => r.modelId === 'gpt-4o');
+
+    expect(gpt4).toBeDefined();
+    expect(gpt4!.avgTokensPerSec).toBeGreaterThan(0);
   });
 
   it('queryTokensDaily returns daily aggregation', () => {

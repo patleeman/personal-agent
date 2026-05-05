@@ -64,9 +64,9 @@ function ToolCard({ tool }: { tool: TraceToolHealth }) {
           value={`${successRate.toFixed(1)}%`}
           cls={tool.errors === 0 ? 'text-success' : hasTrouble ? 'text-danger' : 'text-warning'}
         />
-        <Stat label="Avg Latency" value={`${tool.avgLatencyMs.toFixed(1)}s`} />
-        <Stat label="P95 Latency" value={`${tool.p95LatencyMs.toFixed(1)}s`} />
-        <Stat label="Max Latency" value={`${tool.maxLatencyMs.toFixed(1)}s`} />
+        <Stat label="Avg Latency" value={formatDuration(tool.avgLatencyMs)} />
+        <Stat label="P95 Latency" value={formatDuration(tool.p95LatencyMs)} />
+        <Stat label="Max Latency" value={formatDuration(tool.maxLatencyMs)} />
       </div>
       <div className="mt-2.5 pt-2 border-t border-border-subtle/50">
         <div className="flex items-end gap-0.5 h-6">
@@ -84,6 +84,15 @@ function ToolCard({ tool }: { tool: TraceToolHealth }) {
       </div>
     </div>
   );
+}
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0ms';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
 }
 
 function Stat({ label, value, cls = '' }: { label: string; value: string; cls?: string }) {
