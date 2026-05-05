@@ -121,6 +121,10 @@ const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
   import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
 );
 
+const TracesPage = lazyRouteWithRecovery('traces-page', () =>
+  import('../pages/TracesPage').then((module) => ({ default: module.TracesPage })),
+);
+
 function suspendRoute(element: React.ReactNode) {
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center px-6 text-[12px] text-dim">Loading…</div>}>
@@ -437,6 +441,7 @@ export function App() {
                         <Route path="automations" element={suspendRoute(<TasksPage />)} />
                         <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
+                        <Route path="traces" element={suspendRoute(<TracesPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                       </Route>
                     </Routes>

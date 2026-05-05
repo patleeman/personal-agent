@@ -516,7 +516,7 @@ function DetailSection({ title, children }: { title: string; children: ReactNode
 
 function SummaryCell({ label, value, className = '' }: { label: string; value: ReactNode; className?: string }) {
   return (
-    <div className="min-w-0 border-t border-border-subtle py-4 first:border-t-0 sm:border-t sm:[&:nth-child(-n+2)]:border-t-0">
+    <div className="min-w-0 border-t border-border-subtle py-4 sm:border-l sm:border-t-0 sm:first:border-l-0 sm:first:pl-0 sm:pl-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</div>
       <div className={`mt-2 break-words text-[14px] leading-5 text-primary ${className}`}>{value}</div>
     </div>
@@ -717,11 +717,11 @@ function AutomationDetailView({
               ← Automations
             </button>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-2">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className={`h-3 w-3 shrink-0 rounded-full border ${statusDotClass(effectiveSummary)}`} aria-hidden="true" />
-                  <h1 className="break-words text-pretty text-[28px] font-semibold leading-[1.08] tracking-tight text-primary sm:text-[32px]">
+                  <h1 className="break-words text-[28px] font-semibold tracking-tight text-primary md:text-[34px] lg:text-[40px]">
                     {title}
                   </h1>
                 </div>
@@ -762,9 +762,9 @@ function AutomationDetailView({
             </div>
           </div>
 
-          <div className="grid gap-7">
-            <div className="min-w-0 space-y-7">
-              <section className="grid gap-x-6 border-y border-border-subtle sm:grid-cols-2">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="min-w-0 space-y-8">
+              <section className="grid grid-cols-1 border-y border-border-subtle sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
                 <SummaryCell
                   label="Last run"
                   value={lastRunLabel}
@@ -911,7 +911,7 @@ function AutomationDetailView({
               )}
             </div>
 
-            <aside className="border-t border-border-subtle pt-1">
+            <aside className="min-w-0 border-t border-border-subtle pt-1 lg:border-l lg:border-t-0 lg:pl-6">
               <RailSection title="Schedule">
                 <RailLine label="Type">{scheduleTypeLabel}</RailLine>
                 <RailLine label="Time">{scheduleLabel}</RailLine>

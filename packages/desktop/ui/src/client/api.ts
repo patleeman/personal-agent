@@ -1,6 +1,8 @@
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import type {
   AppStatus,
+  AutoModeSummary,
+  AutoModeSummary,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
   ConversationAttachmentAssetData,
@@ -1494,6 +1496,7 @@ export const api = {
   tracesAgentLoop: (range?: string) => get<TraceAgentLoop>(`/traces/agent-loop${range ? `?range=${range}` : ''}`),
   tracesTokensDaily: (range?: string) => get<TraceTokenDaily[]>(`/traces/tokens-daily${range ? `?range=${range}` : ''}`),
   tracesToolFlow: (range?: string) => get<ToolFlowResult>(`/traces/tool-flow${range ? `?range=${range}` : ''}`),
+  tracesAutoMode: (range?: string) => get<AutoModeSummary>(`/traces/auto-mode${range ? `?range=${range}` : ''}`),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────

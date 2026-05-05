@@ -1,6 +1,7 @@
 import type { AgentSession, AgentSessionEvent } from '@mariozechner/pi-coding-agent';
 
 import { logWarn } from '../shared/logging.js';
+import { persistTraceCompaction, persistTraceToolCall } from '../traces/tracePersistence.js';
 import { CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE } from './conversationAutoMode.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import { type SseEvent, toSse } from './liveSessionEvents.js';
@@ -15,6 +16,17 @@ import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
 
 const AUTO_MODE_CONTROLLER_RETRY_MAX = 2;
+
+const toolStartTimes = new WeakMap<AgentSession, Map<string, number>>();
+
+function getToolStartTimes(session: AgentSession): Map<string, number> {
+  let map = toolStartTimes.get(session);
+  if (!map) {
+    map = new Map();
+    toolStartTimes.set(session, map);
+  }
+  return map;
+}
 
 export interface LiveSessionEventHost {
   sessionId: string;
@@ -120,6 +132,25 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     callbacks.scheduleContextUsage(entry);
   }
 
+  if (event.type === 'tool_execution_start') {
+    getToolStartTimes(entry.session).set(event.toolCallId, Date.now());
+  }
+
+  if (event.type === 'tool_execution_end') {
+    const startTime = getToolStartTimes(entry.session).get(event.toolCallId);
+    const durationMs = startTime != null ? Date.now() - startTime : undefined;
+    getToolStartTimes(entry.session).delete(event.toolCallId);
+
+    persistTraceToolCall({
+      sessionId: entry.sessionId,
+      toolName: event.toolName,
+      durationMs,
+      status: event.isError ? 'error' : 'ok',
+      errorMessage: event.isError ? String(event.result) : undefined,
+      conversationTitle: entry.title,
+    });
+  }
+
   if (event.type === 'agent_start') {
     entry.currentTurnError = null;
     callbacks.publishSessionMetaChanged(entry.sessionId);
@@ -182,17 +213,26 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     const compactionReason = event.reason === 'manual' ? null : event.reason;
     entry.pendingAutoCompactionReason = null;
 
-    if (compactionReason && !event.aborted && event.result) {
-      entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({
-        mode: 'auto',
-        reason: compactionReason,
-        willRetry: event.willRetry,
+    if (!event.aborted && event.result) {
+      persistTraceCompaction({
+        sessionId: entry.sessionId,
+        reason: event.reason,
+        tokensBefore: event.result.tokensBefore ?? 0,
+        tokensSaved: event.result.tokensBefore ?? 0,
       });
-      callbacks.broadcastSnapshot(entry);
-      callbacks.clearContextUsageTimer(entry);
-      callbacks.broadcastContextUsage(entry, true);
-      callbacks.publishSessionMetaChanged(entry.sessionId);
-      callbacks.notifyLifecycleHandlers(entry, 'auto_compaction_end');
+
+      if (compactionReason && !event.aborted && event.result) {
+        entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({
+          mode: 'auto',
+          reason: compactionReason,
+          willRetry: event.willRetry,
+        });
+        callbacks.broadcastSnapshot(entry);
+        callbacks.clearContextUsageTimer(entry);
+        callbacks.broadcastContextUsage(entry, true);
+        callbacks.publishSessionMetaChanged(entry.sessionId);
+        callbacks.notifyLifecycleHandlers(entry, 'auto_compaction_end');
+      }
     }
   }
 

@@ -13,6 +13,15 @@ export const THINKING_LEVEL_OPTIONS = [
   { value: 'xhigh', label: 'Extra high' },
 ] as const;
 
+export function getModelThinkingLevelOptions(model: Pick<ModelInfo, 'reasoning'> | null | undefined) {
+  if (!model?.reasoning) {
+    // Non-reasoning models only support Off
+    return THINKING_LEVEL_OPTIONS.filter((opt) => opt.value === '' || opt.value === 'off');
+  }
+  // Reasoning models support all levels — the Pi AI layer clamps invalid ones server-side
+  return THINKING_LEVEL_OPTIONS;
+}
+
 const SERVICE_TIER_OPTIONS = [
   { value: '', label: 'Unset' },
   { value: 'auto', label: 'Auto' },

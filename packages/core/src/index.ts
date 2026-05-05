@@ -35,6 +35,9 @@ export * from './deferred-resume.js';
 // Alert exports
 export * from './alerts.js';
 
+// Trace database exports
+export * from './trace-db.js';
+
 // Scheduled task callback binding exports
 export * from './task-callback-bindings.js';
 

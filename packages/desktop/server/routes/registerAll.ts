@@ -14,6 +14,7 @@ import { registerRunsOpsRoutes } from './runsOps.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
+import { registerTraceRoutes } from './traces.js';
 import { registerTranscriptionRoutes } from './transcription.js';
 import { registerUiPreferenceRoutes } from './uiPreferences.js';
 import { registerVaultEditorRoutes } from './vaultEditor.js';
@@ -55,4 +56,6 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerVaultEditorRoutes(app);
 
   registerRunsOpsRoutes(app);
+
+  registerTraceRoutes(app);
 }

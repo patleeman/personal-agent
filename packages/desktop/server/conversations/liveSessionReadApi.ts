@@ -59,6 +59,8 @@ export function formatAvailableModels(
     contextWindow?: number;
     provider?: string;
     api?: unknown;
+    input?: Array<'text' | 'image'>;
+    reasoning?: boolean;
   }>,
 ) {
   return models.map((model) => {
@@ -70,6 +72,8 @@ export function formatAvailableModels(
       contextWindow,
       provider: model.provider ?? '',
       api: model.api,
+      input: model.input,
+      reasoning: model.reasoning,
     };
   });
 }

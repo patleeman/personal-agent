@@ -36,6 +36,7 @@ export function ConversationComposerInputControls({
   composerSubmitLabel,
   composerAltHeld,
   composerParallelHeld,
+  modelSupportsImages,
   onFilesSelected,
   onInputChange,
   onRememberComposerSelection,
@@ -66,6 +67,7 @@ export function ConversationComposerInputControls({
   streamIsStreaming: boolean;
   models: ModelInfo[];
   currentModel: string;
+  modelSupportsImages: boolean;
   currentThinkingLevel: string;
   currentServiceTier: string;
   savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
@@ -157,29 +159,31 @@ export function ConversationComposerInputControls({
 
         <div className="flex flex-nowrap items-center gap-1.5 px-3 py-0.5">
           <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onOpenFilePicker}
-              disabled={composerDisabled}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-              title="Attach image or file"
-              aria-label="Attach image or file"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            {modelSupportsImages && (
+              <button
+                type="button"
+                onClick={onOpenFilePicker}
+                disabled={composerDisabled}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
+                title="Attach image or file"
+                aria-label="Attach image or file"
               >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </button>
-            {screenshotCaptureAvailable && (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+            )}
+            {modelSupportsImages && screenshotCaptureAvailable && (
               <button
                 type="button"
                 onClick={onCaptureScreenshot}

@@ -9,6 +9,7 @@ import { AgentSession } from '@mariozechner/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { publishAppEvent } from '../shared/appEvents.js';
+import { persistTraceContext, persistTraceStats } from '../traces/tracePersistence.js';
 import { type ConversationAutoModeState, type ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
@@ -321,6 +322,27 @@ function maybeAutoTitleConversation(entry: LiveEntry): void {
 }
 
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
+  const usage = getLiveSessionContextUsage(entry);
+  if (usage) {
+    const systemSeg = usage.segments?.find((s) => s.key === 'system');
+    const userSeg = usage.segments?.find((s) => s.key === 'user');
+    const assistantSeg = usage.segments?.find((s) => s.key === 'assistant');
+    const toolSeg = usage.segments?.find((s) => s.key === 'tool');
+    const summarySeg = usage.segments?.find((s) => s.key === 'summary');
+    persistTraceContext({
+      sessionId: entry.sessionId,
+      modelId: usage.modelId ?? entry.session.model?.id,
+      totalTokens: usage.tokens ?? 0,
+      contextWindow: usage.contextWindow ?? 0,
+      pct: usage.percent != null ? Math.round(usage.percent * 100) / 100 : 0,
+      segSystem: systemSeg?.tokens ?? 0,
+      segUser: userSeg?.tokens ?? 0,
+      segAssistant: assistantSeg?.tokens ?? 0,
+      segTool: toolSeg?.tokens ?? 0,
+      segSummary: summarySeg?.tokens ?? 0,
+      systemPromptTokens: systemSeg?.tokens ?? 0,
+    });
+  }
   broadcastLiveSessionContextUsage(entry, (event) => broadcast(entry, event), force);
 }
 
@@ -412,7 +434,16 @@ function wireSession(id: string, session: AgentSession, cwd: string, options: { 
       publishSessionMetaChanged,
       broadcastQueueState,
       broadcastTitle,
-      broadcastStats: (target, tokens, cost) => broadcast(target, { type: 'stats_update', tokens, cost }),
+      broadcastStats: (target, tokens, cost) => {
+        broadcast(target, { type: 'stats_update', tokens, cost });
+        persistTraceStats({
+          sessionId: target.sessionId,
+          modelId: target.session.model?.id,
+          tokensInput: tokens.input,
+          tokensOutput: tokens.output,
+          cost,
+        });
+      },
       clearContextUsageTimer,
       broadcastContextUsage,
       broadcastSnapshot,

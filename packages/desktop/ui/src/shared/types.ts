@@ -1105,6 +1105,8 @@ export interface ModelInfo {
   context: number;
   input?: Array<'text' | 'image'>;
   supportedServiceTiers?: ModelServiceTier[];
+  input?: Array<'text' | 'image'>;
+  reasoning?: boolean;
 }
 
 export interface ModelState {
@@ -1513,4 +1515,141 @@ export interface TranscriptionResult {
     endMs?: number;
     text: string;
   }>;
+}
+
+// ── Traces / Telemetry ─────────────────────────────────────────────────────
+
+export interface TraceSummary {
+  activeSessions: number;
+  runsToday: number;
+  totalCost: number;
+  tokensTotal: number;
+  tokensInput: number;
+  tokensOutput: number;
+  tokensCached: number;
+  cacheHitRate: number;
+  toolErrors: number;
+  toolCalls: number;
+}
+
+export interface TraceModelUsage {
+  modelId: string;
+  tokens: number;
+  cost: number;
+  calls: number;
+}
+
+export interface TraceThroughput {
+  modelId: string;
+  avgTokensPerSec: number;
+}
+
+export interface TraceCostRow {
+  conversationTitle: string;
+  modelId: string;
+  tokens: number;
+  cost: number;
+}
+
+export interface TraceToolHealth {
+  toolName: string;
+  calls: number;
+  errors: number;
+  successRate: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  maxLatencyMs: number;
+}
+
+export interface TraceContextSession {
+  sessionId: string;
+  totalTokens: number;
+  contextWindow: number;
+  pct: number;
+  segSystem: number;
+  segUser: number;
+  segAssistant: number;
+  segTool: number;
+  segSummary: number;
+  systemPromptTokens: number;
+}
+
+export interface TraceCompactionEvent {
+  sessionId: string;
+  ts: string;
+  reason: string;
+  tokensBefore: number;
+  tokensAfter: number;
+  tokensSaved: number;
+}
+
+export interface TraceCompactionAggs {
+  autoCount: number;
+  manualCount: number;
+  totalTokensSaved: number;
+  overflowPct: number;
+}
+
+export interface TraceContextResponse {
+  sessions: TraceContextSession[];
+  compactions: TraceCompactionEvent[];
+  compactionAggs: TraceCompactionAggs;
+}
+
+export interface TraceAgentLoop {
+  turnsPerRun: number;
+  stepsPerTurn: number;
+  runsOver20Turns: number;
+  subagentsPerRun: number;
+  avgDurationMs: number;
+  stuckRuns: number;
+}
+
+export interface TraceTokenDaily {
+  date: string;
+  tokensInput: number;
+  tokensOutput: number;
+  tokensCached: number;
+  cost: number;
+}
+
+export interface ToolTransition {
+  fromTool: string;
+  toTool: string;
+  count: number;
+}
+
+export interface ToolCoOccurrence {
+  toolA: string;
+  toolB: string;
+  sessions: number;
+}
+
+export interface FailureTrajectory {
+  toolName: string;
+  errorMessage: string;
+  previousCalls: string[];
+  ts: string;
+  sessionId: string;
+}
+
+export interface ToolFlowResult {
+  transitions: ToolTransition[];
+  coOccurrences: ToolCoOccurrence[];
+  failureTrajectories: FailureTrajectory[];
+}
+
+export interface AutoModeEvent {
+  sessionId: string;
+  ts: string;
+  enabled: boolean;
+  stopReason: string | null;
+}
+
+export interface AutoModeSummary {
+  enabledCount: number;
+  disabledCount: number;
+  currentActive: number;
+  topStopReasons: Array<{ reason: string; count: number }>;
+  recentEvents: AutoModeEvent[];
 }

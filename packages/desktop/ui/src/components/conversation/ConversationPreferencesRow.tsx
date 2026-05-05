@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { getModelSelectableServiceTierOptions, groupModelsByProvider, THINKING_LEVEL_OPTIONS } from '../../model/modelPreferences';
+import { getModelSelectableServiceTierOptions, getModelThinkingLevelOptions, groupModelsByProvider } from '../../model/modelPreferences';
 import type { ModelInfo } from '../../shared/types';
 import { cx, IconButton } from '../ui';
 
@@ -24,11 +24,13 @@ function ConversationThinkingLevelSelect({
   value,
   disabled,
   variant = 'inline',
+  model,
   onChange,
 }: {
   value: string;
   disabled: boolean;
   variant?: 'inline' | 'menu';
+  model: ModelInfo | null;
   onChange: (thinkingLevel: string) => void;
 }) {
   const selectClassName =
@@ -48,7 +50,7 @@ function ConversationThinkingLevelSelect({
         className={selectClassName}
         aria-label="Conversation thinking level"
       >
-        {THINKING_LEVEL_OPTIONS.map((option) => (
+        {getModelThinkingLevelOptions(model).map((option) => (
           <option key={option.value || 'unset'} value={option.value}>
             {option.label}
           </option>
@@ -270,6 +272,7 @@ export function ConversationPreferencesRow({
           <ConversationThinkingLevelSelect
             value={currentThinkingLevel}
             disabled={savingPreference !== null}
+            model={selectedModel}
             onChange={onSelectThinkingLevel}
           />
           {supportsFastMode ? (
@@ -348,6 +351,7 @@ export function ConversationPreferencesRow({
                     value={currentThinkingLevel}
                     disabled={savingPreference !== null}
                     variant="menu"
+                    model={selectedModel}
                     onChange={(thinkingLevel) => {
                       onSelectThinkingLevel(thinkingLevel);
                       setCompactMenuOpen(false);

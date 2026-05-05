@@ -1,4 +1,5 @@
 import { publishAppEvent } from '../shared/appEvents.js';
+import { persistTraceAutoMode } from '../traces/tracePersistence.js';
 import type { ConversationAutoModeState, ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import {
   markLiveSessionAutoModeContinueRequested,
@@ -66,6 +67,12 @@ export async function setLiveSessionAutoModeState<TEntry extends LiveSessionAuto
   callbacks.broadcastAutoModeState(entry, true);
   callbacks.publishSessionMetaChanged(entry.sessionId);
   publishAppEvent({ type: 'session_file_changed', sessionId: entry.sessionId });
+
+  persistTraceAutoMode({
+    sessionId: entry.sessionId,
+    enabled: nextState.enabled,
+    stopReason: nextState.stopReason,
+  });
 
   return nextState;
 }
