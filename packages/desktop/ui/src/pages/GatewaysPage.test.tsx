@@ -75,19 +75,23 @@ function keyDown(element: HTMLElement, key: string) {
 
 describe('GatewaysPage', () => {
   let gatewaysMock: ReturnType<typeof vi.spyOn>;
-  let ensureGatewayConnectionMock: ReturnType<typeof vi.spyOn>;
   let updateGatewayConnectionMock: ReturnType<typeof vi.spyOn>;
   let detachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
   let searchSlackMcpChannelsMock: ReturnType<typeof vi.spyOn>;
   let attachSlackMcpChannelMock: ReturnType<typeof vi.spyOn>;
+  let telegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
+  let saveTelegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
+  let deleteTelegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     gatewaysMock = vi.spyOn(api, 'gateways');
-    ensureGatewayConnectionMock = vi.spyOn(api, 'ensureGatewayConnection');
     updateGatewayConnectionMock = vi.spyOn(api, 'updateGatewayConnection');
     detachGatewayConversationMock = vi.spyOn(api, 'detachGatewayConversation');
     searchSlackMcpChannelsMock = vi.spyOn(api, 'searchSlackMcpChannels');
     attachSlackMcpChannelMock = vi.spyOn(api, 'attachSlackMcpChannel');
+    telegramGatewayTokenMock = vi.spyOn(api, 'telegramGatewayToken').mockResolvedValue({ configured: false });
+    saveTelegramGatewayTokenMock = vi.spyOn(api, 'saveTelegramGatewayToken');
+    deleteTelegramGatewayTokenMock = vi.spyOn(api, 'deleteTelegramGatewayToken');
   });
 
   afterEach(() => {
@@ -102,6 +106,7 @@ describe('GatewaysPage', () => {
 
   it('shows loading state while fetching', async () => {
     gatewaysMock.mockReturnValue(new Promise(() => {})); // never resolves
+    telegramGatewayTokenMock.mockReturnValue(new Promise(() => {})); // never resolves
     const { container } = renderPage();
     expect(container.textContent).toContain('Loading…');
   });
@@ -111,7 +116,46 @@ describe('GatewaysPage', () => {
     const { container } = renderPage();
     await flushAsyncWork();
     expect(container.textContent).toContain('No gateways connected');
-    expect(container.textContent).toContain('Connect Telegram');
+    expect(container.textContent).not.toContain('Connect Telegram');
+    expect(container.textContent).toContain('No bot token stored');
+  });
+
+  it('saves Telegram bot setup from the gateways page', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    saveTelegramGatewayTokenMock.mockResolvedValue({ configured: true, state: createGatewayState() });
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="123456:ABC-DEF…"]');
+    expect(input).toBeTruthy();
+    typeInput(input!, 'token-123');
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Add bot');
+    expect(saveButton).toBeTruthy();
+    click(saveButton!);
+    await flushAsyncWork();
+
+    expect(saveTelegramGatewayTokenMock).toHaveBeenCalledWith('token-123');
+    expect(container.textContent).toContain('Bot token stored');
+  });
+
+  it('removes Telegram bot setup from the gateways page', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    telegramGatewayTokenMock.mockResolvedValue({ configured: true });
+    deleteTelegramGatewayTokenMock.mockResolvedValue({ configured: false, state: createGatewayState() });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const removeButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Remove');
+    expect(removeButton).toBeTruthy();
+    click(removeButton!);
+    await flushAsyncWork();
+
+    expect(deleteTelegramGatewayTokenMock).toHaveBeenCalled();
+    expect(container.textContent).toContain('No bot token stored');
   });
 
   it('displays error from API', async () => {
@@ -281,39 +325,6 @@ describe('GatewaysPage', () => {
 
     expect(container.textContent).toContain('Paused');
     expect(container.textContent).toContain('Resume');
-  });
-
-  it('calls ensureGatewayConnection when Connect Telegram is clicked', async () => {
-    const emptyState = createGatewayState();
-    gatewaysMock.mockResolvedValue(emptyState);
-
-    const connectedState = createGatewayState({
-      connections: [
-        {
-          id: 'tg-1',
-          provider: 'telegram',
-          label: 'My Telegram',
-          status: 'active',
-          enabled: true,
-          createdAt: '2026-05-04T00:00:00Z',
-          updatedAt: '2026-05-04T12:00:00Z',
-        },
-      ],
-      bindings: [],
-    });
-    ensureGatewayConnectionMock.mockResolvedValue(connectedState);
-
-    const { container } = renderPage();
-    await flushAsyncWork();
-
-    const connectBtn = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent?.trim() === '+ Connect Telegram');
-    expect(connectBtn).toBeTruthy();
-
-    click(connectBtn!);
-    await flushAsyncWork();
-
-    expect(ensureGatewayConnectionMock).toHaveBeenCalledWith('telegram');
-    expect(container.textContent).toContain('Telegram');
   });
 
   it('pauses Telegram via updateGatewayConnection', async () => {

@@ -7,12 +7,20 @@ import type { GatewayConnection, GatewayEvent, GatewayState, GatewayThreadBindin
 import { timeAgoCompact } from '../shared/utils';
 
 const EMPTY_GATEWAY_STATE: GatewayState = { providers: [], connections: [], bindings: [], events: [], chatTargets: [] };
+const INPUT_CLASS =
+  'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 
 export function GatewaysPage() {
   const [state, setState] = useState<GatewayState>(EMPTY_GATEWAY_STATE);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [telegramTokenState, setTelegramTokenState] = useState<{ configured: boolean } | null>(null);
+  const [telegramTokenLoading, setTelegramTokenLoading] = useState(true);
+  const [telegramTokenError, setTelegramTokenError] = useState<string | null>(null);
+  const [telegramTokenDraft, setTelegramTokenDraft] = useState('');
+  const [telegramTokenNotice, setTelegramTokenNotice] = useState<string | null>(null);
+  const [telegramTokenSaveError, setTelegramTokenSaveError] = useState<string | null>(null);
 
   const telegramConnection = state.connections.find((c) => c.provider === 'telegram') ?? null;
   const telegramBinding = telegramConnection
@@ -43,13 +51,61 @@ export function GatewaysPage() {
     };
   }, []);
 
-  async function ensureTelegram() {
-    setBusy('connect');
-    setError(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .telegramGatewayToken()
+      .then((next) => {
+        if (!cancelled) setTelegramTokenState(next);
+      })
+      .catch((err) => {
+        if (!cancelled) setTelegramTokenError(formatGatewayError(err));
+      })
+      .finally(() => {
+        if (!cancelled) setTelegramTokenLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function saveTelegramToken() {
+    const token = telegramTokenDraft.trim();
+    if (!token) {
+      setTelegramTokenSaveError('Telegram bot token is required.');
+      return;
+    }
+
+    setBusy('telegram-token-save');
+    setTelegramTokenNotice(null);
+    setTelegramTokenSaveError(null);
     try {
-      setState(await api.ensureGatewayConnection('telegram'));
+      const result = await api.saveTelegramGatewayToken(token);
+      setState(result.state);
+      setTelegramTokenState({ configured: result.configured });
+      setTelegramTokenDraft('');
+      setTelegramTokenNotice('Telegram bot saved. The gateway will attach chats when messages arrive.');
     } catch (err) {
-      setError(formatGatewayError(err));
+      setTelegramTokenSaveError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeTelegramToken() {
+    const confirmed = window.confirm('Remove the Telegram bot token and stop the gateway?');
+    if (!confirmed) return;
+
+    setBusy('telegram-token-remove');
+    setTelegramTokenNotice(null);
+    setTelegramTokenSaveError(null);
+    try {
+      const result = await api.deleteTelegramGatewayToken();
+      setState(result.state);
+      setTelegramTokenState({ configured: result.configured });
+      setTelegramTokenNotice('Telegram bot removed.');
+    } catch (err) {
+      setTelegramTokenSaveError(formatGatewayError(err));
     } finally {
       setBusy(null);
     }
@@ -126,29 +182,58 @@ export function GatewaysPage() {
   return (
     <div className="h-full overflow-y-auto">
       <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
-        <AppPageIntro
-          title="Gateways"
-          summary={
-            <>
-              Route external apps into conversation threads.{' '}
-              <Link to="/settings#settings-gateways" className="text-accent hover:underline">
-                Provider credentials in Settings.
-              </Link>
-            </>
-          }
-          actions={
-            <ToolbarButton
-              className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-              onClick={ensureTelegram}
-              disabled={busy !== null}
-            >
-              {telegramConnection ? 'Refresh' : '+ Connect Telegram'}
-            </ToolbarButton>
-          }
-        />
+        <AppPageIntro title="Gateways" summary="Configure external apps and route them into conversation threads." />
 
         {error ? <p className="text-[13px] text-danger">{error}</p> : null}
         {loading ? <p className="text-[13px] text-dim">Loading…</p> : null}
+
+        <section className="max-w-4xl">
+          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Telegram</h2>
+          <div className="mt-3 space-y-3 border-t border-border-subtle pt-5">
+            <p className="text-[13px] text-secondary">Add a Telegram bot token. Incoming chats will create or reuse gateway threads.</p>
+            {telegramTokenLoading && !telegramTokenState ? <p className="text-[13px] text-dim">Loading Telegram config…</p> : null}
+            {telegramTokenError && !telegramTokenState ? (
+              <p className="text-[13px] text-danger">Failed to load Telegram config: {telegramTokenError}</p>
+            ) : null}
+            <p className="text-[13px] text-secondary">
+              Status:{' '}
+              <span className={telegramTokenState?.configured ? 'text-success' : 'text-dim'}>
+                {telegramTokenState?.configured ? 'Bot token stored' : 'No bot token stored'}
+              </span>
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="min-w-0 flex-1 text-[12px] text-secondary">
+                Bot token
+                <input
+                  type="password"
+                  value={telegramTokenDraft}
+                  onChange={(event) => setTelegramTokenDraft(event.target.value)}
+                  placeholder="123456:ABC-DEF…"
+                  className={`${INPUT_CLASS} mt-1`}
+                  disabled={busy !== null}
+                />
+              </label>
+              <div className="flex shrink-0 gap-2">
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                  disabled={busy !== null || telegramTokenDraft.trim().length === 0}
+                  onClick={saveTelegramToken}
+                >
+                  {busy === 'telegram-token-save' ? 'Saving…' : telegramTokenState?.configured ? 'Update bot' : 'Add bot'}
+                </ToolbarButton>
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                  disabled={busy !== null || !telegramTokenState?.configured}
+                  onClick={removeTelegramToken}
+                >
+                  {busy === 'telegram-token-remove' ? 'Removing…' : 'Remove'}
+                </ToolbarButton>
+              </div>
+            </div>
+            {telegramTokenNotice ? <p className="text-[12px] text-success">{telegramTokenNotice}</p> : null}
+            {telegramTokenSaveError ? <p className="text-[12px] text-danger">{telegramTokenSaveError}</p> : null}
+          </div>
+        </section>
 
         {/* Connected gateways */}
         <section className="max-w-4xl">
@@ -184,14 +269,9 @@ export function GatewaysPage() {
             {!hasAnyConnection ? (
               <div className="py-6 text-[14px] text-secondary">
                 <p>No gateways connected.</p>
-                <p className="mt-1 text-[13px] text-dim">Save provider credentials in Settings, then connect gateways here.</p>
-                <ToolbarButton
-                  className="mt-4 rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                  onClick={ensureTelegram}
-                  disabled={busy !== null}
-                >
-                  Connect Telegram
-                </ToolbarButton>
+                <p className="mt-1 text-[13px] text-dim">
+                  Telegram chats appear here after setup, or you can attach a Slack channel below.
+                </p>
               </div>
             ) : null}
           </div>
