@@ -1020,7 +1020,7 @@ export type SseEvent =
   | { type: 'tool_end'; toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string; details?: unknown }
   | { type: 'title_update'; title: string }
   | { type: 'context_usage'; usage: SessionContextUsage | null }
-  | { type: 'stats_update'; tokens: { input: number; output: number; total: number }; cost: number }
+  | { type: 'stats_update'; tokens: { input: number; output: number; total: number; cacheRead: number; cacheWrite: number }; cost: number }
   | { type: 'compaction_start'; mode: 'manual' | 'auto' }
   | { type: 'error'; message: string };
 
@@ -1652,4 +1652,34 @@ export interface AutoModeSummary {
   currentActive: number;
   topStopReasons: Array<{ reason: string; count: number }>;
   recentEvents: AutoModeEvent[];
+}
+
+export interface CacheEfficiencyPoint {
+  ts: string;
+  modelId: string;
+  totalInput: number;
+  cachedInput: number;
+  hitRate: number;
+}
+
+export interface CacheEfficiencyAggregate {
+  overallHitRate: number;
+  totalInput: number;
+  totalCached: number;
+  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number }>;
+}
+
+export interface SystemPromptPoint {
+  ts: string;
+  sessionId: string;
+  systemPromptTokens: number;
+  totalTokens: number;
+  pctOfTotal: number;
+}
+
+export interface SystemPromptAggregate {
+  avgSystemPromptTokens: number;
+  avgPctOfTotal: number;
+  maxSystemPromptTokens: number;
+  samples: number;
 }

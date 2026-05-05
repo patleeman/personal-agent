@@ -909,3 +909,117 @@ export function queryAutoMode(since: string): AutoModeSummary {
     recentEvents: mapped.slice(0, 20),
   };
 }
+
+export interface CacheEfficiencyPoint {
+  ts: string;
+  modelId: string;
+  totalInput: number;
+  cachedInput: number;
+  hitRate: number;
+}
+
+export interface SystemPromptPoint {
+  ts: string;
+  sessionId: string;
+  systemPromptTokens: number;
+  totalTokens: number;
+  pctOfTotal: number;
+}
+
+export function queryCacheEfficiency(since: string): CacheEfficiencyPoint[] {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT ts, model_id, tokens_input, tokens_cached_input
+    FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
+    ORDER BY ts ASC LIMIT 200
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+  return mapRows<CacheEfficiencyPoint>(rows).map((r) => ({
+    ts: r.ts,
+    modelId: r.modelId,
+    totalInput: Number(r.totalInput),
+    cachedInput: Number(r.cachedInput),
+    hitRate: Number(r.totalInput) > 0 ? Math.round((Number(r.cachedInput) / Number(r.totalInput)) * 10000) / 100 : 0,
+  }));
+}
+
+export function querySystemPromptTrend(since: string): SystemPromptPoint[] {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT ts, session_id, system_prompt_tokens, total_tokens
+    FROM trace_context WHERE ts >= ? AND system_prompt_tokens > 0
+    ORDER BY ts ASC LIMIT 200
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+  return mapRows<SystemPromptPoint>(rows).map((r) => ({
+    ts: r.ts,
+    sessionId: r.sessionId,
+    systemPromptTokens: Number(r.systemPromptTokens),
+    totalTokens: Number(r.totalTokens),
+    pctOfTotal: Number(r.totalTokens) > 0 ? Math.round((Number(r.systemPromptTokens) / Number(r.totalTokens)) * 10000) / 100 : 0,
+  }));
+}
+
+export function queryCacheEfficiencyAggregate(since: string): {
+  overallHitRate: number;
+  totalInput: number;
+  totalCached: number;
+  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number }>;
+} {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT COALESCE(model_id, '') as model_id, SUM(tokens_input) as total_input, SUM(tokens_cached_input) as total_cached
+    FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
+    GROUP BY model_id ORDER BY total_input DESC
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+  const mapped = mapRows<{ modelId: string; totalInput: number; totalCached: number }>(rows);
+  const totals = mapped.reduce(
+    (acc, r) => ({ totalInput: acc.totalInput + Number(r.totalInput), totalCached: acc.totalCached + Number(r.totalCached) }),
+    { totalInput: 0, totalCached: 0 },
+  );
+  return {
+    overallHitRate: totals.totalInput > 0 ? Math.round((totals.totalCached / totals.totalInput) * 10000) / 100 : 0,
+    totalInput: totals.totalInput,
+    totalCached: totals.totalCached,
+    byModel: mapped.map((r) => ({
+      modelId: r.modelId,
+      totalInput: Number(r.totalInput),
+      totalCached: Number(r.totalCached),
+      hitRate: Number(r.totalInput) > 0 ? Math.round((Number(r.totalCached) / Number(r.totalInput)) * 10000) / 100 : 0,
+    })),
+  };
+}
+
+export function querySystemPromptAggregate(since: string): {
+  avgSystemPromptTokens: number;
+  avgPctOfTotal: number;
+  maxSystemPromptTokens: number;
+  samples: number;
+} {
+  const db = getTraceDb();
+  const row = db
+    .prepare(
+      `
+    SELECT AVG(system_prompt_tokens) as avg_tokens, AVG(CAST(system_prompt_tokens AS REAL) / CAST(total_tokens AS REAL)) * 100 as avg_pct, MAX(system_prompt_tokens) as max_tokens, COUNT(*) as samples
+    FROM trace_context WHERE ts >= ? AND system_prompt_tokens > 0 AND total_tokens > 0
+  `,
+    )
+    .get(since) as Record<string, unknown>;
+  const m = mapRow<{ avgTokens: number; avgPct: number; maxTokens: number; samples: number }>(row);
+  return {
+    avgSystemPromptTokens: Math.round(Number(m.avgTokens)),
+    avgPctOfTotal: Math.round(Number(m.avgPct) * 100) / 100,
+    maxSystemPromptTokens: Number(m.maxTokens),
+    samples: Number(m.samples),
+  };
+}

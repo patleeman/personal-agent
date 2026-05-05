@@ -19,6 +19,7 @@ import { ErrorState, LoadingState } from '../components/ui';
 import { TracesAgentLoop } from './traces/TracesAgentLoop';
 import { TracesAutoMode } from './traces/TracesAutoMode';
 import { TracesBraidChart } from './traces/TracesBraidChart';
+import { TracesCacheAndSystemPrompt } from './traces/TracesCacheAndSystemPrompt';
 import { TracesContextPressure } from './traces/TracesContextPressure';
 import { TracesHeatmap } from './traces/TracesHeatmap';
 import { TracesModelUsage } from './traces/TracesModelUsage';
@@ -40,6 +41,8 @@ export function TracesPage() {
     tokensDaily,
     toolFlow,
     autoMode,
+    cacheEfficiency,
+    systemPrompt,
     loading,
     error,
     refetch,
@@ -113,7 +116,10 @@ export function TracesPage() {
         {/* ── Auto Mode ── */}
         <TracesAutoMode data={autoMode} />
 
-        {/* ── Context Pressure ── */}
+        {/* ── Cache & System Prompt ── */}
+        <TracesCacheAndSystemPrompt cacheEfficiency={cacheEfficiency} systemPrompt={systemPrompt} />
+
+        {/* ── Context Pressure        {/* ── Context Pressure ── */}
         <TracesContextPressure sessions={contextSessions ?? []} compactions={compactions ?? []} compactionAggs={compactionAggs} />
 
         {/* ── Agent Loop ── */}

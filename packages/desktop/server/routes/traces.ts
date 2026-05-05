@@ -8,12 +8,16 @@
 import {
   queryAgentLoop,
   queryAutoMode,
+  queryCacheEfficiency,
+  queryCacheEfficiencyAggregate,
   queryCompactionAggregates,
   queryCompactions,
   queryContextSessions,
   queryCostByConversation,
   queryModelUsage,
   querySummary,
+  querySystemPromptAggregate,
+  querySystemPromptTrend,
   queryThroughput,
   queryTokensDaily,
   queryToolFlow,
@@ -140,6 +144,29 @@ export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patc
   });
 
   // ── Auto mode ───────────────────────────────────────────────────────────
+  router.get('/api/traces/cache-efficiency', async (req, res) => {
+    try {
+      const since = parseRangeParam(req.query.range);
+      const [series, aggregate] = await Promise.all([queryCacheEfficiency(since), queryCacheEfficiencyAggregate(since)]);
+      res.json({ series, aggregate });
+    } catch (err) {
+      logError('traces cache-efficiency error', { message: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // ── System prompt trend ────────────────────────────────────────────────
+  router.get('/api/traces/system-prompt', async (req, res) => {
+    try {
+      const since = parseRangeParam(req.query.range);
+      const [series, aggregate] = await Promise.all([querySystemPromptTrend(since), querySystemPromptAggregate(since)]);
+      res.json({ series, aggregate });
+    } catch (err) {
+      logError('traces system-prompt error', { message: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   router.get('/api/traces/auto-mode', (req, res) => {
     try {
       const since = parseRangeParam(req.query.range);

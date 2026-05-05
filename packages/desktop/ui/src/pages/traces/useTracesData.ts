@@ -18,7 +18,7 @@ import type {
   TraceTokenDaily,
   TraceToolHealth,
 } from '../../shared/types';
-import type { AutoModeSummary, ToolFlowResult } from '../../shared/types';
+import type { AutoModeSummary, CacheEfficiencyAggregate, SystemPromptAggregate, ToolFlowResult } from '../../shared/types';
 
 export type TraceRange = '1h' | '6h' | '24h' | '7d' | '30d';
 
@@ -35,6 +35,8 @@ export interface TracesData {
   tokensDaily: TraceTokenDaily[] | null;
   toolFlow: ToolFlowResult | null;
   autoMode: AutoModeSummary | null;
+  cacheEfficiency: CacheEfficiencyAggregate | null;
+  systemPrompt: SystemPromptAggregate | null;
   loading: boolean;
   error: string | null;
 }
@@ -52,6 +54,8 @@ const EMPTY: TracesData = {
   tokensDaily: null,
   toolFlow: null,
   autoMode: null,
+  cacheEfficiency: null,
+  systemPrompt: null,
   loading: true,
   error: null,
 };
@@ -62,7 +66,19 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
   const fetch = useCallback(async () => {
     setData((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const [summary, modelUsage, costByConversation, toolHealth, context, agentLoop, tokensDaily, toolFlow, autoMode] = await Promise.all([
+      const [
+        summary,
+        modelUsage,
+        costByConversation,
+        toolHealth,
+        context,
+        agentLoop,
+        tokensDaily,
+        toolFlow,
+        autoMode,
+        cacheEff,
+        sysPrompt,
+      ] = await Promise.all([
         api.tracesSummary(range),
         api.tracesModelUsage(range),
         api.tracesCostByConversation(range),
@@ -72,6 +88,8 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         api.tracesTokensDaily(range),
         api.tracesToolFlow(range),
         api.tracesAutoMode(range),
+        api.tracesCacheEfficiency(range),
+        api.tracesSystemPrompt(range),
       ]);
 
       setData({
@@ -87,6 +105,8 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         tokensDaily,
         toolFlow,
         autoMode,
+        cacheEfficiency: cacheEff.aggregate,
+        systemPrompt: sysPrompt.aggregate,
         loading: false,
         error: null,
       });

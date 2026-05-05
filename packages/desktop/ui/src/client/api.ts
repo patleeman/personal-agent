@@ -3,6 +3,8 @@ import type {
   AppStatus,
   AutoModeSummary,
   AutoModeSummary,
+  CacheEfficiencyAggregate,
+  CacheEfficiencyPoint,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
   ConversationAttachmentAssetData,
@@ -55,6 +57,8 @@ import type {
   SessionDetailResult,
   SessionMeta,
   SkillFoldersState,
+  SystemPromptAggregate,
+  SystemPromptPoint,
   ToolFlowResult,
   ToolsState,
   TraceAgentLoop,
@@ -1497,6 +1501,12 @@ export const api = {
   tracesTokensDaily: (range?: string) => get<TraceTokenDaily[]>(`/traces/tokens-daily${range ? `?range=${range}` : ''}`),
   tracesToolFlow: (range?: string) => get<ToolFlowResult>(`/traces/tool-flow${range ? `?range=${range}` : ''}`),
   tracesAutoMode: (range?: string) => get<AutoModeSummary>(`/traces/auto-mode${range ? `?range=${range}` : ''}`),
+  tracesCacheEfficiency: (range?: string) =>
+    get<{ series: CacheEfficiencyPoint[]; aggregate: CacheEfficiencyAggregate }>(
+      `/traces/cache-efficiency${range ? `?range=${range}` : ''}`,
+    ),
+  tracesSystemPrompt: (range?: string) =>
+    get<{ series: SystemPromptPoint[]; aggregate: SystemPromptAggregate }>(`/traces/system-prompt${range ? `?range=${range}` : ''}`),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────

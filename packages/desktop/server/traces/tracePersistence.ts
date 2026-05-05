@@ -15,6 +15,7 @@ export function persistTraceStats(params: {
   modelId?: string;
   tokensInput: number;
   tokensOutput: number;
+  tokensCachedInput?: number;
   cost: number;
 }): void {
   writeTraceStats({
@@ -23,6 +24,7 @@ export function persistTraceStats(params: {
     modelId: params.modelId,
     tokensInput: params.tokensInput,
     tokensOutput: params.tokensOutput,
+    tokensCachedInput: params.tokensCachedInput,
     cost: params.cost,
   });
 }

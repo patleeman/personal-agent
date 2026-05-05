@@ -435,12 +435,23 @@ function wireSession(id: string, session: AgentSession, cwd: string, options: { 
       broadcastQueueState,
       broadcastTitle,
       broadcastStats: (target, tokens, cost) => {
-        broadcast(target, { type: 'stats_update', tokens, cost });
+        broadcast(target, {
+          type: 'stats_update',
+          tokens: {
+            input: tokens.input,
+            output: tokens.output,
+            total: tokens.total,
+            cacheRead: tokens.cacheRead ?? 0,
+            cacheWrite: tokens.cacheWrite ?? 0,
+          },
+          cost,
+        });
         persistTraceStats({
           sessionId: target.sessionId,
           modelId: target.session.model?.id,
           tokensInput: tokens.input,
           tokensOutput: tokens.output,
+          tokensCachedInput: tokens.cacheRead,
           cost,
         });
       },

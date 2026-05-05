@@ -38,7 +38,7 @@ export type SseEvent =
   | { type: 'tool_end'; toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string; details?: unknown }
   | { type: 'title_update'; title: string }
   | { type: 'context_usage'; usage: LiveContextUsage | null }
-  | { type: 'stats_update'; tokens: { input: number; output: number; total: number }; cost: number }
+  | { type: 'stats_update'; tokens: { input: number; output: number; total: number; cacheRead: number; cacheWrite: number }; cost: number }
   | { type: 'compaction_start'; mode: 'manual' | 'auto' }
   | { type: 'error'; message: string };
 
