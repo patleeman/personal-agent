@@ -77,16 +77,6 @@ CREATE TABLE IF NOT EXISTS trace_compactions (
   tokens_saved INTEGER DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS trace_queue (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL,
-  profile TEXT NOT NULL DEFAULT '',
-  ts TEXT NOT NULL,
-  action TEXT NOT NULL,
-  item_type TEXT DEFAULT '',
-  wait_seconds INTEGER DEFAULT 0
-);
-
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_trace_stats_ts ON trace_stats(ts);
 CREATE INDEX IF NOT EXISTS idx_trace_stats_session ON trace_stats(session_id);
@@ -101,7 +91,6 @@ CREATE INDEX IF NOT EXISTS idx_trace_context_ts ON trace_context(ts);
 CREATE INDEX IF NOT EXISTS idx_trace_context_session ON trace_context(session_id);
 
 CREATE INDEX IF NOT EXISTS idx_trace_compactions_ts ON trace_compactions(ts);
-CREATE INDEX IF NOT EXISTS idx_trace_queue_ts ON trace_queue(ts);
 
 CREATE TABLE IF NOT EXISTS trace_auto_mode (
   id TEXT PRIMARY KEY,
@@ -239,7 +228,6 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
     db.prepare(`DELETE FROM trace_context WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_tool_calls WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_compactions WHERE ts < ?`).run(cutoff);
-    db.prepare(`DELETE FROM trace_queue WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_auto_mode WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_suggested_context WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_context_pointer_inspect WHERE ts < ?`).run(cutoff);
@@ -417,33 +405,6 @@ export function writeTraceCompaction(params: {
       params.tokensBefore,
       params.tokensAfter,
       params.tokensSaved,
-    );
-  } catch (err) {
-    // Fire-and-forget
-  }
-}
-
-export function writeTraceQueue(params: {
-  sessionId: string;
-  action: 'enqueue' | 'dequeue' | 'timeout' | 'complete';
-  itemType?: string;
-  waitSeconds?: number;
-  profile?: string;
-}): void {
-  try {
-    const db = getTraceDb();
-    const stmt = db.prepare(`
-      INSERT INTO trace_queue (id, session_id, profile, ts, action, item_type, wait_seconds)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(
-      generateId(),
-      params.sessionId,
-      params.profile ?? '',
-      timestamp(),
-      params.action,
-      params.itemType ?? '',
-      params.waitSeconds ?? 0,
     );
   } catch (err) {
     // Fire-and-forget

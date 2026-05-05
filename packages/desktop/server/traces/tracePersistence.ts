@@ -10,7 +10,6 @@ import {
   traceWorkerCompaction,
   traceWorkerContext,
   traceWorkerContextPointerInspect,
-  traceWorkerQueue,
   traceWorkerStats,
   traceWorkerSuggestedContext,
   traceWorkerToolCall,
@@ -82,17 +81,6 @@ export function persistTraceCompaction(params: {
     tokensAfter: params.tokensAfter ?? 0,
     tokensSaved: params.tokensSaved ?? 0,
   });
-}
-
-// ── Queue hook ────────────────────────────────────────────────────────────────
-
-export function persistTraceQueue(params: {
-  sessionId: string;
-  action: 'enqueue' | 'dequeue' | 'timeout' | 'complete';
-  itemType?: string;
-  waitSeconds?: number;
-}): void {
-  traceWorkerQueue(params);
 }
 
 // ── Auto mode hook ────────────────────────────────────────────────────────────

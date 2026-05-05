@@ -61,10 +61,6 @@ export function traceWorkerCompaction(params: Omit<TraceWorkerMessage & { type: 
   send({ type: 'compaction', ...params });
 }
 
-export function traceWorkerQueue(params: Omit<TraceWorkerMessage & { type: 'queue' }, 'type'>): void {
-  send({ type: 'queue', ...params });
-}
-
 export function traceWorkerAutoMode(params: Omit<TraceWorkerMessage & { type: 'auto_mode' }, 'type'>): void {
   send({ type: 'auto_mode', ...params });
 }
