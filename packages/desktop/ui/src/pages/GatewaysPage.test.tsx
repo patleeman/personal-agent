@@ -77,6 +77,7 @@ describe('GatewaysPage', () => {
   let gatewaysMock: ReturnType<typeof vi.spyOn>;
   let updateGatewayConnectionMock: ReturnType<typeof vi.spyOn>;
   let detachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
+  let attachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
   let searchSlackMcpChannelsMock: ReturnType<typeof vi.spyOn>;
   let attachSlackMcpChannelMock: ReturnType<typeof vi.spyOn>;
   let telegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
@@ -87,8 +88,21 @@ describe('GatewaysPage', () => {
     gatewaysMock = vi.spyOn(api, 'gateways');
     updateGatewayConnectionMock = vi.spyOn(api, 'updateGatewayConnection');
     detachGatewayConversationMock = vi.spyOn(api, 'detachGatewayConversation');
+    attachGatewayConversationMock = vi.spyOn(api, 'attachGatewayConversation');
     searchSlackMcpChannelsMock = vi.spyOn(api, 'searchSlackMcpChannels');
     attachSlackMcpChannelMock = vi.spyOn(api, 'attachSlackMcpChannel');
+    vi.spyOn(api, 'sessions').mockResolvedValue([
+      {
+        id: 'thread-1',
+        file: '/tmp/thread-1.jsonl',
+        timestamp: '2026-05-04T12:00:00Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'openai/gpt-4o',
+        title: 'Support thread',
+        messageCount: 1,
+      },
+    ]);
     telegramGatewayTokenMock = vi.spyOn(api, 'telegramGatewayToken').mockResolvedValue({ configured: false });
     saveTelegramGatewayTokenMock = vi.spyOn(api, 'saveTelegramGatewayToken');
     deleteTelegramGatewayTokenMock = vi.spyOn(api, 'deleteTelegramGatewayToken');
@@ -107,6 +121,7 @@ describe('GatewaysPage', () => {
   it('shows loading state while fetching', async () => {
     gatewaysMock.mockReturnValue(new Promise(() => {})); // never resolves
     telegramGatewayTokenMock.mockReturnValue(new Promise(() => {})); // never resolves
+    vi.mocked(api.sessions).mockReturnValue(new Promise(() => {})); // never resolves
     const { container } = renderPage();
     expect(container.textContent).toContain('Loading…');
   });
@@ -118,6 +133,7 @@ describe('GatewaysPage', () => {
     expect(container.textContent).toContain('No gateways connected');
     expect(container.textContent).not.toContain('Connect Telegram');
     expect(container.textContent).toContain('No bot token stored');
+    expect(container.textContent).toContain('Chat ID');
   });
 
   it('saves Telegram bot setup from the gateways page', async () => {
@@ -182,6 +198,59 @@ describe('GatewaysPage', () => {
 
     expect(saveTelegramGatewayTokenMock).toHaveBeenCalledWith('new-token');
     expect(container.textContent).toContain('Replace token');
+  });
+
+  it('attaches a Telegram chat to a selected thread', async () => {
+    gatewaysMock.mockResolvedValue(createGatewayState());
+    telegramGatewayTokenMock.mockResolvedValue({ configured: true });
+    const attachedState = createGatewayState({
+      connections: [
+        {
+          id: 'tg-1',
+          provider: 'telegram',
+          label: 'Telegram',
+          status: 'active',
+          enabled: true,
+          createdAt: '2026-05-04T00:00:00Z',
+          updatedAt: '2026-05-04T12:00:00Z',
+        },
+      ],
+      bindings: [
+        {
+          id: 'b-tg-1',
+          provider: 'telegram',
+          connectionId: 'tg-1',
+          conversationId: 'thread-1',
+          conversationTitle: 'Support thread',
+          externalChatId: '123456789',
+          externalChatLabel: '123456789',
+          repliesEnabled: true,
+          createdAt: '2026-05-04T00:00:00Z',
+          updatedAt: '2026-05-04T12:00:00Z',
+        },
+      ],
+    });
+    attachGatewayConversationMock.mockResolvedValue(attachedState);
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const chatInput = container.querySelector<HTMLInputElement>('input[placeholder="123456789"]');
+    expect(chatInput).toBeTruthy();
+    typeInput(chatInput!, '123456789');
+    const attachButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Attach chat');
+    expect(attachButton).toBeTruthy();
+    click(attachButton!);
+    await flushAsyncWork();
+
+    expect(attachGatewayConversationMock).toHaveBeenCalledWith({
+      provider: 'telegram',
+      conversationId: 'thread-1',
+      conversationTitle: 'Support thread',
+      externalChatId: '123456789',
+      externalChatLabel: '123456789',
+    });
+    expect(container.textContent).toContain('Support thread');
   });
 
   it('displays error from API', async () => {

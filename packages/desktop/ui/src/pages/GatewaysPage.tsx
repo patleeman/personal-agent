@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../client/api';
 import { AppPageIntro, AppPageLayout, ToolbarButton } from '../components/ui';
-import type { GatewayConnection, GatewayEvent, GatewayState, GatewayThreadBinding } from '../shared/types';
+import type { GatewayConnection, GatewayEvent, GatewayState, GatewayThreadBinding, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 
 const EMPTY_GATEWAY_STATE: GatewayState = { providers: [], connections: [], bindings: [], events: [], chatTargets: [] };
@@ -22,6 +22,10 @@ export function GatewaysPage() {
   const [telegramTokenEditing, setTelegramTokenEditing] = useState(false);
   const [telegramTokenNotice, setTelegramTokenNotice] = useState<string | null>(null);
   const [telegramTokenSaveError, setTelegramTokenSaveError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [telegramChatIdDraft, setTelegramChatIdDraft] = useState('');
+  const [telegramThreadId, setTelegramThreadId] = useState('');
 
   const telegramConnection = state.connections.find((c) => c.provider === 'telegram') ?? null;
   const telegramBinding = telegramConnection
@@ -46,6 +50,23 @@ export function GatewaysPage() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .sessions()
+      .then((next) => {
+        if (cancelled) return;
+        setSessions(next);
+        setTelegramThreadId((current) => current || next[0]?.id || '');
+      })
+      .catch((err) => {
+        if (!cancelled) setSessionsError(formatGatewayError(err));
       });
     return () => {
       cancelled = true;
@@ -140,6 +161,34 @@ export function GatewaysPage() {
     }
   }
 
+  async function attachTelegramChat() {
+    const chatId = telegramChatIdDraft.trim();
+    const thread = sessions.find((session) => session.id === telegramThreadId) ?? null;
+    if (!chatId || !thread) {
+      setError('Choose a thread and enter a Telegram chat ID.');
+      return;
+    }
+
+    setBusy('telegram-attach');
+    setError(null);
+    try {
+      setState(
+        await api.attachGatewayConversation({
+          provider: 'telegram',
+          conversationId: thread.id,
+          conversationTitle: thread.title || thread.id,
+          externalChatId: chatId,
+          externalChatLabel: chatId,
+        }),
+      );
+      setTelegramChatIdDraft('');
+    } catch (err) {
+      setError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function searchSlackChannels() {
     if (!slackQuery.trim()) return;
     setBusy('slack-search');
@@ -180,8 +229,9 @@ export function GatewaysPage() {
     }
   }
 
+  const hasVisibleTelegramConnection = telegramConnection && telegramBinding;
   const hasVisibleSlackConnection = slackConnection && slackBinding;
-  const hasAnyConnection = telegramConnection || hasVisibleSlackConnection;
+  const hasAnyConnection = hasVisibleTelegramConnection || hasVisibleSlackConnection;
   const telegramConfigured = telegramTokenState?.configured === true;
   const showTelegramTokenEditor = !telegramConfigured || telegramTokenEditing;
 
@@ -196,7 +246,10 @@ export function GatewaysPage() {
         <section className="max-w-4xl">
           <h2 className="text-[18px] font-semibold tracking-tight text-primary">Telegram</h2>
           <div className="mt-3 space-y-3 border-t border-border-subtle pt-5">
-            <p className="text-[13px] text-secondary">Add a Telegram bot token. Incoming chats will create or reuse gateway threads.</p>
+            <p className="text-[13px] text-secondary">
+              Add a bot token, then map a Telegram chat ID to an existing conversation thread. Incoming messages from mapped chats will
+              route into that thread.
+            </p>
             {telegramTokenLoading && !telegramTokenState ? <p className="text-[13px] text-dim">Loading Telegram config…</p> : null}
             {telegramTokenError && !telegramTokenState ? (
               <p className="text-[13px] text-danger">Failed to load Telegram config: {telegramTokenError}</p>
@@ -267,6 +320,49 @@ export function GatewaysPage() {
             )}
             {telegramTokenNotice ? <p className="text-[12px] text-success">{telegramTokenNotice}</p> : null}
             {telegramTokenSaveError ? <p className="text-[12px] text-danger">{telegramTokenSaveError}</p> : null}
+
+            <div className="border-t border-border-subtle pt-4">
+              <h3 className="text-[13px] font-medium text-primary">Attach a Telegram chat</h3>
+              <p className="mt-1 text-[12px] text-secondary">
+                Send a message to your bot, then use Telegram's chat ID for that conversation here.
+              </p>
+              {sessionsError ? <p className="mt-2 text-[12px] text-danger">Failed to load threads: {sessionsError}</p> : null}
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                <label className="min-w-0 text-[12px] text-secondary">
+                  Thread
+                  <select
+                    className={`${INPUT_CLASS} mt-1`}
+                    value={telegramThreadId}
+                    onChange={(event) => setTelegramThreadId(event.target.value)}
+                    disabled={busy !== null || sessions.length === 0}
+                  >
+                    {sessions.length === 0 ? <option value="">No threads available</option> : null}
+                    {sessions.map((session) => (
+                      <option key={session.id} value={session.id}>
+                        {session.title || session.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="min-w-0 text-[12px] text-secondary">
+                  Chat ID
+                  <input
+                    value={telegramChatIdDraft}
+                    onChange={(event) => setTelegramChatIdDraft(event.target.value)}
+                    placeholder="123456789"
+                    className={`${INPUT_CLASS} mt-1`}
+                    disabled={busy !== null}
+                  />
+                </label>
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                  disabled={busy !== null || !telegramTokenState?.configured || !telegramThreadId || !telegramChatIdDraft.trim()}
+                  onClick={attachTelegramChat}
+                >
+                  {busy === 'telegram-attach' ? 'Attaching…' : 'Attach chat'}
+                </ToolbarButton>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -274,7 +370,7 @@ export function GatewaysPage() {
         <section className="max-w-4xl">
           <h2 className="text-[18px] font-semibold tracking-tight text-primary">Connected</h2>
           <div className="mt-3 border-t border-border-subtle">
-            {telegramConnection ? (
+            {hasVisibleTelegramConnection ? (
               <GatewayRow
                 connection={telegramConnection}
                 binding={telegramBinding}
@@ -282,7 +378,7 @@ export function GatewaysPage() {
                 icon="TG"
                 iconBg="bg-sky-500"
                 title="Telegram"
-                targetLabel="Telegram chat"
+                targetLabel="Chat ID"
                 onPause={() => updateTelegram(false)}
                 onResume={() => updateTelegram(true)}
                 onDetach={detachTelegram}
