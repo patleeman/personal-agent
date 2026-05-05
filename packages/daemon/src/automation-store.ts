@@ -365,6 +365,7 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
   `);
 
   migrateAutomationSchema(db);
+  repairAutomationChildForeignKeys(db);
   db.exec('CREATE INDEX IF NOT EXISTS idx_automations_runtime_scope_title ON automations(runtime_scope, title)');
   db.exec(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_legacy_file_path ON automations(legacy_file_path) WHERE legacy_file_path IS NOT NULL',
@@ -406,6 +407,114 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
 function readAutomationColumnNames(db: SqliteDatabase): Set<string> {
   const columns = db.prepare('PRAGMA table_info(automations)').all() as Array<{ name?: string }>;
   return new Set(columns.map((column) => column.name).filter((name): name is string => typeof name === 'string'));
+}
+
+const AUTOMATION_STATE_COLUMNS = [
+  'automation_id',
+  'running',
+  'running_started_at',
+  'active_run_id',
+  'last_run_id',
+  'last_status',
+  'last_run_at',
+  'last_success_at',
+  'last_failure_at',
+  'last_error',
+  'last_log_path',
+  'last_scheduled_minute',
+  'last_attempt_count',
+  'one_time_resolved_at',
+  'one_time_resolved_status',
+  'one_time_completed_at',
+] as const;
+
+function createAutomationStateTableSql(tableName = 'automation_state'): string {
+  return `
+    CREATE TABLE ${tableName} (
+      automation_id TEXT PRIMARY KEY,
+      running INTEGER NOT NULL DEFAULT 0,
+      running_started_at TEXT,
+      active_run_id TEXT,
+      last_run_id TEXT,
+      last_status TEXT,
+      last_run_at TEXT,
+      last_success_at TEXT,
+      last_failure_at TEXT,
+      last_error TEXT,
+      last_log_path TEXT,
+      last_scheduled_minute TEXT,
+      last_attempt_count INTEGER,
+      one_time_resolved_at TEXT,
+      one_time_resolved_status TEXT,
+      one_time_completed_at TEXT,
+      FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+    )
+  `;
+}
+
+function createAutomationActivityTableSql(tableName = 'automation_activity'): string {
+  return `
+    CREATE TABLE ${tableName} (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      automation_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload_json TEXT,
+      FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+    )
+  `;
+}
+
+function readTableSql(db: SqliteDatabase, tableName: string): string | undefined {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) as { sql?: string } | undefined;
+  return row?.sql;
+}
+
+function tableReferencesLegacyProfile(tableSql: string | undefined): boolean {
+  return /REFERENCES\s+["`]?(?:automations_legacy_profile)["`]?/i.test(tableSql ?? '');
+}
+
+function repairAutomationChildForeignKeys(db: SqliteDatabase): void {
+  const stateSql = readTableSql(db, 'automation_state');
+  const activitySql = readTableSql(db, 'automation_activity');
+  if (!tableReferencesLegacyProfile(stateSql) && !tableReferencesLegacyProfile(activitySql)) {
+    return;
+  }
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    if (tableReferencesLegacyProfile(stateSql)) {
+      db.exec('DROP TABLE IF EXISTS automation_state_legacy_fk');
+      db.exec('ALTER TABLE automation_state RENAME TO automation_state_legacy_fk');
+      db.exec(createAutomationStateTableSql());
+      db.exec(`
+        INSERT OR REPLACE INTO automation_state (${AUTOMATION_STATE_COLUMNS.join(', ')})
+        SELECT ${AUTOMATION_STATE_COLUMNS.join(', ')}
+        FROM automation_state_legacy_fk
+      `);
+      db.exec('DROP TABLE automation_state_legacy_fk');
+    }
+
+    if (tableReferencesLegacyProfile(activitySql)) {
+      db.exec('DROP INDEX IF EXISTS idx_automation_activity_automation_id_created_at');
+      db.exec('DROP TABLE IF EXISTS automation_activity_legacy_fk');
+      db.exec('ALTER TABLE automation_activity RENAME TO automation_activity_legacy_fk');
+      db.exec(createAutomationActivityTableSql());
+      db.exec(`
+        INSERT OR REPLACE INTO automation_activity (seq, automation_id, kind, created_at, payload_json)
+        SELECT seq, automation_id, kind, created_at, payload_json
+        FROM automation_activity_legacy_fk
+      `);
+      db.exec('DROP TABLE automation_activity_legacy_fk');
+    }
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_automation_activity_automation_id_created_at
+      ON automation_activity(automation_id, created_at DESC, seq DESC)
+    `);
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
 }
 
 function migrateAutomationSchema(db: SqliteDatabase): void {
@@ -510,6 +619,7 @@ function migrateAutomationSchema(db: SqliteDatabase): void {
       FROM automations_legacy_profile
     `);
     db.exec('DROP TABLE automations_legacy_profile');
+    repairAutomationChildForeignKeys(db);
     db.exec('CREATE INDEX IF NOT EXISTS idx_automations_runtime_scope_title ON automations(runtime_scope, title)');
     db.exec(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_legacy_file_path ON automations(legacy_file_path) WHERE legacy_file_path IS NOT NULL',

@@ -210,6 +210,41 @@ describe('tasks module scheduling', () => {
         '2026-03-02T10:00:00.000Z',
         '2026-03-02T10:00:00.000Z',
       );
+    legacyDb.exec(`
+      CREATE TABLE automation_state (
+        automation_id TEXT PRIMARY KEY,
+        running INTEGER NOT NULL DEFAULT 0,
+        running_started_at TEXT,
+        active_run_id TEXT,
+        last_run_id TEXT,
+        last_status TEXT,
+        last_run_at TEXT,
+        last_success_at TEXT,
+        last_failure_at TEXT,
+        last_error TEXT,
+        last_log_path TEXT,
+        last_scheduled_minute TEXT,
+        last_attempt_count INTEGER,
+        one_time_resolved_at TEXT,
+        one_time_resolved_status TEXT,
+        one_time_completed_at TEXT,
+        FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+      );
+      CREATE TABLE automation_activity (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        automation_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        payload_json TEXT,
+        FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+      );
+    `);
+    legacyDb
+      .prepare('INSERT INTO automation_state (automation_id, running, last_status, last_run_at) VALUES (?, ?, ?, ?)')
+      .run('legacy-task', 0, 'success', '2026-03-02T11:00:00.000Z');
+    legacyDb
+      .prepare('INSERT INTO automation_activity (automation_id, kind, created_at, payload_json) VALUES (?, ?, ?, ?)')
+      .run('legacy-task', 'run-failed', '2026-03-02T12:00:00.000Z', JSON.stringify({ message: 'boom' }));
     legacyDb.close();
 
     const automations = listStoredAutomations({ dbPath });
@@ -222,10 +257,30 @@ describe('tasks module scheduling', () => {
       }),
     );
 
+    expect(loadAutomationRuntimeStateMap({ dbPath })['legacy-task']).toEqual(
+      expect.objectContaining({
+        id: 'legacy-task',
+        lastStatus: 'success',
+      }),
+    );
+    expect(listAutomationActivityEntries('legacy-task', { dbPath })).toEqual([
+      expect.objectContaining({
+        automationId: 'legacy-task',
+        kind: 'run-failed',
+      }),
+    ]);
+
     const migratedDb = openSqliteDatabase(dbPath);
     const columns = migratedDb.prepare('PRAGMA table_info(automations)').all() as Array<{ name: string }>;
     expect(columns.map((column) => column.name)).toContain('runtime_scope');
     expect(columns.map((column) => column.name)).not.toContain('profile');
+    const childTableSql = migratedDb
+      .prepare(
+        "SELECT group_concat(sql, '\n') AS sql FROM sqlite_master WHERE type = 'table' AND name IN ('automation_state', 'automation_activity')",
+      )
+      .get() as { sql: string };
+    expect(childTableSql.sql).not.toContain('automations_legacy_profile');
+    expect(migratedDb.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     migratedDb.close();
   });
 
