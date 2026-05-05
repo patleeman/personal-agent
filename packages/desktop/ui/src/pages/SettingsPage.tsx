@@ -2394,6 +2394,13 @@ export function SettingsPage() {
     };
   }, [desktopEnvironment?.activeHostKind, oauthLoginState?.id, oauthLoginState?.status]);
 
+  // Open auth URL in system browser when it becomes available during OAuth login
+  useEffect(() => {
+    if (oauthLoginState?.status === 'running' && oauthLoginState.authUrl && oauthLoginState.authUrl.length > 0) {
+      window.open(oauthLoginState.authUrl, '_blank');
+    }
+  }, [oauthLoginState?.authUrl, oauthLoginState?.status]);
+
   useEffect(() => {
     if (!oauthLoginState?.id) {
       oauthTerminalStateKeyRef.current = null;
@@ -4961,7 +4968,25 @@ export function SettingsPage() {
                                     <div className="space-y-2 border-t border-border-subtle pt-3">
                                       <p className="ui-card-meta">
                                         OAuth login running for {selectedProviderLogin.providerName}.
-                                        {selectedProviderLogin.authUrl ? ` Opened ${selectedProviderLogin.authUrl}` : ''}
+                                        {selectedProviderLogin.authUrl ? (
+                                          <>
+                                            {' Opened '}
+                                            <a
+                                              href={selectedProviderLogin.authUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="underline text-interactive hover:text-interactive-hover"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                window.open(selectedProviderLogin.authUrl, '_blank');
+                                              }}
+                                            >
+                                              {selectedProviderLogin.authUrl}
+                                            </a>
+                                          </>
+                                        ) : (
+                                          ''
+                                        )}
                                       </p>
                                       {selectedProviderLogin.progress.length > 0 && (
                                         <p className="ui-card-meta">
