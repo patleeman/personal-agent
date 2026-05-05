@@ -1,8 +1,9 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { api } from '../client/api';
 import { getDesktopBridge, isDesktopShell } from '../desktop/desktopBridge';
-import type { DesktopEnvironmentState, DesktopNavigationState } from '../shared/types';
+import type { DaemonPowerSummary, DesktopEnvironmentState, DesktopNavigationState } from '../shared/types';
 import type { AppLayoutMode } from '../ui-state/appLayoutMode';
 import { ToolbarButton } from './ui';
 
@@ -100,6 +101,74 @@ export function readBrowserNavigationState(): DesktopNavigationState {
   };
 }
 
+function CaffeineIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2.5 2.5v6a3 3 0 0 0 3 3h3a3 3 0 0 0 3-3v-6Z" />
+      <path d="M11.5 4.5h1a1.5 1.5 0 0 1 0 3h-1" />
+      <path d="M5 13.5h4" />
+      <path d="M7 13.5v-2" />
+    </svg>
+  );
+}
+
+const DAEMON_POWER_POLL_MS = 30_000;
+
+function useDaemonPower(): DaemonPowerSummary | null {
+  const [power, setPower] = useState<DaemonPowerSummary | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function fetchPower() {
+      try {
+        const state = await api.daemon();
+        if (mountedRef.current) {
+          setPower(state.power);
+        }
+      } catch {
+        if (mountedRef.current) {
+          setPower(null);
+        }
+      }
+    }
+
+    void fetchPower();
+
+    function poll() {
+      pollTimer = setTimeout(async () => {
+        await fetchPower();
+        if (mountedRef.current) {
+          poll();
+        }
+      }, DAEMON_POWER_POLL_MS);
+    }
+
+    poll();
+
+    return () => {
+      mountedRef.current = false;
+      if (pollTimer !== null) {
+        clearTimeout(pollTimer);
+      }
+    };
+  }, []);
+
+  return power;
+}
+
 export function DesktopTopBar({
   environment,
   sidebarOpen,
@@ -124,6 +193,7 @@ export function DesktopTopBar({
   zenMode?: boolean;
 }) {
   const location = useLocation();
+  const daemonPower = useDaemonPower();
   const [navigation, setNavigation] = useState<DesktopNavigationState>({
     canGoBack: false,
     canGoForward: false,
@@ -192,6 +262,13 @@ export function DesktopTopBar({
   const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
   const launchBadgeLabel = environment?.launchMode === 'testing' ? environment.launchLabel?.trim() || 'Testing' : null;
 
+  const caffinating = daemonPower?.keepAwake === true && daemonPower?.active === true;
+  const powerTooltip = caffinating
+    ? 'Idle system sleep is blocked. Display sleep is still allowed.'
+    : daemonPower?.keepAwake === true
+      ? `Keep-awake is enabled but inactive${daemonPower?.error ? `: ${daemonPower.error}` : ''}.`
+      : null;
+
   return (
     <div className="ui-desktop-top-bar border-b-0 bg-base/80">
       <div className="ui-desktop-top-bar__drag-region" />
@@ -239,6 +316,15 @@ export function DesktopTopBar({
       </div>
       <div className="ui-desktop-top-bar__center" />
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+        {daemonPower !== null && daemonPower.keepAwake ? (
+          <div
+            className={`ui-desktop-top-bar__icon-button ui-desktop-top-bar__caffeine-indicator ${caffinating ? 'ui-desktop-top-bar__caffeine-active' : ''}`}
+            aria-label={caffinating ? 'Caffinating — system sleep blocked' : 'Keep-awake enabled'}
+            title={powerTooltip ?? ''}
+          >
+            <CaffeineIcon />
+          </div>
+        ) : null}
         <div className="ui-desktop-layout-switcher" role="radiogroup" aria-label="View mode">
           <button
             type="button"

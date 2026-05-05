@@ -82,6 +82,14 @@
     background-color: rgb(var(--color-danger) / 0.14);
   }
 
+  .ui-desktop-top-bar__caffeine-indicator {
+    @apply flex h-7 w-7 items-center justify-center rounded-md text-secondary;
+  }
+
+  .ui-desktop-top-bar__caffeine-indicator.ui-desktop-top-bar__caffeine-active {
+    color: rgb(var(--color-accent));
+  }
+
   .ui-desktop-top-bar__center {
     @apply relative z-10 flex-1;
   }
