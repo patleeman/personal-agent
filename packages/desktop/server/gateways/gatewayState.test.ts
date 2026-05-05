@@ -51,6 +51,24 @@ describe('gatewayState', () => {
     expect(state.bindings[0]).toMatchObject({ conversationId: 'conv-b', conversationTitle: 'B' });
   });
 
+  it('keeps chat target config when a gateway thread is detached', () => {
+    const stateRoot = makeStateRoot();
+    attachGatewayConversation({
+      stateRoot,
+      profile: 'shared',
+      provider: 'telegram',
+      conversationId: 'conv-a',
+      conversationTitle: 'A',
+      externalChatId: '123456789',
+      externalChatLabel: '123456789',
+    });
+
+    const state = detachArchivedGatewayConversations({ stateRoot, profile: 'shared', conversationIds: ['conv-a'] });
+
+    expect(state.bindings).toEqual([]);
+    expect(state.chatTargets).toMatchObject([{ provider: 'telegram', externalChatId: '123456789', repliesEnabled: false }]);
+  });
+
   it('detaches archived conversations from gateways', () => {
     const stateRoot = makeStateRoot();
     attachGatewayConversation({ stateRoot, profile: 'shared', provider: 'telegram', conversationId: 'conv-a', conversationTitle: 'A' });

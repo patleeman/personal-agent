@@ -130,7 +130,7 @@ describe('GatewaysPage', () => {
     gatewaysMock.mockResolvedValue(createGatewayState());
     const { container } = renderPage();
     await flushAsyncWork();
-    expect(container.textContent).toContain('No gateways connected');
+    expect(container.textContent).toContain('Chat config');
     expect(container.textContent).not.toContain('Connect Telegram');
     expect(container.textContent).toContain('No bot token stored');
     expect(container.textContent).toContain('Chat ID');
@@ -238,7 +238,7 @@ describe('GatewaysPage', () => {
     const chatInput = container.querySelector<HTMLInputElement>('input[placeholder="123456789"]');
     expect(chatInput).toBeTruthy();
     typeInput(chatInput!, '123456789');
-    const attachButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Attach chat');
+    const attachButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Attach thread');
     expect(attachButton).toBeTruthy();
     click(attachButton!);
     await flushAsyncWork();

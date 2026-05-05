@@ -31,6 +31,10 @@ export function GatewaysPage() {
   const telegramBinding = telegramConnection
     ? (state.bindings.find((b) => b.connectionId === telegramConnection.id && b.provider === 'telegram') ?? null)
     : null;
+  const telegramChatTarget = telegramConnection
+    ? (state.chatTargets.find((target) => target.connectionId === telegramConnection.id && target.provider === 'telegram') ?? null)
+    : null;
+  const configuredTelegramChatId = telegramChatTarget?.externalChatId || telegramBinding?.externalChatId || '';
   const slackConnection = state.connections.find((c) => c.provider === 'slack_mcp') ?? null;
   const slackBinding = slackConnection
     ? (state.bindings.find((b) => b.connectionId === slackConnection.id && b.provider === 'slack_mcp') ?? null)
@@ -55,6 +59,12 @@ export function GatewaysPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (configuredTelegramChatId && !telegramChatIdDraft.trim()) {
+      setTelegramChatIdDraft(configuredTelegramChatId);
+    }
+  }, [configuredTelegramChatId, telegramChatIdDraft]);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +172,7 @@ export function GatewaysPage() {
   }
 
   async function attachTelegramChat() {
-    const chatId = telegramChatIdDraft.trim();
+    const chatId = telegramChatIdDraft.trim() || configuredTelegramChatId;
     const thread = sessions.find((session) => session.id === telegramThreadId) ?? null;
     if (!chatId || !thread) {
       setError('Choose a thread and enter a Telegram chat ID.');
@@ -229,9 +239,7 @@ export function GatewaysPage() {
     }
   }
 
-  const hasVisibleTelegramConnection = telegramConnection && telegramBinding;
   const hasVisibleSlackConnection = slackConnection && slackBinding;
-  const hasAnyConnection = hasVisibleTelegramConnection || hasVisibleSlackConnection;
   const telegramConfigured = telegramTokenState?.configured === true;
   const showTelegramTokenEditor = !telegramConfigured || telegramTokenEditing;
 
@@ -322,14 +330,25 @@ export function GatewaysPage() {
             {telegramTokenSaveError ? <p className="text-[12px] text-danger">{telegramTokenSaveError}</p> : null}
 
             <div className="border-t border-border-subtle pt-4">
-              <h3 className="text-[13px] font-medium text-primary">Attach a Telegram chat</h3>
+              <h3 className="text-[13px] font-medium text-primary">Chat config</h3>
               <p className="mt-1 text-[12px] text-secondary">
-                Send a message to your bot, then use Telegram's chat ID for that conversation here.
+                Send a message to your bot, then save that Telegram chat ID here. Thread attachment can change later.
               </p>
+              {configuredTelegramChatId ? <p className="mt-2 text-[13px] text-secondary">Chat ID: {configuredTelegramChatId}</p> : null}
               {sessionsError ? <p className="mt-2 text-[12px] text-danger">Failed to load threads: {sessionsError}</p> : null}
               <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
                 <label className="min-w-0 text-[12px] text-secondary">
-                  Thread
+                  Chat ID
+                  <input
+                    value={telegramChatIdDraft}
+                    onChange={(event) => setTelegramChatIdDraft(event.target.value)}
+                    placeholder="123456789"
+                    className={`${INPUT_CLASS} mt-1`}
+                    disabled={busy !== null}
+                  />
+                </label>
+                <label className="min-w-0 text-[12px] text-secondary">
+                  Attach thread
                   <select
                     className={`${INPUT_CLASS} mt-1`}
                     value={telegramThreadId}
@@ -344,33 +363,16 @@ export function GatewaysPage() {
                     ))}
                   </select>
                 </label>
-                <label className="min-w-0 text-[12px] text-secondary">
-                  Chat ID
-                  <input
-                    value={telegramChatIdDraft}
-                    onChange={(event) => setTelegramChatIdDraft(event.target.value)}
-                    placeholder="123456789"
-                    className={`${INPUT_CLASS} mt-1`}
-                    disabled={busy !== null}
-                  />
-                </label>
                 <ToolbarButton
                   className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
                   disabled={busy !== null || !telegramTokenState?.configured || !telegramThreadId || !telegramChatIdDraft.trim()}
                   onClick={attachTelegramChat}
                 >
-                  {busy === 'telegram-attach' ? 'Attaching…' : 'Attach chat'}
+                  {busy === 'telegram-attach' ? 'Attaching…' : telegramBinding ? 'Update attachment' : 'Attach thread'}
                 </ToolbarButton>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* Connected gateways */}
-        <section className="max-w-4xl">
-          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Connected</h2>
-          <div className="mt-3 border-t border-border-subtle">
-            {hasVisibleTelegramConnection ? (
+            {telegramBinding ? (
               <GatewayRow
                 connection={telegramConnection}
                 binding={telegramBinding}
@@ -385,6 +387,13 @@ export function GatewaysPage() {
                 showPauseResume
               />
             ) : null}
+          </div>
+        </section>
+
+        {/* Slack channel attach — show until Slack MCP is attached to a channel */}
+        <section className="max-w-4xl">
+          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Slack MCP</h2>
+          <div className="mt-3 border-t border-border-subtle pt-5 space-y-3">
             {hasVisibleSlackConnection ? (
               <GatewayRow
                 connection={slackConnection}
@@ -396,61 +405,47 @@ export function GatewaysPage() {
                 targetLabel="Slack channel"
                 onDetach={detachSlack}
               />
-            ) : null}
-            {!hasAnyConnection ? (
-              <div className="py-6 text-[14px] text-secondary">
-                <p>No gateways connected.</p>
-                <p className="mt-1 text-[13px] text-dim">
-                  Telegram chats appear here after setup, or you can attach a Slack channel below.
-                </p>
-              </div>
-            ) : null}
+            ) : (
+              <>
+                <p className="text-[13px] text-secondary">Search Slack through MCP and attach an active channel as a gateway.</p>
+                <div className="flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface/70 px-3 py-1.5 text-[13px] text-primary placeholder:text-dim outline-none transition-colors focus:border-accent/50 disabled:opacity-50"
+                    value={slackQuery}
+                    onChange={(e) => setSlackQuery(e.target.value)}
+                    placeholder="Search channels…"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void searchSlackChannels();
+                    }}
+                  />
+                  <ToolbarButton
+                    className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                    onClick={searchSlackChannels}
+                    disabled={busy !== null || !slackQuery.trim()}
+                  >
+                    Search
+                  </ToolbarButton>
+                </div>
+                {slackChannels.length > 0 ? (
+                  <div className="border-t border-border-subtle">
+                    {slackChannels.map((channel) => (
+                      <button
+                        key={channel.id}
+                        type="button"
+                        className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
+                        onClick={() => void attachSlackChannel(channel)}
+                        disabled={busy !== null}
+                      >
+                        <span>{channel.name}</span>
+                        <span className="text-[12px] text-dim">{channel.id}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </section>
-
-        {/* Slack channel attach — show until Slack MCP is attached to a channel */}
-        {!slackBinding ? (
-          <section className="max-w-4xl">
-            <h2 className="text-[18px] font-semibold tracking-tight text-primary">Slack MCP</h2>
-            <div className="mt-3 border-t border-border-subtle pt-5 space-y-3">
-              <p className="text-[13px] text-secondary">Search Slack through MCP and attach an active channel as a gateway.</p>
-              <div className="flex gap-2">
-                <input
-                  className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface/70 px-3 py-1.5 text-[13px] text-primary placeholder:text-dim outline-none transition-colors focus:border-accent/50 disabled:opacity-50"
-                  value={slackQuery}
-                  onChange={(e) => setSlackQuery(e.target.value)}
-                  placeholder="Search channels…"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void searchSlackChannels();
-                  }}
-                />
-                <ToolbarButton
-                  className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                  onClick={searchSlackChannels}
-                  disabled={busy !== null || !slackQuery.trim()}
-                >
-                  Search
-                </ToolbarButton>
-              </div>
-              {slackChannels.length > 0 ? (
-                <div className="border-t border-border-subtle">
-                  {slackChannels.map((channel) => (
-                    <button
-                      key={channel.id}
-                      type="button"
-                      className="flex w-full items-center justify-between border-b border-border-subtle py-2.5 text-left text-[13px] hover:text-accent last:border-b-0"
-                      onClick={() => void attachSlackChannel(channel)}
-                      disabled={busy !== null}
-                    >
-                      <span>{channel.name}</span>
-                      <span className="text-[12px] text-dim">{channel.id}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
 
         {/* Activity */}
         <GatewayActivity events={state.events} />

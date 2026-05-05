@@ -137,6 +137,32 @@ export function attachGatewayConversation(input: {
       createdAt: now,
       updatedAt: now,
     });
+    if (input.externalChatId) {
+      const existingTarget = state.chatTargets.find(
+        (target) =>
+          target.provider === input.provider && target.connectionId === connection.id && target.externalChatId === input.externalChatId,
+      );
+      if (existingTarget) {
+        existingTarget.externalChatLabel = input.externalChatLabel ?? existingTarget.externalChatLabel;
+        existingTarget.conversationId = input.conversationId;
+        existingTarget.conversationTitle = input.conversationTitle ?? existingTarget.conversationTitle;
+        existingTarget.repliesEnabled = true;
+        existingTarget.updatedAt = now;
+      } else {
+        state.chatTargets.push({
+          id: `${connection.id}:chat:${input.externalChatId}`,
+          provider: input.provider,
+          connectionId: connection.id,
+          externalChatId: input.externalChatId,
+          externalChatLabel: input.externalChatLabel,
+          conversationId: input.conversationId,
+          conversationTitle: input.conversationTitle,
+          repliesEnabled: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
     appendGatewayEvent(state, {
       provider: input.provider,
       conversationId: input.conversationId,
