@@ -14,6 +14,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   closeTraceDbs,
   queryAgentLoop,
+  queryCacheEfficiency,
+  queryCacheEfficiencyAggregate,
   queryCompactionAggregates,
   queryCompactions,
   queryContextSessions,
@@ -57,7 +59,17 @@ describe('trace-db', () => {
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
 
     // Write some test data
-    writeTraceStats({ sessionId, modelId: 'gpt-4o', tokensInput: 1000, tokensOutput: 2000, cost: 0.05, turnCount: 2, stepCount: 10 });
+    writeTraceStats({
+      sessionId,
+      modelId: 'gpt-4o',
+      tokensInput: 1000,
+      tokensOutput: 2000,
+      tokensCachedInput: 250,
+      cost: 0.05,
+      turnCount: 2,
+      stepCount: 5,
+      durationMs: 1000,
+    });
     writeTraceStats({ sessionId, modelId: 'gpt-4o', tokensInput: 500, tokensOutput: 1500, cost: 0.03, turnCount: 1, stepCount: 5 });
     writeTraceStats({
       sessionId: 'session-2',
@@ -67,7 +79,8 @@ describe('trace-db', () => {
       cost: 0.01,
       runId: 'run-1',
       turnCount: 3,
-      stepCount: 15,
+      stepCount: 5,
+      durationMs: 700000,
     });
 
     writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 1200 });
@@ -148,6 +161,18 @@ describe('trace-db', () => {
   it('queryAgentLoop returns stats', () => {
     const result = queryAgentLoop(fiveHoursAgo);
     expect(result.turnsPerRun).toBeGreaterThan(0);
+    expect(result.stepsPerTurn).toBeGreaterThan(0);
+    expect(result.avgDurationMs).toBeGreaterThan(0);
+    expect(result.stuckRuns).toBe(1);
+  });
+
+  it('queryCacheEfficiency maps token cache columns', () => {
+    const series = queryCacheEfficiency(fiveHoursAgo);
+    expect(series[0]).toMatchObject({ totalInput: 1000, cachedInput: 250, hitRate: 25 });
+
+    const aggregate = queryCacheEfficiencyAggregate(fiveHoursAgo);
+    expect(aggregate.totalInput).toBeGreaterThan(0);
+    expect(aggregate.totalCached).toBeGreaterThan(0);
   });
 
   it('queryTokensDaily returns daily aggregation', () => {

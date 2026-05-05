@@ -179,6 +179,10 @@ interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState 
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
+  traceRunId?: string | null;
+  traceRunStartedAtMs?: number | null;
+  traceRunTurnCount?: number;
+  traceRunStepCount?: number;
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
 }
@@ -420,7 +424,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
       publishSessionMetaChanged,
       broadcastQueueState,
       broadcastTitle,
-      broadcastStats: (target, tokens, cost) => {
+      broadcastStats: (target, tokens, cost, traceRun) => {
         broadcast(target, {
           type: 'stats_update',
           tokens: {
@@ -435,10 +439,14 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
         persistTraceStats({
           sessionId: target.sessionId,
           modelId: target.session.model?.id,
+          runId: traceRun.runId,
           tokensInput: tokens.input,
           tokensOutput: tokens.output,
           tokensCachedInput: tokens.cacheRead,
           cost,
+          turnCount: traceRun.turnCount,
+          stepCount: traceRun.stepCount,
+          durationMs: traceRun.durationMs,
         });
       },
       clearContextUsageTimer,

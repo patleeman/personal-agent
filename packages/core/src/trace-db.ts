@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS trace_stats (
   tokens_cached_input INTEGER DEFAULT 0,
   cost REAL DEFAULT 0,
   turn_count INTEGER DEFAULT 0,
-  step_count INTEGER DEFAULT 0
+  step_count INTEGER DEFAULT 0,
+  duration_ms INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS trace_tool_calls (
@@ -113,6 +114,8 @@ CREATE INDEX IF NOT EXISTS idx_trace_auto_mode_ts ON trace_auto_mode(ts);
 CREATE INDEX IF NOT EXISTS idx_trace_auto_mode_session ON trace_auto_mode(session_id);
 `;
 
+const MIGRATIONS = [`ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`];
+
 // ── Database management ───────────────────────────────────────────────────────
 
 const dbCache = new Map<string, SqliteDatabase>();
@@ -144,6 +147,13 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
 
   const db = openSqliteDatabase(path);
   db.exec(SCHEMA);
+  for (const migration of MIGRATIONS) {
+    try {
+      db.exec(migration);
+    } catch {
+      // Column already exists. SQLite's ADD COLUMN has no IF NOT EXISTS on older versions.
+    }
+  }
   dbCache.set(path, db);
   return db;
 }
@@ -185,13 +195,14 @@ export function writeTraceStats(params: {
   cost: number;
   turnCount?: number;
   stepCount?: number;
+  durationMs?: number;
   profile?: string;
 }): void {
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
-      INSERT INTO trace_stats (id, session_id, run_id, model_id, profile, ts, tokens_input, tokens_output, tokens_cached_input, cost, turn_count, step_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO trace_stats (id, session_id, run_id, model_id, profile, ts, tokens_input, tokens_output, tokens_cached_input, cost, turn_count, step_count, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       generateId(),
@@ -206,6 +217,7 @@ export function writeTraceStats(params: {
       params.cost,
       params.turnCount ?? 0,
       params.stepCount ?? 0,
+      params.durationMs ?? 0,
     );
   } catch (err) {
     // Fire-and-forget: silently ignore write failures
@@ -636,17 +648,23 @@ export function queryAgentLoop(since: string): AgentLoopRow {
       `
     SELECT
       AVG(turn_count) as avg_turns,
-      AVG(step_count) as avg_steps,
+      CASE WHEN COALESCE(SUM(turn_count), 0) > 0 THEN CAST(SUM(step_count) AS REAL) / CAST(SUM(turn_count) AS REAL) ELSE 0 END as avg_steps,
       COUNT(*) as total_runs,
       COALESCE(SUM(CASE WHEN turn_count > 20 THEN 1 ELSE 0 END), 0) as runs_over_20,
-      COALESCE(SUM(CASE WHEN step_count > 50 THEN 1 ELSE 0 END), 0) as stuck_runs
-    FROM trace_stats WHERE ts >= ? AND run_id IS NOT NULL
+      AVG(duration_ms) as avg_duration_ms,
+      COALESCE(SUM(CASE WHEN duration_ms > 600000 THEN 1 ELSE 0 END), 0) as stuck_runs
+    FROM trace_stats WHERE ts >= ? AND (run_id IS NOT NULL OR turn_count > 0 OR step_count > 0 OR duration_ms > 0)
   `,
     )
     .get(since) as Record<string, unknown>;
-  const stats = mapRow<{ avgTurns: number | null; avgSteps: number | null; totalRuns: number; runsOver20: number; stuckRuns: number }>(
-    rawStats,
-  );
+  const stats = mapRow<{
+    avgTurns: number | null;
+    avgSteps: number | null;
+    totalRuns: number;
+    runsOver20: number;
+    avgDurationMs: number | null;
+    stuckRuns: number;
+  }>(rawStats);
 
   const rawSub = db
     .prepare(
@@ -665,7 +683,7 @@ export function queryAgentLoop(since: string): AgentLoopRow {
     stepsPerTurn: stats.avgSteps ? Math.round(Number(stats.avgSteps) * 10) / 10 : 0,
     runsOver20Turns: Number(stats.runsOver20),
     subagentsPerRun: Math.round((Number(sub.runsWithSubagents) / totalRuns) * 10) / 10,
-    avgDurationMs: 0,
+    avgDurationMs: Math.round(Number(stats.avgDurationMs) || 0),
     stuckRuns: Number(stats.stuckRuns),
   };
 }
@@ -931,7 +949,7 @@ export function queryCacheEfficiency(since: string): CacheEfficiencyPoint[] {
   const rows = db
     .prepare(
       `
-    SELECT ts, model_id, tokens_input, tokens_cached_input
+    SELECT ts, model_id, tokens_input as total_input, tokens_cached_input as cached_input
     FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
     ORDER BY ts ASC LIMIT 200
   `,

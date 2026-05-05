@@ -2,7 +2,7 @@
  * Tests for traces routes
  */
 
-import { closeTraceDbs, writeTraceContext, writeTraceStats, writeTraceToolCall } from '@personal-agent/core';
+import { closeTraceDbs, writeTraceCompaction, writeTraceContext, writeTraceStats, writeTraceToolCall } from '@personal-agent/core';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';

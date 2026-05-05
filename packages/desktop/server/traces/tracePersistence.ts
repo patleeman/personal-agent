@@ -5,7 +5,14 @@
  * Each hook is synchronous and fire-and-forget — never blocks the session loop.
  */
 
-import { writeTraceCompaction, writeTraceContext, writeTraceQueue, writeTraceStats, writeTraceToolCall } from '@personal-agent/core';
+import {
+  writeTraceAutoMode,
+  writeTraceCompaction,
+  writeTraceContext,
+  writeTraceQueue,
+  writeTraceStats,
+  writeTraceToolCall,
+} from '@personal-agent/core';
 
 // ── Stats hook ────────────────────────────────────────────────────────────────
 
@@ -17,6 +24,9 @@ export function persistTraceStats(params: {
   tokensOutput: number;
   tokensCachedInput?: number;
   cost: number;
+  turnCount?: number;
+  stepCount?: number;
+  durationMs?: number;
 }): void {
   writeTraceStats({
     sessionId: params.sessionId,
@@ -26,6 +36,9 @@ export function persistTraceStats(params: {
     tokensOutput: params.tokensOutput,
     tokensCachedInput: params.tokensCachedInput,
     cost: params.cost,
+    turnCount: params.turnCount,
+    stepCount: params.stepCount,
+    durationMs: params.durationMs,
   });
 }
 

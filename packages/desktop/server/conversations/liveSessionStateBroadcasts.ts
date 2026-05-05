@@ -6,7 +6,7 @@ import { readLiveSessionAutoModeHostState } from './liveSessionAutoModeOps.js';
 import type { LiveContextUsage, SseEvent } from './liveSessionEvents.js';
 import { type ParallelPromptJob, readParallelState } from './liveSessionParallelJobs.js';
 import { readQueueState } from './liveSessionQueue.js';
-import { estimateContextUsageSegments } from './sessionContextUsage.js';
+import { estimateContextUsageSegments, estimateSessionContextTokens } from './sessionContextUsage.js';
 
 export interface LiveSessionContextUsageHost {
   session: AgentSession;
@@ -32,19 +32,43 @@ export interface LiveSessionAutoModeStateHost {
 export function readLiveSessionContextUsage(session: AgentSession): LiveContextUsage | null {
   try {
     const usage = session.getContextUsage();
+    const modelId = session.model?.id;
+    const contextWindow = normalizeModelContextWindow(modelId, usage?.contextWindow, session.model?.contextWindow ?? 128_000);
+
     if (!usage) {
-      return null;
+      const tokens = estimateSessionContextTokens(session.messages);
+      if (!Number.isSafeInteger(tokens) || tokens < 0) {
+        return null;
+      }
+
+      return {
+        tokens,
+        modelId,
+        contextWindow,
+        percent: contextWindow > 0 ? (tokens / contextWindow) * 100 : null,
+        segments: estimateContextUsageSegments(session.messages, tokens),
+      };
     }
 
-    const modelId = session.model?.id;
-    const contextWindow = normalizeModelContextWindow(modelId, usage.contextWindow, session.model?.contextWindow ?? 128_000);
+    if (usage.tokens === null) {
+      return {
+        ...usage,
+        modelId,
+        contextWindow,
+        percent: null,
+      };
+    }
+
+    if (!Number.isSafeInteger(usage.tokens) || usage.tokens < 0) {
+      return null;
+    }
 
     return {
       ...usage,
       modelId,
       contextWindow,
-      percent: usage.tokens !== null && contextWindow > 0 ? (usage.tokens / contextWindow) * 100 : null,
-      ...(usage.tokens !== null ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) } : {}),
+      percent: contextWindow > 0 ? (usage.tokens / contextWindow) * 100 : null,
+      segments: estimateContextUsageSegments(session.messages, usage.tokens),
     };
   } catch {
     return null;

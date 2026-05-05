@@ -39,6 +39,10 @@ export interface LiveSessionEventHost {
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
+  traceRunId?: string | null;
+  traceRunStartedAtMs?: number | null;
+  traceRunTurnCount?: number;
+  traceRunStepCount?: number;
 }
 
 export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> {
@@ -51,7 +55,12 @@ export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> 
   publishSessionMetaChanged: (sessionId: string) => void;
   broadcastQueueState: (entry: TEntry, force?: boolean) => void;
   broadcastTitle: (entry: TEntry) => void;
-  broadcastStats: (entry: TEntry, tokens: { input: number; output: number; total: number }, cost: number) => void;
+  broadcastStats: (
+    entry: TEntry,
+    tokens: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number },
+    cost: number,
+    traceRun: { runId?: string; turnCount: number; stepCount: number; durationMs: number },
+  ) => void;
   clearContextUsageTimer: (entry: TEntry) => void;
   broadcastContextUsage: (entry: TEntry, force?: boolean) => void;
   broadcastSnapshot: (entry: TEntry) => void;
@@ -68,6 +77,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
 
   if (event.type === 'turn_end') {
+    entry.traceRunTurnCount = (entry.traceRunTurnCount ?? 0) + 1;
+
     if (activeHiddenTurnCustomType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
       const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
       entry.pendingAutoModeContinuation = false;
@@ -133,6 +144,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'tool_execution_end') {
+    entry.traceRunStepCount = (entry.traceRunStepCount ?? 0) + 1;
+
     const startTime = getToolStartTimes(entry.session).get(event.toolCallId);
     const durationMs = startTime != null ? Date.now() - startTime : undefined;
     getToolStartTimes(entry.session).delete(event.toolCallId);
@@ -148,6 +161,10 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   }
 
   if (event.type === 'agent_start') {
+    entry.traceRunId = `${entry.sessionId}:${Date.now().toString(36)}`;
+    entry.traceRunStartedAtMs = Date.now();
+    entry.traceRunTurnCount = 0;
+    entry.traceRunStepCount = 0;
     entry.currentTurnError = null;
     callbacks.publishSessionMetaChanged(entry.sessionId);
     void callbacks.syncDurableConversationRun(entry, 'running');
@@ -182,10 +199,19 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   if (event.type === 'agent_end') {
     try {
       const stats = entry.session.getSessionStats();
-      callbacks.broadcastStats(entry, stats.tokens, stats.cost);
+      callbacks.broadcastStats(entry, stats.tokens, stats.cost, {
+        runId: entry.traceRunId ?? undefined,
+        turnCount: entry.traceRunTurnCount ?? 0,
+        stepCount: entry.traceRunStepCount ?? 0,
+        durationMs: entry.traceRunStartedAtMs ? Date.now() - entry.traceRunStartedAtMs : 0,
+      });
     } catch {
       /* ignore */
     }
+    entry.traceRunId = null;
+    entry.traceRunStartedAtMs = null;
+    entry.traceRunTurnCount = 0;
+    entry.traceRunStepCount = 0;
     callbacks.clearContextUsageTimer(entry);
     callbacks.broadcastContextUsage(entry, true);
   }
