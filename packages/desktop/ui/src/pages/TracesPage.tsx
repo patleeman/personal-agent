@@ -70,8 +70,8 @@ export function TracesPage() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* Top bar */}
       <div className="flex items-center gap-3 border-b border-border-subtle bg-surface px-6 py-3 shrink-0">
-        <h1 className="text-[15px] font-semibold">Traces</h1>
-        <span className="text-[12px] text-dim">Telemetry &amp; monitoring</span>
+        <h1 className="text-[15px] font-semibold">Telemetry</h1>
+        <span className="text-[12px] text-dim">Monitoring &amp; instrumentation</span>
         <span className="flex-1" />
         <TimeRangeSelector value={range} onChange={setRange} />
         <button type="button" onClick={refetch} className="ui-action-button text-[11px]">

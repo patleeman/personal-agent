@@ -86,8 +86,8 @@ describe('TracesPage', () => {
         <TracesPage />
       </MemoryRouter>,
     );
-    expect(html).toContain('Traces');
     expect(html).toContain('Telemetry');
+    expect(html).toContain('instrumentation');
   });
 
   it('renders pulse card labels', () => {

@@ -121,7 +121,7 @@ const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
   import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
 );
 
-const TracesPage = lazyRouteWithRecovery('traces-page', () =>
+const TracesPage = lazyRouteWithRecovery('telemetry-page', () =>
   import('../pages/TracesPage').then((module) => ({ default: module.TracesPage })),
 );
 
@@ -441,7 +441,7 @@ export function App() {
                         <Route path="automations" element={suspendRoute(<TasksPage />)} />
                         <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
-                        <Route path="traces" element={suspendRoute(<TracesPage />)} />
+                        <Route path="telemetry" element={suspendRoute(<TracesPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                       </Route>
                     </Routes>
