@@ -315,7 +315,7 @@ async function syncDurableConversationRun(
 }
 
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
-  const usage = getLiveSessionContextUsage(entry);
+  const usage = readLiveSessionContextUsageForEntry(entry);
   if (usage) {
     const systemSeg = usage.segments?.find((s) => s.key === 'system');
     const userSeg = usage.segments?.find((s) => s.key === 'user');
