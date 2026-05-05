@@ -41,7 +41,9 @@ export interface SlackMcpGatewayRuntimeDependencies {
   callSlackTool?: (tool: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
-const DISCLOSURE_SUFFIX = '— Patrick’s agent';
+// Slack automatically appends "Sent using @Claude" attribution on messages sent via the MCP OAuth app.
+// We detect agent replies in channel history by this Slack-injected string.
+const SLACK_SENT_VIA_MARKER = 'Sent using';
 const DEFAULT_POLL_MS = 15_000;
 const SLOW_RETRY_MS = 60_000;
 
@@ -223,7 +225,7 @@ export class SlackMcpGatewayRuntime {
     try {
       const result = await this.callSlackTool('slack_send_message', {
         channel_id: target.externalChatId,
-        message: `${text}\n\n${DISCLOSURE_SUFFIX}`,
+        message: text,
       });
       const sentTs = extractSlackMessageTs(result);
       if (sentTs) this.sentMessageTs.add(sentTs);
@@ -449,7 +451,7 @@ export class SlackMcpGatewayRuntime {
   }
 
   private async sendSystemMessage(channelId: string, text: string): Promise<void> {
-    const result = await this.callSlackTool('slack_send_message', { channel_id: channelId, message: `${text}\n\n${DISCLOSURE_SUFFIX}` });
+    const result = await this.callSlackTool('slack_send_message', { channel_id: channelId, message: text });
     const sentTs = extractSlackMessageTs(result);
     if (sentTs) this.sentMessageTs.add(sentTs);
   }
@@ -471,7 +473,9 @@ export class SlackMcpGatewayRuntime {
   private isSelfMessage(message: SlackMcpMessage): boolean {
     if (message.ts && this.sentMessageTs.has(message.ts)) return true;
     if (message.user && this.selfUserIds.has(message.user)) return true;
-    if (message.text.includes(DISCLOSURE_SUFFIX)) return true;
+    // Slack automatically injects "Sent using @<App>" into messages sent via the MCP OAuth app.
+    // Use this as a fallback to skip agent replies even after a server restart clears sentMessageTs.
+    if (message.text.includes(SLACK_SENT_VIA_MARKER)) return true;
     return false;
   }
 
