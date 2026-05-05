@@ -60,6 +60,12 @@ export function useConversationScroll({
   const smoothBottomScrollCleanupRef = useRef<(() => void) | null>(null);
   const pinnedBottomWatchUntilRef = useRef(0);
   const pinnedBottomWatchFrameRef = useRef(0);
+  // Only true during the initial conversation-load settle (windowed chunks
+  // being replaced with measured blocks). During streaming the transcript
+  // is already measured so transient layout scroll events don't occur and
+  // "preserve pinned during auto-scroll" should not apply — that guard
+  // would prevent scrollbar/keyboard detach.
+  const isTransientSettleRef = useRef(false);
   const hasMessages = (messages?.length ?? 0) > 0;
 
   const clearSmoothBottomScrollSettle = useCallback(() => {
@@ -171,6 +177,13 @@ export function useConversationScroll({
 
       const tick = () => {
         bottomScrollAnimationFrameRef.current = 0;
+
+        // If the user detached while a settle tick was already queued (e.g. the
+        // wheel handler raced with requestAnimationFrame), stop without scrolling.
+        if (!scrollPinnedToBottomRef.current) {
+          return;
+        }
+
         const nextScrollHeight = el.scrollHeight;
         syncPinnedBottomFromDom(el, nextScrollHeight);
         frameCount += 1;
@@ -209,6 +222,7 @@ export function useConversationScroll({
     completedInitialScrollKeyRef.current = null;
     streamingTailAutoScrollKeyRef.current = null;
     scrollPinnedToBottomRef.current = true;
+    isTransientSettleRef.current = false;
 
     // Defer the initial scroll by one animation frame so that a remounting
     // ChatView (triggered by a key change on conversationId) has time to
@@ -273,7 +287,12 @@ export function useConversationScroll({
     // still replacing estimated spacer heights with measured ones. Those are
     // not user intent; if we treat them as detachments, the settle loop gets
     // cancelled and the viewport can strand itself in the middle of the page.
+    //
+    // Only apply this guard during the initial settle — during streaming the
+    // transcript is fully measured so transient scroll events don't occur, and
+    // the guard would prevent scrollbar/keyboard users from detaching.
     if (
+      isTransientSettleRef.current &&
       shouldPreservePinnedBottomDuringAutoScroll({
         wasPinnedToBottom: scrollPinnedToBottomRef.current,
         isAutoScrollActive: bottomScrollAnimationFrameRef.current !== 0 || pinnedBottomWatchFrameRef.current !== 0,
@@ -442,9 +461,11 @@ export function useConversationScroll({
     }
 
     scrollPinnedToBottomRef.current = true;
+    isTransientSettleRef.current = true;
     settleBottomScroll({
       minFrames: INITIAL_SCROLL_MIN_FRAMES,
       onSettled: () => {
+        isTransientSettleRef.current = false;
         completedInitialScrollKeyRef.current = initialScrollKey;
       },
     });
