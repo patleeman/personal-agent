@@ -306,7 +306,7 @@ export class SlackMcpGatewayRuntime {
     const result = await this.callSlackTool('slack_read_channel', {
       channel_id: binding.externalChatId,
       limit: 25,
-      response_format: 'detailed',
+      response_format: 'detailed', // detailed includes Message TS fields we parse
     });
     const messages = extractSlackMessages(result)
       .filter((message) => !target.lastExternalMessageId || message.ts > target.lastExternalMessageId)
@@ -494,14 +494,56 @@ export class SlackMcpGatewayRuntime {
   }
 }
 
+/**
+ * Parse messages from the Slack MCP `slack_read_channel` response.
+ *
+ * The Slack MCP server returns formatted text, not a JSON message array.
+ * The `detailed` response format includes `Message TS: <ts>` lines that
+ * we parse to recover structured message data.
+ *
+ * Detailed block format:
+ *   === Message from <Name> (<uid>) at <time> ===
+ *   Message TS: 1778005533.609269
+ *   <message body (may be multiline)>
+ */
 function extractSlackMessages(value: unknown): SlackMcpMessage[] {
+  // Try structured array first (future-proofing if Slack MCP adds JSON output)
   const root = unwrapMcpResult(value);
-  const candidates = findArrays(root)
-    .flatMap((array) => array)
+  const structured = findArrays(root)
+    .flatMap((a) => a)
     .filter(isSlackMessage);
-  const unique = new Map<string, SlackMcpMessage>();
-  for (const message of candidates) unique.set(message.ts, message);
-  return [...unique.values()];
+  if (structured.length > 0) {
+    const unique = new Map<string, SlackMcpMessage>();
+    for (const m of structured) unique.set(m.ts, m);
+    return [...unique.values()];
+  }
+
+  // Parse the `detailed` text format
+  const messagesText = extractMessagesText(root);
+  if (!messagesText) return [];
+
+  const results: SlackMcpMessage[] = [];
+  // Split on message header lines
+  const blocks = messagesText.split(/(?=={3} Message from .+ ===)/g);
+  for (const block of blocks) {
+    const tsMatch = block.match(/^Message TS:\s*([\d.]+)$/m);
+    if (!tsMatch) continue;
+    const ts = tsMatch[1]!;
+    // Extract user id from header: "=== Message from Name (UID) at ..."
+    const userMatch = block.match(/=== Message from .+?\(([A-Z0-9]+)\)/);
+    const user = userMatch ? userMatch[1] : undefined;
+    // Body is everything after the "Message TS:" line
+    const afterTs = block.slice(block.indexOf(tsMatch[0]!) + tsMatch[0]!.length).trim();
+    if (!afterTs) continue;
+    results.push({ ts, text: afterTs, user });
+  }
+  return results;
+}
+
+function extractMessagesText(root: unknown): string | null {
+  if (!root || typeof root !== 'object') return null;
+  const record = root as Record<string, unknown>;
+  return typeof record.messages === 'string' ? record.messages : null;
 }
 
 function extractSlackMessageTs(value: unknown): string | null {
