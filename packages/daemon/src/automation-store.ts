@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:f
 import { basename, dirname, join, resolve } from 'node:path';
 
 import {
-  applyMigrations,
+  migrateWithBackup,
   type Migration,
   openSqliteDatabase,
   readTableColumnNames,
@@ -522,20 +522,24 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
       ON automation_activity(automation_id, created_at DESC, seq DESC);
   `);
 
-  // Apply versioned schema migrations
+  // Apply versioned schema migrations with pre-migration backup
   //
   // Fresh DBs: tables don't exist yet, CREATE TABLE IF NOT EXISTS above handles
   //   the full schema. We mark them at the latest version — no migrations needed.
-  // Already-versioned DBs: user_version > 0, applyMigrations runs pending steps.
-  // Pre-migration DBs: user_version is 0. applyMigrations detects this and runs
-  //   all migrations from scratch, which is safe because each migration checks
-  //   PRAGMA table_info before applying changes.
+  // Already-versioned DBs: user_version > 0, migrateWithBackup runs pending steps
+  //   and creates a timestamped backup before making any changes.
+  // Pre-migration DBs: user_version is 0. migrateWithBackup detects this and runs
+  //   all migrations from scratch, with a pre-migration backup.
   {
     const tableExisted = tableExists(db, 'automations');
     if (!tableExisted) {
       setSchemaVersion(db, AUTOMATION_SCHEMA_VERSION);
     } else {
-      applyMigrations(db, 'automation', AUTOMATION_MIGRATIONS);
+      const result = migrateWithBackup(db, resolved, 'automation', AUTOMATION_MIGRATIONS);
+      if (result.applied > 0 && result.backupPath) {
+        // Backup taken and migrations applied successfully.
+        // The backup remains on disk in the .backups/ directory.
+      }
     }
   }
 

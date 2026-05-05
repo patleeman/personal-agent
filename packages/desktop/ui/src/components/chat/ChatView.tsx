@@ -193,7 +193,11 @@ export const ChatView = memo(function ChatView({
     <ChatRenderItemView
       key={
         item.type === 'trace_cluster'
-          ? `trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`
+          ? // Use only startIndex so the component stays mounted when new blocks
+            // append to the cluster during streaming. Using endIndex would change
+            // the key on every append, unmounting all child ToolBlocks and losing
+            // their expansion (preference) state.
+            `trace-${messageIndexOffset + item.startIndex}`
           : messageIndexOffset + item.index
       }
       item={item}

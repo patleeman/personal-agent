@@ -5,13 +5,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   applyMigrations,
+  createDbBackup,
   hasAllColumns,
   hasAnyColumn,
+  listDbBackups,
+  migrateWithBackup,
   type Migration,
   readSchemaVersion,
   readTableColumnNames,
   readTableCreateSql,
   rebuildChildForeignKeys,
+  restoreDbBackup,
   safeRebuildTable,
   setSchemaVersion,
   type SqliteDatabase,
@@ -388,5 +392,129 @@ describe('rebuildChildForeignKeys', () => {
     // No FK violations
     const fkIssues = db.prepare('PRAGMA foreign_key_check').all();
     expect(fkIssues).toEqual([]);
+  });
+});
+
+// ── Pre-migration backups ─────────────────────────────────────────────────────
+
+describe('createDbBackup / restoreDbBackup', () => {
+  it('creates a backup of a database file', () => {
+    const { db, path: dbPath } = createTempDb();
+    db.exec('CREATE TABLE t (x TEXT)');
+    db.exec("INSERT INTO t VALUES ('hello')");
+
+    // Pass the db handle so WAL gets flushed before copy
+    const backupPath = createDbBackup(dbPath, db);
+    expect(backupPath).toContain('.backups');
+    expect(backupPath).toMatch(/\.backup$/);
+
+    // Verify the backup exists and can be opened
+    const backupDb = openSqliteDatabase(backupPath);
+    const row = backupDb.prepare('SELECT x FROM t').get() as { x: string };
+    expect(row.x).toBe('hello');
+    backupDb.close();
+  });
+
+  it('lists backups newest-first', () => {
+    const { db, path: dbPath } = createTempDb();
+    db.exec('CREATE TABLE t (x TEXT)');
+
+    const first = createDbBackup(dbPath, db);
+    const second = createDbBackup(dbPath, db);
+    const all = listDbBackups(dbPath);
+
+    expect(all).toHaveLength(2);
+    expect(all[0]).toBe(second); // newest first
+    expect(all[1]).toBe(first);
+  });
+
+  it('restores a database from backup', () => {
+    const { db, path: dbPath } = createTempDb();
+    db.exec('CREATE TABLE t (x TEXT)');
+    db.exec("INSERT INTO t VALUES ('original')");
+
+    // Flush WAL and create backup
+    const backupPath = createDbBackup(dbPath, db);
+    db.close();
+
+    // Corrupt the database
+    const corruptedDb = openSqliteDatabase(dbPath);
+    corruptedDb.exec('DROP TABLE t');
+    corruptedDb.exec('CREATE TABLE t (x TEXT)');
+    corruptedDb.exec("INSERT INTO t VALUES ('corrupted')");
+    corruptedDb.close();
+
+    // Restore from backup
+    restoreDbBackup(dbPath, backupPath);
+
+    const restoredDb = openSqliteDatabase(dbPath);
+    const row = restoredDb.prepare('SELECT x FROM t').get() as { x: string };
+    expect(row.x).toBe('original');
+    restoredDb.close();
+  });
+});
+
+describe('migrateWithBackup', () => {
+  it('creates backup before applying pending migrations', () => {
+    const { db, path: dbPath } = createTempDb();
+
+    // Create initial schema and set version to 1
+    db.exec('CREATE TABLE t (x TEXT)');
+    db.exec("INSERT INTO t VALUES ('pre-migration')");
+    setSchemaVersion(db, 1);
+
+    const migrations: Migration[] = [
+      {
+        version: 2,
+        description: 'Add column',
+        up: (d) => d.exec('ALTER TABLE t ADD COLUMN y TEXT'),
+      },
+    ];
+
+    const result = migrateWithBackup(db, dbPath, 'test', migrations);
+    expect(result.applied).toBe(1);
+    expect(result.backupPath).toBeDefined();
+
+    // Backup should exist on disk
+    expect(result.backupPath && require('fs').existsSync(result.backupPath)).toBe(true);
+
+    // Migration applied
+    const cols = readTableColumnNames(db, 't');
+    expect(cols.has('y')).toBe(true);
+  });
+
+  it('does not create backup when no migrations are pending', () => {
+    const { db, path: dbPath } = createTempDb();
+    db.exec('CREATE TABLE t (x TEXT)');
+    setSchemaVersion(db, 1);
+
+    const migrations: Migration[] = [{ version: 1, description: 'v1', up: () => {} }];
+
+    const result = migrateWithBackup(db, dbPath, 'test', migrations);
+    expect(result.applied).toBe(0);
+    expect(result.backupPath).toBeUndefined();
+  });
+
+  it('throws with backup path on migration failure', () => {
+    const { db, path: dbPath } = createTempDb();
+    db.exec('CREATE TABLE t (x TEXT)');
+    db.exec("INSERT INTO t VALUES ('data')");
+    setSchemaVersion(db, 1);
+
+    const migrations: Migration[] = [
+      {
+        version: 2,
+        description: 'Broken migration',
+        up: () => {
+          throw new Error('simulated failure');
+        },
+      },
+    ];
+
+    expect(() => migrateWithBackup(db, dbPath, 'test', migrations)).toThrow(/backup/);
+
+    // Original data should still be intact
+    const row = db.prepare('SELECT x FROM t').get() as { x: string };
+    expect(row.x).toBe('data');
   });
 });

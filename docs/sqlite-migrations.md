@@ -22,8 +22,8 @@ SQLite provides a single-integer schema version via `PRAGMA user_version`. This 
 
 ```typescript
 interface Migration {
-  version: number;       // Monotonically increasing
-  description: string;   // Human-readable label
+  version: number; // Monotonically increasing
+  description: string; // Human-readable label
   up: (db: SqliteDatabase) => void; // Apply the migration
 }
 ```
@@ -39,14 +39,14 @@ safeRebuildTable({
   db,
   tableName: 'automations',
   createSql: `CREATE TABLE automations ( ... runtime_scope TEXT ... )`,
-  columns: ['id', 'title', /* all columns except runtime_scope */],
+  columns: ['id', 'title' /* all columns except runtime_scope */],
   additionalColumns: ['runtime_scope'],
   additionalValues: ['shared'],
   childTableDefs: [
     {
       tableName: 'automation_state',
       createSql: `CREATE TABLE automation_state ( ... FK REFERENCES automations(id) ... )`,
-      columns: ['automation_id', 'running', /* ... */],
+      columns: ['automation_id', 'running' /* ... */],
     },
   ],
   validate: true,
@@ -92,10 +92,10 @@ const MY_MIGRATIONS: Migration[] = [
 function openMyStore(): SqliteDatabase {
   const db = openSqliteDatabase(dbPath);
   db.pragma('foreign_keys = ON');
-  
+
   // Create initial schema (no-op for existing tables)
   db.exec(`CREATE TABLE IF NOT EXISTS my_table (...)`);
-  
+
   // Apply versioned migrations
   const tableExisted = tableExists(db, 'my_table');
   if (!tableExisted) {
@@ -103,12 +103,13 @@ function openMyStore(): SqliteDatabase {
   } else {
     applyMigrations(db, 'my-store', MY_MIGRATIONS);
   }
-  
+
   return db;
 }
 ```
 
 The flow:
+
 1. **Fresh DB**: `CREATE TABLE IF NOT EXISTS` creates the table with the full schema → set version to latest → no migrations run
 2. **Versioned DB**: `user_version > 0` → `applyMigrations` runs only pending steps
 3. **Pre-migration DB**: `user_version` is 0 → `applyMigrations` runs **all** migrations from scratch. Each migration is idempotent (checks column presence before `ALTER TABLE`)
@@ -123,6 +124,60 @@ To retrofit a store to use versioned migrations:
 4. **Remove old migration code**: Delete functions like `migrateFooSchema`, `repairFooForeignKeys`
 5. **Add tests**: Test fresh DB + pre-migration DB + versioned DB scenarios
 
+## Pre-migration Backups
+
+Before any schema-changing migration runs, `migrateWithBackup` creates a timestamped copy of the database file in a `.backups/` directory alongside the original DB.
+
+```
+/path/to/runtime.db
+/path/to/.backups/
+  runtime.db.2026-05-05T05-30-00-000Z.backup
+  runtime.db.2026-05-05T05-00-00-000Z.backup
+  runtime.db.2026-05-04T12-00-00-000Z.backup
+```
+
+The backup is taken **before** any schema changes, so it represents a known-good state. After a successful migration, old backups are pruned (keeping the 3 most recent by default). If a migration fails, the error includes the backup path and restore instructions.
+
+### Restoring from a backup
+
+```bash
+# 1. Stop the daemon (close all DB handles)
+# 2. Copy the backup back
+cp /path/to/.backups/runtime.db.<timestamp>.backup /path/to/runtime.db
+# 3. Remove stale WAL/SHM files
+rm -f /path/to/runtime.db-wal /path/to/runtime.db-shm
+# 4. Restart the daemon
+```
+
+Or programmatically:
+
+```typescript
+import { restoreDbBackup } from '@personal-agent/core';
+restoreDbBackup('/path/to/runtime.db', '/path/to/.backups/runtime.db.<timestamp>.backup');
+```
+
+### Using migrateWithBackup
+
+```typescript
+import { migrateWithBackup } from '@personal-agent/core';
+
+const result = migrateWithBackup(db, dbPath, 'my-store', MY_MIGRATIONS);
+// result.applied    — number of migrations applied
+// result.backupPath — path to the backup file (undefined if no migrations needed)
+```
+
+### Manual backup
+
+```typescript
+import { createDbBackup, listDbBackups } from '@personal-agent/core';
+
+// Create a backup
+const backupPath = createDbBackup('/path/to/runtime.db');
+
+// List available backups (newest first)
+const backups = listDbBackups('/path/to/runtime.db');
+```
+
 ## Rules
 
 1. **Never use `ALTER TABLE ... RENAME` directly**. Use `safeRebuildTable` which handles FK rewriting.
@@ -130,3 +185,4 @@ To retrofit a store to use versioned migrations:
 3. **Add column checks inside migrations**. Each migration should use `readTableColumnNames` to check if columns exist before `ALTER TABLE ADD COLUMN`.
 4. **Test the upgrade path**. Create a fixture DB with the old schema, run migrations, assert data preservation and `PRAGMA foreign_key_check = []`.
 5. **Store-specific version constants**. Each store has its own `SCHEMA_VERSION` constant that's bumped when new migrations are added.
+6. **Use `migrateWithBackup` for production stores**. This creates a pre-migration backup so you can roll back if something goes wrong.

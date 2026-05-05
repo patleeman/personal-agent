@@ -261,9 +261,20 @@ export function useConversationScroll({
       }
     };
 
+    // Any pointer interaction in the transcript (clicking a tool call,
+    // selecting text, tapping a link) should pause auto-scroll so the user
+    // can read or interact without being pushed to the bottom.
+    const handlePointerDown = () => {
+      if (scrollPinnedToBottomRef.current) {
+        detachFromBottom();
+      }
+    };
+
     el.addEventListener('wheel', handleWheel, { passive: true });
+    el.addEventListener('pointerdown', handlePointerDown, { passive: true });
     return () => {
       el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener('pointerdown', handlePointerDown);
     };
   }, [detachFromBottom, scrollRef]);
 

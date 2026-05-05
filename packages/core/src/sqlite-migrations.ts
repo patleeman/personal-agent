@@ -384,3 +384,175 @@ export function hasAllColumns(db: SqliteDatabase, tableName: string, ...columnNa
   const existing = readTableColumnNames(db, tableName);
   return columnNames.every((c) => existing.has(c));
 }
+
+// ── Pre-migration backups ─────────────────────────────────────────────────────
+
+import { copyFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+
+/**
+ * Default number of recent migration backups to keep.
+ */
+export const DEFAULT_BACKUP_RETENTION = 3;
+
+/**
+ * Get the backup directory path for a given DB file.
+ * Backups are stored alongside the DB file in a `.backups` subdirectory.
+ *
+ * Example: `/path/to/runtime.db` → `/path/to/.backups/`
+ */
+export function resolveBackupDir(dbPath: string): string {
+  const dbDir = dirname(dbPath);
+  return join(dbDir, '.backups');
+}
+
+/**
+ * Resolve the backup file path for a given DB file and timestamp.
+ */
+export function resolveBackupPath(dbPath: string, timestamp: string): string {
+  const dbName = basename(dbPath);
+  const dir = resolveBackupDir(dbPath);
+  return join(dir, `${dbName}.${timestamp}.backup`);
+}
+
+/**
+ * Create a timestamped backup copy of a SQLite database file.
+ *
+ * Best practice: pass the opened DB handle so we can flush the WAL first
+ * via PRAGMA wal_checkpoint(TRUNCATE), ensuring the main DB file is
+ * consistent. When no handle is provided, we copy whatever is on disk.
+ *
+ * @param dbPath - Absolute path to the SQLite database file.
+ * @param db - Optional open database handle. If provided, a WAL checkpoint
+ *   is run before copying to ensure consistency.
+ * @returns The path to the created backup file.
+ */
+export function createDbBackup(dbPath: string, db?: SqliteDatabase): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = resolveBackupPath(dbPath, timestamp);
+  const backupDir = resolveBackupDir(dbPath);
+
+  mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+
+  // Flush WAL if we have a handle
+  if (db) {
+    try {
+      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Best-effort — copy whatever is on disk
+    }
+  }
+
+  copyFileSync(dbPath, backupPath);
+
+  // Clean up old backups beyond retention
+  pruneBackups(dbPath);
+
+  return backupPath;
+}
+
+/**
+ * List available backups for a database file, ordered newest-first.
+ */
+export function listDbBackups(dbPath: string): string[] {
+  const dir = resolveBackupDir(dbPath);
+  if (!existsSync(dir)) {
+    return [];
+  }
+
+  const dbName = basename(dbPath);
+  const prefix = `${dbName}.`;
+
+  return readdirSync(dir)
+    .filter((f) => f.startsWith(prefix) && f.endsWith('.backup'))
+    .map((f) => join(dir, f))
+    .sort()
+    .reverse();
+}
+
+/**
+ * Prune old backups, keeping only the most recent N.
+ */
+export function pruneBackups(dbPath: string, keep = DEFAULT_BACKUP_RETENTION): void {
+  const backups = listDbBackups(dbPath);
+  if (backups.length <= keep) {
+    return;
+  }
+
+  for (const oldBackup of backups.slice(keep)) {
+    try {
+      unlinkSync(oldBackup);
+    } catch {
+      // Best-effort cleanup
+    }
+  }
+}
+
+/**
+ * Migrate with pre-migration backup.
+ *
+ * Before applying any pending migrations, creates a timestamped backup
+ * of the database file.  If the migration succeeds, old backups are pruned.
+ * If it fails, an error is thrown with the backup path so the caller can
+ * restore manually.
+ *
+ * @returns Object with `applied` (number of migrations applied) and
+ *   `backupPath` (path to the backup, if one was taken).
+ */
+export function migrateWithBackup(
+  db: SqliteDatabase,
+  dbPath: string,
+  label: string,
+  migrations: Migration[],
+): { applied: number; backupPath?: string } {
+  const pending = migrations.filter((m) => m.version > readSchemaVersion(db));
+  if (pending.length === 0) {
+    return { applied: 0 };
+  }
+
+  // Take a backup before making any schema changes.
+  // Pass the DB handle so WAL is flushed first.
+  const backupPath = createDbBackup(dbPath, db);
+
+  try {
+    const applied = applyMigrations(db, label, migrations);
+    return { applied, backupPath };
+  } catch (error) {
+    // Migration failed — the backup is available for manual restore.
+    // We don't auto-restore because the DB handle may be in an
+    // inconsistent state. The caller or operator should:
+    //   1. Close the database
+    //   2. restoreDbBackup(dbPath, backupPath)
+    //   3. Reopen
+    const message =
+      `Migration failed for ${label}. ` +
+      `A backup was created at: ${backupPath}\n` +
+      `To restore: close the database, then run:\n` +
+      `  cp "${backupPath}" "${dbPath}"\n` +
+      `  rm -f "${dbPath}-wal" "${dbPath}-shm"`;
+    throw new Error(message, { cause: error });
+  }
+}
+
+/**
+ * Restore a database file from a backup.
+ *
+ * Closes the WAL/SHM files first by removing them, then copies the
+ * backup back to the original path.
+ */
+export function restoreDbBackup(dbPath: string, backupPath: string): void {
+  if (!existsSync(backupPath)) {
+    throw new Error(`Backup file not found: ${backupPath}`);
+  }
+
+  // Remove stale WAL and SHM files so SQLite starts fresh
+  for (const ext of ['-wal', '-shm']) {
+    try {
+      unlinkSync(`${dbPath}${ext}`);
+    } catch {
+      // Ignore if files don't exist
+    }
+  }
+
+  copyFileSync(backupPath, dbPath);
+}

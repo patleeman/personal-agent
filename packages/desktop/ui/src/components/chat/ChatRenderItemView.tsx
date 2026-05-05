@@ -79,7 +79,7 @@ export function ChatRenderItemView({
 
     return (
       <div
-        key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`}
+        key={`trace-${messageIndexOffset + item.startIndex}`}
         data-chat-tail={isTailItem ? '1' : undefined}
         style={contentVisibilityStyle}
       >
