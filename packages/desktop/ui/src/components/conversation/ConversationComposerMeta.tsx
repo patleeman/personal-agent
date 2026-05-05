@@ -278,7 +278,7 @@ export function ConversationComposerMeta({
             <MoreIcon />
           </button>
           {moreOpen ? (
-            <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-subtle bg-popover p-2 text-left text-[12px] shadow-xl">
+            <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-default bg-surface p-2 text-left text-[12px] shadow-2xl">
               {showExecutionTargetPicker ? (
                 <label className="block px-2 py-1.5 text-[11px] text-secondary">
                   Run on
