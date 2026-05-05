@@ -59,6 +59,7 @@ export interface TelegramGatewayRuntimeDependencies {
   getCurrentModel: (conversationId: string) => Promise<string | null> | string | null;
   setModel: (conversationId: string, model: string) => Promise<void>;
   readBotToken: () => string | null;
+  notifyNewConversation?: (conversationId: string) => void;
   fetch?: typeof fetch;
 }
 
@@ -149,12 +150,13 @@ export class TelegramGatewayRuntime {
           provider: 'telegram',
           externalChatId: input.externalChatId,
         });
-    if (existing) {
+    if (existing && existing.conversationId) {
       return { conversationId: existing.conversationId, conversationTitle: existing.conversationTitle || existing.conversationId };
     }
 
     const title = `Telegram: ${input.externalChatLabel || input.externalChatId}`;
     const created = await this.dependencies.createConversation({ title });
+    void this.dependencies.notifyNewConversation?.(created.id);
     upsertGatewayChatTarget({
       stateRoot: this.dependencies.stateRoot,
       profile: this.dependencies.profile,

@@ -28,7 +28,7 @@ import { SlackMcpGatewayRuntime } from '../gateways/slackMcpGateway.js';
 import { readTelegramBotToken, removeTelegramBotToken, writeTelegramBotToken } from '../gateways/telegramAuth.js';
 import { TelegramGatewayRuntime } from '../gateways/telegramGateway.js';
 import { logError } from '../middleware/index.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import type { ServerRouteContext } from './context.js';
 
 let getCurrentProfileFn: () => string = () => {
@@ -107,6 +107,9 @@ function ensureTelegramRuntime(): TelegramGatewayRuntime {
       renameSession(created.id, input.title);
       return { id: created.id };
     },
+    notifyNewConversation: (conversationId) => {
+      publishAppEvent({ type: 'open_session', sessionId: conversationId });
+    },
     submitPrompt: async (input) => {
       await submitLiveSessionPromptCapability(
         { conversationId: input.conversationId, text: input.text, images: input.images },
@@ -148,6 +151,9 @@ function ensureSlackMcpRuntime(): SlackMcpGatewayRuntime {
       const created = await createLiveSessionCapability({}, liveSessionContext(context));
       renameSession(created.id, input.title);
       return { id: created.id };
+    },
+    notifyNewConversation: (conversationId) => {
+      publishAppEvent({ type: 'open_session', sessionId: conversationId });
     },
     submitPrompt: async (input) =>
       submitLiveSessionPromptCapability(

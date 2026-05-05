@@ -43,6 +43,7 @@ export interface SlackMcpGatewayRuntimeDependencies {
   getCurrentModel: (conversationId: string) => Promise<string | null> | string | null;
   setModel: (conversationId: string, model: string) => Promise<void>;
   isConversationBusy: (conversationId: string) => boolean;
+  notifyNewConversation?: (conversationId: string) => void;
   callSlackTool?: (tool: string, args: Record<string, unknown>) => Promise<unknown>;
 }
 
@@ -84,6 +85,7 @@ export class SlackMcpGatewayRuntime {
     const created = await this.dependencies.createConversation({ title });
     await this.dependencies.renameConversation(created.id, title);
 
+    void this.dependencies.notifyNewConversation?.(created.id);
     upsertGatewayChatTarget({
       stateRoot: this.dependencies.stateRoot,
       profile: this.dependencies.profile,

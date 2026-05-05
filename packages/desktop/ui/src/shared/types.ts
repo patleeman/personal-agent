@@ -689,6 +689,7 @@ export type AppEvent =
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'session_meta_changed'; sessionId: string }
   | { type: 'session_file_changed'; sessionId: string }
+  | { type: 'open_session'; sessionId: string }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs_snapshot'; result: DurableRunListResult }
@@ -699,6 +700,7 @@ export type DesktopAppEvent =
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'session_meta_changed'; sessionId: string }
   | { type: 'session_file_changed'; sessionId: string }
+  | { type: 'open_session'; sessionId: string }
   | { type: 'sessions'; sessions: SessionMeta[] }
   | { type: 'tasks'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs'; result: DurableRunListResult }

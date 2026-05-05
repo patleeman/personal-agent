@@ -20,6 +20,7 @@ import {
   replaceSessionMetaPreservingOrder,
 } from '../session/sessionListState';
 import { fetchSessionsSnapshot } from '../session/sessionSnapshot';
+import { openConversationTab } from '../session/sessionTabs';
 import type { DaemonState, DesktopAppEvent, DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { ThemeProvider } from '../ui-state/theme';
 import {
@@ -241,6 +242,9 @@ export function App() {
           return;
         case 'session_file_changed':
           bumpConversationVersion(payload.sessionId);
+          return;
+        case 'open_session':
+          openConversationTab(payload.sessionId);
           return;
 
         case 'sessions':
