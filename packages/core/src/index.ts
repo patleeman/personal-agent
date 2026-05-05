@@ -11,6 +11,9 @@ export * from './runtime/index.js';
 // SQLite helpers
 export * from './sqlite.js';
 
+// SQLite schema migration framework
+export * from './sqlite-migrations.js';
+
 // Machine-local config exports
 export * from './machine-config.js';
 

@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
-import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
+import {
+  applyMigrations,
+  type Migration,
+  openSqliteDatabase,
+  readTableColumnNames,
+  safeRebuildTable,
+  setSchemaVersion,
+  type SqliteDatabase,
+  tableExists,
+} from '@personal-agent/core';
 
 import { loadDaemonConfig } from './config.js';
 import { parseCronExpression, type ParsedTaskDefinition, type ParsedTaskSchedule, parseTaskDefinition } from './modules/tasks-parser.js';
@@ -16,6 +25,179 @@ export type AutomationConversationBehavior = 'steer' | 'followUp';
 
 const MAX_AUTOMATION_DURATION_SECONDS = 7 * 24 * 60 * 60;
 export const DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS = 15 * 60;
+
+// ── Schema migrations ────────────────────────────────────────────────────────
+
+/** Current schema version for the automation database. */
+const AUTOMATION_SCHEMA_VERSION = 2;
+
+const AUTOMATION_MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    description: 'Add columns that may be missing from pre-versioned schemas',
+    up: (db) => {
+      const columnNames = readTableColumnNames(db, 'automations');
+
+      if (!columnNames.has('thinking_level')) {
+        db.exec('ALTER TABLE automations ADD COLUMN thinking_level TEXT');
+      }
+      if (!columnNames.has('target_type')) {
+        db.exec("ALTER TABLE automations ADD COLUMN target_type TEXT NOT NULL DEFAULT 'background-agent'");
+      }
+      if (!columnNames.has('catch_up_window_seconds')) {
+        db.exec('ALTER TABLE automations ADD COLUMN catch_up_window_seconds INTEGER');
+      }
+      if (!columnNames.has('conversation_behavior')) {
+        db.exec('ALTER TABLE automations ADD COLUMN conversation_behavior TEXT');
+      }
+      if (!columnNames.has('thread_mode')) {
+        db.exec("ALTER TABLE automations ADD COLUMN thread_mode TEXT NOT NULL DEFAULT 'dedicated'");
+      }
+      if (!columnNames.has('thread_session_file')) {
+        db.exec('ALTER TABLE automations ADD COLUMN thread_session_file TEXT');
+      }
+      if (!columnNames.has('thread_conversation_id')) {
+        db.exec('ALTER TABLE automations ADD COLUMN thread_conversation_id TEXT');
+      }
+
+      // Fix default values for newly added columns
+      db.exec("UPDATE automations SET target_type = 'background-agent' WHERE target_type IS NULL OR trim(target_type) = ''");
+      db.exec(
+        "UPDATE automations SET conversation_behavior = NULL WHERE conversation_behavior IS NOT NULL AND trim(conversation_behavior) NOT IN ('steer', 'followUp')",
+      );
+      db.exec("UPDATE automations SET thread_mode = 'dedicated' WHERE thread_mode IS NULL OR trim(thread_mode) = ''");
+
+      // Set default catch-up window for cron automations
+      db.prepare(
+        `UPDATE automations
+         SET catch_up_window_seconds = ?
+         WHERE schedule_type = 'cron'
+           AND (catch_up_window_seconds IS NULL OR catch_up_window_seconds <= 0)`,
+      ).run(DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS);
+    },
+  },
+  {
+    version: 2,
+    description: 'Migrate profile column to runtime_scope with FK-safe rebuild',
+    up: (db) => {
+      const columnNames = readTableColumnNames(db, 'automations');
+      if (!columnNames.has('profile')) {
+        return;
+      }
+
+      // This runs on databases that still have the old `profile` column.
+      // We rebuild the automations table with `runtime_scope` instead,
+      // and auto-repair child table FK references that SQLite rewrites.
+      safeRebuildTable({
+        db,
+        tableName: 'automations',
+        createSql: `CREATE TABLE automations (
+          id TEXT PRIMARY KEY,
+          runtime_scope TEXT NOT NULL DEFAULT 'shared',
+          title TEXT NOT NULL,
+          enabled INTEGER NOT NULL,
+          schedule_type TEXT NOT NULL,
+          cron TEXT,
+          at TEXT,
+          prompt TEXT NOT NULL,
+          cwd TEXT,
+          model_ref TEXT,
+          thinking_level TEXT,
+          timeout_seconds INTEGER NOT NULL,
+          catch_up_window_seconds INTEGER,
+          target_type TEXT NOT NULL DEFAULT 'background-agent',
+          conversation_behavior TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          legacy_file_path TEXT,
+          thread_mode TEXT NOT NULL DEFAULT 'dedicated',
+          thread_session_file TEXT,
+          thread_conversation_id TEXT
+        )`,
+        columns: [
+          'id',
+          'title',
+          'enabled',
+          'schedule_type',
+          'cron',
+          'at',
+          'prompt',
+          'cwd',
+          'model_ref',
+          'thinking_level',
+          'timeout_seconds',
+          'catch_up_window_seconds',
+          'target_type',
+          'conversation_behavior',
+          'created_at',
+          'updated_at',
+          'legacy_file_path',
+          'thread_mode',
+          'thread_session_file',
+          'thread_conversation_id',
+        ],
+        additionalColumns: ['runtime_scope'],
+        additionalValues: ['shared'],
+        childTableDefs: [
+          {
+            tableName: 'automation_state',
+            createSql: `CREATE TABLE automation_state (
+              automation_id TEXT PRIMARY KEY,
+              running INTEGER NOT NULL DEFAULT 0,
+              running_started_at TEXT,
+              active_run_id TEXT,
+              last_run_id TEXT,
+              last_status TEXT,
+              last_run_at TEXT,
+              last_success_at TEXT,
+              last_failure_at TEXT,
+              last_error TEXT,
+              last_log_path TEXT,
+              last_scheduled_minute TEXT,
+              last_attempt_count INTEGER,
+              one_time_resolved_at TEXT,
+              one_time_resolved_status TEXT,
+              one_time_completed_at TEXT,
+              FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+            )`,
+            columns: [
+              'automation_id',
+              'running',
+              'running_started_at',
+              'active_run_id',
+              'last_run_id',
+              'last_status',
+              'last_run_at',
+              'last_success_at',
+              'last_failure_at',
+              'last_error',
+              'last_log_path',
+              'last_scheduled_minute',
+              'last_attempt_count',
+              'one_time_resolved_at',
+              'one_time_resolved_status',
+              'one_time_completed_at',
+            ],
+          },
+          {
+            tableName: 'automation_activity',
+            createSql: `CREATE TABLE automation_activity (
+              seq INTEGER PRIMARY KEY AUTOINCREMENT,
+              automation_id TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              payload_json TEXT,
+              FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+            )`,
+            columns: ['seq', 'automation_id', 'kind', 'created_at', 'payload_json'],
+          },
+        ],
+        validate: true,
+        strict: true,
+      });
+    },
+  },
+];
 
 export interface StoredAutomation extends ParsedTaskDefinition {
   runtimeScope: string;
@@ -141,30 +323,6 @@ type AutomationActivityRow = {
 const LEGACY_TASK_FILE_SUFFIX = '.task.md';
 const AUTOMATION_ACTIVITY_RETENTION_LIMIT = 100;
 const dbCache = new Map<string, SqliteDatabase>();
-
-const AUTOMATION_COLUMNS = [
-  'id',
-  'runtime_scope',
-  'title',
-  'enabled',
-  'schedule_type',
-  'cron',
-  'at',
-  'prompt',
-  'cwd',
-  'model_ref',
-  'thinking_level',
-  'timeout_seconds',
-  'catch_up_window_seconds',
-  'target_type',
-  'conversation_behavior',
-  'created_at',
-  'updated_at',
-  'legacy_file_path',
-  'thread_mode',
-  'thread_session_file',
-  'thread_conversation_id',
-] as const;
 
 export function closeAutomationDbs(): void {
   for (const db of dbCache.values()) {
@@ -364,269 +522,30 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
       ON automation_activity(automation_id, created_at DESC, seq DESC);
   `);
 
-  migrateAutomationSchema(db);
-  repairAutomationChildForeignKeys(db);
+  // Apply versioned schema migrations
+  //
+  // Fresh DBs: tables don't exist yet, CREATE TABLE IF NOT EXISTS above handles
+  //   the full schema. We mark them at the latest version — no migrations needed.
+  // Already-versioned DBs: user_version > 0, applyMigrations runs pending steps.
+  // Pre-migration DBs: user_version is 0. applyMigrations detects this and runs
+  //   all migrations from scratch, which is safe because each migration checks
+  //   PRAGMA table_info before applying changes.
+  {
+    const tableExisted = tableExists(db, 'automations');
+    if (!tableExisted) {
+      setSchemaVersion(db, AUTOMATION_SCHEMA_VERSION);
+    } else {
+      applyMigrations(db, 'automation', AUTOMATION_MIGRATIONS);
+    }
+  }
+
   db.exec('CREATE INDEX IF NOT EXISTS idx_automations_runtime_scope_title ON automations(runtime_scope, title)');
   db.exec(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_legacy_file_path ON automations(legacy_file_path) WHERE legacy_file_path IS NOT NULL',
   );
 
-  const automationColumns = db.prepare('PRAGMA table_info(automations)').all() as Array<{ name?: string }>;
-  const automationColumnNames = new Set(automationColumns.map((column) => column.name));
-  if (!automationColumnNames.has('thinking_level')) {
-    db.exec('ALTER TABLE automations ADD COLUMN thinking_level TEXT');
-  }
-  if (!automationColumnNames.has('target_type')) {
-    db.exec("ALTER TABLE automations ADD COLUMN target_type TEXT NOT NULL DEFAULT 'background-agent'");
-  }
-  if (!automationColumnNames.has('catch_up_window_seconds')) {
-    db.exec('ALTER TABLE automations ADD COLUMN catch_up_window_seconds INTEGER');
-  }
-  if (!automationColumnNames.has('conversation_behavior')) {
-    db.exec('ALTER TABLE automations ADD COLUMN conversation_behavior TEXT');
-  }
-  if (!automationColumnNames.has('thread_mode')) {
-    db.exec("ALTER TABLE automations ADD COLUMN thread_mode TEXT NOT NULL DEFAULT 'dedicated'");
-  }
-  if (!automationColumnNames.has('thread_session_file')) {
-    db.exec('ALTER TABLE automations ADD COLUMN thread_session_file TEXT');
-  }
-  if (!automationColumnNames.has('thread_conversation_id')) {
-    db.exec('ALTER TABLE automations ADD COLUMN thread_conversation_id TEXT');
-  }
-  db.exec("UPDATE automations SET target_type = 'background-agent' WHERE target_type IS NULL OR trim(target_type) = ''");
-  db.exec(
-    "UPDATE automations SET conversation_behavior = NULL WHERE conversation_behavior IS NOT NULL AND trim(conversation_behavior) NOT IN ('steer', 'followUp')",
-  );
-  db.exec("UPDATE automations SET thread_mode = 'dedicated' WHERE thread_mode IS NULL OR trim(thread_mode) = ''");
-
   dbCache.set(resolved, db);
   return db;
-}
-
-function readAutomationColumnNames(db: SqliteDatabase): Set<string> {
-  const columns = db.prepare('PRAGMA table_info(automations)').all() as Array<{ name?: string }>;
-  return new Set(columns.map((column) => column.name).filter((name): name is string => typeof name === 'string'));
-}
-
-const AUTOMATION_STATE_COLUMNS = [
-  'automation_id',
-  'running',
-  'running_started_at',
-  'active_run_id',
-  'last_run_id',
-  'last_status',
-  'last_run_at',
-  'last_success_at',
-  'last_failure_at',
-  'last_error',
-  'last_log_path',
-  'last_scheduled_minute',
-  'last_attempt_count',
-  'one_time_resolved_at',
-  'one_time_resolved_status',
-  'one_time_completed_at',
-] as const;
-
-function createAutomationStateTableSql(tableName = 'automation_state'): string {
-  return `
-    CREATE TABLE ${tableName} (
-      automation_id TEXT PRIMARY KEY,
-      running INTEGER NOT NULL DEFAULT 0,
-      running_started_at TEXT,
-      active_run_id TEXT,
-      last_run_id TEXT,
-      last_status TEXT,
-      last_run_at TEXT,
-      last_success_at TEXT,
-      last_failure_at TEXT,
-      last_error TEXT,
-      last_log_path TEXT,
-      last_scheduled_minute TEXT,
-      last_attempt_count INTEGER,
-      one_time_resolved_at TEXT,
-      one_time_resolved_status TEXT,
-      one_time_completed_at TEXT,
-      FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
-    )
-  `;
-}
-
-function createAutomationActivityTableSql(tableName = 'automation_activity'): string {
-  return `
-    CREATE TABLE ${tableName} (
-      seq INTEGER PRIMARY KEY AUTOINCREMENT,
-      automation_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      payload_json TEXT,
-      FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
-    )
-  `;
-}
-
-function readTableSql(db: SqliteDatabase, tableName: string): string | undefined {
-  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) as { sql?: string } | undefined;
-  return row?.sql;
-}
-
-function tableReferencesLegacyProfile(tableSql: string | undefined): boolean {
-  return /REFERENCES\s+["`]?(?:automations_legacy_profile)["`]?/i.test(tableSql ?? '');
-}
-
-function repairAutomationChildForeignKeys(db: SqliteDatabase): void {
-  const stateSql = readTableSql(db, 'automation_state');
-  const activitySql = readTableSql(db, 'automation_activity');
-  if (!tableReferencesLegacyProfile(stateSql) && !tableReferencesLegacyProfile(activitySql)) {
-    return;
-  }
-
-  db.exec('PRAGMA foreign_keys = OFF');
-  try {
-    if (tableReferencesLegacyProfile(stateSql)) {
-      db.exec('DROP TABLE IF EXISTS automation_state_legacy_fk');
-      db.exec('ALTER TABLE automation_state RENAME TO automation_state_legacy_fk');
-      db.exec(createAutomationStateTableSql());
-      db.exec(`
-        INSERT OR REPLACE INTO automation_state (${AUTOMATION_STATE_COLUMNS.join(', ')})
-        SELECT ${AUTOMATION_STATE_COLUMNS.join(', ')}
-        FROM automation_state_legacy_fk
-      `);
-      db.exec('DROP TABLE automation_state_legacy_fk');
-    }
-
-    if (tableReferencesLegacyProfile(activitySql)) {
-      db.exec('DROP INDEX IF EXISTS idx_automation_activity_automation_id_created_at');
-      db.exec('DROP TABLE IF EXISTS automation_activity_legacy_fk');
-      db.exec('ALTER TABLE automation_activity RENAME TO automation_activity_legacy_fk');
-      db.exec(createAutomationActivityTableSql());
-      db.exec(`
-        INSERT OR REPLACE INTO automation_activity (seq, automation_id, kind, created_at, payload_json)
-        SELECT seq, automation_id, kind, created_at, payload_json
-        FROM automation_activity_legacy_fk
-      `);
-      db.exec('DROP TABLE automation_activity_legacy_fk');
-    }
-
-    db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_automation_activity_automation_id_created_at
-      ON automation_activity(automation_id, created_at DESC, seq DESC)
-    `);
-  } finally {
-    db.exec('PRAGMA foreign_keys = ON');
-  }
-}
-
-function migrateAutomationSchema(db: SqliteDatabase): void {
-  let columnNames = readAutomationColumnNames(db);
-  if (!columnNames.has('thinking_level')) {
-    db.exec('ALTER TABLE automations ADD COLUMN thinking_level TEXT');
-  }
-  if (!columnNames.has('target_type')) {
-    db.exec("ALTER TABLE automations ADD COLUMN target_type TEXT NOT NULL DEFAULT 'background-agent'");
-  }
-  if (!columnNames.has('catch_up_window_seconds')) {
-    db.exec('ALTER TABLE automations ADD COLUMN catch_up_window_seconds INTEGER');
-  }
-  if (!columnNames.has('conversation_behavior')) {
-    db.exec('ALTER TABLE automations ADD COLUMN conversation_behavior TEXT');
-  }
-  if (!columnNames.has('thread_mode')) {
-    db.exec("ALTER TABLE automations ADD COLUMN thread_mode TEXT NOT NULL DEFAULT 'dedicated'");
-  }
-  if (!columnNames.has('thread_session_file')) {
-    db.exec('ALTER TABLE automations ADD COLUMN thread_session_file TEXT');
-  }
-  if (!columnNames.has('thread_conversation_id')) {
-    db.exec('ALTER TABLE automations ADD COLUMN thread_conversation_id TEXT');
-  }
-  columnNames = readAutomationColumnNames(db);
-
-  if (!columnNames.has('runtime_scope')) {
-    db.exec("ALTER TABLE automations ADD COLUMN runtime_scope TEXT NOT NULL DEFAULT 'shared'");
-    columnNames = readAutomationColumnNames(db);
-  }
-
-  db.prepare(
-    `UPDATE automations
-     SET catch_up_window_seconds = ?
-     WHERE schedule_type = 'cron'
-       AND (catch_up_window_seconds IS NULL OR catch_up_window_seconds <= 0)`,
-  ).run(DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS);
-
-  if (!columnNames.has('profile')) {
-    return;
-  }
-
-  db.exec('PRAGMA foreign_keys = OFF');
-  try {
-    db.exec('DROP INDEX IF EXISTS idx_automations_profile_title');
-    db.exec('DROP INDEX IF EXISTS idx_automations_runtime_scope_title');
-    db.exec('DROP INDEX IF EXISTS idx_automations_legacy_file_path');
-    db.exec('ALTER TABLE automations RENAME TO automations_legacy_profile');
-    db.exec(`
-      CREATE TABLE automations (
-        id TEXT PRIMARY KEY,
-        runtime_scope TEXT NOT NULL DEFAULT 'shared',
-        title TEXT NOT NULL,
-        enabled INTEGER NOT NULL,
-        schedule_type TEXT NOT NULL,
-        cron TEXT,
-        at TEXT,
-        prompt TEXT NOT NULL,
-        cwd TEXT,
-        model_ref TEXT,
-        thinking_level TEXT,
-        timeout_seconds INTEGER NOT NULL,
-        catch_up_window_seconds INTEGER,
-        target_type TEXT NOT NULL DEFAULT 'background-agent',
-        conversation_behavior TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        legacy_file_path TEXT,
-        thread_mode TEXT NOT NULL DEFAULT 'dedicated',
-        thread_session_file TEXT,
-        thread_conversation_id TEXT
-      )
-    `);
-    db.exec(`
-      INSERT INTO automations (${AUTOMATION_COLUMNS.join(', ')})
-      SELECT
-        id,
-        'shared',
-        title,
-        enabled,
-        schedule_type,
-        cron,
-        at,
-        prompt,
-        cwd,
-        model_ref,
-        thinking_level,
-        timeout_seconds,
-        CASE
-          WHEN schedule_type = 'cron' THEN COALESCE(NULLIF(catch_up_window_seconds, 0), ${DEFAULT_CRON_CATCH_UP_WINDOW_SECONDS})
-          ELSE catch_up_window_seconds
-        END,
-        target_type,
-        conversation_behavior,
-        created_at,
-        updated_at,
-        legacy_file_path,
-        thread_mode,
-        thread_session_file,
-        thread_conversation_id
-      FROM automations_legacy_profile
-    `);
-    db.exec('DROP TABLE automations_legacy_profile');
-    repairAutomationChildForeignKeys(db);
-    db.exec('CREATE INDEX IF NOT EXISTS idx_automations_runtime_scope_title ON automations(runtime_scope, title)');
-    db.exec(
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_legacy_file_path ON automations(legacy_file_path) WHERE legacy_file_path IS NOT NULL',
-    );
-  } finally {
-    db.exec('PRAGMA foreign_keys = ON');
-  }
 }
 
 function toParsedSchedule(row: StoredAutomationRow): ParsedTaskSchedule {
