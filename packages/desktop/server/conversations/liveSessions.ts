@@ -443,6 +443,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
           tokensInput: tokens.input,
           tokensOutput: tokens.output,
           tokensCachedInput: tokens.cacheRead,
+          tokensCachedWrite: tokens.cacheWrite,
           cost,
           turnCount: traceRun.turnCount,
           stepCount: traceRun.stepCount,

@@ -23,6 +23,7 @@ export function persistTraceStats(params: {
   tokensInput: number;
   tokensOutput: number;
   tokensCachedInput?: number;
+  tokensCachedWrite?: number;
   cost: number;
   turnCount?: number;
   stepCount?: number;
@@ -35,6 +36,7 @@ export function persistTraceStats(params: {
     tokensInput: params.tokensInput,
     tokensOutput: params.tokensOutput,
     tokensCachedInput: params.tokensCachedInput,
+    tokensCachedWrite: params.tokensCachedWrite,
     cost: params.cost,
     turnCount: params.turnCount,
     stepCount: params.stepCount,

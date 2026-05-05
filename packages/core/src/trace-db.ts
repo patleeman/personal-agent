@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS trace_stats (
   tokens_input INTEGER DEFAULT 0,
   tokens_output INTEGER DEFAULT 0,
   tokens_cached_input INTEGER DEFAULT 0,
+  tokens_cached_write INTEGER DEFAULT 0,
   cost REAL DEFAULT 0,
   turn_count INTEGER DEFAULT 0,
   step_count INTEGER DEFAULT 0,
@@ -114,7 +115,10 @@ CREATE INDEX IF NOT EXISTS idx_trace_auto_mode_ts ON trace_auto_mode(ts);
 CREATE INDEX IF NOT EXISTS idx_trace_auto_mode_session ON trace_auto_mode(session_id);
 `;
 
-const MIGRATIONS = [`ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`];
+const MIGRATIONS = [
+  `ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`,
+  `ALTER TABLE trace_stats ADD COLUMN tokens_cached_write INTEGER DEFAULT 0`,
+];
 
 // ── Database management ───────────────────────────────────────────────────────
 
@@ -192,6 +196,7 @@ export function writeTraceStats(params: {
   tokensInput: number;
   tokensOutput: number;
   tokensCachedInput?: number;
+  tokensCachedWrite?: number;
   cost: number;
   turnCount?: number;
   stepCount?: number;
@@ -201,8 +206,8 @@ export function writeTraceStats(params: {
   try {
     const db = getTraceDb();
     const stmt = db.prepare(`
-      INSERT INTO trace_stats (id, session_id, run_id, model_id, profile, ts, tokens_input, tokens_output, tokens_cached_input, cost, turn_count, step_count, duration_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO trace_stats (id, session_id, run_id, model_id, profile, ts, tokens_input, tokens_output, tokens_cached_input, tokens_cached_write, cost, turn_count, step_count, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       generateId(),
@@ -214,6 +219,7 @@ export function writeTraceStats(params: {
       params.tokensInput,
       params.tokensOutput,
       params.tokensCachedInput ?? 0,
+      params.tokensCachedWrite ?? 0,
       params.cost,
       params.turnCount ?? 0,
       params.stepCount ?? 0,
