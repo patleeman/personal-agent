@@ -117,8 +117,10 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
   );
 }
 
+// Heatmap intensity is based on actual work done (fresh input + output),
+// not cache tokens which inflate heavily in long-running sessions.
 function tokenTotal(day: TraceTokenDaily): number {
-  return day.tokensInput + day.tokensCached + day.tokensCachedWrite + day.tokensOutput;
+  return day.tokensInput + day.tokensOutput;
 }
 
 function pct(value: number, total: number): string {

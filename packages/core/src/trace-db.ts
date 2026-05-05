@@ -162,7 +162,7 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
     }
   }
 
-  // Prune stale rows on open (fire-and-forget)
+  // Prune stale rows on open then vacuum to reclaim space (fire-and-forget)
   try {
     const cutoff = new Date(Date.now() - TRACE_STATS_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
     db.prepare(`DELETE FROM trace_stats WHERE ts < ?`).run(cutoff);
@@ -171,6 +171,7 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
     db.prepare(`DELETE FROM trace_compactions WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_queue WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_auto_mode WHERE ts < ?`).run(cutoff);
+    db.exec(`VACUUM`);
   } catch {
     // Non-fatal
   }
@@ -412,7 +413,7 @@ export function querySummary(since: string): TraceSummary {
     .prepare(
       `
     SELECT
-      COALESCE(SUM(tokens_input + tokens_cached_input + tokens_output), 0) as tokens_total,
+      COALESCE(SUM(tokens_input + tokens_cached_input + tokens_cached_write + tokens_output), 0) as tokens_total,
       COALESCE(SUM(tokens_input), 0) as tokens_input,
       COALESCE(SUM(tokens_output), 0) as tokens_output,
       COALESCE(SUM(tokens_cached_input), 0) as tokens_cached,
@@ -748,6 +749,7 @@ export interface TokenDailyRow {
   tokensOutput: number;
   tokensCached: number;
   tokensCachedWrite: number;
+  toolErrors: number;
   cost: number;
 }
 
@@ -757,24 +759,33 @@ export function queryTokensDaily(since: string): TokenDailyRow[] {
     .prepare(
       `
     SELECT
-      DATE(ts) as date,
-      SUM(tokens_input) as tokens_input,
-      SUM(tokens_output) as tokens_output,
-      SUM(tokens_cached_input) as tokens_cached,
-      SUM(tokens_cached_write) as tokens_cached_write,
-      SUM(cost) as cost
-    FROM trace_stats WHERE ts >= ?
-    GROUP BY DATE(ts)
+      DATE(s.ts) as date,
+      SUM(s.tokens_input) as tokens_input,
+      SUM(s.tokens_output) as tokens_output,
+      SUM(s.tokens_cached_input) as tokens_cached,
+      SUM(s.tokens_cached_write) as tokens_cached_write,
+      SUM(s.cost) as cost,
+      COALESCE(e.error_count, 0) as tool_errors
+    FROM trace_stats s
+    LEFT JOIN (
+      SELECT DATE(ts) as date, COUNT(*) as error_count
+      FROM trace_tool_calls
+      WHERE ts >= ? AND status = 'error'
+      GROUP BY DATE(ts)
+    ) e ON DATE(s.ts) = e.date
+    WHERE s.ts >= ?
+    GROUP BY DATE(s.ts)
     ORDER BY date ASC
   `,
     )
-    .all(since) as Record<string, unknown>[];
+    .all(since, since) as Record<string, unknown>[];
   return mapRows<TokenDailyRow>(rows).map((r) => ({
     ...r,
     tokensInput: Number(r.tokensInput),
     tokensOutput: Number(r.tokensOutput),
     tokensCached: Number(r.tokensCached),
     tokensCachedWrite: Number(r.tokensCachedWrite),
+    toolErrors: Number(r.toolErrors),
     cost: Number(r.cost),
   }));
 }

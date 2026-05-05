@@ -202,10 +202,14 @@ describe('trace-db', () => {
     expect(gpt4!.avgTokensPerSec).toBeGreaterThan(0);
   });
 
-  it('queryTokensDaily returns daily aggregation', () => {
+  it('queryTokensDaily returns daily aggregation with tool errors', () => {
     const result = queryTokensDaily(fiveHoursAgo);
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result[0].tokensInput).toBeGreaterThan(0);
     expect(result[0].tokensOutput).toBeGreaterThan(0);
+    expect(typeof result[0].toolErrors).toBe('number');
+    // Fixture has 1 tool error (read tool), so today's row should have toolErrors >= 1
+    const totalErrors = result.reduce((sum, r) => sum + r.toolErrors, 0);
+    expect(totalErrors).toBeGreaterThanOrEqual(1);
   });
 });

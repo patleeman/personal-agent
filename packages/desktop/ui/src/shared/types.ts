@@ -1607,6 +1607,7 @@ export interface TraceTokenDaily {
   tokensOutput: number;
   tokensCached: number;
   tokensCachedWrite: number;
+  toolErrors: number;
   cost: number;
 }
 

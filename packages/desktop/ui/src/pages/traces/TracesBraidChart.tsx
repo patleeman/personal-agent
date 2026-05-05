@@ -25,7 +25,8 @@ export function TracesBraidChart({ data }: { data: TraceTokenDaily[] }) {
   const inputSeries = data.map((d) => d.tokensInput);
   const outputSeries = data.map((d) => d.tokensOutput);
   const costSeries = data.map((d) => d.cost);
-  const errorSeries = data.map(() => 0); // Placeholder: daily error count not available
+  const errorSeries = data.map((d) => d.toolErrors);
+  const hasErrors = errorSeries.some((v) => v > 0);
 
   const maxVal = Math.max(...inputSeries, ...outputSeries, 1);
   const maxCost = Math.max(...costSeries, 0.01);
@@ -49,7 +50,7 @@ export function TracesBraidChart({ data }: { data: TraceTokenDaily[] }) {
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">🧶 Time Series — Last {data.length} Days</span>
-        <span className="ml-auto text-[10px] text-dim">4 metrics overlaid</span>
+        <span className="ml-auto text-[10px] text-dim">{hasErrors ? '4' : '3'} metrics overlaid</span>
       </div>
       <div className="p-3">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[100px]" preserveAspectRatio="none">
@@ -71,8 +72,8 @@ export function TracesBraidChart({ data }: { data: TraceTokenDaily[] }) {
           <path d={outputPath} fill="none" stroke="#4cd964" strokeWidth="1.5" opacity="0.7" />
           {/* Cost */}
           <path d={costPath} fill="none" stroke="#ff9f0a" strokeWidth="1.5" opacity="0.7" />
-          {/* Error rate (placeholder) */}
-          {errPath && <path d={errPath} fill="none" stroke="#ff4757" strokeWidth="1.5" opacity="0.7" />}
+          {/* Tool errors (only rendered when non-zero data exists) */}
+          {hasErrors && <path d={errPath} fill="none" stroke="#ff4757" strokeWidth="1.5" opacity="0.7" />}
           {/* X labels: first, middle, last */}
           <text x="0" y={H - 4} fill="var(--dim)" fontSize="7">
             {data[0]?.date?.slice(5) ?? ''}
@@ -94,9 +95,11 @@ export function TracesBraidChart({ data }: { data: TraceTokenDaily[] }) {
           <span className="flex items-center gap-1">
             <span className="w-3 h-0.5 rounded bg-[#ff9f0a]" /> Cost
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-0.5 rounded bg-[#ff4757]" /> Errors
-          </span>
+          {hasErrors && (
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-0.5 rounded bg-[#ff4757]" /> Errors
+            </span>
+          )}
           <span className="ml-auto">Peak: {formatNumber(maxVal)} tokens</span>
         </div>
       </div>
