@@ -15,7 +15,6 @@ interface ConversationCheckpointPresentation {
   linesAdded?: number;
   linesDeleted?: number;
   updatedAt?: string;
-  openRequested: boolean;
 }
 
 function isCheckpointAction(value: unknown): value is ConversationCheckpointPresentation['action'] {
@@ -62,7 +61,6 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
   const input = block.input as {
     action?: unknown;
     checkpointId?: unknown;
-    open?: unknown;
   };
 
   const action = details?.action ?? (isCheckpointAction(input.action) ? input.action : undefined);
@@ -102,6 +100,5 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
     linesAdded: typeof details?.linesAdded === 'number' ? details.linesAdded : undefined,
     linesDeleted: typeof details?.linesDeleted === 'number' ? details.linesDeleted : undefined,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,
-    openRequested: typeof details?.openRequested === 'boolean' ? details.openRequested : input.open === true,
   };
 }

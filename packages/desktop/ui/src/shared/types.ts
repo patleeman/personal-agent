@@ -109,7 +109,6 @@ export interface ConversationCheckpointToolDetails {
   linesDeleted?: number;
   cwd?: string;
   updatedAt?: string;
-  openRequested?: boolean;
   checkpointCount?: number;
   checkpointIds?: string[];
   paths?: string[];

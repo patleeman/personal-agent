@@ -30,7 +30,6 @@ const CheckpointToolParams = Type.Object({
       description: 'Targeted file or directory paths to include in the checkpoint commit. Required when action=save.',
     }),
   ),
-  open: Type.Optional(Type.Boolean({ description: 'Whether the review modal should open after saving. Defaults to true.' })),
 });
 
 interface ParsedCommitMetadata {
@@ -406,8 +405,6 @@ export function createCheckpointAgentExtension(options: {
               linesAdded,
               linesDeleted,
             });
-            const openRequested = params.open ?? true;
-
             invalidateAppTopics('checkpoints', 'sessions');
             return {
               content: [
@@ -429,7 +426,6 @@ export function createCheckpointAgentExtension(options: {
                 linesDeleted: record.linesDeleted,
                 cwd: record.cwd,
                 updatedAt: record.updatedAt,
-                openRequested,
                 paths,
               },
             };

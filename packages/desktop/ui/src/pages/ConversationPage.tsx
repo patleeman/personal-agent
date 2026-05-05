@@ -32,11 +32,7 @@ import {
   setConversationArtifactIdInSearch,
 } from '../conversation/conversationArtifacts';
 import { parseWholeLineBashCommand } from '../conversation/conversationBashCommand';
-import {
-  getConversationCheckpointIdFromSearch,
-  readCheckpointPresentation,
-  setConversationCheckpointIdInSearch,
-} from '../conversation/conversationCheckpoints';
+import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { bytesToBase64, type ComposerDictationCapture, startComposerDictationCapture } from '../conversation/conversationComposerDictation';
 import {
   canNavigateComposerHistoryValue,
@@ -1152,17 +1148,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const artifactAutoOpenSeededRef = useRef(false);
   const artifactAutoOpenStartedAtRef = useRef(new Date().toISOString());
   const processedArtifactAutoOpenIdsRef = useRef<Set<string>>(new Set());
-  const checkpointAutoOpenSeededRef = useRef(false);
-  const checkpointAutoOpenStartedAtRef = useRef(new Date().toISOString());
-  const processedCheckpointAutoOpenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     artifactAutoOpenSeededRef.current = false;
     artifactAutoOpenStartedAtRef.current = new Date().toISOString();
     processedArtifactAutoOpenIdsRef.current = new Set();
-    checkpointAutoOpenSeededRef.current = false;
-    checkpointAutoOpenStartedAtRef.current = new Date().toISOString();
-    processedCheckpointAutoOpenIdsRef.current = new Set();
   }, [id]);
 
   useEffect(() => {
@@ -1191,37 +1181,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       openArtifact(nextArtifact.targetId);
     }
   }, [openArtifact, realMessages]);
-
-  useEffect(() => {
-    if (!realMessages) {
-      return;
-    }
-
-    if (!checkpointAutoOpenSeededRef.current) {
-      processedCheckpointAutoOpenIdsRef.current = collectCompletedToolAutoOpenBlockKeys(
-        realMessages,
-        readCheckpointPresentation,
-        'checkpoint',
-      );
-      checkpointAutoOpenSeededRef.current = true;
-      return;
-    }
-
-    const nextCheckpoint = findRequestedToolPresentationToOpen({
-      messages: realMessages,
-      processedBlockKeys: processedCheckpointAutoOpenIdsRef.current,
-      autoOpenStartedAt: checkpointAutoOpenStartedAtRef.current,
-      readPresentation: readCheckpointPresentation,
-      getTargetId: (checkpoint) => checkpoint.checkpointId,
-      keyPrefix: 'checkpoint',
-    });
-    for (const blockKey of nextCheckpoint.processedBlockKeys) {
-      processedCheckpointAutoOpenIdsRef.current.add(blockKey);
-    }
-    if (nextCheckpoint.targetId) {
-      openCheckpoint(nextCheckpoint.targetId);
-    }
-  }, [openCheckpoint, realMessages]);
 
   const { titles, setTitle: pushTitle } = useLiveTitles();
 
