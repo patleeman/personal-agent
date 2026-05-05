@@ -337,6 +337,7 @@ export class SlackMcpGatewayRuntime {
     });
     await this.submitInboundBatch({
       conversationId: target.conversationId,
+      channelId: binding.externalChatId,
       channelLabel: binding.externalChatLabel || binding.externalChatId,
       lines,
       latestTs,
@@ -345,6 +346,7 @@ export class SlackMcpGatewayRuntime {
 
   private async submitInboundBatch(input: {
     conversationId: string;
+    channelId: string;
     channelLabel: string;
     lines: string[];
     latestTs: string;
@@ -369,6 +371,9 @@ export class SlackMcpGatewayRuntime {
       this.pendingFollowUp.set(input.conversationId, [...(this.pendingFollowUp.get(input.conversationId) ?? []), text]);
       return;
     }
+
+    // Send ack so the user knows the agent is working
+    void this.sendAck(input.channelId);
 
     const result = await this.dependencies.submitPrompt({ conversationId: input.conversationId, text });
     if (result && result.delivery === 'queued') {
@@ -447,6 +452,16 @@ export class SlackMcpGatewayRuntime {
         });
         await this.sendSystemMessage(channelId, 'Detached Slack MCP gateway from this conversation.');
         return;
+    }
+  }
+
+  private async sendAck(channelId: string): Promise<void> {
+    try {
+      const result = await this.callSlackTool('slack_send_message', { channel_id: channelId, message: '👀' });
+      const sentTs = extractSlackMessageTs(result);
+      if (sentTs) this.sentMessageTs.add(sentTs);
+    } catch {
+      // Ack is best-effort — don't fail the turn if it can't be sent
     }
   }
 
