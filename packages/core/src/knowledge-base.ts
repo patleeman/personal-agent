@@ -192,7 +192,12 @@ function listRemoteSnapshot(cwd: string, branch: string): Snapshot {
     return {};
   }
 
-  const output = runGitBuffer(cwd, ['ls-tree', '-rz', '-r', remoteRef], { allowFailure: true });
+  let output: Buffer;
+  try {
+    output = runGitBuffer(cwd, ['ls-tree', '-rz', '-r', remoteRef]);
+  } catch {
+    return {};
+  }
   if (output.length === 0) {
     return {};
   }
@@ -986,6 +991,17 @@ export class KnowledgeBaseManager {
       const baseSnapshot = storedState?.snapshot ?? (remoteExists ? remoteSnapshot : {});
       const workingSnapshot = listWorkingSnapshot(root);
 
+      // Safety check: if remote appears empty but the ref exists and we previously
+      // tracked files, something is wrong (likely a transient git failure).
+      // Skip this sync cycle rather than destroying the working tree.
+      if (remoteExists && Object.keys(remoteSnapshot).length === 0 && Object.keys(baseSnapshot).length > 0) {
+        setRuntimeState(this.runtimeState, {
+          syncStatus: 'error',
+          lastError: 'Remote snapshot is empty but remote ref exists and local state has content. Skipping sync to prevent data loss.',
+        });
+        return this.readState();
+      }
+
       if (hasRecentLocalChanges(root, baseSnapshot, workingSnapshot, Date.now())) {
         setRuntimeState(this.runtimeState, {
           syncStatus: 'idle',
@@ -1042,6 +1058,13 @@ export class KnowledgeBaseManager {
       this.checkoutRemoteBase(root, config.branch, true);
 
       const finalPaths = new Set<string>(Object.keys(remoteSnapshot));
+
+      // Guard: if the remote snapshot is unexpectedly empty (shouldn't reach here
+      // due to the safety check above, but defend against it anyway), bail out.
+      if (finalPaths.size === 0 && Object.keys(baseSnapshot).length > 0) {
+        throw new Error('Remote snapshot is empty but previous state has content — aborting sync to prevent data loss');
+      }
+
       for (const resolution of resolutions) {
         const timestampForRecovery = syncTimestamp;
         const localContent = localContents.get(resolution.path) ?? null;
