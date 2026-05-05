@@ -24,7 +24,7 @@ import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import type { ProjectRecord, ScheduledTaskDetail, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 import { MentionTextarea } from './MentionTextarea';
-import { cx, ErrorState, LoadingState, ToolbarButton } from './ui';
+import { cx, ErrorState, LoadingState, Pill, ToolbarButton } from './ui';
 
 const TITLE_INPUT_CLASS = 'w-full min-w-0 bg-transparent text-[16px] font-medium text-primary placeholder:text-dim/75 outline-none';
 const PROMPT_INPUT_CLASS =
@@ -596,6 +596,10 @@ function InlineSwitch({
   );
 }
 
+function isTextOnlyModel(model: { id: string; input?: Array<'text' | 'image'> }): boolean {
+  return Array.isArray(model.input) && !model.input.includes('image');
+}
+
 function TaskAdvancedMenu({
   value,
   modelOptions,
@@ -603,10 +607,13 @@ function TaskAdvancedMenu({
   onChange,
 }: {
   value: TaskFormState;
-  modelOptions: Array<{ id: string }>;
+  modelOptions: Array<{ id: string; input?: Array<'text' | 'image'> }>;
   existingThreadOptions: Array<{ id: string; label: string; cwd?: string }>;
   onChange: (patch: Partial<TaskFormState>) => void;
 }) {
+  const selectedModel = modelOptions.find((m) => m.id === value.model) ?? null;
+  const textOnly = selectedModel ? isTextOnlyModel(selectedModel) : false;
+
   return (
     <div className="absolute top-full right-0 z-20 mt-2 w-[20rem] rounded-xl border border-border-default bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
       <div className="space-y-3">
@@ -710,7 +717,10 @@ function TaskAdvancedMenu({
         {shouldShowTaskModelControls(value) && (
           <>
             <div className="space-y-1.5">
-              <span className={FIELD_LABEL_CLASS}>Model</span>
+              <div className="flex items-center gap-2">
+                <span className={FIELD_LABEL_CLASS}>Model</span>
+                {textOnly && <Pill tone="warning">text-only</Pill>}
+              </div>
               <InlineSelect
                 value={value.model}
                 onChange={(event) => onChange({ model: event.target.value })}

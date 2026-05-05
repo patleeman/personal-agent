@@ -6,7 +6,7 @@ import { getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention } from '
 import { formatTaskNextRunCountdown, formatTaskSchedule, getNextTaskRunAt, getPreviousTaskRunAt } from '../automation/taskSchedule';
 import { api } from '../client/api';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
-import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
+import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, Pill, ToolbarButton } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 import { ensureConversationTabOpen } from '../session/sessionTabs';
 import type { DurableRunRecord, ScheduledTaskDetail, ScheduledTaskSchedulerHealth, ScheduledTaskSummary } from '../shared/types';
@@ -14,6 +14,13 @@ import { timeAgo } from '../shared/utils';
 
 function isFailedTaskStatus(status: string | undefined): boolean {
   return status === 'failed' || status === 'failure';
+}
+
+function isTextOnlyModel(modelId: string, models: Array<{ id: string; input?: Array<'text' | 'image'> }>): boolean {
+  if (modelId === 'Default' || !modelId) return false;
+  const model = models.find((m) => m.id === modelId);
+  if (!model) return false;
+  return Array.isArray(model.input) && !model.input.includes('image');
 }
 
 function formatTaskName(task: Pick<ScheduledTaskSummary, 'id' | 'title'>): string {
@@ -559,6 +566,7 @@ function AutomationDetailView({
     if (!id) throw new Error('Task not found.');
     return api.taskDetail(id);
   }, id);
+  const { data: modelState } = useApi(async () => api.models(), 'automation-detail-models');
   const [runningNow, setRunningNow] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -619,7 +627,9 @@ function AutomationDetailView({
   const lastRunLabel = effectiveSummary?.lastRunAt
     ? `${isFailedTaskStatus(effectiveSummary.lastStatus) ? 'Failed' : 'Ran'} ${timeAgo(effectiveSummary.lastRunAt)}`
     : '—';
+  const models = modelState?.models ?? [];
   const modelLabel = detail?.model ?? effectiveSummary?.model ?? 'Default';
+  const modelTextOnly = isTextOnlyModel(modelLabel, models);
   const threadLabel = detail?.threadTitle ?? effectiveSummary?.threadTitle ?? formatThreadModeLabel(detail?.threadMode);
   const timeoutLabel = formatSeconds(detail?.timeoutSeconds);
   const catchUpLabel = formatSeconds(detail?.catchUpWindowSeconds ?? effectiveSummary?.catchUpWindowSeconds);
@@ -774,7 +784,15 @@ function AutomationDetailView({
                 <SummaryCell label="Expected vs actual" value={expectedActualLabel} />
                 <SummaryCell label="Schedule" value={scheduleLabel} />
                 <SummaryCell label="Target" value={targetLabel} />
-                <SummaryCell label="Model" value={modelLabel} />
+                <SummaryCell
+                  label="Model"
+                  value={
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>{modelLabel}</span>
+                      {modelTextOnly && <Pill tone="warning">text-only</Pill>}
+                    </span>
+                  }
+                />
               </section>
 
               {latestRunFailed && (
@@ -924,7 +942,12 @@ function AutomationDetailView({
                 <RailLine label="Owner">{projectLabel}</RailLine>
               </RailSection>
               <RailSection title="Runtime">
-                <RailLine label="Model">{modelLabel}</RailLine>
+                <RailLine label="Model">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>{modelLabel}</span>
+                    {modelTextOnly && <Pill tone="warning">text-only</Pill>}
+                  </span>
+                </RailLine>
                 <RailLine label="Timeout">{timeoutLabel}</RailLine>
                 <RailLine label="Scheduler">{detail?.schedulerLastEvaluatedAt ? timeAgo(detail.schedulerLastEvaluatedAt) : '—'}</RailLine>
                 <RailLine label="Retries">{effectiveSummary.lastAttemptCount ?? 0}</RailLine>
