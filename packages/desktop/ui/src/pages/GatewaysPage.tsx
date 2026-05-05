@@ -171,11 +171,29 @@ export function GatewaysPage() {
     }
   }
 
+  async function saveTelegramChatConfig() {
+    const chatId = telegramChatIdDraft.trim();
+    if (!chatId) {
+      setError('Enter a Telegram chat ID.');
+      return;
+    }
+
+    setBusy('telegram-chat-save');
+    setError(null);
+    try {
+      setState(await api.saveTelegramGatewayChat(chatId));
+    } catch (err) {
+      setError(formatGatewayError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function attachTelegramChat() {
-    const chatId = telegramChatIdDraft.trim() || configuredTelegramChatId;
+    const chatId = configuredTelegramChatId;
     const thread = sessions.find((session) => session.id === telegramThreadId) ?? null;
     if (!chatId || !thread) {
-      setError('Choose a thread and enter a Telegram chat ID.');
+      setError('Save a Telegram chat ID and choose a thread.');
       return;
     }
 
@@ -255,8 +273,7 @@ export function GatewaysPage() {
           <h2 className="text-[18px] font-semibold tracking-tight text-primary">Telegram</h2>
           <div className="mt-3 space-y-3 border-t border-border-subtle pt-5">
             <p className="text-[13px] text-secondary">
-              Add a bot token, then map a Telegram chat ID to an existing conversation thread. Incoming messages from mapped chats will
-              route into that thread.
+              Configure one bot and one Telegram chat, then attach that chat to whichever thread should handle it right now.
             </p>
             {telegramTokenLoading && !telegramTokenState ? <p className="text-[13px] text-dim">Loading Telegram config…</p> : null}
             {telegramTokenError && !telegramTokenState ? (
@@ -331,12 +348,8 @@ export function GatewaysPage() {
 
             <div className="border-t border-border-subtle pt-4">
               <h3 className="text-[13px] font-medium text-primary">Chat config</h3>
-              <p className="mt-1 text-[12px] text-secondary">
-                Send a message to your bot, then save that Telegram chat ID here. Thread attachment can change later.
-              </p>
-              {configuredTelegramChatId ? <p className="mt-2 text-[13px] text-secondary">Chat ID: {configuredTelegramChatId}</p> : null}
-              {sessionsError ? <p className="mt-2 text-[12px] text-danger">Failed to load threads: {sessionsError}</p> : null}
-              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+              <p className="mt-1 text-[12px] text-secondary">Send a message to your bot, then save that Telegram chat ID here.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                 <label className="min-w-0 text-[12px] text-secondary">
                   Chat ID
                   <input
@@ -347,8 +360,23 @@ export function GatewaysPage() {
                     disabled={busy !== null}
                   />
                 </label>
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                  disabled={busy !== null || !telegramTokenState?.configured || !telegramChatIdDraft.trim()}
+                  onClick={saveTelegramChatConfig}
+                >
+                  {busy === 'telegram-chat-save' ? 'Saving…' : configuredTelegramChatId ? 'Save chat ID' : 'Add chat ID'}
+                </ToolbarButton>
+              </div>
+            </div>
+
+            <div className="border-t border-border-subtle pt-4">
+              <h3 className="text-[13px] font-medium text-primary">Thread attachment</h3>
+              <p className="mt-1 text-[12px] text-secondary">Swap the saved Telegram chat between conversation threads as needed.</p>
+              {sessionsError ? <p className="mt-2 text-[12px] text-danger">Failed to load threads: {sessionsError}</p> : null}
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                 <label className="min-w-0 text-[12px] text-secondary">
-                  Attach thread
+                  Thread
                   <select
                     className={`${INPUT_CLASS} mt-1`}
                     value={telegramThreadId}
@@ -365,7 +393,7 @@ export function GatewaysPage() {
                 </label>
                 <ToolbarButton
                   className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-                  disabled={busy !== null || !telegramTokenState?.configured || !telegramThreadId || !telegramChatIdDraft.trim()}
+                  disabled={busy !== null || !configuredTelegramChatId || !telegramThreadId}
                   onClick={attachTelegramChat}
                 >
                   {busy === 'telegram-attach' ? 'Attaching…' : telegramBinding ? 'Update attachment' : 'Attach thread'}

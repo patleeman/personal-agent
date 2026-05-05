@@ -22,6 +22,7 @@ import {
   type GatewayStatus,
   readGatewayState,
   updateGatewayConnectionStatus,
+  upsertGatewayChatTarget,
 } from '../gateways/gatewayState.js';
 import { SlackMcpGatewayRuntime } from '../gateways/slackMcpGateway.js';
 import { readTelegramBotToken, removeTelegramBotToken, writeTelegramBotToken } from '../gateways/telegramAuth.js';
@@ -301,6 +302,29 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         statusMessage: 'Telegram bot token removed',
       });
       res.json({ configured: false, state });
+    } catch (err) {
+      handleGatewayError(res, err);
+    }
+  });
+
+  router.post('/api/gateways/telegram/chat', (req: Request, res: Response) => {
+    try {
+      const chatId = readOptionalString(req.body?.chatId);
+      if (!chatId) {
+        res.status(400).json({ error: 'chatId required' });
+        return;
+      }
+      ensureGatewayConnection({ ...currentGatewayContext(), provider: 'telegram' });
+      upsertGatewayChatTarget({
+        ...currentGatewayContext(),
+        provider: 'telegram',
+        externalChatId: chatId,
+        externalChatLabel: readOptionalString(req.body?.chatLabel) ?? chatId,
+        conversationId: '',
+        conversationTitle: '',
+        repliesEnabled: false,
+      });
+      res.json(readGatewayState(currentGatewayContext()));
     } catch (err) {
       handleGatewayError(res, err);
     }

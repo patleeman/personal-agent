@@ -53,7 +53,16 @@ import type {
   SessionDetailResult,
   SessionMeta,
   SkillFoldersState,
+  ToolFlowResult,
   ToolsState,
+  TraceAgentLoop,
+  TraceContextResponse,
+  TraceCostRow,
+  TraceModelUsage,
+  TraceSummary,
+  TraceThroughput,
+  TraceTokenDaily,
+  TraceToolHealth,
   TranscriptionInstallResult,
   TranscriptionModelStatus,
   TranscriptionProviderId,
@@ -1467,12 +1476,24 @@ export const api = {
   saveTelegramGatewayToken: async (token: string) =>
     post<{ configured: boolean; state: GatewayState }>('/gateways/telegram/token', { token }),
   deleteTelegramGatewayToken: async () => del<{ configured: boolean; state: GatewayState }>('/gateways/telegram/token'),
+  saveTelegramGatewayChat: async (chatId: string) => post<GatewayState>('/gateways/telegram/chat', { chatId }),
   searchSlackMcpChannels: async (query: string) =>
     get<{ channels: Array<{ id: string; name: string; isPrivate?: boolean }> }>(
       `/gateways/slack-mcp/channels?query=${encodeURIComponent(query)}`,
     ),
   attachSlackMcpChannel: async (input: { channelId: string; channelLabel?: string }) =>
     post<GatewayState>('/gateways/slack-mcp/channel', input),
+
+  // ── Traces ────────────────────────────────────────────────────────────
+  tracesSummary: (range?: string) => get<TraceSummary>(`/traces/summary${range ? `?range=${range}` : ''}`),
+  tracesModelUsage: (range?: string) =>
+    get<{ models: TraceModelUsage[]; throughput: TraceThroughput[] }>(`/traces/model-usage${range ? `?range=${range}` : ''}`),
+  tracesCostByConversation: (range?: string) => get<TraceCostRow[]>(`/traces/cost-by-conversation${range ? `?range=${range}` : ''}`),
+  tracesToolHealth: (range?: string) => get<TraceToolHealth[]>(`/traces/tool-health${range ? `?range=${range}` : ''}`),
+  tracesContext: (range?: string) => get<TraceContextResponse>(`/traces/context${range ? `?range=${range}` : ''}`),
+  tracesAgentLoop: (range?: string) => get<TraceAgentLoop>(`/traces/agent-loop${range ? `?range=${range}` : ''}`),
+  tracesTokensDaily: (range?: string) => get<TraceTokenDaily[]>(`/traces/tokens-daily${range ? `?range=${range}` : ''}`),
+  tracesToolFlow: (range?: string) => get<ToolFlowResult>(`/traces/tool-flow${range ? `?range=${range}` : ''}`),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────

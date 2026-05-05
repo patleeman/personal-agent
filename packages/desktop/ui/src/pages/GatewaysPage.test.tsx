@@ -83,6 +83,7 @@ describe('GatewaysPage', () => {
   let telegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
   let saveTelegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
   let deleteTelegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
+  let saveTelegramGatewayChatMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     gatewaysMock = vi.spyOn(api, 'gateways');
@@ -106,6 +107,7 @@ describe('GatewaysPage', () => {
     telegramGatewayTokenMock = vi.spyOn(api, 'telegramGatewayToken').mockResolvedValue({ configured: false });
     saveTelegramGatewayTokenMock = vi.spyOn(api, 'saveTelegramGatewayToken');
     deleteTelegramGatewayTokenMock = vi.spyOn(api, 'deleteTelegramGatewayToken');
+    saveTelegramGatewayChatMock = vi.spyOn(api, 'saveTelegramGatewayChat');
   });
 
   afterEach(() => {
@@ -203,6 +205,35 @@ describe('GatewaysPage', () => {
   it('attaches a Telegram chat to a selected thread', async () => {
     gatewaysMock.mockResolvedValue(createGatewayState());
     telegramGatewayTokenMock.mockResolvedValue({ configured: true });
+    saveTelegramGatewayChatMock.mockResolvedValue(
+      createGatewayState({
+        connections: [
+          {
+            id: 'tg-1',
+            provider: 'telegram',
+            label: 'Telegram',
+            status: 'active',
+            enabled: true,
+            createdAt: '2026-05-04T00:00:00Z',
+            updatedAt: '2026-05-04T12:00:00Z',
+          },
+        ],
+        chatTargets: [
+          {
+            id: 'tg-1:chat:123456789',
+            provider: 'telegram',
+            connectionId: 'tg-1',
+            externalChatId: '123456789',
+            externalChatLabel: '123456789',
+            conversationId: '',
+            conversationTitle: '',
+            repliesEnabled: false,
+            createdAt: '2026-05-04T00:00:00Z',
+            updatedAt: '2026-05-04T12:00:00Z',
+          },
+        ],
+      }),
+    );
     const attachedState = createGatewayState({
       connections: [
         {
@@ -238,6 +269,12 @@ describe('GatewaysPage', () => {
     const chatInput = container.querySelector<HTMLInputElement>('input[placeholder="123456789"]');
     expect(chatInput).toBeTruthy();
     typeInput(chatInput!, '123456789');
+    const saveChatButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Add chat ID');
+    expect(saveChatButton).toBeTruthy();
+    click(saveChatButton!);
+    await flushAsyncWork();
+
+    expect(saveTelegramGatewayChatMock).toHaveBeenCalledWith('123456789');
     const attachButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Attach thread');
     expect(attachButton).toBeTruthy();
     click(attachButton!);
