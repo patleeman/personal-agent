@@ -91,12 +91,13 @@ export function ConversationComposerMeta({
   openGatewayPickerSignal?: string | null;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [gatewayOnlyOpen, setGatewayOnlyOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const showGatewayOnly = Boolean(openGatewayPickerSignal);
 
   useEffect(() => {
     if (openGatewayPickerSignal) {
       setMoreOpen(true);
+      setGatewayOnlyOpen(true);
     }
   }, [openGatewayPickerSignal]);
 
@@ -112,11 +113,13 @@ export function ConversationComposerMeta({
       }
 
       setMoreOpen(false);
+      setGatewayOnlyOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setMoreOpen(false);
+        setGatewayOnlyOpen(false);
       }
     }
 
@@ -303,13 +306,16 @@ export function ConversationComposerMeta({
             className="flex h-7 w-7 items-center justify-center rounded-md text-secondary transition-colors hover:bg-surface/45 hover:text-primary"
             aria-label="Conversation options"
             title="Conversation options"
-            onClick={() => setMoreOpen((current) => !current)}
+            onClick={() => {
+              setGatewayOnlyOpen(false);
+              setMoreOpen((current) => !current);
+            }}
           >
             <MoreIcon />
           </button>
           {moreOpen ? (
             <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-default bg-surface p-2 text-left text-[12px] shadow-2xl">
-              {showExecutionTargetPicker && !showGatewayOnly ? (
+              {showExecutionTargetPicker && !gatewayOnlyOpen ? (
                 <label className="block px-2 py-1.5 text-[11px] text-secondary">
                   Run on
                   <span className="relative mt-1 flex min-w-0 items-center">
@@ -336,7 +342,7 @@ export function ConversationComposerMeta({
                 <GatewayComposerControl
                   conversationId={conversationId}
                   conversationTitle={conversationTitle}
-                  standalone={showGatewayOnly || !showExecutionTargetPicker}
+                  standalone={gatewayOnlyOpen || !showExecutionTargetPicker}
                 />
               ) : null}
             </div>
