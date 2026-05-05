@@ -287,6 +287,7 @@ export function createAskUserQuestionAgentExtension(): (pi: ExtensionAPI) => voi
             ...(payload.details ? { details: payload.details } : {}),
             questions: payload.questions,
           },
+          terminate: true,
         };
       },
     });
