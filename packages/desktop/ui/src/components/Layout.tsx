@@ -36,7 +36,9 @@ import {
 import {
   ConversationCheckpointWorkbenchPane,
   ConversationDiffRailContent,
+  UNCOMMITTED_SENTINEL,
   useConversationCheckpointSummaries,
+  useUncommittedDiff,
 } from './ConversationCheckpointWorkbench';
 import { ConversationRunsRailContent, ConversationRunWorkbenchPane, useConversationRunList } from './ConversationRunsWorkbench';
 import { DesktopTopBar } from './DesktopTopBar';
@@ -998,6 +1000,7 @@ function WorkbenchKnowledgeRail({
   const { runs, sessions, tasks } = useAppData();
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
   const { checkpoints, loading: checkpointsLoading, error: checkpointsError } = useConversationCheckpointSummaries(conversationId);
+  const { result: uncommittedResult, loading: uncommittedLoading } = useUncommittedDiff(workspaceCwd);
   const runLookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
   const connectedRuns = useConversationRunList(conversationId, runs, runLookups);
   const activeRunConnected = activeRunId !== null && connectedRuns.some((run) => run.runId === activeRunId);
@@ -1065,7 +1068,7 @@ function WorkbenchKnowledgeRail({
     });
   }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleDiffsModeSelect = useCallback(() => {
-    const nextCheckpointId = activeCheckpointId ?? checkpoints[0]?.id ?? null;
+    const nextCheckpointId = activeCheckpointId ?? checkpoints[0]?.id ?? (uncommittedResult ? UNCOMMITTED_SENTINEL : null);
     onActiveToolChange('diffs');
     onWorkspaceFileClear();
     onCheckpointSelect(nextCheckpointId);
@@ -1081,7 +1084,7 @@ function WorkbenchKnowledgeRail({
       }
       return next;
     });
-  }, [activeCheckpointId, checkpoints, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  }, [activeCheckpointId, checkpoints, uncommittedResult, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleArtifactsModeSelect = useCallback(() => {
     const firstArtifactId = activeArtifactId ?? artifacts[0]?.id ?? null;
     onActiveToolChange('artifacts');
@@ -1214,7 +1217,14 @@ function WorkbenchKnowledgeRail({
   }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams]);
 
   useEffect(() => {
-    if (activeTool === 'diffs' && !activeCheckpointId && !checkpointsLoading && checkpoints.length === 0) {
+    if (
+      activeTool === 'diffs' &&
+      !activeCheckpointId &&
+      !checkpointsLoading &&
+      !uncommittedLoading &&
+      checkpoints.length === 0 &&
+      !uncommittedResult
+    ) {
       onActiveToolChange('knowledge');
       onCheckpointSelect(null);
       setSearchParams(
@@ -1226,7 +1236,17 @@ function WorkbenchKnowledgeRail({
         { replace: true },
       );
     }
-  }, [activeCheckpointId, activeTool, checkpoints.length, checkpointsLoading, onActiveToolChange, onCheckpointSelect, setSearchParams]);
+  }, [
+    activeCheckpointId,
+    activeTool,
+    checkpoints.length,
+    checkpointsLoading,
+    uncommittedLoading,
+    uncommittedResult,
+    onActiveToolChange,
+    onCheckpointSelect,
+    setSearchParams,
+  ]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -1275,7 +1295,7 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
-        {checkpoints.length > 0 || activeCheckpointId ? (
+        {checkpoints.length > 0 || activeCheckpointId || uncommittedResult ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'diffs' && 'ui-sidebar-nav-item-active')}
