@@ -1000,6 +1000,42 @@ async function callMcpToolWithServerConfig(
   }
 }
 
+export interface McpClientConnection {
+  callTool: (toolName: string, input: unknown, timeoutMs?: number) => Promise<unknown>;
+  close: () => Promise<void>;
+}
+
+/**
+ * Open a persistent MCP client connection to a server config directly.
+ * The caller owns the lifecycle — call close() when done.
+ */
+export async function connectMcpServerDirect(
+  server: McpServerConfig,
+  options: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+    log?: (message: string) => void;
+  } = {},
+): Promise<McpClientConnection> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const env = options.env ?? process.env;
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const connection = await openMcpClient(server, { configPath: cwd, cwd, env, timeoutMs, log: options.log });
+
+  return {
+    callTool: async (toolName: string, input: unknown, callTimeoutMs?: number): Promise<unknown> => {
+      const t = callTimeoutMs ?? 30_000;
+      return withTimeout(
+        connection.client.callTool({ name: toolName, arguments: isRecord(input) ? (input as Record<string, unknown>) : {} }),
+        t,
+        `Calling ${server.name}/${toolName}`,
+      );
+    },
+    close: connection.close,
+  };
+}
+
 export async function callMcpToolDirect(
   server: McpServerConfig,
   toolName: string,

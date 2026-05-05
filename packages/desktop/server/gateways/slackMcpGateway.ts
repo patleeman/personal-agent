@@ -1,4 +1,4 @@
-import { callMcpToolDirect, type McpServerConfig } from '@personal-agent/core';
+import { connectMcpServerDirect, type McpClientConnection, type McpServerConfig } from '@personal-agent/core';
 
 import {
   attachGatewayConversation,
@@ -67,17 +67,23 @@ export const SLACK_MCP_SERVER_CONFIG: McpServerConfig = {
   transport: 'remote',
   args: [],
   url: 'https://mcp.slack.com/mcp',
-  // callbackPort must match the redirect_uri registered for this client
+  // callbackPort must match the redirect_uri registered for this client.
+  // Slack's registered redirect URI for this client ID uses /callback (not /oauth/callback).
   callbackPort: 3118,
+  callbackPath: '/callback',
   oauthClientInfo: {
     client_id: '1601185624273.8899143856786',
-    redirect_uris: ['http://localhost:3118/oauth/callback'],
+    redirect_uris: ['http://localhost:3118/callback'],
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },
   raw: {},
 };
+
+const CONNECT_TIMEOUT_MS = 60_000;
+const RECONNECT_DELAY_MS = 5_000;
+const MAX_RECONNECT_DELAY_MS = 60_000;
 
 export class SlackMcpGatewayRuntime {
   private timer: NodeJS.Timeout | null = null;
@@ -86,12 +92,17 @@ export class SlackMcpGatewayRuntime {
   private selfUserIds = new Set<string>();
   private pendingFollowUp = new Map<string, string[]>();
   private displayNameCache = new Map<string, string>();
+  private connection: McpClientConnection | null = null;
+  private connectingPromise: Promise<McpClientConnection> | null = null;
+  private reconnectDelay = RECONNECT_DELAY_MS;
 
   constructor(private readonly dependencies: SlackMcpGatewayRuntimeDependencies) {}
 
   start(): void {
     if (this.polling) return;
     this.polling = true;
+    // Don't eagerly connect here — let the first tool call establish the connection
+    // to avoid racing with any concurrent callSlackTool invocations.
     void this.pollOnceAndSchedule(0);
   }
 
@@ -99,6 +110,38 @@ export class SlackMcpGatewayRuntime {
     this.polling = false;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    void this.connection?.close().catch(() => undefined);
+    this.connection = null;
+  }
+
+  private ensureConnected(): Promise<McpClientConnection> {
+    if (this.connection) return Promise.resolve(this.connection);
+    if (this.connectingPromise) return this.connectingPromise;
+    const server = this.dependencies.mcpServer ?? SLACK_MCP_SERVER_CONFIG;
+    this.connectingPromise = connectMcpServerDirect(server, { timeoutMs: CONNECT_TIMEOUT_MS })
+      .then((conn) => {
+        this.connection = conn;
+        this.reconnectDelay = RECONNECT_DELAY_MS;
+        this.connectingPromise = null;
+        return conn;
+      })
+      .catch((error) => {
+        this.connection = null;
+        this.connectingPromise = null;
+        throw error;
+      });
+    return this.connectingPromise;
+  }
+
+  private async reconnect(): Promise<void> {
+    await this.connection?.close().catch(() => undefined);
+    this.connection = null;
+    if (!this.polling) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, this.reconnectDelay));
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+    if (this.polling) {
+      await this.ensureConnected().catch(() => undefined);
+    }
   }
 
   async searchChannels(query: string): Promise<SlackMcpChannelSummary[]> {
@@ -377,8 +420,18 @@ export class SlackMcpGatewayRuntime {
         await this.sendSystemMessage(channelId, 'Stopped the current agent turn.');
         return;
       case 'new': {
-        const created = await this.attachChannel({ channelId, channelLabel: target.externalChatLabel });
-        await this.sendSystemMessage(channelId, `Started a fresh conversation: ${created.title}.`);
+        // Create a new conversation and re-attach the same channel to it
+        const title = `Slack: ${target.externalChatLabel || channelId}`;
+        const created = await this.dependencies.createConversation({ title });
+        await this.dependencies.renameConversation(created.id, title);
+        void this.dependencies.notifyNewConversation?.(created.id);
+        await this.attachChannelToConversation({
+          conversationId: created.id,
+          conversationTitle: title,
+          externalChatId: channelId,
+          externalChatLabel: target.externalChatLabel,
+        });
+        await this.sendSystemMessage(channelId, `Started a fresh conversation: ${title}.`);
         return;
       }
       case 'model':
@@ -435,12 +488,20 @@ export class SlackMcpGatewayRuntime {
 
   private async callSlackTool(tool: string, args: Record<string, unknown>): Promise<unknown> {
     if (this.dependencies.callSlackTool) return this.dependencies.callSlackTool(tool, args);
-    const server = this.dependencies.mcpServer ?? SLACK_MCP_SERVER_CONFIG;
-    const result = await callMcpToolDirect(server, tool, args, { timeoutMs: 30_000 });
-    if (!result.data) {
-      throw new Error(result.error ?? result.stderr ?? `Slack MCP ${tool} failed`);
+    let conn: McpClientConnection;
+    try {
+      conn = await this.ensureConnected();
+    } catch (error) {
+      throw new Error(`Slack MCP connection failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return result.data.parsed;
+    try {
+      const raw = await conn.callTool(tool, args, 30_000);
+      return raw;
+    } catch (error) {
+      // Connection broken — drop it so next call reconnects
+      void this.reconnect();
+      throw error;
+    }
   }
 }
 
