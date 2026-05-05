@@ -66,7 +66,6 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onDictationPointerCancel={vi.fn()}
       onSubmitComposerQuestion={vi.fn()}
       onSubmitComposerActionForModifiers={vi.fn()}
-      modelSupportsImages={true}
       onAbortStream={vi.fn()}
       {...overrides}
     />,
@@ -75,7 +74,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
 
 describe('ConversationComposerInputControls', () => {
   it('renders textarea, attachment controls, preferences, dictation, and disabled send', () => {
-    const html = renderControls({ modelSupportsImages: true });
+    const html = renderControls();
 
     expect(html).toContain('Message… / commands, @ notes');
     expect(html).toContain('Attach image or file');
@@ -87,7 +86,6 @@ describe('ConversationComposerInputControls', () => {
 
   it('renders screenshot and question-submit states', () => {
     const html = renderControls({
-      modelSupportsImages: true,
       screenshotCaptureAvailable: true,
       screenshotCaptureBusy: true,
       pendingAskUserQuestion: true,
@@ -99,6 +97,13 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('Capture screenshot');
     expect(html).toContain('Answer 1-9, or type to skip…');
     expect(html).toContain('Submit answers');
+  });
+
+  it('keeps attachment and screenshot controls visible for text-only model routing', () => {
+    const html = renderControls({ screenshotCaptureAvailable: true });
+
+    expect(html).toContain('Attach image or file');
+    expect(html).toContain('Capture screenshot');
   });
 
   it('renders the dictation waveform while recording', () => {
