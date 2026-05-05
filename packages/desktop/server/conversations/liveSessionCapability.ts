@@ -10,6 +10,7 @@ import {
   resolveDurableRunsRoot,
 } from '@personal-agent/daemon';
 
+import { registerSuggestedPointers } from '../extensions/conversationInspectAgentExtension.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedTasksContext,
@@ -21,6 +22,7 @@ import {
 import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import type { MemoryDocSummary } from '../routes/context.js';
+import { persistTraceSuggestedContext } from '../traces/tracePersistence.js';
 import { buildAttachedConversationContextDocsContext, readConversationContextDocs } from './conversationContextDocs.js';
 import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
@@ -601,6 +603,12 @@ function buildPromptContextMessagesForSubmit(input: {
           currentConversationId: input.conversationId,
           currentCwd: input.currentCwd,
         }) ?? { contextMessages: [], pointers: [], warnings: [] });
+
+    if (pointers.pointers.length > 0) {
+      const pointerIds = pointers.pointers.map((p) => p.sessionId);
+      persistTraceSuggestedContext({ sessionId: input.conversationId, pointerIds });
+      registerSuggestedPointers(input.conversationId, pointerIds);
+    }
 
     return {
       contextMessages: [...contextMessages, ...pointers.contextMessages],

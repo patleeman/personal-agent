@@ -9,6 +9,22 @@ import {
   CONVERSATION_INSPECT_SCOPE_VALUES,
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
 } from '../conversations/conversationInspectCapability.js';
+import { persistTraceContextPointerInspect } from '../traces/tracePersistence.js';
+
+// Per-session registry of suggested pointer IDs (populated by liveSessionCapability on each turn)
+// Key: sessionId, Value: set of suggested conversation IDs
+const suggestedPointerRegistry = new Map<string, Set<string>>();
+
+export function registerSuggestedPointers(sessionId: string, pointerIds: string[]): void {
+  let set = suggestedPointerRegistry.get(sessionId);
+  if (!set) {
+    set = new Set<string>();
+    suggestedPointerRegistry.set(sessionId, set);
+  }
+  for (const id of pointerIds) {
+    set.add(id);
+  }
+}
 import { executeConversationInspect } from '../conversations/conversationInspectWorkerClient.js';
 
 const ConversationInspectToolParams = Type.Object({
@@ -88,11 +104,24 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
         // The worker runs in a dedicated thread so synchronous file I/O doesn't
         // block the Electron main thread.
         const workerParams: Record<string, unknown> = { ...params };
+        const currentSessionId = ctx.sessionManager.getSessionId();
         if (params.action === 'list' || params.action === 'search') {
-          workerParams.currentConversationId = ctx.sessionManager.getSessionId();
+          workerParams.currentConversationId = currentSessionId;
         }
 
         const { action, result, text } = await executeConversationInspect(params.action as string, workerParams);
+
+        // Track whether this inspect targets a suggested pointer
+        const targetConversationId = typeof params.conversationId === 'string' ? params.conversationId : null;
+        if (targetConversationId && currentSessionId) {
+          const suggested = suggestedPointerRegistry.get(currentSessionId);
+          const wasSuggested = suggested?.has(targetConversationId) ?? false;
+          persistTraceContextPointerInspect({
+            sessionId: currentSessionId,
+            inspectedConversationId: targetConversationId,
+            wasSuggested,
+          });
+        }
 
         return {
           content: [{ type: 'text' as const, text }],

@@ -5,6 +5,7 @@ import type {
   AutoModeSummary,
   CacheEfficiencyAggregate,
   CacheEfficiencyPoint,
+  ContextPointerUsageResult,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
   ConversationAttachmentAssetData,
@@ -1495,6 +1496,7 @@ export const api = {
     ),
   tracesSystemPrompt: (range?: string) =>
     get<{ series: SystemPromptPoint[]; aggregate: SystemPromptAggregate }>(`/traces/system-prompt${range ? `?range=${range}` : ''}`),
+  tracesContextPointers: (range?: string) => get<ContextPointerUsageResult>(`/traces/context-pointers${range ? `?range=${range}` : ''}`),
 };
 
 // ── Vault editor ─────────────────────────────────────────────────────────────

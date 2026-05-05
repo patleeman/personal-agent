@@ -12,6 +12,7 @@ import {
   queryCacheEfficiencyAggregate,
   queryCompactionAggregates,
   queryCompactions,
+  queryContextPointerUsage,
   queryContextSessions,
   queryCostByConversation,
   queryModelUsage,
@@ -174,6 +175,18 @@ export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patc
       res.json(autoMode);
     } catch (err) {
       logError('traces auto-mode error', { message: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // ── Context pointer usage ───────────────────────────────────────────────
+  router.get('/api/traces/context-pointers', (req, res) => {
+    try {
+      const since = parseRangeParam(req.query.range);
+      const result = queryContextPointerUsage(since);
+      res.json(result);
+    } catch (err) {
+      logError('traces context-pointers error', { message: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ error: String(err) });
     }
   });

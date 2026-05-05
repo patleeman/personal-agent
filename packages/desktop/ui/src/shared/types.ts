@@ -1682,3 +1682,24 @@ export interface SystemPromptAggregate {
   maxSystemPromptTokens: number;
   samples: number;
 }
+
+export interface ContextPointerUsageSummary {
+  totalInspects: number;
+  sessionsWithInspect: number;
+  totalSuggested: number;
+  sessionsWithSuggested: number;
+  usageRate: number;
+  totalAnyInspects: number;
+  avgPointersPerTurn: number;
+}
+
+export interface ContextPointerDailyRow {
+  date: string;
+  suggested: number;
+  inspected: number;
+}
+
+export interface ContextPointerUsageResult {
+  summary: ContextPointerUsageSummary;
+  daily: ContextPointerDailyRow[];
+}

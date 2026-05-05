@@ -20,6 +20,7 @@ import { TracesAgentLoop } from './traces/TracesAgentLoop';
 import { TracesAutoMode } from './traces/TracesAutoMode';
 import { TracesBraidChart } from './traces/TracesBraidChart';
 import { TracesCacheAndSystemPrompt } from './traces/TracesCacheAndSystemPrompt';
+import { TracesContextPointers } from './traces/TracesContextPointers';
 import { TracesContextPressure } from './traces/TracesContextPressure';
 import { TracesHeatmap } from './traces/TracesHeatmap';
 import { TracesModelUsage } from './traces/TracesModelUsage';
@@ -44,6 +45,7 @@ export function TracesPage() {
     autoMode,
     cacheEfficiency,
     systemPrompt,
+    contextPointers,
     loading,
     error,
     refetch,
@@ -114,6 +116,9 @@ export function TracesPage() {
 
         {/* ── Tool Flow ── */}
         <TracesToolFlow data={toolFlow} />
+
+        {/* ── Suggested Context Usage ── */}
+        <TracesContextPointers data={contextPointers} />
 
         {/* ── Auto Mode ── */}
         <TracesAutoMode data={autoMode} />

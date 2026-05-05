@@ -9,8 +9,10 @@ import {
   writeTraceAutoMode,
   writeTraceCompaction,
   writeTraceContext,
+  writeTraceContextPointerInspect,
   writeTraceQueue,
   writeTraceStats,
+  writeTraceSuggestedContext,
   writeTraceToolCall,
 } from '@personal-agent/core';
 
@@ -107,4 +109,16 @@ export function persistTraceQueue(params: {
 
 export function persistTraceAutoMode(params: { sessionId: string; enabled: boolean; stopReason?: string | null }): void {
   writeTraceAutoMode(params);
+}
+
+export function persistTraceSuggestedContext(params: { sessionId: string; pointerIds: string[] }): void {
+  writeTraceSuggestedContext(params);
+}
+
+export function persistTraceContextPointerInspect(params: {
+  sessionId: string;
+  inspectedConversationId: string;
+  wasSuggested: boolean;
+}): void {
+  writeTraceContextPointerInspect(params);
 }

@@ -113,11 +113,41 @@ CREATE TABLE IF NOT EXISTS trace_auto_mode (
 
 CREATE INDEX IF NOT EXISTS idx_trace_auto_mode_ts ON trace_auto_mode(ts);
 CREATE INDEX IF NOT EXISTS idx_trace_auto_mode_session ON trace_auto_mode(session_id);
+
+-- Suggested context pointer tracking
+CREATE TABLE IF NOT EXISTS trace_suggested_context (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  profile TEXT NOT NULL DEFAULT '',
+  ts TEXT NOT NULL,
+  pointer_ids TEXT NOT NULL DEFAULT '',
+  pointer_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS trace_context_pointer_inspect (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  profile TEXT NOT NULL DEFAULT '',
+  ts TEXT NOT NULL,
+  inspected_conversation_id TEXT NOT NULL,
+  was_suggested INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_ts ON trace_suggested_context(ts);
+CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_session ON trace_suggested_context(session_id);
+CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_ts ON trace_context_pointer_inspect(ts);
+CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id);
 `;
 
 const MIGRATIONS = [
   `ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`,
   `ALTER TABLE trace_stats ADD COLUMN tokens_cached_write INTEGER DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS trace_suggested_context (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '', ts TEXT NOT NULL, pointer_ids TEXT NOT NULL DEFAULT '', pointer_count INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS trace_context_pointer_inspect (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '', ts TEXT NOT NULL, inspected_conversation_id TEXT NOT NULL, was_suggested INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_ts ON trace_suggested_context(ts)`,
+  `CREATE INDEX IF NOT EXISTS idx_trace_suggested_context_session ON trace_suggested_context(session_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_ts ON trace_context_pointer_inspect(ts)`,
+  `CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id)`,
 ];
 
 // ── Database management ───────────────────────────────────────────────────────
@@ -171,6 +201,8 @@ function getTraceDb(stateRoot?: string): SqliteDatabase {
     db.prepare(`DELETE FROM trace_compactions WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_queue WHERE ts < ?`).run(cutoff);
     db.prepare(`DELETE FROM trace_auto_mode WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_suggested_context WHERE ts < ?`).run(cutoff);
+    db.prepare(`DELETE FROM trace_context_pointer_inspect WHERE ts < ?`).run(cutoff);
     db.exec(`VACUUM`);
   } catch {
     // Non-fatal
@@ -374,6 +406,33 @@ export function writeTraceQueue(params: {
       params.waitSeconds ?? 0,
     );
   } catch (err) {
+    // Fire-and-forget
+  }
+}
+
+export function writeTraceSuggestedContext(params: { sessionId: string; pointerIds: string[]; profile?: string }): void {
+  try {
+    const db = getTraceDb();
+    db.prepare(
+      `INSERT INTO trace_suggested_context (id, session_id, profile, ts, pointer_ids, pointer_count) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(generateId(), params.sessionId, params.profile ?? '', timestamp(), params.pointerIds.join(','), params.pointerIds.length);
+  } catch {
+    // Fire-and-forget
+  }
+}
+
+export function writeTraceContextPointerInspect(params: {
+  sessionId: string;
+  inspectedConversationId: string;
+  wasSuggested: boolean;
+  profile?: string;
+}): void {
+  try {
+    const db = getTraceDb();
+    db.prepare(
+      `INSERT INTO trace_context_pointer_inspect (id, session_id, profile, ts, inspected_conversation_id, was_suggested) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(generateId(), params.sessionId, params.profile ?? '', timestamp(), params.inspectedConversationId, params.wasSuggested ? 1 : 0);
+  } catch {
     // Fire-and-forget
   }
 }
@@ -1117,5 +1176,117 @@ export function querySystemPromptAggregate(since: string): {
     avgPctOfTotal: Math.round(Number(m.avgPct) * 100) / 100,
     maxSystemPromptTokens: Number(m.maxTokens),
     samples: Number(m.samples),
+  };
+}
+
+// ── Suggested Context Pointer Usage ──────────────────────────────────────────
+
+export interface ContextPointerUsageSummary {
+  /** Total conversation_inspect calls on suggested pointers */
+  totalInspects: number;
+  /** Unique sessions that inspected at least one suggested pointer */
+  sessionsWithInspect: number;
+  /** Total times pointers were surfaced (one event per prompt turn) */
+  totalSuggested: number;
+  /** Unique sessions that received pointers */
+  sessionsWithSuggested: number;
+  /** Usage rate: sessions that inspected / sessions that received pointers */
+  usageRate: number;
+  /** Total inspect calls (any conversation, not just suggested) */
+  totalAnyInspects: number;
+  /** Avg pointers suggested per turn */
+  avgPointersPerTurn: number;
+}
+
+export interface ContextPointerDailyRow {
+  date: string;
+  suggested: number;
+  inspected: number;
+}
+
+export function queryContextPointerUsage(since: string): {
+  summary: ContextPointerUsageSummary;
+  daily: ContextPointerDailyRow[];
+} {
+  const db = getTraceDb();
+
+  // Summary across the range
+  const rawSuggested = db
+    .prepare(
+      `
+    SELECT COUNT(*) as total, COUNT(DISTINCT session_id) as sessions, AVG(pointer_count) as avg_count
+    FROM trace_suggested_context WHERE ts >= ?
+  `,
+    )
+    .get(since) as Record<string, unknown>;
+  const suggested = mapRow<{ total: number; sessions: number; avgCount: number }>(rawSuggested);
+
+  const rawInspects = db
+    .prepare(
+      `
+    SELECT
+      COUNT(*) as total_any,
+      COALESCE(SUM(was_suggested), 0) as total_suggested,
+      COUNT(DISTINCT CASE WHEN was_suggested = 1 THEN session_id END) as sessions_inspected
+    FROM trace_context_pointer_inspect WHERE ts >= ?
+  `,
+    )
+    .get(since) as Record<string, unknown>;
+  const inspects = mapRow<{ totalAny: number; totalSuggested: number; sessionsInspected: number }>(rawInspects);
+
+  const sessionsWithSuggested = Number(suggested.sessions);
+  const sessionsWithInspect = Number(inspects.sessionsInspected);
+  const usageRate = sessionsWithSuggested > 0 ? Math.round((sessionsWithInspect / sessionsWithSuggested) * 1000) / 10 : 0;
+
+  // Daily breakdown
+  const rawSuggestedDaily = db
+    .prepare(
+      `
+    SELECT DATE(ts) as date, COUNT(*) as cnt
+    FROM trace_suggested_context WHERE ts >= ?
+    GROUP BY DATE(ts) ORDER BY date ASC
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+
+  const rawInspectDaily = db
+    .prepare(
+      `
+    SELECT DATE(ts) as date, COALESCE(SUM(was_suggested), 0) as cnt
+    FROM trace_context_pointer_inspect WHERE ts >= ?
+    GROUP BY DATE(ts) ORDER BY date ASC
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+
+  const suggestedByDate = new Map<string, number>();
+  for (const row of rawSuggestedDaily) {
+    const r = mapRow<{ date: string; cnt: number }>(row);
+    suggestedByDate.set(r.date, Number(r.cnt));
+  }
+  const inspectByDate = new Map<string, number>();
+  for (const row of rawInspectDaily) {
+    const r = mapRow<{ date: string; cnt: number }>(row);
+    inspectByDate.set(r.date, Number(r.cnt));
+  }
+
+  const allDates = new Set([...suggestedByDate.keys(), ...inspectByDate.keys()]);
+  const daily: ContextPointerDailyRow[] = [...allDates].sort().map((date) => ({
+    date,
+    suggested: suggestedByDate.get(date) ?? 0,
+    inspected: inspectByDate.get(date) ?? 0,
+  }));
+
+  return {
+    summary: {
+      totalInspects: Number(inspects.totalSuggested),
+      sessionsWithInspect,
+      totalSuggested: Number(suggested.total),
+      sessionsWithSuggested,
+      usageRate,
+      totalAnyInspects: Number(inspects.totalAny),
+      avgPointersPerTurn: Number(suggested.avgCount) ? Math.round(Number(suggested.avgCount) * 10) / 10 : 0,
+    },
+    daily,
   };
 }

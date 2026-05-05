@@ -7,6 +7,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../../client/api';
 import type {
+  AutoModeSummary,
+  CacheEfficiencyAggregate,
+  ContextPointerUsageResult,
+  SystemPromptAggregate,
+  ToolFlowResult,
   TraceAgentLoop,
   TraceCompactionAggs,
   TraceCompactionEvent,
@@ -18,7 +23,6 @@ import type {
   TraceTokenDaily,
   TraceToolHealth,
 } from '../../shared/types';
-import type { AutoModeSummary, CacheEfficiencyAggregate, SystemPromptAggregate, ToolFlowResult } from '../../shared/types';
 
 export type TraceRange = '1h' | '6h' | '24h' | '7d' | '30d';
 
@@ -37,6 +41,7 @@ export interface TracesData {
   autoMode: AutoModeSummary | null;
   cacheEfficiency: CacheEfficiencyAggregate | null;
   systemPrompt: SystemPromptAggregate | null;
+  contextPointers: ContextPointerUsageResult | null;
   loading: boolean;
   error: string | null;
 }
@@ -56,6 +61,7 @@ const EMPTY: TracesData = {
   autoMode: null,
   cacheEfficiency: null,
   systemPrompt: null,
+  contextPointers: null,
   loading: true,
   error: null,
 };
@@ -78,6 +84,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         autoMode,
         cacheEff,
         sysPrompt,
+        contextPointers,
       ] = await Promise.all([
         api.tracesSummary(range),
         api.tracesModelUsage(range),
@@ -90,6 +97,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         api.tracesAutoMode(range),
         api.tracesCacheEfficiency(range),
         api.tracesSystemPrompt(range),
+        api.tracesContextPointers(range),
       ]);
 
       setData({
@@ -107,6 +115,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         autoMode,
         cacheEfficiency: cacheEff.aggregate,
         systemPrompt: sysPrompt.aggregate,
+        contextPointers,
         loading: false,
         error: null,
       });
