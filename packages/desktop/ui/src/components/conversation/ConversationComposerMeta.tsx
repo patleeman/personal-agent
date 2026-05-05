@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../client/api';
 import type { GatewayState } from '../../shared/types';
@@ -91,12 +91,42 @@ export function ConversationComposerMeta({
   openGatewayPickerSignal?: string | null;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const showGatewayOnly = Boolean(openGatewayPickerSignal);
 
   useEffect(() => {
     if (openGatewayPickerSignal) {
       setMoreOpen(true);
     }
   }, [openGatewayPickerSignal]);
+
+  useEffect(() => {
+    if (!moreOpen || typeof document === 'undefined') {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) {
+        return;
+      }
+
+      setMoreOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMoreOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [moreOpen]);
 
   return (
     <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
@@ -267,7 +297,7 @@ export function ConversationComposerMeta({
           ) : null
         ) : null}
         {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
             type="button"
             className="flex h-7 w-7 items-center justify-center rounded-md text-secondary transition-colors hover:bg-surface/45 hover:text-primary"
@@ -279,7 +309,7 @@ export function ConversationComposerMeta({
           </button>
           {moreOpen ? (
             <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-default bg-surface p-2 text-left text-[12px] shadow-2xl">
-              {showExecutionTargetPicker ? (
+              {showExecutionTargetPicker && !showGatewayOnly ? (
                 <label className="block px-2 py-1.5 text-[11px] text-secondary">
                   Run on
                   <span className="relative mt-1 flex min-w-0 items-center">
@@ -303,7 +333,11 @@ export function ConversationComposerMeta({
                 </label>
               ) : null}
               {!draft && conversationId ? (
-                <GatewayComposerControl conversationId={conversationId} conversationTitle={conversationTitle} />
+                <GatewayComposerControl
+                  conversationId={conversationId}
+                  conversationTitle={conversationTitle}
+                  standalone={showGatewayOnly || !showExecutionTargetPicker}
+                />
               ) : null}
             </div>
           ) : null}
@@ -315,7 +349,15 @@ export function ConversationComposerMeta({
 
 type GatewayProviderChoice = 'telegram' | 'slack_mcp';
 
-function GatewayComposerControl({ conversationId, conversationTitle }: { conversationId: string; conversationTitle?: string }) {
+function GatewayComposerControl({
+  conversationId,
+  conversationTitle,
+  standalone = false,
+}: {
+  conversationId: string;
+  conversationTitle?: string;
+  standalone?: boolean;
+}) {
   const [state, setState] = useState<GatewayState | null>(null);
   const [provider, setProvider] = useState<GatewayProviderChoice>('telegram');
   const [busy, setBusy] = useState(false);
@@ -372,7 +414,7 @@ function GatewayComposerControl({ conversationId, conversationTitle }: { convers
   const statusLabel = connection ? connection.status.replace(/_/g, ' ') : 'not configured';
 
   return (
-    <div className="border-t border-border-subtle px-2 py-2">
+    <div className={cx(standalone ? 'px-2 py-1.5' : 'border-t border-border-subtle px-2 py-2')}>
       <label className="block text-[11px] text-secondary">
         Gateway
         <select
