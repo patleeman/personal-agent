@@ -1,4 +1,4 @@
-import { callMcpTool } from '@personal-agent/core';
+import { callMcpToolDirect, type McpServerConfig } from '@personal-agent/core';
 
 import {
   attachGatewayConversation,
@@ -30,7 +30,7 @@ export interface SlackMcpChannelSummary {
 export interface SlackMcpGatewayRuntimeDependencies {
   stateRoot: string;
   profile: string;
-  mcpServer?: string;
+  mcpServer?: McpServerConfig;
   createConversation: (input: { title: string }) => Promise<{ id: string }>;
   submitPrompt: (input: {
     conversationId: string;
@@ -50,6 +50,27 @@ export interface SlackMcpGatewayRuntimeDependencies {
 const DISCLOSURE_SUFFIX = '— Patrick’s agent';
 const DEFAULT_POLL_MS = 15_000;
 const SLOW_RETRY_MS = 60_000;
+
+/**
+ * Slack's official MCP server config. The clientId is Slack's fixed app ID
+ * for the Claude plugin — required by Slack's confidential OAuth model.
+ * https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/
+ */
+const SLACK_MCP_SERVER_CONFIG: McpServerConfig = {
+  name: 'slack',
+  transport: 'remote',
+  args: [],
+  url: 'https://mcp.slack.com/mcp',
+  callbackPort: 3118,
+  oauthClientInfo: {
+    client_id: '1601185624273.8899143856786',
+    redirect_uris: ['http://localhost:3118/oauth/callback'],
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  },
+  raw: {},
+};
 
 export class SlackMcpGatewayRuntime {
   private timer: NodeJS.Timeout | null = null;
@@ -392,7 +413,8 @@ export class SlackMcpGatewayRuntime {
 
   private async callSlackTool(tool: string, args: Record<string, unknown>): Promise<unknown> {
     if (this.dependencies.callSlackTool) return this.dependencies.callSlackTool(tool, args);
-    const result = await callMcpTool(this.dependencies.mcpServer ?? 'slack', tool, args, { timeoutMs: 30_000 });
+    const server = this.dependencies.mcpServer ?? SLACK_MCP_SERVER_CONFIG;
+    const result = await callMcpToolDirect(server, tool, args, { timeoutMs: 30_000 });
     if (!result.data) {
       throw new Error(result.error ?? result.stderr ?? `Slack MCP ${tool} failed`);
     }

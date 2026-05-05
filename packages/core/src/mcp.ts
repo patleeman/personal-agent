@@ -940,31 +940,26 @@ export async function inspectMcpTool(
   }
 }
 
-export async function callMcpTool(
-  serverName: string,
+async function callMcpToolWithServerConfig(
+  server: McpServerConfig,
   toolName: string,
   input: unknown,
   options: {
-    cwd?: string;
-    configPath?: string;
-    env?: NodeJS.ProcessEnv;
-    timeoutMs?: number;
+    cwd: string;
+    configPath: string;
+    env: NodeJS.ProcessEnv;
+    timeoutMs: number;
     log?: (message: string) => void;
-  } = {},
+  },
 ): Promise<McpOperationResult<McpToolCallResult>> {
-  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
-  const timeoutMs = options.timeoutMs ?? 30_000;
-  const env = options.env ?? process.env;
-  const config = readMcpConfig({ cwd, configPath: options.configPath, env });
-  const server = findServer(config, serverName);
   const stderrLogs: string[] = [];
 
   try {
     const connection = await openMcpClient(server, {
-      configPath: config.path,
-      cwd,
-      env,
-      timeoutMs,
+      configPath: options.configPath,
+      cwd: options.cwd,
+      env: options.env,
+      timeoutMs: options.timeoutMs,
       log: (message) => {
         stderrLogs.push(message);
         options.log?.(message);
@@ -977,7 +972,7 @@ export async function callMcpTool(
           name: toolName,
           arguments: isRecord(input) ? input : {},
         }),
-        timeoutMs,
+        options.timeoutMs,
         `Calling ${server.name}/${toolName}`,
       );
       const rawOutput = `${JSON.stringify(result, null, 2)}\n`;
@@ -1003,6 +998,49 @@ export async function callMcpTool(
       error: formatMcpOperationError(error, server),
     };
   }
+}
+
+export async function callMcpToolDirect(
+  server: McpServerConfig,
+  toolName: string,
+  input: unknown,
+  options: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+    log?: (message: string) => void;
+  } = {},
+): Promise<McpOperationResult<McpToolCallResult>> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const env = options.env ?? process.env;
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  return callMcpToolWithServerConfig(server, toolName, input, { cwd, configPath: cwd, env, timeoutMs, log: options.log });
+}
+
+export async function callMcpTool(
+  serverName: string,
+  toolName: string,
+  input: unknown,
+  options: {
+    cwd?: string;
+    configPath?: string;
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+    log?: (message: string) => void;
+  } = {},
+): Promise<McpOperationResult<McpToolCallResult>> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const env = options.env ?? process.env;
+  const config = readMcpConfig({ cwd, configPath: options.configPath, env });
+  const server = findServer(config, serverName);
+  return callMcpToolWithServerConfig(server, toolName, input, {
+    cwd,
+    configPath: config.path,
+    env,
+    timeoutMs,
+    log: options.log,
+  });
 }
 
 export async function listMcpCatalog(
