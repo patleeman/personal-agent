@@ -50,9 +50,9 @@ See `docs/release-cycle.md` for the fuller release notes.
 
 The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it and keep it updated anytime you make a commit.
 
-## Checkpoint when complete
+## Checkpoint as the final step
 
-Once you're done with your task, remember to /skill:checkpoint your work. In this repo we commit and push directly to main, no need to create branches.
+Before declaring a task complete, /skill:checkpoint your work. This is the last thing you do — after all validations pass, before you summarize what was done. In this repo we commit and push directly to main, no need to create branches.
 
 - I explicitly want targeted checkpoints for the code you modified.
 - If a file has unrelated work mixed in, stage only your hunks. If you cannot do that safely, stop and tell me instead of sweeping unrelated changes into the commit.
