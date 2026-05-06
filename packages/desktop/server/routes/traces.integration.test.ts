@@ -49,7 +49,13 @@ describe('traces API integration', () => {
     });
     writeTraceToolCall({ sessionId: 's1', runId: 'r1', toolName: 'bash', toolInput: { command: 'git status --short' }, status: 'ok' });
     writeTraceToolCall({ sessionId: 's1', toolName: 'read', status: 'error', errorMessage: 'not found' });
-    writeTraceToolCall({ sessionId: 's2', runId: 'r2', toolName: 'bash', toolInput: { command: 'npm test' }, status: 'ok' });
+    writeTraceToolCall({
+      sessionId: 's2',
+      runId: 'r2',
+      toolName: 'bash',
+      toolInput: { command: 'npm test | tee /tmp/test.log' },
+      status: 'ok',
+    });
     writeTraceContext({ sessionId: 's1', modelId: 'gpt-4o', totalTokens: 12000, contextWindow: 128000, pct: 9.4 });
 
     const router = {
@@ -128,6 +134,7 @@ describe('traces API integration', () => {
     expect(bash.calls).toBe(2);
     expect(bash.errors).toBe(0);
     expect(bash.bashBreakdown.map((row: any) => row.command)).toEqual(['git', 'npm']);
+    expect(bash.bashComplexity.pipelineCalls).toBe(1);
     const read = res.body.find((t: any) => t.toolName === 'read');
     expect(read.errors).toBe(1);
   });

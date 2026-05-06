@@ -52,6 +52,25 @@ vi.mock('./traces/useTracesData', () => ({
           { command: 'git', calls: 48, errors: 0, successRate: 100, avgLatencyMs: 600, p95LatencyMs: 1800, maxLatencyMs: 3200 },
           { command: 'npm', calls: 23, errors: 1, successRate: 95.7, avgLatencyMs: 4000, p95LatencyMs: 12400, maxLatencyMs: 12400 },
         ],
+        bashComplexity: {
+          avgScore: 3.8,
+          maxScore: 12,
+          avgCommandCount: 2.2,
+          maxCommandCount: 7,
+          avgCharCount: 84,
+          maxCharCount: 360,
+          pipelineCalls: 31,
+          chainCalls: 44,
+          redirectCalls: 12,
+          multilineCalls: 5,
+          shellCalls: 3,
+          substitutionCalls: 8,
+          shapeBreakdown: [
+            { shape: 'single', calls: 64 },
+            { shape: 'chain', calls: 35 },
+            { shape: 'pipeline', calls: 31 },
+          ],
+        },
       },
       { toolName: 'read', calls: 89, errors: 7, successRate: 92.1, avgLatencyMs: 400, p95LatencyMs: 1100, maxLatencyMs: 2800 },
     ],
@@ -179,6 +198,8 @@ describe('TracesPage', () => {
     expect(html).toContain('read');
     expect(html).toContain('Bash breakdown');
     expect(html).toContain('git');
+    expect(html).toContain('Avg score');
+    expect(html).toContain('piped');
   });
 
   it('renders agent loop stats', () => {

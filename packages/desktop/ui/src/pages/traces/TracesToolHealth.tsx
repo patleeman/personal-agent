@@ -41,7 +41,8 @@ export function TracesToolHealth({ tools }: { tools: TraceToolHealth[] }) {
 function BashBreakdown({ tools }: { tools: TraceToolHealth[] }) {
   const bash = tools.find((tool) => tool.toolName === 'bash');
   const rows = bash?.bashBreakdown ?? [];
-  if (!bash || rows.length === 0) return null;
+  const complexity = bash?.bashComplexity;
+  if (!bash || (rows.length === 0 && !complexity)) return null;
 
   return (
     <div className="border-t border-border-subtle px-4 pb-4 pt-3">
@@ -49,24 +50,70 @@ function BashBreakdown({ tools }: { tools: TraceToolHealth[] }) {
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Bash breakdown</span>
         <span className="ml-auto text-[10px] text-dim">Top command families</span>
       </div>
-      <div className="space-y-1.5">
-        {rows.map((row) => {
-          const pct = bash.calls > 0 ? Math.max((row.calls / bash.calls) * 100, 2) : 0;
-          const hasErrors = row.errors > 0;
-          return (
-            <div key={row.command} className="grid grid-cols-[90px_1fr_76px_76px] items-center gap-3 text-[11px]">
-              <span className="truncate font-mono text-primary">{row.command}</span>
-              <div className="h-2 overflow-hidden rounded-full bg-elevated">
-                <div className={hasErrors ? 'h-full bg-warning/80' : 'h-full bg-success/70'} style={{ width: `${pct}%` }} />
-              </div>
-              <span className="text-right font-mono text-secondary">{row.calls} calls</span>
-              <span className={`text-right font-mono ${hasErrors ? 'text-danger' : 'text-dim'}`}>
-                {hasErrors ? `${row.errors} err` : formatDuration(row.p95LatencyMs)}
-              </span>
-            </div>
-          );
-        })}
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        {rows.length > 0 && (
+          <div className="space-y-1.5">
+            {rows.map((row) => {
+              const pct = bash.calls > 0 ? Math.max((row.calls / bash.calls) * 100, 2) : 0;
+              const hasErrors = row.errors > 0;
+              return (
+                <div key={row.command} className="grid grid-cols-[90px_1fr_76px_76px] items-center gap-3 text-[11px]">
+                  <span className="truncate font-mono text-primary">{row.command}</span>
+                  <div className="h-2 overflow-hidden rounded-full bg-elevated">
+                    <div className={hasErrors ? 'h-full bg-warning/80' : 'h-full bg-success/70'} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-right font-mono text-secondary">{row.calls} calls</span>
+                  <span className={`text-right font-mono ${hasErrors ? 'text-danger' : 'text-dim'}`}>
+                    {hasErrors ? `${row.errors} err` : formatDuration(row.p95LatencyMs)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {complexity && <BashComplexity complexity={complexity} totalCalls={bash.calls} />}
       </div>
+    </div>
+  );
+}
+
+function BashComplexity({ complexity, totalCalls }: { complexity: NonNullable<TraceToolHealth['bashComplexity']>; totalCalls: number }) {
+  const shapeTotal = Math.max(totalCalls, 1);
+  return (
+    <div>
+      <div className="mb-2 grid grid-cols-3 gap-3 text-[11px]">
+        <ComplexityStat label="Avg score" value={complexity.avgScore.toFixed(1)} />
+        <ComplexityStat label="Max score" value={String(complexity.maxScore)} cls={complexity.maxScore >= 10 ? 'text-warning' : ''} />
+        <ComplexityStat label="Max cmds" value={String(complexity.maxCommandCount)} />
+      </div>
+      <div className="space-y-1.5">
+        {complexity.shapeBreakdown.map((row) => (
+          <div key={row.shape} className="grid grid-cols-[78px_1fr_54px] items-center gap-2 text-[10px]">
+            <span className="capitalize text-secondary">{row.shape}</span>
+            <div className="h-1.5 overflow-hidden rounded-full bg-elevated">
+              <div className="h-full bg-accent/70" style={{ width: `${Math.max((row.calls / shapeTotal) * 100, 2)}%` }} />
+            </div>
+            <span className="text-right font-mono text-dim">{row.calls}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 text-[10px] text-dim">
+        <span>{complexity.pipelineCalls} piped</span>
+        <span>{complexity.chainCalls} chained</span>
+        <span>{complexity.redirectCalls} redirected</span>
+        <span>{complexity.multilineCalls} multiline</span>
+        <span>{complexity.shellCalls} shell</span>
+        <span>{complexity.substitutionCalls} substs</span>
+      </div>
+    </div>
+  );
+}
+
+function ComplexityStat({ label, value, cls = '' }: { label: string; value: string; cls?: string }) {
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-[0.06em] text-dim">{label}</div>
+      <div className={`font-mono text-[13px] font-semibold ${cls || 'text-primary'}`}>{value}</div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   closeTraceDbs,
   queryAgentLoop,
   queryBashBreakdown,
+  queryBashComplexity,
   queryCacheEfficiency,
   queryCacheEfficiencyAggregate,
   queryCompactionAggregates,
@@ -97,7 +98,7 @@ describe('trace-db', () => {
     writeTraceToolCall({
       sessionId,
       toolName: 'bash',
-      toolInput: { command: 'npm run check' },
+      toolInput: { command: 'rg "foo" packages | head -20 > /tmp/foo.txt' },
       status: 'ok',
       durationMs: 800,
       conversationTitle: 'Test chat',
@@ -149,7 +150,8 @@ describe('trace-db', () => {
     expect(bash!.errors).toBe(0);
     expect(bash!.successRate).toBe(100);
     expect(bash!.p95LatencyMs).toBe(1200);
-    expect(bash!.bashBreakdown?.map((row) => row.command)).toEqual(['git', 'npm']);
+    expect(bash!.bashBreakdown?.map((row) => row.command)).toEqual(['git', 'rg']);
+    expect(bash!.bashComplexity).toMatchObject({ pipelineCalls: 1, chainCalls: 1, redirectCalls: 1, maxCommandCount: 2 });
 
     const read = result.find((t) => t.toolName === 'read');
     expect(read).toBeDefined();
@@ -162,7 +164,23 @@ describe('trace-db', () => {
     const result = queryBashBreakdown(fiveHoursAgo);
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ command: 'git', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 1200 });
-    expect(result[1]).toMatchObject({ command: 'npm', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 800 });
+    expect(result[1]).toMatchObject({ command: 'rg', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 800 });
+  });
+
+  it('queryBashComplexity returns command shape and complexity stats', () => {
+    const result = queryBashComplexity(fiveHoursAgo);
+    expect(result).toMatchObject({
+      maxScore: 5,
+      avgScore: 4,
+      maxCommandCount: 2,
+      pipelineCalls: 1,
+      chainCalls: 1,
+      redirectCalls: 1,
+    });
+    expect(result.shapeBreakdown).toEqual([
+      { shape: 'chain', calls: 1 },
+      { shape: 'pipeline', calls: 1 },
+    ]);
   });
 
   it('queryContextSessions returns latest per session', () => {

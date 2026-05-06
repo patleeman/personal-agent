@@ -329,6 +329,86 @@ function parseBashCommandLabel(command: string | null): string | null {
   return 'shell';
 }
 
+export type BashCommandShape = 'single' | 'pipeline' | 'chain' | 'redirect' | 'multiline' | 'shell' | 'unknown';
+
+interface BashCommandComplexity {
+  score: number;
+  shape: BashCommandShape;
+  commandCount: number;
+  pipelineCount: number;
+  chainCount: number;
+  redirectCount: number;
+  lineCount: number;
+  charCount: number;
+  hasShellControl: boolean;
+  hasSubstitution: boolean;
+}
+
+function countMatches(value: string, pattern: RegExp): number {
+  return value.match(pattern)?.length ?? 0;
+}
+
+function countPipelines(command: string): number {
+  let count = 0;
+  for (let i = 0; i < command.length; i += 1) {
+    if (command[i] !== '|') continue;
+    if (command[i - 1] === '|' || command[i + 1] === '|') continue;
+    count += 1;
+  }
+  return count;
+}
+
+function analyzeBashCommandComplexity(command: string | null): BashCommandComplexity {
+  const text = command?.trim() ?? '';
+  if (!text) {
+    return {
+      score: 0,
+      shape: 'unknown',
+      commandCount: 0,
+      pipelineCount: 0,
+      chainCount: 0,
+      redirectCount: 0,
+      lineCount: 0,
+      charCount: 0,
+      hasShellControl: false,
+      hasSubstitution: false,
+    };
+  }
+
+  const lineCount = text.split(/\r?\n/).filter((line) => line.trim()).length;
+  const pipelineCount = countPipelines(text);
+  const chainCount = countMatches(text, /&&|\|\||;/g) + Math.max(0, lineCount - 1);
+  const redirectCount = countMatches(text, /(?:>>?|<<?)/g);
+  const hasShellControl = /\b(?:if|then|else|fi|for|while|do|done|case|esac|function)\b/.test(text);
+  const hasSubstitution = /\$\(|`/.test(text);
+  const commandCount = Math.max(1, text.split(/\s*(?:&&|\|\||;|\||\r?\n)\s*/).filter(Boolean).length);
+  const charCount = text.length;
+  const score = Math.max(
+    1,
+    commandCount +
+      pipelineCount * 2 +
+      chainCount +
+      redirectCount +
+      Math.max(0, lineCount - 1) +
+      (hasShellControl ? 3 : 0) +
+      (hasSubstitution ? 2 : 0) +
+      (charCount >= 240 ? 2 : charCount >= 120 ? 1 : 0),
+  );
+  const shape: BashCommandShape = hasShellControl
+    ? 'shell'
+    : lineCount > 1
+      ? 'multiline'
+      : pipelineCount > 0
+        ? 'pipeline'
+        : chainCount > 0
+          ? 'chain'
+          : redirectCount > 0
+            ? 'redirect'
+            : 'single';
+
+  return { score, shape, commandCount, pipelineCount, chainCount, redirectCount, lineCount, charCount, hasShellControl, hasSubstitution };
+}
+
 // ── SQL result mapping ───────────────────────────────────────────────────
 // SQLite returns snake_case keys. Convert to camelCase for TypeScript interfaces.
 function mapRow<T extends object>(row: Record<string, unknown>): T {
@@ -690,6 +770,7 @@ export interface ToolHealthRow {
   p95LatencyMs: number;
   maxLatencyMs: number;
   bashBreakdown?: BashBreakdownRow[];
+  bashComplexity?: BashComplexitySummary;
 }
 
 export interface BashBreakdownRow {
@@ -700,6 +781,22 @@ export interface BashBreakdownRow {
   avgLatencyMs: number;
   p95LatencyMs: number;
   maxLatencyMs: number;
+}
+
+export interface BashComplexitySummary {
+  avgScore: number;
+  maxScore: number;
+  avgCommandCount: number;
+  maxCommandCount: number;
+  avgCharCount: number;
+  maxCharCount: number;
+  pipelineCalls: number;
+  chainCalls: number;
+  redirectCalls: number;
+  multilineCalls: number;
+  shellCalls: number;
+  substitutionCalls: number;
+  shapeBreakdown: Array<{ shape: BashCommandShape; calls: number }>;
 }
 
 export function queryToolHealth(since: string): ToolHealthRow[] {
@@ -729,7 +826,87 @@ export function queryToolHealth(since: string): ToolHealthRow[] {
     p95LatencyMs: queryToolLatencyP95(since, r.toolName),
     maxLatencyMs: Number(r.maxLatencyMs) || 0,
     bashBreakdown: r.toolName === 'bash' ? queryBashBreakdown(since) : undefined,
+    bashComplexity: r.toolName === 'bash' ? queryBashComplexity(since) : undefined,
   }));
+}
+
+export function queryBashComplexity(since: string): BashComplexitySummary {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT bash_command
+    FROM trace_tool_calls
+    WHERE ts >= ? AND tool_name = 'bash'
+  `,
+    )
+    .all(since) as Array<{ bash_command: string | null }>;
+
+  const analyses = rows.map((row) => analyzeBashCommandComplexity(row.bash_command));
+  const total = analyses.length;
+  if (total === 0) {
+    return {
+      avgScore: 0,
+      maxScore: 0,
+      avgCommandCount: 0,
+      maxCommandCount: 0,
+      avgCharCount: 0,
+      maxCharCount: 0,
+      pipelineCalls: 0,
+      chainCalls: 0,
+      redirectCalls: 0,
+      multilineCalls: 0,
+      shellCalls: 0,
+      substitutionCalls: 0,
+      shapeBreakdown: [],
+    };
+  }
+
+  const shapeCounts = new Map<BashCommandShape, number>();
+  let scoreTotal = 0;
+  let commandCountTotal = 0;
+  let charCountTotal = 0;
+  let maxScore = 0;
+  let maxCommandCount = 0;
+  let maxCharCount = 0;
+  let pipelineCalls = 0;
+  let chainCalls = 0;
+  let redirectCalls = 0;
+  let multilineCalls = 0;
+  let shellCalls = 0;
+  let substitutionCalls = 0;
+
+  for (const analysis of analyses) {
+    scoreTotal += analysis.score;
+    commandCountTotal += analysis.commandCount;
+    charCountTotal += analysis.charCount;
+    maxScore = Math.max(maxScore, analysis.score);
+    maxCommandCount = Math.max(maxCommandCount, analysis.commandCount);
+    maxCharCount = Math.max(maxCharCount, analysis.charCount);
+    if (analysis.pipelineCount > 0) pipelineCalls += 1;
+    if (analysis.chainCount > 0) chainCalls += 1;
+    if (analysis.redirectCount > 0) redirectCalls += 1;
+    if (analysis.lineCount > 1) multilineCalls += 1;
+    if (analysis.hasShellControl) shellCalls += 1;
+    if (analysis.hasSubstitution) substitutionCalls += 1;
+    shapeCounts.set(analysis.shape, (shapeCounts.get(analysis.shape) ?? 0) + 1);
+  }
+
+  return {
+    avgScore: Math.round((scoreTotal / total) * 10) / 10,
+    maxScore,
+    avgCommandCount: Math.round((commandCountTotal / total) * 10) / 10,
+    maxCommandCount,
+    avgCharCount: Math.round(charCountTotal / total),
+    maxCharCount,
+    pipelineCalls,
+    chainCalls,
+    redirectCalls,
+    multilineCalls,
+    shellCalls,
+    substitutionCalls,
+    shapeBreakdown: [...shapeCounts.entries()].map(([shape, calls]) => ({ shape, calls })).sort((a, b) => b.calls - a.calls),
+  };
 }
 
 export function queryBashBreakdown(since: string): BashBreakdownRow[] {

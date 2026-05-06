@@ -1556,6 +1556,7 @@ export interface TraceToolHealth {
   p95LatencyMs: number;
   maxLatencyMs: number;
   bashBreakdown?: TraceBashBreakdown[];
+  bashComplexity?: TraceBashComplexity;
 }
 
 export interface TraceBashBreakdown {
@@ -1566,6 +1567,22 @@ export interface TraceBashBreakdown {
   avgLatencyMs: number;
   p95LatencyMs: number;
   maxLatencyMs: number;
+}
+
+export interface TraceBashComplexity {
+  avgScore: number;
+  maxScore: number;
+  avgCommandCount: number;
+  maxCommandCount: number;
+  avgCharCount: number;
+  maxCharCount: number;
+  pipelineCalls: number;
+  chainCalls: number;
+  redirectCalls: number;
+  multilineCalls: number;
+  shellCalls: number;
+  substitutionCalls: number;
+  shapeBreakdown: Array<{ shape: 'single' | 'pipeline' | 'chain' | 'redirect' | 'multiline' | 'shell' | 'unknown'; calls: number }>;
 }
 
 export interface TraceContextSession {
