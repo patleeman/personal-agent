@@ -104,7 +104,9 @@ function runGit(cwd: string, args: string[], options: { allowEmptyStdout?: boole
   if (result.status !== 0) {
     const stderr = `${result.stderr ?? ''}`.trim();
     const stdout = `${result.stdout ?? ''}`.trim();
-    throw new Error(stderr || stdout || `git ${args.join(' ')} failed with status ${result.status}`);
+    const details = stderr || stdout;
+    const summary = details ? `git ${args.join(' ')}:\n${details}` : `git ${args.join(' ')} failed with status ${result.status}`;
+    throw new Error(summary);
   }
 
   const stdout = `${result.stdout ?? ''}`;
@@ -290,7 +292,7 @@ function createCheckpointCommit(options: { cwd: string; message: string; paths: 
     throw new Error(`${stagedDiff.stderr ?? stagedDiff.stdout ?? 'Could not inspect staged changes.'}`.trim());
   }
 
-  runGit(options.cwd, ['commit', '--no-verify', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
+  runGit(options.cwd, ['commit', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
   const commitSha = runGit(options.cwd, ['rev-parse', 'HEAD']).trim();
   const metadata = parseCommitMetadata(
     runGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]),
