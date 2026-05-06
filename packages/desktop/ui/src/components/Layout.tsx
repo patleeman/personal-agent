@@ -707,7 +707,7 @@ function hasBlockingHtmlModal(): boolean {
   return Boolean(document.querySelector('[aria-modal="true"]'));
 }
 
-function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: string | null; onClose: () => void }) {
+export function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: string | null; onClose: () => void }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const closedRef = useRef(false);
@@ -775,6 +775,7 @@ function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: stri
   }, [bridge, browserSessionKey, syncUrlDraftFromBrowserState]);
 
   useLayoutEffect(() => {
+    closedRef.current = false;
     syncBounds();
     const observer = typeof ResizeObserver !== 'undefined' && browserHostRef.current ? new ResizeObserver(syncBounds) : null;
     if (browserHostRef.current) {
