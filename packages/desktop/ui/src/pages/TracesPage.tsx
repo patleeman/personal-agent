@@ -15,7 +15,7 @@
 
 import { useState } from 'react';
 
-import { ErrorState, LoadingState } from '../components/ui';
+import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { TracesAgentLoop } from './traces/TracesAgentLoop';
 import { TracesAutoMode } from './traces/TracesAutoMode';
 import { TracesBraidChart } from './traces/TracesBraidChart';
@@ -73,65 +73,55 @@ export function TracesPage() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 border-b border-border-subtle bg-surface px-6 py-3 shrink-0">
-        <h1 className="text-[15px] font-semibold">Telemetry</h1>
-        <span className="text-[12px] text-dim">Monitoring &amp; instrumentation</span>
-        <span className="flex-1" />
-        <TimeRangeSelector value={range} onChange={setRange} />
-        <button type="button" onClick={refetch} className="ui-action-button text-[11px]">
-          ↻ Refresh
-        </button>
-      </div>
+    <div className="h-full overflow-y-auto">
+      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
+        <AppPageIntro
+          title="Telemetry"
+          summary="Monitoring, usage, and runtime instrumentation across recent agent activity."
+          actions={
+            <div className="flex items-center gap-2">
+              <TimeRangeSelector value={range} onChange={setRange} />
+              <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none" onClick={refetch}>
+                Refresh
+              </ToolbarButton>
+            </div>
+          }
+        />
 
-      {/* Main scrollable content */}
-      <div className="flex-1 overflow-y-auto px-6 pb-10 space-y-4" style={{ paddingTop: '14px' }}>
         {/* ── Pulse Row ── */}
         {summary && <PulseRow summary={summary} />}
 
-        {/* ── Heatmap ── */}
-        {tokensDaily && <TracesHeatmap data={tokensDaily} />}
+        <section className="space-y-4 border-t border-border-subtle pt-6">
+          {tokensDaily && <TracesHeatmap data={tokensDaily} />}
+          {modelUsage && summary && (
+            <TracesModelUsage
+              models={modelUsage}
+              throughput={throughput ?? []}
+              totalTokens={modelUsage.reduce((total, model) => total + model.tokens, 0)}
+              tokensInput={summary.tokensInput}
+              tokensOutput={summary.tokensOutput}
+              tokensCached={summary.tokensCached}
+              tokensCachedWrite={summary.tokensCachedWrite}
+              cacheHitRate={summary.cacheHitRate}
+              cacheEfficiency={cacheEfficiency}
+            />
+          )}
+          {tokensDaily && summary && <TracesBraidChart data={tokensDaily} />}
+        </section>
 
-        {/* ── Model Usage ── */}
-        {modelUsage && summary && (
-          <TracesModelUsage
-            models={modelUsage}
-            throughput={throughput ?? []}
-            totalTokens={modelUsage.reduce((total, model) => total + model.tokens, 0)}
-            tokensInput={summary.tokensInput}
-            tokensOutput={summary.tokensOutput}
-            tokensCached={summary.tokensCached}
-            tokensCachedWrite={summary.tokensCachedWrite}
-            cacheHitRate={summary.cacheHitRate}
-            cacheEfficiency={cacheEfficiency}
-          />
-        )}
+        <section className="space-y-4 border-t border-border-subtle pt-6">
+          {toolHealth && <TracesToolHealth tools={toolHealth} />}
+          <TracesToolFlow data={toolFlow} />
+        </section>
 
-        {/* ── Braid Chart ── */}
-        {tokensDaily && summary && <TracesBraidChart data={tokensDaily} />}
-
-        {/* ── Tool Telemetry ── */}
-        {toolHealth && <TracesToolHealth tools={toolHealth} />}
-
-        {/* ── Tool Flow ── */}
-        <TracesToolFlow data={toolFlow} />
-
-        {/* ── Suggested Context Usage ── */}
-        <TracesContextPointers data={contextPointers} />
-
-        {/* ── Auto Mode ── */}
-        <TracesAutoMode data={autoMode} />
-
-        {/* ── Cache & System Prompt ── */}
-        <TracesCacheAndSystemPrompt cacheEfficiency={cacheEfficiency} systemPrompt={systemPrompt} />
-
-        {/* ── Context Pressure ── */}
-        <TracesContextPressure sessions={contextSessions ?? []} compactions={compactions ?? []} compactionAggs={compactionAggs} />
-
-        {/* ── Agent Loop ── */}
-        <TracesAgentLoop loop={agentLoop} />
-      </div>
+        <section className="space-y-4 border-t border-border-subtle pt-6">
+          <TracesContextPointers data={contextPointers} />
+          <TracesAutoMode data={autoMode} />
+          <TracesCacheAndSystemPrompt cacheEfficiency={cacheEfficiency} systemPrompt={systemPrompt} />
+          <TracesContextPressure sessions={contextSessions ?? []} compactions={compactions ?? []} compactionAggs={compactionAggs} />
+          <TracesAgentLoop loop={agentLoop} />
+        </section>
+      </AppPageLayout>
     </div>
   );
 }
@@ -147,14 +137,14 @@ function TimeRangeSelector({ value, onChange }: { value: TraceRange; onChange: (
   ];
 
   return (
-    <div className="flex gap-0.5 rounded-lg bg-elevated p-0.5">
+    <div className="flex gap-1 border-r border-border-subtle pr-2">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-            value === opt.value ? 'bg-accent text-white' : 'text-dim hover:text-primary'
+          className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
+            value === opt.value ? 'bg-surface text-primary shadow-sm' : 'text-secondary hover:bg-surface/45 hover:text-primary'
           }`}
         >
           {opt.label}
@@ -203,16 +193,19 @@ function PulseRow({ summary }: { summary: NonNullable<ReturnType<typeof useTrace
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-3">
+    <section className="grid grid-cols-1 border-y border-border-subtle sm:grid-cols-2 lg:grid-cols-5">
       {cards.map((card) => (
-        <div key={card.label} className="relative flex flex-col gap-1 rounded-xl border border-border-subtle bg-surface px-4 py-3">
+        <div
+          key={card.label}
+          className="relative flex min-w-0 flex-col gap-2 border-border-subtle py-4 sm:px-4 sm:[&:not(:first-child)]:border-l max-sm:border-t max-sm:first:border-t-0"
+        >
           {card.dot && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-accent animate-pulse" />}
           <span className="text-[10px] uppercase tracking-[0.1em] text-dim">{card.label}</span>
           <span className={`text-[24px] font-semibold leading-none tracking-tight ${card.cls}`}>{card.value}</span>
           <span className="text-[11px] text-dim">{card.trend}</span>
         </div>
       ))}
-    </div>
+    </section>
   );
 }
 
