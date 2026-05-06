@@ -53,19 +53,26 @@ function BashBreakdown({ tools }: { tools: TraceToolHealth[] }) {
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         {rows.length > 0 && (
           <div className="space-y-1.5">
+            <div className="grid grid-cols-[90px_1fr_76px_64px_64px] items-center gap-3 text-[9px] uppercase tracking-[0.06em] text-dim">
+              <span>Command</span>
+              <span />
+              <span className="text-right">Calls</span>
+              <span className="text-right">Errors</span>
+              <span className="text-right">P95</span>
+            </div>
             {rows.map((row) => {
               const pct = bash.calls > 0 ? Math.max((row.calls / bash.calls) * 100, 2) : 0;
               const hasErrors = row.errors > 0;
+              const errorRate = 'errorRate' in row ? row.errorRate : row.calls > 0 ? (row.errors / row.calls) * 100 : 0;
               return (
-                <div key={row.command} className="grid grid-cols-[90px_1fr_76px_76px] items-center gap-3 text-[11px]">
+                <div key={row.command} className="grid grid-cols-[90px_1fr_76px_64px_64px] items-center gap-3 text-[11px]">
                   <span className="truncate font-mono text-primary">{row.command}</span>
                   <div className="h-2 overflow-hidden rounded-full bg-elevated">
                     <div className={hasErrors ? 'h-full bg-warning/80' : 'h-full bg-success/70'} style={{ width: `${pct}%` }} />
                   </div>
                   <span className="text-right font-mono text-secondary">{row.calls} calls</span>
-                  <span className={`text-right font-mono ${hasErrors ? 'text-danger' : 'text-dim'}`}>
-                    {hasErrors ? `${row.errors} err` : formatDuration(row.p95LatencyMs)}
-                  </span>
+                  <span className={`text-right font-mono ${hasErrors ? 'text-danger' : 'text-dim'}`}>{errorRate.toFixed(1)}%</span>
+                  <span className="text-right font-mono text-dim">{formatDuration(row.p95LatencyMs)}</span>
                 </div>
               );
             })}

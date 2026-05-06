@@ -163,8 +163,8 @@ describe('trace-db', () => {
   it('queryBashBreakdown returns command-family stats', () => {
     const result = queryBashBreakdown(fiveHoursAgo);
     expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ command: 'git', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 1200 });
-    expect(result[1]).toMatchObject({ command: 'rg', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 800 });
+    expect(result[0]).toMatchObject({ command: 'git', calls: 1, errors: 0, errorRate: 0, successRate: 100, p95LatencyMs: 1200 });
+    expect(result[1]).toMatchObject({ command: 'rg', calls: 1, errors: 0, errorRate: 0, successRate: 100, p95LatencyMs: 800 });
   });
 
   it('queryBashComplexity returns command shape and complexity stats', () => {

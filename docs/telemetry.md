@@ -8,7 +8,7 @@ The desktop app writes turn stats, context pressure, compactions, and tool calls
 
 Tool health groups calls by tool name and tracks call count, errors, success rate, average latency, P95 latency, and max latency. Bash is treated as a first-class subsection because it is the dominant Pi tool: each bash call also stores the submitted command and a normalized command-family label such as `git`, `npm`, or `rg`.
 
-The UI shows the normal per-tool card for `bash`, then a Bash breakdown with the top command families for the selected time range. Existing rows without command metadata are grouped as `unknown`.
+The UI shows the normal per-tool card for `bash`, then a Bash breakdown with the top command families for the selected time range. Each command family includes call count, command-level error rate, and P95 latency so noisy commands stand out without opening raw traces. Existing rows without command metadata are grouped as `unknown`.
 
 ## Bash complexity
 

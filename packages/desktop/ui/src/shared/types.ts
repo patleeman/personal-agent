@@ -1563,6 +1563,7 @@ export interface TraceBashBreakdown {
   command: string;
   calls: number;
   errors: number;
+  errorRate: number;
   successRate: number;
   avgLatencyMs: number;
   p95LatencyMs: number;
@@ -1702,16 +1703,30 @@ export interface CacheEfficiencyAggregate {
 export interface SystemPromptPoint {
   ts: string;
   sessionId: string;
+  modelId: string;
   systemPromptTokens: number;
   totalTokens: number;
+  contextWindow: number;
   pctOfTotal: number;
+  pctOfContextWindow: number;
+}
+
+export interface SystemPromptModelAggregate {
+  modelId: string;
+  avgSystemPromptTokens: number;
+  maxSystemPromptTokens: number;
+  contextWindow: number;
+  avgPctOfContextWindow: number;
+  samples: number;
 }
 
 export interface SystemPromptAggregate {
   avgSystemPromptTokens: number;
   avgPctOfTotal: number;
+  avgPctOfContextWindow: number;
   maxSystemPromptTokens: number;
   samples: number;
+  byModel: SystemPromptModelAggregate[];
 }
 
 export interface ContextPointerUsageSummary {

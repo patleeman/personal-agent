@@ -777,6 +777,7 @@ export interface BashBreakdownRow {
   command: string;
   calls: number;
   errors: number;
+  errorRate: number;
   successRate: number;
   avgLatencyMs: number;
   p95LatencyMs: number;
@@ -933,6 +934,7 @@ export function queryBashBreakdown(since: string): BashBreakdownRow[] {
     ...r,
     calls: Number(r.calls),
     errors: Number(r.errors),
+    errorRate: Number(r.calls) > 0 ? Math.round((Number(r.errors) / Number(r.calls)) * 1000) / 10 : 0,
     successRate: Number(r.calls) > 0 ? Math.round((1 - Number(r.errors) / Number(r.calls)) * 1000) / 10 : 100,
     avgLatencyMs: Number(r.avgLatencyMs) || 0,
     p95LatencyMs: queryBashCommandLatencyP95(since, r.command),
@@ -1417,9 +1419,21 @@ export interface CacheEfficiencyPoint {
 export interface SystemPromptPoint {
   ts: string;
   sessionId: string;
+  modelId: string;
   systemPromptTokens: number;
   totalTokens: number;
+  contextWindow: number;
   pctOfTotal: number;
+  pctOfContextWindow: number;
+}
+
+export interface SystemPromptModelAggregate {
+  modelId: string;
+  avgSystemPromptTokens: number;
+  maxSystemPromptTokens: number;
+  contextWindow: number;
+  avgPctOfContextWindow: number;
+  samples: number;
 }
 
 export function queryCacheEfficiency(since: string): CacheEfficiencyPoint[] {
@@ -1447,7 +1461,7 @@ export function querySystemPromptTrend(since: string): SystemPromptPoint[] {
   const rows = db
     .prepare(
       `
-    SELECT ts, session_id, system_prompt_tokens, total_tokens
+    SELECT ts, session_id, COALESCE(model_id, '') as model_id, system_prompt_tokens, total_tokens, context_window
     FROM trace_context WHERE ts >= ? AND system_prompt_tokens > 0
     ORDER BY ts ASC LIMIT 200
   `,
@@ -1456,9 +1470,13 @@ export function querySystemPromptTrend(since: string): SystemPromptPoint[] {
   return mapRows<SystemPromptPoint>(rows).map((r) => ({
     ts: r.ts,
     sessionId: r.sessionId,
+    modelId: r.modelId,
     systemPromptTokens: Number(r.systemPromptTokens),
     totalTokens: Number(r.totalTokens),
+    contextWindow: Number(r.contextWindow),
     pctOfTotal: Number(r.totalTokens) > 0 ? Math.round((Number(r.systemPromptTokens) / Number(r.totalTokens)) * 10000) / 100 : 0,
+    pctOfContextWindow:
+      Number(r.contextWindow) > 0 ? Math.round((Number(r.systemPromptTokens) / Number(r.contextWindow)) * 10000) / 100 : 0,
   }));
 }
 
@@ -1509,24 +1527,63 @@ export function queryCacheEfficiencyAggregate(since: string): {
 export function querySystemPromptAggregate(since: string): {
   avgSystemPromptTokens: number;
   avgPctOfTotal: number;
+  avgPctOfContextWindow: number;
   maxSystemPromptTokens: number;
   samples: number;
+  byModel: SystemPromptModelAggregate[];
 } {
   const db = getTraceDb();
   const row = db
     .prepare(
       `
-    SELECT AVG(system_prompt_tokens) as avg_tokens, AVG(CAST(system_prompt_tokens AS REAL) / CAST(total_tokens AS REAL)) * 100 as avg_pct, MAX(system_prompt_tokens) as max_tokens, COUNT(*) as samples
+    SELECT AVG(system_prompt_tokens) as avg_tokens,
+      AVG(CAST(system_prompt_tokens AS REAL) / CAST(total_tokens AS REAL)) * 100 as avg_pct,
+      AVG(CASE WHEN context_window > 0 THEN CAST(system_prompt_tokens AS REAL) / CAST(context_window AS REAL) END) * 100 as avg_pct_context_window,
+      MAX(system_prompt_tokens) as max_tokens,
+      COUNT(*) as samples
     FROM trace_context WHERE ts >= ? AND system_prompt_tokens > 0 AND total_tokens > 0
   `,
     )
     .get(since) as Record<string, unknown>;
-  const m = mapRow<{ avgTokens: number; avgPct: number; maxTokens: number; samples: number }>(row);
+  const m = mapRow<{ avgTokens: number; avgPct: number; avgPctContextWindow: number; maxTokens: number; samples: number }>(row);
+  const byModelRows = db
+    .prepare(
+      `
+    SELECT COALESCE(model_id, '') as model_id,
+      AVG(system_prompt_tokens) as avg_tokens,
+      MAX(system_prompt_tokens) as max_tokens,
+      MAX(context_window) as context_window,
+      AVG(CAST(system_prompt_tokens AS REAL) / CAST(context_window AS REAL)) * 100 as avg_pct_context_window,
+      COUNT(*) as samples
+    FROM trace_context
+    WHERE ts >= ? AND system_prompt_tokens > 0 AND context_window > 0 AND model_id IS NOT NULL AND model_id != ''
+    GROUP BY model_id
+    ORDER BY avg_tokens DESC
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+  const byModel = mapRows<{
+    modelId: string;
+    avgTokens: number;
+    maxTokens: number;
+    contextWindow: number;
+    avgPctContextWindow: number;
+    samples: number;
+  }>(byModelRows).map((r) => ({
+    modelId: r.modelId,
+    avgSystemPromptTokens: Math.round(Number(r.avgTokens)),
+    maxSystemPromptTokens: Number(r.maxTokens),
+    contextWindow: Number(r.contextWindow),
+    avgPctOfContextWindow: Math.round(Number(r.avgPctContextWindow) * 100) / 100,
+    samples: Number(r.samples),
+  }));
   return {
     avgSystemPromptTokens: Math.round(Number(m.avgTokens)),
     avgPctOfTotal: Math.round(Number(m.avgPct) * 100) / 100,
+    avgPctOfContextWindow: Math.round(Number(m.avgPctContextWindow) * 100) / 100,
     maxSystemPromptTokens: Number(m.maxTokens),
     samples: Number(m.samples),
+    byModel,
   };
 }
 
