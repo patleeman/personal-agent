@@ -981,7 +981,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       if (paths.length === 0) return;
 
       // Deduplicate: if a folder is selected, skip its children
-      const deduped = getTopLevelDraggedPaths(paths);
+      const deduped = getTopLevelDraggedPaths(paths).map((id) => {
+        // Normalize: ensure directories always have a trailing slash
+        const entry = entryMapRef.current.get(id.endsWith('/') ? id : `${id}/`);
+        if (entry?.kind === 'folder') return `${id.replace(/\/+$/, '')}/`;
+        return id;
+      });
 
       const message =
         deduped.length === 1 ? `Delete "${deduped[0]?.split('/').filter(Boolean).pop() ?? ''}"?` : `Delete ${deduped.length} items?`;
@@ -1217,8 +1222,9 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   useEffect(() => {
     nativeContextMenuOpenRef.current = (item, context) => {
+      const lookupPath = item.kind === 'directory' && !item.path.endsWith('/') ? `${item.path}/` : item.path;
       const entry =
-        entryMapRef.current.get(item.path) ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+        entryMapRef.current.get(lookupPath) ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
       const desktopBridge = getDesktopBridge();
       const canOpenInFinder = Boolean(desktopBridge?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry));
 
@@ -1625,9 +1631,13 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 {...(!useNativeKnowledgeContextMenu
                   ? {
                       renderContextMenu: (item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
-                        const entry =
-                          entryMap.get(item.path) ??
-                          createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+                        const entry = (() => {
+                          const lookupPath = item.kind === 'directory' && !item.path.endsWith('/') ? `${item.path}/` : item.path;
+                          return (
+                            entryMap.get(lookupPath) ??
+                            createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name)
+                          );
+                        })();
                         const canOpenInFinder = Boolean(
                           getDesktopBridge()?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry),
                         );
