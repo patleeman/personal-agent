@@ -1538,6 +1538,9 @@ export interface TraceModelUsage {
 export interface TraceThroughput {
   modelId: string;
   avgTokensPerSec: number;
+  peakTokensPerSec: number;
+  tokensOutput: number;
+  durationMs: number;
 }
 
 export interface TraceCostRow {

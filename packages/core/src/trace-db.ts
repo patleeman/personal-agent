@@ -1205,6 +1205,9 @@ export function queryTokensDaily(since: string): TokenDailyRow[] {
 export interface ThroughputRow {
   modelId: string;
   avgTokensPerSec: number;
+  peakTokensPerSec: number;
+  tokensOutput: number;
+  durationMs: number;
 }
 
 export function queryThroughput(since: string): ThroughputRow[] {
@@ -1214,18 +1217,22 @@ export function queryThroughput(since: string): ThroughputRow[] {
       `
     SELECT
       COALESCE(model_id, 'unknown') as model_id,
-      SUM(tokens_input + tokens_cached_input + tokens_output) as tokens,
-      SUM(duration_ms) as duration_ms
+      SUM(tokens_output) as tokens,
+      SUM(duration_ms) as duration_ms,
+      MAX(CAST(tokens_output AS REAL) / (CAST(duration_ms AS REAL) / 1000.0)) as peak_tokens_per_sec
     FROM trace_stats WHERE ts >= ? AND duration_ms > 0
     GROUP BY model_id
     ORDER BY tokens DESC
   `,
     )
     .all(since) as Record<string, unknown>[];
-  const mapped = mapRows<{ modelId: string; tokens: number; durationMs: number }>(rows);
+  const mapped = mapRows<{ modelId: string; tokens: number; durationMs: number; peakTokensPerSec: number }>(rows);
   return mapped.map((r) => ({
     modelId: r.modelId,
     avgTokensPerSec: Number(r.durationMs) > 0 ? Math.round(Number(r.tokens) / (Number(r.durationMs) / 1000)) : 0,
+    peakTokensPerSec: Math.round(Number(r.peakTokensPerSec) || 0),
+    tokensOutput: Number(r.tokens),
+    durationMs: Number(r.durationMs),
   }));
 }
 

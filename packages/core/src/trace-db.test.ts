@@ -291,12 +291,14 @@ describe('trace-db', () => {
     expect(chat!.cost).toBe(0.08);
   });
 
-  it('queryThroughput uses recorded run duration', () => {
+  it('queryThroughput uses output tokens over recorded run duration', () => {
     const result = queryThroughput(fiveHoursAgo);
     const gpt4 = result.find((r) => r.modelId === 'gpt-4o');
 
     expect(gpt4).toBeDefined();
-    expect(gpt4!.avgTokensPerSec).toBeGreaterThan(0);
+    expect(gpt4!.avgTokensPerSec).toBe(2000);
+    expect(gpt4!.peakTokensPerSec).toBe(2000);
+    expect(gpt4!.tokensOutput).toBe(2000);
   });
 
   it('queryTokensDaily returns daily aggregation with tool errors', () => {

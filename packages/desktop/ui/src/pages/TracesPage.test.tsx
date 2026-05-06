@@ -32,8 +32,8 @@ vi.mock('./traces/useTracesData', () => ({
       { modelId: 'claude-3-opus', tokens: 96000, cost: 0.72, calls: 2 },
     ],
     throughput: [
-      { modelId: 'gpt-4o', avgTokensPerSec: 142 },
-      { modelId: 'gpt-4o-mini', avgTokensPerSec: 98 },
+      { modelId: 'gpt-4o', avgTokensPerSec: 142, peakTokensPerSec: 180, tokensOutput: 14200, durationMs: 100000 },
+      { modelId: 'gpt-4o-mini', avgTokensPerSec: 98, peakTokensPerSec: 120, tokensOutput: 9800, durationMs: 100000 },
     ],
     costByConversation: [
       { conversationTitle: 'Refactor auth', modelId: 'gpt-4o', tokens: 428000, cost: 1.42 },

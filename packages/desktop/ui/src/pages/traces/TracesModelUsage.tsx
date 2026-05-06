@@ -27,6 +27,11 @@ export function TracesModelUsage({
 }) {
   const maxTokens = Math.max(...models.map((m) => m.tokens), 1);
   const cacheByModel = Object.fromEntries((cacheEfficiency?.byModel ?? []).map((m) => [m.modelId, m.hitRate]));
+  const totalThroughputOutputTokens = throughput.reduce((sum, t) => sum + t.tokensOutput, 0);
+  const totalThroughputDurationMs = throughput.reduce((sum, t) => sum + t.durationMs, 0);
+  const totalThroughputTokensPerSec =
+    totalThroughputDurationMs > 0 ? Math.round(totalThroughputOutputTokens / (totalThroughputDurationMs / 1000)) : 0;
+  const peakThroughputTokensPerSec = Math.max(...throughput.map((t) => t.peakTokensPerSec), 0);
 
   return (
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
@@ -98,15 +103,15 @@ export function TracesModelUsage({
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Throughput</div>
           <div className="flex gap-2 mb-3">
-            <QuickStat value={`${throughput[0]?.avgTokensPerSec ?? 0}`} label="tok/s avg" cls="text-accent" />
-            <QuickStat value={`${Math.max(...throughput.map((t) => t.avgTokensPerSec), 0)}`} label="tok/s peak" cls="text-warning" />
+            <QuickStat value={`${totalThroughputTokensPerSec}`} label="tok/s avg" cls="text-accent" />
+            <QuickStat value={`${peakThroughputTokensPerSec}`} label="tok/s peak" cls="text-warning" />
           </div>
           {throughput.length > 0 ? (
             throughput.map((t) => (
               <BarRow
                 key={t.modelId}
                 label={<span className="model-tag">{t.modelId}</span>}
-                value={`${t.avgTokensPerSec} tok/s`}
+                value={`${t.avgTokensPerSec} tok/s avg · ${t.peakTokensPerSec} peak`}
                 pct={t.avgTokensPerSec / Math.max(...throughput.map((x) => x.avgTokensPerSec), 1)}
                 color="bg-accent"
               />
