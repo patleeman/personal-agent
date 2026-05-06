@@ -50,6 +50,7 @@ export function useDesktopConversationState(conversationId: string | null, optio
   const [state, setState] = useState<DesktopConversationState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectVersion, setConnectVersion] = useState(0);
+  const [subscriptionVersion, setSubscriptionVersion] = useState(0);
   const matchedState = state?.conversationId === conversationId ? state : null;
 
   useEffect(() => {
@@ -176,11 +177,16 @@ export function useDesktopConversationState(conversationId: string | null, optio
         void bridge.unsubscribeConversationState(subscriptionId).catch(() => {});
       }
     };
-  }, [bridge, conversationId, mode, options?.tailBlocks, surfaceId, surfaceType]);
+  }, [bridge, conversationId, mode, options?.tailBlocks, subscriptionVersion, surfaceId, surfaceType]);
 
   const reconnect = useCallback(() => {
+    if (mode === 'local') {
+      setSubscriptionVersion((current) => current + 1);
+      return;
+    }
+
     setConnectVersion((current) => current + 1);
-  }, []);
+  }, [mode]);
 
   const send = useCallback(
     async (

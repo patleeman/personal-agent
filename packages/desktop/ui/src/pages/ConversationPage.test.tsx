@@ -10,6 +10,7 @@ import {
   ConversationPage,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   replaceConversationMetaInSessionList,
+  resolveConversationCwdChangeAction,
   resolveConversationExecutionOverride,
   resolveConversationPerformanceMode,
   resolveDisplayedConversationPendingStatusLabel,
@@ -53,6 +54,36 @@ function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode |
 }
 
 describe('desktop conversation state fallback', () => {
+  it('reconnects the current transcript when a cwd change keeps the same conversation id', () => {
+    expect(
+      resolveConversationCwdChangeAction({
+        conversationId: 'conv-1',
+        cwdChange: { newConversationId: 'conv-1', cwd: '/tmp/next', autoContinued: true },
+        handledKey: null,
+      }),
+    ).toEqual({ action: 'reconnect', key: 'conv-1\n/tmp/next\n1' });
+  });
+
+  it('navigates when a cwd change moves to a different conversation id', () => {
+    expect(
+      resolveConversationCwdChangeAction({
+        conversationId: 'conv-1',
+        cwdChange: { newConversationId: 'conv-2', cwd: '/tmp/next', autoContinued: false },
+        handledKey: null,
+      }),
+    ).toEqual({ action: 'navigate', key: 'conv-2\n/tmp/next\n0', conversationId: 'conv-2' });
+  });
+
+  it('does not handle the same cwd change twice', () => {
+    expect(
+      resolveConversationCwdChangeAction({
+        conversationId: 'conv-1',
+        cwdChange: { newConversationId: 'conv-1', cwd: '/tmp/next', autoContinued: true },
+        handledKey: 'conv-1\n/tmp/next\n1',
+      }),
+    ).toEqual({ action: 'none', key: null });
+  });
+
   it('preserves partial remote execution identity overrides', () => {
     expect(
       resolveConversationExecutionOverride({

@@ -86,6 +86,7 @@ import {
   replaceConversationMetaInSessionList,
   replaceConversationTitleInSessionList,
   resolveConversationBackgroundRunState,
+  resolveConversationCwdChangeAction,
   resolveConversationInitialHistoricalWarmupTarget,
   resolveConversationLiveSession,
   resolveConversationPageTitle,
@@ -293,6 +294,7 @@ import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, w
 
 export {
   replaceConversationMetaInSessionList,
+  resolveConversationCwdChangeAction,
   resolveConversationPerformanceMode,
   resolveDisplayedConversationPendingStatusLabel,
   shouldDeferConversationFileRefresh,
@@ -732,6 +734,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
   const deferredConversationFileVersionRef = useRef<{ conversationId: string; version: number } | null>(null);
+  const handledCwdChangeKeyRef = useRef<string | null>(null);
 
   const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
   const deferConversationFileRefresh = shouldDeferConversationFileRefresh({
@@ -837,14 +840,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const currentSurfaceId = stream.surfaceId;
 
   useEffect(() => {
-    const pendingCwdChange = stream.cwdChange;
-    if (!id || !pendingCwdChange || pendingCwdChange.newConversationId === id) {
+    const cwdChangeAction = resolveConversationCwdChangeAction({
+      conversationId: id,
+      cwdChange: stream.cwdChange,
+      handledKey: handledCwdChangeKeyRef.current,
+    });
+    if (cwdChangeAction.action === 'none') {
       return;
     }
 
-    ensureConversationTabOpen(pendingCwdChange.newConversationId);
-    navigate(`/conversations/${pendingCwdChange.newConversationId}`);
-  }, [id, navigate, stream.cwdChange]);
+    handledCwdChangeKeyRef.current = cwdChangeAction.key;
+    if (cwdChangeAction.action === 'navigate') {
+      ensureConversationTabOpen(cwdChangeAction.conversationId);
+      navigate(`/conversations/${cwdChangeAction.conversationId}`);
+      return;
+    }
+
+    streamReconnect();
+  }, [id, navigate, stream.cwdChange, streamReconnect]);
 
   useLayoutEffect(() => {
     if (!id || draft) {

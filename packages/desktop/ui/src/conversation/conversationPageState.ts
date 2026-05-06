@@ -467,6 +467,27 @@ export function shouldSubscribeToDesktopConversationState(input: {
   return !input.draft && !input.remoteHostId?.trim() && !input.remoteConversationId?.trim();
 }
 
+export function resolveConversationCwdChangeAction(input: {
+  conversationId: string | null | undefined;
+  cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null | undefined;
+  handledKey: string | null | undefined;
+}): { action: 'none'; key: null } | { action: 'navigate'; key: string; conversationId: string } | { action: 'reconnect'; key: string } {
+  if (!input.conversationId || !input.cwdChange) {
+    return { action: 'none', key: null };
+  }
+
+  const key = `${input.cwdChange.newConversationId}\n${input.cwdChange.cwd}\n${input.cwdChange.autoContinued ? '1' : '0'}`;
+  if (input.handledKey === key) {
+    return { action: 'none', key: null };
+  }
+
+  if (input.cwdChange.newConversationId !== input.conversationId) {
+    return { action: 'navigate', key, conversationId: input.cwdChange.newConversationId };
+  }
+
+  return { action: 'reconnect', key };
+}
+
 export function shouldFetchConversationAttachments(input: {
   draft: boolean;
   conversationId: string | null | undefined;
