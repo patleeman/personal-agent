@@ -1268,6 +1268,7 @@ function toolFlowLabel(call: { toolName: string; bashCommandLabel?: string | nul
   if (call.toolName !== 'bash') return call.toolName;
 
   const label = call.bashCommandLabel?.trim() || parseBashCommandLabel(call.bashCommand ?? null) || 'unknown';
+  if (label === 'apply_patch') return 'apply_patch';
   return `bash:${label}`;
 }
 

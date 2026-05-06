@@ -207,6 +207,23 @@ describe('trace-db', () => {
     });
   });
 
+  it('queryToolFlow normalizes legacy bash apply_patch calls to the apply_patch tool label', () => {
+    writeTraceToolCall({
+      sessionId: 'patch-session',
+      toolName: 'bash',
+      toolInput: { command: "apply_patch <<'PATCH'\n*** Begin Patch\n*** End Patch\nPATCH" },
+      status: 'ok',
+    });
+    writeTraceToolCall({ sessionId: 'patch-session', toolName: 'read', status: 'ok' });
+
+    const result = queryToolFlow(fiveHoursAgo);
+
+    expect(result.transitions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fromTool: 'apply_patch', toTool: 'read', count: 1 })]),
+    );
+    expect(result.transitions).not.toEqual(expect.arrayContaining([expect.objectContaining({ fromTool: 'bash:apply_patch' })]));
+  });
+
   it('queryContextSessions returns latest per session', () => {
     const result = queryContextSessions(fiveHoursAgo);
     expect(result.length).toBe(1);
