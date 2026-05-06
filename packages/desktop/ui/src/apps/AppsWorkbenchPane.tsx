@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { AppIcon } from './AppIcon';
 import { AppPageViewer } from './AppPageViewer';
 import type { SkillApp } from './types';
 
@@ -34,8 +35,13 @@ function AppsListView({ apps, onSelect }: { apps: SkillApp[]; onSelect: (app: Sk
           className="flex flex-col rounded-xl border border-border-subtle bg-surface p-4 text-left transition-colors hover:border-accent/30 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
           onClick={() => onSelect(app)}
         >
-          <p className="text-[13px] font-semibold text-primary">{app.name}</p>
-          {app.description ? <p className="mt-1 text-[12px] leading-5 text-secondary line-clamp-2">{app.description}</p> : null}
+          <div className="flex min-w-0 items-start gap-3">
+            <AppIcon app={app} className="size-9" />
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold text-primary">{app.name}</p>
+              {app.description ? <p className="mt-1 text-[12px] leading-5 text-secondary line-clamp-2">{app.description}</p> : null}
+            </div>
+          </div>
           <div className="mt-3 flex items-center gap-2">
             <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
               {app.nav.length > 1 ? `${app.nav.length} pages` : 'Single page'}

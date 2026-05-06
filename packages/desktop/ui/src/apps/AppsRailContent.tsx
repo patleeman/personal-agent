@@ -4,6 +4,7 @@
  * Shows a list of app thumbnails/cards that the user can click to open.
  */
 
+import { AppIcon } from './AppIcon';
 import type { SkillApp } from './types';
 
 export function AppsRailContent({
@@ -42,6 +43,7 @@ export function AppsRailContent({
           }
           onClick={() => onSelectApp(app)}
         >
+          <AppIcon app={app} className="size-7 rounded-lg" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[12px] font-medium">{app.name}</p>
             {app.description ? <p className="mt-0.5 truncate text-[11px] text-dim">{app.description}</p> : null}

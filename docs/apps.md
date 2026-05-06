@@ -12,6 +12,7 @@ Apps live under the vault root in `apps/{app-id}/`:
 knowledge-base/repo/apps/
   auto-research/
     APP.md
+    icon.svg
     run.html
 ```
 
@@ -23,6 +24,7 @@ name: Auto Research
 description: Launch overnight optimization sessions and track progress
 prompt: '/skill:auto-research'
 entry: run.html
+icon: icon.svg
 ---
 ```
 
@@ -34,6 +36,19 @@ Required manifest fields:
 | `description` | Short summary shown on the app card           |
 | `prompt`      | Base prompt or skill the app wraps            |
 | `entry`       | HTML file to load first, usually `index.html` |
+
+Optional app icons can be added with `icon`. Put the icon file in the app directory and reference it from `APP.md`:
+
+```yaml
+icon: icon.svg
+```
+
+Icon specs for agents creating apps:
+
+- Prefer `icon.svg`; PNG, WebP, JPEG are also supported.
+- Design for a square canvas, minimum 64×64px, with a simple centered mark that still reads at 36px.
+- Use a transparent background unless the mark needs a deliberate solid tile.
+- Avoid text, tiny details, screenshots, and external image URLs. Keep the file local under `apps/{app-id}/`.
 
 Optional navigation metadata can be added with `nav`. Today it is parsed for app metadata/page counts; app pages should still render their own links or controls when they need multi-page movement.
 
@@ -193,7 +208,7 @@ Prefer one focused page with a form and a status/results area. Do not build a mi
 
 ## Discovery and viewing
 
-The desktop app lists apps from `GET /api/apps`, which scans the vault `apps/` directory for subdirectories containing `APP.md` manifests. Apps appear in the top-level **Apps** page and in the Workbench Apps rail.
+The desktop app lists apps from `GET /api/apps`, which scans the vault `apps/` directory for subdirectories containing `APP.md` manifests. Apps appear in the top-level **Apps** page and in the Workbench Apps rail. If `icon` is present, the app list renders it to the left of the app name.
 
 If an app does not appear:
 

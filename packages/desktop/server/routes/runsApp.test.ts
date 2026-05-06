@@ -90,6 +90,7 @@ describe('registerRunAppRoutes', () => {
       logHandler: handlers['GET /api/runs/:id/log']!,
       cancelHandler: handlers['POST /api/runs/:id/cancel']!,
       appsHandler: handlers['GET /api/apps']!,
+      iconHandler: handlers['GET /api/apps/:id/icon']!,
     };
   }
 
@@ -111,6 +112,15 @@ describe('registerRunAppRoutes', () => {
     };
   }
 
+  function createAssetResponse() {
+    return {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+      setHeader: vi.fn(),
+      send: vi.fn(),
+    };
+  }
+
   it('lists apps with their vault directory id instead of display name', async () => {
     const vaultRoot = await mkdtemp(join(tmpdir(), 'pa-apps-test-'));
     try {
@@ -122,6 +132,7 @@ name: Auto Research
 description: Launch overnight optimization sessions
 prompt: "/skill:auto-research"
 entry: run.html
+icon: icon.svg
 ---
 `,
       );
@@ -138,9 +149,36 @@ entry: run.html
           description: 'Launch overnight optimization sessions',
           prompt: '/skill:auto-research',
           entry: 'run.html',
+          icon: 'icon.svg',
           nav: [],
         },
       ]);
+    } finally {
+      await rm(vaultRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('serves the icon declared by an app manifest', async () => {
+    const vaultRoot = await mkdtemp(join(tmpdir(), 'pa-app-icon-test-'));
+    try {
+      await mkdir(join(vaultRoot, 'apps', 'auto-research'), { recursive: true });
+      await writeFile(
+        join(vaultRoot, 'apps', 'auto-research', 'APP.md'),
+        `---
+name: Auto Research
+icon: icon.svg
+---
+`,
+      );
+      await writeFile(join(vaultRoot, 'apps', 'auto-research', 'icon.svg'), '<svg></svg>');
+      getVaultRootMock.mockReturnValue(vaultRoot);
+      const { iconHandler } = createHarness();
+      const res = createAssetResponse();
+
+      await iconHandler({ params: { id: 'auto-research' } }, res);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/svg+xml; charset=utf-8');
+      expect(res.send).toHaveBeenCalledWith(Buffer.from('<svg></svg>'));
     } finally {
       await rm(vaultRoot, { recursive: true, force: true });
     }

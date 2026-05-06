@@ -13,5 +13,6 @@ export interface SkillApp {
   description: string;
   prompt: string;
   entry: string;
+  icon: string;
   nav: SkillAppNavItem[];
 }

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { AppPageIntro, AppPageLayout, ToolbarButton } from '../components/ui';
+import { AppIcon } from './AppIcon';
 import { AppPageViewer } from './AppPageViewer';
 import type { SkillApp } from './types';
 import { useAppList } from './useAppList';
@@ -170,14 +171,17 @@ export function AppsPage() {
                 className="group grid w-full gap-3 border-b border-border-subtle py-5 text-left text-primary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6"
                 onClick={() => handleSelectApp(app)}
               >
-                <div className="min-w-0 space-y-1.5">
-                  <p className="truncate text-[15px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
-                    {app.name}
-                  </p>
-                  {app.description ? (
-                    <p className="max-w-3xl text-[13px] leading-6 text-secondary line-clamp-2">{app.description}</p>
-                  ) : null}
-                  {app.prompt ? <p className="truncate font-mono text-[11px] text-dim">{app.prompt.slice(0, 72)}</p> : null}
+                <div className="flex min-w-0 gap-3">
+                  <AppIcon app={app} />
+                  <div className="min-w-0 space-y-1.5">
+                    <p className="truncate text-[15px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
+                      {app.name}
+                    </p>
+                    {app.description ? (
+                      <p className="max-w-3xl text-[13px] leading-6 text-secondary line-clamp-2">{app.description}</p>
+                    ) : null}
+                    {app.prompt ? <p className="truncate font-mono text-[11px] text-dim">{app.prompt.slice(0, 72)}</p> : null}
+                  </div>
                 </div>
                 <div className="text-[12px] text-secondary sm:text-right">
                   <div>{app.nav.length > 1 ? `${app.nav.length} pages` : 'Single page'}</div>

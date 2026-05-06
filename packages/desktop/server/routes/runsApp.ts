@@ -4,8 +4,8 @@
  * Handles durable run listing, status, logs, cancel, import, and SSE events.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { extname, join, resolve, sep } from 'node:path';
 
 import { getVaultRoot } from '@personal-agent/core';
 import { pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
@@ -45,6 +45,31 @@ function parseYamlScalar(raw: string | undefined, fallback = ''): string {
   const quoted = trimmed.match(/^(?:"(.*)"|'(.*)')$/);
 
   return quoted ? (quoted[1] ?? quoted[2] ?? '') : trimmed;
+}
+
+function resolveAppAssetPath(appDir: string, assetPath: string): string | null {
+  const trimmed = assetPath.trim();
+  if (!trimmed || trimmed.startsWith('/') || trimmed.includes('\0')) return null;
+
+  const resolved = resolve(appDir, trimmed);
+  const appRoot = resolve(appDir);
+  return resolved === appRoot || resolved.startsWith(`${appRoot}${sep}`) ? resolved : null;
+}
+
+function getImageContentType(filePath: string): string | null {
+  switch (extname(filePath).toLowerCase()) {
+    case '.svg':
+      return 'image/svg+xml; charset=utf-8';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    default:
+      return null;
+  }
 }
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
@@ -133,6 +158,7 @@ export function registerRunAppRoutes(
         description: string;
         prompt: string;
         entry: string;
+        icon: string;
         nav: Array<{ label: string; page: string }>;
       }> = [];
 
@@ -156,6 +182,7 @@ export function registerRunAppRoutes(
           const description = parseYamlScalar(yaml.match(/^description\s*:\s*(.+)$/m)?.[1]);
           const prompt = parseYamlScalar(yaml.match(/^prompt\s*:\s*(.+)$/m)?.[1]);
           const entryPage = parseYamlScalar(yaml.match(/^entry\s*:\s*(.+)$/m)?.[1], 'index.html');
+          const icon = parseYamlScalar(yaml.match(/^icon\s*:\s*(.+)$/m)?.[1]);
 
           // Parse nav block if present
           const nav: Array<{ label: string; page: string }> = [];
@@ -180,7 +207,7 @@ export function registerRunAppRoutes(
             }
           }
 
-          apps.push({ id: entry, name, description, prompt, entry: entryPage, nav });
+          apps.push({ id: entry, name, description, prompt, entry: entryPage, icon, nav });
         } catch {
           // Skip malformed apps
         }
@@ -192,6 +219,49 @@ export function registerRunAppRoutes(
         message: err instanceof Error ? err.message : String(err),
       });
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // GET /api/apps/:id/icon — serve the optional app icon declared in APP.md
+  router.get('/api/apps/:id/icon', (req, res) => {
+    try {
+      const appId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+      if (!appId || appId.includes('/') || appId.includes('\\') || appId.includes('\0')) {
+        res.status(400).json({ error: 'Invalid app id' });
+        return;
+      }
+
+      const vaultRoot = resolve(getVaultRoot());
+      const appDir = join(vaultRoot, 'apps', appId);
+      const appMdPath = join(appDir, 'APP.md');
+      if (!existsSync(appMdPath) || !statSync(appMdPath).isFile()) {
+        res.status(404).json({ error: 'App not found' });
+        return;
+      }
+
+      const raw = readFileSync(appMdPath, 'utf-8');
+      const yamlMatch = raw.match(/^---\s*\n([\s\S]*?)\n---/);
+      const icon = parseYamlScalar(yamlMatch?.[1].match(/^icon\s*:\s*(.+)$/m)?.[1]);
+      const iconPath = icon ? resolveAppAssetPath(appDir, icon) : null;
+      if (!iconPath || !existsSync(iconPath) || !statSync(iconPath).isFile()) {
+        res.status(404).json({ error: 'Icon not found' });
+        return;
+      }
+
+      const contentType = getImageContentType(iconPath);
+      if (!contentType) {
+        res.status(415).json({ error: 'Unsupported icon type' });
+        return;
+      }
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.send(readFileSync(iconPath));
+    } catch (err) {
+      logError('app icon serve error', {
+        message: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'Failed to serve app icon' });
     }
   });
 
