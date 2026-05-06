@@ -185,6 +185,8 @@ interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState 
   traceRunStartedAtMs?: number | null;
   traceRunTurnCount?: number;
   traceRunStepCount?: number;
+  traceRunFirstAssistantAtMs?: number | null;
+  traceRunFirstToolAtMs?: number | null;
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
 }

@@ -43,6 +43,38 @@ function readToolEventArgs(event: AgentSessionEvent): unknown {
   return 'args' in event ? event.args : undefined;
 }
 
+function readToolInputMetadata(toolName: string, toolInput: unknown): Record<string, unknown> | undefined {
+  if (typeof toolInput !== 'object' || toolInput === null || Array.isArray(toolInput)) return undefined;
+  const input = toolInput as Record<string, unknown>;
+  const path = typeof input.path === 'string' ? input.path : typeof input.filePath === 'string' ? input.filePath : undefined;
+  const command = typeof input.command === 'string' ? input.command : undefined;
+  const mcpServer = typeof input.server === 'string' ? input.server : undefined;
+  const mcpTool = typeof input.tool === 'string' ? input.tool : undefined;
+  const url = typeof input.url === 'string' ? input.url : undefined;
+  const metadata: Record<string, unknown> = { inputKeys: Object.keys(input).sort() };
+  if (path) {
+    const parts = path.split('/').filter(Boolean);
+    const file = parts.at(-1) ?? path;
+    metadata.pathExt = file.includes('.') ? file.split('.').at(-1) : '';
+    metadata.pathDepth = parts.length;
+  }
+  if (command) metadata.commandLength = command.length;
+  if (mcpServer) metadata.mcpServer = mcpServer;
+  if (mcpTool) metadata.mcpTool = mcpTool;
+  if (url) {
+    try {
+      metadata.domain = new URL(url).hostname;
+    } catch {
+      metadata.domain = 'invalid-url';
+    }
+  }
+  if (toolName === 'write' || toolName === 'apply_patch' || toolName === 'edit') {
+    const content = typeof input.content === 'string' ? input.content : typeof input.input === 'string' ? input.input : undefined;
+    if (content) metadata.contentLength = content.length;
+  }
+  return metadata;
+}
+
 export interface LiveSessionEventHost {
   sessionId: string;
   session: AgentSession;
@@ -58,6 +90,8 @@ export interface LiveSessionEventHost {
   traceRunStartedAtMs?: number | null;
   traceRunTurnCount?: number;
   traceRunStepCount?: number;
+  traceRunFirstAssistantAtMs?: number | null;
+  traceRunFirstToolAtMs?: number | null;
   tracePersistedTokens?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number };
 }
 
@@ -168,6 +202,19 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   if (event.type === 'tool_execution_start') {
     getToolStartTimes(entry.session).set(event.toolCallId, Date.now());
     getToolStartInputs(entry.session).set(event.toolCallId, readToolEventArgs(event));
+    if (!entry.traceRunFirstToolAtMs) {
+      const now = Date.now();
+      entry.traceRunFirstToolAtMs = now;
+      persistAppTelemetryEvent({
+        source: 'agent',
+        category: 'conversation_latency',
+        name: 'first_tool',
+        sessionId: entry.sessionId,
+        runId: entry.traceRunId ?? undefined,
+        durationMs: entry.traceRunStartedAtMs ? now - entry.traceRunStartedAtMs : undefined,
+        metadata: { toolName: event.toolName },
+      });
+    }
   }
 
   if (event.type === 'tool_execution_end') {
@@ -189,6 +236,21 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       errorMessage: event.isError ? String(event.result) : undefined,
       conversationTitle: entry.title,
     });
+    persistAppTelemetryEvent({
+      source: 'agent',
+      category: 'tool_execution',
+      name: event.toolName,
+      sessionId: entry.sessionId,
+      runId: entry.traceRunId ?? undefined,
+      durationMs,
+      count: entry.traceRunStepCount ?? 0,
+      status: event.isError ? 500 : 200,
+      metadata: {
+        isError: event.isError,
+        errorMessage: event.isError ? String(event.result).slice(0, 500) : undefined,
+        ...readToolInputMetadata(event.toolName, toolInput),
+      },
+    });
   }
 
   if (event.type === 'agent_start') {
@@ -196,6 +258,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     entry.traceRunStartedAtMs = Date.now();
     entry.traceRunTurnCount = 0;
     entry.traceRunStepCount = 0;
+    entry.traceRunFirstAssistantAtMs = null;
+    entry.traceRunFirstToolAtMs = null;
     entry.currentTurnError = null;
     persistAppTelemetryEvent({
       source: 'agent',
@@ -226,7 +290,28 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     const errorMessage = getAssistantErrorDisplayMessage(event.message);
     if (errorMessage) {
       entry.currentTurnError = errorMessage;
+      persistAppTelemetryEvent({
+        source: 'agent',
+        category: 'conversation_outcome',
+        name: 'assistant_error',
+        sessionId: entry.sessionId,
+        runId: entry.traceRunId ?? undefined,
+        metadata: { message: errorMessage },
+      });
     }
+  }
+
+  if (event.type === 'message_start' && event.message.role === 'assistant' && !entry.traceRunFirstAssistantAtMs) {
+    const now = Date.now();
+    entry.traceRunFirstAssistantAtMs = now;
+    persistAppTelemetryEvent({
+      source: 'agent',
+      category: 'conversation_latency',
+      name: 'first_assistant_message',
+      sessionId: entry.sessionId,
+      runId: entry.traceRunId ?? undefined,
+      durationMs: entry.traceRunStartedAtMs ? now - entry.traceRunStartedAtMs : undefined,
+    });
   }
 
   if (event.type === 'queue_update') {
@@ -282,6 +367,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     entry.traceRunStartedAtMs = null;
     entry.traceRunTurnCount = 0;
     entry.traceRunStepCount = 0;
+    entry.traceRunFirstAssistantAtMs = null;
+    entry.traceRunFirstToolAtMs = null;
     callbacks.clearContextUsageTimer(entry);
     callbacks.broadcastContextUsage(entry, true);
   }

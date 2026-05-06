@@ -39,6 +39,15 @@ function formatFields(fields: Record<string, unknown> | undefined): string {
 function emit(level: WebLogLevel, message: string, fields?: Record<string, unknown>): void {
   const line = `[${new Date().toISOString()}] [web] [${level}] ${message}${formatFields(fields)}`;
 
+  if (level !== 'info') {
+    persistAppTelemetryEvent({
+      source: 'server',
+      category: 'log',
+      name: level,
+      metadata: { message, fields },
+    });
+  }
+
   if (level === 'error') {
     console.error(line);
     return;

@@ -19,6 +19,7 @@ import type {
   SessionContextUsage,
   SseEvent,
 } from '../shared/types';
+import { recordRendererTelemetry } from '../telemetry/appTelemetry';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { clearWarmLiveSessionState, readWarmLiveSessionState, writeWarmLiveSessionState } from '../ui-state/liveSessionWarmth';
 
@@ -670,6 +671,7 @@ export function useSessionStream(
 
   const abort = useCallback(async () => {
     if (!normalizedSessionId) return;
+    recordRendererTelemetry({ category: 'conversation_stream', name: 'abort_requested', sessionId: normalizedSessionId });
     await api.abortSession(normalizedSessionId, surfaceId);
   }, [normalizedSessionId, surfaceId]);
 
@@ -726,8 +728,13 @@ export function useSessionStream(
 
     let es: EventSourceLike;
     let closed = false;
+    let connectStartedAt = 0;
+    let sawFirstEvent = false;
+    let reconnectCount = 0;
 
     function connect() {
+      connectStartedAt = performance.now();
+      sawFirstEvent = false;
       const params = new URLSearchParams();
       const tailBlocks = normalizeLiveSessionTailBlocks(options?.tailBlocks);
       if (tailBlocks !== undefined) {
@@ -749,12 +756,42 @@ export function useSessionStream(
           return;
         }
 
+        if (!sawFirstEvent) {
+          sawFirstEvent = true;
+          recordRendererTelemetry({
+            category: 'conversation_stream',
+            name: 'first_event',
+            sessionId: requestedSessionId,
+            durationMs: Math.round(performance.now() - connectStartedAt),
+            count: reconnectCount,
+            metadata: { eventType: event.type, registeredSurface: registerSurface },
+          });
+        }
+
+        if (event.type === 'snapshot') {
+          recordRendererTelemetry({
+            category: 'conversation_stream',
+            name: 'snapshot',
+            sessionId: requestedSessionId,
+            count: event.blocks.length,
+            metadata: { totalBlocks: event.totalBlocks, blockOffset: event.blockOffset, reconnectCount },
+          });
+        }
+
         setState((prev) => applyEvent(prev, blocksRef, streamingRef, event));
       };
 
       es.onerror = () => {
         if (closed) return;
         es.close();
+        reconnectCount += 1;
+        recordRendererTelemetry({
+          category: 'conversation_stream',
+          name: 'sse_error',
+          sessionId: requestedSessionId,
+          durationMs: Math.round(performance.now() - connectStartedAt),
+          count: reconnectCount,
+        });
         // Clear streaming state immediately so the cursor doesn't stay frozen
         // during the reconnect window. The snapshot on reconnect will restore
         // the real state.

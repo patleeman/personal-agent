@@ -24,6 +24,7 @@ export function flushAppTelemetryQueue(): void {
 export function persistAppTelemetryEvent(event: AppTelemetryEventInput): void {
   try {
     if (queue.length >= MAX_QUEUE_SIZE) {
+      writeAppTelemetryEvent({ source: 'system', category: 'telemetry', name: 'queue_drop', count: queue.length });
       queue = queue.slice(queue.length - Math.floor(MAX_QUEUE_SIZE / 2));
     }
     queue.push(event);
