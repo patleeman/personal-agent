@@ -16,6 +16,7 @@ import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveD
 
 import { clearDurableRunsListCache } from '../automation/durableRuns.js';
 import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { logWarn } from './logging.js';
 
 export type AppEventTopic =
@@ -482,6 +483,14 @@ function startProfileConfigWatch(profileConfigFile: string, onChange: () => void
 }
 
 export function publishAppEvent(event: AppEvent): void {
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'app_event',
+    name: event.type,
+    sessionId: 'sessionId' in event ? event.sessionId : undefined,
+    count: event.type === 'invalidate' ? event.topics.length : undefined,
+    metadata: event.type === 'invalidate' ? { topics: event.topics } : undefined,
+  });
   for (const listener of listeners) {
     listener(event);
   }

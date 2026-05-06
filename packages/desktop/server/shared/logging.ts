@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
+
 export type WebLogLevel = 'info' | 'warn' | 'error';
 
 function formatValue(value: unknown): string {
@@ -89,6 +91,20 @@ export function webRequestLoggingMiddleware(req: Request, res: Response, next: N
       durationMs,
       contentLength: res.getHeader('content-length'),
     };
+
+    persistAppTelemetryEvent({
+      source: 'server',
+      category: 'api',
+      name: 'request',
+      route: req.route?.path ? `${req.method} ${req.route.path}` : `${req.method} ${req.path}`,
+      status: statusCode,
+      durationMs,
+      metadata: {
+        method: req.method,
+        path: req.originalUrl || req.url,
+        contentLength: res.getHeader('content-length'),
+      },
+    });
 
     if (statusCode >= 500) {
       logError('request failed', fields);

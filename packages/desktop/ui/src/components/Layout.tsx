@@ -24,6 +24,7 @@ import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
+import { useRouteTelemetry } from '../telemetry/appTelemetry';
 import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, writeAppLayoutMode } from '../ui-state/appLayoutMode';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-state/liveSessionWarmth';
@@ -1541,6 +1542,7 @@ function WorkbenchKnowledgeRail({
 
 export function Layout() {
   const location = useLocation();
+  useRouteTelemetry();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { sessions } = useAppData();

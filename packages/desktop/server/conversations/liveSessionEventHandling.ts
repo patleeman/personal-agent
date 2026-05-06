@@ -1,6 +1,7 @@
 import type { AgentSession, AgentSessionEvent } from '@mariozechner/pi-coding-agent';
 
 import { logWarn } from '../shared/logging.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { persistTraceCompaction, persistTraceToolCall } from '../traces/tracePersistence.js';
 import { CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE } from './conversationAutoMode.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
@@ -94,6 +95,15 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
 
   if (event.type === 'turn_end') {
     entry.traceRunTurnCount = (entry.traceRunTurnCount ?? 0) + 1;
+    persistAppTelemetryEvent({
+      source: 'agent',
+      category: 'conversation_loop',
+      name: 'turn_end',
+      sessionId: entry.sessionId,
+      runId: entry.traceRunId ?? undefined,
+      count: entry.traceRunTurnCount,
+      metadata: { hiddenTurnCustomType: activeHiddenTurnCustomType },
+    });
 
     if (activeHiddenTurnCustomType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
       const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
@@ -187,10 +197,28 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     entry.traceRunTurnCount = 0;
     entry.traceRunStepCount = 0;
     entry.currentTurnError = null;
+    persistAppTelemetryEvent({
+      source: 'agent',
+      category: 'conversation_loop',
+      name: 'agent_start',
+      sessionId: entry.sessionId,
+      runId: entry.traceRunId,
+      metadata: { title: entry.title },
+    });
     void callbacks.syncDurableConversationRun(entry, 'running');
   }
 
   if (event.type === 'agent_end') {
+    persistAppTelemetryEvent({
+      source: 'agent',
+      category: 'conversation_loop',
+      name: 'agent_end',
+      sessionId: entry.sessionId,
+      runId: entry.traceRunId ?? undefined,
+      durationMs: entry.traceRunStartedAtMs ? Date.now() - entry.traceRunStartedAtMs : undefined,
+      count: entry.traceRunStepCount ?? 0,
+      metadata: { turnCount: entry.traceRunTurnCount ?? 0, currentTurnError: entry.currentTurnError },
+    });
     void callbacks.syncDurableConversationRun(entry, 'waiting');
   }
 

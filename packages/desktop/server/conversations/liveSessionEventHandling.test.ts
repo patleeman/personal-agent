@@ -8,9 +8,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the persist functions before importing the handler
-const { persistTraceToolCallMock, persistTraceCompactionMock } = vi.hoisted(() => ({
+const { persistTraceToolCallMock, persistTraceCompactionMock, persistAppTelemetryEventMock } = vi.hoisted(() => ({
   persistTraceToolCallMock: vi.fn(),
   persistTraceCompactionMock: vi.fn(),
+  persistAppTelemetryEventMock: vi.fn(),
+}));
+
+vi.mock('../traces/appTelemetry.js', () => ({
+  persistAppTelemetryEvent: persistAppTelemetryEventMock,
 }));
 
 vi.mock('../traces/tracePersistence.js', () => ({

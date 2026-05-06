@@ -4,6 +4,12 @@ Telemetry explains how Personal Agent records local trace data for the desktop m
 
 The desktop app writes turn stats, context pressure, compactions, and tool calls into the local SQLite trace database. The Traces page reads aggregated views from `/api/traces/*` endpoints; writes are fire-and-forget through the trace worker so conversation execution does not wait on analytics.
 
+## Application telemetry
+
+Application telemetry is a generic local event sink for signals that are useful to collect now before the UI has a first-class chart. It writes to `pi-agent/state/trace/app-telemetry.db` through `writeAppTelemetryEvent` and stores source, category, name, session/run ids, route, status, duration, counts, values, and bounded JSON metadata.
+
+Current producers include server API request timing, server app events, renderer route views/leaves, renderer visibility changes, renderer crashes/rejections, conversation prompt submissions, and agent loop lifecycle events. The endpoint for renderer events is `POST /api/telemetry/event`; it is intentionally fire-and-forget and must never block or break the app.
+
 ## Tool telemetry
 
 Tool health groups calls by tool name and tracks call count, errors, success rate, average latency, P95 latency, and max latency. Bash is treated as a first-class subsection because it is the dominant Pi tool: each bash call also stores the submitted command and a normalized command-family label such as `git`, `npm`, or `rg`.

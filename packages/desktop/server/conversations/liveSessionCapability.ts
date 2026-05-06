@@ -21,6 +21,7 @@ import {
 import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import type { MemoryDocSummary } from '../routes/context.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { persistTraceSuggestedContext } from '../traces/tracePersistence.js';
 import { buildAttachedConversationContextDocsContext, readConversationContextDocs } from './conversationContextDocs.js';
 import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
@@ -784,6 +785,29 @@ export async function submitLiveSessionPromptCapability(
     contextMessages: prepared.normalizedContextMessages,
   });
   const promptContextMessages = promptContext.contextMessages;
+
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'conversation_prompt',
+    name: 'submit',
+    sessionId: liveConversationId,
+    count: promptContextMessages.length,
+    value: prepared.text.length,
+    metadata: {
+      behavior,
+      promptLength: prepared.text.length,
+      imageCount: prepared.promptImages?.length ?? 0,
+      contextMessageCount: promptContextMessages.length,
+      relatedConversationCount: input.relatedConversationIds?.length ?? 0,
+      referencedTaskCount: prepared.promptReferences.taskIds.length,
+      referencedMemoryDocCount: prepared.promptReferences.memoryDocIds.length,
+      referencedVaultFileCount: prepared.referencedVaultFiles.length,
+      referencedAttachmentCount: prepared.referencedAttachments.length,
+      backgroundRunContextCount: prepared.backgroundRunContextEntries.length,
+      surfaceId: prepared.surfaceId,
+      cwd: recoveredLiveEntry?.cwd,
+    },
+  });
 
   for (const message of promptContextMessages) {
     await queuePromptContext(liveConversationId, message.customType, message.content);

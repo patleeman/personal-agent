@@ -7,6 +7,7 @@ import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { recordRendererTelemetry } from '../telemetry/appTelemetry';
 import { App } from './App';
 
 // ── Renderer-side crash logging ───────────────────────────────────────────────
@@ -25,11 +26,32 @@ window.addEventListener('error', (event) => {
   }
 
   console.error('[renderer] uncaught error', event.error ?? event.message);
+  recordRendererTelemetry({
+    category: 'renderer',
+    name: 'uncaught_error',
+    route: `${window.location.pathname}${window.location.search}`,
+    metadata: {
+      message: event.message,
+      stack: event.error instanceof Error ? event.error.stack : undefined,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+    },
+  });
 });
 
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown');
   console.error('[renderer] unhandled rejection', reason);
+  recordRendererTelemetry({
+    category: 'renderer',
+    name: 'unhandled_rejection',
+    route: `${window.location.pathname}${window.location.search}`,
+    metadata: {
+      reason,
+      stack: event.reason instanceof Error ? event.reason.stack : undefined,
+    },
+  });
 });
 
 // ── Desktop shell detection ───────────────────────────────────────────────────
