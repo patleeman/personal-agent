@@ -26,26 +26,35 @@ export function TracesCacheAndSystemPrompt({
             <>
               <div className="flex gap-2 mb-3">
                 <QuickStat
+                  value={`${cacheEfficiency.requestCacheHitRate}%`}
+                  label="Request Hit Rate"
+                  cls={cacheEfficiency.requestCacheHitRate > 50 ? 'text-success' : 'text-warning'}
+                />
+                <QuickStat
                   value={`${cacheEfficiency.overallHitRate}%`}
                   label="Cached Share"
                   cls={cacheEfficiency.overallHitRate > 30 ? 'text-success' : 'text-warning'}
                 />
                 <QuickStat value={fmt(cacheEfficiency.totalCached)} label="Cache Read" />
-                <QuickStat value={fmt(cacheEfficiency.totalCachedWrite)} label="Cache Write" />
-                <QuickStat value={fmt(cacheEfficiency.totalInput)} label="Total Input" />
+                <QuickStat value={`${cacheEfficiency.cachedRequests}/${cacheEfficiency.requests}`} label="Cached Requests" />
               </div>
               {cacheEfficiency.byModel.map((m) => {
-                const barCls = m.hitRate > 30 ? 'bg-success' : m.hitRate > 10 ? 'bg-warning' : 'bg-danger';
+                const barCls = m.requestCacheHitRate > 50 ? 'bg-success' : m.requestCacheHitRate > 10 ? 'bg-warning' : 'bg-danger';
                 return (
                   <div key={m.modelId} className="flex items-center gap-2 py-1">
                     <span className="text-[11px] text-secondary w-[100px]">{m.modelId}</span>
                     <div className="flex-1 h-1.5 bg-elevated rounded overflow-hidden">
-                      <div className={`h-full rounded ${barCls}`} style={{ width: `${Math.max(m.hitRate, 2)}%` }} />
+                      <div className={`h-full rounded ${barCls}`} style={{ width: `${Math.max(m.requestCacheHitRate, 2)}%` }} />
                     </div>
-                    <span className="text-[10px] font-mono text-dim w-[50px] text-right">{m.hitRate}%</span>
+                    <span className="text-[10px] font-mono text-dim w-[120px] text-right">
+                      {m.requestCacheHitRate}% req · {m.hitRate}% tok
+                    </span>
                   </div>
                 );
               })}
+              <div className="text-[11px] text-dim pt-2 mt-2 border-t border-border-subtle">
+                Request hit rate counts requests with any cache read. Cached share is provider-reported cached token volume.
+              </div>
             </>
           )}
         </div>

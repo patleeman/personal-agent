@@ -132,7 +132,27 @@ vi.mock('./traces/useTracesData', () => ({
       { date: '2026-05-01', tokensInput: 100000, tokensOutput: 200000, tokensCached: 30000, cost: 0.5 },
       { date: '2026-05-02', tokensInput: 150000, tokensOutput: 250000, tokensCached: 40000, cost: 0.75 },
     ],
-    cacheEfficiency: null,
+    cacheEfficiency: {
+      overallHitRate: 86.4,
+      requestCacheHitRate: 52.5,
+      totalInput: 1250000,
+      totalCached: 1080000,
+      totalCachedWrite: 30000,
+      requests: 40,
+      cachedRequests: 21,
+      byModel: [
+        {
+          modelId: 'gpt-4o',
+          hitRate: 86.4,
+          requestCacheHitRate: 52.5,
+          totalInput: 1250000,
+          totalCached: 1080000,
+          totalCachedWrite: 30000,
+          requests: 40,
+          cachedRequests: 21,
+        },
+      ],
+    },
     systemPrompt: {
       avgSystemPromptTokens: 8000,
       avgPctOfTotal: 40,
@@ -223,6 +243,8 @@ describe('TracesPage', () => {
     expect(html).toContain('gpt-4o');
     expect(html).toContain('gpt-4o-mini');
     expect(html).toContain('Cached Share');
+    expect(html).toContain('Request Hit Rate');
+    expect(html).toContain('21/40');
     expect(html).not.toContain('Cache Hit');
   });
 

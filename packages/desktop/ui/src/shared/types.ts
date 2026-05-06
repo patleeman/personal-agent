@@ -1697,10 +1697,22 @@ export interface CacheEfficiencyPoint {
 
 export interface CacheEfficiencyAggregate {
   overallHitRate: number;
+  requestCacheHitRate: number;
   totalInput: number;
   totalCached: number;
   totalCachedWrite: number;
-  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number; totalCachedWrite: number }>;
+  requests: number;
+  cachedRequests: number;
+  byModel: Array<{
+    modelId: string;
+    hitRate: number;
+    requestCacheHitRate: number;
+    totalInput: number;
+    totalCached: number;
+    totalCachedWrite: number;
+    requests: number;
+    cachedRequests: number;
+  }>;
 }
 
 export interface SystemPromptPoint {

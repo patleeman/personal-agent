@@ -235,6 +235,9 @@ describe('trace-db', () => {
     expect(aggregate.totalInput).toBe(2050);
     expect(aggregate.totalCached).toBe(250);
     expect(aggregate.totalCachedWrite).toBe(0);
+    expect(aggregate.requests).toBe(3);
+    expect(aggregate.cachedRequests).toBe(1);
+    expect(aggregate.requestCacheHitRate).toBe(33.33);
     expect(aggregate.overallHitRate).toBeGreaterThan(0);
     expect(aggregate.overallHitRate).toBeLessThanOrEqual(100);
   });

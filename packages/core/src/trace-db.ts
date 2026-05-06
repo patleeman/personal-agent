@@ -1489,10 +1489,22 @@ export function querySystemPromptTrend(since: string): SystemPromptPoint[] {
 
 export function queryCacheEfficiencyAggregate(since: string): {
   overallHitRate: number;
+  requestCacheHitRate: number;
   totalInput: number;
   totalCached: number;
   totalCachedWrite: number;
-  byModel: Array<{ modelId: string; hitRate: number; totalInput: number; totalCached: number; totalCachedWrite: number }>;
+  requests: number;
+  cachedRequests: number;
+  byModel: Array<{
+    modelId: string;
+    hitRate: number;
+    requestCacheHitRate: number;
+    totalInput: number;
+    totalCached: number;
+    totalCachedWrite: number;
+    requests: number;
+    cachedRequests: number;
+  }>;
 } {
   const db = getTraceDb();
   const rows = db
@@ -1501,32 +1513,49 @@ export function queryCacheEfficiencyAggregate(since: string): {
     SELECT COALESCE(model_id, '') as model_id,
       SUM(tokens_input + tokens_cached_input + tokens_cached_write) as total_input,
       SUM(tokens_cached_input) as total_cached,
-      SUM(tokens_cached_write) as total_cached_write
+      SUM(tokens_cached_write) as total_cached_write,
+      COUNT(*) as requests,
+      SUM(CASE WHEN tokens_cached_input > 0 THEN 1 ELSE 0 END) as cached_requests
     FROM trace_stats WHERE ts >= ? AND model_id IS NOT NULL AND model_id != ''
     GROUP BY model_id ORDER BY total_input DESC
   `,
     )
     .all(since) as Record<string, unknown>[];
-  const mapped = mapRows<{ modelId: string; totalInput: number; totalCached: number; totalCachedWrite: number }>(rows);
+  const mapped = mapRows<{
+    modelId: string;
+    totalInput: number;
+    totalCached: number;
+    totalCachedWrite: number;
+    requests: number;
+    cachedRequests: number;
+  }>(rows);
   const totals = mapped.reduce(
     (acc, r) => ({
       totalInput: acc.totalInput + Number(r.totalInput),
       totalCached: acc.totalCached + Number(r.totalCached),
       totalCachedWrite: acc.totalCachedWrite + Number(r.totalCachedWrite),
+      requests: acc.requests + Number(r.requests),
+      cachedRequests: acc.cachedRequests + Number(r.cachedRequests),
     }),
-    { totalInput: 0, totalCached: 0, totalCachedWrite: 0 },
+    { totalInput: 0, totalCached: 0, totalCachedWrite: 0, requests: 0, cachedRequests: 0 },
   );
   return {
     overallHitRate: totals.totalInput > 0 ? Math.round((totals.totalCached / totals.totalInput) * 10000) / 100 : 0,
+    requestCacheHitRate: totals.requests > 0 ? Math.round((totals.cachedRequests / totals.requests) * 10000) / 100 : 0,
     totalInput: totals.totalInput,
     totalCached: totals.totalCached,
     totalCachedWrite: totals.totalCachedWrite,
+    requests: totals.requests,
+    cachedRequests: totals.cachedRequests,
     byModel: mapped.map((r) => ({
       modelId: r.modelId,
       totalInput: Number(r.totalInput),
       totalCached: Number(r.totalCached),
       totalCachedWrite: Number(r.totalCachedWrite),
+      requests: Number(r.requests),
+      cachedRequests: Number(r.cachedRequests),
       hitRate: Number(r.totalInput) > 0 ? Math.round((Number(r.totalCached) / Number(r.totalInput)) * 10000) / 100 : 0,
+      requestCacheHitRate: Number(r.requests) > 0 ? Math.round((Number(r.cachedRequests) / Number(r.requests)) * 10000) / 100 : 0,
     })),
   };
 }
