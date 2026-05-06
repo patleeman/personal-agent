@@ -70,7 +70,11 @@ export function buildChatRenderChunks(renderItems: ChatRenderItem[], messageInde
       return count + (range.end - range.start + 1);
     }, 0);
     chunks.push({
-      key: `${startRange.start}-${endRange.end}-${items.length}`,
+      // Use only the first item's start message index as the chunk key so it
+      // stays stable when the last trace cluster grows during streaming. Using
+      // endRange.end would change the key on every append, unmounting the
+      // WindowedChatChunk and losing all child ToolBlock state.
+      key: `chunk-${startRange.start}`,
       items,
       startItemIndex,
       endItemIndex: startItemIndex + items.length - 1,

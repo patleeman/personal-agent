@@ -37,7 +37,7 @@ describe('chatWindowing', () => {
 
     expect(chunks).toEqual([
       {
-        key: '20-23-2',
+        key: 'chunk-20',
         items: [messageItem(0), traceCluster(1, 3)],
         startItemIndex: 0,
         endItemIndex: 1,
@@ -46,7 +46,7 @@ describe('chatWindowing', () => {
         spanCount: 4,
       },
       {
-        key: '24-25-2',
+        key: 'chunk-24',
         items: [messageItem(4), messageItem(5)],
         startItemIndex: 2,
         endItemIndex: 3,
