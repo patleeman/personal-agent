@@ -3277,7 +3277,7 @@ final class ConversationViewModel: ObservableObject {
             upsertToolBlock(toolCallId: toolCallId, replacement: block)
         case .toolUpdate(let toolCallId, let partialResult):
             liveEventRevision += 1
-            updateToolBlock(toolCallId: toolCallId) { block in
+            upsertToolBlock(toolCallId: toolCallId) { block in
                 DisplayBlock(
                     type: block.type,
                     id: block.id,

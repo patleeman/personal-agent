@@ -457,6 +457,34 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(block.message, "command failed")
     }
 
+    func testToolUpdateWithoutToolStartStillShowsLiveOutputBlock() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        client.emitToolUpdate(conversationId: "conv-1", toolCallId: "missing-tool-update", partialResult: .string("partial output"))
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.blocks.contains { $0.id == "missing-tool-update" }
+        }
+        let block = try XCTUnwrap(model.blocks.first { $0.id == "missing-tool-update" })
+        XCTAssertEqual(block.type, "tool_use")
+        XCTAssertEqual(block.output, "partial output")
+        XCTAssertNil(block.durationMs)
+    }
+
     func testOlderConversationBootstrapDoesNotClearLoadingForNewerBootstrap() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(
