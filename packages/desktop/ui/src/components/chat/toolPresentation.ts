@@ -33,6 +33,15 @@ export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosureP
 }
 
 export function toggleDisclosurePreference(autoOpen: boolean, preference: DisclosurePreference): DisclosurePreference {
+  // When autoOpen opened the item and the user clicks without having
+  // expressed a preference, make the open preference explicit instead of
+  // toggling to closed. This way clicking on an auto-opened tool/thinking
+  // block to "look at it" keeps it open, and the user can still close it
+  // with a second click.
+  if (preference === 'auto' && autoOpen) {
+    return 'open';
+  }
+
   return resolveDisclosureOpen(autoOpen, preference) ? 'closed' : 'open';
 }
 

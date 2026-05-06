@@ -21,7 +21,9 @@ describe('toolPresentation', () => {
     expect(resolveDisclosureOpen(false, 'auto')).toBe(false);
     expect(resolveDisclosureOpen(false, 'open')).toBe(true);
     expect(resolveDisclosureOpen(true, 'closed')).toBe(false);
-    expect(toggleDisclosurePreference(true, 'auto')).toBe('closed');
+    // Clicking an auto-opened item makes the open preference explicit
+    // instead of collapsing it (user was "looking at it").
+    expect(toggleDisclosurePreference(true, 'auto')).toBe('open');
     expect(toggleDisclosurePreference(false, 'auto')).toBe('open');
   });
 
