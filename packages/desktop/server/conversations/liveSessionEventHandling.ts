@@ -286,7 +286,13 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     callbacks.broadcast(entry, sse);
   }
 
-  clearActiveHiddenTurnAfterTerminalEvent(entry, event);
+  const hiddenTurnCleared = clearActiveHiddenTurnAfterTerminalEvent(entry, event);
+  if (hiddenTurnCleared) {
+    // publishSessionMetaChanged above (in the turn_end block) fires *before* the
+    // hidden turn is cleared, so the client got isRunning=true from hasPendingHiddenTurn.
+    // Send a fresh meta update now so the sidebar shows the correct idle state.
+    callbacks.publishSessionMetaChanged(entry.sessionId);
+  }
 
   if (event.type === 'turn_end' || event.type === 'agent_end') {
     void callbacks.tryImportReadyParallelJobs(entry);
