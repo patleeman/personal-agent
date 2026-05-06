@@ -487,6 +487,25 @@ export class DesktopWindowController {
     return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: input.conversationId });
   }
 
+  isWorkbenchBrowserActive(): boolean {
+    return this.isWorkbenchBrowserActiveForConversation('@global');
+  }
+
+  async snapshotWorkbenchBrowser(): Promise<unknown> {
+    const owner = await this.ensureWorkbenchBrowserOwner('@global');
+    return this.workbenchBrowser.snapshot(owner, '@global');
+  }
+
+  async screenshotWorkbenchBrowser(): Promise<unknown> {
+    const owner = await this.ensureWorkbenchBrowserOwner('@global');
+    return this.workbenchBrowser.screenshot(owner, '@global');
+  }
+
+  async cdpWorkbenchBrowser(input: { command?: unknown; continueOnError?: unknown }): Promise<unknown> {
+    const owner = await this.ensureWorkbenchBrowserOwner('@global');
+    return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: '@global' });
+  }
+
   sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {
     const focusedWindow = BrowserWindow.getFocusedWindow();
     const trackedWindow = focusedWindow ? this.trackedWindows.get(focusedWindow.webContents.id)?.window : undefined;

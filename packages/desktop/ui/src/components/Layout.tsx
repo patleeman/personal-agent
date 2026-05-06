@@ -654,7 +654,7 @@ function WorkbenchDocumentPane({
   }
 
   if (activeTool === 'browser') {
-    return <WorkbenchBrowserTab conversationId={conversationId} onClose={() => onActiveToolChange('knowledge')} />;
+    return <WorkbenchBrowserTab onClose={() => onActiveToolChange('knowledge')} />;
   }
 
   if (activeTool === 'apps') {
@@ -707,7 +707,7 @@ function hasBlockingHtmlModal(): boolean {
   return Boolean(document.querySelector('[aria-modal="true"]'));
 }
 
-export function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: string | null; onClose: () => void }) {
+export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const closedRef = useRef(false);
@@ -719,7 +719,7 @@ export function WorkbenchBrowserTab({ conversationId, onClose }: { conversationI
     Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>
   >([]);
   const bridge = getDesktopBridge();
-  const browserSessionKey = conversationId ?? 'draft';
+  const browserSessionKey = '@global';
 
   const syncUrlDraftFromBrowserState = useCallback((nextState: DesktopWorkbenchBrowserState) => {
     if (document.activeElement === urlInputRef.current) {
@@ -1309,6 +1309,31 @@ function WorkbenchKnowledgeRail({
         </button>
         <button
           type="button"
+          className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'browser' && 'ui-sidebar-nav-item-active')}
+          title="Browser"
+          onClick={handleBrowserModeSelect}
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0 opacity-70"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="8.25" />
+            <path d="M3.75 12h16.5" />
+            <path d="M12 3.75c2.1 2.25 3.15 5 3.15 8.25S14.1 18 12 20.25" />
+            <path d="M12 3.75C9.9 6 8.85 8.75 8.85 12S9.9 18 12 20.25" />
+          </svg>
+          <span className="flex-1 text-left">Browser</span>
+        </button>
+        <button
+          type="button"
           className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'files' && 'ui-sidebar-nav-item-active')}
           title="File explorer"
           onClick={handleFileExplorerModeSelect}
@@ -1412,31 +1437,6 @@ function WorkbenchKnowledgeRail({
             <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" />
           </svg>
           <span className="flex-1 text-left">Apps</span>
-        </button>
-        <button
-          type="button"
-          className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'browser' && 'ui-sidebar-nav-item-active')}
-          title="Browser"
-          onClick={handleBrowserModeSelect}
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="shrink-0 opacity-70"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="8.25" />
-            <path d="M3.75 12h16.5" />
-            <path d="M12 3.75c2.1 2.25 3.15 5 3.15 8.25S14.1 18 12 20.25" />
-            <path d="M12 3.75C9.9 6 8.85 8.75 8.85 12S9.9 18 12 20.25" />
-          </svg>
-          <span className="flex-1 text-left">Browser</span>
         </button>
         {showRunsTab ? (
           <button
@@ -1686,7 +1686,7 @@ export function Layout() {
   const activeApp = useMemo(() => apps.find((a) => a.id === activeAppId) ?? null, [apps, activeAppId]);
   const setActiveConversationTool = useCallback(
     (tool: WorkbenchRailMode) => {
-      if (activeConversationId) {
+      if (activeConversationId && tool !== 'browser') {
         setSelectedToolByConversation((current) => ({
           ...current,
           [activeConversationId]: tool,
@@ -1766,11 +1766,13 @@ export function Layout() {
       return;
     }
 
-    // Save outgoing conversation state
-    setSelectedToolByConversation((current) => ({
-      ...current,
-      [previousConversationId]: activeWorkbenchTool,
-    }));
+    // Save outgoing conversation state (skip browser which is global)
+    if (activeWorkbenchTool !== 'browser') {
+      setSelectedToolByConversation((current) => ({
+        ...current,
+        [previousConversationId]: activeWorkbenchTool,
+      }));
+    }
     setSelectedFileByConversation((current) => ({
       ...current,
       [previousConversationId]: activeWorkbenchKnowledgeFileId,
@@ -1789,7 +1791,7 @@ export function Layout() {
     }));
 
     // Restore incoming conversation state
-    if (activeConversationId) {
+    if (activeConversationId && activeWorkbenchTool !== 'browser') {
       // Restore tool: prefer saved per-conversation state; fall back to
       // knowledge unless we were on runs (reset to avoid stale run context).
       const savedTool = selectedToolByConversation[activeConversationId];

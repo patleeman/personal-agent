@@ -27,7 +27,7 @@ describe('WorkbenchBrowserTab', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the embedded browser alive when a draft conversation becomes saved', async () => {
+  it('uses a global session key independent of conversation', async () => {
     const setWorkbenchBrowserBounds = vi.fn(async () => ({
       url: 'https://example.com/',
       title: 'Example',
@@ -49,15 +49,14 @@ describe('WorkbenchBrowserTab', () => {
 
     root = createRoot(container);
     act(() => {
-      root?.render(<WorkbenchBrowserTab conversationId={null} onClose={() => undefined} />);
+      root?.render(<WorkbenchBrowserTab onClose={() => undefined} />);
     });
     await flushAsyncWork();
 
-    act(() => {
-      root?.render(<WorkbenchBrowserTab conversationId="conversation-1" onClose={() => undefined} />);
-    });
-    await flushAsyncWork();
-
-    expect(setWorkbenchBrowserBounds).toHaveBeenCalledWith(expect.objectContaining({ visible: true, sessionKey: 'conversation-1' }));
+    // All bridge calls should use '@global' as the session key
+    const calls = setWorkbenchBrowserBounds.mock.calls.filter((call) => call[0]?.sessionKey !== undefined);
+    for (const call of calls) {
+      expect(call[0].sessionKey).toBe('@global');
+    }
   });
 });
