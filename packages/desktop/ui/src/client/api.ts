@@ -1486,7 +1486,7 @@ export const api = {
   tracesCostByConversation: (range?: string) => get<TraceCostRow[]>(`/traces/cost-by-conversation${range ? `?range=${range}` : ''}`),
   tracesToolHealth: (range?: string) => get<TraceToolHealth[]>(`/traces/tool-health${range ? `?range=${range}` : ''}`),
   tracesContext: (range?: string) => get<TraceContextResponse>(`/traces/context${range ? `?range=${range}` : ''}`),
-  tracesAgentLoop: (range?: string) => get<TraceAgentLoop>(`/traces/agent-loop${range ? `?range=${range}` : ''}`),
+  tracesAgentLoop: (range?: string) => get<TraceAgentLoop | null>(`/traces/agent-loop${range ? `?range=${range}` : ''}`),
   tracesTokensDaily: (range?: string) => get<TraceTokenDaily[]>(`/traces/tokens-daily${range ? `?range=${range}` : ''}`),
   tracesToolFlow: (range?: string) => get<ToolFlowResult>(`/traces/tool-flow${range ? `?range=${range}` : ''}`),
   tracesAutoMode: (range?: string) => get<AutoModeSummary>(`/traces/auto-mode${range ? `?range=${range}` : ''}`),

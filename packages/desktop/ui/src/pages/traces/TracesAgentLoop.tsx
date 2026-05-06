@@ -21,7 +21,7 @@ export function TracesAgentLoop({ loop }: { loop: TraceAgentLoop | null }) {
     <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">🔄 Agent Loop Health</span>
-        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">Last 24h</span>
+        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">Selected range</span>
       </div>
       <div className="p-4">
         {/* Loop stats grid */}
@@ -38,28 +38,29 @@ export function TracesAgentLoop({ loop }: { loop: TraceAgentLoop | null }) {
           <LoopStat value={String(loop.stuckRuns)} label="Stuck Runs (&gt;10m)" cls={loop.stuckRuns > 0 ? 'text-danger' : 'text-dim'} />
         </div>
 
-        {/* Waterfall bars (simulated) */}
         <div className="pt-3 border-t border-border-subtle">
           <div className="text-[11px] font-medium mb-3">Run Duration Distribution</div>
-          <DurBar label="P50" pct={50} val="2m 18s" color="bg-accent" />
-          <DurBar label="P95" pct={82} val="8m 42s" color="bg-warning" />
-          <DurBar label="P99" pct={95} val="14m 06s" color="bg-danger" />
-        </div>
-
-        {/* Waterfall legend */}
-        <div className="flex gap-3 text-[10px] text-dim mt-3 pt-3 border-t border-border-subtle">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-accent" /> Thinking
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-warning" /> Tools
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-success" /> Output
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm bg-steel/50" /> Overhead
-          </span>
+          {loop.durationP99Ms > 0 ? (
+            <>
+              <DurBar
+                label="P50"
+                pct={durationPct(loop.durationP50Ms, loop.durationP99Ms)}
+                val={formatDuration(loop.durationP50Ms)}
+                color="bg-accent"
+              />
+              <DurBar
+                label="P95"
+                pct={durationPct(loop.durationP95Ms, loop.durationP99Ms)}
+                val={formatDuration(loop.durationP95Ms)}
+                color="bg-warning"
+              />
+              <DurBar label="P99" pct={100} val={formatDuration(loop.durationP99Ms)} color="bg-danger" />
+            </>
+          ) : (
+            <div className="rounded-lg bg-elevated px-3 py-4 text-center text-[11px] text-dim">
+              Duration percentiles need completed runs with timings.
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -93,4 +94,9 @@ function formatDuration(ms: number): string {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${m}m ${sec}s`;
+}
+
+function durationPct(ms: number, maxMs: number): number {
+  if (maxMs <= 0) return 0;
+  return Math.max(4, Math.min(100, Math.round((ms / maxMs) * 100)));
 }
