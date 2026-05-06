@@ -5,8 +5,9 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
+import { getVaultRoot } from '@personal-agent/core';
 import { pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
 import type { Express } from 'express';
 
@@ -74,7 +75,7 @@ function initializeRunsAppRoutesContext(context: Pick<ServerRouteContext, 'getDu
 
 export function registerRunAppRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getDurableRunSnapshot' | 'getRepoRoot'>,
+  context: Pick<ServerRouteContext, 'getDurableRunSnapshot'>,
 ): void {
   initializeRunsAppRoutesContext(context);
 
@@ -110,8 +111,7 @@ export function registerRunAppRoutes(
   router.get('/api/apps', async (_req, res) => {
     try {
       // Scan apps/ directories in the vault
-      const vaultRoot = context.getRepoRoot();
-      // The apps directory is relative to the vault
+      const vaultRoot = resolve(getVaultRoot());
       const appsRoot = join(vaultRoot, 'apps');
       let entries: string[] = [];
       try {
