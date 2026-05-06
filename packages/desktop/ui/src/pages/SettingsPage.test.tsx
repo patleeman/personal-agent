@@ -299,9 +299,12 @@ describe('SettingsPage', () => {
 
     expect(html).toContain('>Settings</h1>');
     expect(html).toContain('aria-label="Settings sections"');
-    expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-general"'));
-    expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
-    expect(html.indexOf('href="#settings-skills"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
+    expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-conversation"'));
+    expect(html.indexOf('href="#settings-conversation"')).toBeLessThan(html.indexOf('href="#settings-workspace"'));
+    expect(html.indexOf('href="#settings-workspace"')).toBeLessThan(html.indexOf('href="#settings-dictation"'));
+    expect(html.indexOf('href="#settings-dictation"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
+    expect(html.indexOf('href="#settings-skills"')).toBeLessThan(html.indexOf('href="#settings-tools"'));
+    expect(html.indexOf('href="#settings-tools"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');
     expect(html).toContain('Skills');
     expect(html).toContain('Skill folders');
@@ -322,8 +325,10 @@ describe('SettingsPage', () => {
     expect(html).toContain('Daemon');
     expect(html).toContain('Loading daemon settings');
     expect(html).toContain('Theme and other visual preferences for the desktop app.');
-    expect(html).toContain('Workspace defaults, knowledge base, and conversation behavior.');
-    expect(html).toContain('Skill discovery, bundled MCP wrappers, and extra runtime instructions.');
+    expect(html).toContain('Default model, vision model, thinking level, and fast mode for new conversations.');
+    expect(html).toContain('Working directory and knowledge base for project context.');
+    expect(html).toContain('Skill discovery folders and extra runtime AGENTS.md instructions.');
+    expect(html).toContain('MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration.');
     expect(html).toContain('Load extra skill folders alongside the root skills directory.');
     expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');
@@ -333,6 +338,7 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Repo root');
     expect(html).not.toContain('↻ Refresh');
     expect(html).not.toContain('Appearance, workspace defaults, providers, and local browser state in one place.');
+    expect(html).not.toContain('Workspace defaults, knowledge base, and conversation behavior.');
   });
 
   it('renders a fast mode toggle for models that support priority tier', () => {

@@ -48,13 +48,15 @@ const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
-  { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
-  { id: 'settings-general', label: 'General', summary: 'Defaults and knowledge base' },
+  { id: 'settings-conversation', label: 'Conversation', summary: 'Default model, vision, and thinking' },
+  { id: 'settings-workspace', label: 'Workspace', summary: 'Working directory and knowledge base' },
   { id: 'settings-dictation', label: 'Dictation', summary: 'Transcription provider and model' },
-  { id: 'settings-skills', label: 'Skills', summary: 'Folders, wrappers, and instructions' },
+  { id: 'settings-skills', label: 'Skills', summary: 'Folders and AGENTS.md instructions' },
+  { id: 'settings-tools', label: 'Tools', summary: 'MCP wrappers and runtime tool config' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
   { id: 'settings-daemon', label: 'Daemon', summary: 'Background runtime and wake behavior' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
+  { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
   { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
@@ -525,12 +527,7 @@ function DaemonSettingsSection() {
   const daemonPower = daemonState?.power ?? { keepAwake: false, supported: true, active: false };
 
   return (
-    <SettingsSection
-      id="settings-daemon"
-      label="Daemon"
-      description="Background runtime behavior for automations and durable runs."
-      className="order-4"
-    >
+    <SettingsSection id="settings-daemon" label="Daemon" description="Background runtime behavior for automations and durable runs.">
       <SettingsPanel title="Power" description="Control whether the daemon keeps this Mac awake for unattended background work.">
         {loading ? <p className="ui-card-meta">Loading daemon settings…</p> : null}
         {daemonState ? (
@@ -810,7 +807,7 @@ export function DesktopKeyboardShortcutsSettingsSection() {
   }
 
   return (
-    <SettingsSection id="settings-keyboard" label="Keyboard" description="Configure desktop app shortcuts." className="order-1">
+    <SettingsSection id="settings-keyboard" label="Keyboard" description="Configure desktop app shortcuts.">
       <SettingsPanel title="Keyboard shortcuts" description="Every desktop menu shortcut is configurable and auto-saves immediately.">
         {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
         {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
@@ -1493,7 +1490,7 @@ export function DesktopConnectionsSettingsPanel() {
   }
 
   return (
-    <SettingsSection id="settings-desktop" label="Desktop" description="Manage local app behavior and SSH remotes." className="order-5">
+    <SettingsSection id="settings-desktop" label="Desktop" description="Manage local app behavior and SSH remotes.">
       <SettingsPanel title="App behavior" description="Control how the menu bar app starts and how downloaded updates install.">
         {!getDesktopBridge() && isDesktopShell() ? (
           <p className="text-[12px] text-danger">Desktop bridge unavailable. Restart the desktop app and try again.</p>
@@ -3232,14 +3229,34 @@ export function SettingsPage() {
         contentClassName="max-w-[72rem] flex flex-col gap-12"
         aside={<SettingsTableOfContents items={visibleQuickLinks} activeId={activeQuickLinkId} onNavigate={navigateToSection} />}
       >
-        <AppPageIntro title="Settings" summary="Defaults, providers, skills, desktop runtime, and interface state." />
+        <AppPageIntro title="Settings" summary="Appearance, conversation defaults, workspace, skills, providers, and runtime behavior." />
 
         <div className="flex flex-col gap-12">
           <SettingsSection
+            id="settings-appearance"
+            label="Appearance"
+            description="Theme and other visual preferences for the desktop app."
+          >
+            <div className="space-y-0">
+              <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="ui-segmented-control" role="group" aria-label="Theme selection">
+                    <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
+                    <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
+                    <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
+                  </div>
+                  <span className="ui-card-meta">
+                    Current theme: {theme}
+                    {themePreference === 'system' ? ' (auto)' : ''}
+                  </span>
+                </div>
+              </SettingsPanel>
+            </div>
+          </SettingsSection>
+          <SettingsSection
             id="settings-skills"
             label="Skills"
-            description="Skill discovery, bundled MCP wrappers, and extra runtime instructions."
-            className="order-3"
+            description="Skill discovery folders and extra runtime AGENTS.md instructions."
           >
             <div className="space-y-0">
               <SettingsPanel title="Skill folders" description="Load extra skill folders alongside the root skills directory.">
@@ -3317,112 +3334,6 @@ export function SettingsPage() {
                 ) : null}
 
                 {skillFoldersSaveError && <p className="text-[12px] text-danger">{skillFoldersSaveError}</p>}
-              </SettingsPanel>
-
-              <SettingsPanel
-                title="Bundled MCP wrappers"
-                description="Skills can keep their MCP CLI wrapper config in mcp.json next to SKILL.md. Explicit config still wins when server names collide."
-              >
-                {toolsLoading && !toolsState ? (
-                  <p className="ui-card-meta">Loading MCP wrappers…</p>
-                ) : toolsError && !toolsState ? (
-                  <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
-                ) : toolsState ? (
-                  <div className="space-y-5">
-                    <p className="ui-card-meta break-all">
-                      {toolsState.mcp.configExists ? (
-                        <>
-                          Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
-                        </>
-                      ) : (
-                        'No explicit MCP config file found. Using bundled skill manifests only.'
-                      )}
-                    </p>
-
-                    {toolsState.mcp.bundledSkills.length > 0 ? (
-                      <div className="space-y-3">
-                        <p className="ui-card-meta">
-                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'}{' '}
-                          active.
-                        </p>
-                        {toolsState.mcp.bundledSkills.map((bundle) => (
-                          <div
-                            key={bundle.manifestPath}
-                            className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0"
-                          >
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
-                              <span className="ui-card-meta">
-                                {bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}
-                              </span>
-                            </div>
-                            <p className="ui-card-meta break-all">
-                              <span className="font-mono text-[11px]">{bundle.manifestPath}</span>
-                            </p>
-                            <p className="ui-card-meta break-all">
-                              <span className="font-mono text-[11px]">{bundle.serverNames.join(', ')}</span>
-                            </p>
-                            {bundle.overriddenServerNames.length > 0 ? (
-                              <p className="text-[12px] text-secondary">
-                                Overridden by explicit config:{' '}
-                                <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
-                              </p>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="ui-card-meta">No skill-local mcp.json wrappers found in the active skill set.</p>
-                    )}
-
-                    {toolsState.mcp.servers.length > 0 ? (
-                      <div className="space-y-3">
-                        <p className="ui-card-meta">Effective MCP servers</p>
-                        {toolsState.mcp.servers.map((server) => (
-                          <div key={server.name} className="space-y-2 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-[12px] text-primary">{server.name}</span>
-                              <Pill tone={server.transport === 'remote' ? 'teal' : 'muted'}>{server.transport}</Pill>
-                              {server.hasOAuth ? <Pill tone="accent">oauth</Pill> : null}
-                              <span className="ui-card-meta">{formatMcpServerSource(server)}</span>
-                            </div>
-                            <p className="ui-card-meta break-all">
-                              <span className="font-mono text-[11px]">{formatMcpServerCommand(server)}</span>
-                            </p>
-                            <div className="grid gap-y-1 text-[11px] leading-5 text-dim sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-x-3">
-                              {server.sourcePath ? (
-                                <>
-                                  <span className="text-secondary">{formatMcpServerSourcePathLabel(server)}</span>
-                                  <span className="break-all font-mono">{server.sourcePath}</span>
-                                </>
-                              ) : null}
-                              {server.callbackUrl ? (
-                                <>
-                                  <span className="text-secondary">Callback</span>
-                                  <span className="break-all font-mono">{server.callbackUrl}</span>
-                                </>
-                              ) : null}
-                              {server.authorizeResource ? (
-                                <>
-                                  <span className="text-secondary">Resource</span>
-                                  <span className="break-all font-mono">{server.authorizeResource}</span>
-                                </>
-                              ) : null}
-                              {server.cwd ? (
-                                <>
-                                  <span className="text-secondary">Working dir</span>
-                                  <span className="break-all font-mono">{server.cwd}</span>
-                                </>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="ui-card-meta">No MCP servers are currently available.</p>
-                    )}
-                  </div>
-                ) : null}
               </SettingsPanel>
 
               <SettingsPanel title="AGENTS.md files" description="Append extra AGENTS.md-style files to the runtime prompt.">
@@ -3505,10 +3416,9 @@ export function SettingsPage() {
           </SettingsSection>
 
           <SettingsSection
-            id="settings-general"
-            label="General"
-            description="Workspace defaults, knowledge base, and conversation behavior."
-            className="order-2"
+            id="settings-conversation"
+            label="Conversation"
+            description="Default model, vision model, thinking level, and fast mode for new conversations."
           >
             <div className="space-y-0">
               <SettingsPanel title="Default model" description="Used for new chats and runs unless a model is picked explicitly.">
@@ -3628,7 +3538,15 @@ export function SettingsPage() {
 
                 {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
               </SettingsPanel>
+            </div>
+          </SettingsSection>
 
+          <SettingsSection
+            id="settings-workspace"
+            label="Workspace"
+            description="Working directory and knowledge base for project context."
+          >
+            <div className="space-y-0">
               <SettingsPanel title="Knowledge base" description="Point PA at a git repo and let it manage the local mirror and sync loop.">
                 {knowledgeBaseLoading && !knowledgeBaseState ? (
                   <p className="ui-card-meta">Loading knowledge base…</p>
@@ -3811,7 +3729,6 @@ export function SettingsPage() {
             id="settings-dictation"
             label="Dictation"
             description="Choose the transcription backend used by the composer mic button. No automatic fallback is applied."
-            className="order-3"
           >
             <div className="space-y-0">
               <SettingsPanel
@@ -3928,33 +3845,9 @@ export function SettingsPage() {
           </SettingsSection>
 
           <SettingsSection
-            id="settings-appearance"
-            label="Appearance"
-            description="Theme and other visual preferences for the desktop app."
-            className="order-1"
-          >
-            <div className="space-y-0">
-              <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="ui-segmented-control" role="group" aria-label="Theme selection">
-                    <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
-                    <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
-                    <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
-                  </div>
-                  <span className="ui-card-meta">
-                    Current theme: {theme}
-                    {themePreference === 'system' ? ' (auto)' : ''}
-                  </span>
-                </div>
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
             id="settings-providers"
             label="Providers"
             description="Provider definitions, model overrides, and credential management."
-            className="order-3"
           >
             <div className="space-y-0">
               <SettingsPanel title="Provider & model definitions">
@@ -4948,8 +4841,121 @@ export function SettingsPage() {
             </div>
           </SettingsSection>
 
-          <DaemonSettingsSection />
+          <SettingsSection
+            id="settings-tools"
+            label="Tools"
+            description="MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration."
+          >
+            <div className="space-y-0">
+              <SettingsPanel
+                title="Bundled MCP wrappers"
+                description="Skills can keep their MCP CLI wrapper config in mcp.json next to SKILL.md. Explicit config still wins when server names collide."
+              >
+                {toolsLoading && !toolsState ? (
+                  <p className="ui-card-meta">Loading MCP wrappers…</p>
+                ) : toolsError && !toolsState ? (
+                  <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
+                ) : toolsState ? (
+                  <div className="space-y-5">
+                    <p className="ui-card-meta break-all">
+                      {toolsState.mcp.configExists ? (
+                        <>
+                          Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
+                        </>
+                      ) : (
+                        'No explicit MCP config file found. Using bundled skill manifests only.'
+                      )}
+                    </p>
 
+                    {toolsState.mcp.bundledSkills.length > 0 ? (
+                      <div className="space-y-3">
+                        <p className="ui-card-meta">
+                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'}{' '}
+                          active.
+                        </p>
+                        {toolsState.mcp.bundledSkills.map((bundle) => (
+                          <div
+                            key={bundle.manifestPath}
+                            className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0"
+                          >
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
+                              <span className="ui-card-meta">
+                                {bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}
+                              </span>
+                            </div>
+                            <p className="ui-card-meta break-all">
+                              <span className="font-mono text-[11px]">{bundle.manifestPath}</span>
+                            </p>
+                            <p className="ui-card-meta break-all">
+                              <span className="font-mono text-[11px]">{bundle.serverNames.join(', ')}</span>
+                            </p>
+                            {bundle.overriddenServerNames.length > 0 ? (
+                              <p className="text-[12px] text-secondary">
+                                Overridden by explicit config:{' '}
+                                <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="ui-card-meta">No skill-local mcp.json wrappers found in the active skill set.</p>
+                    )}
+
+                    {toolsState.mcp.servers.length > 0 ? (
+                      <div className="space-y-3">
+                        <p className="ui-card-meta">Effective MCP servers</p>
+                        {toolsState.mcp.servers.map((server) => (
+                          <div key={server.name} className="space-y-2 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-[12px] text-primary">{server.name}</span>
+                              <Pill tone={server.transport === 'remote' ? 'teal' : 'muted'}>{server.transport}</Pill>
+                              {server.hasOAuth ? <Pill tone="accent">oauth</Pill> : null}
+                              <span className="ui-card-meta">{formatMcpServerSource(server)}</span>
+                            </div>
+                            <p className="ui-card-meta break-all">
+                              <span className="font-mono text-[11px]">{formatMcpServerCommand(server)}</span>
+                            </p>
+                            <div className="grid gap-y-1 text-[11px] leading-5 text-dim sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-x-3">
+                              {server.sourcePath ? (
+                                <>
+                                  <span className="text-secondary">{formatMcpServerSourcePathLabel(server)}</span>
+                                  <span className="break-all font-mono">{server.sourcePath}</span>
+                                </>
+                              ) : null}
+                              {server.callbackUrl ? (
+                                <>
+                                  <span className="text-secondary">Callback</span>
+                                  <span className="break-all font-mono">{server.callbackUrl}</span>
+                                </>
+                              ) : null}
+                              {server.authorizeResource ? (
+                                <>
+                                  <span className="text-secondary">Resource</span>
+                                  <span className="break-all font-mono">{server.authorizeResource}</span>
+                                </>
+                              ) : null}
+                              {server.cwd ? (
+                                <>
+                                  <span className="text-secondary">Working dir</span>
+                                  <span className="break-all font-mono">{server.cwd}</span>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="ui-card-meta">No MCP servers are currently available.</p>
+                    )}
+                  </div>
+                ) : null}
+              </SettingsPanel>
+            </div>
+          </SettingsSection>
+
+          <DaemonSettingsSection />
           <DesktopConnectionsSettingsPanel />
 
           {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
@@ -4958,7 +4964,6 @@ export function SettingsPage() {
             id="settings-interface"
             label="Interface"
             description="Browser-local UI state, saved layout preferences, and reset tools."
-            className="order-6"
           >
             <SettingsPanel title="Reset saved UI preferences" description="Clears saved UI state only. Conversations and data stay intact.">
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
