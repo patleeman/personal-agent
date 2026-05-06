@@ -29,7 +29,7 @@ function AppsListView({ apps, onSelect }: { apps: SkillApp[]; onSelect: (app: Sk
     <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
       {apps.map((app) => (
         <button
-          key={app.name}
+          key={app.id}
           type="button"
           className="flex flex-col rounded-xl border border-border-subtle bg-surface p-4 text-left transition-colors hover:border-accent/30 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
           onClick={() => onSelect(app)}
@@ -80,7 +80,7 @@ export function AppsWorkbenchPane({
     setPageContent(null);
     setPageError(null);
 
-    fetch(`/api/vault/file?id=apps/${encodeURIComponent(activeApp.name)}/${encodeURIComponent(activeApp.entry)}`)
+    fetch(`/api/vault/file?id=apps/${encodeURIComponent(activeApp.id)}/${encodeURIComponent(activeApp.entry)}`)
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load app page: ${res.statusText}`);
         return res.json();

@@ -20,7 +20,7 @@ function buildAppPageDocument(content: string, app: SkillApp): string {
     '  <meta charset="utf-8" />\n' +
     '  <meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
     '  <base href="/apps/' +
-    encodeURIComponent(app.name) +
+    encodeURIComponent(app.id) +
     '/" />\n' +
     '  ' +
     PA_CLIENT_SRC +

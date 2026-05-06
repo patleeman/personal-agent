@@ -34,11 +34,11 @@ export function AppsRailContent({
     <div className="flex flex-col gap-1 px-1.5 py-1.5">
       {apps.map((app) => (
         <button
-          key={app.name}
+          key={app.id}
           type="button"
           className={
             'flex w-full min-w-0 items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 ' +
-            (activeApp?.name === app.name ? 'bg-accent/10 text-primary' : 'text-secondary hover:bg-surface hover:text-primary')
+            (activeApp?.id === app.id ? 'bg-accent/10 text-primary' : 'text-secondary hover:bg-surface hover:text-primary')
           }
           onClick={() => onSelectApp(app)}
         >

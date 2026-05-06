@@ -8,6 +8,7 @@ export interface SkillAppNavItem {
 }
 
 export interface SkillApp {
+  id: string;
   name: string;
   description: string;
   prompt: string;

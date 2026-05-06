@@ -1525,7 +1525,7 @@ function WorkbenchKnowledgeRail({
         <div className="min-h-0 flex-1 overflow-hidden">
           <AppsRailContent
             apps={apps}
-            activeApp={apps.find((a) => a.name === searchParams.get('app')) ?? null}
+            activeApp={apps.find((a) => a.id === searchParams.get('app')) ?? null}
             loading={appsLoading}
             onSelectApp={onAppSelect}
           />
@@ -1679,8 +1679,8 @@ export function Layout() {
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
   const { apps, loading: appsLoading, error: appsError } = useAppList();
-  const activeAppName = showWorkbench ? searchParams.get('app') : null;
-  const activeApp = useMemo(() => apps.find((a) => a.name === activeAppName) ?? null, [apps, activeAppName]);
+  const activeAppId = showWorkbench ? searchParams.get('app') : null;
+  const activeApp = useMemo(() => apps.find((a) => a.id === activeAppId) ?? null, [apps, activeAppId]);
   const setActiveConversationTool = useCallback(
     (tool: WorkbenchRailMode) => {
       if (activeConversationId) {
@@ -1729,7 +1729,7 @@ export function Layout() {
       setSearchParams(
         (current) => {
           const next = new URLSearchParams(current);
-          next.set('app', app.name);
+          next.set('app', app.id);
           return next;
         },
         { replace: true },

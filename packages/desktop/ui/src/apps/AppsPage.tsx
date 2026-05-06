@@ -41,7 +41,7 @@ export function AppsPage() {
     setPageContent(null);
     setPageError(null);
 
-    fetch(`/api/vault/file?id=apps/${encodeURIComponent(selectedApp.name)}/${encodeURIComponent(selectedApp.entry)}`)
+    fetch(`/api/vault/file?id=apps/${encodeURIComponent(selectedApp.id)}/${encodeURIComponent(selectedApp.entry)}`)
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load app page: ${res.statusText}`);
         return res.json() as Promise<{ content: string }>;
@@ -165,7 +165,7 @@ export function AppsPage() {
           <section className="border-t border-border-subtle">
             {apps.map((app) => (
               <button
-                key={app.name}
+                key={app.id}
                 type="button"
                 className="group grid w-full gap-3 border-b border-border-subtle py-5 text-left text-primary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6"
                 onClick={() => handleSelectApp(app)}

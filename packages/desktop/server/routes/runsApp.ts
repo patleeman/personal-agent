@@ -40,6 +40,13 @@ function getPaComponentsCss(): string {
   return paComponentsCss;
 }
 
+function parseYamlScalar(raw: string | undefined, fallback = ''): string {
+  const trimmed = raw?.trim() ?? fallback;
+  const quoted = trimmed.match(/^(?:"(.*)"|'(.*)')$/);
+
+  return quoted ? (quoted[1] ?? quoted[2] ?? '') : trimmed;
+}
+
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
 const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
 const ACTIVE_RUN_LOG_POLL_INTERVAL_MS = 250;
@@ -120,8 +127,14 @@ export function registerRunAppRoutes(
         // apps directory may not exist yet
       }
 
-      const apps: Array<{ name: string; description: string; prompt: string; entry: string; nav: Array<{ label: string; page: string }> }> =
-        [];
+      const apps: Array<{
+        id: string;
+        name: string;
+        description: string;
+        prompt: string;
+        entry: string;
+        nav: Array<{ label: string; page: string }>;
+      }> = [];
 
       for (const entry of entries) {
         const appDir = join(appsRoot, entry);
@@ -139,10 +152,10 @@ export function registerRunAppRoutes(
           if (!yamlMatch) continue;
 
           const yaml = yamlMatch[1];
-          const name = yaml.match(/^name\s*:\s*(.+)$/m)?.[1]?.trim() ?? entry;
-          const description = yaml.match(/^description\s*:\s*(.+)$/m)?.[1]?.trim() ?? '';
-          const prompt = yaml.match(/^prompt\s*:\s*(.+)$/m)?.[1]?.trim() ?? '';
-          const entryPage = yaml.match(/^entry\s*:\s*(.+)$/m)?.[1]?.trim() ?? 'index.html';
+          const name = parseYamlScalar(yaml.match(/^name\s*:\s*(.+)$/m)?.[1], entry);
+          const description = parseYamlScalar(yaml.match(/^description\s*:\s*(.+)$/m)?.[1]);
+          const prompt = parseYamlScalar(yaml.match(/^prompt\s*:\s*(.+)$/m)?.[1]);
+          const entryPage = parseYamlScalar(yaml.match(/^entry\s*:\s*(.+)$/m)?.[1], 'index.html');
 
           // Parse nav block if present
           const nav: Array<{ label: string; page: string }> = [];
@@ -161,13 +174,13 @@ export function registerRunAppRoutes(
                 const labelMatch = navLine.match(/label\s*:\s*(.+)$/);
                 const pageMatch = navLine.match(/page\s*:\s*(.+)$/);
                 if (labelMatch && pageMatch) {
-                  nav.push({ label: labelMatch[1].trim(), page: pageMatch[1].trim() });
+                  nav.push({ label: parseYamlScalar(labelMatch[1]), page: parseYamlScalar(pageMatch[1]) });
                 }
               }
             }
           }
 
-          apps.push({ name, description, prompt, entry: entryPage, nav });
+          apps.push({ id: entry, name, description, prompt, entry: entryPage, nav });
         } catch {
           // Skip malformed apps
         }
