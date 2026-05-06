@@ -70,7 +70,6 @@ describe('registerRunAppRoutes', () => {
 
     registerRunAppRoutes(router as never, {
       getDurableRunSnapshot: options?.getDurableRunSnapshot ?? (async () => null),
-      getRepoRoot: options?.getRepoRoot ?? (() => '/tmp'),
     });
 
     return {
