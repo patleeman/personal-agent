@@ -56,11 +56,25 @@ export function TracesCacheAndSystemPrompt({
             <>
               <div className="flex gap-2 mb-3">
                 <QuickStat value={fmt(systemPrompt.avgSystemPromptTokens)} label="Avg Size" />
-                <QuickStat value={`${systemPrompt.avgPctOfTotal}%`} label="Avg % of Context" />
+                <QuickStat value={`${systemPrompt.avgPctOfContextWindow}%`} label="Avg % Window" />
                 <QuickStat value={fmt(systemPrompt.maxSystemPromptTokens)} label="Max Size" />
               </div>
+              {systemPrompt.byModel.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {systemPrompt.byModel.map((m) => (
+                    <div key={m.modelId} className="grid grid-cols-[minmax(0,1fr)_64px_56px_54px] items-center gap-2 text-[11px]">
+                      <span className="text-secondary truncate" title={m.modelId}>
+                        {m.modelId}
+                      </span>
+                      <span className="font-mono text-primary text-right">{fmt(m.avgSystemPromptTokens)}</span>
+                      <span className="font-mono text-dim text-right">{m.avgPctOfContextWindow}%</span>
+                      <span className="font-mono text-dim text-right">/{fmt(m.contextWindow)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="text-[11px] text-dim pt-2 border-t border-border-subtle">
-                Sampled from {systemPrompt.samples} context snapshot{systemPrompt.samples !== 1 ? 's' : ''}
+                Sampled from {systemPrompt.samples} session{systemPrompt.samples !== 1 ? 's' : ''}
               </div>
             </>
           )}

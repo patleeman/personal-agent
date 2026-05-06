@@ -24,6 +24,8 @@ import {
   queryCostByConversation,
   queryModelUsage,
   querySummary,
+  querySystemPromptAggregate,
+  querySystemPromptTrend,
   queryThroughput,
   queryTokensDaily,
   queryToolHealth,
@@ -235,6 +237,50 @@ describe('trace-db', () => {
     expect(aggregate.totalCachedWrite).toBe(0);
     expect(aggregate.overallHitRate).toBeGreaterThan(0);
     expect(aggregate.overallHitRate).toBeLessThanOrEqual(100);
+  });
+
+  it('querySystemPromptAggregate reports system prompt context window usage by model', () => {
+    writeTraceContext({
+      sessionId: 'system-prompt-model-a',
+      modelId: 'model-a',
+      totalTokens: 10_000,
+      contextWindow: 100_000,
+      pct: 10,
+      systemPromptTokens: 5_000,
+    });
+    writeTraceContext({
+      sessionId: 'system-prompt-model-b',
+      modelId: 'model-b',
+      totalTokens: 20_000,
+      contextWindow: 200_000,
+      pct: 10,
+      systemPromptTokens: 10_000,
+    });
+
+    const aggregate = querySystemPromptAggregate(fiveHoursAgo);
+    expect(aggregate.avgSystemPromptTokens).toBe(7_500);
+    expect(aggregate.avgPctOfContextWindow).toBe(5);
+    expect(aggregate.byModel).toEqual([
+      {
+        modelId: 'model-b',
+        avgSystemPromptTokens: 10_000,
+        maxSystemPromptTokens: 10_000,
+        contextWindow: 200_000,
+        avgPctOfContextWindow: 5,
+        samples: 1,
+      },
+      {
+        modelId: 'model-a',
+        avgSystemPromptTokens: 5_000,
+        maxSystemPromptTokens: 5_000,
+        contextWindow: 100_000,
+        avgPctOfContextWindow: 5,
+        samples: 1,
+      },
+    ]);
+
+    const trend = querySystemPromptTrend(fiveHoursAgo).filter((point) => point.sessionId.startsWith('system-prompt-model-'));
+    expect(trend[0]).toMatchObject({ modelId: 'model-a', contextWindow: 100_000, pctOfContextWindow: 5 });
   });
 
   it('queryCostByConversation does not multiply stats by tool calls', () => {

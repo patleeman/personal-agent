@@ -1536,12 +1536,22 @@ export function querySystemPromptAggregate(since: string): {
   const row = db
     .prepare(
       `
+    WITH session_prompts AS (
+      SELECT session_id,
+        COALESCE(model_id, '') as model_id,
+        MAX(system_prompt_tokens) as system_prompt_tokens,
+        MAX(total_tokens) as total_tokens,
+        MAX(context_window) as context_window
+      FROM trace_context
+      WHERE ts >= ? AND system_prompt_tokens > 0 AND total_tokens > 0
+      GROUP BY session_id, model_id
+    )
     SELECT AVG(system_prompt_tokens) as avg_tokens,
       AVG(CAST(system_prompt_tokens AS REAL) / CAST(total_tokens AS REAL)) * 100 as avg_pct,
       AVG(CASE WHEN context_window > 0 THEN CAST(system_prompt_tokens AS REAL) / CAST(context_window AS REAL) END) * 100 as avg_pct_context_window,
       MAX(system_prompt_tokens) as max_tokens,
       COUNT(*) as samples
-    FROM trace_context WHERE ts >= ? AND system_prompt_tokens > 0 AND total_tokens > 0
+    FROM session_prompts
   `,
     )
     .get(since) as Record<string, unknown>;
@@ -1549,14 +1559,22 @@ export function querySystemPromptAggregate(since: string): {
   const byModelRows = db
     .prepare(
       `
+    WITH session_prompts AS (
+      SELECT session_id,
+        COALESCE(model_id, '') as model_id,
+        MAX(system_prompt_tokens) as system_prompt_tokens,
+        MAX(context_window) as context_window
+      FROM trace_context
+      WHERE ts >= ? AND system_prompt_tokens > 0 AND context_window > 0 AND model_id IS NOT NULL AND model_id != ''
+      GROUP BY session_id, model_id
+    )
     SELECT COALESCE(model_id, '') as model_id,
       AVG(system_prompt_tokens) as avg_tokens,
       MAX(system_prompt_tokens) as max_tokens,
       MAX(context_window) as context_window,
       AVG(CAST(system_prompt_tokens AS REAL) / CAST(context_window AS REAL)) * 100 as avg_pct_context_window,
       COUNT(*) as samples
-    FROM trace_context
-    WHERE ts >= ? AND system_prompt_tokens > 0 AND context_window > 0 AND model_id IS NOT NULL AND model_id != ''
+    FROM session_prompts
     GROUP BY model_id
     ORDER BY avg_tokens DESC
   `,

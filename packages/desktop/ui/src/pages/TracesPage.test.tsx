@@ -132,6 +132,24 @@ vi.mock('./traces/useTracesData', () => ({
       { date: '2026-05-01', tokensInput: 100000, tokensOutput: 200000, tokensCached: 30000, cost: 0.5 },
       { date: '2026-05-02', tokensInput: 150000, tokensOutput: 250000, tokensCached: 40000, cost: 0.75 },
     ],
+    cacheEfficiency: null,
+    systemPrompt: {
+      avgSystemPromptTokens: 8000,
+      avgPctOfTotal: 40,
+      avgPctOfContextWindow: 4,
+      maxSystemPromptTokens: 10000,
+      samples: 2,
+      byModel: [
+        {
+          modelId: 'gpt-4o',
+          avgSystemPromptTokens: 8000,
+          maxSystemPromptTokens: 10000,
+          contextWindow: 200000,
+          avgPctOfContextWindow: 4,
+          samples: 2,
+        },
+      ],
+    },
     loading: false,
     error: null,
     refetch: vi.fn(),
@@ -204,6 +222,17 @@ describe('TracesPage', () => {
     );
     expect(html).toContain('gpt-4o');
     expect(html).toContain('gpt-4o-mini');
+  });
+
+  it('renders system prompt context-window usage by model', () => {
+    const html = renderToString(
+      <MemoryRouter>
+        <TracesPage />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('System Prompt');
+    expect(html).toContain('Avg % Window');
+    expect(html).toContain('200K');
   });
 
   it('renders tool health stats', () => {
