@@ -1555,6 +1555,17 @@ export interface TraceToolHealth {
   avgLatencyMs: number;
   p95LatencyMs: number;
   maxLatencyMs: number;
+  bashBreakdown?: TraceBashBreakdown[];
+}
+
+export interface TraceBashBreakdown {
+  command: string;
+  calls: number;
+  errors: number;
+  successRate: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  maxLatencyMs: number;
 }
 
 export interface TraceContextSession {
@@ -1598,6 +1609,9 @@ export interface TraceAgentLoop {
   runsOver20Turns: number;
   subagentsPerRun: number;
   avgDurationMs: number;
+  durationP50Ms: number;
+  durationP95Ms: number;
+  durationP99Ms: number;
   stuckRuns: number;
 }
 

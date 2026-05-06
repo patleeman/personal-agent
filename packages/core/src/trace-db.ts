@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS trace_tool_calls (
   profile TEXT NOT NULL DEFAULT '',
   ts TEXT NOT NULL,
   tool_name TEXT NOT NULL,
+  tool_input_json TEXT,
+  bash_command TEXT,
+  bash_command_label TEXT,
   duration_ms INTEGER,
   status TEXT NOT NULL DEFAULT 'ok',
   error_message TEXT,
@@ -137,12 +140,18 @@ const TRACE_MIGRATIONS: Migration[] = [
   {
     version: 1,
     description: 'Add duration_ms to trace_stats',
-    up: (db) => db.exec(`ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`),
+    up: (db) => addColumnIfMissing(db, 'trace_stats', 'duration_ms', `ALTER TABLE trace_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`),
   },
   {
     version: 2,
     description: 'Add tokens_cached_write to trace_stats',
-    up: (db) => db.exec(`ALTER TABLE trace_stats ADD COLUMN tokens_cached_write INTEGER DEFAULT 0`),
+    up: (db) =>
+      addColumnIfMissing(
+        db,
+        'trace_stats',
+        'tokens_cached_write',
+        `ALTER TABLE trace_stats ADD COLUMN tokens_cached_write INTEGER DEFAULT 0`,
+      ),
   },
   {
     version: 3,
@@ -176,7 +185,23 @@ const TRACE_MIGRATIONS: Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_trace_context_pointer_inspect_session ON trace_context_pointer_inspect(session_id)`);
     },
   },
+  {
+    version: 5,
+    description: 'Add tool input metadata to trace tool calls',
+    up: (db) => {
+      addColumnIfMissing(db, 'trace_tool_calls', 'tool_input_json', `ALTER TABLE trace_tool_calls ADD COLUMN tool_input_json TEXT`);
+      addColumnIfMissing(db, 'trace_tool_calls', 'bash_command', `ALTER TABLE trace_tool_calls ADD COLUMN bash_command TEXT`);
+      addColumnIfMissing(db, 'trace_tool_calls', 'bash_command_label', `ALTER TABLE trace_tool_calls ADD COLUMN bash_command_label TEXT`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_trace_tool_calls_bash_command_label ON trace_tool_calls(bash_command_label)`);
+    },
+  },
 ];
+
+function addColumnIfMissing(db: SqliteDatabase, table: string, column: string, sql: string): void {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: unknown }>;
+  if (rows.some((row) => row.name === column)) return;
+  db.exec(sql);
+}
 
 // ── Database management ───────────────────────────────────────────────────────
 
@@ -250,6 +275,60 @@ function timestamp(): string {
   return new Date().toISOString();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function truncateTraceText(value: string, maxLength = 4000): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+}
+
+function stringifyToolInput(input: unknown): string | null {
+  if (input == null) return null;
+  try {
+    return truncateTraceText(JSON.stringify(input));
+  } catch {
+    return null;
+  }
+}
+
+function readBashCommand(toolName: string, toolInput: unknown, explicitCommand?: string): string | null {
+  if (toolName !== 'bash') return null;
+  const command =
+    typeof explicitCommand === 'string'
+      ? explicitCommand
+      : isRecord(toolInput) && typeof toolInput.command === 'string'
+        ? toolInput.command
+        : '';
+  const trimmed = command.trim();
+  return trimmed ? truncateTraceText(trimmed) : null;
+}
+
+function parseBashCommandLabel(command: string | null): string | null {
+  if (!command) return null;
+
+  const segments = command
+    .split(/\s*(?:&&|\|\||;|\|)\s*/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  for (const rawSegment of segments) {
+    let segment = rawSegment.replace(/^(?:time|command|sudo)\s+/, '').trim();
+    while (/^[A-Za-z_][A-Za-z0-9_]*=.*\s/.test(segment)) {
+      segment = segment.replace(/^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S+)\s*/, '').trim();
+    }
+    if (!segment || segment.startsWith('cd ') || segment === 'cd' || segment.startsWith('export ')) continue;
+    if (/^(if|for|while|case)\b/.test(segment)) return 'shell';
+
+    const token = segment.match(/^([A-Za-z0-9_./:-]+)/)?.[1];
+    if (!token) continue;
+    const basename = token.split('/').filter(Boolean).at(-1) ?? token;
+    return basename || 'shell';
+  }
+
+  return 'shell';
+}
+
 // ── SQL result mapping ───────────────────────────────────────────────────
 // SQLite returns snake_case keys. Convert to camelCase for TypeScript interfaces.
 function mapRow<T extends object>(row: Record<string, unknown>): T {
@@ -312,6 +391,8 @@ export function writeTraceToolCall(params: {
   sessionId: string;
   runId?: string;
   toolName: string;
+  toolInput?: unknown;
+  bashCommand?: string;
   durationMs?: number;
   status: 'ok' | 'error';
   errorMessage?: string;
@@ -320,9 +401,10 @@ export function writeTraceToolCall(params: {
 }): void {
   try {
     const db = getTraceDb();
+    const bashCommand = readBashCommand(params.toolName, params.toolInput, params.bashCommand);
     const stmt = db.prepare(`
-      INSERT INTO trace_tool_calls (id, session_id, run_id, profile, ts, tool_name, duration_ms, status, error_message, conversation_title)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO trace_tool_calls (id, session_id, run_id, profile, ts, tool_name, tool_input_json, bash_command, bash_command_label, duration_ms, status, error_message, conversation_title)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       generateId(),
@@ -331,6 +413,9 @@ export function writeTraceToolCall(params: {
       params.profile ?? '',
       timestamp(),
       params.toolName,
+      stringifyToolInput(params.toolInput),
+      bashCommand,
+      parseBashCommandLabel(bashCommand),
       params.durationMs ?? null,
       params.status,
       params.errorMessage ?? null,
@@ -604,6 +689,17 @@ export interface ToolHealthRow {
   avgLatencyMs: number;
   p95LatencyMs: number;
   maxLatencyMs: number;
+  bashBreakdown?: BashBreakdownRow[];
+}
+
+export interface BashBreakdownRow {
+  command: string;
+  calls: number;
+  errors: number;
+  successRate: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  maxLatencyMs: number;
 }
 
 export function queryToolHealth(since: string): ToolHealthRow[] {
@@ -632,7 +728,57 @@ export function queryToolHealth(since: string): ToolHealthRow[] {
     avgLatencyMs: Number(r.avgLatencyMs) || 0,
     p95LatencyMs: queryToolLatencyP95(since, r.toolName),
     maxLatencyMs: Number(r.maxLatencyMs) || 0,
+    bashBreakdown: r.toolName === 'bash' ? queryBashBreakdown(since) : undefined,
   }));
+}
+
+export function queryBashBreakdown(since: string): BashBreakdownRow[] {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      COALESCE(bash_command_label, 'unknown') as command,
+      COUNT(*) as calls,
+      COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as errors,
+      AVG(duration_ms) as avg_latency_ms,
+      MAX(duration_ms) as max_latency_ms
+    FROM trace_tool_calls
+    WHERE ts >= ? AND tool_name = 'bash'
+    GROUP BY COALESCE(bash_command_label, 'unknown')
+    ORDER BY calls DESC, errors DESC
+    LIMIT 8
+  `,
+    )
+    .all(since) as Record<string, unknown>[];
+
+  return mapRows<BashBreakdownRow>(rows).map((r) => ({
+    ...r,
+    calls: Number(r.calls),
+    errors: Number(r.errors),
+    successRate: Number(r.calls) > 0 ? Math.round((1 - Number(r.errors) / Number(r.calls)) * 1000) / 10 : 100,
+    avgLatencyMs: Number(r.avgLatencyMs) || 0,
+    p95LatencyMs: queryBashCommandLatencyP95(since, r.command),
+    maxLatencyMs: Number(r.maxLatencyMs) || 0,
+  }));
+}
+
+function queryBashCommandLatencyP95(since: string, command: string): number {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT duration_ms
+    FROM trace_tool_calls
+    WHERE ts >= ? AND tool_name = 'bash' AND COALESCE(bash_command_label, 'unknown') = ? AND duration_ms IS NOT NULL
+    ORDER BY duration_ms ASC
+  `,
+    )
+    .all(since, command) as Array<{ duration_ms: number }>;
+
+  if (rows.length === 0) return 0;
+  const index = Math.ceil(rows.length * 0.95) - 1;
+  return Number(rows[Math.max(0, Math.min(index, rows.length - 1))].duration_ms) || 0;
 }
 
 function queryToolLatencyP95(since: string, toolName: string): number {
@@ -753,10 +899,13 @@ export interface AgentLoopRow {
   runsOver20Turns: number;
   subagentsPerRun: number;
   avgDurationMs: number;
+  durationP50Ms: number;
+  durationP95Ms: number;
+  durationP99Ms: number;
   stuckRuns: number;
 }
 
-export function queryAgentLoop(since: string): AgentLoopRow {
+export function queryAgentLoop(since: string): AgentLoopRow | null {
   const db = getTraceDb();
   const rawStats = db
     .prepare(
@@ -768,7 +917,7 @@ export function queryAgentLoop(since: string): AgentLoopRow {
       COALESCE(SUM(CASE WHEN turn_count > 20 THEN 1 ELSE 0 END), 0) as runs_over_20,
       AVG(duration_ms) as avg_duration_ms,
       COALESCE(SUM(CASE WHEN duration_ms > 600000 THEN 1 ELSE 0 END), 0) as stuck_runs
-    FROM trace_stats WHERE ts >= ? AND (run_id IS NOT NULL OR turn_count > 0 OR step_count > 0 OR duration_ms > 0)
+    FROM trace_stats WHERE ts >= ? AND ((run_id IS NOT NULL AND run_id != '') OR turn_count > 0 OR step_count > 0 OR duration_ms > 0)
   `,
     )
     .get(since) as Record<string, unknown>;
@@ -781,26 +930,50 @@ export function queryAgentLoop(since: string): AgentLoopRow {
     stuckRuns: number;
   }>(rawStats);
 
+  const totalRuns = Number(stats.totalRuns) || 0;
+  if (totalRuns === 0) {
+    return null;
+  }
+
   const rawSub = db
     .prepare(
       `
-    SELECT COUNT(DISTINCT session_id || run_id) as runs_with_subagents
-    FROM trace_tool_calls WHERE ts >= ? AND tool_name = 'subagent'
+    SELECT COUNT(*) as subagent_calls
+    FROM trace_tool_calls WHERE ts >= ? AND tool_name = 'subagent' AND run_id IS NOT NULL AND run_id != ''
   `,
     )
     .get(since) as Record<string, unknown>;
-  const sub = mapRow<{ runsWithSubagents: number }>(rawSub);
-
-  const totalRuns = Math.max(Number(stats.totalRuns), 1);
+  const sub = mapRow<{ subagentCalls: number }>(rawSub);
 
   return {
     turnsPerRun: stats.avgTurns ? Math.round(Number(stats.avgTurns) * 10) / 10 : 0,
     stepsPerTurn: stats.avgSteps ? Math.round(Number(stats.avgSteps) * 10) / 10 : 0,
     runsOver20Turns: Number(stats.runsOver20),
-    subagentsPerRun: Math.round((Number(sub.runsWithSubagents) / totalRuns) * 10) / 10,
+    subagentsPerRun: Math.round((Number(sub.subagentCalls) / totalRuns) * 10) / 10,
     avgDurationMs: Math.round(Number(stats.avgDurationMs) || 0),
+    durationP50Ms: queryRunDurationPercentile(since, 0.5),
+    durationP95Ms: queryRunDurationPercentile(since, 0.95),
+    durationP99Ms: queryRunDurationPercentile(since, 0.99),
     stuckRuns: Number(stats.stuckRuns),
   };
+}
+
+function queryRunDurationPercentile(since: string, percentile: number): number {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT duration_ms
+    FROM trace_stats
+    WHERE ts >= ? AND duration_ms > 0 AND ((run_id IS NOT NULL AND run_id != '') OR turn_count > 0 OR step_count > 0)
+    ORDER BY duration_ms ASC
+  `,
+    )
+    .all(since) as Array<{ duration_ms: number }>;
+
+  if (rows.length === 0) return 0;
+  const index = Math.ceil(rows.length * percentile) - 1;
+  return Math.round(Number(rows[Math.max(0, Math.min(index, rows.length - 1))].duration_ms) || 0);
 }
 
 export interface TokenDailyRow {

@@ -18,6 +18,7 @@ import { getAssistantErrorDisplayMessage } from './sessions.js';
 const AUTO_MODE_CONTROLLER_RETRY_MAX = 2;
 
 const toolStartTimes = new WeakMap<AgentSession, Map<string, number>>();
+const toolStartInputs = new WeakMap<AgentSession, Map<string, unknown>>();
 
 function getToolStartTimes(session: AgentSession): Map<string, number> {
   let map = toolStartTimes.get(session);
@@ -26,6 +27,19 @@ function getToolStartTimes(session: AgentSession): Map<string, number> {
     toolStartTimes.set(session, map);
   }
   return map;
+}
+
+function getToolStartInputs(session: AgentSession): Map<string, unknown> {
+  let map = toolStartInputs.get(session);
+  if (!map) {
+    map = new Map();
+    toolStartInputs.set(session, map);
+  }
+  return map;
+}
+
+function readToolEventArgs(event: AgentSessionEvent): unknown {
+  return 'args' in event ? event.args : undefined;
 }
 
 export interface LiveSessionEventHost {
@@ -143,6 +157,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
 
   if (event.type === 'tool_execution_start') {
     getToolStartTimes(entry.session).set(event.toolCallId, Date.now());
+    getToolStartInputs(entry.session).set(event.toolCallId, readToolEventArgs(event));
   }
 
   if (event.type === 'tool_execution_end') {
@@ -151,10 +166,14 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     const startTime = getToolStartTimes(entry.session).get(event.toolCallId);
     const durationMs = startTime != null ? Date.now() - startTime : undefined;
     getToolStartTimes(entry.session).delete(event.toolCallId);
+    const toolInput = getToolStartInputs(entry.session).get(event.toolCallId);
+    getToolStartInputs(entry.session).delete(event.toolCallId);
 
     persistTraceToolCall({
       sessionId: entry.sessionId,
+      runId: entry.traceRunId ?? undefined,
       toolName: event.toolName,
+      toolInput,
       durationMs,
       status: event.isError ? 'error' : 'ok',
       errorMessage: event.isError ? String(event.result) : undefined,

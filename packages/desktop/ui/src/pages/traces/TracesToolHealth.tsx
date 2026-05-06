@@ -33,6 +33,40 @@ export function TracesToolHealth({ tools }: { tools: TraceToolHealth[] }) {
           <ToolCard key={tool.toolName} tool={tool} />
         ))}
       </div>
+      <BashBreakdown tools={tools} />
+    </div>
+  );
+}
+
+function BashBreakdown({ tools }: { tools: TraceToolHealth[] }) {
+  const bash = tools.find((tool) => tool.toolName === 'bash');
+  const rows = bash?.bashBreakdown ?? [];
+  if (!bash || rows.length === 0) return null;
+
+  return (
+    <div className="border-t border-border-subtle px-4 pb-4 pt-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Bash breakdown</span>
+        <span className="ml-auto text-[10px] text-dim">Top command families</span>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((row) => {
+          const pct = bash.calls > 0 ? Math.max((row.calls / bash.calls) * 100, 2) : 0;
+          const hasErrors = row.errors > 0;
+          return (
+            <div key={row.command} className="grid grid-cols-[90px_1fr_76px_76px] items-center gap-3 text-[11px]">
+              <span className="truncate font-mono text-primary">{row.command}</span>
+              <div className="h-2 overflow-hidden rounded-full bg-elevated">
+                <div className={hasErrors ? 'h-full bg-warning/80' : 'h-full bg-success/70'} style={{ width: `${pct}%` }} />
+              </div>
+              <span className="text-right font-mono text-secondary">{row.calls} calls</span>
+              <span className={`text-right font-mono ${hasErrors ? 'text-danger' : 'text-dim'}`}>
+                {hasErrors ? `${row.errors} err` : formatDuration(row.p95LatencyMs)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

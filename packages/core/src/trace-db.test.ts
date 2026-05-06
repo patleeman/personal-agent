@@ -14,6 +14,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   closeTraceDbs,
   queryAgentLoop,
+  queryBashBreakdown,
   queryCacheEfficiency,
   queryCacheEfficiencyAggregate,
   queryCompactionAggregates,
@@ -85,8 +86,22 @@ describe('trace-db', () => {
       durationMs: 700000,
     });
 
-    writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 1200, conversationTitle: 'Test chat' });
-    writeTraceToolCall({ sessionId, toolName: 'bash', status: 'ok', durationMs: 800, conversationTitle: 'Test chat' });
+    writeTraceToolCall({
+      sessionId,
+      toolName: 'bash',
+      toolInput: { command: 'git status --short && git diff' },
+      status: 'ok',
+      durationMs: 1200,
+      conversationTitle: 'Test chat',
+    });
+    writeTraceToolCall({
+      sessionId,
+      toolName: 'bash',
+      toolInput: { command: 'npm run check' },
+      status: 'ok',
+      durationMs: 800,
+      conversationTitle: 'Test chat',
+    });
     writeTraceToolCall({ sessionId, toolName: 'read', status: 'error', errorMessage: 'File not found' });
     writeTraceToolCall({ sessionId, toolName: 'read', status: 'ok', durationMs: 400 });
 
@@ -134,12 +149,20 @@ describe('trace-db', () => {
     expect(bash!.errors).toBe(0);
     expect(bash!.successRate).toBe(100);
     expect(bash!.p95LatencyMs).toBe(1200);
+    expect(bash!.bashBreakdown?.map((row) => row.command)).toEqual(['git', 'npm']);
 
     const read = result.find((t) => t.toolName === 'read');
     expect(read).toBeDefined();
     expect(read!.calls).toBe(2);
     expect(read!.errors).toBe(1);
     expect(read!.successRate).toBe(50);
+  });
+
+  it('queryBashBreakdown returns command-family stats', () => {
+    const result = queryBashBreakdown(fiveHoursAgo);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ command: 'git', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 1200 });
+    expect(result[1]).toMatchObject({ command: 'npm', calls: 1, errors: 0, successRate: 100, p95LatencyMs: 800 });
   });
 
   it('queryContextSessions returns latest per session', () => {
@@ -164,10 +187,20 @@ describe('trace-db', () => {
 
   it('queryAgentLoop returns stats', () => {
     const result = queryAgentLoop(fiveHoursAgo);
+    expect(result).not.toBeNull();
+    if (!result) throw new Error('expected agent loop stats');
     expect(result.turnsPerRun).toBeGreaterThan(0);
     expect(result.stepsPerTurn).toBeGreaterThan(0);
     expect(result.avgDurationMs).toBeGreaterThan(0);
+    expect(result.durationP50Ms).toBeGreaterThan(0);
+    expect(result.durationP95Ms).toBeGreaterThan(0);
+    expect(result.durationP99Ms).toBeGreaterThan(0);
     expect(result.stuckRuns).toBe(1);
+  });
+
+  it('queryAgentLoop returns null when no run metrics exist', () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    expect(queryAgentLoop(future)).toBeNull();
   });
 
   it('queryCacheEfficiency maps token cache columns', () => {

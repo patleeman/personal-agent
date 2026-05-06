@@ -17,6 +17,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Views](views.md) — Conversation, Workbench, Zen layouts
 - [Conversations](conversations.md) — live threads, branching, async follow-through
 - [Desktop App](desktop-app.md) — Electron shell, shortcuts, settings
+- [Telemetry](telemetry.md) — local trace stats and monitoring views
 - [Gateways](gateways.md) — external app routing into conversations
 - [Knowledge System](knowledge-system.md) — vault, docs, skills, instruction files
 - [Configuration](configuration.md) — file-based config, env vars
@@ -28,7 +29,7 @@ See [Getting Started](getting-started.md) for the full setup.
 
 **Core Product Model** — conversations, checkpoints, diffs, artifacts, git integration, projects, knowledge system, and KB sync.
 
-**Desktop App** — Electron shell, settings UI, file explorer, gateways, and automations management.
+**Desktop App** — Electron shell, settings UI, file explorer, telemetry, gateways, and automations management.
 
 **Browser** — embedded webview with CDP, snapshot, screenshot tools, and browser comments.
 

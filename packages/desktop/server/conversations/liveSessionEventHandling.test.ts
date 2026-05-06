@@ -192,6 +192,7 @@ describe('trace persistence hooks', () => {
       sessionId: 'test-session',
       session: mockSession,
       title: 'Test conversation',
+      traceRunId: 'run-1',
     } as any;
 
     // First fire tool_execution_start to set up the timer
@@ -201,7 +202,7 @@ describe('trace persistence hooks', () => {
         type: 'tool_execution_start',
         toolCallId: 'tc-1',
         toolName: 'bash',
-        args: {},
+        args: { command: 'git status --short' },
       } as any,
       mockCallbacks,
     );
@@ -222,7 +223,9 @@ describe('trace persistence hooks', () => {
     expect(persistTraceToolCallMock).toHaveBeenCalledTimes(1);
     const call = persistTraceToolCallMock.mock.calls[0][0];
     expect(call.sessionId).toBe('test-session');
+    expect(call.runId).toBe('run-1');
     expect(call.toolName).toBe('bash');
+    expect(call.toolInput).toEqual({ command: 'git status --short' });
     expect(call.status).toBe('ok');
     expect(call.durationMs).toBeGreaterThanOrEqual(0);
     expect(call.conversationTitle).toBe('Test conversation');

@@ -40,7 +40,19 @@ vi.mock('./traces/useTracesData', () => ({
       { conversationTitle: 'Debug CI', modelId: 'gpt-4o-mini', tokens: 196000, cost: 0.39 },
     ],
     toolHealth: [
-      { toolName: 'bash', calls: 142, errors: 2, successRate: 98.6, avgLatencyMs: 1200, p95LatencyMs: 3800, maxLatencyMs: 12400 },
+      {
+        toolName: 'bash',
+        calls: 142,
+        errors: 2,
+        successRate: 98.6,
+        avgLatencyMs: 1200,
+        p95LatencyMs: 3800,
+        maxLatencyMs: 12400,
+        bashBreakdown: [
+          { command: 'git', calls: 48, errors: 0, successRate: 100, avgLatencyMs: 600, p95LatencyMs: 1800, maxLatencyMs: 3200 },
+          { command: 'npm', calls: 23, errors: 1, successRate: 95.7, avgLatencyMs: 4000, p95LatencyMs: 12400, maxLatencyMs: 12400 },
+        ],
+      },
       { toolName: 'read', calls: 89, errors: 7, successRate: 92.1, avgLatencyMs: 400, p95LatencyMs: 1100, maxLatencyMs: 2800 },
     ],
     contextSessions: [
@@ -68,7 +80,17 @@ vi.mock('./traces/useTracesData', () => ({
       },
     ],
     compactionAggs: { autoCount: 4, manualCount: 1, totalTokensSaved: 301000, overflowPct: 65 },
-    agentLoop: { turnsPerRun: 4.2, stepsPerTurn: 8.6, runsOver20Turns: 2, subagentsPerRun: 1.4, avgDurationMs: 252000, stuckRuns: 1 },
+    agentLoop: {
+      turnsPerRun: 4.2,
+      stepsPerTurn: 8.6,
+      runsOver20Turns: 2,
+      subagentsPerRun: 1.4,
+      avgDurationMs: 252000,
+      durationP50Ms: 138000,
+      durationP95Ms: 522000,
+      durationP99Ms: 846000,
+      stuckRuns: 1,
+    },
     tokensDaily: [
       { date: '2026-05-01', tokensInput: 100000, tokensOutput: 200000, tokensCached: 30000, cost: 0.5 },
       { date: '2026-05-02', tokensInput: 150000, tokensOutput: 250000, tokensCached: 40000, cost: 0.75 },
@@ -155,6 +177,8 @@ describe('TracesPage', () => {
     );
     expect(html).toContain('bash');
     expect(html).toContain('read');
+    expect(html).toContain('Bash breakdown');
+    expect(html).toContain('git');
   });
 
   it('renders agent loop stats', () => {
@@ -165,6 +189,7 @@ describe('TracesPage', () => {
     );
     expect(html).toContain('4.2');
     expect(html).toContain('8.6');
+    expect(html).toContain('8m 42s');
   });
 
   it('renders compaction data', () => {

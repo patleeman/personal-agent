@@ -57,6 +57,8 @@ export function persistTraceToolCall(params: {
   sessionId: string;
   runId?: string;
   toolName: string;
+  toolInput?: unknown;
+  bashCommand?: string;
   durationMs?: number;
   status: 'ok' | 'error';
   errorMessage?: string;

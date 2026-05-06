@@ -26,6 +26,7 @@
         { "title": "Desktop App", "path": "desktop-app.md" },
         { "title": "Settings", "path": "settings.md" },
         { "title": "File Explorer", "path": "file-explorer.md" },
+        { "title": "Telemetry", "path": "telemetry.md" },
         { "title": "Gateways", "path": "gateways.md" },
         { "title": "Automations", "path": "automations.md" }
       ]
