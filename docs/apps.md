@@ -118,6 +118,62 @@ Minimal example:
 
 Run requests are handled by `POST /api/runs`. They create durable runs with source metadata `{ type: 'app', id: appId }` and task slug `app-{appId}`.
 
+## Persistence
+
+Apps can persist state today by using browser storage or the existing vault file API. There is not yet a dedicated app database API.
+
+| Method           | Use for                                            | Tradeoff                                                                                                                |
+| ---------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `localStorage`   | UI preferences, draft inputs, collapsed panels     | Fast and private to the browser context, but not syncable, agent-readable, or durable enough for canonical task state   |
+| Vault files      | App state, board JSON, task markdown, history      | Durable, syncable, git-friendly, and visible to agents; writes are whole-file overwrites with no conflict/version check |
+| App database API | Future high-churn state, indexes, concurrent edits | Not implemented yet; useful once apps need structured queries or safer multi-writer semantics                           |
+
+Use vault files as the default persistence layer for meaningful app state. Store files under the app's vault directory, for example:
+
+```text
+apps/agent-board/
+  APP.md
+  index.html
+  board.json
+  tasks/
+    fix-css.md
+```
+
+The app can read and write vault-relative paths with the existing API:
+
+```js
+async function readTextFile(id, fallback = '') {
+  const res = await fetch('/api/vault/file?id=' + encodeURIComponent(id));
+  if (!res.ok) return fallback;
+  const file = await res.json();
+  return file.content;
+}
+
+async function writeTextFile(id, content) {
+  const res = await fetch('/api/vault/file', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, content }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+```
+
+For JSON state, wrap those helpers:
+
+```js
+async function readJson(id, fallback) {
+  const text = await readTextFile(id, null);
+  return text == null ? fallback : JSON.parse(text);
+}
+
+async function writeJson(id, value) {
+  await writeTextFile(id, JSON.stringify(value, null, 2));
+}
+```
+
+For a kanban-style app, keep canonical task data in markdown files with frontmatter and keep board ordering in JSON. That makes the board recoverable without the app and easy for agents to inspect.
+
 ## Components
 
 The component library is deliberately small:
