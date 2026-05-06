@@ -850,6 +850,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     handledCwdChangeKeyRef.current = cwdChangeAction.key;
+    if (stream.cwdChange?.autoContinued) {
+      setPendingAssistantStatusLabel('Working…');
+    }
+
     if (cwdChangeAction.action === 'navigate') {
       ensureConversationTabOpen(cwdChangeAction.conversationId);
       navigate(`/conversations/${cwdChangeAction.conversationId}`);
