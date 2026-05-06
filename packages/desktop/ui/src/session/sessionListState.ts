@@ -48,3 +48,15 @@ export function removeSessionMetaPreservingOrder(sessions: readonly SessionMeta[
 
   return [...sessions.slice(0, existingIndex), ...sessions.slice(existingIndex + 1)];
 }
+
+/** Update just the isRunning field on a session in the list, preserving everything else.
+ *  Returns the same array reference if the session is not found or running hasn't changed. */
+export function updateSessionRunningPreservingOrder(sessions: readonly SessionMeta[], sessionId: string, running: boolean): SessionMeta[] {
+  const index = sessions.findIndex((s) => s.id === sessionId);
+  if (index === -1) return sessions as SessionMeta[];
+  const existing = sessions[index];
+  if (!existing || existing.isRunning === running) return sessions as SessionMeta[];
+  const next = [...sessions];
+  next[index] = { ...existing, isRunning: running };
+  return next;
+}
