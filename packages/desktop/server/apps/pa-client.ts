@@ -117,17 +117,41 @@ export const PA_CLIENT_JS: string = `
   // ── <pa-card> ──────────────────────────────────────────────────────────────
   class PaCard extends HTMLElement {
     connectedCallback() {
+      if (this._mountScheduled || this._mounted) return;
+      this._mountScheduled = true;
+      setTimeout(() => this.mount(), 0);
+    }
+
+    mount() {
+      if (this._mounted) return;
+      this._mounted = true;
+      if (!this.style.display) this.style.display = 'block';
+
       const title = this.getAttribute('title') || '';
-      this.innerHTML = '<div class="pa-card">' +
-        (title ? '<div class="pa-card-title">' + escapeHtml(title) + '</div>' : '') +
-        '<div class="pa-card-body"><slot></slot></div>' +
-        '</div>';
+      const children = Array.from(this.childNodes);
+      const card = document.createElement('div');
+      card.className = 'pa-card';
+
+      if (title) {
+        const titleEl = document.createElement('div');
+        titleEl.className = 'pa-card-title';
+        titleEl.textContent = title;
+        card.appendChild(titleEl);
+      }
+
+      const body = document.createElement('div');
+      body.className = 'pa-card-body';
+      for (const child of children) body.appendChild(child);
+      card.appendChild(body);
+
+      this.replaceChildren(card);
     }
   }
 
   // ── <pa-form> ──────────────────────────────────────────────────────────────
   class PaForm extends HTMLElement {
     connectedCallback() {
+      this.classList.add('pa-form');
       this.addEventListener('submit', (e) => e.preventDefault());
     }
 
@@ -200,6 +224,15 @@ export const PA_CLIENT_JS: string = `
   // ── <pa-button> ────────────────────────────────────────────────────────────
   class PaButton extends HTMLElement {
     connectedCallback() {
+      if (this._mountScheduled || this._mounted) return;
+      this._mountScheduled = true;
+      setTimeout(() => this.mount(), 0);
+    }
+
+    mount() {
+      if (this._mounted) return;
+      this._mounted = true;
+
       const action = this.getAttribute('action') || '';
       const variant = this.getAttribute('variant') || 'primary';
       const text = this.textContent.trim() || 'Submit';

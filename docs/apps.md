@@ -54,7 +54,9 @@ Start from `packages/desktop/server/apps/app-scaffold.html` when creating a new 
 <script src="/pa/client.js"></script>
 ```
 
-The client exposes `window.PA` and the `<pa-*>` component library. The usual flow is:
+The client exposes `window.PA` and the `<pa-*>` component library. Use explicit closing tags for custom elements (`<pa-field ...></pa-field>`), not XML-style self-closing tags; HTML does not self-close custom elements.
+
+The usual flow is:
 
 1. Render a `<pa-form>` with `<pa-field>` inputs.
 2. Listen for the `pa:run` event from a `<pa-button action="run">`.
@@ -67,7 +69,7 @@ Minimal example:
 ```html
 <pa-card title="Run research">
   <pa-form id="research-form">
-    <pa-field label="Goal" name="goal" type="text" placeholder="Reduce bundle size" />
+    <pa-field label="Goal" name="goal" type="text" placeholder="Reduce bundle size"></pa-field>
     <pa-button action="run" variant="primary">Start</pa-button>
   </pa-form>
 </pa-card>
