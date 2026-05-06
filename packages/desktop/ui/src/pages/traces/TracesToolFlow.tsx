@@ -35,9 +35,13 @@ export function TracesToolFlow({ data }: { data: ToolFlowResult | null }) {
               const pct = (t.count / maxCount) * 100;
               return (
                 <div key={i} className="flex items-center gap-2 py-1">
-                  <span className="text-[11px] text-secondary w-[60px] text-right font-mono">{t.fromTool}</span>
+                  <span className="text-[11px] text-secondary w-[90px] text-right font-mono truncate" title={t.fromTool}>
+                    {t.fromTool}
+                  </span>
                   <span className="text-dim text-[10px]">→</span>
-                  <span className="text-[11px] text-primary w-[60px] font-mono">{t.toTool}</span>
+                  <span className="text-[11px] text-primary w-[90px] font-mono truncate" title={t.toTool}>
+                    {t.toTool}
+                  </span>
                   <div className="flex-1 h-2 bg-elevated rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
                   </div>

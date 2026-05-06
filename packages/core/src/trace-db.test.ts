@@ -28,6 +28,7 @@ import {
   querySystemPromptTrend,
   queryThroughput,
   queryTokensDaily,
+  queryToolFlow,
   queryToolHealth,
   writeTraceCompaction,
   writeTraceContext,
@@ -183,6 +184,27 @@ describe('trace-db', () => {
       { shape: 'chain', calls: 1 },
       { shape: 'pipeline', calls: 1 },
     ]);
+  });
+
+  it('queryToolFlow breaks bash into command-family labels', () => {
+    const result = queryToolFlow(fiveHoursAgo);
+
+    expect(result.transitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ fromTool: 'bash:git', toTool: 'bash:rg', count: 1 }),
+        expect.objectContaining({ fromTool: 'bash:rg', toTool: 'read', count: 1 }),
+      ]),
+    );
+    expect(result.coOccurrences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ toolA: 'bash:git', toolB: 'bash:rg', sessions: 1 }),
+        expect.objectContaining({ toolA: 'bash:rg', toolB: 'read', sessions: 1 }),
+      ]),
+    );
+    expect(result.failureTrajectories[0]).toMatchObject({
+      toolName: 'read',
+      previousCalls: ['bash:git', 'bash:rg'],
+    });
   });
 
   it('queryContextSessions returns latest per session', () => {

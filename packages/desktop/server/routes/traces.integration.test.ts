@@ -156,8 +156,10 @@ describe('traces API integration', () => {
     const res = await call('GET', '/api/traces/tool-flow');
     expect(res.status).toBe(200);
     expect(res.body.transitions).toBeInstanceOf(Array);
+    expect(res.body.transitions).toEqual(expect.arrayContaining([expect.objectContaining({ fromTool: 'bash:git', toTool: 'read' })]));
     expect(res.body.failureTrajectories).toBeInstanceOf(Array);
     expect(res.body.failureTrajectories.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.failureTrajectories[0].previousCalls).toEqual(['bash:git']);
   });
 
   it('tokens-daily returns daily data', async () => {

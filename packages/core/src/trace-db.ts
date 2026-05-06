@@ -1264,6 +1264,13 @@ export interface ToolFlowResult {
   failureTrajectories: FailureTrajectory[];
 }
 
+function toolFlowLabel(call: { toolName: string; bashCommandLabel?: string | null; bashCommand?: string | null }): string {
+  if (call.toolName !== 'bash') return call.toolName;
+
+  const label = call.bashCommandLabel?.trim() || parseBashCommandLabel(call.bashCommand ?? null) || 'unknown';
+  return `bash:${label}`;
+}
+
 /**
  * Analyze tool call sequences to find:
  * 1. Most common tool→tool transitions
@@ -1277,14 +1284,22 @@ export function queryToolFlow(since: string): ToolFlowResult {
   const rows = db
     .prepare(
       `
-    SELECT session_id, ts, tool_name, status, error_message
+    SELECT session_id, ts, tool_name, bash_command_label, bash_command, status, error_message
     FROM trace_tool_calls
     WHERE ts >= ?
     ORDER BY session_id, ts ASC
   `,
     )
     .all(since) as Record<string, unknown>[];
-  const calls = mapRows<{ sessionId: string; ts: string; toolName: string; status: string; errorMessage: string | null }>(rows);
+  const calls = mapRows<{
+    sessionId: string;
+    ts: string;
+    toolName: string;
+    bashCommandLabel: string | null;
+    bashCommand: string | null;
+    status: string;
+    errorMessage: string | null;
+  }>(rows).map((call) => ({ ...call, flowToolName: toolFlowLabel(call) }));
 
   // Group by session
   const sessionMap = new Map<string, typeof calls>();
@@ -1301,7 +1316,7 @@ export function queryToolFlow(since: string): ToolFlowResult {
   const transitionMap = new Map<string, number>();
   for (const [, sessionCalls] of sessionMap) {
     for (let i = 0; i < sessionCalls.length - 1; i++) {
-      const key = `${sessionCalls[i].toolName}→${sessionCalls[i + 1].toolName}`;
+      const key = `${sessionCalls[i].flowToolName}→${sessionCalls[i + 1].flowToolName}`;
       transitionMap.set(key, (transitionMap.get(key) ?? 0) + 1);
     }
   }
@@ -1315,7 +1330,7 @@ export function queryToolFlow(since: string): ToolFlowResult {
   // 2. Co-occurrence: count sessions where both tools appear
   const coocMap = new Map<string, number>();
   for (const [, sessionCalls] of sessionMap) {
-    const toolsInSession = [...new Set(sessionCalls.map((c) => c.toolName))].sort();
+    const toolsInSession = [...new Set(sessionCalls.map((c) => c.flowToolName))].sort();
     for (let i = 0; i < toolsInSession.length; i++) {
       for (let j = i + 1; j < toolsInSession.length; j++) {
         const key = `${toolsInSession[i]}↔${toolsInSession[j]}`;
@@ -1336,9 +1351,9 @@ export function queryToolFlow(since: string): ToolFlowResult {
     for (let i = 0; i < sessionCalls.length; i++) {
       if (sessionCalls[i].status === 'error') {
         const start = Math.max(0, i - 3);
-        const previousCalls = sessionCalls.slice(start, i).map((c) => c.toolName);
+        const previousCalls = sessionCalls.slice(start, i).map((c) => c.flowToolName);
         failureTrajectories.push({
-          toolName: sessionCalls[i].toolName,
+          toolName: sessionCalls[i].flowToolName,
           errorMessage: sessionCalls[i].errorMessage ?? 'Unknown error',
           previousCalls,
           ts: sessionCalls[i].ts,
