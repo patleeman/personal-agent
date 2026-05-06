@@ -155,7 +155,11 @@ export function App() {
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
   const [daemon, setDaemonState] = useState<DaemonState | null>(null);
   const openedOnceRef = useRef(false);
-  const inflightSessionMetaRefreshesRef = useRef(new Map<string, Promise<void>>());
+  // Note: deliberately no inflight dedup on refreshSessionMeta — two consecutive
+  // session_meta_changed events (e.g. turn_end followed quickly by agent_start)
+  // must each fetch from the server, otherwise the second update gets the stale
+  // response of the first when the server state has already transitioned.
+  const refreshSessionMetaCounterRef = useRef(0);
 
   const setTitle = useCallback((id: string, title: string) => {
     setTitleMap((prev) => {
@@ -192,12 +196,12 @@ export function App() {
 
   const refreshSessionMeta = useCallback(
     (sessionId: string) => {
-      const inflight = inflightSessionMetaRefreshesRef.current.get(sessionId);
-      if (inflight) {
-        return inflight;
-      }
+      // Bump counter so concurrent-ish requests can at least be distinguished
+      // if debugging. The important thing: no inflight dedup — each event must
+      // independently fetch the latest server state.
+      refreshSessionMetaCounterRef.current += 1;
 
-      const request = api
+      void api
         .sessionMeta(sessionId)
         .then((session) => {
           applySessionMetaUpdate(sessionId, session);
@@ -207,13 +211,7 @@ export function App() {
           if (/not found/i.test(message)) {
             applySessionMetaUpdate(sessionId, null);
           }
-        })
-        .finally(() => {
-          inflightSessionMetaRefreshesRef.current.delete(sessionId);
         });
-
-      inflightSessionMetaRefreshesRef.current.set(sessionId, request);
-      return request;
     },
     [applySessionMetaUpdate],
   );
