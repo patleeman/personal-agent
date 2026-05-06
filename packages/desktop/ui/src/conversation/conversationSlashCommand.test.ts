@@ -3,6 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { parseConversationSlashCommand } from './conversationSlashCommand';
 
 describe('parseConversationSlashCommand', () => {
+  it('parses auto mode mission commands', () => {
+    expect(parseConversationSlashCommand('/auto')).toEqual({
+      kind: 'command',
+      command: { action: 'auto', enabled: true, mode: 'tenacious' },
+    });
+    expect(parseConversationSlashCommand('/auto forced 5 turns fix reconnect bugs')).toEqual({
+      kind: 'command',
+      command: { action: 'auto', enabled: true, mode: 'forced', budget: { maxTurns: 5 }, mission: 'fix reconnect bugs' },
+    });
+    expect(parseConversationSlashCommand('/auto off')).toEqual({
+      kind: 'command',
+      command: { action: 'auto', enabled: false, mode: 'normal' },
+    });
+  });
+
   it('parses compact with optional custom instructions', () => {
     expect(parseConversationSlashCommand('/compact')).toEqual({
       kind: 'command',

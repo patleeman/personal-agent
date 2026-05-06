@@ -54,7 +54,7 @@ function createHarness() {
   };
 }
 
-function createSessionManager(options: { enabled?: boolean; branch?: unknown[] }) {
+function createSessionManager(options: { enabled?: boolean; branch?: unknown[]; data?: Record<string, unknown> }) {
   return {
     getSessionId: () => 'conversation-1',
     getEntries: () => [
@@ -63,6 +63,7 @@ function createSessionManager(options: { enabled?: boolean; branch?: unknown[] }
         customType: 'conversation-auto-mode',
         data: {
           enabled: options.enabled ?? false,
+          ...options.data,
         },
       },
     ],
@@ -100,6 +101,52 @@ describe('conversation auto mode agent extension', () => {
     } as never);
 
     expect(markConversationAutoModeContinueRequestedMock).toHaveBeenCalledWith('conversation-1');
+  });
+
+  it('decrements forced-mode turn budgets before continuing', async () => {
+    const { tool } = createHarness();
+
+    await tool.execute?.('tool-1', { action: 'continue' }, undefined, undefined, {
+      sessionManager: createSessionManager({
+        enabled: true,
+        data: { mode: 'forced', budget: { maxTurns: 3 }, mission: 'Fix reconnect bugs' },
+        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+      }),
+    } as never);
+
+    expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', {
+      enabled: true,
+      budget: { maxTurns: 2 },
+    });
+    expect(markConversationAutoModeContinueRequestedMock).toHaveBeenCalledWith('conversation-1');
+  });
+
+  it('stops forced-mode continuation when the turn budget is exhausted', async () => {
+    setLiveSessionAutoModeStateMock.mockResolvedValueOnce({
+      enabled: false,
+      stopReason: 'budget exhausted',
+      stopCategory: 'budget_exhausted',
+      stopConfidence: 1,
+      updatedAt: '2026-04-12T15:00:00.000Z',
+    });
+    const { tool } = createHarness();
+
+    const result = await tool.execute?.('tool-1', { action: 'continue' }, undefined, undefined, {
+      sessionManager: createSessionManager({
+        enabled: true,
+        data: { mode: 'forced', budget: { maxTurns: 0 }, mission: 'Fix reconnect bugs' },
+        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+      }),
+    } as never);
+
+    expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', {
+      enabled: false,
+      stopReason: 'budget exhausted',
+      stopCategory: 'budget_exhausted',
+      stopConfidence: 1,
+    });
+    expect(markConversationAutoModeContinueRequestedMock).not.toHaveBeenCalled();
+    expect(result?.details).toMatchObject({ action: 'stop', stopCategory: 'budget_exhausted' });
   });
 
   it('stops auto mode through the live session helper', async () => {
@@ -142,7 +189,7 @@ describe('conversation auto mode agent extension', () => {
     );
     await Promise.resolve();
 
-    expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-1');
+    expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-1', undefined);
   });
 
   it('keeps the auto control tool inactive outside hidden auto-review turns', async () => {

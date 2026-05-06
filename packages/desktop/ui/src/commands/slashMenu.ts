@@ -12,6 +12,7 @@ export interface SlashMenuItem {
 }
 
 const BASE_SLASH_COMMANDS = [
+  { cmd: '/auto', icon: '▶', desc: 'Enable auto mode with an optional mission, mode, and turn budget' },
   { cmd: '/model', icon: '⊕', desc: 'Select model (opens selector UI)' },
   { cmd: '/export', icon: '⇪', desc: 'Export session to HTML file' },
   { cmd: '/copy', icon: '⎘', desc: 'Copy last agent message to clipboard' },

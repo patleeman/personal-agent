@@ -224,9 +224,12 @@ export function registerConversationStateRoutes(
 
   router.patch('/api/conversations/:id/auto-mode', async (req, res) => {
     try {
-      const { enabled } = req.body as {
+      const { enabled, mission, mode, budget } = req.body as {
         enabled?: unknown;
         surfaceId?: string;
+        mission?: string | null;
+        mode?: 'normal' | 'tenacious' | 'forced' | null;
+        budget?: { maxTurns?: number; until?: string } | null;
       };
 
       if (typeof enabled !== 'boolean') {
@@ -236,7 +239,7 @@ export function registerConversationStateRoutes(
 
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-        const state = await setLiveSessionAutoModeState(req.params.id, { enabled });
+        const state = await setLiveSessionAutoModeState(req.params.id, { enabled, mission, mode, budget });
         res.json(state);
         return;
       }
@@ -249,7 +252,7 @@ export function registerConversationStateRoutes(
           flushLiveDeferredResumes: flushLiveDeferredResumesFn,
         });
         ensureRequestControlsLocalLiveConversation(recovered.conversationId, req.body);
-        const state = await setLiveSessionAutoModeState(recovered.conversationId, { enabled });
+        const state = await setLiveSessionAutoModeState(recovered.conversationId, { enabled, mission, mode, budget });
         res.json(state);
         return;
       }
@@ -261,7 +264,7 @@ export function registerConversationStateRoutes(
       }
 
       const sessionManager = SessionManager.open(sessionFile);
-      const state = writeConversationAutoModeState(sessionManager, { enabled });
+      const state = writeConversationAutoModeState(sessionManager, { enabled, mission, mode, budget });
       publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
       res.json(state);
     } catch (err) {

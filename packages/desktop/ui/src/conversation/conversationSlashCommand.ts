@@ -1,6 +1,7 @@
 import { parseSlashInput } from '../commands/slashMenu';
 
 export type ConversationSlashCommand =
+  | { action: 'auto'; enabled: boolean; mode: 'normal' | 'tenacious' | 'forced'; mission?: string; budget?: { maxTurns?: number } }
   | { action: 'clear' }
   | { action: 'compact'; customInstructions?: string }
   | { action: 'copy' }
@@ -21,7 +22,11 @@ export type ConversationSlashCommand =
 
 type ConversationSlashParseResult = { kind: 'command'; command: ConversationSlashCommand } | { kind: 'invalid'; message: string };
 
-function parseNoArgCommand(command: ConversationSlashCommand['action'], argument: string, usage: string): ConversationSlashParseResult {
+function parseNoArgCommand(
+  command: Exclude<ConversationSlashCommand['action'], 'auto'>,
+  argument: string,
+  usage: string,
+): ConversationSlashParseResult {
   if (argument.length > 0) {
     return { kind: 'invalid', message: usage };
   }
@@ -38,6 +43,32 @@ export function parseConversationSlashCommand(input: string): ConversationSlashP
   const argument = parsed.argument.trim();
 
   switch (parsed.command) {
+    case '/auto': {
+      if (argument === 'off' || argument === 'stop') {
+        return { kind: 'command', command: { action: 'auto', enabled: false, mode: 'normal' } };
+      }
+
+      const modeMatch = argument.match(/^(normal|tenacious|forced)\b\s*/i);
+      const mode = modeMatch ? (modeMatch[1].toLowerCase() as 'normal' | 'tenacious' | 'forced') : 'tenacious';
+      let rest = modeMatch ? argument.slice(modeMatch[0].length).trim() : argument;
+      let budget: { maxTurns?: number } | undefined;
+      const turnsMatch = rest.match(/^(?:for\s+)?(\d+)\s+turns?\b\s*/i);
+      if (turnsMatch) {
+        budget = { maxTurns: Number(turnsMatch[1]) };
+        rest = rest.slice(turnsMatch[0].length).trim();
+      }
+      const mission = rest.replace(/^[:-]\s*/, '').trim();
+      return {
+        kind: 'command',
+        command: {
+          action: 'auto',
+          enabled: true,
+          mode,
+          ...(mission ? { mission } : {}),
+          ...(budget ? { budget } : {}),
+        },
+      };
+    }
     case '/clear':
       return parseNoArgCommand('clear', argument, 'Usage: /clear');
     case '/compact':
