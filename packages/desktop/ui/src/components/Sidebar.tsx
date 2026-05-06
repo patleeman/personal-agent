@@ -119,6 +119,7 @@ const PATH = {
   chevronDown: 'm6 9 6 6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
+  grid: 'M5 5h6v6H5V5Zm8 0h6v6h-6V5ZM5 13h6v6H5v-6Zm8 0h6v6h-6v-6Z',
   filter: 'M4.5 7.5h15M7.5 12h9M10.5 16.5h3',
   list: 'M8.25 6.75h9m-9 5.25h9m-9 5.25h9M5.25 6.75h.01M5.25 12h.01M5.25 17.25h.01',
   grip: 'M9 6.75h.01M9 12h.01M9 17.25h.01M15 6.75h.01M15 12h.01M15 17.25h.01',
@@ -3560,6 +3561,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
             label="Automations"
             forceActive={location.pathname.startsWith('/automations')}
           />
+          <TopNavItem to="/apps" icon={PATH.grid} label="Apps" forceActive={location.pathname.startsWith('/apps')} />
           <TopNavItem to="/gateways" icon={PATH.gateways} label="Gateways" forceActive={location.pathname.startsWith('/gateways')} />
           <TopNavItem to="/telemetry" icon={PATH.list} label="Telemetry" forceActive={location.pathname.startsWith('/telemetry')} />
           {!hideKnowledgeNav ? (

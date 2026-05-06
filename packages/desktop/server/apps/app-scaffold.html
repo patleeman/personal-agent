@@ -1,0 +1,100 @@
+<!doctype html>
+<html class="pa-app">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/pa/components.css" />
+    <script src="/pa/client.js"></script>
+    <title><!-- AGENT: set app title --></title>
+  </head>
+  <body class="pa-app" style="margin: 0; padding: 16px">
+    <!--
+      AGENT SCAFFOLD — Skill App Template
+
+      Fill in the <pa-form> and <pa-card> below with fields appropriate
+      for the skill or prompt this app wraps.
+
+      Design guidelines:
+      - Use <pa-card> for logical sections (form, results, history).
+      - Use <pa-row> for side-by-side layout (desktop), stacks on mobile.
+      - Use <pa-stack> for vertical spacing.
+      - Keep it simple: one page for form+results, tabs for multi-page.
+      - Color scheme inherits from .pa-app via CSS variables.
+      - Buttons with action="run" trigger PA.run(). Wire the submit handler.
+      - Charts use PA-compatible data — agent generates the right format.
+
+      Save the final app to apps/{name}/ in the KB when done.
+    -->
+
+    <!-- Form section -->
+    <pa-card title="<!-- AGENT: card title -->">
+      <pa-form id="app-form">
+        <!--
+          AGENT: add <pa-field> elements here.
+          Example:
+          <pa-field label="Goal" name="goal" type="text" placeholder="e.g. reduce bundle size" help="What should the agent optimize?" />
+          <pa-field label="Max iterations" name="max_iterations" type="number" placeholder="50" />
+          <pa-field label="Notify on breakthroughs" name="notify" type="toggle" />
+        -->
+        <pa-button action="run" variant="primary">Start</pa-button>
+      </pa-form>
+    </pa-card>
+
+    <!-- Output / results section -->
+    <pa-card title="Results" style="margin-top: 16px">
+      <div id="app-results">
+        <!--
+          AGENT: add output elements here.
+          Agent wire up the submit handler to populate these on completion.
+          Example:
+          <pa-status id="run-status" status="idle"></pa-status>
+          <pa-table id="results-table" columns="Run,Commit,Status,Impact" style="margin-top:12px"></pa-table>
+          <pa-chart id="results-chart"></pa-chart>
+        -->
+      </div>
+    </pa-card>
+
+    <script>
+      // AGENT: wire up form submission and result handling.
+      // This handler is called when <pa-button action="run"> is clicked inside <pa-form>.
+      document.addEventListener('pa:run', async (event) => {
+        const { form, button } = event.detail;
+        const values = form.getValues();
+
+        // AGENT: assemble the prompt from form values
+        const prompt =
+          '/skill:your-skill-name with ' +
+          Object.entries(values)
+            .map(([k, v]) => k + '=' + v)
+            .join(', ');
+
+        // AGENT: wire up status element
+        const statusEl = document.getElementById('run-status');
+
+        button.setLoading(true);
+        if (statusEl) statusEl.setStatus('running', 'Starting run...');
+
+        try {
+          const { runId } = await PA.run({ prompt, source: 'app:your-app-name' });
+          if (statusEl) statusEl.setStatus('running', 'Run started: ' + runId);
+
+          // Subscribe to status updates
+          PA.onStatus(runId, (event) => {
+            if (event.type === 'detail' || event.type === 'snapshot') {
+              const run = event.detail?.run;
+              const status = run?.status?.status || run?.status || 'unknown';
+              if (statusEl) statusEl.setStatus(status, status);
+
+              // AGENT: update output elements based on run data
+              // e.g. populate table, chart, etc.
+            }
+          });
+        } catch (err) {
+          if (statusEl) statusEl.setStatus('error', err.message);
+        } finally {
+          button.setLoading(false);
+        }
+      });
+    </script>
+  </body>
+</html>

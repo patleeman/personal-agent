@@ -1,0 +1,371 @@
+/**
+ * PA component library styles — injected into app pages via the harness.
+ * Matches the desktop app design system (dark mode by default, light via prefers-color-scheme).
+ */
+
+/* ── CSS variables (inherit from desktop app when available) ─────────────── */
+.pa-app {
+  --pa-bg: rgb(16 18 22);
+  --pa-surface: rgb(22 25 31);
+  --pa-surface-hover: rgb(30 34 42);
+  --pa-border: rgb(40 44 54);
+  --pa-border-subtle: rgb(34 38 46);
+  --pa-text: rgb(210 218 238);
+  --pa-text-secondary: rgb(140 148 170);
+  --pa-text-dim: rgb(100 108 130);
+  --pa-accent: rgb(79 140 255);
+  --pa-accent-hover: rgb(100 160 255);
+  --pa-danger: rgb(239 68 68);
+  --pa-success: rgb(52 211 153);
+  --pa-warning: rgb(251 191 36);
+  --pa-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --pa-font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --pa-radius: 8px;
+  --pa-radius-sm: 4px;
+  --pa-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-color-scheme: light) {
+  .pa-app {
+    --pa-bg: rgb(248 249 252);
+    --pa-surface: rgb(255 255 255);
+    --pa-surface-hover: rgb(243 245 250);
+    --pa-border: rgb(220 225 235);
+    --pa-border-subtle: rgb(230 234 242);
+    --pa-text: rgb(20 25 40);
+    --pa-text-secondary: rgb(90 98 120);
+    --pa-text-dim: rgb(140 148 170);
+  }
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+.pa-app {
+  font-family: var(--pa-font);
+  color: var(--pa-text);
+  background: var(--pa-bg);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+/* ── Card ────────────────────────────────────────────────────────────────── */
+.pa-card {
+  background: var(--pa-surface);
+  border: 1px solid var(--pa-border);
+  border-radius: var(--pa-radius);
+  box-shadow: var(--pa-shadow);
+  overflow: hidden;
+}
+
+.pa-card-title {
+  padding: 12px 16px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pa-text);
+  border-bottom: 1px solid var(--pa-border-subtle);
+}
+
+.pa-card-body {
+  padding: 16px;
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────── */
+.pa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pa-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pa-text-secondary);
+}
+
+.pa-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--pa-font);
+  color: var(--pa-text);
+  background: var(--pa-bg);
+  border: 1px solid var(--pa-border);
+  border-radius: var(--pa-radius-sm);
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.pa-input:focus {
+  border-color: var(--pa-accent);
+  box-shadow: 0 0 0 2px rgb(79 140 255 / 0.15);
+}
+
+.pa-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.pa-field-help {
+  font-size: 11px;
+  color: var(--pa-text-dim);
+  margin: 2px 0 0;
+}
+
+/* Toggle */
+.pa-field-toggle-wrap .pa-field-label {
+  display: none;
+}
+
+.pa-field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.pa-field-toggle input {
+  display: none;
+}
+
+.pa-toggle-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--pa-border);
+  border-radius: 10px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.pa-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--pa-text);
+  border-radius: 50%;
+  transition:
+    transform 0.2s,
+    background 0.2s;
+}
+
+.pa-field-toggle input:checked + .pa-toggle-track {
+  background: var(--pa-accent);
+}
+
+.pa-field-toggle input:checked + .pa-toggle-track::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.pa-toggle-label {
+  font-size: 13px;
+  color: var(--pa-text);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.pa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--pa-font);
+  border: none;
+  border-radius: var(--pa-radius-sm);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+}
+
+.pa-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pa-btn-primary {
+  background: var(--pa-accent);
+  color: #fff;
+}
+
+.pa-btn-primary:hover:not(:disabled) {
+  background: var(--pa-accent-hover);
+}
+
+.pa-btn-secondary {
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  border: 1px solid var(--pa-border);
+}
+
+.pa-btn-secondary:hover:not(:disabled) {
+  background: var(--pa-surface-hover);
+  border-color: var(--pa-accent);
+}
+
+.pa-btn-danger {
+  background: var(--pa-danger);
+  color: #fff;
+}
+
+.pa-btn-ghost {
+  background: transparent;
+  color: var(--pa-text-secondary);
+}
+
+.pa-btn-ghost:hover:not(:disabled) {
+  background: var(--pa-surface-hover);
+  color: var(--pa-text);
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.pa-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.pa-spinner-dot {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--pa-border);
+  border-top-color: var(--pa-accent);
+  border-radius: 50%;
+  animation: pa-spin 0.8s linear infinite;
+}
+
+@keyframes pa-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Status ──────────────────────────────────────────────────────────────── */
+.pa-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--pa-radius-sm);
+  font-size: 12px;
+}
+
+.pa-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pa-status-idle .pa-status-dot {
+  background: var(--pa-text-dim);
+}
+.pa-status-queued .pa-status-dot {
+  background: var(--pa-warning);
+}
+.pa-status-running .pa-status-dot {
+  background: var(--pa-accent);
+  animation: pa-pulse 1.2s ease-in-out infinite;
+}
+.pa-status-complete .pa-status-dot {
+  background: var(--pa-success);
+}
+.pa-status-error .pa-status-dot {
+  background: var(--pa-danger);
+}
+
+@keyframes pa-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.pa-table-wrap {
+  overflow-x: auto;
+}
+
+.pa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pa-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: var(--pa-text-secondary);
+  border-bottom: 1px solid var(--pa-border-subtle);
+  white-space: nowrap;
+}
+
+.pa-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--pa-border-subtle);
+  color: var(--pa-text);
+}
+
+.pa-table tr:last-child td {
+  border-bottom: none;
+}
+
+.pa-table tr:hover td {
+  background: var(--pa-surface-hover);
+}
+
+/* ── Chart ───────────────────────────────────────────────────────────────── */
+.pa-chart-container {
+  width: 100%;
+  min-height: 200px;
+}
+
+.pa-chart-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── Layout helpers ──────────────────────────────────────────────────────── */
+.pa-row {
+  display: flex;
+  gap: 16px;
+}
+
+.pa-row > * {
+  flex: 1;
+}
+
+.pa-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pa-gap-sm {
+  gap: 8px;
+}
+.pa-gap-lg {
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .pa-row {
+    flex-direction: column;
+  }
+}
