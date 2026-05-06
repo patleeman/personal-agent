@@ -273,6 +273,40 @@ describe('trace persistence hooks', () => {
     expect(call.errorMessage).toBe('File not found');
   });
 
+  it('persists object-shaped tool errors as readable JSON instead of object Object', () => {
+    const entry = {
+      sessionId: 'test-session',
+      session: mockSession,
+      title: 'Test conversation',
+    } as any;
+
+    handleLiveSessionEvent(
+      entry,
+      {
+        type: 'tool_execution_start',
+        toolCallId: 'tc-json-error',
+        toolName: 'bash',
+        args: { command: 'npm test' },
+      } as any,
+      mockCallbacks,
+    );
+
+    handleLiveSessionEvent(
+      entry,
+      {
+        type: 'tool_execution_end',
+        toolCallId: 'tc-json-error',
+        toolName: 'bash',
+        result: { exitCode: 1, stderr: 'failed' },
+        isError: true,
+      } as any,
+      mockCallbacks,
+    );
+
+    expect(persistTraceToolCallMock).toHaveBeenCalledTimes(1);
+    expect(persistTraceToolCallMock.mock.calls[0][0].errorMessage).toBe('{"exitCode":1,"stderr":"failed"}');
+  });
+
   it('persists compaction on compaction_end', () => {
     const entry = {
       sessionId: 'test-session',

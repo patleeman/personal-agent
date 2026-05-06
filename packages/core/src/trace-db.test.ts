@@ -224,6 +224,17 @@ describe('trace-db', () => {
     expect(result.transitions).not.toEqual(expect.arrayContaining([expect.objectContaining({ fromTool: 'bash:apply_patch' })]));
   });
 
+  it('queryToolFlow ignores bash calls without command metadata', () => {
+    writeTraceToolCall({ sessionId: 'unknown-bash-session', toolName: 'bash', status: 'ok' });
+    writeTraceToolCall({ sessionId: 'unknown-bash-session', toolName: 'bash', status: 'error', errorMessage: 'missing command' });
+
+    const result = queryToolFlow(fiveHoursAgo);
+
+    expect(result.transitions).not.toEqual(expect.arrayContaining([expect.objectContaining({ fromTool: 'bash:unknown' })]));
+    expect(result.transitions).not.toEqual(expect.arrayContaining([expect.objectContaining({ toTool: 'bash:unknown' })]));
+    expect(result.failureTrajectories).not.toEqual(expect.arrayContaining([expect.objectContaining({ toolName: 'bash:unknown' })]));
+  });
+
   it('queryContextSessions returns latest per session', () => {
     const result = queryContextSessions(fiveHoursAgo);
     expect(result.length).toBe(1);

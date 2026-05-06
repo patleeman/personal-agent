@@ -1300,7 +1300,10 @@ export function queryToolFlow(since: string): ToolFlowResult {
     bashCommand: string | null;
     status: string;
     errorMessage: string | null;
-  }>(rows).map((call) => ({ ...call, flowToolName: toolFlowLabel(call) }));
+  }>(rows)
+    .map((call) => ({ ...call, flowToolName: toolFlowLabel(call) }))
+    // Older telemetry did not persist bash input, so it cannot be broken down into useful flow labels.
+    .filter((call) => call.flowToolName !== 'bash:unknown');
 
   // Group by session
   const sessionMap = new Map<string, typeof calls>();

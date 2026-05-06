@@ -43,6 +43,36 @@ function readToolEventArgs(event: AgentSessionEvent): unknown {
   return 'args' in event ? event.args : undefined;
 }
 
+function stringifyToolError(result: unknown): string | undefined {
+  if (result == null) return undefined;
+  if (typeof result === 'string') return result;
+  if (result instanceof Error) return result.stack ?? result.message;
+  if (typeof result !== 'object') return String(result);
+
+  const record = result as Record<string, unknown>;
+  if (typeof record.errorMessage === 'string') return record.errorMessage;
+  if (typeof record.message === 'string') return record.message;
+  if (typeof record.error === 'string') return record.error;
+  if (Array.isArray(record.content)) {
+    const text = record.content
+      .map((item) =>
+        typeof item === 'object' && item !== null && typeof (item as Record<string, unknown>).text === 'string'
+          ? (item as Record<string, string>).text
+          : '',
+      )
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    if (text) return text;
+  }
+
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
+}
+
 function readToolInputMetadata(toolName: string, toolInput: unknown): Record<string, unknown> | undefined {
   if (typeof toolInput !== 'object' || toolInput === null || Array.isArray(toolInput)) return undefined;
   const input = toolInput as Record<string, unknown>;
@@ -226,6 +256,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     const toolInput = getToolStartInputs(entry.session).get(event.toolCallId);
     getToolStartInputs(entry.session).delete(event.toolCallId);
 
+    const errorMessage = event.isError ? stringifyToolError(event.result) : undefined;
+
     persistTraceToolCall({
       sessionId: entry.sessionId,
       runId: entry.traceRunId ?? undefined,
@@ -233,7 +265,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       toolInput,
       durationMs,
       status: event.isError ? 'error' : 'ok',
-      errorMessage: event.isError ? String(event.result) : undefined,
+      errorMessage,
       conversationTitle: entry.title,
     });
     persistAppTelemetryEvent({
@@ -247,7 +279,7 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       status: event.isError ? 500 : 200,
       metadata: {
         isError: event.isError,
-        errorMessage: event.isError ? String(event.result).slice(0, 500) : undefined,
+        errorMessage: errorMessage?.slice(0, 500),
         ...readToolInputMetadata(event.toolName, toolInput),
       },
     });
