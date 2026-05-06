@@ -290,7 +290,7 @@ function createCheckpointCommit(options: { cwd: string; message: string; paths: 
     throw new Error(`${stagedDiff.stderr ?? stagedDiff.stdout ?? 'Could not inspect staged changes.'}`.trim());
   }
 
-  runGit(options.cwd, ['commit', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
+  runGit(options.cwd, ['commit', '--no-verify', '--only', '-m', options.message, '--', ...options.paths], { allowEmptyStdout: true });
   const commitSha = runGit(options.cwd, ['rev-parse', 'HEAD']).trim();
   const metadata = parseCommitMetadata(
     runGit(options.cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]),
