@@ -222,6 +222,8 @@ describe('TracesPage', () => {
     );
     expect(html).toContain('gpt-4o');
     expect(html).toContain('gpt-4o-mini');
+    expect(html).toContain('Cached Share');
+    expect(html).not.toContain('Cache Hit');
   });
 
   it('renders system prompt context-window usage by model', () => {

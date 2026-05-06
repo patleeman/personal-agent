@@ -50,7 +50,7 @@ export function TracesModelUsage({
             <Metric value={formatNumber(tokensOutput)} label="Output" />
             <Metric value={formatNumber(tokensCached)} label="Cache Read" cls="text-success" />
             <Metric value={formatNumber(tokensCachedWrite)} label="Cache Write" cls="text-warning" />
-            <Metric value={`${cacheHitRate}%`} label="Cache Hit" cls="text-accent" />
+            <Metric value={`${cacheHitRate}%`} label="Cached Share" cls="text-accent" />
           </div>
           {models.map((m) => {
             const hitRate = cacheByModel[m.modelId];
@@ -130,15 +130,15 @@ export function TracesModelUsage({
             pct={Math.min(tokensCached / Math.max(tokensInput + tokensCached, 1), 1)}
             color="bg-steel/50"
           />
-          <CacheRow label="Hit rate" value={`${cacheHitRate}%`} pct={cacheHitRate / 100} color="bg-success" />
+          <CacheRow label="Cached share" value={`${cacheHitRate}%`} pct={cacheHitRate / 100} color="bg-success" />
           <CacheRow
-            label="Cacheable in"
+            label="Total prompt in"
             value={formatNumber(tokensInput + tokensCached)}
             pct={Math.min((tokensInput + tokensCached) / Math.max(totalTokens, 1), 1)}
             color="bg-success"
           />
           <div className="mt-2 pt-2 border-t border-border-subtle text-[11px] text-dim">
-            {cacheHitRate > 0 ? <span className="text-warning">▲ +{cacheHitRate}%</span> : null} cache hit rate
+            {cacheHitRate > 0 ? <span className="text-warning">{cacheHitRate}%</span> : null} of prompt input read from cache
           </div>
         </div>
       </div>

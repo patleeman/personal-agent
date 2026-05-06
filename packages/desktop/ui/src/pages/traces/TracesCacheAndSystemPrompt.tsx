@@ -27,7 +27,7 @@ export function TracesCacheAndSystemPrompt({
               <div className="flex gap-2 mb-3">
                 <QuickStat
                   value={`${cacheEfficiency.overallHitRate}%`}
-                  label="Overall Hit Rate"
+                  label="Cached Share"
                   cls={cacheEfficiency.overallHitRate > 30 ? 'text-success' : 'text-warning'}
                 />
                 <QuickStat value={fmt(cacheEfficiency.totalCached)} label="Cache Read" />
