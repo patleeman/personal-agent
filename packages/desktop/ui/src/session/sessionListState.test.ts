@@ -5,6 +5,7 @@ import {
   mergeSessionSnapshotPreservingOrder,
   removeSessionMetaPreservingOrder,
   replaceSessionMetaPreservingOrder,
+  updateSessionRunningPreservingOrder,
 } from './sessionListState';
 
 function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
@@ -91,5 +92,39 @@ describe('sessionListState', () => {
       createSession({ id: 'alpha', title: 'Alpha' }),
       createSession({ id: 'gamma', title: 'Gamma' }),
     ]);
+  });
+
+  // ── session_meta_changed running updates ──────────────────────────────────
+
+  it('updates isRunning on the matching session when running changes', () => {
+    const sessions = [
+      createSession({ id: 'alpha', title: 'Alpha', isRunning: false }),
+      createSession({ id: 'beta', title: 'Beta', isRunning: true }),
+    ];
+
+    const updated = updateSessionRunningPreservingOrder(sessions, 'alpha', true);
+    expect(updated[0]?.isRunning).toBe(true);
+    expect(updated[0]?.title).toBe('Alpha'); // unchanged
+    expect(updated[1]?.isRunning).toBe(true); // unchanged
+    expect(updated[1]?.title).toBe('Beta');
+  });
+
+  it('returns the same array reference when running is unchanged', () => {
+    const sessions = [
+      createSession({ id: 'alpha', title: 'Alpha', isRunning: false }),
+      createSession({ id: 'beta', title: 'Beta', isRunning: true }),
+    ];
+
+    expect(updateSessionRunningPreservingOrder(sessions, 'alpha', false)).toBe(sessions);
+    expect(updateSessionRunningPreservingOrder(sessions, 'beta', true)).toBe(sessions);
+  });
+
+  it('returns the same array reference when session is not found', () => {
+    const sessions = [createSession({ id: 'alpha', title: 'Alpha', isRunning: false })];
+    expect(updateSessionRunningPreservingOrder(sessions, 'unknown', true)).toBe(sessions);
+  });
+
+  it('returns the same array reference when sessions list is empty', () => {
+    expect(updateSessionRunningPreservingOrder([], 'anything', true)).toEqual([]);
   });
 });
