@@ -12,7 +12,6 @@ import { tags as t } from '@lezer/highlight';
 import {
   type ContextMenuItem as FileTreeContextMenuItem,
   type ContextMenuOpenContext as FileTreeContextMenuOpenContext,
-  FileTree as TreesModel,
   type FileTreeRenameEvent,
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
@@ -30,6 +29,8 @@ import type {
   WorkspaceGitStatusChange,
 } from '../../shared/types';
 import { useTheme } from '../../ui-state/theme';
+import { ContextMenuWrapper } from '../shared/ContextMenuWrapper';
+import { useFileTreeModel } from '../shared/useFileTreeModel';
 import { cx, EmptyState, LoadingState, Pill } from '../ui';
 
 interface WorkspaceExplorerProps {
@@ -484,12 +485,8 @@ function WorkspaceTreeContextMenu({
   onRename: () => void;
 }) {
   return (
-    <div
-      className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]"
-      role="menu"
-      aria-label="Workspace entry actions"
-    >
-      <div className="space-y-px">
+    <ContextMenuWrapper className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]">
+      <div className="space-y-px" role="menu" aria-label="Workspace entry actions">
         <button type="button" className="ui-context-menu-item gap-2" onClick={onCreateFile} role="menuitem">
           <Ico d={ICON.file} size={12} />
           New File
@@ -527,7 +524,7 @@ function WorkspaceTreeContextMenu({
           Delete
         </button>
       </div>
-    </div>
+    </ContextMenuWrapper>
   );
 }
 
@@ -744,25 +741,47 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
   const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
   const refreshSerial = useRef(0);
   const refreshTimer = useRef<number | null>(null);
-  const selectionChangeRef = useRef<(paths: readonly string[]) => void>(() => {});
-  const renameRef = useRef<(event: FileTreeRenameEvent) => void>(() => {});
-  const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
   const useNativeWorkspaceContextMenu = shouldUseNativeAppContextMenus();
-  const model = useMemo(
-    () =>
-      new TreesModel({
-        paths: [],
-        search: false,
-        composition: {
-          contextMenu: useNativeWorkspaceContextMenu
-            ? { enabled: true, triggerMode: 'right-click', onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context) }
-            : { triggerMode: 'right-click' },
-        },
-        onSelectionChange: (paths) => selectionChangeRef.current(paths),
-        renaming: { onRename: (event) => renameRef.current(event) },
-      }),
-    [useNativeWorkspaceContextMenu],
-  );
+  const { model, resetTree, nativeContextMenuOpenRef } = useFileTreeModel({
+    useNativeContextMenu: useNativeWorkspaceContextMenu,
+    onSelectionChange: (paths) => {
+      const selected = paths[0];
+      if (!selected) return;
+      const workspacePath = treePathToWorkspacePath(selected);
+      const entry = workspaceEntryMap.get(workspacePath);
+      if (!entry || entry.kind === 'directory') return;
+      if (cwd && onOpenFile) {
+        openWorkspaceFile(entry.path);
+        return;
+      }
+      onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
+    },
+    onRename: ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
+      if (!cwd) return;
+      const entry = workspaceEntryMap.get(treePathToWorkspacePath(sourcePath));
+      const nextName = destinationPath.split('/').filter(Boolean).pop()?.trim() ?? '';
+      if (!entry || !nextName || nextName === entry.name) return;
+      void api
+        .renameWorkspacePath(cwd, entry.path, nextName)
+        .then((renamed) => {
+          setOpenFilePaths((current) => {
+            const next = current.map((path) =>
+              path === entry.path
+                ? renamed.path
+                : path.startsWith(`${entry.path}/`)
+                  ? `${renamed.path}/${path.slice(entry.path.length + 1)}`
+                  : path,
+            );
+            writeWorkspaceOpenFiles(cwd, next);
+            return next;
+          });
+          void loadRoot();
+          const parent = parentDirectory(entry.path);
+          if (parent) void loadDirectory(parent);
+        })
+        .catch((error) => window.alert(error instanceof Error ? error.message : String(error)));
+    },
+  });
 
   const loadRoot = useCallback(async () => {
     if (!cwd) return;
@@ -1011,56 +1030,10 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
   }, [showDiff]);
 
   useEffect(() => {
-    model.resetPaths(workspaceTreePaths, {
+    resetTree(workspaceTreePaths, {
       initialExpandedPaths: collectExpandedWorkspaceFolderPaths(model, workspaceEntryMap.values()),
     });
-  }, [model, workspaceEntryMap, workspaceTreePaths]);
-
-  useEffect(() => {
-    selectionChangeRef.current = (paths: readonly string[]) => {
-      const selected = paths[0];
-      if (!selected) return;
-      const workspacePath = treePathToWorkspacePath(selected);
-      const entry = workspaceEntryMap.get(workspacePath);
-      if (!entry) return;
-      if (entry.kind === 'directory') {
-        return;
-      }
-      if (cwd && onOpenFile) {
-        openWorkspaceFile(entry.path);
-        return;
-      }
-      onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
-    };
-  }, [cwd, onDraftPrompt, onOpenFile, openWorkspaceFile, root, workspaceEntryMap]);
-
-  useEffect(() => {
-    renameRef.current = ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
-      if (!cwd) return;
-      const entry = workspaceEntryMap.get(treePathToWorkspacePath(sourcePath));
-      const nextName = destinationPath.split('/').filter(Boolean).pop()?.trim() ?? '';
-      if (!entry || !nextName || nextName === entry.name) return;
-      void api
-        .renameWorkspacePath(cwd, entry.path, nextName)
-        .then((renamed) => {
-          setOpenFilePaths((current) => {
-            const next = current.map((path) =>
-              path === entry.path
-                ? renamed.path
-                : path.startsWith(`${entry.path}/`)
-                  ? `${renamed.path}/${path.slice(entry.path.length + 1)}`
-                  : path,
-            );
-            writeWorkspaceOpenFiles(cwd, next);
-            return next;
-          });
-          void loadRoot();
-          const parent = parentDirectory(entry.path);
-          if (parent) void loadDirectory(parent);
-        })
-        .catch((error) => window.alert(error instanceof Error ? error.message : String(error)));
-    };
-  }, [cwd, loadDirectory, loadRoot, workspaceEntryMap]);
+  }, [model, resetTree, workspaceEntryMap, workspaceTreePaths]);
 
   useEffect(() => {
     nativeContextMenuOpenRef.current = (item, context) => {
@@ -1109,7 +1082,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
     return unsubscribe;
   }, [loadDirectory, model, nodes, railOnly, workspaceEntryMap]);
 
-  useEffect(() => () => model.cleanUp(), [model]);
+  // model cleanup handled by useFileTreeModel
 
   if (!cwd) return null;
 

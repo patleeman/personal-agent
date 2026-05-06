@@ -300,7 +300,7 @@ describe('Sidebar', () => {
     });
 
     expect(html).toContain('aria-label="Running conversation"');
-    expect(html).toContain('>auto<');
+    expect(html).toContain('M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z');
     expect(html).toContain('Morning briefing thread');
   });
 

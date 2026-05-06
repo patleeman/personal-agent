@@ -1709,10 +1709,10 @@ function OpenConversationRow({
           <div className="flex min-w-0 items-center gap-1.5">
             {isAutomation ? (
               <span
-                className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent/75"
+                className="shrink-0 text-accent/75"
                 title={automationTitle ? `Automation thread: ${automationTitle}` : 'Automation thread'}
               >
-                auto
+                <Ico d={PATH.automations} size={11} />
               </span>
             ) : null}
             {pinned ? (

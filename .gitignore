@@ -28,6 +28,9 @@ tools/*/.build/
 # Logs
 *.log
 
+# Runtime state
+scripts/.last-reviewed-sha
+
 # Test coverage output
 coverage/
 

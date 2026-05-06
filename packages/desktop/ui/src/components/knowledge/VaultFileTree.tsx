@@ -2,8 +2,6 @@ import {
   type ContextMenuItem as FileTreeContextMenuItem,
   type ContextMenuOpenContext as FileTreeContextMenuOpenContext,
   FileTree as TreesModel,
-  type FileTreeDropContext,
-  type FileTreeDropResult,
   type FileTreeRenameEvent,
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
@@ -35,6 +33,8 @@ import {
   writeStoredExpandedFolderIds,
 } from '../../local/knowledgeTreeState';
 import type { VaultEntry } from '../../shared/types';
+import { ContextMenuWrapper } from '../shared/ContextMenuWrapper';
+import { canDropAllPaths, getTopLevelDraggedPaths, useFileTreeModel } from '../shared/useFileTreeModel';
 import { cx } from '../ui';
 import { emitKBEvent, onKBEvent, useVaultWatcher } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
@@ -188,11 +188,6 @@ function getExpandableFolderIds(path: string): string[] {
   return folderIds;
 }
 
-function getTopLevelDraggedPaths(paths: readonly string[]): string[] {
-  const sorted = [...paths].sort((left, right) => left.length - right.length || left.localeCompare(right));
-  return sorted.filter((path, index) => !sorted.slice(0, index).some((candidate) => candidate.endsWith('/') && path.startsWith(candidate)));
-}
-
 function collectExpandedFolderIds(model: TreesModel, folderIds: readonly string[]): Set<string> {
   const expanded = new Set<string>();
   for (const folderId of folderIds) {
@@ -275,12 +270,8 @@ function getCreateTargetDirectoryId(entry: VaultEntry): string {
 
 function TreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinder, onMove, onRename }: ContextMenuProps) {
   return (
-    <div
-      className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]"
-      role="menu"
-      aria-label="Knowledge entry actions"
-    >
-      <div className="space-y-px">
+    <ContextMenuWrapper className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]">
+      <div className="space-y-px" role="menu" aria-label="Knowledge entry actions">
         <button type="button" className="ui-context-menu-item gap-2" onClick={onCreateFile} role="menuitem">
           <Ico d={ICON.file} size={12} />
           New File
@@ -318,7 +309,7 @@ function TreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinde
           Delete
         </button>
       </div>
-    </div>
+    </ContextMenuWrapper>
   );
 }
 
@@ -353,7 +344,16 @@ function MoveModal({
             onChange={(event) => setSelected(event.target.value)}
           >
             {folderOptions.map((folder) => (
-              <option key={folder.id} value={folder.id} disabled={!canDropAllPaths(paths, folder.id, entryMap)}>
+              <option
+                key={folder.id}
+                value={folder.id}
+                disabled={
+                  !canDropAllPaths(paths, folder.id, (path, dir) => {
+                    const entry = entryMap.get(path);
+                    return entry ? canDropVaultEntry(entry, dir) : false;
+                  })
+                }
+              >
                 {folder.label}
               </option>
             ))}
@@ -685,14 +685,6 @@ function OpenFilesSection({
   );
 }
 
-function canDropAllPaths(paths: readonly string[], targetDir: string, entryMap: Map<string, VaultEntry>): boolean {
-  return paths.every((path) => {
-    const entry = entryMap.get(path);
-    if (!entry) return false;
-    return canDropVaultEntry(entry, targetDir);
-  });
-}
-
 export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -706,16 +698,9 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const recentlyClosedFileIdsRef = useRef<string[]>(readStoredRecentlyClosedFileIds());
   const expandedFolderIdsRef = useRef<Set<string>>(readStoredExpandedFolderIds());
   const visibleExpandedFolderIdsRef = useRef<Set<string>>(new Set(expandedFolderIdsRef.current));
-  const initialActiveFileIdRef = useRef(activeFileId);
   const activeFileIdRef = useRef(activeFileId);
   const entryMapRef = useRef<Map<string, VaultEntry>>(new Map());
   const folderIdsRef = useRef<string[]>([]);
-  const selectedPathsRef = useRef<readonly string[]>([]);
-  const selectionChangeRef = useRef<(paths: readonly string[]) => void>(() => {});
-  const renameRef = useRef<(event: FileTreeRenameEvent) => void>(() => {});
-  const canDropRef = useRef<(event: FileTreeDropContext) => boolean>(() => false);
-  const dropCompleteRef = useRef<(event: FileTreeDropResult) => void>(() => {});
-  const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
   const reconcilingExpansionRef = useRef(false);
   const treeHostWrapperRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -727,38 +712,18 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     error: knowledgeBaseError,
     refetch: refetchKnowledgeBase,
   } = useApi(api.knowledgeBase, 'knowledge-base-tree-status');
-  const model = useMemo(
-    () =>
-      new TreesModel({
-        paths: [],
-        search: false,
-        initialExpandedPaths: [...expandedFolderIdsRef.current],
-        initialSelectedPaths: initialActiveFileIdRef.current ? [initialActiveFileIdRef.current] : [],
-        composition: {
-          contextMenu: useNativeKnowledgeContextMenu
-            ? {
-                enabled: true,
-                triggerMode: 'right-click',
-                onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context),
-              }
-            : {
-                triggerMode: 'right-click',
-              },
-        },
-        onSelectionChange: (paths) => selectionChangeRef.current(paths),
-        renaming: {
-          onRename: (event) => renameRef.current(event),
-        },
-        dragAndDrop: {
-          canDrop: (event) => canDropRef.current(event),
-          onDropComplete: (event) => dropCompleteRef.current(event),
-          onDropError: (error) => {
-            console.error('knowledge tree drop failed', error);
-          },
-        },
-      }),
-    [useNativeKnowledgeContextMenu],
-  );
+  const { model, resetTree, nativeContextMenuOpenRef, canDropRef, dropCompleteRef } = useFileTreeModel({
+    useNativeContextMenu: useNativeKnowledgeContextMenu,
+    onSelectionChange: (paths) => {
+      const selectedPath = paths.find((path) => !path.endsWith('/')) ?? null;
+      if (selectedPath && selectedPath !== activeFileIdRef.current) {
+        onFileSelect(selectedPath);
+      }
+    },
+    onRename: (event) => {
+      void handleRename(event);
+    },
+  });
 
   const entryMap = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
   const folderIds = useMemo(() => entries.filter((entry) => entry.kind === 'folder').map((entry) => entry.id), [entries]);
@@ -844,7 +809,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       try {
         const result = await api.vaultFiles();
         setEntries(result.files);
-        model.resetPaths(
+        resetTree(
           result.files.map((entry) => entry.id),
           {
             initialExpandedPaths: [...expandedFolderIdsRef.current],
@@ -853,12 +818,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       } catch (error) {
         console.error('failed to load knowledge base snapshot', error);
         setEntries([]);
-        model.resetPaths([]);
+        resetTree([]);
       } finally {
         setLoading(false);
       }
     },
-    [model],
+    [resetTree],
   );
 
   const handleRename = useCallback(
@@ -1186,21 +1151,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     persistOpenFileIds(addOpenFileId(openFileIdsRef.current, activeFileId));
   }, [activeFileId, persistOpenFileIds]);
 
-  useEffect(() => {
-    selectionChangeRef.current = (paths) => {
-      selectedPathsRef.current = paths;
-      const selectedPath = paths.find((path) => !path.endsWith('/')) ?? null;
-      if (selectedPath && selectedPath !== activeFileIdRef.current) {
-        onFileSelect(selectedPath);
-      }
-    };
-  }, [onFileSelect]);
-
-  useEffect(() => {
-    renameRef.current = (event) => {
-      void handleRename(event);
-    };
-  }, [handleRename]);
+  // selectionChangeRef and renameRef are wired through useFileTreeModel
 
   useEffect(() => {
     canDropRef.current = (event) => {
@@ -1286,22 +1237,22 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
     if (knowledgeBaseDisabled) {
       setEntries([]);
-      model.resetPaths([]);
+      resetTree([]);
       setLoading(false);
       return;
     }
 
     void loadSnapshot();
-  }, [knowledgeBaseDisabled, knowledgeBaseState, loadSnapshot, model]);
+  }, [knowledgeBaseDisabled, knowledgeBaseState, loadSnapshot, resetTree]);
 
-  // Keyboard shortcut: Delete/Backspace removes selected items
+  // Delete/Backspace keyboard shortcut — scoped to the tree wrapper so it
+  // doesn't process keystrokes from other parts of the app.
   useEffect(() => {
     const wrapper = treeHostWrapperRef.current;
     if (!wrapper) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Delete' && event.key !== 'Backspace') return;
-      // Don't fire when typing in an input/textarea
       if (
         event.target instanceof HTMLElement &&
         (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable)
@@ -1318,7 +1269,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
     wrapper.addEventListener('keydown', handleKeyDown);
     return () => wrapper.removeEventListener('keydown', handleKeyDown);
-  }, [handleDeletePaths, model]);
+  }, [model, handleDeletePaths]);
 
   useEffect(() => {
     if (!activeFileId) {
@@ -1352,12 +1303,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
 
-  useEffect(
-    () => () => {
-      model.cleanUp();
-    },
-    [model],
-  );
+  // model cleanup handled by useFileTreeModel
 
   useEffect(() => {
     if (!knowledgeBaseDisabled) {
