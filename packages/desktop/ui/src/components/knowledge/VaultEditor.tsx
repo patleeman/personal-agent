@@ -13,7 +13,7 @@ import { api, vaultApi } from '../../client/api';
 import { type MarkdownFrontmatter, parseMarkdownDocument, stringifyMarkdownFrontmatter } from '../../knowledge/markdownDocument';
 import type { VaultBacklink, VaultEntry } from '../../shared/types';
 import { FrontmatterDisclosure } from './FrontmatterDisclosure';
-import { emitKBEvent, onKBEvent } from './knowledgeEvents';
+import { emitKBEvent, type KBFileChangedExternallyDetail, onKBEvent } from './knowledgeEvents';
 import { readMarkdownFromEditor } from './markdownEditorContent';
 import { buildWikiLinkExtension } from './WikiLinkExtension';
 import { buildWikiLinkRenderer } from './WikiLinkSuggestion';
@@ -435,6 +435,9 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   const [frontmatterError, setFrontmatterError] = useState<string | null>(null);
   const [rawFrontmatter, setRawFrontmatter] = useState<string | null>(null);
 
+  // Trigger a reload when the file changes externally
+  const [reloadCounter, setReloadCounter] = useState(0);
+
   // Vault entries for wikilink autocomplete — refresh on kb events
   const [allEntries, setAllEntries] = useState<VaultEntry[]>([]);
   const entriesRef = useRef<VaultEntry[]>([]);
@@ -466,6 +469,21 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     ];
     return () => offs.forEach((off) => off());
   }, [loadEntries]);
+
+  // Reload the current file when it changes externally
+  useEffect(() => {
+    const off = onKBEvent<KBFileChangedExternallyDetail>('kb:file-changed-externally', ({ path }) => {
+      if (path === fileIdRef.current && fileIdRef.current) {
+        // Clear the cached document so the load effect re-fetches
+        cachedVaultDocuments.delete(fileIdRef.current);
+        pendingVaultDocumentReads.delete(fileIdRef.current);
+        cachedVaultBacklinks.delete(fileIdRef.current);
+        pendingVaultBacklinkReads.delete(fileIdRef.current);
+        setReloadCounter((c) => c + 1);
+      }
+    });
+    return off;
+  }, []);
 
   const suggestionRenderer = useRef(buildWikiLinkRenderer());
   const fileIdRef = useRef<string | null>(null);
@@ -614,7 +632,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
           setLoading(false);
         }
       });
-  }, [applyLoadedDocument, editor, fileId]);
+  }, [applyLoadedDocument, editor, fileId, reloadCounter]);
 
   // Build full file content (frontmatter + body) for saving
   const getContent = useCallback(() => {

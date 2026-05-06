@@ -996,7 +996,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
           applyDeleteEffects(id);
           setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, id)));
           try {
-            model.remove(id);
+            model.remove(id, id.endsWith('/') ? { recursive: true } : undefined);
           } catch {
             // The follow-up snapshot is authoritative; this is only an immediate UI update.
           }
