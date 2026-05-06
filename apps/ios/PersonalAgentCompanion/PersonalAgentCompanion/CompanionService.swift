@@ -2476,6 +2476,10 @@ final class MockCompanionClient: CompanionClientProtocol {
         emitConversation(conversationId, .titleUpdate(title))
     }
 
+    func emitToolEnd(conversationId: String, toolCallId: String, toolName: String, isError: Bool, output: String) {
+        emitConversation(conversationId, .toolEnd(toolCallId: toolCallId, toolName: toolName, isError: isError, durationMs: 100, output: output, details: nil))
+    }
+
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope {
         createConversationCount += 1
         if createConversationDelayNanoseconds > 0 {

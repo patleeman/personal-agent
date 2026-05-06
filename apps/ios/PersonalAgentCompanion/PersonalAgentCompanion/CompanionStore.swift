@@ -3274,7 +3274,7 @@ final class ConversationViewModel: ObservableObject {
         case .toolStart(let toolCallId, let toolName, let args):
             liveEventRevision += 1
             let block = DisplayBlock(type: "tool_use", id: toolCallId, ts: ISO8601DateFormatter.flexible.string(from: .now), tool: toolName, input: args, output: "", toolCallId: toolCallId)
-            blocks.append(block)
+            upsertToolBlock(toolCallId: toolCallId, replacement: block)
         case .toolUpdate(let toolCallId, let partialResult):
             liveEventRevision += 1
             updateToolBlock(toolCallId: toolCallId) { block in
@@ -3307,7 +3307,7 @@ final class ConversationViewModel: ObservableObject {
             }
         case .toolEnd(let toolCallId, let toolName, let isError, let durationMs, let output, let details):
             liveEventRevision += 1
-            updateToolBlock(toolCallId: toolCallId) { block in
+            upsertToolBlock(toolCallId: toolCallId) { block in
                 DisplayBlock(
                     type: "tool_use",
                     id: block.id,
@@ -3377,6 +3377,23 @@ final class ConversationViewModel: ObservableObject {
     private func updateToolBlock(toolCallId: String, transform: (DisplayBlock) -> DisplayBlock) {
         if let index = blocks.lastIndex(where: { $0.toolCallId == toolCallId || $0.id == toolCallId }) {
             blocks[index] = transform(blocks[index])
+        }
+    }
+
+    private func upsertToolBlock(toolCallId: String, replacement: DisplayBlock) {
+        if let index = blocks.lastIndex(where: { $0.toolCallId == toolCallId || $0.id == toolCallId }) {
+            blocks[index] = replacement
+        } else {
+            blocks.append(replacement)
+        }
+    }
+
+    private func upsertToolBlock(toolCallId: String, transform: (DisplayBlock) -> DisplayBlock) {
+        if let index = blocks.lastIndex(where: { $0.toolCallId == toolCallId || $0.id == toolCallId }) {
+            blocks[index] = transform(blocks[index])
+        } else {
+            let placeholder = DisplayBlock(type: "tool_use", id: toolCallId, ts: ISO8601DateFormatter.flexible.string(from: .now), toolCallId: toolCallId)
+            blocks.append(transform(placeholder))
         }
     }
 }
