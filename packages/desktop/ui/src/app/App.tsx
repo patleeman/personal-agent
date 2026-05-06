@@ -121,6 +121,7 @@ const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () =>
 const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
   import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
 );
+const AppsPage = lazyRouteWithRecovery('apps-page', () => import('../apps/AppsPage').then((module) => ({ default: module.AppsPage })));
 
 const TracesPage = lazyRouteWithRecovery('telemetry-page', () =>
   import('../pages/TracesPage').then((module) => ({ default: module.TracesPage })),
@@ -455,6 +456,7 @@ export function App() {
                         <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
                         <Route path="automations" element={suspendRoute(<TasksPage />)} />
                         <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
+                        <Route path="apps" element={suspendRoute(<AppsPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
                         <Route path="telemetry" element={suspendRoute(<TracesPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
