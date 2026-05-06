@@ -35,7 +35,7 @@ export type AppEvent =
   | { type: 'connected' }
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
-  | { type: 'session_meta_changed'; sessionId: string }
+  | { type: 'session_meta_changed'; sessionId: string; running?: boolean }
   | { type: 'session_file_changed'; sessionId: string }
   | { type: 'open_session'; sessionId: string };
 

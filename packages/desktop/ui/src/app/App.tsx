@@ -236,6 +236,19 @@ export function App() {
           return;
         case 'session_meta_changed':
           bumpConversationVersion(payload.sessionId);
+          if (payload.running !== undefined) {
+            setSessionsState((previous) => {
+              if (!previous) return previous;
+              const index = previous.findIndex((s) => s.id === payload.sessionId);
+              if (index === -1) return previous;
+              const existing = previous[index];
+              if (!existing || existing.isRunning === payload.running) return previous;
+              const updated = { ...existing, isRunning: payload.running };
+              const next = [...previous];
+              next[index] = updated;
+              return next;
+            });
+          }
           void refreshSessionMeta(payload.sessionId);
           return;
         case 'session_file_changed':

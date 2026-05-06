@@ -49,15 +49,16 @@ describe('streaming lifecycle callbacks', () => {
       broadcastSnapshot: vi.fn(),
       broadcast: vi.fn(),
       tryImportReadyParallelJobs: vi.fn().mockResolvedValue(undefined),
+      syncRunningState: vi.fn(),
     };
   }
 
-  it('agent_start marks durable run as running and publishes meta change', () => {
+  it('agent_start marks durable run as running and syncs running state', () => {
     const entry = makeEntry();
     const cbs = makeCallbacks();
     handleLiveSessionEvent(entry, { type: 'agent_start' } as any, cbs);
     expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'running');
-    expect(cbs.publishSessionMetaChanged).toHaveBeenCalledWith('sess-1');
+    expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
   });
 
   it('agent_end marks durable run as waiting', () => {
@@ -79,8 +80,21 @@ describe('streaming lifecycle callbacks', () => {
     handleLiveSessionEvent(entry, { type: 'turn_end', message: {}, toolResults: [] } as any, cbs);
     expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'waiting');
     expect(cbs.notifyLifecycleHandlers).toHaveBeenCalledWith(entry, 'turn_end');
-    expect(cbs.publishSessionMetaChanged).toHaveBeenCalledWith('sess-1');
+    expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
     expect(cbs.clearContextUsageTimer).toHaveBeenCalled();
+  });
+
+  it('calls syncRunningState on every event, not just agent_start/turn_end', () => {
+    const entry = makeEntry();
+    const cbs = makeCallbacks();
+    const events = [
+      { type: 'tool_execution_start', toolCallId: 'tc-1', toolName: 'bash', args: {} },
+      { type: 'message_update', message: {}, assistantMessageEvent: { type: 'text_delta', delta: 'hi' } },
+      { type: 'tool_execution_end', toolCallId: 'tc-1', toolName: 'bash', result: { exitCode: 0 }, isError: false },
+    ] as any;
+    for (const event of events) handleLiveSessionEvent(entry, event, cbs);
+    expect(cbs.syncRunningState).toHaveBeenCalledTimes(events.length);
+    expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
   });
 
   it('agent_start then agent_end broadcasts to subscribers via broadcast', () => {
@@ -158,6 +172,7 @@ describe('trace persistence hooks', () => {
     applyPendingConversationWorkingDirectoryChange: vi.fn(),
     scheduleContextUsage: vi.fn(),
     publishSessionMetaChanged: vi.fn(),
+    syncRunningState: vi.fn(),
     broadcastQueueState: vi.fn(),
     broadcastTitle: vi.fn(),
     broadcastStats: vi.fn(),

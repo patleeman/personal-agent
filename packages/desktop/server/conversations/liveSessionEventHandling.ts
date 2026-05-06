@@ -65,6 +65,7 @@ export interface LiveSessionEventCallbacks<TEntry extends LiveSessionEventHost> 
   clearContextUsageTimer: (entry: TEntry) => void;
   broadcastContextUsage: (entry: TEntry, force?: boolean) => void;
   broadcastSnapshot: (entry: TEntry) => void;
+  syncRunningState: (sessionId: string) => void;
   broadcast: (entry: TEntry, event: SseEvent) => void;
   tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
 }
@@ -167,7 +168,6 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     entry.traceRunTurnCount = 0;
     entry.traceRunStepCount = 0;
     entry.currentTurnError = null;
-    callbacks.publishSessionMetaChanged(entry.sessionId);
     void callbacks.syncDurableConversationRun(entry, 'running');
   }
 
@@ -242,7 +242,6 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   if (event.type === 'turn_end') {
     callbacks.clearContextUsageTimer(entry);
     callbacks.broadcastContextUsage(entry, true);
-    callbacks.publishSessionMetaChanged(entry.sessionId);
   }
 
   if (event.type === 'compaction_start') {
@@ -288,11 +287,12 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
 
   const hiddenTurnCleared = clearActiveHiddenTurnAfterTerminalEvent(entry, event);
   if (hiddenTurnCleared) {
-    // publishSessionMetaChanged above (in the turn_end block) fires *before* the
-    // hidden turn is cleared, so the client got isRunning=true from hasPendingHiddenTurn.
-    // Send a fresh meta update now so the sidebar shows the correct idle state.
     callbacks.publishSessionMetaChanged(entry.sessionId);
   }
+
+  // After every event that could affect running state, sync and broadcast.
+  // No-op if running hasn't actually changed.
+  callbacks.syncRunningState(entry.sessionId);
 
   if (event.type === 'turn_end' || event.type === 'agent_end') {
     void callbacks.tryImportReadyParallelJobs(entry);

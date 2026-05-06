@@ -343,11 +343,11 @@ function buildSyntheticLiveSessionSnapshot(
 }
 
 function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[number] | null | undefined): boolean {
-  // liveEntry.isStreaming already accounts for lastDurableRunState === 'waiting'
-  // (listLiveSessions in liveSessionReadApi sets it to false in that case), so
-  // don't early-return on waiting — hasPendingHiddenTurn must still be checked.
-  // During an active hidden turn (e.g. auto mode) the entry's lastDurableRunState
-  // is 'waiting' (set on agent_end) but the conversation is still logically running.
+  // Prefer the pre-computed `running` field from listLiveSessions.
+  // Fall back to re-deriving for callers (or mocks) that bypass listLiveSessions.
+  if (liveEntry && 'running' in liveEntry) {
+    return liveEntry.running;
+  }
   return Boolean(
     liveEntry?.isStreaming ||
     liveEntry?.hasPendingHiddenTurn ||

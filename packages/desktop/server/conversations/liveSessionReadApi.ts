@@ -13,6 +13,29 @@ export interface LiveSessionReadHost extends LiveSessionHiddenTurnState {
   lastDurableRunState?: string;
 }
 
+/** Single canonical function that determines whether a live session is running.
+ *  All consumers must use this — no re-derivation in other modules.
+ *
+ *  A session is running when:
+ *   - The agent is actively streaming (agent runtime), OR
+ *   - A hidden turn is active or queued (auto mode, etc.), OR
+ *   - The durable run state is 'running' or 'recovering'
+ *
+ *  The lastDurableRunState guard handles the race where agent_end fires before
+ *  session.isStreaming is cleared by the Pi runtime. When lastDurableRunState
+ *  is 'waiting' and there's no pending hidden work, the session is truly idle. */
+export function computeLiveSessionRunning(entry: LiveSessionReadHost): boolean {
+  if (entry.lastDurableRunState === 'waiting' && !hasQueuedOrActiveHiddenTurn(entry)) {
+    return false;
+  }
+  return Boolean(
+    (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) ||
+    hasQueuedOrActiveHiddenTurn(entry) ||
+    entry.lastDurableRunState === 'running' ||
+    entry.lastDurableRunState === 'recovering',
+  );
+}
+
 export function listLiveSessions<TEntry extends LiveSessionReadHost>(
   entries: Iterable<[string, TEntry]>,
   resolveTitle: (entry: TEntry) => string,
@@ -22,6 +45,7 @@ export function listLiveSessions<TEntry extends LiveSessionReadHost>(
     cwd: entry.cwd,
     sessionFile: resolveLiveSessionFile(entry.session) ?? '',
     title: resolveTitle(entry),
+    running: computeLiveSessionRunning(entry),
     isStreaming:
       // lastDurableRunState is the authoritative state — it transitions to 'waiting'
       // synchronously in syncLiveSessionDurableRun before session.isStreaming is
