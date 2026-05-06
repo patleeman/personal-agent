@@ -36,7 +36,7 @@ import {
 } from '../../local/knowledgeTreeState';
 import type { VaultEntry } from '../../shared/types';
 import { cx } from '../ui';
-import { emitKBEvent, onKBEvent } from './knowledgeEvents';
+import { emitKBEvent, onKBEvent, useVaultWatcher } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
@@ -305,7 +305,7 @@ function TreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinde
         </button>
         <button type="button" className="ui-context-menu-item gap-2" onClick={onMove} role="menuitem">
           <Ico d={ICON.move} size={12} />
-          Move to…
+          Move to...
         </button>
         <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
         <button
@@ -323,23 +323,26 @@ function TreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinde
 }
 
 function MoveModal({
-  entry,
+  paths,
   folderOptions,
+  entryMap,
   onConfirm,
   onClose,
 }: {
-  entry: VaultEntry;
+  paths: readonly string[];
   folderOptions: readonly FolderOption[];
+  entryMap: Map<string, VaultEntry>;
   onConfirm: (targetDir: string) => void;
   onClose: () => void;
 }) {
-  const currentDir = entry.kind === 'file' ? idToDir(entry.id) : entry.id;
   const [selected, setSelected] = useState('');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-80 p-5" onClick={(event) => event.stopPropagation()}>
-        <h3 className="text-[13px] font-semibold text-primary mb-1">Move “{entry.name}”</h3>
+        <h3 className="text-[13px] font-semibold text-primary mb-1">
+          {paths.length === 1 ? `Move "${entryMap.get(paths[0] ?? '')?.name ?? ''}"` : `Move ${paths.length} items`}
+        </h3>
         <p className="text-[11px] text-dim mb-3">Select destination folder.</p>
         <label className="block space-y-1">
           <span className="text-[11px] text-dim">Destination</span>
@@ -350,7 +353,7 @@ function MoveModal({
             onChange={(event) => setSelected(event.target.value)}
           >
             {folderOptions.map((folder) => (
-              <option key={folder.id} value={folder.id} disabled={folder.id === currentDir || !canDropVaultEntry(entry, folder.id)}>
+              <option key={folder.id} value={folder.id} disabled={!canDropAllPaths(paths, folder.id, entryMap)}>
                 {folder.label}
               </option>
             ))}
@@ -491,7 +494,7 @@ function ImportUrlModal({
               className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70"
               disabled={submitting}
             >
-              {submitting ? 'Importing…' : 'Import URL'}
+              {submitting ? 'Importing...' : 'Import URL'}
             </button>
           </div>
         </form>
@@ -589,7 +592,7 @@ function CreateEntryModal({
               className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70"
               disabled={submitting}
             >
-              {submitting ? 'Creating…' : title}
+              {submitting ? 'Creating...' : title}
             </button>
           </div>
         </form>
@@ -682,10 +685,18 @@ function OpenFilesSection({
   );
 }
 
+function canDropAllPaths(paths: readonly string[], targetDir: string, entryMap: Map<string, VaultEntry>): boolean {
+  return paths.every((path) => {
+    const entry = entryMap.get(path);
+    if (!entry) return false;
+    return canDropVaultEntry(entry, targetDir);
+  });
+}
+
 export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
+  const [movePaths, setMovePaths] = useState<string[] | null>(null);
   const [importDirectoryId, setImportDirectoryId] = useState<string | null>(null);
   const [createEntryState, setCreateEntryState] = useState<CreateEntryState | null>(null);
   const [syncingKnowledgeBase, setSyncingKnowledgeBase] = useState(false);
@@ -699,6 +710,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const activeFileIdRef = useRef(activeFileId);
   const entryMapRef = useRef<Map<string, VaultEntry>>(new Map());
   const folderIdsRef = useRef<string[]>([]);
+  const selectedPathsRef = useRef<readonly string[]>([]);
   const selectionChangeRef = useRef<(paths: readonly string[]) => void>(() => {});
   const renameRef = useRef<(event: FileTreeRenameEvent) => void>(() => {});
   const canDropRef = useRef<(event: FileTreeDropContext) => boolean>(() => false);
@@ -964,25 +976,36 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     [createEntryState, onFileSelect],
   );
 
-  const handleDelete = useCallback(
-    async (entry: VaultEntry) => {
-      if (!window.confirm(`Delete “${entry.name}”?`)) {
+  const handleDeletePaths = useCallback(
+    async (paths: readonly string[]) => {
+      if (paths.length === 0) return;
+
+      // Deduplicate: if a folder is selected, skip its children
+      const deduped = getTopLevelDraggedPaths(paths);
+
+      const message =
+        deduped.length === 1 ? `Delete "${deduped[0]?.split('/').filter(Boolean).pop() ?? ''}"?` : `Delete ${deduped.length} items?`;
+
+      if (!window.confirm(message)) {
         return;
       }
 
-      try {
-        await vaultApi.deleteFile(entry.id);
-        applyDeleteEffects(entry.id);
-        setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, entry.id)));
+      for (const id of deduped) {
         try {
-          model.remove(entry.id, entry.kind === 'folder' ? { recursive: true } : undefined);
-        } catch {
-          // The follow-up snapshot is authoritative; this is only an immediate UI update.
+          await vaultApi.deleteFile(id);
+          applyDeleteEffects(id);
+          setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, id)));
+          try {
+            model.remove(id);
+          } catch {
+            // The follow-up snapshot is authoritative; this is only an immediate UI update.
+          }
+        } catch (error) {
+          console.error('delete failed', error);
         }
-        emitKBEvent('kb:file-deleted', { id: entry.id });
-      } catch (error) {
-        console.error('delete failed', error);
       }
+
+      emitKBEvent('kb:entries-changed');
     },
     [applyDeleteEffects, model],
   );
@@ -1029,16 +1052,31 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
           }, 0);
           break;
         case 'move':
-          setMoveEntry(entry);
+          {
+            const selectedPaths = [...model.getSelectedPaths()];
+            if (selectedPaths.length > 1 && selectedPaths.includes(entry.id)) {
+              const entries = getTopLevelDraggedPaths(selectedPaths).filter((p) => entryMapRef.current.has(p));
+              setMovePaths(entries);
+            } else {
+              setMovePaths([entry.id]);
+            }
+          }
           break;
         case 'delete':
-          void handleDelete(entry);
+          {
+            const selectedPaths = [...model.getSelectedPaths()];
+            if (selectedPaths.length > 1 && selectedPaths.includes(entry.id)) {
+              void handleDeletePaths(selectedPaths);
+            } else {
+              void handleDeletePaths([entry.id]);
+            }
+          }
           break;
         default:
           break;
       }
     },
-    [handleDelete, handleOpenInFinder, model, openCreateEntryModal],
+    [handleDeletePaths, handleOpenInFinder, model, openCreateEntryModal],
   );
 
   const handleOpenFileClose = useCallback(
@@ -1145,6 +1183,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   useEffect(() => {
     selectionChangeRef.current = (paths) => {
+      selectedPathsRef.current = paths;
       const selectedPath = paths.find((path) => !path.endsWith('/')) ?? null;
       if (selectedPath && selectedPath !== activeFileIdRef.current) {
         onFileSelect(selectedPath);
@@ -1249,6 +1288,32 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     void loadSnapshot();
   }, [knowledgeBaseDisabled, knowledgeBaseState, loadSnapshot, model]);
 
+  // Keyboard shortcut: Delete/Backspace removes selected items
+  useEffect(() => {
+    const wrapper = treeHostWrapperRef.current;
+    if (!wrapper) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      // Don't fire when typing in an input/textarea
+      if (
+        event.target instanceof HTMLElement &&
+        (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const selectedPaths = model.getSelectedPaths();
+      if (selectedPaths.length === 0) return;
+
+      event.preventDefault();
+      void handleDeletePaths(selectedPaths);
+    };
+
+    wrapper.addEventListener('keydown', handleKeyDown);
+    return () => wrapper.removeEventListener('keydown', handleKeyDown);
+  }, [handleDeletePaths, model]);
+
   useEffect(() => {
     if (!activeFileId) {
       for (const selectedPath of model.getSelectedPaths()) {
@@ -1293,7 +1358,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       return;
     }
 
-    setMoveEntry(null);
+    setMovePaths(null);
     setImportDirectoryId(null);
     setCreateEntryState(null);
   }, [knowledgeBaseDisabled]);
@@ -1331,6 +1396,18 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       off.forEach((unsubscribe) => unsubscribe());
     };
   }, [applyDeleteEffects, applyRenameEffects, loadSnapshot, refetchKnowledgeBase]);
+
+  // Watch for external file system changes to the vault root
+  useVaultWatcher(
+    useCallback(() => {
+      const currentContent = activeFileIdRef.current;
+      if (currentContent) {
+        emitKBEvent('kb:file-changed-externally', { path: currentContent });
+      }
+      void loadSnapshot({ keepLoadingState: false });
+      void refetchKnowledgeBase({ resetLoading: false });
+    }, [loadSnapshot, refetchKnowledgeBase]),
+  );
 
   useEffect(() => {
     const wrapper = treeHostWrapperRef.current;
@@ -1455,7 +1532,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 <Link to="/settings#settings-general" className="text-accent hover:underline">
                   Settings
                 </Link>{' '}
-                — any git remote works, empty or existing.
+                - any git remote works, empty or existing.
               </p>
             </div>
           </div>
@@ -1499,7 +1576,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
               <button
                 type="button"
                 className="ui-icon-button ui-icon-button-compact"
-                title={syncingKnowledgeBase ? 'Syncing knowledge base…' : 'Sync knowledge base'}
+                title={syncingKnowledgeBase ? 'Syncing knowledge base...' : 'Sync knowledge base'}
                 aria-label="Sync knowledge base"
                 disabled={syncingKnowledgeBase}
                 onClick={() => {
@@ -1540,7 +1617,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
           <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
             {loading ? (
-              <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
+              <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading...</p>
             ) : (
               <TreesFileTree
                 className="h-full"
@@ -1581,11 +1658,22 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                             }}
                             onMove={() => {
                               context.close();
-                              setMoveEntry(entry);
+                              const selectedPaths = [...model.getSelectedPaths()];
+                              if (selectedPaths.length > 1 && selectedPaths.includes(entry.id)) {
+                                const entries = getTopLevelDraggedPaths(selectedPaths).filter((p) => entryMapRef.current.has(p));
+                                setMovePaths(entries);
+                              } else {
+                                setMovePaths([entry.id]);
+                              }
                             }}
                             onDelete={() => {
                               context.close();
-                              void handleDelete(entry);
+                              const selectedPaths = [...model.getSelectedPaths()];
+                              if (selectedPaths.length > 1 && selectedPaths.includes(entry.id)) {
+                                void handleDeletePaths(selectedPaths);
+                              } else {
+                                void handleDeletePaths([entry.id]);
+                              }
                             }}
                           />
                         );
@@ -1599,14 +1687,15 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         </>
       )}
 
-      {moveEntry ? (
+      {movePaths ? (
         <MoveModal
-          entry={moveEntry}
+          paths={movePaths}
+          entryMap={entryMap}
           folderOptions={folderOptions}
           onConfirm={(targetDir) => {
-            void handleMovePaths([moveEntry.id], targetDir);
+            void handleMovePaths(movePaths, targetDir);
           }}
-          onClose={() => setMoveEntry(null)}
+          onClose={() => setMovePaths(null)}
         />
       ) : null}
 
