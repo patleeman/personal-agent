@@ -18,6 +18,7 @@ import {
 import { subscribeProviderOAuthLogins } from '../models/providerAuth.js';
 import { startAppEventMonitor } from '../shared/appEvents.js';
 import { createServiceAttentionMonitor, type ServiceAttentionMonitorOptions } from '../shared/internalAttention.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 
 export function createServerApps(): { app: Express } {
   const app = express();
@@ -41,6 +42,18 @@ export function startBootstrapMonitors(options: {
   daemonRoot?: string;
   readDaemonState: ServiceAttentionMonitorOptions['readDaemonState'];
 }): void {
+  persistAppTelemetryEvent({
+    source: 'system',
+    category: 'system_health',
+    name: 'bootstrap_monitors_start',
+    metadata: {
+      repoRoot: options.repoRoot,
+      sessionsDir: options.sessionsDir,
+      taskStateFile: options.taskStateFile,
+      profileConfigFile: options.profileConfigFile,
+    },
+  });
+
   startAppEventMonitor({
     repoRoot: options.repoRoot,
     sessionsDir: options.sessionsDir,
@@ -68,12 +81,25 @@ export function startBootstrapMonitors(options: {
 
 export function startDeferredResumeLoop(options: { flushLiveDeferredResumes: () => Promise<void>; pollMs: number }): void {
   const pollMs = normalizeDeferredResumePollMs(options.pollMs);
+  persistAppTelemetryEvent({ source: 'system', category: 'system_health', name: 'deferred_resume_loop_start', value: pollMs });
   void options.flushLiveDeferredResumes().catch((error) => {
+    persistAppTelemetryEvent({
+      source: 'system',
+      category: 'system_health',
+      name: 'deferred_resume_flush_failed',
+      metadata: { message: (error as Error).message },
+    });
     logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
   });
 
   setInterval(() => {
     void options.flushLiveDeferredResumes().catch((error) => {
+      persistAppTelemetryEvent({
+        source: 'system',
+        category: 'system_health',
+        name: 'deferred_resume_flush_failed',
+        metadata: { message: (error as Error).message },
+      });
       logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
     });
   }, pollMs);
@@ -92,6 +118,7 @@ export function startConversationRecovery(options: {
   queuePromptContext: RecoverDurableLiveConversationsDependencies['queuePromptContext'];
   promptSession: RecoverDurableLiveConversationsDependencies['promptSession'];
 }): void {
+  const startedAt = process.hrtime.bigint();
   void recoverDurableLiveConversations({
     isLive: options.isLive,
     resumeSession: options.resumeSession,
@@ -107,12 +134,26 @@ export function startConversationRecovery(options: {
     },
   })
     .then(async (result) => {
+      persistAppTelemetryEvent({
+        source: 'system',
+        category: 'system_health',
+        name: 'conversation_recovery_completed',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        count: result.recovered.length,
+      });
       if (result.recovered.length > 0) {
         logInfo(`Recovered ${String(result.recovered.length)} live conversation runs from durable state.`);
         await options.flushLiveDeferredResumes();
       }
     })
     .catch((error) => {
+      persistAppTelemetryEvent({
+        source: 'system',
+        category: 'system_health',
+        name: 'conversation_recovery_failed',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        metadata: { message: (error as Error).message },
+      });
       logWarn(`Conversation recovery failed: ${(error as Error).message}`);
     });
 }
@@ -154,6 +195,19 @@ export function startServerListeners(options: {
   handleUpgrade?: (request: IncomingMessage, socket: Socket, head: Buffer) => void;
 }): void {
   const server = options.app.listen(options.port, options.loopbackHost, () => {
+    persistAppTelemetryEvent({
+      source: 'system',
+      category: 'system_health',
+      name: 'server_started',
+      metadata: {
+        port: options.port,
+        loopbackHost: options.loopbackHost,
+        profile: options.getCurrentProfile(),
+        repoRoot: options.repoRoot,
+        cwd: options.getDefaultWebCwd(),
+        dist: options.distDir,
+      },
+    });
     logInfo('desktop renderer server started', {
       url: `http://${options.loopbackHost}:${options.port}`,
       profile: options.getCurrentProfile(),

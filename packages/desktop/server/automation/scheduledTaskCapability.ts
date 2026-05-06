@@ -16,6 +16,7 @@ import {
 
 import { readSessionMeta } from '../conversations/sessions.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { loadScheduledTasksForProfile, type TaskRuntimeEntry, toScheduledTaskMetadata } from './scheduledTasks.js';
 import {
   applyScheduledTaskThreadBinding,
@@ -170,6 +171,15 @@ export function readScheduledTaskSchedulerHealth(profile: string) {
   const ageSeconds = Number.isFinite(lastEvaluatedAtMs) ? Math.floor((Date.now() - lastEvaluatedAtMs) / 1000) : undefined;
   const status = ageSeconds === undefined ? 'unknown' : ageSeconds > SCHEDULER_STALE_AFTER_SECONDS ? 'stale' : 'healthy';
 
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'system_health',
+    name: 'scheduler_health',
+    status: status === 'healthy' ? 200 : status === 'stale' ? 503 : 0,
+    value: ageSeconds,
+    metadata: { profile, lastEvaluatedAt, staleAfterSeconds: SCHEDULER_STALE_AFTER_SECONDS },
+  });
+
   if (status === 'stale') {
     upsertAlert({
       profile,
@@ -283,6 +293,7 @@ function applyScheduledTaskCallbackBinding(
 }
 
 export async function createScheduledTaskCapability(profile: string, input: ScheduledTaskCreateCapabilityInput) {
+  const startedAt = process.hrtime.bigint();
   const targetType = normalizeAutomationTargetTypeForSelection(input.targetType);
   const threadSelection = resolveScheduledTaskThreadBinding({
     threadMode: targetType === 'conversation' && input.threadMode === 'none' ? 'dedicated' : input.threadMode,
@@ -322,6 +333,13 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
   const savedTask = findTaskForProfile(profile, task.id);
   const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
   const activity = listAutomationActivityEntries(task.id);
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'scheduled_task',
+    name: 'create',
+    durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    metadata: { profile, taskId: task.id, targetType, scheduleType: task.schedule.type, enabled: task.enabled, cwd: task.cwd },
+  });
   return {
     ok: true as const,
     task: buildScheduledTaskDetail(savedTask?.task ?? task, savedTask?.runtime, callbackBinding, activity),
@@ -329,6 +347,7 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
 }
 
 export async function updateScheduledTaskCapability(profile: string, input: ScheduledTaskUpdateCapabilityInput) {
+  const startedAt = process.hrtime.bigint();
   const taskId = readRequiredTaskId(input.taskId);
   const resolvedTask = findTaskForProfile(profile, taskId);
   if (!resolvedTask) {
@@ -375,6 +394,13 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
   const refreshedTask = findTaskForProfile(profile, task.id);
   const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
   const activity = listAutomationActivityEntries(task.id);
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'scheduled_task',
+    name: 'update',
+    durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    metadata: { profile, taskId: task.id, targetType, scheduleType: task.schedule.type, enabled: task.enabled, cwd: task.cwd },
+  });
   return {
     ok: true as const,
     task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime, callbackBinding, activity),
@@ -395,6 +421,13 @@ export async function deleteScheduledTaskCapability(profile: string, taskId: str
 
   clearTaskCallbackBinding({ profile, taskId: resolvedTask.task.id });
   invalidateAppTopics('tasks');
+
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'scheduled_task',
+    name: 'delete',
+    metadata: { profile, taskId: resolvedTask.task.id, title: resolvedTask.task.title },
+  });
 
   return {
     ok: true as const,
@@ -419,6 +452,7 @@ export async function readScheduledTaskLogCapability(profile: string, taskId: st
 }
 
 export async function runScheduledTaskCapability(profile: string, taskId: string) {
+  const startedAt = process.hrtime.bigint();
   const resolvedTask = findTaskForProfile(profile, readRequiredTaskId(taskId));
   if (!resolvedTask) {
     throw new Error('Task not found');
@@ -429,6 +463,15 @@ export async function runScheduledTaskCapability(profile: string, taskId: string
   }
 
   const result = await startScheduledTaskRun(resolvedTask.task.id);
+  persistAppTelemetryEvent({
+    source: 'server',
+    category: 'scheduled_task',
+    name: 'run',
+    runId: result.runId,
+    durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    status: result.accepted ? 202 : 409,
+    metadata: { profile, taskId: resolvedTask.task.id, title: resolvedTask.task.title, reason: result.reason },
+  });
   if (!result.accepted) {
     throw new Error(result.reason ?? 'Could not start the task run.');
   }

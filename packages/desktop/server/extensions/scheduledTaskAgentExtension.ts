@@ -25,6 +25,7 @@ import {
   type ScheduledTaskThreadInput,
 } from '../automation/scheduledTaskThreads.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
 const SCHEDULED_TASK_TARGET_VALUES = ['background-agent', 'conversation'] as const;
@@ -547,6 +548,14 @@ export function createScheduledTaskAgentExtension(options: { getCurrentProfile: 
               const { task } = resolveScheduledTaskForProfile(profile, taskId);
               if (!(await pingDaemon())) throw new Error('Daemon is not responding. Ensure the desktop app is running.');
               const result = await startScheduledTaskRun(task.id);
+              persistAppTelemetryEvent({
+                source: 'agent',
+                category: 'scheduled_task',
+                name: 'run_tool_run',
+                runId: result.runId,
+                status: result.accepted ? 202 : 409,
+                metadata: { profile, taskId: task.id, title: task.title, reason: result.reason },
+              });
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not start scheduled task @${taskId}.`);
               }
