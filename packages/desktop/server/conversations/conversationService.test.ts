@@ -501,6 +501,69 @@ describe('conversationService', () => {
     expect(toggleConversationAttention({ profile: 'assistant', conversationId: 'missing' })).toBe(false);
   });
 
+  it('reads isRunning from the live entry running field when present', () => {
+    readSessionMetaMock.mockReturnValue({
+      id: 'live-running',
+      file: '/sessions/live-running.jsonl',
+      timestamp: '2026-04-09T09:00:00.000Z',
+      cwd: '/repo/live',
+      cwdSlug: '-repo-live',
+      model: 'gpt-5',
+      title: 'Running conversation',
+      messageCount: 2,
+    });
+    getLocalLiveSessionsMock.mockReturnValue([
+      {
+        id: 'live-running',
+        cwd: '/repo/live',
+        sessionFile: '/sessions/live-running.jsonl',
+        running: true,
+        isStreaming: false,
+      },
+    ]);
+
+    const meta = readConversationSessionMeta('live-running');
+    expect(meta).toEqual(
+      expect.objectContaining({
+        id: 'live-running',
+        isLive: true,
+        isRunning: true,
+      }),
+    );
+  });
+
+  it('falls back to legacy derivation when live entry has no running field', () => {
+    readSessionMetaMock.mockReturnValue({
+      id: 'fallback',
+      file: '/sessions/fallback.jsonl',
+      timestamp: '2026-04-09T09:00:00.000Z',
+      cwd: '/repo/fallback',
+      cwdSlug: '-repo-fallback',
+      model: 'gpt-5',
+      title: 'Fallback test',
+      messageCount: 1,
+    });
+    getLocalLiveSessionsMock.mockReturnValue([
+      {
+        id: 'fallback',
+        cwd: '/repo/fallback',
+        sessionFile: '/sessions/fallback.jsonl',
+        // no `running` field — exercise the legacy derivation path
+        isStreaming: false,
+        hasPendingHiddenTurn: true,
+      },
+    ]);
+
+    const meta = readConversationSessionMeta('fallback');
+    expect(meta).toEqual(
+      expect.objectContaining({
+        id: 'fallback',
+        isLive: true,
+        isRunning: true, // from hasPendingHiddenTurn via fallback path
+      }),
+    );
+  });
+
   it('marks conversations with partial remote identity as live remote targets', () => {
     listSessionsMock.mockReturnValue([
       {
