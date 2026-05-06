@@ -15,7 +15,6 @@ import { createConversationAutoModeAgentExtension } from '../extensions/conversa
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
 import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
-import gptApplyPatchExtension from '../extensions/gpt-apply-patch/index.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
 import { createImageProbeAgentExtension } from '../extensions/imageProbeAgentExtension.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
@@ -181,7 +180,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
       createConversationQueueAgentExtension({ getCurrentProfile: getRuntimeScope }),
       createReminderAgentExtension(),
       webToolsExtension,
-      gptApplyPatchExtension,
 
       openaiNativeCompactionExtension,
     ].map(guardSystemPromptOverride);

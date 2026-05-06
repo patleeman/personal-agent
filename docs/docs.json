@@ -50,7 +50,6 @@
       "items": [
         { "title": "Conversation Inspect", "path": "conversation-inspect.md" },
         { "title": "Web Search & Fetch", "path": "web-search-fetch.md" },
-        { "title": "Apply Patch", "path": "apply-patch.md" },
         { "title": "Image Generation", "path": "image-generation.md" },
         { "title": "Ask User Question", "path": "ask-user-question.md" },
         { "title": "Change Working Directory", "path": "change-working-directory.md" }

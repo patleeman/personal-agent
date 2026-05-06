@@ -68,7 +68,7 @@ function readToolInputMetadata(toolName: string, toolInput: unknown): Record<str
       metadata.domain = 'invalid-url';
     }
   }
-  if (toolName === 'write' || toolName === 'apply_patch' || toolName === 'edit') {
+  if (toolName === 'write' || toolName === 'edit') {
     const content = typeof input.content === 'string' ? input.content : typeof input.input === 'string' ? input.input : undefined;
     if (content) metadata.contentLength = content.length;
   }

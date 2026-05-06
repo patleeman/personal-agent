@@ -35,7 +35,7 @@ See [Getting Started](getting-started.md) for the full setup.
 
 **Background Runtime** — daemon, runs, scheduled tasks, reminders, and auto mode.
 
-**Agent Tools** — web search & fetch, apply patch, image generation, ask user question, change working directory, and conversation inspect.
+**Agent Tools** — web search & fetch, image generation, ask user question, change working directory, and conversation inspect.
 
 **Voice** — local Whisper dictation.
 

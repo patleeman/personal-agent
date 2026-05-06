@@ -24,7 +24,6 @@ const {
   createImageProbeAgentExtensionMock,
   createMcpAgentExtensionMock,
   webToolsExtensionMock,
-  gptApplyPatchExtensionMock,
   knowledgeBaseExtensionMock,
   openaiNativeCompactionExtensionMock,
   daemonRunOrchestrationPromptExtensionMock,
@@ -60,7 +59,6 @@ const {
     createImageProbeAgentExtensionMock: vi.fn(() => 'image-probe-extension'),
     createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
     webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
-    gptApplyPatchExtensionMock: vi.fn(() => 'gpt-apply-patch-extension'),
     knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
     openaiNativeCompactionExtensionMock: vi.fn(() => 'openai-native-compaction-extension'),
     daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
@@ -141,10 +139,6 @@ vi.mock('../extensions/mcpAgentExtension.js', () => ({
 
 vi.mock('../extensions/web-tools/index.js', () => ({
   default: webToolsExtensionMock,
-}));
-
-vi.mock('../extensions/gpt-apply-patch/index.js', () => ({
-  default: gptApplyPatchExtensionMock,
 }));
 
 vi.mock('../extensions/knowledge-base/index.js', () => ({
@@ -245,7 +239,7 @@ describe('createRuntimeState', () => {
     const factories = state.buildLiveSessionExtensionFactories();
     // All factories are wrapped by guardSystemPromptOverride so each
     // element is a function. Verify count and that each delegates correctly.
-    expect(factories).toHaveLength(17);
+    expect(factories).toHaveLength(16);
     factories.forEach((factory) => {
       expect(typeof factory).toBe('function');
     });
@@ -313,7 +307,7 @@ describe('createRuntimeState', () => {
       logger: createLogger(),
     });
 
-    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(16);
+    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(15);
     expect(createImageProbeAgentExtensionMock).not.toHaveBeenCalled();
   });
 
