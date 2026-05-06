@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { AgentSession, estimateTokens } from '@mariozechner/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
-import { publishAppEvent } from '../shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { persistTraceContext, persistTraceStats } from '../traces/tracePersistence.js';
 import { type ConversationAutoModeState, type ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
@@ -89,6 +89,7 @@ import {
   listQueuedPromptPreviews as listQueuedPromptPreviewsForEntry,
 } from './liveSessionQueueRead.js';
 import {
+  computeLiveSessionRunning,
   formatAvailableModels,
   getLiveSessionContextUsage as readLiveSessionContextUsageForEntry,
   getLiveSessionForkEntries as readLiveSessionForkEntries,
@@ -179,6 +180,7 @@ interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState 
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
+  running: boolean;
   traceRunId?: string | null;
   traceRunStartedAtMs?: number | null;
   traceRunTurnCount?: number;
@@ -270,8 +272,29 @@ function broadcastSnapshot(entry: LiveEntry): void {
   }
 }
 
+function publishRunningChange(entry: LiveEntry): void {
+  const next = computeLiveSessionRunning(entry);
+  if (next === entry.running) return;
+  entry.running = next;
+  publishAppEvent({ type: 'session_meta_changed', sessionId: entry.sessionId, running: next });
+  invalidateAppTopics('sessions');
+}
+
 function publishSessionMetaChanged(sessionId: string): void {
-  publishAppEvent({ type: 'session_meta_changed', sessionId });
+  const entry = registry.get(sessionId);
+  const package_: { type: 'session_meta_changed'; sessionId: string; running?: boolean } = {
+    type: 'session_meta_changed',
+    sessionId,
+  };
+  if (entry) {
+    const running = computeLiveSessionRunning(entry);
+    if (running !== entry.running) {
+      entry.running = running;
+      invalidateAppTopics('sessions');
+    }
+    package_.running = running;
+  }
+  publishAppEvent(package_);
 }
 
 export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: number): LiveSessionStateSnapshot {
@@ -422,6 +445,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
     isCompacting: false,
+    running: false,
     parallelJobs: [],
     importingParallelJobs: false,
     ...createLiveSessionPresenceHost(),
@@ -445,6 +469,11 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
       applyPendingConversationWorkingDirectoryChange,
       scheduleContextUsage,
       publishSessionMetaChanged,
+      syncRunningState: (sessionId: string) => {
+        const target = registry.get(sessionId);
+        if (!target) return;
+        publishRunningChange(target);
+      },
       broadcastQueueState,
       broadcastTitle,
       broadcastStats: (target, tokens, cost, traceRun) => {
