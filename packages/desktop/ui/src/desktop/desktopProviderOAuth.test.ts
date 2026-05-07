@@ -42,7 +42,7 @@ describe('subscribeDesktopProviderOAuthLogin', () => {
       new CustomEvent(DESKTOP_PROVIDER_OAUTH_EVENT, {
         detail: {
           subscriptionId: 'other',
-          state: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
+          event: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
         },
       }),
     );
@@ -50,7 +50,7 @@ describe('subscribeDesktopProviderOAuthLogin', () => {
       new CustomEvent(DESKTOP_PROVIDER_OAUTH_EVENT, {
         detail: {
           subscriptionId: 'oauth-sub-1',
-          state: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
+          event: { id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' },
         },
       }),
     );

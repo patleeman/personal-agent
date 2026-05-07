@@ -3,7 +3,7 @@ import { DESKTOP_PROVIDER_OAUTH_EVENT, getDesktopBridge } from './desktopBridge'
 
 interface DesktopProviderOAuthEnvelope {
   subscriptionId: string;
-  state: ProviderOAuthLoginState;
+  event: ProviderOAuthLoginState;
 }
 
 export async function subscribeDesktopProviderOAuthLogin(
@@ -25,7 +25,7 @@ export async function subscribeDesktopProviderOAuthLogin(
       return;
     }
 
-    onState(detail.state);
+    onState(detail.event);
   };
 
   window.addEventListener(DESKTOP_PROVIDER_OAUTH_EVENT, handleEvent as EventListener);
