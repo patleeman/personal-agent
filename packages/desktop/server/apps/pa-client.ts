@@ -108,7 +108,9 @@ export const PA_CLIENT_JS: string = `
         var extensionId = extensionIdFromPath;
         if (!extensionId) throw new Error('Extension id is unavailable');
         return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/actions/' + encodeURIComponent(actionId), { method: 'POST', body: input || {} });
-      }
+      },
+      listCommands() { return requestJson('/api/extensions/commands'); },
+      listSlashCommands() { return requestJson('/api/extensions/slash-commands'); }
     },
 
     runs: {

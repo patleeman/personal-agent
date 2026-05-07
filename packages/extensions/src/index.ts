@@ -137,6 +137,24 @@ export interface ExtensionBackendAction {
   description?: string;
 }
 
+export interface ExtensionCommandRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType: ExtensionPackageType;
+  title: string;
+  action: string;
+  icon?: string;
+}
+
+export interface ExtensionSlashCommandRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType: ExtensionPackageType;
+  name: string;
+  description: string;
+  action: string;
+}
+
 export interface ExtensionStateDocument<T = unknown> {
   key: string;
   value: T;

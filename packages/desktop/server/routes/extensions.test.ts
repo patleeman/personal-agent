@@ -109,6 +109,52 @@ describe('registerExtensionRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Extension file path escapes package root.' });
   });
 
+  it('serves command and slash command registrations for enabled extensions', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'agent-board',
+        name: 'Agent Board',
+        surfaces: [
+          { id: 'plan', placement: 'command', kind: 'command', title: 'Plan board sprint', action: 'planSprint', icon: 'kanban' },
+          { id: 'task', placement: 'slash', kind: 'slashCommand', name: 'task', description: 'Create a board task', action: 'createTask' },
+        ],
+      }),
+    );
+
+    const harness = createHarness();
+    const commandsRes = createResponse();
+    harness.getHandler('/api/extensions/commands')({}, commandsRes);
+    expect(commandsRes.json).toHaveBeenCalledWith([
+      {
+        extensionId: 'agent-board',
+        surfaceId: 'plan',
+        packageType: 'user',
+        title: 'Plan board sprint',
+        action: 'planSprint',
+        icon: 'kanban',
+      },
+    ]);
+
+    const slashRes = createResponse();
+    harness.getHandler('/api/extensions/slash-commands')({}, slashRes);
+    expect(slashRes.json).toHaveBeenCalledWith([
+      {
+        extensionId: 'agent-board',
+        surfaceId: 'task',
+        packageType: 'user',
+        name: 'task',
+        description: 'Create a board task',
+        action: 'createTask',
+      },
+    ]);
+  });
+
   it('serves extension state documents with optimistic concurrency', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

@@ -39,6 +39,24 @@ export interface ExtensionRegistrySnapshot {
   surfaces: Array<ExtensionSurface & { extensionId: string; packageType: ExtensionManifest['packageType'] }>;
 }
 
+export interface ExtensionCommandRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType: ExtensionManifest['packageType'];
+  title: string;
+  action: string;
+  icon?: string;
+}
+
+export interface ExtensionSlashCommandRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType: ExtensionManifest['packageType'];
+  name: string;
+  description: string;
+  action: string;
+}
+
 interface ExtensionRegistryConfig {
   disabledIds?: string[];
 }
@@ -191,6 +209,40 @@ export function readExtensionRegistrySnapshot(): ExtensionRegistrySnapshot {
       : [],
   );
   return { extensions, routes, surfaces };
+}
+
+export function listExtensionCommandRegistrations(): ExtensionCommandRegistration[] {
+  return readExtensionRegistrySnapshot().surfaces.flatMap((surface) =>
+    surface.kind === 'command'
+      ? [
+          {
+            extensionId: surface.extensionId,
+            surfaceId: surface.id,
+            packageType: surface.packageType,
+            title: surface.title,
+            action: surface.action,
+            ...(surface.icon ? { icon: surface.icon } : {}),
+          },
+        ]
+      : [],
+  );
+}
+
+export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandRegistration[] {
+  return readExtensionRegistrySnapshot().surfaces.flatMap((surface) =>
+    surface.kind === 'slashCommand'
+      ? [
+          {
+            extensionId: surface.extensionId,
+            surfaceId: surface.id,
+            packageType: surface.packageType,
+            name: surface.name,
+            description: surface.description,
+            action: surface.action,
+          },
+        ]
+      : [],
+  );
 }
 
 export function findExtensionEntry(extensionId: string): ExtensionRegistryEntry | null {

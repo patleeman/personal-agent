@@ -427,6 +427,15 @@ Slash commands are separate because they live in the conversation composer and u
 }
 ```
 
+The current implementation exposes manifest-declared command registrations through:
+
+```http
+GET /api/extensions/commands
+GET /api/extensions/slash-commands
+```
+
+Those endpoints return enabled extension surfaces normalized into `{ extensionId, surfaceId, packageType, ... }` records. They do not execute commands yet; the command palette and composer integration should call the registered backend `action` once those host surfaces are wired.
+
 Slash actions should receive composer text, attachments, current conversation ID, cwd, and selected context. They can return one of: replace composer text, append context, open a modal, create a task, or submit a prompt.
 
 ## Frontend runtime
@@ -480,9 +489,10 @@ PA.automations.run(taskId)
 PA.automations.readLog(taskId)
 PA.automations.readSchedulerHealth()
 
-PA.extension.call(actionId, input)
-PA.extension.getManifest()
-PA.extension.listSurfaces()
+PA.extension.invoke(actionId, input)
+PA.extension.listCommands()
+PA.extension.listSlashCommands()
+// Target follow-up APIs: getManifest, listSurfaces
 
 PA.ui.toast(message)
 PA.ui.openSurface(surfaceId, params?)

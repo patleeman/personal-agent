@@ -6,7 +6,9 @@ import type { Express, Request, Response } from 'express';
 import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
 import {
   findExtensionEntry,
+  listExtensionCommandRegistrations,
   listExtensionInstallSummaries,
+  listExtensionSlashCommandRegistrations,
   readExtensionRegistrySnapshot,
   readExtensionSchema,
   setExtensionEnabled,
@@ -124,6 +126,22 @@ export function registerExtensionRoutes(
       res.json(readExtensionRegistrySnapshot().surfaces);
     } catch (err) {
       sendRouteError(res, 'extensions surfaces error', err);
+    }
+  });
+
+  router.get('/api/extensions/commands', (_req, res) => {
+    try {
+      res.json(listExtensionCommandRegistrations());
+    } catch (err) {
+      sendRouteError(res, 'extensions commands error', err);
+    }
+  });
+
+  router.get('/api/extensions/slash-commands', (_req, res) => {
+    try {
+      res.json(listExtensionSlashCommandRegistrations());
+    } catch (err) {
+      sendRouteError(res, 'extensions slash commands error', err);
     }
   });
 
