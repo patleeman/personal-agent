@@ -32,7 +32,7 @@ interface UseConversationScrollOptions {
 interface UseConversationScrollResult {
   atBottom: boolean;
   syncScrollStateFromDom: () => void;
-  scrollToBottom: (options?: { behavior?: ScrollBehavior }) => void;
+  scrollToBottom: (options?: { behavior?: ScrollBehavior; force?: boolean }) => void;
   capturePrependRestore: () => void;
 }
 
@@ -66,6 +66,7 @@ export function useConversationScroll({
   // "preserve pinned during auto-scroll" should not apply — that guard
   // would prevent scrollbar/keyboard detach.
   const isTransientSettleRef = useRef(false);
+  const isStreamingRef = useRef(isStreaming);
   const hasMessages = (messages?.length ?? 0) > 0;
 
   const clearSmoothBottomScrollSettle = useCallback(() => {
@@ -103,6 +104,10 @@ export function useConversationScroll({
     cancelBottomScrollSettle();
     cancelPinnedBottomWatch();
   }, [cancelBottomScrollSettle, cancelPinnedBottomWatch]);
+
+  useLayoutEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
 
   const syncPinnedBottomFromDom = useCallback((el: HTMLDivElement, scrollHeight = el.scrollHeight) => {
     scrollPinnedToBottomRef.current = true;
@@ -255,8 +260,8 @@ export function useConversationScroll({
       return;
     }
 
-    const handleWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0 && scrollPinnedToBottomRef.current) {
+    const handleWheel = () => {
+      if (scrollPinnedToBottomRef.current) {
         detachFromBottom();
       }
     };
@@ -323,9 +328,13 @@ export function useConversationScroll({
   }, [cancelBottomScrollSettle, cancelPinnedBottomWatch, scrollRef]);
 
   const scrollToBottom = useCallback(
-    (options?: { behavior?: ScrollBehavior }) => {
+    (options?: { behavior?: ScrollBehavior; force?: boolean }) => {
       const el = scrollRef.current;
       if (!el) {
+        return;
+      }
+
+      if (!options?.force && isStreamingRef.current && !scrollPinnedToBottomRef.current) {
         return;
       }
 

@@ -6215,7 +6215,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           {!showConversationLoadingState && showScrollToBottomControl && (
             <button
               onClick={() => {
-                scrollToBottom({ behavior: 'smooth' });
+                scrollToBottom({ behavior: 'smooth', force: true });
               }}
               className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
             >
