@@ -3,7 +3,13 @@ import { resolve, sep } from 'node:path';
 
 import type { Express, Request, Response } from 'express';
 
-import { findExtensionEntry, readExtensionRegistrySnapshot, readExtensionSchema } from '../extensions/extensionRegistry.js';
+import {
+  findExtensionEntry,
+  listExtensionInstallSummaries,
+  readExtensionRegistrySnapshot,
+  readExtensionSchema,
+  setExtensionEnabled,
+} from '../extensions/extensionRegistry.js';
 import { logError } from '../middleware/index.js';
 
 function sendRouteError(res: Response, label: string, err: unknown): void {
@@ -65,12 +71,20 @@ function readExtensionFile(req: Request, res: Response): void {
   }
 }
 
-export function registerExtensionRoutes(router: Pick<Express, 'get' | 'post'>): void {
+export function registerExtensionRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
   router.get('/api/extensions/schema', (_req, res) => {
     try {
       res.json(readExtensionSchema());
     } catch (err) {
       sendRouteError(res, 'extensions schema error', err);
+    }
+  });
+
+  router.get('/api/extensions/installed', (_req, res) => {
+    try {
+      res.json(listExtensionInstallSummaries());
+    } catch (err) {
+      sendRouteError(res, 'extensions installed error', err);
     }
   });
 
@@ -99,6 +113,29 @@ export function registerExtensionRoutes(router: Pick<Express, 'get' | 'post'>): 
   });
 
   router.get('/api/extensions/:id/files/*', readExtensionFile);
+
+  router.patch('/api/extensions/:id', (req, res) => {
+    try {
+      const entry = findExtensionEntry(req.params.id);
+      if (!entry) {
+        res.status(404).json({ error: 'Extension not found.' });
+        return;
+      }
+      if (entry.source === 'system') {
+        res.status(400).json({ error: 'System extensions cannot be disabled.' });
+        return;
+      }
+      const enabled = (req.body as { enabled?: unknown }).enabled;
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ error: 'enabled must be a boolean.' });
+        return;
+      }
+      setExtensionEnabled(entry.manifest.id, enabled);
+      res.json({ ok: true, extension: listExtensionInstallSummaries().find((extension) => extension.id === entry.manifest.id) });
+    } catch (err) {
+      sendRouteError(res, 'extension update error', err);
+    }
+  });
 
   router.post('/api/extensions/reload', (_req, res) => {
     res.json({ ok: true, reloaded: false, message: 'Runtime manifests are read on demand.' });

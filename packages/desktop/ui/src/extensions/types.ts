@@ -71,6 +71,20 @@ export interface ExtensionManifest {
   permissions?: string[];
 }
 
+export interface ExtensionInstallSummary {
+  id: string;
+  name: string;
+  packageType?: ExtensionPackageType;
+  enabled: boolean;
+  description?: string;
+  version?: string;
+  packageRoot?: string;
+  manifest: ExtensionManifest;
+  permissions?: string[];
+  surfaces: ExtensionSurface[];
+  routes: Array<{ route: string; surfaceId: string }>;
+}
+
 export interface ExtensionRouteSummary {
   route: string;
   extensionId: string;

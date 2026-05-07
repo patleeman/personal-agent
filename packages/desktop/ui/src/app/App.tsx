@@ -122,6 +122,9 @@ const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
   import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
 );
 const AppsPage = lazyRouteWithRecovery('apps-page', () => import('../apps/AppsPage').then((module) => ({ default: module.AppsPage })));
+const ExtensionManagerPage = lazyRouteWithRecovery('extension-manager-page', () =>
+  import('../extensions/ExtensionManagerPage').then((module) => ({ default: module.ExtensionManagerPage })),
+);
 const ExtensionPage = lazyRouteWithRecovery('extension-page', () =>
   import('../extensions/ExtensionPage').then((module) => ({ default: module.ExtensionPage })),
 );
@@ -454,6 +457,7 @@ export function App() {
                         <Route path="ext/:extensionId" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="ext/:extensionId/*" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="apps" element={suspendRoute(<AppsPage />)} />
+                        <Route path="extensions" element={suspendRoute(<ExtensionManagerPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
                         <Route path="telemetry" element={suspendRoute(<TracesPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />

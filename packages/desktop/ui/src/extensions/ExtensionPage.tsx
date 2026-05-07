@@ -28,7 +28,7 @@ export function ExtensionPage() {
   }
 
   if (registry.error) {
-    return <ErrorState title="Extensions unavailable" message={registry.error} />;
+    return <ErrorState message={`Extensions unavailable: ${registry.error}`} />;
   }
 
   if (surface?.component === 'automations') {
@@ -46,5 +46,5 @@ export function ExtensionPage() {
     );
   }
 
-  return <ErrorState title="Extension surface unavailable" message="No extension page is registered for this route." />;
+  return <ErrorState message="Extension surface unavailable: no extension page is registered for this route." />;
 }

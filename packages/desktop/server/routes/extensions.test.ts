@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerExtensionRoutes } from './extensions.js';
 
-type Handler = (req: { params?: Record<string, string> }, res: ReturnType<typeof createResponse>) => void;
+type Handler = (req: { params?: Record<string, string>; body?: unknown }, res: ReturnType<typeof createResponse>) => void;
 
 function createResponse() {
   return {
@@ -21,14 +21,17 @@ function createResponse() {
 function createHarness() {
   const getHandlers = new Map<string, Handler>();
   const postHandlers = new Map<string, Handler>();
+  const patchHandlers = new Map<string, Handler>();
   const router = {
     get: vi.fn((path: string, handler: Handler) => getHandlers.set(path, handler)),
     post: vi.fn((path: string, handler: Handler) => postHandlers.set(path, handler)),
+    patch: vi.fn((path: string, handler: Handler) => patchHandlers.set(path, handler)),
   };
   registerExtensionRoutes(router as never);
   return {
     getHandler: (path: string) => getHandlers.get(path)!,
     postHandler: (path: string) => postHandlers.get(path)!,
+    patchHandler: (path: string) => patchHandlers.get(path)!,
   };
 }
 
@@ -47,6 +50,10 @@ describe('registerExtensionRoutes', () => {
     const listRes = createResponse();
     harness.getHandler('/api/extensions')({}, listRes);
     expect(listRes.json).toHaveBeenCalledWith([expect.objectContaining({ id: 'system-automations', packageType: 'system' })]);
+
+    const installedRes = createResponse();
+    harness.getHandler('/api/extensions/installed')({}, installedRes);
+    expect(installedRes.json).toHaveBeenCalledWith([expect.objectContaining({ id: 'system-automations', enabled: true })]);
 
     const routesRes = createResponse();
     harness.getHandler('/api/extensions/routes')({}, routesRes);
@@ -90,6 +97,29 @@ describe('registerExtensionRoutes', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Extension file path escapes package root.' });
+  });
+
+  it('toggles runtime extensions', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
+
+    const harness = createHarness();
+    const res = createResponse();
+    harness.patchHandler('/api/extensions/:id')({ params: { id: 'agent-board' }, body: { enabled: false } }, res);
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, extension: expect.objectContaining({ id: 'agent-board', enabled: false }) });
+  });
+
+  it('rejects disabling system extensions', () => {
+    const harness = createHarness();
+    const res = createResponse();
+    harness.patchHandler('/api/extensions/:id')({ params: { id: 'system-automations' }, body: { enabled: false } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'System extensions cannot be disabled.' });
   });
 
   it('accepts explicit reload calls for runtime manifests', () => {

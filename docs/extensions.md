@@ -292,10 +292,12 @@ Expose registry endpoints for agents and the Extension Manager:
 
 ```http
 GET /api/extensions/schema          # placements, kinds, scopes, icon names
-GET /api/extensions                 # installed system + runtime extension manifests
+GET /api/extensions                 # enabled system + runtime extension manifests
+GET /api/extensions/installed       # Extension Manager summaries: enabled state, manifest, permissions, routes, package path
 GET /api/extensions/routes          # claimed routes and owning extension
 GET /api/extensions/surfaces        # registered surfaces by placement/kind
 GET /api/extensions/:id/files/*     # serve iframe assets from a runtime extension package
+PATCH /api/extensions/:id           # enable/disable runtime extensions with { enabled: boolean }
 ```
 
 The agent workflow for creating an extension should be:
@@ -313,15 +315,14 @@ V0 supports two install paths:
 1. The agent creates or edits files directly in `~/.local/state/personal-agent/extensions/{id}/`.
 2. The user imports an extension zip bundle, which PA unpacks into the runtime extensions directory.
 
-The Extension Manager should support the minimum operational lifecycle:
+The Extension Manager lives at `/extensions` and supports the minimum operational lifecycle:
 
-- list installed extensions
-- enable/disable an extension
+- list installed system and runtime extensions
+- enable/disable runtime extensions; system extensions stay enabled in v0
 - reload all extensions
-- reload one extension
-- open the extension folder in Finder
-- show manifest, surfaces, routes, backend actions, and declared permissions
-- import/export extension bundles
+- open a runtime extension folder in Finder from the desktop app
+- show manifest, surfaces, routes, and declared permissions
+- leave import/export extension bundles for the next package-management slice
 
 Export bundles include extension code and manifest by default. Extension state export is optional and must be explicit so users do not accidentally move private task data, logs, or workflow history.
 

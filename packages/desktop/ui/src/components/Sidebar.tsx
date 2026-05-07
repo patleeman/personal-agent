@@ -3596,6 +3596,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
             forceActive={location.pathname.startsWith('/automations')}
           />
           <TopNavItem to="/apps" icon={PATH.grid} label="Apps" forceActive={location.pathname.startsWith('/apps')} />
+          <TopNavItem to="/extensions" icon={PATH.sparkles} label="Extensions" forceActive={location.pathname.startsWith('/extensions')} />
           {extensionNavItems.map((item) => (
             <TopNavItem
               key={`${item.extensionId}:${item.id}`}
