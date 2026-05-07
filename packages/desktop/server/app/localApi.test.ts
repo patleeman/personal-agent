@@ -53,6 +53,38 @@ describe('desktop local API conversation actions', () => {
   });
 });
 
+describe('desktop local API extension routes', () => {
+  const tempStateRoot = mkdtempSync(join(tmpdir(), 'pa-local-api-extensions-'));
+  const previousStateRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
+
+  afterAll(() => {
+    if (previousStateRoot === undefined) {
+      delete process.env.PERSONAL_AGENT_STATE_ROOT;
+    } else {
+      process.env.PERSONAL_AGENT_STATE_ROOT = previousStateRoot;
+    }
+    rmSync(tempStateRoot, { recursive: true, force: true });
+  });
+
+  it('dispatches wildcard extension file routes in the desktop local API', async () => {
+    process.env.PERSONAL_AGENT_STATE_ROOT = tempStateRoot;
+    const extensionRoot = join(tempStateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
+    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
+    writeFileSync(join(extensionRoot, 'frontend', 'rail.html'), '<h1>Agent Board Rail</h1>');
+
+    const response = await dispatchDesktopLocalApiRequest({
+      method: 'GET',
+      path: '/api/extensions/agent-board/files/frontend/rail.html?surfaceId=rail',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('html');
+    expect(Buffer.from(response.body).toString('utf-8')).toContain('Agent Board Rail');
+    expect(Buffer.from(response.body).toString('utf-8')).toContain('/pa/client.js');
+  });
+});
+
 describe('desktop local API vault routes', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'pa-local-api-vault-'));
   const previousVaultRoot = process.env.PERSONAL_AGENT_VAULT_ROOT;

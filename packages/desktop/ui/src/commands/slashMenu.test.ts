@@ -91,4 +91,29 @@ describe('buildSlashMenuItems', () => {
     const items = buildSlashMenuItems('/res', SKILLS);
     expect(items.some((item) => item.displayCmd === '/resume')).toBe(true);
   });
+
+  it('includes matching extension slash commands', () => {
+    const items = buildSlashMenuItems('/tas', SKILLS, [
+      {
+        extensionId: 'agent-board',
+        surfaceId: 'task',
+        packageType: 'user',
+        name: 'task',
+        description: 'Create a board task',
+        action: 'createTask',
+      },
+    ]);
+
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        key: 'extension:agent-board:task',
+        displayCmd: '/task',
+        insertText: '/task ',
+        desc: 'Create a board task',
+        source: 'agent-board',
+        kind: 'extensionSlashCommand',
+        action: 'createTask',
+      }),
+    );
+  });
 });

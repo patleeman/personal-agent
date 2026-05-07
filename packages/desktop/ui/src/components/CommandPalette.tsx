@@ -18,6 +18,7 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
+import type { ExtensionCommandRegistration } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
 import type { ConversationContentSearchMatch, SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
 import { timeAgo } from '../shared/utils';
@@ -28,7 +29,8 @@ import { cx } from './ui';
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
-  | { kind: 'openFile'; fileId: string };
+  | { kind: 'openFile'; fileId: string }
+  | { kind: 'extensionCommand'; extensionId: string; action: string; title: string };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
@@ -144,6 +146,19 @@ function buildFileSearchItems(results: VaultSearchResult[]): CommandPaletteItem<
   }));
 }
 
+function buildExtensionCommandItems(commands: ExtensionCommandRegistration[]): CommandPaletteItem<CommandPaletteAction>[] {
+  return commands.map((command, index) => ({
+    id: `extension-command:${command.extensionId}:${command.surfaceId}`,
+    section: 'commands' as const,
+    title: command.title,
+    subtitle: command.extensionId,
+    meta: command.packageType === 'system' ? 'system extension' : 'extension',
+    keywords: [command.extensionId, command.surfaceId, command.action],
+    order: index,
+    action: { kind: 'extensionCommand', extensionId: command.extensionId, action: command.action, title: command.title },
+  }));
+}
+
 function buildConversationContentSearchItems(
   results: ConversationContentSearchMatch[],
   query: string,
@@ -167,6 +182,8 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
     switch (scope) {
       case 'files':
         return `No files match “${query}”.`;
+      case 'commands':
+        return `No commands match “${query}”.`;
       case 'search':
         return `Nothing matches “${query}”.`;
       case 'threads':
@@ -178,8 +195,10 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
   switch (scope) {
     case 'files':
       return 'No knowledge files yet.';
+    case 'commands':
+      return 'No extension commands registered.';
     case 'search':
-      return 'Type to search threads and files.';
+      return 'Type to search commands, threads, and files.';
     case 'threads':
     default:
       return 'No threads yet.';
@@ -211,6 +230,9 @@ export function CommandPalette() {
   const [vaultSearchResults, setVaultSearchResults] = useState<VaultSearchResult[]>([]);
   const [vaultSearchLoading, setVaultSearchLoading] = useState(false);
   const [vaultSearchError, setVaultSearchError] = useState<string | null>(null);
+  const [extensionCommands, setExtensionCommands] = useState<ExtensionCommandRegistration[]>([]);
+  const [extensionCommandsLoading, setExtensionCommandsLoading] = useState(false);
+  const [extensionCommandsError, setExtensionCommandsError] = useState<string | null>(null);
 
   const openThreadSessions = useMemo(
     () => [...pinnedSessions.map((session) => ({ ...session, pinned: true }) satisfies ScopedSessionMeta), ...tabs],
@@ -221,6 +243,7 @@ export function CommandPalette() {
   const archivedConversationItems = useMemo(() => buildConversationItems('archived', archivedSessions), [archivedSessions]);
   const fileItems = useMemo(() => buildFileItems(vaultFiles), [vaultFiles]);
   const searchedFileItems = useMemo(() => buildFileSearchItems(vaultSearchResults), [vaultSearchResults]);
+  const extensionCommandItems = useMemo(() => buildExtensionCommandItems(extensionCommands), [extensionCommands]);
   const searchedConversationItems = useMemo(
     () => buildConversationContentSearchItems(conversationContentSearchResults, query.trim()),
     [conversationContentSearchResults, query],
@@ -232,10 +255,20 @@ export function CommandPalette() {
       openConversationItems,
       archivedConversationItems,
       fileItems,
+      commandItems: extensionCommandItems,
       searchedConversationItems,
       searchedFileItems,
     });
-  }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedConversationItems, searchedFileItems]);
+  }, [
+    archivedConversationItems,
+    extensionCommandItems,
+    fileItems,
+    openConversationItems,
+    query,
+    scope,
+    searchedConversationItems,
+    searchedFileItems,
+  ]);
 
   const emptyQueryLimits = useMemo(
     () => (scope === 'threads' && query.trim().length === 0 ? { archived: archivedVisibleLimit } : undefined),
@@ -276,6 +309,19 @@ export function CommandPalette() {
     }
   }, []);
 
+  const loadExtensionCommands = useCallback(async () => {
+    setExtensionCommandsLoading(true);
+    setExtensionCommandsError(null);
+    try {
+      setExtensionCommands(await api.extensionCommands());
+    } catch (error) {
+      setExtensionCommandsError(error instanceof Error ? error.message : String(error));
+      setExtensionCommands([]);
+    } finally {
+      setExtensionCommandsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     function handleOpenPalette(event: Event) {
       const detail = (event as CustomEvent<OpenCommandPaletteDetail>).detail;
@@ -307,6 +353,22 @@ export function CommandPalette() {
       // Keep the palette usable even if the eager thread bootstrap fails.
     });
   }, [open, refetch, scope, sessions]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (scope !== 'commands' && scope !== 'search') {
+      return;
+    }
+
+    if (extensionCommandsLoading || extensionCommands.length > 0) {
+      return;
+    }
+
+    void loadExtensionCommands();
+  }, [extensionCommands.length, extensionCommandsLoading, loadExtensionCommands, open, scope]);
 
   useEffect(() => {
     if (!open) {
@@ -487,6 +549,18 @@ export function CommandPalette() {
             );
             closePalette();
             return;
+          case 'extensionCommand':
+            await api.invokeExtensionAction(item.action.extensionId, item.action.action, {
+              source: 'commandPalette',
+              title: item.action.title,
+              location: {
+                pathname: location.pathname,
+                search: location.search,
+                hash: location.hash,
+              },
+            });
+            closePalette();
+            return;
           default:
             return;
         }
@@ -657,14 +731,35 @@ export function CommandPalette() {
       sections.add('files');
     }
 
+    if ((scope === 'commands' || scope === 'search') && extensionCommandsLoading && extensionCommandItems.length === 0) {
+      sections.add('commands');
+    }
+
     if (scope === 'search' && vaultSearchLoading) {
       sections.add('files');
     }
 
     return [...sections];
-  }, [conversationContentSearchLoading, fileItems.length, scope, sessions, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
+  }, [
+    conversationContentSearchLoading,
+    extensionCommandItems.length,
+    extensionCommandsLoading,
+    fileItems.length,
+    scope,
+    sessions,
+    sessionsLoading,
+    vaultFilesLoading,
+    vaultSearchLoading,
+  ]);
   const showSectionHeaders = groups.length > 1;
-  const searchPlaceholder = scope === 'threads' ? 'Search threads…' : scope === 'files' ? 'Open files…' : 'Search threads and files…';
+  const searchPlaceholder =
+    scope === 'threads'
+      ? 'Search threads…'
+      : scope === 'files'
+        ? 'Open files…'
+        : scope === 'commands'
+          ? 'Run commands…'
+          : 'Search commands, threads, and files…';
 
   if (!open) {
     return null;
@@ -863,11 +958,18 @@ export function CommandPalette() {
             </section>
           )}
 
+          {extensionCommandsError && (scope === 'commands' || scope === 'search') && (
+            <section className="pb-2 last:pb-0">
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load extension commands: {extensionCommandsError}</p>
+            </section>
+          )}
+
           {visibleCount === 0 &&
             loadingSections.length === 0 &&
             !(conversationContentSearchError && (scope === 'threads' || scope === 'search')) &&
             !(vaultFilesError && (scope === 'files' || scope === 'search')) &&
-            !(vaultSearchError && scope === 'search') && (
+            !(vaultSearchError && scope === 'search') &&
+            !(extensionCommandsError && (scope === 'commands' || scope === 'search')) && (
               <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
             )}
         </div>

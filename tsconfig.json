@@ -15,10 +15,16 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@personal-agent/core": ["./packages/core/src"],
-      "@personal-agent/daemon": ["./packages/daemon/src"]
+      "@personal-agent/daemon": ["./packages/daemon/src"],
+      "@personal-agent/extensions": ["./packages/extensions/src"]
     }
   },
-  "references": [{ "path": "./packages/core" }, { "path": "./packages/daemon" }, { "path": "./packages/desktop" }],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/daemon" },
+    { "path": "./packages/extensions" },
+    { "path": "./packages/desktop" }
+  ],
   "files": [],
   "exclude": ["node_modules", "dist"]
 }

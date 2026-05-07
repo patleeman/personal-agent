@@ -1,0 +1,80 @@
+<!doctype html>
+<html class="pa-extension-rail">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><!-- Rail title --></title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --pa-bg: #eef1f7;
+        --pa-text: #171b2a;
+        --pa-muted: #68708a;
+        --pa-line: #c8cfdd;
+        --pa-accent: #5f75ff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --pa-bg: #181b28;
+          --pa-text: #e9edf8;
+          --pa-muted: #9ca5c3;
+          --pa-line: #30384d;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--pa-bg);
+        color: var(--pa-text);
+        font:
+          12px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+      main {
+        padding: 12px;
+        display: grid;
+        gap: 12px;
+      }
+      .eyebrow {
+        margin: 0 0 4px;
+        color: var(--pa-accent);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      h1,
+      p {
+        margin-top: 0;
+      }
+      h1 {
+        margin-bottom: 4px;
+        font-size: 15px;
+      }
+      p {
+        color: var(--pa-muted);
+      }
+      section {
+        border-top: 1px solid var(--pa-line);
+        padding-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow"><!-- Context --></p>
+        <h1><!-- Rail title --></h1>
+        <p><!-- One compact sentence. --></p>
+      </header>
+      <section><!-- Rail content --></section>
+    </main>
+    <script src="rail.js"></script>
+  </body>
+</html>

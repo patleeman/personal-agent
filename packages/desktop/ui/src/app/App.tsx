@@ -109,7 +109,6 @@ function ConversationsRouteRedirect() {
   return <Navigate to={redirectPath} replace />;
 }
 
-const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('../pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationPage = lazyRouteWithRecovery('conversation-page', () =>
   import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })),
 );
@@ -123,6 +122,12 @@ const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
   import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
 );
 const AppsPage = lazyRouteWithRecovery('apps-page', () => import('../apps/AppsPage').then((module) => ({ default: module.AppsPage })));
+const ExtensionManagerPage = lazyRouteWithRecovery('extension-manager-page', () =>
+  import('../extensions/ExtensionManagerPage').then((module) => ({ default: module.ExtensionManagerPage })),
+);
+const ExtensionPage = lazyRouteWithRecovery('extension-page', () =>
+  import('../extensions/ExtensionPage').then((module) => ({ default: module.ExtensionPage })),
+);
 
 const TracesPage = lazyRouteWithRecovery('telemetry-page', () =>
   import('../pages/TracesPage').then((module) => ({ default: module.TracesPage })),
@@ -450,9 +455,12 @@ export function App() {
                         <Route path="conversations/:id" element={<SavedConversationRoute />} />
                         <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
                         <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
-                        <Route path="automations" element={suspendRoute(<TasksPage />)} />
-                        <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
+                        <Route path="automations" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="automations/:id" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="ext/:extensionId" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="ext/:extensionId/*" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="apps" element={suspendRoute(<AppsPage />)} />
+                        <Route path="extensions" element={suspendRoute(<ExtensionManagerPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
                         <Route path="telemetry" element={suspendRoute(<TracesPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />

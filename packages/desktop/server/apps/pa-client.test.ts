@@ -1,19 +1,88 @@
 import { JSDOM } from 'jsdom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { PA_CLIENT_JS } from './pa-client.js';
 
-async function renderAppHtml(html: string): Promise<Document> {
+async function renderAppHtml(
+  html: string,
+  url = 'http://127.0.0.1:9876/',
+  beforeEval?: (window: Window & typeof globalThis) => void,
+): Promise<Document> {
   const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
-    url: 'http://127.0.0.1:9876/',
+    url,
     runScripts: 'outside-only',
   });
+  beforeEval?.(dom.window);
   dom.window.eval(PA_CLIENT_JS);
   await new Promise((resolve) => dom.window.setTimeout(resolve, 5));
   return dom.window.document;
 }
 
 describe('PA skill app client components', () => {
+  it('exposes extension launch context from iframe query params', async () => {
+    const document = await renderAppHtml(
+      '<main></main>',
+      'http://127.0.0.1:9876/api/extensions/agent-board/files/frontend/index.html?surfaceId=page&route=%2Fext%2Fagent-board&pathname=%2Fext%2Fagent-board%2Ftoday&search=%3Ftab%3Ddoing&hash=%23top&conversationId=session-1&cwd=%2Ftmp%2Frepo&theme=dark',
+    );
+    const pa = document.defaultView?.PA as { context: { get(): Record<string, unknown> } };
+
+    expect(pa.context.get()).toEqual({
+      extensionId: 'agent-board',
+      surfaceId: 'page',
+      route: '/ext/agent-board',
+      pathname: '/ext/agent-board/today',
+      search: '?tab=doing',
+      hash: '#top',
+      conversationId: 'session-1',
+      cwd: '/tmp/repo',
+      theme: 'dark',
+    });
+  });
+
+  it('prefers injected launch context for srcdoc extension frames', async () => {
+    const document = await renderAppHtml('<main></main>', 'http://127.0.0.1:9876/', (window) => {
+      (window as Window & typeof globalThis & { __PA_LAUNCH_CONTEXT__?: unknown }).__PA_LAUNCH_CONTEXT__ = {
+        extensionId: 'visual-rail',
+        surfaceId: 'rail',
+        route: '',
+        pathname: '/automations',
+        search: '',
+        hash: '',
+        conversationId: null,
+        cwd: null,
+        theme: 'system',
+      };
+    });
+    const pa = document.defaultView?.PA as { context: { get(): Record<string, unknown> } };
+
+    expect(pa.context.get()).toEqual({
+      extensionId: 'visual-rail',
+      surfaceId: 'rail',
+      route: '',
+      pathname: '/automations',
+      search: '',
+      hash: '',
+      conversationId: null,
+      cwd: null,
+      theme: 'system',
+    });
+  });
+
+  it('exposes extension manifest helpers', async () => {
+    const document = await renderAppHtml('<main></main>', 'http://127.0.0.1:9876/api/extensions/agent-board/files/frontend/index.html');
+    const pa = document.defaultView?.PA as { extension: { getManifest(): Promise<unknown>; listSurfaces(): Promise<unknown> } };
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    expect(document.defaultView).not.toBeNull();
+    document.defaultView!.fetch = fetchMock;
+
+    await pa.extension.getManifest();
+    await pa.extension.listSurfaces();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/extensions/agent-board/manifest', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/extensions/agent-board/surfaces', expect.any(Object));
+  });
   it('preserves card children parsed after custom element connection', async () => {
     const document = await renderAppHtml(`
       <pa-card title="Research brief">

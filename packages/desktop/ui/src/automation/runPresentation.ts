@@ -40,11 +40,6 @@ interface RunMoment {
 
 type RunCategory = 'scheduled' | 'conversation' | 'deferred' | 'background' | 'other';
 
-export function isRunInProgress(run: DurableRunRecord): boolean {
-  const status = run.status?.status;
-  return status === 'running' || status === 'recovering';
-}
-
 export function isRunActive(run: DurableRunRecord | null | undefined): boolean {
   const status = run?.status?.status;
   return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
@@ -364,7 +359,7 @@ function excerptShellCommand(command: string | undefined, maxLength = 88): strin
   return excerpt(normalizeShellHeadlineCommand(command), maxLength);
 }
 
-export function getRunTaskId(run: DurableRunRecord): string | undefined {
+function getRunTaskId(run: DurableRunRecord): string | undefined {
   return run.manifest?.source?.type === 'scheduled-task'
     ? (run.manifest.source.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId'))
     : run.manifest?.kind === 'scheduled-task'

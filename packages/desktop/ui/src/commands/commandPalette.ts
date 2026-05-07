@@ -1,7 +1,7 @@
 import { fuzzyScore } from './slashMenu';
 
-export type CommandPaletteSection = 'open' | 'archived' | 'files';
-export type CommandPaletteScope = 'threads' | 'files' | 'search';
+export type CommandPaletteSection = 'open' | 'archived' | 'files' | 'commands';
+export type CommandPaletteScope = 'threads' | 'files' | 'commands' | 'search';
 
 export interface CommandPaletteItem<TAction = unknown> {
   id: string;
@@ -29,18 +29,21 @@ interface CommandPaletteSectionResult<TAction = unknown> {
 export const COMMAND_PALETTE_SCOPE_SECTIONS: Record<CommandPaletteScope, CommandPaletteSection[]> = {
   threads: ['open', 'archived'],
   files: ['files'],
-  search: ['open', 'archived', 'files'],
+  commands: ['commands'],
+  search: ['commands', 'open', 'archived', 'files'],
 };
 
 export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, string> = {
   open: 'Open threads',
   archived: 'Archived threads',
   files: 'Files',
+  commands: 'Commands',
 };
 
 export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [
   { value: 'threads', label: 'Threads' },
   { value: 'files', label: 'Files' },
+  { value: 'commands', label: 'Commands' },
   { value: 'search', label: 'Search all' },
 ];
 
@@ -120,6 +123,7 @@ export function selectCommandPaletteScopedItems<TAction>(input: {
   openConversationItems: CommandPaletteItem<TAction>[];
   archivedConversationItems: CommandPaletteItem<TAction>[];
   fileItems: CommandPaletteItem<TAction>[];
+  commandItems?: CommandPaletteItem<TAction>[];
   searchedConversationItems: CommandPaletteItem<TAction>[];
   searchedFileItems: CommandPaletteItem<TAction>[];
 }): CommandPaletteItem<TAction>[] {
@@ -130,14 +134,17 @@ export function selectCommandPaletteScopedItems<TAction>(input: {
     ...(hasQuery ? input.searchedConversationItems : []),
   ];
   const fileItems = [...input.fileItems, ...(hasQuery ? input.searchedFileItems : [])];
+  const commandItems = input.commandItems ?? [];
 
   switch (input.scope) {
     case 'threads':
       return dedupeCommandPaletteItems(conversationItems);
     case 'files':
       return dedupeCommandPaletteItems(fileItems);
+    case 'commands':
+      return dedupeCommandPaletteItems(commandItems);
     case 'search':
-      return dedupeCommandPaletteItems([...conversationItems, ...fileItems]);
+      return dedupeCommandPaletteItems([...commandItems, ...conversationItems, ...fileItems]);
     default:
       return [];
   }
@@ -147,6 +154,7 @@ const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   open: 12,
   archived: 8,
   files: 30,
+  commands: 20,
 };
 const MAX_EMPTY_QUERY_LIMIT = 100;
 

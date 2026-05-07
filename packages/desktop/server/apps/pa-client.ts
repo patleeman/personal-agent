@@ -14,6 +14,29 @@ export const PA_CLIENT_JS: string = `
 
   // ── State ─────────────────────────────────────────────────────────────────
   const activeSSE = new Map();
+  const injectedLaunchContext = window.__PA_LAUNCH_CONTEXT__ && typeof window.__PA_LAUNCH_CONTEXT__ === 'object'
+    ? window.__PA_LAUNCH_CONTEXT__
+    : null;
+  const extensionIdFromPath = (() => {
+    if (typeof injectedLaunchContext?.extensionId === 'string') return injectedLaunchContext.extensionId;
+    const match = window.location.pathname.match(new RegExp('^/api/extensions/([^/]+)/files/'));
+    return match ? decodeURIComponent(match[1]) : null;
+  })();
+  const launchParams = new URLSearchParams(window.location.search || '');
+
+  function readLaunchContext() {
+    return {
+      extensionId: extensionIdFromPath,
+      surfaceId: typeof injectedLaunchContext?.surfaceId === 'string' ? injectedLaunchContext.surfaceId : launchParams.get('surfaceId'),
+      route: typeof injectedLaunchContext?.route === 'string' ? injectedLaunchContext.route : launchParams.get('route'),
+      pathname: typeof injectedLaunchContext?.pathname === 'string' ? injectedLaunchContext.pathname : launchParams.get('pathname'),
+      search: typeof injectedLaunchContext?.search === 'string' ? injectedLaunchContext.search : launchParams.get('search') || '',
+      hash: typeof injectedLaunchContext?.hash === 'string' ? injectedLaunchContext.hash : launchParams.get('hash') || '',
+      conversationId: typeof injectedLaunchContext?.conversationId === 'string' ? injectedLaunchContext.conversationId : launchParams.get('conversationId'),
+      cwd: typeof injectedLaunchContext?.cwd === 'string' ? injectedLaunchContext.cwd : launchParams.get('cwd'),
+      theme: typeof injectedLaunchContext?.theme === 'string' ? injectedLaunchContext.theme : launchParams.get('theme') || 'system'
+    };
+  }
 
   // ── PA client ──────────────────────────────────────────────────────────────
   window.PA = {
@@ -99,6 +122,94 @@ export const PA_CLIENT_JS: string = `
       };
     },
 
+    context: {
+      get() { return readLaunchContext(); }
+    },
+
+    extension: {
+      invoke(actionId, input) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/actions/' + encodeURIComponent(actionId), { method: 'POST', body: input || {} });
+      },
+      getManifest() {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/manifest');
+      },
+      listSurfaces() {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/surfaces');
+      },
+      listCommands() { return requestJson('/api/extensions/commands'); },
+      listSlashCommands() { return requestJson('/api/extensions/slash-commands'); }
+    },
+
+    runs: {
+      start(input) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/runs', { method: 'POST', body: input || {} });
+      },
+      get(runId) { return requestJson('/api/runs/' + encodeURIComponent(runId)); },
+      list() { return requestJson('/api/runs'); },
+      readLog(runId, tail) { return requestJson('/api/runs/' + encodeURIComponent(runId) + '/log' + (tail ? '?tail=' + encodeURIComponent(tail) : '')); },
+      cancel(runId) { return requestJson('/api/runs/' + encodeURIComponent(runId) + '/cancel', { method: 'POST' }); }
+    },
+
+    vault: {
+      read(path) { return requestJson('/api/vault/file?id=' + encodeURIComponent(path)); },
+      write(path, content) { return requestJson('/api/vault/file', { method: 'PUT', body: { id: path, content: content } }); },
+      list(path) { return requestJson('/api/vault/tree' + (path ? '?dir=' + encodeURIComponent(path) : '')); },
+      search(query) { return requestJson('/api/vault/search?q=' + encodeURIComponent(query)); }
+    },
+
+    conversations: {
+      list() { return requestJson('/api/sessions'); },
+      get(conversationId, opts) {
+        var tail = opts && opts.tailBlocks ? '?tailBlocks=' + encodeURIComponent(opts.tailBlocks) : '';
+        return requestJson('/api/sessions/' + encodeURIComponent(conversationId) + tail);
+      },
+      getMeta(conversationId) { return requestJson('/api/sessions/' + encodeURIComponent(conversationId) + '/meta'); },
+      searchIndex(sessionIds) { return requestJson('/api/sessions/search-index', { method: 'POST', body: { sessionIds: sessionIds || [] } }); }
+    },
+
+    storage: {
+      get(key) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state/' + encodeStateKey(key));
+      },
+      put(key, value, opts) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state/' + encodeStateKey(key), { method: 'PUT', body: { value: value, expectedVersion: opts && opts.expectedVersion } });
+      },
+      delete(key) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state/' + encodeStateKey(key), { method: 'DELETE' });
+      },
+      list(prefix) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        var suffix = prefix ? '?prefix=' + encodeURIComponent(prefix) : '';
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state' + suffix);
+      }
+    },
+
+    automations: {
+      list() { return requestJson('/api/tasks'); },
+      get(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId)); },
+      create(input) { return requestJson('/api/tasks', { method: 'POST', body: input }); },
+      update(taskId, input) { return requestJson('/api/tasks/' + encodeURIComponent(taskId), { method: 'PATCH', body: input }); },
+      delete(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId), { method: 'DELETE' }); },
+      run(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId) + '/run', { method: 'POST' }); },
+      readLog(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId) + '/log'); },
+      readSchedulerHealth() { return requestJson('/api/tasks/scheduler-health'); }
+    },
+
     /**
      * Navigate to another app page.
      * @param {string} page - e.g. 'history.html'
@@ -108,6 +219,25 @@ export const PA_CLIENT_JS: string = `
       window.dispatchEvent(event);
     }
   };
+
+  function encodeStateKey(key) {
+    return String(key || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  }
+
+  async function requestJson(path, opts) {
+    const init = opts || {};
+    const fetchOpts = { method: init.method || 'GET', headers: { ...(init.headers || {}) } };
+    if (init.body !== undefined) {
+      fetchOpts.headers['Content-Type'] = fetchOpts.headers['Content-Type'] || 'application/json';
+      fetchOpts.body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
+    }
+    const res = await fetch(path, fetchOpts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Request failed');
+    }
+    return res.json();
+  }
 
   // ── Helper: emit a custom event ────────────────────────────────────────────
   function emit(name, detail) {

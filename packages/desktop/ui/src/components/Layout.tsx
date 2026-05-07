@@ -16,6 +16,9 @@ import {
   readDesktopEnvironment,
 } from '../desktop/desktopBridge';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
+import { ExtensionFrame } from '../extensions/ExtensionFrame';
+import { type ExtensionRightToolPanelSurface, type ExtensionSurfaceSummary, isExtensionRightToolPanelSurface } from '../extensions/types';
+import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
@@ -91,7 +94,58 @@ type DesktopLayoutShortcutAction =
   | 'show-workbench-mode'
   | 'show-zen-mode';
 
-type WorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs' | 'apps';
+type BuiltInWorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs' | 'apps';
+type ExtensionWorkbenchRailMode = `extension:${string}:${string}`;
+type WorkbenchRailMode = BuiltInWorkbenchRailMode | ExtensionWorkbenchRailMode;
+
+function extensionToolPanelMode(surface: ExtensionRightToolPanelSurface & ExtensionSurfaceSummary): ExtensionWorkbenchRailMode {
+  return `extension:${surface.extensionId}:${surface.id}`;
+}
+
+function parseExtensionToolPanelMode(mode: WorkbenchRailMode): { extensionId: string; surfaceId: string } | null {
+  if (!mode.startsWith('extension:')) return null;
+  const [, extensionId, surfaceId] = mode.split(':');
+  return extensionId && surfaceId ? { extensionId, surfaceId } : null;
+}
+
+function iconGlyphForExtensionSurface(icon: string | undefined): string {
+  switch (icon) {
+    case 'automation':
+      return '◷';
+    case 'browser':
+      return '◎';
+    case 'database':
+      return '▤';
+    case 'diff':
+      return '⇄';
+    case 'file':
+      return '□';
+    case 'gear':
+      return '⚙';
+    case 'graph':
+      return '⌁';
+    case 'kanban':
+      return '▦';
+    case 'play':
+      return '▶';
+    case 'terminal':
+      return '⌘';
+    case 'sparkle':
+    case 'app':
+    default:
+      return '✦';
+  }
+}
+
+function isExtensionToolPanelAvailableForContext(
+  surface: ExtensionRightToolPanelSurface & ExtensionSurfaceSummary,
+  input: { conversationId: string | null; workspaceCwd: string | null },
+): boolean {
+  if (surface.scope === 'conversation') return Boolean(input.conversationId);
+  if (surface.scope === 'workspace') return Boolean(input.workspaceCwd);
+  if (surface.scope === 'selection') return false;
+  return true;
+}
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
   return (
@@ -1187,6 +1241,7 @@ function WorkbenchKnowledgeRail({
   onBrowserTabSwitch,
   onBrowserTabAdd,
   onBrowserTabClose,
+  extensionToolPanels,
 }: {
   conversationId: string | null;
   workspaceCwd: string | null;
@@ -1208,7 +1263,9 @@ function WorkbenchKnowledgeRail({
   onBrowserTabSwitch: (tabId: string) => void;
   onBrowserTabAdd: () => void;
   onBrowserTabClose: (tabId: string) => void;
+  extensionToolPanels: Array<ExtensionRightToolPanelSurface & ExtensionSurfaceSummary>;
 }) {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
@@ -1223,6 +1280,19 @@ function WorkbenchKnowledgeRail({
     activeRunConnected,
     runsLoaded: runs !== null,
   });
+  const availableExtensionToolPanels = useMemo(
+    () => extensionToolPanels.filter((surface) => isExtensionToolPanelAvailableForContext(surface, { conversationId, workspaceCwd })),
+    [conversationId, extensionToolPanels, workspaceCwd],
+  );
+  const activeExtensionToolPanel = useMemo(() => {
+    const parsed = parseExtensionToolPanelMode(activeTool);
+    if (!parsed) return null;
+    return (
+      availableExtensionToolPanels.find(
+        (surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId && surface.entry,
+      ) ?? null
+    );
+  }, [activeTool, availableExtensionToolPanels]);
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
     (id: string) => {
@@ -1377,6 +1447,22 @@ function WorkbenchKnowledgeRail({
     },
     [onActiveToolChange, onCheckpointSelect, onRunSelect, onWorkspaceFileClear, setSearchParams],
   );
+  const handleExtensionToolPanelSelect = useCallback(
+    (surface: ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) => {
+      onActiveToolChange(extensionToolPanelMode(surface));
+      onWorkspaceFileClear();
+      onCheckpointSelect(null);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete('file');
+        next.delete('artifact');
+        next.delete('checkpoint');
+        next.delete('run');
+        return next;
+      });
+    },
+    [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams],
+  );
 
   useEffect(() => {
     if (activeArtifactId && artifacts.length > 0) {
@@ -1414,6 +1500,13 @@ function WorkbenchKnowledgeRail({
       { replace: true },
     );
   }, [activeTool, onActiveToolChange, setSearchParams, showRunsTab]);
+
+  useEffect(() => {
+    const parsed = parseExtensionToolPanelMode(activeTool);
+    if (!parsed) return;
+    if (activeExtensionToolPanel) return;
+    onActiveToolChange('knowledge');
+  }, [activeExtensionToolPanel, activeTool, onActiveToolChange]);
 
   useEffect(() => {
     if (activeTool === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
@@ -1643,6 +1736,23 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Runs</span>
           </button>
         ) : null}
+        {availableExtensionToolPanels.map((surface) => (
+          <button
+            key={`${surface.extensionId}:${surface.id}`}
+            type="button"
+            className={cx(
+              'ui-sidebar-nav-item w-full text-left',
+              activeTool === extensionToolPanelMode(surface) && 'ui-sidebar-nav-item-active',
+            )}
+            title={surface.title ?? surface.label}
+            onClick={() => handleExtensionToolPanelSelect(surface)}
+          >
+            <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
+              {iconGlyphForExtensionSurface(surface.icon)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-left">{surface.label}</span>
+          </button>
+        ))}
       </div>
       {activeTool === 'knowledge' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -1709,6 +1819,21 @@ function WorkbenchKnowledgeRail({
             activeApp={apps.find((a) => a.id === searchParams.get('app')) ?? null}
             loading={appsLoading}
             onSelectApp={onAppSelect}
+          />
+        </div>
+      ) : activeExtensionToolPanel ? (
+        <div className="min-h-0 flex-1 overflow-hidden bg-base">
+          <ExtensionFrame
+            title={activeExtensionToolPanel.title ?? activeExtensionToolPanel.label}
+            extensionId={activeExtensionToolPanel.extensionId}
+            entry={activeExtensionToolPanel.entry}
+            surfaceId={activeExtensionToolPanel.id}
+            route={null}
+            pathname={location.pathname}
+            search={location.search}
+            hash={location.hash}
+            conversationId={conversationId}
+            cwd={workspaceCwd}
           />
         </div>
       ) : activeTool === 'browser' ? (
@@ -1835,6 +1960,7 @@ export function Layout() {
     location.pathname.startsWith('/settings') ||
     location.pathname.startsWith('/system') ||
     location.pathname.startsWith('/automations') ||
+    location.pathname.startsWith('/extensions') ||
     location.pathname.startsWith('/gateways') ||
     location.pathname.startsWith('/knowledge') ||
     location.pathname.startsWith('/telemetry') ||
@@ -1965,6 +2091,11 @@ export function Layout() {
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
   const { apps, loading: appsLoading, error: appsError } = useAppList();
+  const extensionRegistry = useExtensionRegistry();
+  const extensionRightToolPanels = useMemo(
+    () => extensionRegistry.surfaces.filter(isExtensionRightToolPanelSurface),
+    [extensionRegistry.surfaces],
+  );
   const activeAppId = showWorkbench ? searchParams.get('app') : null;
   const activeApp = useMemo(() => apps.find((a) => a.id === activeAppId) ?? null, [apps, activeAppId]);
   const setActiveConversationTool = useCallback(
@@ -2481,6 +2612,7 @@ export function Layout() {
                             onBrowserTabSwitch={handleBrowserTabSwitch}
                             onBrowserTabAdd={handleBrowserTabAdd}
                             onBrowserTabClose={handleBrowserTabClose}
+                            extensionToolPanels={extensionRightToolPanels}
                           />
                         </aside>
                       </>

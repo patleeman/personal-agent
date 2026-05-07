@@ -222,6 +222,7 @@ import {
   resolveSelectedConversationExecutionTargetId,
 } from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
+import type { ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -1730,6 +1731,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
+  const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .extensionSlashCommands()
+      .then((commands) => {
+        if (!cancelled) {
+          setExtensionSlashCommands(commands);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExtensionSlashCommands([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(
@@ -2440,7 +2462,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const slashQuery = slashInput?.command ?? '';
   const modelQuery = showModelPicker ? (slashInput?.argument ?? '') : '';
   const mentionQuery = mentionMatch?.[2] ?? '';
-  const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
+  const slashItems = useMemo(
+    () => buildSlashMenuItems(input, memoryData?.skills ?? [], extensionSlashCommands),
+    [extensionSlashCommands, input, memoryData],
+  );
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
   const mentionItems = useMemo(
     () =>
@@ -4991,6 +5016,74 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  function findExtensionSlashCommand(text: string): { command: ExtensionSlashCommandRegistration; argument: string } | null {
+    const parsed = parseSlashInput(text.trim());
+    if (!parsed) {
+      return null;
+    }
+
+    const name = parsed.command.slice(1);
+    const command = extensionSlashCommands.find((candidate) => candidate.name === name);
+    return command ? { command, argument: parsed.argument } : null;
+  }
+
+  async function executeExtensionSlashCommand(
+    command: ExtensionSlashCommandRegistration,
+    inputSnapshot: string,
+    argument: string,
+  ): Promise<{ kind: 'handled' } | { kind: 'send'; text: string }> {
+    try {
+      const response = await api.invokeExtensionAction(command.extensionId, command.action, {
+        commandName: command.name,
+        argument,
+        text: inputSnapshot,
+        conversationId: id ?? null,
+        cwd: currentCwd,
+        draft,
+      });
+      const result = response.result;
+
+      if (typeof result === 'string') {
+        return { kind: 'send', text: result };
+      }
+      if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        setInput('');
+        return { kind: 'handled' };
+      }
+
+      const payload = result as {
+        text?: unknown;
+        prompt?: unknown;
+        replaceComposerText?: unknown;
+        appendComposerText?: unknown;
+        notice?: { tone?: unknown; text?: unknown };
+      };
+      if (typeof payload.notice?.text === 'string') {
+        showNotice(payload.notice.tone === 'danger' ? 'danger' : 'accent', payload.notice.text);
+      }
+      if (typeof payload.replaceComposerText === 'string') {
+        setInput(payload.replaceComposerText);
+        return { kind: 'handled' };
+      }
+      if (typeof payload.appendComposerText === 'string') {
+        setInput(`${inputSnapshot}${payload.appendComposerText}`);
+        return { kind: 'handled' };
+      }
+      if (typeof payload.prompt === 'string') {
+        return { kind: 'send', text: payload.prompt };
+      }
+      if (typeof payload.text === 'string') {
+        return { kind: 'send', text: payload.text };
+      }
+
+      setInput('');
+      return { kind: 'handled' };
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      return { kind: 'handled' };
+    }
+  }
+
   async function executeConversationSlashCommand(
     command: ConversationSlashCommand,
   ): Promise<{ kind: 'handled' } | { kind: 'send'; text: string }> {
@@ -5330,6 +5423,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
 
         slashTextToSend = slashResult.text;
+      } else {
+        const extensionSlash = findExtensionSlashCommand(text);
+        if (extensionSlash) {
+          rememberComposerInput(inputSnapshot);
+          const slashResult = await executeExtensionSlashCommand(extensionSlash.command, inputSnapshot, extensionSlash.argument);
+          if (slashResult.kind === 'handled') {
+            return;
+          }
+
+          slashTextToSend = slashResult.text;
+        }
       }
     }
 
