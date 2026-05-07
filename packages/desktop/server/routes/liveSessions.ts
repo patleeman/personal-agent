@@ -34,6 +34,7 @@ import {
 } from '../conversations/liveSessions.js';
 import { readSessionMeta } from '../conversations/sessions.js';
 import { logError, logSlowConversationPerf, logWarn, setServerTimingHeaders } from '../middleware/index.js';
+import { publishAppEvent } from '../shared/appEvents.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import type { ServerRouteContext } from './context.js';
 
@@ -354,6 +355,7 @@ export function registerLiveSessionRoutes(
         },
         getLiveSessionCapabilityContext(),
       );
+      publishAppEvent({ type: 'open_session', sessionId: result.id });
       res.json(result);
     } catch (err) {
       logError('request handler error', {
