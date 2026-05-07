@@ -171,7 +171,6 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
 
     handleHiddenAutoReviewTurnEnd(entry, activeHiddenTurnCustomType, callbacks);
 
-    void callbacks.syncDurableConversationRun(entry, 'waiting');
     callbacks.notifyLifecycleHandlers(entry, 'turn_end');
     void callbacks.applyPendingConversationWorkingDirectoryChange(entry);
   }

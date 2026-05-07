@@ -79,11 +79,11 @@ describe('streaming lifecycle callbacks', () => {
     expect(cbs.broadcastContextUsage).toHaveBeenCalled();
   });
 
-  it('turn_end marks durable run as waiting and notifies lifecycle handlers', () => {
+  it('turn_end keeps the durable run active and notifies lifecycle handlers', () => {
     const entry = makeEntry();
     const cbs = makeCallbacks();
     handleLiveSessionEvent(entry, { type: 'turn_end', message: {}, toolResults: [] } as any, cbs);
-    expect(cbs.syncDurableConversationRun).toHaveBeenCalledWith(entry, 'waiting');
+    expect(cbs.syncDurableConversationRun).not.toHaveBeenCalledWith(entry, 'waiting');
     expect(cbs.notifyLifecycleHandlers).toHaveBeenCalledWith(entry, 'turn_end');
     expect(cbs.syncRunningState).toHaveBeenCalledWith('sess-1');
     expect(cbs.clearContextUsageTimer).toHaveBeenCalled();

@@ -157,11 +157,10 @@ export function App() {
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
   const [daemon, setDaemonState] = useState<DaemonState | null>(null);
   const openedOnceRef = useRef(false);
-  // Note: deliberately no inflight dedup on refreshSessionMeta — two consecutive
-  // session_meta_changed events (e.g. turn_end followed quickly by agent_start)
-  // must each fetch from the server, otherwise the second update gets the stale
-  // response of the first when the server state has already transitioned.
-  const refreshSessionMetaCounterRef = useRef(0);
+  // Session meta requests can resolve out of order during fast run transitions.
+  // Track the latest request per session so stale HTTP responses cannot undo the
+  // authoritative running state already pushed over the desktop event stream.
+  const refreshSessionMetaSeqRef = useRef(new Map<string, number>());
 
   const setTitle = useCallback((id: string, title: string) => {
     setTitleMap((prev) => {
@@ -197,18 +196,22 @@ export function App() {
   }, []);
 
   const refreshSessionMeta = useCallback(
-    (sessionId: string) => {
-      // Bump counter so concurrent-ish requests can at least be distinguished
-      // if debugging. The important thing: no inflight dedup — each event must
-      // independently fetch the latest server state.
-      refreshSessionMetaCounterRef.current += 1;
+    (sessionId: string, running?: boolean) => {
+      const nextSeq = (refreshSessionMetaSeqRef.current.get(sessionId) ?? 0) + 1;
+      refreshSessionMetaSeqRef.current.set(sessionId, nextSeq);
 
       void api
         .sessionMeta(sessionId)
         .then((session) => {
-          applySessionMetaUpdate(sessionId, session);
+          if (refreshSessionMetaSeqRef.current.get(sessionId) !== nextSeq) {
+            return;
+          }
+          applySessionMetaUpdate(sessionId, session && running !== undefined ? { ...session, isRunning: running } : session);
         })
         .catch((error) => {
+          if (refreshSessionMetaSeqRef.current.get(sessionId) !== nextSeq) {
+            return;
+          }
           const message = error instanceof Error ? error.message : String(error);
           if (/not found/i.test(message)) {
             applySessionMetaUpdate(sessionId, null);
@@ -243,7 +246,7 @@ export function App() {
               previous ? updateSessionRunningPreservingOrder(previous, payload.sessionId, payload.running) : previous,
             );
           }
-          void refreshSessionMeta(payload.sessionId);
+          void refreshSessionMeta(payload.sessionId, payload.running);
           return;
         case 'session_file_changed':
           bumpConversationVersion(payload.sessionId);

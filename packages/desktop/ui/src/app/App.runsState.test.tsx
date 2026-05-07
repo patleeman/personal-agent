@@ -246,6 +246,35 @@ describe('App background work run state integration', () => {
     expect(container.textContent).toContain('conversation running');
   });
 
+  it('ignores stale session meta responses after a newer running event', async () => {
+    const idleSession = createSessionMeta({ isRunning: false });
+    const runningSession = createSessionMeta({ isRunning: true });
+    let resolveStale: ((session: SessionMeta) => void) | null = null;
+    fetchSessionsSnapshotMock.mockResolvedValueOnce([idleSession]);
+    apiSessionMetaMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<SessionMeta>((resolve) => {
+            resolveStale = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(runningSession);
+    ({ container, root } = await renderAppAtConversation());
+
+    await emitDesktopEvent({ type: 'sessions', sessions: [idleSession] });
+    await emitDesktopEvent({ type: 'session_meta_changed', sessionId: 'conv-1', running: false });
+    await emitDesktopEvent({ type: 'session_meta_changed', sessionId: 'conv-1', running: true });
+    expect(container.textContent).toContain('conversation running');
+
+    await act(async () => {
+      resolveStale?.(idleSession);
+      await Promise.resolve();
+    });
+    await flushReact();
+
+    expect(container.textContent).toContain('conversation running');
+  });
+
   it('keeps completed, failed, interrupted, and unrelated runs out of the active shelf', async () => {
     ({ container, root } = await renderAppAtConversation());
 
