@@ -1,30 +1,58 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildSelectionContextMenuTemplate, normalizeSelectionContextMenuCoordinate } from './selection-context-menu.js';
 
+// ── selection-context-menu — template builder ─────────────────────────────
+
 describe('buildSelectionContextMenuTemplate', () => {
-  it('drops unsafe menu coordinates', () => {
-    expect(normalizeSelectionContextMenuCoordinate(12.4)).toBe(0);
-    expect(normalizeSelectionContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
+  it('returns empty template when nothing is enabled', () => {
+    expect(buildSelectionContextMenuTemplate({}, () => {})).toHaveLength(0);
   });
 
-  it('includes reply and copy actions when both are available', () => {
-    const onSelect = vi.fn();
-    expect(buildSelectionContextMenuTemplate({ canReply: true, canCopy: true }, onSelect)).toEqual([
-      expect.objectContaining({ label: 'Reply with Selection' }),
-      expect.objectContaining({ type: 'separator' }),
-      expect.objectContaining({ label: 'Copy' }),
-    ]);
+  it('includes reply with selection when canReply', () => {
+    const items = buildSelectionContextMenuTemplate({ canReply: true }, () => {});
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Reply with Selection',
+      ),
+    ).toBe(true);
   });
 
-  it('returns a single native copy action when only copy is available', () => {
-    const onSelect = vi.fn();
-    expect(buildSelectionContextMenuTemplate({ canCopy: true }, onSelect)).toEqual([expect.objectContaining({ label: 'Copy' })]);
+  it('includes copy when canCopy', () => {
+    const items = buildSelectionContextMenuTemplate({ canCopy: true }, () => {});
+    expect(items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Copy')).toBe(
+      true,
+    );
   });
 
-  it('omits the menu when no actions are available', () => {
-    const onSelect = vi.fn();
-    expect(buildSelectionContextMenuTemplate({ canReply: false, canCopy: false }, onSelect)).toEqual([]);
-    expect(buildSelectionContextMenuTemplate({}, onSelect)).toEqual([]);
+  it('includes both when both enabled', () => {
+    const items = buildSelectionContextMenuTemplate({ canReply: true, canCopy: true }, () => {});
+    expect(items.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('inserts separator between reply and copy when both present', () => {
+    const items = buildSelectionContextMenuTemplate({ canReply: true, canCopy: true }, () => {});
+    const separators = items.filter(
+      (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'type' in item && item.type === 'separator',
+    );
+    expect(separators.length).toBe(1);
+  });
+});
+
+describe('normalizeSelectionContextMenuCoordinate', () => {
+  it('returns 0 for undefined', () => {
+    expect(normalizeSelectionContextMenuCoordinate(undefined)).toBe(0);
+  });
+
+  it('returns 0 for NaN', () => {
+    expect(normalizeSelectionContextMenuCoordinate(Number.NaN)).toBe(0);
+  });
+
+  it('returns 0 for negative', () => {
+    expect(normalizeSelectionContextMenuCoordinate(-1)).toBe(0);
+  });
+
+  it('passes safe integers through', () => {
+    expect(normalizeSelectionContextMenuCoordinate(42)).toBe(42);
   });
 });

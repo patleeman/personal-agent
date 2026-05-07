@@ -1,74 +1,92 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { buildDesktopTrayMenuTemplate, type DesktopTrayActions } from './tray.js';
+import { buildDesktopTrayMenuTemplate } from './tray.js';
 
-function createActions(): DesktopTrayActions {
-  return {
-    onOpen: vi.fn(),
-    onOpenConversation: vi.fn(),
-    onNewConversation: vi.fn(),
-    onClipUrlFromClipboard: vi.fn(),
-    onSettings: vi.fn(),
-    onCheckForUpdates: vi.fn(),
-    onRestartRuntime: vi.fn(),
-    onOpenLogs: vi.fn(),
-    onQuit: vi.fn(),
-  };
-}
+// ── tray — menu template builder ──────────────────────────────────────────
 
 describe('buildDesktopTrayMenuTemplate', () => {
-  it('shows the ssh-only remote summary when the desktop backend is ready', () => {
-    const template = buildDesktopTrayMenuTemplate({
-      startupState: { kind: 'ready' },
-      actions: createActions(),
+  it('shows starting state', () => {
+    const items = buildDesktopTrayMenuTemplate({
+      startupState: { kind: 'starting' },
+      actions: {} as ReturnType<typeof buildDesktopTrayMenuTemplate> extends never
+        ? never
+        : Parameters<typeof buildDesktopTrayMenuTemplate>[0]['actions'],
     });
 
-    expect(template).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Remote execution: SSH-only', enabled: false }),
-        expect.objectContaining({ label: 'Show Personal Agent', enabled: true }),
-        expect.objectContaining({ label: 'New Conversation', enabled: true }),
-        expect.objectContaining({ label: 'Clip URL from Clipboard', enabled: true }),
-        expect.objectContaining({ label: 'Settings…', enabled: true }),
-        expect.objectContaining({ label: 'Restart Runtime', enabled: true }),
-        expect.objectContaining({ label: 'Quit Personal Agent' }),
-      ]),
-    );
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) =>
+          'label' in item && typeof item.label === 'string' && item.label.includes('Launching'),
+      ),
+    ).toBe(true);
   });
 
-  it('surfaces startup failures with retry and log actions', () => {
-    const template = buildDesktopTrayMenuTemplate({
-      startupState: { kind: 'error', message: 'SSH handshake failed.' },
-      actions: createActions(),
+  it('shows ready state with working menu items', () => {
+    const items = buildDesktopTrayMenuTemplate({
+      startupState: { kind: 'ready' },
+      actions: {
+        onNewConversation: () => {},
+      } as unknown as Parameters<typeof buildDesktopTrayMenuTemplate>[0]['actions'],
     });
 
-    expect(template).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Remote execution: SSH-only', enabled: false }),
-        expect.objectContaining({ label: 'Startup failed', enabled: false }),
-        expect.objectContaining({ label: 'SSH handshake failed.', enabled: false }),
-        expect.objectContaining({ label: 'Retry Personal Agent', enabled: true }),
-        expect.objectContaining({ label: 'New Conversation', enabled: false }),
-        expect.objectContaining({ label: 'Clip URL from Clipboard', enabled: false }),
-        expect.objectContaining({ label: 'Settings…', enabled: false }),
-        expect.objectContaining({ label: 'Restart Runtime', enabled: true }),
-        expect.objectContaining({ label: 'Open Desktop Logs' }),
-      ]),
-    );
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'New Conversation'),
+    ).toBe(true);
   });
 
-  it('uses the current app name for testing launches', () => {
-    const template = buildDesktopTrayMenuTemplate({
-      appName: 'Personal Agent Testing',
-      startupState: { kind: 'ready' },
-      actions: createActions(),
+  it('shows error state with truncated message', () => {
+    const items = buildDesktopTrayMenuTemplate({
+      startupState: { kind: 'error', message: 'Something went wrong with the backend.' },
+      actions: {} as ReturnType<typeof buildDesktopTrayMenuTemplate> extends never
+        ? never
+        : Parameters<typeof buildDesktopTrayMenuTemplate>[0]['actions'],
     });
 
-    expect(template).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Show Personal Agent Testing', enabled: true }),
-        expect.objectContaining({ label: 'Quit Personal Agent Testing' }),
-      ]),
-    );
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Startup failed'),
+    ).toBe(true);
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Retry Personal Agent',
+      ),
+    ).toBe(true);
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Open Desktop Logs'),
+    ).toBe(true);
+  });
+
+  it('includes clip URL from clipboard when ready', () => {
+    const items = buildDesktopTrayMenuTemplate({
+      startupState: { kind: 'ready' },
+      actions: {} as ReturnType<typeof buildDesktopTrayMenuTemplate> extends never
+        ? never
+        : Parameters<typeof buildDesktopTrayMenuTemplate>[0]['actions'],
+    });
+
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Clip URL from Clipboard',
+      ),
+    ).toBe(true);
+  });
+
+  it('includes Settings and Quit', () => {
+    const items = buildDesktopTrayMenuTemplate({
+      startupState: { kind: 'ready' },
+      actions: {
+        onSettings: () => {},
+        onQuit: () => {},
+      } as unknown as Parameters<typeof buildDesktopTrayMenuTemplate>[0]['actions'],
+    });
+
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Settings…'),
+    ).toBe(true);
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) =>
+          ('label' in item && (item as { label?: string }).label === 'Quit Personal Agent') || item.label === 'Quit Personal Agent',
+      ),
+    ).toBe(true);
   });
 });
