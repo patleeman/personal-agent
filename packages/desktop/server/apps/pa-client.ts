@@ -18,6 +18,19 @@ export const PA_CLIENT_JS: string = `
     const match = window.location.pathname.match(new RegExp('^/api/extensions/([^/]+)/files/'));
     return match ? decodeURIComponent(match[1]) : null;
   })();
+  const launchParams = new URLSearchParams(window.location.search || '');
+
+  function readLaunchContext() {
+    return {
+      extensionId: extensionIdFromPath,
+      surfaceId: launchParams.get('surfaceId'),
+      route: launchParams.get('route'),
+      pathname: launchParams.get('pathname'),
+      search: launchParams.get('search') || '',
+      hash: launchParams.get('hash') || '',
+      theme: launchParams.get('theme') || 'system'
+    };
+  }
 
   // ── PA client ──────────────────────────────────────────────────────────────
   window.PA = {
@@ -103,11 +116,25 @@ export const PA_CLIENT_JS: string = `
       };
     },
 
+    context: {
+      get() { return readLaunchContext(); }
+    },
+
     extension: {
       invoke(actionId, input) {
         var extensionId = extensionIdFromPath;
         if (!extensionId) throw new Error('Extension id is unavailable');
         return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/actions/' + encodeURIComponent(actionId), { method: 'POST', body: input || {} });
+      },
+      getManifest() {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/manifest');
+      },
+      listSurfaces() {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/surfaces');
       },
       listCommands() { return requestJson('/api/extensions/commands'); },
       listSlashCommands() { return requestJson('/api/extensions/slash-commands'); }

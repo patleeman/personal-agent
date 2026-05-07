@@ -78,6 +78,27 @@ describe('registerExtensionRoutes', () => {
     ]);
   });
 
+  it('serves per-extension manifest and surfaces', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    const surface = { id: 'page', placement: 'main', kind: 'page', route: '/ext/agent-board', entry: 'frontend/page.html' };
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board', surfaces: [surface] }),
+    );
+
+    const harness = createHarness();
+    const manifestRes = createResponse();
+    harness.getHandler('/api/extensions/:id/manifest')({ params: { id: 'agent-board' } }, manifestRes);
+    expect(manifestRes.json).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent-board', surfaces: [surface] }));
+
+    const surfacesRes = createResponse();
+    harness.getHandler('/api/extensions/:id/surfaces')({ params: { id: 'agent-board' } }, surfacesRes);
+    expect(surfacesRes.json).toHaveBeenCalledWith([surface]);
+  });
+
   it('serves runtime extension files inside the package root', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

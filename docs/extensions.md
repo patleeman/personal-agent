@@ -462,7 +462,7 @@ Frontend entries receive a `window.PA` API plus launch context. Bundled system e
 The v0 surface below is intentionally broader than apps because extensions need to behave like product modules:
 
 ```ts
-PA.context.get() // extension id, surface id, route params, active conversation, cwd, theme
+PA.context.get() // extension id, surface id, route, current pathname/search/hash, theme
 
 PA.run.start({ prompt, cwd?, source?, conversationId? })
 PA.run.get(runId)
@@ -497,9 +497,10 @@ PA.automations.readLog(taskId)
 PA.automations.readSchedulerHealth()
 
 PA.extension.invoke(actionId, input)
+PA.extension.getManifest()
+PA.extension.listSurfaces()
 PA.extension.listCommands()
 PA.extension.listSlashCommands()
-// Target follow-up APIs: getManifest, listSurfaces
 
 PA.ui.toast(message)
 PA.ui.openSurface(surfaceId, params?)
@@ -580,7 +581,7 @@ The server invokes handlers through the action endpoint:
 POST /api/extensions/:extensionId/actions/:actionId
 ```
 
-Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. The backend build is content-hash cached; unchanged packages reuse the compiled module. If an action invoke sees a broken edit but a previous compiled backend exists, PA uses the previous compiled backend instead of bricking the extension. Explicit reload still reports build failures. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.extension.invoke(actionId, input)`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`.
+Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. The backend build is content-hash cached; unchanged packages reuse the compiled module. If an action invoke sees a broken edit but a previous compiled backend exists, PA uses the previous compiled backend instead of bricking the extension. Explicit reload still reports build failures. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.context.get()`, `PA.extension.invoke/getManifest/listSurfaces`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`.
 
 The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage`, `ctx.runs`, `ctx.automations`, `ctx.vault`, `ctx.conversations`, and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
 

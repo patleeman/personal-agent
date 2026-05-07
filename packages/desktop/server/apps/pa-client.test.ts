@@ -1,11 +1,11 @@
 import { JSDOM } from 'jsdom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { PA_CLIENT_JS } from './pa-client.js';
 
-async function renderAppHtml(html: string): Promise<Document> {
+async function renderAppHtml(html: string, url = 'http://127.0.0.1:9876/'): Promise<Document> {
   const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
-    url: 'http://127.0.0.1:9876/',
+    url,
     runScripts: 'outside-only',
   });
   dom.window.eval(PA_CLIENT_JS);
@@ -14,6 +14,39 @@ async function renderAppHtml(html: string): Promise<Document> {
 }
 
 describe('PA skill app client components', () => {
+  it('exposes extension launch context from iframe query params', async () => {
+    const document = await renderAppHtml(
+      '<main></main>',
+      'http://127.0.0.1:9876/api/extensions/agent-board/files/frontend/index.html?surfaceId=page&route=%2Fext%2Fagent-board&pathname=%2Fext%2Fagent-board%2Ftoday&search=%3Ftab%3Ddoing&hash=%23top&theme=dark',
+    );
+    const pa = document.defaultView?.PA as { context: { get(): Record<string, unknown> } };
+
+    expect(pa.context.get()).toEqual({
+      extensionId: 'agent-board',
+      surfaceId: 'page',
+      route: '/ext/agent-board',
+      pathname: '/ext/agent-board/today',
+      search: '?tab=doing',
+      hash: '#top',
+      theme: 'dark',
+    });
+  });
+
+  it('exposes extension manifest helpers', async () => {
+    const document = await renderAppHtml('<main></main>', 'http://127.0.0.1:9876/api/extensions/agent-board/files/frontend/index.html');
+    const pa = document.defaultView?.PA as { extension: { getManifest(): Promise<unknown>; listSurfaces(): Promise<unknown> } };
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    expect(document.defaultView).not.toBeNull();
+    document.defaultView!.fetch = fetchMock;
+
+    await pa.extension.getManifest();
+    await pa.extension.listSurfaces();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/extensions/agent-board/manifest', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/extensions/agent-board/surfaces', expect.any(Object));
+  });
   it('preserves card children parsed after custom element connection', async () => {
     const document = await renderAppHtml(`
       <pa-card title="Research brief">

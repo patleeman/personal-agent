@@ -11,8 +11,25 @@ function routeMatches(route: string, pathname: string): boolean {
   return pathname === route || pathname.startsWith(`${route}/`);
 }
 
-function buildExtensionFileSrc(extensionId: string, entry: string): string {
-  return buildApiPath(`/extensions/${encodeURIComponent(extensionId)}/files/${entry.split('/').map(encodeURIComponent).join('/')}`);
+function buildExtensionFileSrc(input: {
+  extensionId: string;
+  entry: string;
+  surfaceId: string;
+  route: string;
+  pathname: string;
+  search: string;
+  hash: string;
+}): string {
+  const query = new URLSearchParams({
+    surfaceId: input.surfaceId,
+    route: input.route,
+    pathname: input.pathname,
+    search: input.search,
+    hash: input.hash,
+  });
+  return buildApiPath(
+    `/extensions/${encodeURIComponent(input.extensionId)}/files/${input.entry.split('/').map(encodeURIComponent).join('/')}?${query.toString()}`,
+  );
 }
 
 export function ExtensionPage() {
@@ -39,7 +56,15 @@ export function ExtensionPage() {
     return (
       <iframe
         title={surface.title ?? surface.label ?? surface.extensionId}
-        src={buildExtensionFileSrc(surface.extensionId, surface.entry)}
+        src={buildExtensionFileSrc({
+          extensionId: surface.extensionId,
+          entry: surface.entry,
+          surfaceId: surface.id,
+          route: surface.route,
+          pathname: location.pathname,
+          search: location.search,
+          hash: location.hash,
+        })}
         className="h-full w-full border-0 bg-base"
         sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
       />

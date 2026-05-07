@@ -149,6 +149,32 @@ export function registerExtensionRoutes(
     }
   });
 
+  router.get('/api/extensions/:id/manifest', (req, res) => {
+    try {
+      const entry = findExtensionEntry(req.params.id);
+      if (!entry) {
+        res.status(404).json({ error: 'Extension not found.' });
+        return;
+      }
+      res.json(entry.manifest);
+    } catch (err) {
+      sendRouteError(res, 'extension manifest error', err);
+    }
+  });
+
+  router.get('/api/extensions/:id/surfaces', (req, res) => {
+    try {
+      const entry = findExtensionEntry(req.params.id);
+      if (!entry) {
+        res.status(404).json({ error: 'Extension not found.' });
+        return;
+      }
+      res.json(entry.manifest.surfaces ?? []);
+    } catch (err) {
+      sendRouteError(res, 'extension surfaces error', err);
+    }
+  });
+
   router.get('/api/extensions/surfaces', (_req, res) => {
     try {
       res.json(readExtensionRegistrySnapshot().surfaces);
