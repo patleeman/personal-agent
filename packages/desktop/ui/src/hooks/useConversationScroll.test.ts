@@ -56,6 +56,31 @@ describe('useConversationScroll', () => {
     expect(result.current.atBottom).toBe(false);
   });
 
+  it('keeps the viewport pinned when the user wheels down at the bottom', () => {
+    const scrollEl = document.createElement('div');
+    setScrollMetrics(scrollEl, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });
+    scrollEl.querySelector = vi.fn().mockReturnValue(null);
+    const scrollRef = { current: scrollEl };
+    const messages = [{ type: 'text' as const, ts: '1', text: 'hello' }];
+
+    const { result } = renderHook(() =>
+      useConversationScroll({
+        conversationId: 'conversation-1',
+        messages,
+        scrollRef,
+        sessionLoading: false,
+        isStreaming: true,
+        initialScrollKey: null,
+      }),
+    );
+
+    act(() => {
+      scrollEl.dispatchEvent(new WheelEvent('wheel', { deltaY: 80 }));
+    });
+
+    expect(result.current.atBottom).toBe(true);
+  });
+
   it('allows explicit scroll-to-bottom actions to re-pin during streaming', () => {
     const scrollEl = document.createElement('div');
     setScrollMetrics(scrollEl, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });

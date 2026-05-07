@@ -260,8 +260,8 @@ export function useConversationScroll({
       return;
     }
 
-    const handleWheel = () => {
-      if (scrollPinnedToBottomRef.current) {
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0 && scrollPinnedToBottomRef.current) {
         detachFromBottom();
       }
     };
