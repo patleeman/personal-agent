@@ -38,7 +38,17 @@ describe('WorkbenchBrowserTab', () => {
       snapshotRevision: 0,
       changedSinceSnapshot: true,
     }));
-    window.personalAgentDesktop = { setWorkbenchBrowserBounds } as unknown as typeof window.personalAgentDesktop;
+    const navigateWorkbenchBrowser = vi.fn(async (input: { url: string; sessionKey?: string | null }) => ({
+      url: input.url,
+      title: 'Loaded',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      browserRevision: 1,
+      snapshotRevision: 0,
+      changedSinceSnapshot: true,
+    }));
+    window.personalAgentDesktop = { setWorkbenchBrowserBounds, navigateWorkbenchBrowser } as unknown as typeof window.personalAgentDesktop;
 
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -53,10 +63,16 @@ describe('WorkbenchBrowserTab', () => {
     });
     await flushAsyncWork();
 
-    // All bridge calls should use '@global' as the session key
-    const calls = setWorkbenchBrowserBounds.mock.calls.filter((call) => call[0]?.sessionKey !== undefined);
-    for (const call of calls) {
-      expect(call[0].sessionKey).toBe('@global');
+    // All bridge calls should use '@global:tab-' session keys
+    for (const [args] of setWorkbenchBrowserBounds.mock.calls) {
+      if (args?.sessionKey !== undefined) {
+        expect(args.sessionKey).toMatch(/^@global:tab-/);
+      }
+    }
+    for (const [args] of navigateWorkbenchBrowser.mock.calls) {
+      if (args?.sessionKey !== undefined) {
+        expect(args.sessionKey).toMatch(/^@global:tab-/);
+      }
     }
   });
 });

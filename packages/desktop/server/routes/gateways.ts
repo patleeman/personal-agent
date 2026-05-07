@@ -428,16 +428,16 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         res.status(400).json({ error: 'provider and conversationId are required' });
         return;
       }
-      res.json(
-        attachGatewayConversation({
-          ...currentGatewayContext(),
-          provider,
-          conversationId,
-          conversationTitle: readOptionalString(req.body?.conversationTitle),
-          externalChatId: readOptionalString(req.body?.externalChatId),
-          externalChatLabel: readOptionalString(req.body?.externalChatLabel),
-        }),
-      );
+      attachGatewayConversation({
+        ...currentGatewayContext(),
+        provider,
+        conversationId,
+        conversationTitle: readOptionalString(req.body?.conversationTitle),
+        externalChatId: readOptionalString(req.body?.externalChatId),
+        externalChatLabel: readOptionalString(req.body?.externalChatLabel),
+      });
+      invalidateAppTopics('sessions');
+      res.json(readGatewayState(currentGatewayContext()));
     } catch (err) {
       handleGatewayError(res, err);
     }
@@ -446,13 +446,13 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
   router.delete('/api/gateways/bindings/:conversationId', (req: Request, res: Response) => {
     try {
       const provider = readProvider(req.query.provider);
-      res.json(
-        detachGatewayConversation({
-          ...currentGatewayContext(),
-          provider: provider ?? undefined,
-          conversationId: req.params.conversationId,
-        }),
-      );
+      detachGatewayConversation({
+        ...currentGatewayContext(),
+        provider: provider ?? undefined,
+        conversationId: req.params.conversationId,
+      });
+      invalidateAppTopics('sessions');
+      res.json(readGatewayState(currentGatewayContext()));
     } catch (err) {
       handleGatewayError(res, err);
     }

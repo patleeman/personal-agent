@@ -21,6 +21,14 @@ import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
+import {
+  type BrowserTabsState,
+  createNewTab,
+  getAdjacentTabId,
+  getTabSessionKey,
+  readBrowserTabsState,
+  writeBrowserTabsState,
+} from '../local/workbenchBrowserTabs';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
@@ -711,7 +719,8 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const closedRef = useRef(false);
-  const [urlDraft, setUrlDraft] = useState('https://www.google.com/');
+  const tabsStateRef = useRef<BrowserTabsState | null>(null);
+  const [tabsState, setTabsState] = useState<BrowserTabsState>(() => readBrowserTabsState());
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
@@ -719,14 +728,82 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
     Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>
   >([]);
   const bridge = getDesktopBridge();
-  const browserSessionKey = '@global';
+
+  // Keep ref in sync for cleanup
+  useEffect(() => {
+    tabsStateRef.current = tabsState;
+  }, [tabsState]);
+
+  // Derived active tab and session key
+  const activeTab = useMemo(
+    () => tabsState.tabs.find((t) => t.id === tabsState.activeTabId) ?? tabsState.tabs[0]!,
+    [tabsState.tabs, tabsState.activeTabId],
+  );
+  const browserSessionKey = getTabSessionKey(activeTab.id);
+  const [urlDraft, setUrlDraft] = useState(() => activeTab.urlDraft || activeTab.url);
+  const urlDraftRef = useRef(urlDraft);
+
+  // Persist state
+  useEffect(() => {
+    writeBrowserTabsState(tabsState);
+  }, [tabsState]);
+
+  // Track URL per tab to avoid unnecessary updates
+  const tabUrlMapRef = useRef<Record<string, string>>({});
+
+  // When active tab changes, restore its URL draft
+  useEffect(() => {
+    const draft = activeTab.urlDraft || activeTab.url;
+    urlDraftRef.current = draft;
+    setUrlDraft(draft);
+  }, [activeTab.id]);
+
+  // Navigate the Electron view to the tab's saved URL if it doesn't match
+  useEffect(() => {
+    if (!bridge || !activeTab.url) {
+      return;
+    }
+
+    // Only navigate if the view doesn't already have this URL loaded
+    if (!state || state.url !== activeTab.url) {
+      void bridge
+        .navigateWorkbenchBrowser({ url: activeTab.url, sessionKey: browserSessionKey })
+        .then((nextState) => {
+          setState(nextState);
+        })
+        .catch(() => undefined);
+    }
+  }, [activeTab.id]);
+
+  // Update tab URL/title from browser state changes
+  useEffect(() => {
+    if (!state || !state.url) {
+      return;
+    }
+
+    const tabId = activeTab.id;
+    const lastUrl = tabUrlMapRef.current[tabId];
+    if (state.url !== lastUrl) {
+      tabUrlMapRef.current[tabId] = state.url;
+      setTabsState((prev) => ({
+        ...prev,
+        tabs: prev.tabs.map((t) => (t.id === prev.activeTabId ? { ...t, url: state.url, title: state.title || t.title } : t)),
+      }));
+    }
+  }, [state?.url, state?.title, activeTab.id]);
 
   const syncUrlDraftFromBrowserState = useCallback((nextState: DesktopWorkbenchBrowserState) => {
     if (document.activeElement === urlInputRef.current) {
       return;
     }
 
-    setUrlDraft(nextState.url === 'about:blank' ? '' : nextState.url);
+    const newUrl = nextState.url === 'about:blank' ? '' : nextState.url;
+    urlDraftRef.current = newUrl;
+    setUrlDraft(newUrl);
+    setTabsState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => (t.id === prev.activeTabId ? { ...t, url: nextState.url, urlDraft: newUrl } : t)),
+    }));
   }, []);
 
   const syncBounds = useCallback(() => {
@@ -797,7 +874,13 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
       modalObserver?.disconnect();
       window.removeEventListener('resize', syncBounds);
       window.clearInterval(timer);
-      void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey, deactivate: true }).catch(() => undefined);
+      // Deactivate all tabs on unmount
+      const currentTabs = tabsStateRef.current?.tabs ?? [];
+      for (const tab of currentTabs) {
+        void bridge
+          ?.setWorkbenchBrowserBounds({ visible: false, sessionKey: getTabSessionKey(tab.id), deactivate: true })
+          .catch(() => undefined);
+      }
     };
   }, [bridge, browserSessionKey, syncBounds]);
 
@@ -824,7 +907,15 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
       const nextState = await command();
       if (nextState) {
         setState(nextState);
-        setUrlDraft(nextState.url === 'about:blank' ? '' : nextState.url);
+        const newUrl = nextState.url === 'about:blank' ? '' : nextState.url;
+        urlDraftRef.current = newUrl;
+        setUrlDraft(newUrl);
+        setTabsState((prev) => ({
+          ...prev,
+          tabs: prev.tabs.map((t) =>
+            t.id === prev.activeTabId ? { ...t, url: nextState.url, urlDraft: newUrl, title: nextState.title || t.title } : t,
+          ),
+        }));
       }
       setStatus('');
       syncBounds();
@@ -837,9 +928,70 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
     closedRef.current = true;
     setStatus('');
     setCommentDraft(null);
-    void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey, deactivate: true }).catch(() => undefined);
+    const currentTabs = tabsStateRef.current?.tabs ?? [];
+    for (const tab of currentTabs) {
+      void bridge
+        ?.setWorkbenchBrowserBounds({ visible: false, sessionKey: getTabSessionKey(tab.id), deactivate: true })
+        .catch(() => undefined);
+    }
     onClose();
   }
+
+  const switchToTab = useCallback((tabId: string) => {
+    setTabsState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => (t.id === prev.activeTabId ? { ...t, urlDraft: urlDraftRef.current } : t)),
+      activeTabId: tabId,
+    }));
+  }, []);
+
+  const addTab = useCallback(() => {
+    const newTab = createNewTab();
+    setTabsState((prev) => ({
+      ...prev,
+      tabs: [...prev.tabs, newTab],
+      activeTabId: newTab.id,
+    }));
+    urlDraftRef.current = newTab.url;
+    setUrlDraft(newTab.url);
+  }, []);
+
+  const closeTab = useCallback((tabId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+
+    setTabsState((prev) => {
+      if (prev.tabs.length <= 1) {
+        // Don't close the last tab — replace with a new blank tab
+        const newTab = createNewTab();
+        urlDraftRef.current = newTab.url;
+        return {
+          ...prev,
+          tabs: [newTab],
+          activeTabId: newTab.id,
+        };
+      }
+
+      const newTabId = getAdjacentTabId(prev, tabId) ?? prev.tabs[0]!.id;
+      return {
+        ...prev,
+        tabs: prev.tabs.filter((t) => t.id !== tabId),
+        activeTabId: newTabId,
+      };
+    });
+
+    void bridge
+      ?.setWorkbenchBrowserBounds({ visible: false, sessionKey: getTabSessionKey(tabId), deactivate: true })
+      .catch(() => undefined);
+  }, []);
+
+  const handleUrlInputChange = useCallback((value: string) => {
+    urlDraftRef.current = value;
+    setUrlDraft(value);
+    setTabsState((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => (t.id === prev.activeTabId ? { ...t, urlDraft: value } : t)),
+    }));
+  }, []);
 
   function saveCommentDraft() {
     const text = commentDraft?.text.trim();
@@ -866,6 +1018,46 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Tab bar */}
+      <div className="flex shrink-0 items-center border-b border-border-subtle overflow-x-auto bg-base">
+        <div className="flex min-w-0 flex-1 items-center">
+          {tabsState.tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={cx(
+                'group flex items-center gap-1 shrink-0 max-w-[160px] px-2.5 py-[7px] text-[11px] border-r border-border-subtle transition-colors',
+                tab.id === tabsState.activeTabId
+                  ? 'bg-surface text-primary'
+                  : 'bg-transparent text-secondary hover:bg-surface hover:text-primary',
+              )}
+              onClick={() => switchToTab(tab.id)}
+              title={tab.title}
+            >
+              <span className="truncate">{tab.title}</span>
+              <span
+                className="ml-1 rounded-full w-3.5 h-3.5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-border-subtle transition-opacity cursor-pointer"
+                onClick={(e) => closeTab(tab.id, e)}
+                role="button"
+                aria-label={`Close ${tab.title}`}
+                tabIndex={-1}
+              >
+                ×
+              </span>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="shrink-0 px-2.5 py-[7px] text-[13px] text-secondary hover:text-primary transition-colors border-l border-border-subtle"
+          onClick={addTab}
+          title="New tab"
+          aria-label="New tab"
+        >
+          +
+        </button>
+      </div>
+      {/* Nav bar */}
       <form
         className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-3 py-2"
         onSubmit={(event) => {
@@ -908,7 +1100,7 @@ export function WorkbenchBrowserTab({ onClose }: { onClose: () => void }) {
           ref={urlInputRef}
           className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
           value={urlDraft}
-          onChange={(event) => setUrlDraft(event.target.value)}
+          onChange={(event) => handleUrlInputChange(event.target.value)}
           placeholder="https://example.com"
         />
         <button
