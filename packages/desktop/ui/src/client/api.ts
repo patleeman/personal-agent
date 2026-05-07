@@ -313,6 +313,8 @@ export const api = {
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
+  invokeExtensionAction: async (extensionId: string, actionId: string, input: unknown) =>
+    post<{ ok: true; result: unknown }>(`/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionId)}`, input),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),

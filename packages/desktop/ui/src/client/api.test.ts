@@ -25,6 +25,23 @@ describe('api.extensions', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/extensions/slash-commands', { method: 'GET', cache: 'no-store' });
   });
+
+  it('invokes extension actions', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, result: { text: 'created' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api.js');
+    await expect(api.invokeExtensionAction('agent-board', 'createTask', { argument: 'Ship it' })).resolves.toEqual({
+      ok: true,
+      result: { text: 'created' },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/extensions/agent-board/actions/createTask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ argument: 'Ship it' }),
+    });
+  });
 });
 
 describe('api.memory', () => {

@@ -434,9 +434,9 @@ GET /api/extensions/commands
 GET /api/extensions/slash-commands
 ```
 
-Those endpoints return enabled extension surfaces normalized into `{ extensionId, surfaceId, packageType, ... }` records. Slash-command registrations are currently loaded into the conversation composer slash menu and inserted as `/{name}` entries. They do not execute commands yet; command execution should call the registered backend `action` once the host invocation path is wired.
+Those endpoints return enabled extension surfaces normalized into `{ extensionId, surfaceId, packageType, ... }` records. Slash-command registrations are loaded into the conversation composer slash menu and inserted as `/{name}` entries. When submitted, PA calls the registered backend `action` through `POST /api/extensions/:extensionId/actions/:actionId`.
 
-Slash actions should receive composer text, attachments, current conversation ID, cwd, and selected context. They can return one of: replace composer text, append context, open a modal, create a task, or submit a prompt.
+Slash actions receive `{ commandName, argument, text, conversationId, cwd, draft }`. They can return `null`/`undefined` to mark handled, a string to submit as the prompt, or an object with `{ text | prompt | replaceComposerText | appendComposerText | notice }`. Full attachment and selection context is still target follow-up work.
 
 ## Frontend runtime
 
