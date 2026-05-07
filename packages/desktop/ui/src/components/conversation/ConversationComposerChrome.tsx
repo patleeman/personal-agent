@@ -174,11 +174,13 @@ export function resolveConversationComposerShellStateClassName({
   hasInteractiveOverlay,
   autoModeEnabled,
   runMode,
+  streamIsStreaming,
 }: {
   dragOver: boolean;
   hasInteractiveOverlay: boolean;
   autoModeEnabled: boolean;
   runMode?: string;
+  streamIsStreaming?: boolean;
 }): string {
   if (dragOver) {
     return 'border-accent/50 ring-2 ring-accent/20 bg-accent/5';
@@ -198,6 +200,10 @@ export function resolveConversationComposerShellStateClassName({
 
   if (autoModeEnabled) {
     return 'border-warning/30 ring-1 ring-warning/15 ui-input-shell-auto-mode';
+  }
+
+  if (streamIsStreaming) {
+    return 'border-accent/20 ring-1 ring-accent/8 ui-input-shell-streaming';
   }
 
   return 'border-border-subtle';

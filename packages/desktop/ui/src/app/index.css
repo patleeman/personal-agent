@@ -249,6 +249,12 @@
       0 0 18px rgb(var(--color-loop-glow) / 0.14);
   }
 
+  .ui-input-shell-streaming {
+    box-shadow:
+      0 0 0 1px rgb(var(--color-streaming-glow) / 0.05),
+      0 0 14px rgb(var(--color-streaming-glow) / 0.1);
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .ui-input-shell-auto-mode {
       animation: ui-input-shell-auto-mode-glow 2.8s ease-in-out infinite;
@@ -258,6 +264,9 @@
     }
     .ui-input-shell-loop {
       animation: ui-input-shell-loop-glow 2.8s ease-in-out infinite;
+    }
+    .ui-input-shell-streaming {
+      animation: ui-input-shell-streaming-glow 2s ease-in-out infinite;
     }
   }
 
@@ -303,6 +312,21 @@
       box-shadow:
         0 0 0 1px rgb(var(--color-loop-glow) / 0.12),
         0 0 30px rgb(var(--color-loop-glow) / 0.24);
+    }
+  }
+
+  @keyframes ui-input-shell-streaming-glow {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-streaming-glow) / 0.02),
+        0 0 12px rgb(var(--color-streaming-glow) / 0.06);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-streaming-glow) / 0.08),
+        0 0 22px rgb(var(--color-streaming-glow) / 0.14);
     }
   }
 
@@ -1335,6 +1359,7 @@
   --color-auto-mode-glow: 234 196 86;
   --color-mission-glow: 156 95 232;
   --color-loop-glow: 0 130 172;
+  --color-streaming-glow: 120 71 189;
   --color-danger: 183 54 80;
   --color-teal: 0 106 141;
   --color-steel: 46 125 233;
@@ -1366,6 +1391,7 @@
   --color-auto-mode-glow: 245 211 102;
   --color-mission-glow: 210 180 255;
   --color-loop-glow: 165 225 255;
+  --color-streaming-glow: 187 154 247;
   --color-danger: 247 118 142;
   --color-teal: 125 207 255;
   --color-steel: 122 162 247;

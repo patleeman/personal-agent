@@ -6219,7 +6219,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     activeConversationBackgroundRuns.length > 0 ||
     (!draft && orderedDeferredResumes.length > 0) ||
     pendingBrowserComments.length > 0 ||
-    Boolean(pendingAskUserQuestion && composerActiveQuestion);
+    Boolean(pendingAskUserQuestion && composerActiveQuestion) ||
+    stream.isStreaming;
   const hasComposerAttachmentShelfContent =
     attachments.length > 0 || drawingAttachments.length > 0 || drawingsBusy || Boolean(drawingsError);
   const keyboardOpen = keyboardInset > 120;
@@ -6701,6 +6702,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   hasInteractiveOverlay: showModelPicker || showSlash || showMention,
                   autoModeEnabled: conversationAutoModeEnabled,
                   runMode: effectiveConversationAutoModeState?.mode,
+                  streamIsStreaming: stream.isStreaming,
                 }),
               )}
               ref={composerShellRef}
@@ -6729,6 +6731,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+                  {stream.isStreaming &&
+                    !pendingBrowserComments.length &&
+                    attachedContextDocs.length === 0 &&
+                    pendingQueue.length === 0 &&
+                    parallelJobs.length === 0 &&
+                    activeConversationBackgroundRuns.length === 0 &&
+                    !(draft && orderedDeferredResumes.length > 0) &&
+                    !(pendingAskUserQuestion && composerActiveQuestion) && (
+                      <div className="flex items-center gap-2 border-b border-border-subtle/60 px-3 py-2 text-[11px]">
+                        <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-accent" aria-hidden="true">
+                          <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                        </span>
+                        <span className="text-secondary">Working…</span>
+                      </div>
+                    )}
                   {pendingBrowserComments.length > 0 ? (
                     <div className="border-b border-border-subtle/60 px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
