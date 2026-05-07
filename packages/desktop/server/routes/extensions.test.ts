@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -207,6 +208,65 @@ describe('registerExtensionRoutes', () => {
         routes: [{ route: '/ext/agent-board', surfaceId: 'page' }],
       }),
     });
+  });
+
+  it('exports and imports runtime extension bundles', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'agent-board',
+        name: 'Agent Board',
+        surfaces: [{ id: 'page', placement: 'main', kind: 'page', route: '/ext/agent-board', entry: 'frontend/index.html' }],
+      }),
+    );
+    writeFileSync(join(extensionRoot, 'frontend', 'index.html'), '<h1>Agent Board</h1>');
+
+    const harness = createHarness();
+    const exportRes = createResponse();
+    harness.postHandler('/api/extensions/:id/export')({ params: { id: 'agent-board' } }, exportRes);
+    const exportPayload = exportRes.json.mock.calls[0]?.[0] as { exportPath: string };
+
+    expect(exportRes.status).toHaveBeenCalledWith(201);
+    expect(existsSync(exportPayload.exportPath)).toBe(true);
+
+    process.env.PERSONAL_AGENT_STATE_ROOT = mkdtempSync(join(tmpdir(), 'pa-ext-route-import-'));
+    const importHarness = createHarness();
+    const importRes = createResponse();
+    importHarness.postHandler('/api/extensions/import')({ body: { zipPath: exportPayload.exportPath } }, importRes);
+
+    expect(importRes.status).toHaveBeenCalledWith(201);
+    expect(importRes.json).toHaveBeenCalledWith({
+      ok: true,
+      packageRoot: join(process.env.PERSONAL_AGENT_STATE_ROOT, 'extensions', 'agent-board'),
+      extension: expect.objectContaining({ id: 'agent-board', name: 'Agent Board' }),
+    });
+  });
+
+  it('rejects unsafe extension bundles', () => {
+    const zipRoot = mkdtempSync(join(tmpdir(), 'pa-ext-unsafe-'));
+    const unsafeZip = join(zipRoot, 'unsafe.zip');
+    const payloadRoot = join(zipRoot, 'payload');
+    writeFileSync(join(zipRoot, 'escape.txt'), 'nope');
+    mkdirSync(join(payloadRoot, 'agent-board'), { recursive: true });
+    writeFileSync(
+      join(payloadRoot, 'agent-board', 'extension.json'),
+      JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }),
+    );
+    execFileSync('zip', ['-q', unsafeZip, '../escape.txt', 'agent-board/extension.json'], { cwd: payloadRoot });
+
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const harness = createHarness();
+    const res = createResponse();
+    harness.postHandler('/api/extensions/import')({ body: { zipPath: unsafeZip } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Extension bundle contains unsafe paths.' });
   });
 
   it('snapshots runtime extensions', () => {

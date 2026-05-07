@@ -90,6 +90,23 @@ export function ExtensionManagerPage() {
     }
   }, [load]);
 
+  const importExtension = useCallback(async () => {
+    const zipPath = window.prompt('Path to extension .zip bundle');
+    if (!zipPath?.trim()) return;
+
+    setNotice(null);
+    try {
+      const result = await api.importExtension({ zipPath: zipPath.trim() });
+      setNotice(`Imported ${result.packageRoot}`);
+      load();
+      if (result.extension?.id) {
+        setSelectedId(result.extension.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [load]);
+
   const toggleExtension = useCallback(
     (extension: ExtensionInstallSummary) => {
       setBusyId(extension.id);
@@ -123,6 +140,19 @@ export function ExtensionManagerPage() {
     try {
       const result = await api.snapshotExtension(extension.id);
       setNotice(`Snapshot saved to ${result.snapshotPath}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
+
+  const exportExtension = useCallback(async (extension: ExtensionInstallSummary) => {
+    setBusyId(extension.id);
+    setNotice(null);
+    try {
+      const result = await api.exportExtension(extension.id);
+      setNotice(`Exported bundle to ${result.exportPath}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -177,6 +207,7 @@ export function ExtensionManagerPage() {
           actions={
             <div className="flex flex-wrap gap-2">
               <ToolbarButton onClick={createExtension}>Create starter</ToolbarButton>
+              <ToolbarButton onClick={importExtension}>Import zip</ToolbarButton>
               <ToolbarButton onClick={reload}>Reload</ToolbarButton>
             </div>
           }
@@ -234,6 +265,15 @@ export function ExtensionManagerPage() {
                           }}
                         >
                           Snapshot
+                        </ToolbarButton>
+                        <ToolbarButton
+                          className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                          disabled={busyId === extension.id}
+                          onClick={() => {
+                            void exportExtension(extension);
+                          }}
+                        >
+                          Export
                         </ToolbarButton>
                       </>
                     ) : null}

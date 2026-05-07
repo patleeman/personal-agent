@@ -43,6 +43,23 @@ describe('api.extensions', () => {
     });
   });
 
+  it('imports extension packages', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, packageRoot: '/tmp/extensions/agent-board' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api.js');
+    await expect(api.importExtension({ zipPath: '/tmp/agent-board.zip' })).resolves.toEqual({
+      ok: true,
+      packageRoot: '/tmp/extensions/agent-board',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/extensions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipPath: '/tmp/agent-board.zip' }),
+    });
+  });
+
   it('snapshots extension packages', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true, extensionId: 'agent-board', snapshotPath: '/tmp/snapshots/agent-board' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -55,6 +72,23 @@ describe('api.extensions', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/extensions/agent-board/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  it('exports extension packages', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, extensionId: 'agent-board', exportPath: '/tmp/agent-board.zip' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api.js');
+    await expect(api.exportExtension('agent-board')).resolves.toEqual({
+      ok: true,
+      extensionId: 'agent-board',
+      exportPath: '/tmp/agent-board.zip',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/extensions/agent-board/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });

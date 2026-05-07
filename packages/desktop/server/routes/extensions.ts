@@ -4,7 +4,12 @@ import { resolve, sep } from 'node:path';
 import type { Express, Request, Response } from 'express';
 
 import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
-import { createRuntimeExtension, snapshotRuntimeExtension } from '../extensions/extensionLifecycle.js';
+import {
+  createRuntimeExtension,
+  exportRuntimeExtension,
+  importRuntimeExtensionBundle,
+  snapshotRuntimeExtension,
+} from '../extensions/extensionLifecycle.js';
 import {
   findExtensionEntry,
   listExtensionCommandRegistrations,
@@ -125,6 +130,17 @@ export function registerExtensionRoutes(
     }
   });
 
+  router.post('/api/extensions/import', (req, res) => {
+    try {
+      res.status(201).json(importRuntimeExtensionBundle(req.body as { zipPath?: unknown }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /required|not found|unsafe|must|already exists|empty/i.test(message) ? 400 : 500;
+      logError('extension import error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
+    }
+  });
+
   router.get('/api/extensions/routes', (_req, res) => {
     try {
       res.json(readExtensionRegistrySnapshot().routes);
@@ -230,6 +246,17 @@ export function registerExtensionRoutes(
       const message = err instanceof Error ? err.message : String(err);
       const status = /not found/i.test(message) ? 404 : /runtime/i.test(message) ? 400 : 500;
       logError('extension snapshot error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
+    }
+  });
+
+  router.post('/api/extensions/:id/export', (req, res) => {
+    try {
+      res.status(201).json(exportRuntimeExtension(req.params.id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /not found/i.test(message) ? 404 : /runtime/i.test(message) ? 400 : 500;
+      logError('extension export error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
     }
   });

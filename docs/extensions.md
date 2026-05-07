@@ -298,7 +298,9 @@ GET /api/extensions/routes          # claimed routes and owning extension
 GET /api/extensions/surfaces        # registered surfaces by placement/kind
 GET /api/extensions/:id/files/*     # serve iframe assets from a runtime extension package
 POST /api/extensions                # create a starter runtime extension with { id, name, description? }
+POST /api/extensions/import         # import a .zip bundle from { zipPath }
 POST /api/extensions/:id/snapshot   # snapshot a runtime extension directory before edits
+POST /api/extensions/:id/export     # export a runtime extension package to a .zip bundle
 PATCH /api/extensions/:id           # enable/disable runtime extensions with { enabled: boolean }
 ```
 
@@ -321,14 +323,15 @@ The Extension Manager lives at `/extensions` and supports the minimum operationa
 
 - list installed system and runtime extensions
 - create a starter runtime extension package
+- import a runtime extension zip bundle from a local path
+- export a runtime extension package to a zip bundle
 - snapshot a runtime extension directory before risky edits
 - enable/disable runtime extensions; system extensions stay enabled in v0
 - reload all extensions
 - open a runtime extension folder in Finder from the desktop app
 - show manifest, surfaces, routes, and declared permissions
-- leave import/export extension bundles for the next package-management slice
 
-Export bundles include extension code and manifest by default. Extension state export is optional and must be explicit so users do not accidentally move private task data, logs, or workflow history.
+Export bundles include extension code and manifest by default. Extension state export is optional and must be explicit so users do not accidentally move private task data, logs, or workflow history. The current import/export slice handles package code only, not SQLite extension state.
 
 Agents edit runtime extension files directly. Before the extension-edit tool writes files, it must snapshot the current extension directory. The implemented snapshot API copies runtime packages to `~/.local/state/personal-agent/extension-snapshots/{id}/{timestamp}`. Snapshots are used for rollback/debugging; they are not a replacement for source control.
 

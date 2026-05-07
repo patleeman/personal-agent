@@ -311,6 +311,8 @@ export const api = {
   extensionInstallations: async () => get<ExtensionInstallSummary[]>('/extensions/installed'),
   createExtension: async (input: { id: string; name: string; description?: string }) =>
     post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions', input),
+  importExtension: async (input: { zipPath: string }) =>
+    post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions/import', input),
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
@@ -322,6 +324,8 @@ export const api = {
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),
   snapshotExtension: async (extensionId: string) =>
     post<{ ok: true; extensionId: string; snapshotPath: string }>(`/extensions/${encodeURIComponent(extensionId)}/snapshot`),
+  exportExtension: async (extensionId: string) =>
+    post<{ ok: true; extensionId: string; exportPath: string }>(`/extensions/${encodeURIComponent(extensionId)}/export`),
   sessions: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {
