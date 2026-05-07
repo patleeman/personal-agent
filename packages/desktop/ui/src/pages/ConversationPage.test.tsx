@@ -9,6 +9,7 @@ import { constrainPromptImageDimensions } from '../conversation/promptAttachment
 import {
   buildMissionAutoModeInputFromDraft,
   ConversationPage,
+  createDraftMissionTask,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   replaceConversationMetaInSessionList,
   resolveConversationCwdChangeAction,
@@ -83,6 +84,24 @@ describe('desktop conversation state fallback', () => {
         handledKey: 'conv-1\n/tmp/next\n1',
       }),
     ).toEqual({ action: 'none', key: null });
+  });
+
+  it('creates pending user mission tasks with stable user-owned ids', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1778171332502);
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    try {
+      const task = createDraftMissionTask('Inspect persistence');
+
+      expect(task).toEqual({
+        id: 'user-1778171332502-i',
+        description: 'Inspect persistence',
+        status: 'pending',
+      });
+    } finally {
+      nowSpy.mockRestore();
+      randomSpy.mockRestore();
+    }
   });
 
   it('preserves mission tasks when syncing mission draft changes', () => {

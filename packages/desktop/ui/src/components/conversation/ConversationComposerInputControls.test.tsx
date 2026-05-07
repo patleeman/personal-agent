@@ -1,4 +1,7 @@
-import React from 'react';
+// @vitest-environment jsdom
+
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -6,7 +9,14 @@ import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerInputControls } from './ConversationComposerInputControls';
 import { ConversationRunModePanel } from './ConversationRunModePanel';
 
-(globalThis as typeof globalThis & { React?: typeof React }).React = React;
+(globalThis as typeof globalThis & { React?: typeof React; IS_REACT_ACT_ENVIRONMENT?: boolean }).React = React;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 const models: ModelInfo[] = [
   {
@@ -17,6 +27,25 @@ const models: ModelInfo[] = [
     supportedServiceTiers: ['priority'],
   },
 ];
+
+function renderInteractive(element: React.ReactElement) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  act(() => {
+    root.render(element);
+  });
+
+  return {
+    container,
+    unmount: () => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    },
+  };
+}
 
 function renderControls(overrides: Partial<React.ComponentProps<typeof ConversationComposerInputControls>> = {}) {
   return renderToString(
@@ -120,6 +149,83 @@ describe('ConversationComposerInputControls', () => {
     expect(html).not.toContain('aria-label="Mission goal" disabled');
     expect(html).not.toContain('aria-label="Mission max turns" disabled');
     expect(html).not.toContain('Goal: what should be accomplished?');
+  });
+
+  it('commits mission goal and turn edits on blur', () => {
+    const onDraftMissionChange = vi.fn();
+    const rendered = renderInteractive(
+      <ConversationRunModePanel
+        mode="mission"
+        running
+        mission={{
+          goal: 'Fix the page',
+          tasks: [{ id: 't1', description: 'Run tests', status: 'pending' }],
+          maxTurns: 20,
+          turnsUsed: 2,
+        }}
+        onDraftMissionChange={onDraftMissionChange}
+      />,
+    );
+
+    try {
+      const goal = rendered.container.querySelector<HTMLInputElement>('input[aria-label="Mission goal"]');
+      const maxTurns = rendered.container.querySelector<HTMLInputElement>('input[aria-label="Mission max turns"]');
+      expect(goal).toBeTruthy();
+      expect(maxTurns).toBeTruthy();
+
+      act(() => {
+        setInputValue(goal!, 'Ship the thing');
+        goal!.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      });
+      expect(onDraftMissionChange).toHaveBeenLastCalledWith({ goal: 'Ship the thing', maxTurns: 20 });
+
+      act(() => {
+        setInputValue(maxTurns!, '12');
+        maxTurns!.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      });
+      expect(onDraftMissionChange).toHaveBeenLastCalledWith({ goal: 'Fix the page', maxTurns: 12 });
+    } finally {
+      rendered.unmount();
+    }
+  });
+
+  it('submits and clears manually added mission tasks', () => {
+    const onAddMissionTask = vi.fn();
+    const rendered = renderInteractive(
+      <ConversationRunModePanel
+        mode="mission"
+        running
+        mission={{
+          goal: 'Fix the page',
+          tasks: [],
+          maxTurns: 20,
+          turnsUsed: 0,
+        }}
+        onAddMissionTask={onAddMissionTask}
+      />,
+    );
+
+    try {
+      const taskInput = rendered.container.querySelector<HTMLInputElement>('input[aria-label="Add mission task"]');
+      const addButton = rendered.container.querySelector<HTMLButtonElement>('button[type="submit"]');
+      expect(taskInput).toBeTruthy();
+      expect(addButton).toBeTruthy();
+      expect(addButton!.disabled).toBe(true);
+
+      act(() => {
+        setInputValue(taskInput!, '  Inspect persistence  ');
+      });
+      expect(addButton!.disabled).toBe(false);
+
+      act(() => {
+        addButton!.click();
+      });
+      expect(onAddMissionTask).toHaveBeenCalledWith('Inspect persistence');
+      expect(taskInput!.value).toBe('');
+      expect(addButton!.disabled).toBe(true);
+    } finally {
+      rendered.unmount();
+    }
   });
 
   it('keeps active loop controls visible in the run-mode shelf', () => {
