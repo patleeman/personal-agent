@@ -859,7 +859,8 @@ export function applyEvent(
   switch (event.type) {
     case 'snapshot': {
       const snapshotBlocks = event.blocks.map(displayBlockToMessageBlock);
-      streamingRef.current = false;
+      const snapshotIsStreaming = 'isStreaming' in event && event.isStreaming === true;
+      streamingRef.current = snapshotIsStreaming;
       blocksRef.current = snapshotBlocks;
       return {
         ...prev,
@@ -867,7 +868,7 @@ export function applyEvent(
         blockOffset: event.blockOffset,
         totalBlocks: event.totalBlocks,
         hasSnapshot: true,
-        isStreaming: false,
+        isStreaming: snapshotIsStreaming,
         isCompacting: false,
         error: null,
       };

@@ -73,8 +73,8 @@ describe('applyEvent — streaming lifecycle', () => {
     expect(next.isStreaming).toBe(true);
   });
 
-  it('snapshot resets isStreaming, isCompacting and error regardless of prior state', () => {
-    const prev = createStreamState({ isStreaming: true, isCompacting: true, error: 'stale error' });
+  it('snapshot uses the server streaming state while clearing stale compaction and error state', () => {
+    const prev = createStreamState({ isStreaming: false, isCompacting: true, error: 'stale error' });
     const next = apply(prev, {
       type: 'snapshot',
       blocks: [],
@@ -82,7 +82,7 @@ describe('applyEvent — streaming lifecycle', () => {
       totalBlocks: 5,
       isStreaming: true,
     });
-    expect(next.isStreaming).toBe(false);
+    expect(next.isStreaming).toBe(true);
     expect(next.isCompacting).toBe(false);
     expect(next.error).toBeNull();
     expect(next.hasSnapshot).toBe(true);
