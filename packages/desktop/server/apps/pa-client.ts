@@ -123,6 +123,13 @@ export const PA_CLIENT_JS: string = `
       cancel(runId) { return requestJson('/api/runs/' + encodeURIComponent(runId) + '/cancel', { method: 'POST' }); }
     },
 
+    vault: {
+      read(path) { return requestJson('/api/vault/file?id=' + encodeURIComponent(path)); },
+      write(path, content) { return requestJson('/api/vault/file', { method: 'PUT', body: { id: path, content: content } }); },
+      list(path) { return requestJson('/api/vault/tree' + (path ? '?dir=' + encodeURIComponent(path) : '')); },
+      search(query) { return requestJson('/api/vault/search?q=' + encodeURIComponent(query)); }
+    },
+
     storage: {
       get(key) {
         var extensionId = extensionIdFromPath;

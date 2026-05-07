@@ -10,6 +10,7 @@ import { createExtensionAutomationsCapability } from './extensionAutomations.js'
 import { findExtensionEntry } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
+import { createExtensionVaultCapability } from './extensionVault.js';
 
 export interface ExtensionBackendContext {
   extensionId: string;
@@ -21,6 +22,7 @@ export interface ExtensionBackendContext {
   };
   automations: ReturnType<typeof createExtensionAutomationsCapability>;
   runs: ReturnType<typeof createExtensionRunsCapability>;
+  vault: ReturnType<typeof createExtensionVaultCapability>;
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
@@ -71,6 +73,7 @@ function createBackendContext(extensionId: string, serverContext?: Pick<ServerRo
     storage: createStorage(extensionId),
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
+    vault: createExtensionVaultCapability(),
     log: {
       info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
       warn: (message, fields) => console.warn(`[extension:${extensionId}] ${message}`, fields ?? {}),
