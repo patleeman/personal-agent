@@ -22,7 +22,6 @@ import {
   readLiveSessionAutoModeState,
   registry as liveRegistry,
   renameSession,
-  requestConversationAutoModeTurn,
   resumeSession,
   setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
@@ -238,19 +237,9 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      const autoModeInput = {
-        enabled,
-        ...(mission !== undefined ? { mission } : {}),
-        ...(mode !== undefined ? { mode } : {}),
-        ...(budget !== undefined ? { budget } : {}),
-      };
-
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-        const state = await setLiveSessionAutoModeState(req.params.id, autoModeInput);
-        if (state.enabled) {
-          await Promise.resolve(requestConversationAutoModeTurn(req.params.id)).catch(() => false);
-        }
+        const state = await setLiveSessionAutoModeState(req.params.id, { enabled, mission, mode, budget });
         res.json(state);
         return;
       }
@@ -263,10 +252,7 @@ export function registerConversationStateRoutes(
           flushLiveDeferredResumes: flushLiveDeferredResumesFn,
         });
         ensureRequestControlsLocalLiveConversation(recovered.conversationId, req.body);
-        const state = await setLiveSessionAutoModeState(recovered.conversationId, autoModeInput);
-        if (state.enabled) {
-          await Promise.resolve(requestConversationAutoModeTurn(recovered.conversationId)).catch(() => false);
-        }
+        const state = await setLiveSessionAutoModeState(recovered.conversationId, { enabled, mission, mode, budget });
         res.json(state);
         return;
       }
@@ -278,7 +264,7 @@ export function registerConversationStateRoutes(
       }
 
       const sessionManager = SessionManager.open(sessionFile);
-      const state = writeConversationAutoModeState(sessionManager, autoModeInput);
+      const state = writeConversationAutoModeState(sessionManager, { enabled, mission, mode, budget });
       publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
       res.json(state);
     } catch (err) {

@@ -76,7 +76,6 @@ export const CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT = [
   `Call ${CONVERSATION_AUTO_MODE_CONTROL_TOOL} exactly once in this hidden review turn.`,
   '- Use action "continue" if meaningful work remains against the active mission and you can make progress now.',
   '- Use action "stop" only when the mission is complete, blocked on a real dependency, needs user input, or the explicit budget is exhausted.',
-  '- If the mission is "Continue the current task until it is complete, validated, or blocked." (the generic default) then you MUST stop with needs_user and ask the user what they actually want to work on. Do not continue with a generic mission.',
   '- If no mission was provided, derive it from the current pending user request and recent context; if confidence is low, stop with needs_user instead of guessing silently.',
   '- In tenacious mode, continue unless there is a concrete terminal stop reason.',
   '- In forced mode, continue until the mission is complete, a hard blocker appears, or the explicit budget is exhausted.',
@@ -180,8 +179,6 @@ function normalizeStopConfidence(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : null;
 }
 
-const DEFAULT_MISSION_TEXT = 'Continue the current task until it is complete, validated, or blocked.';
-
 function formatAutoModeBudget(budget: ConversationAutoModeBudget | null): string {
   if (!budget) {
     return 'until complete, blocked, or needing user input';
@@ -197,12 +194,8 @@ function formatAutoModeBudget(budget: ConversationAutoModeBudget | null): string
 }
 
 export function formatConversationAutoModePrompt(template: string, state: ConversationAutoModeState): string {
-  const missionText =
-    state.mission && state.mission !== DEFAULT_MISSION_TEXT
-      ? state.mission
-      : 'NO MISSION PROVIDED — you must stop with needs_user and ask the user what to work on';
   return template
-    .replaceAll('{autoMission}', missionText)
+    .replaceAll('{autoMission}', state.mission ?? 'derive from the current user request and recent conversation context')
     .replaceAll('{autoMode}', state.mode)
     .replaceAll('{autoBudget}', formatAutoModeBudget(state.budget));
 }

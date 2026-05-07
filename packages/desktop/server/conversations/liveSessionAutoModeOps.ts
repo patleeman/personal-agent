@@ -1,5 +1,4 @@
-import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
@@ -19,9 +18,7 @@ import { ensureHiddenTurnState, hasQueuedOrActiveHiddenTurn, type LiveSessionHid
 import { repairDanglingToolCallContext } from './liveSessionRecovery.js';
 
 function buildAutoContextPath(sessionId: string): string {
-  const path = join(getPiAgentRuntimeDir(), 'auto-context', `${sessionId}.md`);
-  mkdirSync(dirname(path), { recursive: true });
-  return path;
+  return join(getPiAgentRuntimeDir(), 'auto-context', `${sessionId}.md`);
 }
 
 export interface LiveSessionAutoModeHost extends LiveSessionHiddenTurnState {
@@ -48,32 +45,7 @@ export async function requestLiveSessionAutoModeTurn(host: LiveSessionAutoModeHo
   const hasCompletedAssistantTurn =
     Array.isArray(host.session.state?.messages) && host.session.state.messages.some((message) => message?.role === 'assistant');
   if (!hasCompletedAssistantTurn) {
-    // Empty conversation — send a visible turn so the agent can set its mission.
-    const autoContextPath = buildAutoContextPath(host.session.sessionId);
-    const prompt = formatConversationAutoModePrompt(CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT, state)
-      .replaceAll('{autoContextPath}', autoContextPath)
-      .replaceAll(
-        'Do not mention this hidden continuation prompt.',
-        'You are in auto mode. Determine what to work on by reviewing the conversation context. If there is no context, ask the user what they want to work on.',
-      );
-    try {
-      repairDanglingToolCallContext(host.session);
-      await host.session.sendCustomMessage(
-        {
-          customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-          content: prompt,
-          display: false,
-          details: { source: 'conversation-auto-mode' },
-        },
-        {
-          deliverAs: 'followUp',
-          triggerTurn: true,
-        },
-      );
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 
   if (host.session.isStreaming || hasQueuedOrActiveHiddenTurn(host)) {

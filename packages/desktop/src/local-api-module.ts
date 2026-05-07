@@ -297,10 +297,9 @@ export interface LocalApiModule {
   setDesktopWorkbenchBrowserToolHost?(
     host: {
       isActive(conversationId: string): Promise<boolean>;
-      listTabs(): Promise<Array<{ sessionKey: string; url: string; title: string }>>;
-      snapshot(conversationId: string, tabId?: string): Promise<unknown>;
-      screenshot(conversationId: string, tabId?: string): Promise<unknown>;
-      cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean; tabId?: string }): Promise<unknown>;
+      snapshot(conversationId: string): Promise<unknown>;
+      screenshot(conversationId: string): Promise<unknown>;
+      cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
     } | null,
   ): void;
 }

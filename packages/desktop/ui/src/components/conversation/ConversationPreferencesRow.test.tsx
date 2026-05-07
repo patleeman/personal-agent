@@ -28,12 +28,10 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof ConversationPr
       showAutoModeToggle
       autoModeEnabled={false}
       autoModeBusy={false}
-      autoModeState={null}
-      suggestedAutoModeMission="Finish the current task"
       onSelectModel={vi.fn()}
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
-      onConfigureAutoMode={vi.fn()}
+      onToggleAutoMode={vi.fn()}
       compact={false}
       {...overrides}
     />,

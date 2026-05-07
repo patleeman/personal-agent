@@ -1,6 +1,6 @@
 import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, RefObject } from 'react';
 
-import type { ConversationAutoModeBudget, ConversationAutoModeMode, ConversationAutoModeState, ModelInfo } from '../../shared/types';
+import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
 
@@ -24,8 +24,6 @@ export function ConversationComposerInputControls({
   showAutoModeToggle,
   conversationAutoModeEnabled,
   conversationAutoModeBusy,
-  conversationAutoModeState,
-  suggestedAutoModeMission,
   dictationState,
   dictationLevelSamples,
   dictationStartedAt,
@@ -49,7 +47,7 @@ export function ConversationComposerInputControls({
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
-  onConfigureAutoMode,
+  onToggleAutoMode,
   onDictationPointerDown,
   onDictationPointerUp,
   onDictationPointerCancel,
@@ -74,8 +72,6 @@ export function ConversationComposerInputControls({
   showAutoModeToggle: boolean;
   conversationAutoModeEnabled: boolean;
   conversationAutoModeBusy: boolean;
-  conversationAutoModeState: ConversationAutoModeState | null;
-  suggestedAutoModeMission: string;
   dictationState: 'idle' | 'recording' | 'transcribing';
   dictationLevelSamples: number[];
   dictationStartedAt: number | null;
@@ -99,12 +95,7 @@ export function ConversationComposerInputControls({
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
-  onConfigureAutoMode: (input: {
-    enabled: boolean;
-    mission: string | null;
-    mode: ConversationAutoModeMode;
-    budget: ConversationAutoModeBudget | null;
-  }) => void;
+  onToggleAutoMode: () => void;
   onDictationPointerDown: PointerEventHandler<HTMLButtonElement>;
   onDictationPointerUp: PointerEventHandler<HTMLButtonElement>;
   onDictationPointerCancel: PointerEventHandler<HTMLButtonElement>;
@@ -248,12 +239,10 @@ export function ConversationComposerInputControls({
               showAutoModeToggle={showAutoModeToggle}
               autoModeEnabled={conversationAutoModeEnabled}
               autoModeBusy={conversationAutoModeBusy}
-              autoModeState={conversationAutoModeState}
-              suggestedAutoModeMission={suggestedAutoModeMission}
               onSelectModel={onSelectModel}
               onSelectThinkingLevel={onSelectThinkingLevel}
               onSelectServiceTier={onSelectServiceTier}
-              onConfigureAutoMode={onConfigureAutoMode}
+              onToggleAutoMode={onToggleAutoMode}
               compact={(composerShellWidth ?? Number.POSITIVE_INFINITY) < COMPOSER_PREFERENCES_MENU_WIDTH_PX}
             />
           </div>

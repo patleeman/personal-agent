@@ -37,8 +37,6 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       showAutoModeToggle
       conversationAutoModeEnabled={false}
       conversationAutoModeBusy={false}
-      conversationAutoModeState={null}
-      suggestedAutoModeMission="Finish the current task"
       dictationState="idle"
       dictationLevelSamples={[]}
       dictationStartedAt={null}
@@ -62,7 +60,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onSelectModel={vi.fn()}
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
-      onConfigureAutoMode={vi.fn()}
+      onToggleAutoMode={vi.fn()}
       onDictationPointerDown={vi.fn()}
       onDictationPointerUp={vi.fn()}
       onDictationPointerCancel={vi.fn()}

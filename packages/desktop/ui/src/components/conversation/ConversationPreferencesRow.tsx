@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getModelSelectableServiceTierOptions, getModelThinkingLevelOptions, groupModelsByProvider } from '../../model/modelPreferences';
-import type { ConversationAutoModeBudget, ConversationAutoModeMode, ConversationAutoModeState, ModelInfo } from '../../shared/types';
+import type { ModelInfo } from '../../shared/types';
 import { cx, IconButton } from '../ui';
 
 const COMPOSER_PREFERENCE_SELECT_CLASS =
@@ -204,12 +204,10 @@ export function ConversationPreferencesRow({
   showAutoModeToggle,
   autoModeEnabled,
   autoModeBusy,
-  autoModeState,
-  suggestedAutoModeMission,
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
-  onConfigureAutoMode,
+  onToggleAutoMode,
   compact,
 }: {
   models: ModelInfo[];
@@ -220,17 +218,10 @@ export function ConversationPreferencesRow({
   showAutoModeToggle: boolean;
   autoModeEnabled: boolean;
   autoModeBusy: boolean;
-  autoModeState: ConversationAutoModeState | null;
-  suggestedAutoModeMission: string;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
-  onConfigureAutoMode: (input: {
-    enabled: boolean;
-    mission: string | null;
-    mode: ConversationAutoModeMode;
-    budget: ConversationAutoModeBudget | null;
-  }) => void;
+  onToggleAutoMode: () => void;
   compact: boolean;
 }) {
   const [compactMenuOpen, setCompactMenuOpen] = useState(false);
@@ -312,14 +303,7 @@ export function ConversationPreferencesRow({
                     : 'Turn on conversation auto mode'
               }
               layout="inline"
-              onToggle={() => {
-                onConfigureAutoMode({
-                  enabled: !autoModeEnabled,
-                  mission: autoModeEnabled ? (autoModeState?.mission ?? null) : suggestedAutoModeMission,
-                  mode: autoModeEnabled ? (autoModeState?.mode ?? 'normal') : 'tenacious',
-                  budget: autoModeEnabled ? (autoModeState?.budget ?? null) : null,
-                });
-              }}
+              onToggle={onToggleAutoMode}
             />
           ) : null}
         </>
@@ -404,12 +388,7 @@ export function ConversationPreferencesRow({
                     }
                     layout="menu"
                     onToggle={() => {
-                      onConfigureAutoMode({
-                        enabled: !autoModeEnabled,
-                        mission: autoModeEnabled ? (autoModeState?.mission ?? null) : suggestedAutoModeMission,
-                        mode: autoModeEnabled ? (autoModeState?.mode ?? 'normal') : 'tenacious',
-                        budget: autoModeEnabled ? (autoModeState?.budget ?? null) : null,
-                      });
+                      onToggleAutoMode();
                       setCompactMenuOpen(false);
                     }}
                   />

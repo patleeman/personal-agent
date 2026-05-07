@@ -252,8 +252,6 @@ import {
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import type {
   ConversationAttachmentSummary,
-  ConversationAutoModeBudget,
-  ConversationAutoModeMode,
   ConversationAutoModeState,
   ConversationContextDocRef,
   DeferredResumeSummary,
@@ -1602,16 +1600,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     if (!id) {
-      setConversationAutoModeState({
-        enabled: false,
-        stopReason: null,
-        updatedAt: null,
-        mission: null,
-        mode: 'normal',
-        budget: null,
-        stopCategory: null,
-        stopConfidence: null,
-      });
+      setConversationAutoModeState({ enabled: false, stopReason: null, updatedAt: null });
       return;
     }
 
@@ -1625,16 +1614,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       })
       .catch(() => {
         if (!cancelled) {
-          setConversationAutoModeState({
-            enabled: false,
-            stopReason: null,
-            updatedAt: null,
-            mission: null,
-            mode: 'normal',
-            budget: null,
-            stopCategory: null,
-            stopConfidence: null,
-          });
+          setConversationAutoModeState({ enabled: false, stopReason: null, updatedAt: null });
         }
       });
 
@@ -1645,13 +1625,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
-
-  // Keep local state in sync with server-sent auto mode state changes (agent stopping auto mode, etc.)
-  useEffect(() => {
-    if (stream.autoModeState !== null) {
-      setConversationAutoModeState(stream.autoModeState);
-    }
-  }, [stream.autoModeState]);
   const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
   const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
 
@@ -1661,24 +1634,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
-  const lastUserMessageText = useMemo(() => {
-    if (!realMessages || realMessages.length === 0) {
-      return '';
-    }
-    for (let i = realMessages.length - 1; i >= 0; i -= 1) {
-      const msg = realMessages[i];
-      if (msg.type === 'user' && msg.text) {
-        return msg.text;
-      }
-    }
-    return '';
-  }, [realMessages]);
-
   const suggestedAutoModeMission =
-    input.trim() ||
-    lastUserMessageText ||
-    effectiveConversationAutoModeState?.mission ||
-    'Continue the current task until it is complete, validated, or blocked.';
+    input.trim() || effectiveConversationAutoModeState?.mission || 'Continue the current task until it is complete, validated, or blocked.';
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(
@@ -3930,41 +3887,49 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ],
   );
 
-  const configureConversationAutoMode = useCallback(
-    async (config: {
-      enabled: boolean;
-      mission: string | null;
-      mode: ConversationAutoModeMode;
-      budget: ConversationAutoModeBudget | null;
-    }) => {
-      if (conversationAutoModeBusy) {
-        return;
-      }
-      setConversationAutoModeBusy(true);
-      try {
-        let targetConversationId = id;
-        if (draft) {
-          if (!config.enabled) {
-            return;
-          }
-          targetConversationId = await materializeDraftConversation();
-        }
-        if (!targetConversationId) {
+  const toggleConversationAutoMode = useCallback(async () => {
+    if (conversationAutoModeBusy) {
+      return;
+    }
+
+    const nextEnabled = !conversationAutoModeEnabled;
+    setConversationAutoModeBusy(true);
+
+    try {
+      if (draft) {
+        if (!nextEnabled) {
           return;
         }
-        const liveConversationId = config.enabled && !draft ? await ensureConversationIsLive('enable auto mode') : targetConversationId;
-        const nextState = await api.updateConversationAutoMode(liveConversationId, config, currentSurfaceId);
-        if (liveConversationId === id || targetConversationId === id) {
-          setConversationAutoModeState(nextState);
-        }
-      } catch (error) {
-        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      } finally {
-        setConversationAutoModeBusy(false);
+
+        await materializeDraftConversation({ enableAutoModeOnLoad: true });
+        return;
       }
-    },
-    [conversationAutoModeBusy, currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice],
-  );
+
+      if (!id) {
+        return;
+      }
+
+      const targetConversationId = nextEnabled ? await ensureConversationIsLive('enable auto mode') : id;
+      const nextState = await api.updateConversationAutoMode(targetConversationId, { enabled: nextEnabled }, currentSurfaceId);
+
+      if (targetConversationId === id) {
+        setConversationAutoModeState(nextState);
+      }
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setConversationAutoModeBusy(false);
+    }
+  }, [
+    conversationAutoModeBusy,
+    conversationAutoModeEnabled,
+    currentSurfaceId,
+    draft,
+    ensureConversationIsLive,
+    id,
+    materializeDraftConversation,
+    showNotice,
+  ]);
 
   const rewindConversationFromMessage = useCallback(
     async (messageIndex: number) => {
@@ -6617,8 +6582,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 showAutoModeToggle={Boolean(draft || id)}
                 conversationAutoModeEnabled={conversationAutoModeEnabled}
                 conversationAutoModeBusy={conversationAutoModeBusy}
-                conversationAutoModeState={effectiveConversationAutoModeState}
-                suggestedAutoModeMission={suggestedAutoModeMission}
                 dictationState={dictationState}
                 dictationLevelSamples={dictationLevelSamples}
                 dictationStartedAt={dictationStartedAt}
@@ -6657,8 +6620,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onSelectServiceTier={(enableFastMode) => {
                   void saveServiceTierPreference(enableFastMode);
                 }}
-                onConfigureAutoMode={(config) => {
-                  void configureConversationAutoMode(config);
+                onToggleAutoMode={() => {
+                  void toggleConversationAutoMode();
                 }}
                 onDictationPointerDown={handleDictationPointerDown}
                 onDictationPointerUp={handleDictationPointerUp}
