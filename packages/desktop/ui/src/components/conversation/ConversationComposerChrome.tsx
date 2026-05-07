@@ -189,11 +189,11 @@ export function resolveConversationComposerShellStateClassName({
   }
 
   if (runMode === 'mission') {
-    return 'border-accent/30 ring-1 ring-accent/10 ui-input-shell-mission';
+    return 'border-accent/35 ring-1 ring-accent/10 ui-input-shell-mission';
   }
 
   if (runMode === 'loop') {
-    return 'border-warning/30 ring-1 ring-warning/10 ui-input-shell-loop';
+    return 'border-teal/35 ring-1 ring-teal/10 ui-input-shell-loop';
   }
 
   if (autoModeEnabled) {

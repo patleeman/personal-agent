@@ -237,6 +237,18 @@
       0 0 18px rgb(var(--color-auto-mode-glow) / 0.14);
   }
 
+  .ui-input-shell-mission {
+    box-shadow:
+      0 0 0 1px rgb(var(--color-accent) / 0.05),
+      0 0 18px rgb(var(--color-accent) / 0.12);
+  }
+
+  .ui-input-shell-loop {
+    box-shadow:
+      0 0 0 1px rgb(var(--color-teal) / 0.05),
+      0 0 18px rgb(var(--color-teal) / 0.12);
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .ui-input-shell-auto-mode {
       animation: ui-input-shell-auto-mode-glow 2.8s ease-in-out infinite;

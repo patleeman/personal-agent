@@ -58,6 +58,24 @@ describe('ConversationComposerChrome', () => {
       resolveConversationComposerShellStateClassName({
         dragOver: false,
         hasInteractiveOverlay: false,
+        autoModeEnabled: true,
+        runMode: 'mission',
+      }),
+    ).toContain('ui-input-shell-mission');
+
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: false,
+        autoModeEnabled: true,
+        runMode: 'loop',
+      }),
+    ).toContain('ui-input-shell-loop');
+
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: false,
         autoModeEnabled: false,
       }),
     ).toBe('border-border-subtle');
