@@ -239,19 +239,25 @@
 
   .ui-input-shell-mission {
     box-shadow:
-      0 0 0 1px rgb(var(--color-accent) / 0.05),
-      0 0 18px rgb(var(--color-accent) / 0.12);
+      0 0 0 1px rgb(var(--color-mission-glow) / 0.06),
+      0 0 18px rgb(var(--color-mission-glow) / 0.14);
   }
 
   .ui-input-shell-loop {
     box-shadow:
-      0 0 0 1px rgb(var(--color-teal) / 0.05),
-      0 0 18px rgb(var(--color-teal) / 0.12);
+      0 0 0 1px rgb(var(--color-loop-glow) / 0.06),
+      0 0 18px rgb(var(--color-loop-glow) / 0.14);
   }
 
   @media (prefers-reduced-motion: no-preference) {
     .ui-input-shell-auto-mode {
       animation: ui-input-shell-auto-mode-glow 2.8s ease-in-out infinite;
+    }
+    .ui-input-shell-mission {
+      animation: ui-input-shell-mission-glow 2.8s ease-in-out infinite;
+    }
+    .ui-input-shell-loop {
+      animation: ui-input-shell-loop-glow 2.8s ease-in-out infinite;
     }
   }
 
@@ -267,6 +273,36 @@
       box-shadow:
         0 0 0 1px rgb(var(--color-auto-mode-glow) / 0.12),
         0 0 30px rgb(var(--color-auto-mode-glow) / 0.24);
+    }
+  }
+
+  @keyframes ui-input-shell-mission-glow {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-mission-glow) / 0.04),
+        0 0 16px rgb(var(--color-mission-glow) / 0.12);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-mission-glow) / 0.12),
+        0 0 30px rgb(var(--color-mission-glow) / 0.24);
+    }
+  }
+
+  @keyframes ui-input-shell-loop-glow {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-loop-glow) / 0.04),
+        0 0 16px rgb(var(--color-loop-glow) / 0.12);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-loop-glow) / 0.12),
+        0 0 30px rgb(var(--color-loop-glow) / 0.24);
     }
   }
 
@@ -1297,6 +1333,8 @@
   --color-success: 73 105 44;
   --color-warning: 130 97 49;
   --color-auto-mode-glow: 234 196 86;
+  --color-mission-glow: 156 95 232;
+  --color-loop-glow: 0 130 172;
   --color-danger: 183 54 80;
   --color-teal: 0 106 141;
   --color-steel: 46 125 233;
@@ -1326,6 +1364,8 @@
   --color-success: 158 206 106;
   --color-warning: 224 175 104;
   --color-auto-mode-glow: 245 211 102;
+  --color-mission-glow: 210 180 255;
+  --color-loop-glow: 165 225 255;
   --color-danger: 247 118 142;
   --color-teal: 125 207 255;
   --color-steel: 122 162 247;
