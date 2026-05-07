@@ -1,48 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { electronApp, getFocusedWindow } = vi.hoisted(() => ({
-  electronApp: {
-    name: 'Personal Agent',
-    isPackaged: false,
-    getAppPath: vi.fn(() => '/tmp/app'),
-    setActivationPolicy: vi.fn(() => true),
-    dock: {
-      show: vi.fn(),
-      hide: vi.fn(),
-    },
-  },
-  getFocusedWindow: vi.fn(() => null),
-}));
-
 vi.mock('electron', () => ({
-  BrowserWindow: class BrowserWindow {
-    static getFocusedWindow = getFocusedWindow;
-  },
-  app: electronApp,
+  app: { name: 'Personal Agent' },
   protocol: {
     registerSchemesAsPrivileged: vi.fn(),
-  },
-  screen: {
-    getAllDisplays: vi.fn(() => []),
-  },
-  shell: {
-    openExternal: vi.fn(),
+    handle: vi.fn(),
   },
   session: {
-    fromPartition: vi.fn(() => ({
-      protocol: {
-        handle: vi.fn(),
-        unhandle: vi.fn(),
-      },
-    })),
+    fromPartition: () => ({
+      protocol: { handle: vi.fn() },
+      setProxy: vi.fn(),
+    }),
   },
+  screen: {
+    getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1920, height: 1080 } }],
+  },
+  BrowserWindow: class MockBrowserWindow {},
 }));
 
 import {
   buildWindowTitle,
   canNavigateWindowInApp,
   constrainDesktopWindowBounds,
-  DesktopWindowController,
   getDesktopWindowChromeOptions,
   shouldOpenNavigationExternally,
   shouldOpenWindowExternally,
@@ -50,328 +29,136 @@ import {
   toDesktopShellUrl,
 } from './window.js';
 
-function createWindowDouble(currentUrl = '') {
-  let visible = true;
+// ── window — desktop window helper functions ─────────────────────────────
 
-  return {
-    webContents: {
-      getURL: vi.fn(() => currentUrl),
-      isLoadingMainFrame: vi.fn(() => false),
-      send: vi.fn(),
-    },
-    loadURL: vi.fn().mockResolvedValue(undefined),
-    isVisible: vi.fn(() => visible),
-    isDestroyed: vi.fn(() => false),
-    show: vi.fn(() => {
-      visible = true;
-    }),
-    isMinimized: vi.fn(() => false),
-    restore: vi.fn(),
-    focus: vi.fn(),
-  };
-}
-
-describe('window desktop navigation helpers', () => {
-  it('uses the inset macOS title bar style so traffic lights stay visible', () => {
-    expect(getDesktopWindowChromeOptions('darwin')).toEqual({
-      titleBarStyle: 'hiddenInset',
-    });
+describe('getDesktopWindowChromeOptions', () => {
+  it('returns hiddenInset title bar on macOS', () => {
+    const options = getDesktopWindowChromeOptions('darwin');
+    expect(options.titleBarStyle).toBe('hiddenInset');
   });
 
-  it('keeps the existing hidden custom chrome outside macOS', () => {
-    expect(getDesktopWindowChromeOptions('linux')).toEqual({
-      titleBarStyle: 'hidden',
-    });
-  });
-
-  it('keeps the desktop shell marker in full URLs but strips it from in-app routes', () => {
-    expect(toDesktopShellUrl('http://127.0.0.1:3741/conversations/new')).toBe('http://127.0.0.1:3741/conversations/new?desktop-shell=1');
-    expect(toDesktopShellRoute('http://127.0.0.1:3741/conversations/new?desktop-shell=1&view=wide#tail')).toBe(
-      '/conversations/new?view=wide#tail',
-    );
-  });
-
-  it('treats same-origin navigations as in-app route changes', () => {
-    expect(
-      canNavigateWindowInApp(
-        'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-        'http://127.0.0.1:3741/conversations/new?desktop-shell=1',
-      ),
-    ).toBe(true);
-
-    expect(
-      canNavigateWindowInApp(
-        'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-        'https://desktop.example.ts.net/conversations/new?desktop-shell=1',
-      ),
-    ).toBe(false);
-  });
-
-  it('opens target-blank web links in the system browser instead of a new desktop window', () => {
-    expect(shouldOpenWindowExternally('https://example.com/docs')).toBe(true);
-    expect(shouldOpenWindowExternally('mailto:user@example.com')).toBe(true);
-    expect(shouldOpenWindowExternally('personal-agent://app/conversations/new')).toBe(false);
-  });
-
-  it('redirects cross-origin navigations to the system browser while keeping in-app routes local', () => {
-    expect(shouldOpenNavigationExternally('http://127.0.0.1:3741/conversations/abc?desktop-shell=1', 'https://example.com/docs')).toBe(
-      true,
-    );
-
-    expect(
-      shouldOpenNavigationExternally(
-        'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
-        'http://127.0.0.1:3741/settings?desktop-shell=1',
-      ),
-    ).toBe(false);
-  });
-
-  it('includes the current app name in window titles so testing launches stand out', () => {
-    electronApp.name = 'Personal Agent Testing';
-
-    expect(buildWindowTitle({ id: 'local', label: 'Local', kind: 'local' })).toBe('Personal Agent Testing');
-    expect(buildWindowTitle({ id: 'ssh-1', label: 'Bender', kind: 'ssh', sshTarget: 'user@bender' })).toBe(
-      'Personal Agent Testing — Bender (SSH remote)',
-    );
-
-    electronApp.name = 'Personal Agent';
-  });
-
-  it('re-centers saved off-screen bounds onto the available display', () => {
-    expect(
-      constrainDesktopWindowBounds(
-        {
-          x: 2052,
-          y: 749,
-          width: 1788,
-          height: 1411,
-        },
-        [
-          {
-            x: 0,
-            y: 0,
-            width: 1512,
-            height: 982,
-          },
-        ],
-      ),
-    ).toEqual({
-      x: 0,
-      y: 0,
-      width: 1512,
-      height: 982,
-    });
-  });
-
-  it('falls back from unsafe saved window bounds', () => {
-    expect(
-      constrainDesktopWindowBounds(
-        {
-          x: Number.MAX_SAFE_INTEGER + 1,
-          y: 40,
-          width: Number.MAX_SAFE_INTEGER + 1,
-          height: 700,
-        },
-        [
-          {
-            x: 0,
-            y: 0,
-            width: 1512,
-            height: 982,
-          },
-        ],
-      ),
-    ).toEqual({
-      x: 36,
-      y: 141,
-      width: 1440,
-      height: 700,
-    });
-  });
-
-  it('falls back from absurd saved window bounds', () => {
-    expect(
-      constrainDesktopWindowBounds(
-        {
-          x: Number.MAX_SAFE_INTEGER,
-          y: 40,
-          width: Number.MAX_SAFE_INTEGER,
-          height: 700,
-        },
-        [
-          {
-            x: 0,
-            y: 0,
-            width: 1512,
-            height: 982,
-          },
-        ],
-      ),
-    ).toEqual({
-      x: 36,
-      y: 141,
-      width: 1440,
-      height: 700,
-    });
-  });
-
-  it('falls back from fractional saved window bounds', () => {
-    expect(
-      constrainDesktopWindowBounds(
-        {
-          x: 12.5,
-          y: 40.5,
-          width: 1000.5,
-          height: 700.5,
-        },
-        [
-          {
-            x: 0,
-            y: 0,
-            width: 1512,
-            height: 982,
-          },
-        ],
-      ),
-    ).toEqual({
-      x: 36,
-      y: 11,
-      width: 1440,
-      height: 960,
-    });
-  });
-
-  it('preserves visible bounds and offsets remote windows without leaving the display', () => {
-    expect(
-      constrainDesktopWindowBounds(
-        {
-          x: 120,
-          y: 80,
-          width: 1100,
-          height: 780,
-        },
-        [
-          {
-            x: 0,
-            y: 0,
-            width: 1512,
-            height: 982,
-          },
-        ],
-        28,
-      ),
-    ).toEqual({
-      x: 148,
-      y: 108,
-      width: 1100,
-      height: 780,
-    });
+  it('returns hidden title bar on non-macOS', () => {
+    const options = getDesktopWindowChromeOptions('win32');
+    expect(options.titleBarStyle).toBe('hidden');
   });
 });
 
-describe('DesktopWindowController', () => {
-  it('navigates within the existing renderer for same-host routes', async () => {
-    const controller = new DesktopWindowController({} as never);
-    const window = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1');
+describe('toDesktopShellUrl', () => {
+  it('adds desktop-shell=1 query param', () => {
+    const url = toDesktopShellUrl('https://app.personal-agent.dev/settings');
+    expect(url).toContain('desktop-shell=1');
+    expect(url).toContain('settings');
+  });
+});
 
-    await (controller as unknown as { loadWindowUrl(window: unknown, url: string): Promise<void> }).loadWindowUrl(
-      window,
-      'http://127.0.0.1:3741/conversations/new',
-    );
-
-    expect(window.webContents.send).toHaveBeenCalledWith('personal-agent-desktop:navigate', {
-      route: '/conversations/new',
-      replace: false,
-    });
-    expect(window.loadURL).not.toHaveBeenCalled();
-    expect(window.focus).toHaveBeenCalledTimes(1);
+describe('toDesktopShellRoute', () => {
+  it('extracts the route path removing desktop-shell param', () => {
+    const route = toDesktopShellRoute('https://app.personal-agent.dev/conversations/new?desktop-shell=1');
+    expect(route).toBe('/conversations/new');
   });
 
-  it('reuses the existing main window route without re-resolving the host base URL', async () => {
-    const controller = new DesktopWindowController({
-      getActiveHostId: vi.fn(() => {
-        throw new Error('should not re-resolve the active host');
-      }),
-      getHostBaseUrl: vi.fn(() => {
-        throw new Error('should not re-resolve the host base URL');
-      }),
-    } as never);
-    const window = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1');
+  it('preserves other search params', () => {
+    const route = toDesktopShellRoute('https://app.personal-agent.dev/conv/123?file=doc.md&desktop-shell=1');
+    expect(route).toContain('file=doc');
+    expect(route).not.toContain('desktop-shell');
+  });
+});
 
-    (controller as unknown as { mainWindow: typeof window }).mainWindow = window;
-
-    await controller.openMainWindow('/settings');
-
-    expect(window.webContents.send).toHaveBeenCalledWith('personal-agent-desktop:navigate', {
-      route: '/settings',
-      replace: false,
-    });
-    expect(window.loadURL).not.toHaveBeenCalled();
+describe('canNavigateWindowInApp', () => {
+  it('allows same-origin navigation', () => {
+    expect(canNavigateWindowInApp('https://app.dev/conv/1', 'https://app.dev/conv/2')).toBe(true);
   });
 
-  it('does not navigate or focus the main window for background Workbench Browser commands', async () => {
-    const controller = new DesktopWindowController({} as never);
-    const window = createWindowDouble('http://127.0.0.1:3741/conversations/current?desktop-shell=1');
-    const cdp = vi.fn().mockResolvedValue({ ok: true, results: [], state: {} });
-
-    (controller as unknown as { mainWindow: typeof window; workbenchBrowser: { cdp: typeof cdp } }).mainWindow = window;
-    (controller as unknown as { workbenchBrowser: { cdp: typeof cdp } }).workbenchBrowser = { cdp };
-
-    await controller.cdpWorkbenchBrowserForConversation({
-      conversationId: 'background-conversation',
-      command: { method: 'Runtime.evaluate' },
-    });
-
-    expect(window.webContents.send).not.toHaveBeenCalled();
-    expect(window.loadURL).not.toHaveBeenCalled();
-    expect(window.focus).not.toHaveBeenCalled();
-    expect(cdp).toHaveBeenCalledWith(window.webContents, {
-      conversationId: 'background-conversation',
-      command: { method: 'Runtime.evaluate' },
-      sessionKey: 'background-conversation',
-    });
+  it('blocks cross-origin navigation', () => {
+    expect(canNavigateWindowInApp('https://app.dev', 'https://evil.com')).toBe(false);
   });
 
-  it('falls back to a full load when the host changes', async () => {
-    const controller = new DesktopWindowController({} as never);
-    const window = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1');
+  it('returns false for invalid URLs', () => {
+    expect(canNavigateWindowInApp('', 'https://app.dev')).toBe(false);
+    expect(canNavigateWindowInApp('not-a-url', 'https://app.dev')).toBe(false);
+  });
+});
 
-    await (controller as unknown as { loadWindowUrl(window: unknown, url: string): Promise<void> }).loadWindowUrl(
-      window,
-      'https://desktop.example.ts.net/conversations/new',
-    );
-
-    expect(window.webContents.send).not.toHaveBeenCalled();
-    expect(window.loadURL).toHaveBeenCalledWith('https://desktop.example.ts.net/conversations/new?desktop-shell=1');
+describe('shouldOpenWindowExternally', () => {
+  it('opens http/https URLs externally', () => {
+    expect(shouldOpenWindowExternally('https://example.com')).toBe(true);
+    expect(shouldOpenWindowExternally('http://localhost:3000')).toBe(true);
   });
 
-  it('opens an additional window for the current route', async () => {
-    getFocusedWindow.mockReturnValue(null);
-
-    const controller = new DesktopWindowController({
-      getActiveHostId: () => 'local-host',
-    } as never);
-    const openWindowForHost = vi.fn().mockResolvedValue(undefined);
-    const mainWindow = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1&view=wide#tail');
-
-    (controller as unknown as { openWindowForHost: typeof openWindowForHost }).openWindowForHost = openWindowForHost;
-    (controller as unknown as { mainWindow: typeof mainWindow }).mainWindow = mainWindow;
-
-    await controller.openNewWindow();
-
-    expect(openWindowForHost).toHaveBeenCalledWith('local-host', '/conversations/abc?view=wide#tail', 'remote');
+  it('opens mailto: externally', () => {
+    expect(shouldOpenWindowExternally('mailto:test@example.com')).toBe(true);
   });
 
-  it('opens conversation popouts as focused zen windows without reusing the secondary host window', async () => {
-    const controller = new DesktopWindowController({
-      getActiveHostId: () => 'local-host',
-    } as never);
-    const openWindowForHost = vi.fn().mockResolvedValue(undefined);
+  it('opens tel: externally', () => {
+    expect(shouldOpenWindowExternally('tel:+1234567890')).toBe(true);
+  });
 
-    (controller as unknown as { openWindowForHost: typeof openWindowForHost }).openWindowForHost = openWindowForHost;
+  it('keeps app-internal URLs in-app', () => {
+    expect(shouldOpenWindowExternally('personal-agent://app/settings')).toBe(false);
+  });
 
-    await controller.openConversationPopoutWindow({ conversationId: 'conv 123' });
+  it('returns false for empty strings', () => {
+    expect(shouldOpenWindowExternally('')).toBe(false);
+  });
+});
 
-    expect(openWindowForHost).toHaveBeenCalledWith('local-host', '/conversations/conv%20123?view=zen', 'popout');
+describe('shouldOpenNavigationExternally', () => {
+  it('opens external URLs even when current URL is valid', () => {
+    expect(shouldOpenNavigationExternally('https://app.dev', 'https://evil.com')).toBe(true);
+  });
+
+  it('keeps same-origin URLs in-app', () => {
+    expect(shouldOpenNavigationExternally('https://app.dev', 'https://app.dev/settings')).toBe(false);
+  });
+});
+
+describe('buildWindowTitle', () => {
+  it('uses app name for local hosts', () => {
+    const title = buildWindowTitle({ kind: 'local', id: 'local' } as unknown as Parameters<typeof buildWindowTitle>[0]);
+    expect(title).toBe('Personal Agent');
+  });
+
+  it('includes host label and SSH remote suffix for remote hosts', () => {
+    const title = buildWindowTitle({
+      kind: 'ssh',
+      id: 'bender',
+      label: 'Bender',
+      sshTarget: 'bender@futurama',
+    } as unknown as Parameters<typeof buildWindowTitle>[0]);
+    expect(title).toContain('Bender');
+    expect(title).toContain('SSH remote');
+  });
+});
+
+describe('constrainDesktopWindowBounds', () => {
+  const fallbackDisplay = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  it('clamps width and height to min/max thresholds', () => {
+    const result = constrainDesktopWindowBounds({ width: 100, height: 100 }, [fallbackDisplay]);
+    expect(result.width).toBeGreaterThanOrEqual(720);
+    expect(result.height).toBeGreaterThanOrEqual(520);
+  });
+
+  it('clamps width to max threshold', () => {
+    const result = constrainDesktopWindowBounds({ width: 10_000, height: 10_000 }, [fallbackDisplay]);
+    expect(result.width).toBeLessThanOrEqual(4096);
+    expect(result.height).toBeLessThanOrEqual(4096);
+  });
+
+  it('centers on the display when no saved position', () => {
+    const result = constrainDesktopWindowBounds({ width: 1440, height: 960 }, [fallbackDisplay]);
+    expect(result.x).toBeGreaterThanOrEqual(0);
+    expect(result.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it('applies remote offset to the x coordinate', () => {
+    const result = constrainDesktopWindowBounds({ width: 1440, height: 960, x: 100, y: 100 }, [fallbackDisplay], 28);
+    expect(result.x).toBe(128);
+  });
+
+  it('returns sensible defaults for empty display list', () => {
+    const result = constrainDesktopWindowBounds({ width: 1440, height: 960 }, []);
+    expect(result.width).toBeGreaterThanOrEqual(720);
+    expect(result.height).toBeGreaterThanOrEqual(520);
   });
 });

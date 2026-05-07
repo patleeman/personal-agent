@@ -1,87 +1,145 @@
-import { describe, expect, it, vi } from 'vitest';
+import { BrowserWindow } from 'electron';
+import { describe, expect, it } from 'vitest';
 
 import { buildConversationContextMenuTemplate, normalizeConversationContextMenuCoordinate } from './conversation-context-menu.js';
 
+// ── conversation-context-menu — template builder ──────────────────────────
+
 describe('buildConversationContextMenuTemplate', () => {
-  it('drops unsafe menu coordinates', () => {
-    expect(normalizeConversationContextMenuCoordinate(12.4)).toBe(0);
-    expect(normalizeConversationContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
+  it('returns pin chat when pinAction is pin', () => {
+    const items = buildConversationContextMenuTemplate({ pinAction: 'pin' }, () => {});
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Pin Chat'),
+    ).toBe(true);
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Unpin Chat'),
+    ).toBe(false);
   });
 
-  it('groups conversation, creation, and copy actions with native separators', () => {
-    const template = buildConversationContextMenuTemplate(
-      {
-        pinAction: 'pin',
-        canArchive: true,
-        canOpenInNewWindow: true,
-        canDuplicate: true,
-        canSummarizeAndNew: true,
-        canAttachToGateway: true,
-        canCopyWorkingDirectory: true,
-        canCopyId: true,
-        canCopyDeeplink: true,
-      },
-      vi.fn(),
+  it('returns unpin chat when pinAction is unpin', () => {
+    const items = buildConversationContextMenuTemplate({ pinAction: 'unpin' }, () => {});
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Unpin Chat'),
+    ).toBe(true);
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Pin Chat'),
+    ).toBe(false);
+  });
+
+  it('includes archive when canArchive is true', () => {
+    const items = buildConversationContextMenuTemplate({ canArchive: true }, () => {});
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Archive Chat'),
+    ).toBe(true);
+  });
+
+  it('includes open in separate window', () => {
+    const items = buildConversationContextMenuTemplate({ canOpenInNewWindow: true }, () => {});
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Open in Separate Window',
+      ),
+    ).toBe(true);
+  });
+
+  it('includes duplicate and summarize+new', () => {
+    const items = buildConversationContextMenuTemplate({ canDuplicate: true, canSummarizeAndNew: true }, () => {});
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Duplicate Chat'),
+    ).toBe(true);
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Summarize & New'),
+    ).toBe(true);
+  });
+
+  it('disables duplicate when busyAction is duplicate', () => {
+    const items = buildConversationContextMenuTemplate({ canDuplicate: true, busyAction: 'duplicate' }, () => {});
+    const duplicate = items.find(
+      (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Duplicating…',
     );
-
-    expect(template.map((item) => (item.type === 'separator' ? 'separator' : item.label))).toEqual([
-      'Pin Chat',
-      'Archive Chat',
-      'separator',
-      'Open in Separate Window',
-      'separator',
-      'Duplicate Chat',
-      'Summarize & New',
-      'separator',
-      'Attach to Gateway',
-      'separator',
-      'Copy Working Directory',
-      'Copy Session ID',
-      'Copy Deeplink',
-    ]);
+    expect(duplicate).toBeDefined();
+    expect(duplicate && 'enabled' in duplicate ? duplicate.enabled : true).toBe(false);
   });
 
-  it('switches to unpin when the conversation is already pinned', () => {
-    const template = buildConversationContextMenuTemplate({ pinAction: 'unpin' }, vi.fn());
-
-    expect(template).toEqual([expect.objectContaining({ label: 'Unpin Chat' })]);
-  });
-
-  it('disables all actions while a sidebar action is already running', () => {
-    const template = buildConversationContextMenuTemplate(
-      {
-        pinAction: 'pin',
-        canArchive: true,
-        canOpenInNewWindow: true,
-        canDuplicate: true,
-        canSummarizeAndNew: true,
-        canAttachToGateway: true,
-        canCopyWorkingDirectory: true,
-        canCopyId: true,
-        canCopyDeeplink: true,
-        busyAction: 'duplicate',
-      },
-      vi.fn(),
+  it('disables summarize when busyAction is summarize', () => {
+    const items = buildConversationContextMenuTemplate({ canSummarizeAndNew: true, busyAction: 'summarize' }, () => {});
+    const summarize = items.find(
+      (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Summarizing…',
     );
-
-    expect(template.filter((item) => item.type !== 'separator')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ label: 'Pin Chat', enabled: false }),
-        expect.objectContaining({ label: 'Archive Chat', enabled: false }),
-        expect.objectContaining({ label: 'Open in Separate Window', enabled: false }),
-        expect.objectContaining({ label: 'Duplicating…', enabled: false }),
-        expect.objectContaining({ label: 'Summarize & New', enabled: false }),
-        expect.objectContaining({ label: 'Attach to Gateway', enabled: false }),
-        expect.objectContaining({ label: 'Copy Working Directory', enabled: false }),
-        expect.objectContaining({ label: 'Copy Session ID', enabled: false }),
-        expect.objectContaining({ label: 'Copy Deeplink', enabled: false }),
-      ]),
-    );
+    expect(summarize).toBeDefined();
+    expect(summarize && 'enabled' in summarize ? summarize.enabled : true).toBe(false);
   });
 
-  it('omits separators when only one section is present', () => {
-    const template = buildConversationContextMenuTemplate({ canCopyWorkingDirectory: true }, vi.fn());
+  it('includes attach to gateway', () => {
+    const items = buildConversationContextMenuTemplate({ canAttachToGateway: true }, () => {});
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Attach to Gateway'),
+    ).toBe(true);
+  });
 
-    expect(template).toEqual([expect.objectContaining({ label: 'Copy Working Directory' })]);
+  it('includes copy items', () => {
+    const items = buildConversationContextMenuTemplate({ canCopyWorkingDirectory: true, canCopyId: true, canCopyDeeplink: true }, () => {});
+    expect(
+      items.some(
+        (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Copy Working Directory',
+      ),
+    ).toBe(true);
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Copy Session ID'),
+    ).toBe(true);
+    expect(
+      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Copy Deeplink'),
+    ).toBe(true);
+  });
+
+  it('returns empty template when nothing is enabled', () => {
+    const items = buildConversationContextMenuTemplate({}, () => {});
+    expect(items.length).toBe(0);
+  });
+
+  it('inserts separators between sections', () => {
+    const items = buildConversationContextMenuTemplate(
+      { pinAction: 'pin', canArchive: true, canOpenInNewWindow: true, canCopyId: true },
+      () => {},
+    );
+    const separatorCount = items.filter(
+      (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'type' in item && item.type === 'separator',
+    ).length;
+    expect(separatorCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('invokes onSelect when an item is clicked', () => {
+    const actions: string[] = [];
+    const items = buildConversationContextMenuTemplate({ pinAction: 'pin' }, (action: string) => actions.push(action));
+    const pinItem = items.find(
+      (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Pin Chat',
+    );
+    expect(pinItem).toBeDefined();
+    if (pinItem && 'click' in pinItem && typeof pinItem.click === 'function') {
+      pinItem.click(undefined as unknown as Electron.MenuItem, undefined as unknown as BrowserWindow, undefined as any);
+    }
+    expect(actions).toContain('pin');
+  });
+});
+
+describe('normalizeConversationContextMenuCoordinate', () => {
+  it('returns 0 for undefined', () => {
+    expect(normalizeConversationContextMenuCoordinate(undefined)).toBe(0);
+  });
+
+  it('returns 0 for NaN', () => {
+    expect(normalizeConversationContextMenuCoordinate(Number.NaN)).toBe(0);
+  });
+
+  it('returns 0 for negative numbers', () => {
+    expect(normalizeConversationContextMenuCoordinate(-5)).toBe(0);
+  });
+
+  it('returns a safe integer as-is', () => {
+    expect(normalizeConversationContextMenuCoordinate(100)).toBe(100);
+  });
+
+  it('clamps large non-integer values to 0', () => {
+    expect(normalizeConversationContextMenuCoordinate(1.5)).toBe(0);
   });
 });

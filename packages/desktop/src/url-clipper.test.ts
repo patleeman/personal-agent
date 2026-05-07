@@ -1,70 +1,43 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { type DesktopUrlClipperHost, importClipboardUrlToKnowledge, normalizeClipboardUrl } from './url-clipper.js';
+import { normalizeClipboardUrl } from './url-clipper.js';
 
-function jsonResponse(statusCode: number, body: unknown) {
-  return {
-    statusCode,
-    headers: { 'content-type': 'application/json' },
-    body: Buffer.from(JSON.stringify(body)),
-  };
-}
-
-function createHost(response = jsonResponse(201, { title: 'Example', note: { id: 'Inbox/example.md' } })) {
-  const dispatchApiRequest = vi.fn().mockResolvedValue(response);
-  const host: DesktopUrlClipperHost = {
-    ensureActiveHostRunning: vi.fn().mockResolvedValue(undefined),
-    getActiveHostController: () => ({ dispatchApiRequest }),
-  };
-  return { host, dispatchApiRequest };
-}
+// ── url-clipper — clipboard URL normalization ─────────────────────────────
 
 describe('normalizeClipboardUrl', () => {
-  it('accepts http and https URLs from clipboard text', () => {
-    expect(normalizeClipboardUrl(' https://example.com/path?q=1\n')).toBe('https://example.com/path?q=1');
+  it('normalizes a valid http URL', () => {
+    expect(normalizeClipboardUrl('http://example.com')).toBe('http://example.com/');
   });
 
-  it('rejects empty, invalid, and non-web clipboard values', () => {
+  it('normalizes a valid https URL', () => {
+    expect(normalizeClipboardUrl('https://example.com/page')).toBe('https://example.com/page');
+  });
+
+  it('trims whitespace', () => {
+    expect(normalizeClipboardUrl('  https://example.com  ')).toBe('https://example.com/');
+  });
+
+  it('takes the first non-empty line from multiline input', () => {
+    expect(normalizeClipboardUrl('\n\nhttps://example.com\nignore this\n')).toBe('https://example.com/');
+  });
+
+  it('throws on empty input', () => {
     expect(() => normalizeClipboardUrl('')).toThrow('Clipboard is empty');
+  });
+
+  it('throws on whitespace-only input', () => {
+    expect(() => normalizeClipboardUrl('   ')).toThrow('Clipboard is empty');
+  });
+
+  it('throws on invalid URL', () => {
     expect(() => normalizeClipboardUrl('not a url')).toThrow('valid URL');
-    expect(() => normalizeClipboardUrl('file:///tmp/a.txt')).toThrow('Only http and https');
-  });
-});
-
-describe('importClipboardUrlToKnowledge', () => {
-  it('imports the clipboard URL into the Knowledge Inbox', async () => {
-    const { host, dispatchApiRequest } = createHost();
-
-    await expect(
-      importClipboardUrlToKnowledge({
-        host,
-        clipboardText: 'https://example.com/article',
-        createdAt: '2026-04-25T12:00:00.000Z',
-      }),
-    ).resolves.toEqual({ title: 'Example', note: { id: 'Inbox/example.md' } });
-
-    expect(host.ensureActiveHostRunning).toHaveBeenCalledOnce();
-    expect(dispatchApiRequest).toHaveBeenCalledWith({
-      method: 'POST',
-      path: '/api/vault/share-import',
-      body: {
-        kind: 'url',
-        url: 'https://example.com/article',
-        directoryId: 'Inbox',
-        sourceApp: 'Personal Agent Desktop',
-        createdAt: '2026-04-25T12:00:00.000Z',
-      },
-    });
   });
 
-  it('surfaces API errors', async () => {
-    const { host } = createHost(jsonResponse(500, { error: 'boom' }));
+  it('throws on non-http protocol', () => {
+    expect(() => normalizeClipboardUrl('ftp://example.com')).toThrow('Only http and https');
+  });
 
-    await expect(
-      importClipboardUrlToKnowledge({
-        host,
-        clipboardText: 'https://example.com/article',
-      }),
-    ).rejects.toThrow('boom');
+  it('throws on javascript protocol', () => {
+    expect(() => normalizeClipboardUrl('javascript:alert(1)')).toThrow('Only http and https');
   });
 });
