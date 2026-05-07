@@ -534,13 +534,13 @@ Reload behavior:
 4. Dispose old backend module if it exported `dispose(ctx)`.
 5. Emit extension reload events to open iframes so they can refresh.
 
-Ship a public package for extension authors and agents:
+Ship a public types-only package for extension authors and agents:
 
 ```ts
 import type { ExtensionBackendContext, ExtensionManifest } from '@personal-agent/extensions';
 ```
 
-In v0 this package can be types-only. The runtime still passes `ctx`; extensions should not import PA internals.
+`@personal-agent/extensions` is the public type contract for manifests, surfaces, backend actions, and the backend context. The runtime still passes `ctx`; extensions should not import PA internals.
 
 A backend module exports named async handlers:
 
