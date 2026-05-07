@@ -8,6 +8,8 @@ import type { LiveSessionSubscriptionListener } from './liveSessionSubscription.
 
 export type LiveListener = LiveSessionSubscriptionListener;
 
+import type { LiveSessionLifecycleHandler } from './liveSessionLifecycle.js';
+
 export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
   sessionId: string;
   session: AgentSession;
@@ -32,6 +34,7 @@ export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTur
   traceRunStepCount?: number;
   traceRunFirstAssistantAtMs?: number | null;
   traceRunFirstToolAtMs?: number | null;
+  lifecycleHandlers: Array<LiveSessionLifecycleHandler>;
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
 }

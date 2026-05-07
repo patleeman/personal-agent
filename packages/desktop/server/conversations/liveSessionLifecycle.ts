@@ -8,15 +8,33 @@ export interface LiveSessionLifecycleEvent {
 
 export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => void | Promise<void>;
 
-const lifecycleHandlers = new Set<LiveSessionLifecycleHandler>();
+let defaultHandlers: Array<LiveSessionLifecycleHandler> | undefined;
 
+/** Set the default lifecycle handlers used for all new sessions. */
+/** Register a handler that fires for every new session's lifecycle events.
+ *  Handlers are propagated to each LiveEntry at creation time. */
 export function registerLiveSessionLifecycleHandler(handler: LiveSessionLifecycleHandler): () => void {
-  lifecycleHandlers.add(handler);
-  return () => lifecycleHandlers.delete(handler);
+  if (!defaultHandlers) {
+    defaultHandlers = [];
+  }
+  defaultHandlers.push(handler);
+  return () => {
+    if (!defaultHandlers) return;
+    const idx = defaultHandlers.indexOf(handler);
+    if (idx >= 0) defaultHandlers.splice(idx, 1);
+  };
 }
 
-export function notifyLiveSessionLifecycleHandlers(event: LiveSessionLifecycleEvent): void {
-  for (const handler of lifecycleHandlers) {
+export function setDefaultLifecycleHandlers(handlers: Array<LiveSessionLifecycleHandler>): void {
+  defaultHandlers = handlers;
+}
+
+export function getDefaultLifecycleHandlers(): Array<LiveSessionLifecycleHandler> {
+  return defaultHandlers ?? [];
+}
+
+export function notifyLiveSessionLifecycleHandlers(event: LiveSessionLifecycleEvent, handlers: Array<LiveSessionLifecycleHandler>): void {
+  for (const handler of handlers) {
     Promise.resolve(handler(event)).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error(

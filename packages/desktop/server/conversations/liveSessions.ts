@@ -24,6 +24,7 @@ import { executeLiveSessionBash } from './liveSessionBash.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
 import { branchLiveSession, forkLiveSession } from './liveSessionBranching.js';
 import {
+  applySessionTitle,
   broadcast,
   broadcastAutoModeState,
   broadcastContextUsage,
@@ -52,6 +53,11 @@ import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 import { type LiveContextUsage, type SseEvent } from './liveSessionEvents.js';
 import { makeAuth as makeFactoryAuth, makeRegistry } from './liveSessionFactory.js';
 import { createLiveSessionHiddenTurnState, ensureHiddenTurnState, hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
+import {
+  getDefaultLifecycleHandlers,
+  notifyLiveSessionLifecycleHandlers,
+  registerLiveSessionLifecycleHandler,
+} from './liveSessionLifecycle.js';
 import { type LiveSessionLoaderOptions } from './liveSessionLoader.js';
 import {
   compactLiveSession,
@@ -110,12 +116,8 @@ import { resolveStableSessionTitle } from './liveSessionTitle.js';
 import { type BeforeAgentStartProbeMessage, inspectAvailableLiveSessionTools } from './liveSessionToolInspection.js';
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
 import { appendConversationWorkspaceMetadata, readSessionMetaByFile } from './sessions.js';
-export {
-  type LiveSessionLifecycleEvent,
-  type LiveSessionLifecycleHandler,
-  registerLiveSessionLifecycleHandler,
-} from './liveSessionLifecycle.js';
-import { notifyLiveSessionLifecycleHandlers } from './liveSessionLifecycle.js';
+
+export { registerLiveSessionLifecycleHandler };
 
 export { type LiveContextUsage, type LiveContextUsageSegment, type SseEvent, toSse } from './liveSessionEvents.js';
 export { resolveLastCompletedConversationEntryId, resolveStableForkEntryId } from './liveSessionForking.js';
@@ -311,6 +313,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
     running: false,
     parallelJobs: [],
     importingParallelJobs: false,
+    lifecycleHandlers: getDefaultLifecycleHandlers(),
     ...createLiveSessionPresenceHost(),
   };
   entry.parallelJobs = loadPersistedParallelJobs(entry.session.sessionFile, resolveParallelChildSession);

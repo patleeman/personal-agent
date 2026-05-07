@@ -767,6 +767,7 @@ describe('live session registry helpers', () => {
       cwd: '/tmp/workspace',
       sessionFile: '/tmp/session-helper.jsonl',
       title: 'Persisted title',
+      running: true,
       isStreaming: false,
       hasPendingHiddenTurn: true,
     });
@@ -2379,6 +2380,7 @@ describe('live session subscriptions', () => {
         cwd: '/tmp/workspace',
         sessionFile: '/tmp/workspace/session-2.jsonl',
         title: 'Keep this sidebar title fresh',
+        running: false,
         isStreaming: false,
         hasPendingHiddenTurn: false,
       },
@@ -4182,6 +4184,7 @@ describe('promptSession', () => {
       session: {
         state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
+        model: { input: ['text', 'image'] },
         getSteeringMessages: () => [],
         getFollowUpMessages: () => [],
         isStreaming: true,
@@ -4191,7 +4194,11 @@ describe('promptSession', () => {
       },
     });
 
-    const image = { type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' };
+    const image = {
+      type: 'image' as const,
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+      mimeType: 'image/png',
+    };
     await promptSession('session-steer-image-fallback', 'continue with this screenshot', 'steer', [image]);
 
     expect(steer).toHaveBeenNthCalledWith(1, 'continue with this screenshot', [image]);
@@ -4214,6 +4221,7 @@ describe('promptSession', () => {
       session: {
         state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
+        model: { input: ['text', 'image'] },
         isStreaming: false,
         prompt,
         steer: vi.fn(async () => undefined),
@@ -4223,7 +4231,11 @@ describe('promptSession', () => {
 
     await expect(
       promptSession('session-image-error', 'continue with this screenshot', undefined, [
-        { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' },
+        {
+          type: 'image',
+          data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+          mimeType: 'image/png',
+        },
       ]),
     ).rejects.toThrow('network unavailable');
     expect(prompt).toHaveBeenCalledTimes(1);
