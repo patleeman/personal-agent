@@ -118,47 +118,13 @@ Tenacity does **not** mean expanding scope. Do not add features, redesign unrela
 
 ## State file
 
-Use a file to carry progress forward when the task spans multiple turns, wakeups, or durable runs.
+Auto mode provides a persistent state file at:
 
-Preferred order:
+<runtime-dir>/auto-context/<session-id>.md
 
-1. existing project `PLAN.md` if the repo already uses it as the working plan
-2. repo-local `AUTO_MODE.md` if no suitable project plan exists
+The path is injected into every hidden review turn and continuation turn prompt. Read it on each wakeup to orient, write to it after each action to persist state across turns. The harness does not parse or validate its content — structure it however works for the task.
 
-The file should stay short and operational. Keep these sections current:
-
-```md
-# Auto Mode State
-
-## Goal
-
-One-sentence task goal.
-
-## Current status
-
-What is done, what is in progress, what is blocked.
-
-## Active run
-
-- run id
-- task slug
-- purpose
-
-## Latest validation
-
-- last successful checks
-- last visual validation
-
-## Active deferred resume
-
-- id
-- why it exists
-- when it should wake up
-
-## Next step
-
-The next smallest correct action.
-```
+**Do not create a separate state file (like `AUTO_MODE.md` or `PLAN.md`) in the working directory.** The auto context file is the designated place for progress tracking.
 
 Update the file when:
 

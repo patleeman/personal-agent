@@ -1645,6 +1645,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
+
+  // Keep local state in sync with server-sent auto mode state changes (agent stopping auto mode, etc.)
+  useEffect(() => {
+    if (stream.autoModeState !== null) {
+      setConversationAutoModeState(stream.autoModeState);
+    }
+  }, [stream.autoModeState]);
   const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
   const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
 

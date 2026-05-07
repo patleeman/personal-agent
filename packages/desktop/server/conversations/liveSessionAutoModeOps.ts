@@ -1,4 +1,5 @@
-import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
@@ -18,7 +19,9 @@ import { ensureHiddenTurnState, hasQueuedOrActiveHiddenTurn, type LiveSessionHid
 import { repairDanglingToolCallContext } from './liveSessionRecovery.js';
 
 function buildAutoContextPath(sessionId: string): string {
-  return join(getPiAgentRuntimeDir(), 'auto-context', `${sessionId}.md`);
+  const path = join(getPiAgentRuntimeDir(), 'auto-context', `${sessionId}.md`);
+  mkdirSync(dirname(path), { recursive: true });
+  return path;
 }
 
 export interface LiveSessionAutoModeHost extends LiveSessionHiddenTurnState {
