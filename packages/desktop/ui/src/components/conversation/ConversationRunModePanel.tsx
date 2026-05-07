@@ -54,7 +54,7 @@ export function ConversationRunModePanel({
   if (mode === 'mission') {
     const done = mission?.tasks.filter((task) => task.status === 'done').length ?? 0;
     const total = mission?.tasks.length ?? 0;
-    const goal = mission?.goal ?? draftMission?.goal ?? '';
+    const goal = draftMission?.goal ?? mission?.goal ?? '';
     const maxTurns = mission?.maxTurns ?? draftMission?.maxTurns ?? 20;
     const turnsUsed = mission?.turnsUsed ?? 0;
 
@@ -63,12 +63,11 @@ export function ConversationRunModePanel({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
           <ModeLabel mode="mission">Mission</ModeLabel>
           <span className="shrink-0">Goal</span>
-          <textarea
+          <input
+            aria-label="Mission goal"
             value={goal}
             onChange={(event) => onDraftMissionChange?.({ goal: event.target.value, maxTurns })}
-            rows={1}
-            disabled={running && Boolean(mission)}
-            className={cx('min-w-[12rem] flex-1 resize-none', fieldClassName, running && mission && 'border-transparent text-primary')}
+            className={cx('min-w-[12rem] flex-1', fieldClassName)}
             placeholder="Infer from conversation if blank"
           />
           <span className="shrink-0">
@@ -78,9 +77,9 @@ export function ConversationRunModePanel({
           <span className="shrink-0 text-primary">{turnsUsed}</span>
           <span className="shrink-0">/</span>
           <input
-            type="number"
-            min={1}
-            max={1000}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={maxTurns}
             onChange={(event) =>
               onDraftMissionChange?.({
@@ -88,8 +87,8 @@ export function ConversationRunModePanel({
                 maxTurns: Math.max(1, parseInt(event.target.value, 10) || 20),
               })
             }
-            disabled={running && Boolean(mission)}
-            className={cx(compactNumberClassName, running && mission && 'border-transparent')}
+            aria-label="Mission max turns"
+            className={compactNumberClassName}
           />
         </div>
         {running && mission ? (
@@ -133,7 +132,8 @@ export function ConversationRunModePanel({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
           <ModeLabel mode="loop">Loop</ModeLabel>
           <span className="shrink-0">Repeat</span>
-          <textarea
+          <input
+            aria-label="Loop prompt"
             value={prompt}
             onChange={(event) =>
               onDraftLoopChange?.({
@@ -142,17 +142,16 @@ export function ConversationRunModePanel({
                 delay,
               })
             }
-            rows={1}
-            className={cx('min-w-[14rem] flex-1 resize-none', fieldClassName)}
+            className={cx('min-w-[14rem] flex-1', fieldClassName)}
             placeholder="Prompt to repeat each iteration"
           />
           <span className="shrink-0">Run</span>
           <span className="shrink-0 text-primary">{iterationsUsed}</span>
           <span className="shrink-0">/</span>
           <input
-            type="number"
-            min={1}
-            max={1000}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={maxIterations}
             onChange={(event) =>
               onDraftLoopChange?.({
@@ -161,6 +160,7 @@ export function ConversationRunModePanel({
                 delay,
               })
             }
+            aria-label="Loop max iterations"
             className={compactNumberClassName}
           />
           <span className="shrink-0">times · wait</span>
@@ -173,6 +173,7 @@ export function ConversationRunModePanel({
                 delay: event.target.value,
               })
             }
+            aria-label="Loop delay"
             className={cx('w-28', fieldClassName)}
           />
         </div>

@@ -113,6 +113,9 @@ describe('ConversationComposerInputControls', () => {
 
     expect(html).toContain('Tasks');
     expect(html).toContain('Patch bug');
+    expect(html).toContain('aria-label="Mission goal"');
+    expect(html).toContain('aria-label="Mission max turns"');
+    expect(html).not.toContain('disabled');
     expect(html).not.toContain('Goal: what should be accomplished?');
   });
 
@@ -133,6 +136,9 @@ describe('ConversationComposerInputControls', () => {
 
     expect(html).toContain('Run');
     expect(html).toContain('Prompt to repeat each iteration');
+    expect(html).toContain('aria-label="Loop prompt"');
+    expect(html).toContain('aria-label="Loop max iterations"');
+    expect(html).toContain('aria-label="Loop delay"');
     expect(html).toContain('value="2s"');
   });
 
