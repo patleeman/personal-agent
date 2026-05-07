@@ -2,7 +2,6 @@ import { Component, type ReactNode, Suspense, useCallback, useEffect, useLayoutE
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAppData, useAppEvents } from '../app/contexts';
-import { AppsRailContent, AppsWorkbenchPane, type SkillApp, useAppList } from '../apps/index';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
@@ -94,7 +93,7 @@ type DesktopLayoutShortcutAction =
   | 'show-workbench-mode'
   | 'show-zen-mode';
 
-type BuiltInWorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs' | 'apps';
+type BuiltInWorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs';
 type ExtensionWorkbenchRailMode = `extension:${string}:${string}`;
 type WorkbenchRailMode = BuiltInWorkbenchRailMode | ExtensionWorkbenchRailMode;
 
@@ -646,14 +645,8 @@ function WorkbenchDocumentPane({
   checkpointId,
   runId,
   workspaceFile,
-  activeApp,
-  apps,
-  appsLoading,
-  appsError,
   activeTool,
   onActiveToolChange,
-  onSelectApp,
-  onBackToApps,
   onMissingCheckpoint,
   scrollToCheckpointFile,
   workspaceCwd,
@@ -669,14 +662,8 @@ function WorkbenchDocumentPane({
   checkpointId: string | null;
   runId: string | null;
   workspaceFile: { cwd: string; path: string } | null;
-  activeApp: SkillApp | null;
-  apps: SkillApp[];
-  appsLoading: boolean;
-  appsError: string | null;
   activeTool: WorkbenchRailMode;
   onActiveToolChange: (mode: WorkbenchRailMode) => void;
-  onSelectApp: (app: SkillApp) => void;
-  onBackToApps: () => void;
   onMissingCheckpoint: () => void;
   scrollToCheckpointFile?: string | null;
   workspaceCwd?: string | null;
@@ -738,19 +725,6 @@ function WorkbenchDocumentPane({
         onNewTab={onBrowserTabAdd}
         onReopenTab={onBrowserTabReopen}
         onCloseCurrentTab={() => onBrowserTabClose(activeBrowserTab.id)}
-      />
-    );
-  }
-
-  if (activeTool === 'apps') {
-    return (
-      <AppsWorkbenchPane
-        activeApp={activeApp}
-        apps={apps}
-        loading={appsLoading}
-        error={appsError}
-        onSelectApp={onSelectApp}
-        onBack={onBackToApps}
       />
     );
   }
@@ -1234,9 +1208,6 @@ function WorkbenchKnowledgeRail({
   onWorkspaceFileSelect,
   onWorkspaceFileClear,
   onScrollToCheckpointFile,
-  apps,
-  appsLoading,
-  onAppSelect,
   browserTabsState,
   onBrowserTabSwitch,
   onBrowserTabAdd,
@@ -1256,9 +1227,6 @@ function WorkbenchKnowledgeRail({
   onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
   onWorkspaceFileClear: () => void;
   onScrollToCheckpointFile?: (filePath: string) => void;
-  apps: SkillApp[];
-  appsLoading: boolean;
-  onAppSelect: (app: SkillApp) => void;
   browserTabsState: BrowserTabsState;
   onBrowserTabSwitch: (tabId: string) => void;
   onBrowserTabAdd: () => void;
@@ -1682,34 +1650,6 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Artifacts</span>
           </button>
         ) : null}
-        <button
-          type="button"
-          className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'apps' && 'ui-sidebar-nav-item-active')}
-          title="Apps"
-          onClick={() => {
-            onActiveToolChange('apps');
-            onWorkspaceFileClear();
-          }}
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="shrink-0 opacity-70"
-            aria-hidden="true"
-          >
-            <rect x="3" y="3" width="7.5" height="7.5" rx="1" />
-            <rect x="13.5" y="3" width="7.5" height="7.5" rx="1" />
-            <rect x="3" y="13.5" width="7.5" height="7.5" rx="1" />
-            <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" />
-          </svg>
-          <span className="flex-1 text-left">Apps</span>
-        </button>
         {showRunsTab ? (
           <button
             type="button"
@@ -1810,15 +1750,6 @@ function WorkbenchKnowledgeRail({
             activeRunId={activeRunId}
             lookups={runLookups}
             onOpenRun={handleRunSelect}
-          />
-        </div>
-      ) : activeTool === 'apps' ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <AppsRailContent
-            apps={apps}
-            activeApp={apps.find((a) => a.id === searchParams.get('app')) ?? null}
-            loading={appsLoading}
-            onSelectApp={onAppSelect}
           />
         </div>
       ) : activeExtensionToolPanel ? (
@@ -1963,8 +1894,7 @@ export function Layout() {
     location.pathname.startsWith('/extensions') ||
     location.pathname.startsWith('/gateways') ||
     location.pathname.startsWith('/knowledge') ||
-    location.pathname.startsWith('/telemetry') ||
-    location.pathname.startsWith('/apps')
+    location.pathname.startsWith('/telemetry')
   );
 
   // Persist browser tabs
@@ -2090,14 +2020,11 @@ export function Layout() {
   const previousActiveConversationIdRef = useRef<string | null>(activeConversationId);
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
-  const { apps, loading: appsLoading, error: appsError } = useAppList();
   const extensionRegistry = useExtensionRegistry();
   const extensionRightToolPanels = useMemo(
     () => extensionRegistry.surfaces.filter(isExtensionRightToolPanelSurface),
     [extensionRegistry.surfaces],
   );
-  const activeAppId = showWorkbench ? searchParams.get('app') : null;
-  const activeApp = useMemo(() => apps.find((a) => a.id === activeAppId) ?? null, [apps, activeAppId]);
   const setActiveConversationTool = useCallback(
     (tool: WorkbenchRailMode) => {
       if (activeConversationId && tool !== 'browser') {
@@ -2139,32 +2066,6 @@ export function Layout() {
   const setActiveConversationRun = useCallback((_runId: string | null) => {
     // Run selection is URL-backed.
   }, []);
-
-  const handleAppSelect = useCallback(
-    (app: SkillApp) => {
-      setActiveWorkbenchTool('apps');
-      setSearchParams(
-        (current) => {
-          const next = new URLSearchParams(current);
-          next.set('app', app.id);
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
-
-  const handleBackToApps = useCallback(() => {
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        next.delete('app');
-        return next;
-      },
-      { replace: true },
-    );
-  }, [setSearchParams]);
 
   // Cwd change: clear workspace file if its cwd no longer matches
   useEffect(() => {
@@ -2552,8 +2453,7 @@ export function Layout() {
                         activeWorkbenchCheckpointId ||
                         activeWorkbenchRunId ||
                         activeWorkspaceFile ||
-                        activeWorkbenchTool === 'browser' ||
-                        activeWorkbenchTool === 'apps'
+                        activeWorkbenchTool === 'browser'
                           ? 'true'
                           : 'false'
                       }
@@ -2564,14 +2464,8 @@ export function Layout() {
                         checkpointId={activeWorkbenchCheckpointId}
                         runId={activeWorkbenchRunId}
                         workspaceFile={activeWorkspaceFile}
-                        activeApp={activeApp}
-                        apps={apps}
-                        appsLoading={appsLoading}
-                        appsError={appsError}
                         activeTool={activeWorkbenchTool}
                         onActiveToolChange={setActiveConversationTool}
-                        onSelectApp={handleAppSelect}
-                        onBackToApps={handleBackToApps}
                         onMissingCheckpoint={clearActiveConversationCheckpoint}
                         scrollToCheckpointFile={scrollToCheckpointFile}
                         workspaceCwd={activeWorkspaceCwd}
@@ -2605,9 +2499,6 @@ export function Layout() {
                             onWorkspaceFileSelect={setActiveWorkspaceFile}
                             onWorkspaceFileClear={clearActiveWorkspaceFile}
                             onScrollToCheckpointFile={handleCheckpointFileScroll}
-                            apps={apps}
-                            appsLoading={appsLoading}
-                            onAppSelect={handleAppSelect}
                             browserTabsState={browserTabsState}
                             onBrowserTabSwitch={handleBrowserTabSwitch}
                             onBrowserTabAdd={handleBrowserTabAdd}

@@ -2,7 +2,7 @@
 
 Extensions are the planned self-extensibility layer for Personal Agent. They package UI surfaces, backend actions, storage, and commands so a user can ask the agent to create or modify local product functionality.
 
-Apps proved the core idea: durable user-created UI can live outside the compiled desktop app. Extensions generalize that into a package model that can add pages, sidebar entries, right-rail tools, backend actions, and app-owned state.
+The original prototype proved the core idea: durable user-created UI can live outside the compiled desktop app. Extensions are now the package model for pages, sidebar entries, right-rail tools, backend actions, and extension-owned state.
 
 This document is the target implementation spec for the first extension runtime, not an exploratory brainstorm.
 
@@ -365,7 +365,7 @@ Surface IDs are unique inside one extension. Routes are globally unique. User ex
 
 Left sidebar surfaces should be mostly declarative: labels, icons, routes, badges, and sections. The left bar is the app spine; arbitrary rendering there makes the whole app feel unstable.
 
-Right rail surfaces can be richer. They are contextual, dismissible tools. File Explorer, Diffs, Browser, Apps, Artifacts, Runs, and custom board panels all fit here.
+Right rail surfaces can be richer. They are contextual, dismissible tools. File Explorer, Diffs, Browser, Artifacts, Runs, and custom board panels all fit here.
 
 Main pages are for full workflows. A bundled system extension can own a normal PA page; a user extension can own `/ext/{id}` routes.
 
@@ -454,8 +454,7 @@ Use these references when generating or editing extension UI:
 - `docs/extension-templates/page.html` — default main-page HTML shape.
 - `docs/extension-templates/page.css` — default main-page CSS tokens, layout, buttons, panels, and responsive rules.
 - `docs/extension-templates/rail.html` — compact right-rail tool panel shape.
-- `packages/desktop/server/apps/pa-components.css` — current shared PA component stylesheet served as `/pa/components.css` and `/api/pa/components.css`.
-- `packages/desktop/server/apps/app-scaffold.html` — older skill-app component scaffold; useful for `<pa-card>`, `<pa-form>`, `<pa-field>`, `<pa-button>`, `<pa-status>`, and `<pa-table>` examples.
+- `packages/desktop/server/extensions/pa-components.css` — current shared PA component stylesheet served as `/pa/components.css` and `/api/pa/components.css`.
 - `extensions/system-automations/frontend/index.html` and `extensions/system-automations/frontend/styles.css` — first real bundled system extension; use it as the reference for iframe extension pages.
 
 Default styling rules for generated extensions:
@@ -474,7 +473,7 @@ Default styling rules for generated extensions:
 
 Frontend entries receive a `window.PA` API plus launch context. Bundled system extensions and user extensions both use iframe HTML `entry` files by default; core React component shortcuts are not part of the v0 manifest contract.
 
-The v0 surface below is intentionally broader than apps because extensions need to behave like product modules:
+The v0 surface below is intentionally broad because extensions need to behave like product modules:
 
 ```ts
 PA.context.get() // extension id, surface id, route, current pathname/search/hash, theme
@@ -761,7 +760,7 @@ The first implementation target is a feature-equivalent Automations system exten
 
 Good later candidates:
 
-- Apps / Extensions manager
+- Extensions manager
 - Telemetry
 - Agent Board
 
@@ -774,31 +773,9 @@ Poor first candidates:
 
 The core shell should stay small and stable: navigation, layout, conversations, runs, auth/providers, app/extension registry, storage, and capability APIs.
 
-## Migration from apps
+## Apps removal
 
-The current `apps/{id}/APP.md + index.html` model can become a compatibility layer over extensions.
-
-A current app:
-
-```text
-apps/agent-board/
-  APP.md
-  index.html
-```
-
-Can map to an extension manifest:
-
-```json
-{
-  "schemaVersion": 1,
-  "id": "agent-board",
-  "name": "Agent Board",
-  "surfaces": [{ "id": "page", "placement": "main", "kind": "page", "route": "/apps/agent-board", "entry": "index.html" }],
-  "permissions": ["runs:start", "vault:readwrite"]
-}
-```
-
-This keeps existing apps working while the product moves toward an extension manager.
+The old `apps/{id}/APP.md + index.html` model was removed after the Automations port. New work should use extensions directly: install or create an extension package, declare surfaces in `extension.json`, and render through `/ext/{extensionId}` or a system-owned route.
 
 ## Recommended implementation path
 
@@ -813,6 +790,5 @@ This keeps existing apps working while the product moves toward an extension man
 9. Build the feature-equivalent Automations bundled system extension on the existing `/automations` route.
 10. Add copy-on-write overrides for system extension edits.
 11. Convert Agent Board into a user extension.
-12. Convert Apps into the Extensions manager once the runtime proves itself.
 
 The north star is a small trusted PA kernel surrounded by editable local extensions. Users should be able to create product features by talking to the agent, without every new workflow needing to land in the compiled desktop app.

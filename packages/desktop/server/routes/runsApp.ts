@@ -4,14 +4,12 @@
  * Handles durable run listing, status, logs, cancel, import, and SSE events.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, resolve, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { getVaultRoot } from '@personal-agent/core';
 import { pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
 import type { Express, Response } from 'express';
 
-import { PA_CLIENT_JS } from '../apps/pa-client.js';
 import {
   cancelDurableRun,
   getDurableRun,
@@ -20,56 +18,25 @@ import {
   listDurableRuns,
   readDurableRunLogDelta,
 } from '../automation/durableRuns.js';
+import { PA_CLIENT_JS } from '../extensions/pa-client.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 import type { ServerRouteContext } from './context.js';
 
 // Lazy-load PA component CSS
 let paComponentsCss: string | null = null;
 const __dirname = new URL('.', import.meta.url).pathname;
-const APPS_DIR = join(__dirname, '..', 'apps');
+const EXTENSIONS_DIR = join(__dirname, '..', 'extensions');
 
 function getPaComponentsCss(): string {
   if (paComponentsCss === null) {
     try {
-      paComponentsCss = readFileSync(join(APPS_DIR, 'pa-components.css'), 'utf-8');
+      paComponentsCss = readFileSync(join(EXTENSIONS_DIR, 'pa-components.css'), 'utf-8');
     } catch {
       paComponentsCss = '/* PA components not available */';
     }
   }
 
   return paComponentsCss;
-}
-
-function parseYamlScalar(raw: string | undefined, fallback = ''): string {
-  const trimmed = raw?.trim() ?? fallback;
-  const quoted = trimmed.match(/^(?:"(.*)"|'(.*)')$/);
-
-  return quoted ? (quoted[1] ?? quoted[2] ?? '') : trimmed;
-}
-
-function resolveAppAssetPath(appDir: string, assetPath: string): string | null {
-  const trimmed = assetPath.trim();
-  if (!trimmed || trimmed.startsWith('/') || trimmed.includes('\0')) return null;
-
-  const resolved = resolve(appDir, trimmed);
-  const appRoot = resolve(appDir);
-  return resolved === appRoot || resolved.startsWith(`${appRoot}${sep}`) ? resolved : null;
-}
-
-function getImageContentType(filePath: string): string | null {
-  switch (extname(filePath).toLowerCase()) {
-    case '.svg':
-      return 'image/svg+xml; charset=utf-8';
-    case '.png':
-      return 'image/png';
-    case '.webp':
-      return 'image/webp';
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    default:
-      return null;
-  }
 }
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
@@ -137,141 +104,14 @@ export function registerRunAppRoutes(
     }
   }
 
-  // Serve PA client assets for skill apps and extension iframes. The /api aliases
+  // Serve PA client assets for extension iframes. The /api aliases
   // avoid renderer-dev-server history fallback when iframe srcdoc fetches them.
   router.get('/pa/client.js', sendPaClient);
   router.get('/api/pa/client.js', sendPaClient);
   router.get('/pa/components.css', sendPaComponents);
   router.get('/api/pa/components.css', sendPaComponents);
 
-  // GET /api/apps — list skill apps from the KB vault
-  router.get('/api/apps', async (_req, res) => {
-    try {
-      // Scan apps/ directories in the vault
-      const vaultRoot = resolve(getVaultRoot());
-      const appsRoot = join(vaultRoot, 'apps');
-      let entries: string[] = [];
-      try {
-        entries = readdirSync(appsRoot);
-      } catch {
-        // apps directory may not exist yet
-      }
-
-      const apps: Array<{
-        id: string;
-        name: string;
-        description: string;
-        prompt: string;
-        entry: string;
-        icon: string;
-        nav: Array<{ label: string; page: string }>;
-      }> = [];
-
-      for (const entry of entries) {
-        const appDir = join(appsRoot, entry);
-        const appMdPath = join(appDir, 'APP.md');
-        try {
-          if (!statSync(appMdPath).isFile()) continue;
-        } catch {
-          continue;
-        }
-
-        // Parse APP.md (simple YAML frontmatter)
-        try {
-          const raw = readFileSync(appMdPath, 'utf-8');
-          const yamlMatch = raw.match(/^---\s*\n([\s\S]*?)\n---/);
-          if (!yamlMatch) continue;
-
-          const yaml = yamlMatch[1];
-          const name = parseYamlScalar(yaml.match(/^name\s*:\s*(.+)$/m)?.[1], entry);
-          const description = parseYamlScalar(yaml.match(/^description\s*:\s*(.+)$/m)?.[1]);
-          const prompt = parseYamlScalar(yaml.match(/^prompt\s*:\s*(.+)$/m)?.[1]);
-          const entryPage = parseYamlScalar(yaml.match(/^entry\s*:\s*(.+)$/m)?.[1], 'index.html');
-          const icon = parseYamlScalar(yaml.match(/^icon\s*:\s*(.+)$/m)?.[1]);
-
-          // Parse nav block if present
-          const nav: Array<{ label: string; page: string }> = [];
-          const navMatch = yaml.match(/^nav\s*:\s*$/m);
-          if (navMatch) {
-            const navLines: string[] = [];
-            const yamlLines = yaml.split('\n');
-            const navStartIndex = yamlLines.findIndex((l) => l.trim() === 'nav:');
-            if (navStartIndex >= 0) {
-              for (let i = navStartIndex + 1; i < yamlLines.length; i++) {
-                const line = yamlLines[i];
-                if (!line.startsWith('  - ') && !line.startsWith('    ')) break;
-                navLines.push(line);
-              }
-              for (const navLine of navLines) {
-                const labelMatch = navLine.match(/label\s*:\s*(.+)$/);
-                const pageMatch = navLine.match(/page\s*:\s*(.+)$/);
-                if (labelMatch && pageMatch) {
-                  nav.push({ label: parseYamlScalar(labelMatch[1]), page: parseYamlScalar(pageMatch[1]) });
-                }
-              }
-            }
-          }
-
-          apps.push({ id: entry, name, description, prompt, entry: entryPage, icon, nav });
-        } catch {
-          // Skip malformed apps
-        }
-      }
-
-      res.json(apps);
-    } catch (err) {
-      logError('apps listing error', {
-        message: err instanceof Error ? err.message : String(err),
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  // GET /api/apps/:id/icon — serve the optional app icon declared in APP.md
-  router.get('/api/apps/:id/icon', (req, res) => {
-    try {
-      const appId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
-      if (!appId || appId.includes('/') || appId.includes('\\') || appId.includes('\0')) {
-        res.status(400).json({ error: 'Invalid app id' });
-        return;
-      }
-
-      const vaultRoot = resolve(getVaultRoot());
-      const appDir = join(vaultRoot, 'apps', appId);
-      const appMdPath = join(appDir, 'APP.md');
-      if (!existsSync(appMdPath) || !statSync(appMdPath).isFile()) {
-        res.status(404).json({ error: 'App not found' });
-        return;
-      }
-
-      const raw = readFileSync(appMdPath, 'utf-8');
-      const yamlMatch = raw.match(/^---\s*\n([\s\S]*?)\n---/);
-      const icon = parseYamlScalar(yamlMatch?.[1].match(/^icon\s*:\s*(.+)$/m)?.[1]);
-      const iconPath = icon ? resolveAppAssetPath(appDir, icon) : null;
-      if (!iconPath || !existsSync(iconPath) || !statSync(iconPath).isFile()) {
-        res.status(404).json({ error: 'Icon not found' });
-        return;
-      }
-
-      const contentType = getImageContentType(iconPath);
-      if (!contentType) {
-        res.status(415).json({ error: 'Unsupported icon type' });
-        return;
-      }
-
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      res.send(readFileSync(iconPath));
-    } catch (err) {
-      logError('app icon serve error', {
-        message: err instanceof Error ? err.message : String(err),
-      });
-      res.status(500).json({ error: 'Failed to serve app icon' });
-    }
-  });
-
-  // POST /api/runs — create a durable agent run from an assembled prompt
-  // Used by skill apps (PA client) to execute prompts without a conversation context.
+  // POST /api/runs — create a durable agent run from an assembled prompt.
   router.post('/api/runs', async (req, res) => {
     try {
       const { prompt, source } = req.body;

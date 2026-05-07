@@ -1,5 +1,5 @@
 /**
- * PA client — injected into artifact sandbox for skill apps.
+ * PA client — injected into extension iframes.
  *
  * Provides window.PA (run, getRun, onStatus, navigate)
  * and <pa-*> custom elements (pa-form, pa-field, pa-button, pa-card, etc.)
@@ -44,7 +44,7 @@ export const PA_CLIENT_JS: string = `
      * Start a new run.
      * @param {Object} opts
      * @param {string} opts.prompt - Assembled prompt string
-     * @param {string} [opts.source] - Source identifier (e.g. 'app:auto-research')
+     * @param {string} [opts.source] - Source identifier (e.g. 'extension:automations')
      * @returns {Promise<{runId: string}>}
      */
     async run(opts) {

@@ -1,7 +1,4 @@
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +7,6 @@ const {
   getDurableRunLogCursorMock,
   getDurableRunLogMock,
   getDurableRunMock,
-  getVaultRootMock,
   invalidateAppTopicsMock,
   listDurableRunsMock,
   logErrorMock,
@@ -20,15 +16,10 @@ const {
   getDurableRunLogCursorMock: vi.fn(),
   getDurableRunLogMock: vi.fn(),
   getDurableRunMock: vi.fn(),
-  getVaultRootMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   listDurableRunsMock: vi.fn(),
   logErrorMock: vi.fn(),
   readDurableRunLogDeltaMock: vi.fn(),
-}));
-
-vi.mock('@personal-agent/core', () => ({
-  getVaultRoot: getVaultRootMock,
 }));
 
 vi.mock('../automation/durableRuns.js', () => ({
@@ -58,8 +49,6 @@ describe('registerRunAppRoutes', () => {
     getDurableRunLogCursorMock.mockReturnValue(0);
     getDurableRunLogMock.mockReset();
     getDurableRunMock.mockReset();
-    getVaultRootMock.mockReset();
-    getVaultRootMock.mockReturnValue('/missing-vault');
     invalidateAppTopicsMock.mockReset();
     listDurableRunsMock.mockReset();
     logErrorMock.mockReset();
@@ -89,8 +78,6 @@ describe('registerRunAppRoutes', () => {
       eventsHandler: handlers['GET /api/runs/:id/events']!,
       logHandler: handlers['GET /api/runs/:id/log']!,
       cancelHandler: handlers['POST /api/runs/:id/cancel']!,
-      appsHandler: handlers['GET /api/apps']!,
-      iconHandler: handlers['GET /api/apps/:id/icon']!,
     };
   }
 
@@ -111,78 +98,6 @@ describe('registerRunAppRoutes', () => {
       end: vi.fn(),
     };
   }
-
-  function createAssetResponse() {
-    return {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-      setHeader: vi.fn(),
-      send: vi.fn(),
-    };
-  }
-
-  it('lists apps with their vault directory id instead of display name', async () => {
-    const vaultRoot = await mkdtemp(join(tmpdir(), 'pa-apps-test-'));
-    try {
-      await mkdir(join(vaultRoot, 'apps', 'auto-research'), { recursive: true });
-      await writeFile(
-        join(vaultRoot, 'apps', 'auto-research', 'APP.md'),
-        `---
-name: Auto Research
-description: Launch overnight optimization sessions
-prompt: "/skill:auto-research"
-entry: run.html
-icon: icon.svg
----
-`,
-      );
-      getVaultRootMock.mockReturnValue(vaultRoot);
-      const { appsHandler } = createHarness();
-      const res = createJsonResponse();
-
-      await appsHandler({}, res);
-
-      expect(res.json).toHaveBeenCalledWith([
-        {
-          id: 'auto-research',
-          name: 'Auto Research',
-          description: 'Launch overnight optimization sessions',
-          prompt: '/skill:auto-research',
-          entry: 'run.html',
-          icon: 'icon.svg',
-          nav: [],
-        },
-      ]);
-    } finally {
-      await rm(vaultRoot, { recursive: true, force: true });
-    }
-  });
-
-  it('serves the icon declared by an app manifest', async () => {
-    const vaultRoot = await mkdtemp(join(tmpdir(), 'pa-app-icon-test-'));
-    try {
-      await mkdir(join(vaultRoot, 'apps', 'auto-research'), { recursive: true });
-      await writeFile(
-        join(vaultRoot, 'apps', 'auto-research', 'APP.md'),
-        `---
-name: Auto Research
-icon: icon.svg
----
-`,
-      );
-      await writeFile(join(vaultRoot, 'apps', 'auto-research', 'icon.svg'), '<svg></svg>');
-      getVaultRootMock.mockReturnValue(vaultRoot);
-      const { iconHandler } = createHarness();
-      const res = createAssetResponse();
-
-      await iconHandler({ params: { id: 'auto-research' } }, res);
-
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/svg+xml; charset=utf-8');
-      expect(res.send).toHaveBeenCalledWith(Buffer.from('<svg></svg>'));
-    } finally {
-      await rm(vaultRoot, { recursive: true, force: true });
-    }
-  });
 
   it('lists durable runs and logs list failures', async () => {
     const { listHandler } = createHarness();

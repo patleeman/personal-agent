@@ -121,7 +121,6 @@ const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () =>
 const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
   import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
 );
-const AppsPage = lazyRouteWithRecovery('apps-page', () => import('../apps/AppsPage').then((module) => ({ default: module.AppsPage })));
 const ExtensionManagerPage = lazyRouteWithRecovery('extension-manager-page', () =>
   import('../extensions/ExtensionManagerPage').then((module) => ({ default: module.ExtensionManagerPage })),
 );
@@ -459,7 +458,6 @@ export function App() {
                         <Route path="automations/:id" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="ext/:extensionId" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="ext/:extensionId/*" element={suspendRoute(<ExtensionPage />)} />
-                        <Route path="apps" element={suspendRoute(<AppsPage />)} />
                         <Route path="extensions" element={suspendRoute(<ExtensionManagerPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
                         <Route path="telemetry" element={suspendRoute(<TracesPage />)} />
