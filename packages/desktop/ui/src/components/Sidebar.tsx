@@ -45,6 +45,8 @@ import {
   getDesktopBridge,
   shouldUseNativeAppContextMenus,
 } from '../desktop/desktopBridge';
+import { isExtensionLeftNavItemSurface } from '../extensions/types';
+import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
@@ -145,6 +147,35 @@ const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
 const WORKBENCH_DOCUMENT_WITH_OPEN_FILE_SELECTOR = '[data-workbench-document-pane="true"][data-has-open-file="true"]';
 const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/automations'] as const;
+
+function getExtensionNavIcon(icon: string | undefined): string {
+  switch (icon) {
+    case 'automation':
+      return PATH.automations;
+    case 'browser':
+      return PATH.chatBubble;
+    case 'diff':
+      return PATH.list;
+    case 'file':
+      return PATH.workspace;
+    case 'gear':
+      return PATH.settings;
+    case 'graph':
+      return PATH.nodes;
+    case 'kanban':
+      return PATH.grid;
+    case 'play':
+      return PATH.clock;
+    case 'sparkle':
+      return PATH.sparkles;
+    case 'terminal':
+      return PATH.workspace;
+    case 'app':
+    case 'database':
+    default:
+      return PATH.grid;
+  }
+}
 
 type DesktopConversationShortcutAction =
   | 'close-conversation'
@@ -3527,6 +3558,8 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
     );
   }
 
+  const extensionRegistry = useExtensionRegistry();
+  const extensionNavItems = useMemo(() => extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface), [extensionRegistry.surfaces]);
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
   const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
@@ -3563,6 +3596,15 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
             forceActive={location.pathname.startsWith('/automations')}
           />
           <TopNavItem to="/apps" icon={PATH.grid} label="Apps" forceActive={location.pathname.startsWith('/apps')} />
+          {extensionNavItems.map((item) => (
+            <TopNavItem
+              key={`${item.extensionId}:${item.id}`}
+              to={item.route}
+              icon={getExtensionNavIcon(item.icon)}
+              label={item.label}
+              forceActive={location.pathname.startsWith(item.route)}
+            />
+          ))}
           <TopNavItem to="/gateways" icon={PATH.gateways} label="Gateways" forceActive={location.pathname.startsWith('/gateways')} />
           <TopNavItem to="/telemetry" icon={PATH.list} label="Telemetry" forceActive={location.pathname.startsWith('/telemetry')} />
           {!hideKnowledgeNav ? (

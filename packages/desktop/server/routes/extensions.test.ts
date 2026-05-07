@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerExtensionRoutes } from './extensions.js';
 
@@ -7,7 +11,10 @@ type Handler = (req: { params?: Record<string, string> }, res: ReturnType<typeof
 function createResponse() {
   return {
     json: vi.fn(),
+    send: vi.fn(),
+    sendFile: vi.fn(),
     status: vi.fn().mockReturnThis(),
+    type: vi.fn().mockReturnThis(),
   };
 }
 
@@ -24,6 +31,10 @@ function createHarness() {
     postHandler: (path: string) => postHandlers.get(path)!,
   };
 }
+
+afterEach(() => {
+  delete process.env.PERSONAL_AGENT_STATE_ROOT;
+});
 
 describe('registerExtensionRoutes', () => {
   it('serves extension schema, registry, routes, and surfaces', () => {
@@ -50,11 +61,42 @@ describe('registerExtensionRoutes', () => {
     ]);
   });
 
-  it('accepts explicit reload calls for the static v0 registry', () => {
+  it('serves runtime extension files inside the package root', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
+    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
+    writeFileSync(join(extensionRoot, 'frontend', 'page.html'), '<h1>Agent Board</h1>');
+
+    const harness = createHarness();
+    const res = createResponse();
+    harness.getHandler('/api/extensions/:id/files/*')({ params: { id: 'agent-board', 0: 'frontend/page.html' } }, res);
+
+    expect(res.type).toHaveBeenCalledWith('html');
+    expect(res.send).toHaveBeenCalledWith('<h1>Agent Board</h1>');
+  });
+
+  it('rejects extension file traversal', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
+
+    const harness = createHarness();
+    const res = createResponse();
+    harness.getHandler('/api/extensions/:id/files/*')({ params: { id: 'agent-board', 0: '../escape.html' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Extension file path escapes package root.' });
+  });
+
+  it('accepts explicit reload calls for runtime manifests', () => {
     const harness = createHarness();
     const reloadAllRes = createResponse();
     harness.postHandler('/api/extensions/reload')({}, reloadAllRes);
-    expect(reloadAllRes.json).toHaveBeenCalledWith({ ok: true, reloaded: false, message: 'Static system extension registry is current.' });
+    expect(reloadAllRes.json).toHaveBeenCalledWith({ ok: true, reloaded: false, message: 'Runtime manifests are read on demand.' });
 
     const reloadOneRes = createResponse();
     harness.postHandler('/api/extensions/:id/reload')({ params: { id: 'system-automations' } }, reloadOneRes);
@@ -62,7 +104,7 @@ describe('registerExtensionRoutes', () => {
       ok: true,
       id: 'system-automations',
       reloaded: false,
-      message: 'Static system extension registry is current.',
+      message: 'Runtime manifests are read on demand.',
     });
   });
 });

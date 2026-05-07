@@ -1,4 +1,5 @@
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
+import type { ExtensionManifest, ExtensionRouteSummary, ExtensionSurfaceSummary } from '../extensions/types';
 import type {
   AppStatus,
   AutoModeSummary,
@@ -299,6 +300,10 @@ export const api = {
     return get<DaemonState>('/daemon');
   },
   updateDaemonPower: async (input: { keepAwake: boolean }) => patch<DaemonState>('/daemon/power', input),
+  extensions: async () => get<ExtensionManifest[]>('/extensions'),
+  extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
+  extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
+  reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   sessions: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {

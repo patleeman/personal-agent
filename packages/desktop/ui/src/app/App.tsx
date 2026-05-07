@@ -451,6 +451,8 @@ export function App() {
                         <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
                         <Route path="automations" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="automations/:id" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="ext/:extensionId" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="ext/:extensionId/*" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="apps" element={suspendRoute(<AppsPage />)} />
                         <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
                         <Route path="telemetry" element={suspendRoute(<TracesPage />)} />

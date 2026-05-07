@@ -291,10 +291,11 @@ Expose the TypeScript schema and generated JSON Schema through the app docs. Ext
 Expose registry endpoints for agents and the Extension Manager:
 
 ```http
-GET /api/extensions/schema          # placements, kinds, icon names, generated manifest JSON Schema
-GET /api/extensions                 # installed extensions and enabled state
+GET /api/extensions/schema          # placements, kinds, scopes, icon names
+GET /api/extensions                 # installed system + runtime extension manifests
 GET /api/extensions/routes          # claimed routes and owning extension
 GET /api/extensions/surfaces        # registered surfaces by placement/kind
+GET /api/extensions/:id/files/*     # serve iframe assets from a runtime extension package
 ```
 
 The agent workflow for creating an extension should be:
@@ -303,7 +304,7 @@ The agent workflow for creating an extension should be:
 2. Call or inspect the extension registry to avoid route/surface collisions.
 3. Pick icon names from the registry, not from vibes.
 4. Create the package.
-5. Ask PA to reload extensions.
+5. Ask PA to reload extensions. In the current skeleton, runtime manifests are read on demand; reload exists as the explicit API seam for the future cached TS backend loader.
 
 ## Lifecycle and package management
 
