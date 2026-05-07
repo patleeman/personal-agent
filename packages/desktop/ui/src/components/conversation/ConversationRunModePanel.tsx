@@ -1,7 +1,19 @@
 import { cx } from '../ui';
 
+export interface DraftMissionConfig {
+  goal: string;
+  maxTurns: number;
+}
+
+export interface DraftLoopConfig {
+  prompt: string;
+  maxIterations: number;
+  delay: string;
+}
+
 export interface RunModePanelProps {
   mode: 'manual' | 'nudge' | 'mission' | 'loop';
+  running: boolean;
   mission?: {
     goal: string;
     tasks: Array<{ id: string; description: string; status: string }>;
@@ -14,10 +26,22 @@ export interface RunModePanelProps {
     iterationsUsed: number;
     delay: string;
   } | null;
-  running: boolean;
+  draftMission?: DraftMissionConfig;
+  draftLoop?: DraftLoopConfig;
+  onDraftMissionChange?: (draft: DraftMissionConfig) => void;
+  onDraftLoopChange?: (draft: DraftLoopConfig) => void;
 }
 
-export function ConversationRunModePanel({ mode, mission, loop, running }: RunModePanelProps) {
+export function ConversationRunModePanel({
+  mode,
+  running,
+  mission,
+  loop,
+  draftMission,
+  draftLoop,
+  onDraftMissionChange,
+  onDraftLoopChange,
+}: RunModePanelProps) {
   if (mode === 'manual' || mode === 'nudge') {
     return null;
   }
@@ -37,7 +61,7 @@ export function ConversationRunModePanel({ mode, mission, loop, running }: RunMo
           )}
         </div>
         {running && mission ? (
-          <div className="task-list max-h-[120px] overflow-y-auto">
+          <div className="max-h-[120px] overflow-y-auto">
             {mission.tasks.map((task) => (
               <div
                 key={task.id}
@@ -59,8 +83,30 @@ export function ConversationRunModePanel({ mode, mission, loop, running }: RunMo
             ))}
           </div>
         ) : (
-          <div className="rounded border border-border-subtle bg-surface/45 p-2 text-[11px] text-dim">
-            <p>Set a goal and start. The AI will propose a task list on the first turn.</p>
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={draftMission?.goal ?? ''}
+              onChange={(e) => onDraftMissionChange?.({ goal: e.target.value, maxTurns: draftMission?.maxTurns ?? 20 })}
+              rows={2}
+              className="w-full resize-none rounded-md border border-border-subtle bg-surface/45 px-2.5 py-1.5 text-[12px] text-primary outline-none placeholder:text-dim focus:border-accent/40"
+              placeholder="Goal: what should be accomplished? (optional — inferred from conversation if blank)"
+            />
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[11px] text-dim">
+                Max turns
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={draftMission?.maxTurns ?? 20}
+                  onChange={(e) =>
+                    onDraftMissionChange?.({ goal: draftMission?.goal ?? '', maxTurns: Math.max(1, parseInt(e.target.value, 10) || 20) })
+                  }
+                  className="w-16 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
+                />
+              </label>
+              <span className="text-[10px] text-dim">Stop when all tasks done or max turns reached</span>
+            </div>
           </div>
         )}
       </div>
@@ -81,8 +127,53 @@ export function ConversationRunModePanel({ mode, mission, loop, running }: RunMo
           )}
         </div>
         {!running && (
-          <div className="rounded border border-border-subtle bg-surface/45 p-2 text-[11px] text-dim">
-            <p>Set a loop prompt, iterations count, and delay. The AI will repeat the prompt N times.</p>
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={draftLoop?.prompt ?? ''}
+              onChange={(e) =>
+                onDraftLoopChange?.({
+                  prompt: e.target.value,
+                  maxIterations: draftLoop?.maxIterations ?? 5,
+                  delay: draftLoop?.delay ?? 'After each turn',
+                })
+              }
+              rows={2}
+              className="w-full resize-none rounded-md border border-border-subtle bg-surface/45 px-2.5 py-1.5 text-[12px] text-primary outline-none placeholder:text-dim focus:border-accent/40"
+              placeholder="Prompt to repeat each iteration"
+            />
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-[11px] text-dim">
+                Iterations
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={draftLoop?.maxIterations ?? 5}
+                  onChange={(e) =>
+                    onDraftLoopChange?.({
+                      prompt: draftLoop?.prompt ?? '',
+                      maxIterations: Math.max(1, parseInt(e.target.value, 10) || 5),
+                      delay: draftLoop?.delay ?? 'After each turn',
+                    })
+                  }
+                  className="w-16 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-dim">
+                Delay
+                <input
+                  value={draftLoop?.delay ?? 'After each turn'}
+                  onChange={(e) =>
+                    onDraftLoopChange?.({
+                      prompt: draftLoop?.prompt ?? '',
+                      maxIterations: draftLoop?.maxIterations ?? 5,
+                      delay: e.target.value,
+                    })
+                  }
+                  className="w-28 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
+                />
+              </label>
+            </div>
           </div>
         )}
       </div>

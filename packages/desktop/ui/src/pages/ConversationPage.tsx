@@ -1322,6 +1322,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
   const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
+  const [draftMissionConfig, setDraftMissionConfig] = useState<{ goal: string; maxTurns: number }>({ goal: '', maxTurns: 20 });
+  const [draftLoopConfig, setDraftLoopConfig] = useState<{ prompt: string; maxIterations: number; delay: string }>({
+    prompt: '',
+    maxIterations: 5,
+    delay: 'After each turn',
+  });
   const initialModelPreferenceState = useMemo(
     () =>
       resolveConversationInitialModelPreferenceState({
@@ -3951,7 +3957,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
         const needsLive = nextMode !== 'manual';
         const targetConversationId = needsLive ? await ensureConversationIsLive('set run mode') : id;
-        const input: { mode: string } = { mode: nextMode };
+
+        // Build the input based on the mode
+        const input: Record<string, unknown> = { mode: nextMode };
+        if (nextMode === 'mission') {
+          const goal = draftMissionConfig.goal.trim();
+          input.mission = {
+            goal: goal || 'Mission',
+            tasks: [],
+            maxTurns: draftMissionConfig.maxTurns,
+            turnsUsed: 0,
+          };
+        } else if (nextMode === 'loop') {
+          input.loop = {
+            prompt: draftLoopConfig.prompt || 'Run loop iteration',
+            maxIterations: draftLoopConfig.maxIterations,
+            iterationsUsed: 0,
+            delay: draftLoopConfig.delay,
+          };
+        }
+
         const nextState = await api.updateConversationAutoMode(targetConversationId, input, currentSurfaceId);
 
         if (targetConversationId === id) {
@@ -3963,7 +3988,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setConversationAutoModeBusy(false);
       }
     },
-    [conversationAutoModeBusy, currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice],
+    [
+      conversationAutoModeBusy,
+      currentSurfaceId,
+      draft,
+      ensureConversationIsLive,
+      id,
+      materializeDraftConversation,
+      showNotice,
+      draftMissionConfig,
+      draftLoopConfig,
+    ],
   );
 
   const rewindConversationFromMessage = useCallback(
@@ -6567,6 +6602,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 conversationAutoModeEnabled={conversationAutoModeEnabled}
                 conversationAutoModeBusy={conversationAutoModeBusy}
                 conversationAutoMode={effectiveConversationAutoModeState}
+                draftMissionConfig={draftMissionConfig}
+                draftLoopConfig={draftLoopConfig}
+                onDraftMissionChange={setDraftMissionConfig}
+                onDraftLoopChange={setDraftLoopConfig}
                 dictationState={dictationState}
                 dictationLevelSamples={dictationLevelSamples}
                 dictationStartedAt={dictationStartedAt}

@@ -1,9 +1,14 @@
 import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, RefObject } from 'react';
 
-import type { ModelInfo } from '../../shared/types';
+import type { ConversationAutoModeState, ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
-import { ConversationRunModePanel, ConversationRunStatusStrip } from './ConversationRunModePanel';
+import {
+  ConversationRunModePanel,
+  ConversationRunStatusStrip,
+  type DraftLoopConfig,
+  type DraftMissionConfig,
+} from './ConversationRunModePanel';
 
 const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 780;
 
@@ -25,6 +30,10 @@ export function ConversationComposerInputControls({
   conversationAutoModeEnabled,
   conversationAutoModeBusy,
   conversationAutoMode,
+  draftMissionConfig,
+  draftLoopConfig,
+  onDraftMissionChange,
+  onDraftLoopChange,
   dictationState,
   dictationLevelSamples,
   dictationStartedAt,
@@ -73,7 +82,11 @@ export function ConversationComposerInputControls({
   showAutoModeToggle: boolean;
   conversationAutoModeEnabled: boolean;
   conversationAutoModeBusy: boolean;
-  conversationAutoMode: import('../../shared/types').ConversationAutoModeState | null;
+  conversationAutoMode: ConversationAutoModeState | null;
+  draftMissionConfig?: DraftMissionConfig;
+  draftLoopConfig?: DraftLoopConfig;
+  onDraftMissionChange?: (draft: DraftMissionConfig) => void;
+  onDraftLoopChange?: (draft: DraftLoopConfig) => void;
   dictationState: 'idle' | 'recording' | 'transcribing';
   dictationLevelSamples: number[];
   dictationStartedAt: number | null;
@@ -136,6 +149,10 @@ export function ConversationComposerInputControls({
             running={Boolean(conversationAutoModeEnabled && streamIsStreaming)}
             mission={conversationAutoMode?.mission ?? null}
             loop={conversationAutoMode?.loop ?? null}
+            draftMission={draftMissionConfig}
+            draftLoop={draftLoopConfig}
+            onDraftMissionChange={onDraftMissionChange}
+            onDraftLoopChange={onDraftLoopChange}
           />
         </div>
         <div className="px-3 pt-1">
