@@ -828,16 +828,6 @@ describe('api desktop transport', () => {
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
-    const readConversationTitleSettings = vi.fn().mockResolvedValue({
-      enabled: true,
-      currentModel: '',
-      effectiveModel: 'openai/gpt-5.4',
-    });
-    const updateConversationTitleSettings = vi.fn().mockResolvedValue({
-      enabled: false,
-      currentModel: 'anthropic/claude-sonnet-4-6',
-      effectiveModel: 'anthropic/claude-sonnet-4-6',
-    });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -850,33 +840,18 @@ describe('api desktop transport', () => {
         readDefaultCwd,
         updateDefaultCwd,
         pickFolder,
-        readConversationTitleSettings,
-        updateConversationTitleSettings,
       },
     });
 
     const { api } = await import('./api');
     const defaultCwd = await api.defaultCwd();
     const savedDefaultCwd = await api.updateDefaultCwd('./repo');
-    const conversationTitleSettings = await api.conversationTitleSettings();
-    const savedConversationTitleSettings = await api.updateConversationTitleSettings({
-      enabled: false,
-      model: 'anthropic/claude-sonnet-4-6',
-    });
 
     expect(readDefaultCwd).toHaveBeenCalledTimes(1);
     expect(updateDefaultCwd).toHaveBeenCalledWith('./repo');
-    expect(readConversationTitleSettings).toHaveBeenCalledTimes(1);
-    expect(updateConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
-    expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    expect(savedConversationTitleSettings).toEqual({
-      enabled: false,
-      currentModel: 'anthropic/claude-sonnet-4-6',
-      effectiveModel: 'anthropic/claude-sonnet-4-6',
-    });
   });
 
   it('uses HTTP for vault files and the desktop bridge for folder picking on the local Electron host', async () => {
@@ -1057,18 +1032,9 @@ describe('api desktop transport', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createJsonResponse({ currentCwd: '', effectiveCwd: '/repo' }))
-      .mockResolvedValueOnce(createJsonResponse({ currentCwd: './repo', effectiveCwd: '/repo' }))
-      .mockResolvedValueOnce(createJsonResponse({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' }))
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          enabled: false,
-          currentModel: 'anthropic/claude-sonnet-4-6',
-          effectiveModel: 'anthropic/claude-sonnet-4-6',
-        }),
-      );
+      .mockResolvedValueOnce(createJsonResponse({ currentCwd: './repo', effectiveCwd: '/repo' }));
     vi.stubGlobal('fetch', fetchMock);
     const readDefaultCwd = vi.fn();
-    const readConversationTitleSettings = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -1079,41 +1045,22 @@ describe('api desktop transport', () => {
           activeHostSummary: 'Remote host reachable.',
         }),
         readDefaultCwd,
-        readConversationTitleSettings,
       },
     });
 
     const { api } = await import('./api');
     const defaultCwd = await api.defaultCwd();
     const savedDefaultCwd = await api.updateDefaultCwd('./repo');
-    const conversationTitleSettings = await api.conversationTitleSettings();
-    const savedConversationTitleSettings = await api.updateConversationTitleSettings({
-      enabled: false,
-      model: 'anthropic/claude-sonnet-4-6',
-    });
 
     expect(readDefaultCwd).not.toHaveBeenCalled();
-    expect(readConversationTitleSettings).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/default-cwd', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/default-cwd', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: './repo' }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversation-titles/settings', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversation-titles/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: false, model: 'anthropic/claude-sonnet-4-6' }),
-    });
     expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
-    expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
-    expect(savedConversationTitleSettings).toEqual({
-      enabled: false,
-      currentModel: 'anthropic/claude-sonnet-4-6',
-      effectiveModel: 'anthropic/claude-sonnet-4-6',
-    });
   });
 
   it('falls back to HTTP for desktop vault-file and folder-picker bridges on non-local hosts', async () => {

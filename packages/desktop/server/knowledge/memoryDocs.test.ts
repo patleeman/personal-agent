@@ -193,6 +193,12 @@ profiles:
         description: 'Fallback description.',
         path: skillPath('fallback-skill'),
       },
+      {
+        name: 'other-only',
+        source: 'global',
+        description: 'Hidden from assistant.',
+        path: skillPath('other-only'),
+      },
     ]);
 
     const created = createSkillDoc({

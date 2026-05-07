@@ -59,7 +59,7 @@ describe('scheduledTasks', () => {
       scheduleType: 'cron',
       cron: '0 9 * * *',
       at: undefined,
-      profile: 'assistant',
+      profile: 'shared',
       model: 'openai-codex/gpt-5.4',
       cwd: expect.stringContaining('agent-workspace'),
       timeoutSeconds: 1800,
@@ -85,7 +85,7 @@ describe('scheduledTasks', () => {
       scheduleType: 'at',
       cron: undefined,
       at: '2026-04-10T01:00:00.000Z',
-      profile: 'assistant',
+      profile: 'shared',
       model: undefined,
       cwd: undefined,
       timeoutSeconds: 1800,
@@ -343,8 +343,8 @@ describe('scheduledTasks', () => {
 
     writeFileSync(filePath, `---\ncron: "0 9 * * *"\nprofile: "assistant"\n---\nStandalone task\n`);
 
-    expect(taskBelongsToProfile({ filePath }, 'assistant')).toBe(true);
-    expect(taskBelongsToProfile({ filePath }, 'datadog')).toBe(false);
+    expect(taskBelongsToProfile({ filePath }, 'assistant')).toBe(false);
+    expect(taskBelongsToProfile({ filePath }, 'shared')).toBe(true);
   });
 
   it('returns false for missing or invalid standalone task files', () => {

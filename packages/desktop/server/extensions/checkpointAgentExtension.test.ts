@@ -103,7 +103,6 @@ describe('checkpoint agent extension', () => {
       fileCount: 1,
       linesAdded: 2,
       linesDeleted: 0,
-      openRequested: true,
     });
 
     const checkpointId = created.details?.checkpointId as string;

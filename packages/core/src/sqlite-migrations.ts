@@ -429,10 +429,14 @@ export function resolveBackupPath(dbPath: string, timestamp: string): string {
  */
 export function createDbBackup(dbPath: string, db?: SqliteDatabase): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = resolveBackupPath(dbPath, timestamp);
   const backupDir = resolveBackupDir(dbPath);
 
   mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+
+  let backupPath = resolveBackupPath(dbPath, timestamp);
+  for (let counter = 1; existsSync(backupPath); counter += 1) {
+    backupPath = resolveBackupPath(dbPath, `${timestamp}-${String(counter).padStart(3, '0')}`);
+  }
 
   // Flush WAL if we have a handle
   if (db) {

@@ -97,8 +97,8 @@ describe('KnowledgePage', () => {
 
     const html = renderPage('/knowledge');
 
-    expect(html).toContain('Sync a repo to enable Knowledge');
-    expect(html).toContain('The Knowledge UI stays empty until a managed repo is configured.');
+    expect(html).toContain('Connect a git repo to start using Knowledge');
+    expect(html).toContain('Knowledge stores durable docs, skills, and instruction files in a git repository.');
     expect(html).toContain('href="/settings#settings-general"');
     expect(html).not.toContain('Browse and edit files from the managed knowledge repo.');
     expect(html).not.toContain('Select a file to start editing');

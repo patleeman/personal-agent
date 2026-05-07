@@ -53,6 +53,7 @@ const {
   expandPromptReferencesWithNodeGraphMock,
   publishAppEventMock,
   createSessionListenerUnsubscribeMock,
+  writeAppTelemetryEventMock,
 } = vi.hoisted(() => ({
   LiveSessionControlErrorClass: class LiveSessionControlError extends Error {},
   abortLocalSessionMock: vi.fn(),
@@ -106,6 +107,7 @@ const {
   buildReferencedVaultFilesContextMock: vi.fn(),
   expandPromptReferencesWithNodeGraphMock: vi.fn(),
   publishAppEventMock: vi.fn(),
+  writeAppTelemetryEventMock: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
@@ -115,6 +117,7 @@ vi.mock('node:fs', () => ({
 vi.mock('@personal-agent/core', () => ({
   getStateRoot: vi.fn(() => '/tmp/personal-agent-state'),
   resolveConversationAttachmentPromptFiles: resolveConversationAttachmentPromptFilesMock,
+  writeAppTelemetryEvent: writeAppTelemetryEventMock,
 }));
 
 vi.mock('@personal-agent/daemon', () => ({

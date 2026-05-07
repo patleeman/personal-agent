@@ -84,18 +84,11 @@ function typeInput(input: HTMLInputElement, value: string) {
   });
 }
 
-function keyDown(element: HTMLElement, key: string) {
-  act(() => {
-    element.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-  });
-}
-
 describe('GatewaysPage', () => {
   let gatewaysMock: ReturnType<typeof vi.spyOn>;
   let updateGatewayConnectionMock: ReturnType<typeof vi.spyOn>;
   let detachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
   let attachGatewayConversationMock: ReturnType<typeof vi.spyOn>;
-  let searchSlackMcpChannelsMock: ReturnType<typeof vi.spyOn>;
   let saveSlackMcpChannelMock: ReturnType<typeof vi.spyOn>;
   let slackMcpAuthStateMock: ReturnType<typeof vi.spyOn>;
   let telegramGatewayTokenMock: ReturnType<typeof vi.spyOn>;
@@ -111,7 +104,6 @@ describe('GatewaysPage', () => {
     updateGatewayConnectionMock = vi.spyOn(api, 'updateGatewayConnection');
     detachGatewayConversationMock = vi.spyOn(api, 'detachGatewayConversation');
     attachGatewayConversationMock = vi.spyOn(api, 'attachGatewayConversation');
-    searchSlackMcpChannelsMock = vi.spyOn(api, 'searchSlackMcpChannels');
     saveSlackMcpChannelMock = vi.spyOn(api, 'saveSlackMcpChannel');
     vi.spyOn(api, 'attachSlackMcpChannel');
     slackMcpAuthStateMock = vi.spyOn(api, 'slackMcpAuthState').mockResolvedValue({ authenticated: false });
@@ -427,13 +419,13 @@ describe('GatewaysPage', () => {
     expect(container.textContent).not.toContain('Pause');
   });
 
-  it('shows Slack search when authenticated', async () => {
+  it('shows Slack channel config when authenticated', async () => {
     gatewaysMock.mockResolvedValue(createGatewayState());
     slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
     const { container } = renderPage();
     await flushAsyncWork();
 
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]')).toBeTruthy();
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="https://…/archives/C… or C0B1AHPH4ET"]')).toBeTruthy();
   });
 
   it('hides Slack search when not authenticated', async () => {
@@ -442,7 +434,7 @@ describe('GatewaysPage', () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="https://…/archives/C… or C0B1AHPH4ET"]')).toBeNull();
     expect(container.textContent).toContain('Connect Slack');
   });
 
@@ -677,57 +669,9 @@ describe('GatewaysPage', () => {
     expect(detachGatewayConversationMock).toHaveBeenCalledWith('conv-abc', 'telegram');
   });
 
-  it('searches Slack channels', async () => {
-    gatewaysMock.mockResolvedValue(createGatewayState());
-    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
-    searchSlackMcpChannelsMock.mockResolvedValue({
-      channels: [
-        { id: 'C001', name: 'general' },
-        { id: 'C002', name: 'random' },
-      ],
-    });
-
-    const { container } = renderPage();
-    await flushAsyncWork();
-
-    const input = container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]');
-    expect(input).toBeTruthy();
-
-    typeInput(input!, '#general');
-    keyDown(input!, 'Enter');
-    await flushAsyncWork();
-
-    expect(searchSlackMcpChannelsMock).toHaveBeenCalledWith('#general');
-    expect(container.textContent).toContain('general');
-    expect(container.textContent).toContain('C001');
-    expect(container.textContent).toContain('random');
-  });
-
-  it('shows an empty Slack search result', async () => {
-    gatewaysMock.mockResolvedValue(createGatewayState());
-    slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
-    searchSlackMcpChannelsMock.mockResolvedValue({ channels: [] });
-
-    const { container } = renderPage();
-    await flushAsyncWork();
-
-    const input = container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]');
-    expect(input).toBeTruthy();
-
-    typeInput(input!, 'missing-channel');
-    keyDown(input!, 'Enter');
-    await flushAsyncWork();
-
-    expect(searchSlackMcpChannelsMock).toHaveBeenCalledWith('missing-channel');
-    expect(container.textContent).toContain('No Slack channels found.');
-  });
-
   it('saves a Slack channel from search results', async () => {
     gatewaysMock.mockResolvedValue(createGatewayState());
     slackMcpAuthStateMock.mockResolvedValue({ authenticated: true });
-    searchSlackMcpChannelsMock.mockResolvedValue({
-      channels: [{ id: 'C001', name: 'general' }],
-    });
     saveSlackMcpChannelMock.mockResolvedValue(
       createGatewayState({
         connections: [
@@ -747,21 +691,18 @@ describe('GatewaysPage', () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    const input = container.querySelector<HTMLInputElement>('input[placeholder="Search channels…"]');
-    typeInput(input!, 'general');
-    keyDown(input!, 'Enter');
+    const input = container.querySelector<HTMLInputElement>('input[placeholder="https://…/archives/C… or C0B1AHPH4ET"]');
+    expect(input).toBeTruthy();
+    typeInput(input!, 'C0B1AHPH4ET');
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((btn) => btn.textContent?.trim() === 'Save');
+    expect(saveButton).toBeTruthy();
+
+    click(saveButton!);
     await flushAsyncWork();
 
-    const channelBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.includes('general') || btn.textContent?.includes('C001'),
-    );
-    expect(channelBtn).toBeTruthy();
-
-    click(channelBtn!);
-    await flushAsyncWork();
-
-    expect(saveSlackMcpChannelMock).toHaveBeenCalledWith({ channelId: 'C001', channelLabel: 'general' });
-    expect(container.textContent).toContain('Channel #general saved.');
+    expect(saveSlackMcpChannelMock).toHaveBeenCalledWith({ channelId: 'C0B1AHPH4ET', channelLabel: 'C0B1AHPH4ET' });
+    expect(container.textContent).toContain('Channel C0B1AHPH4ET saved.');
   });
 
   it('renders recent activity events', async () => {

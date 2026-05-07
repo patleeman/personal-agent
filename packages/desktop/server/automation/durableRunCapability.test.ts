@@ -10,6 +10,7 @@ const {
   listDurableRunsMock,
   markDurableRunAttentionReadMock,
   markDurableRunAttentionUnreadMock,
+  writeAppTelemetryEventMock,
 } = vi.hoisted(() => ({
   cancelDurableRunMock: vi.fn(),
   clearDurableRunsListCacheMock: vi.fn(),
@@ -20,9 +21,11 @@ const {
   listDurableRunsMock: vi.fn(),
   markDurableRunAttentionReadMock: vi.fn(),
   markDurableRunAttentionUnreadMock: vi.fn(),
+  writeAppTelemetryEventMock: vi.fn(),
 }));
 
 vi.mock('@personal-agent/core', () => ({
+  writeAppTelemetryEvent: writeAppTelemetryEventMock,
   markDurableRunAttentionRead: markDurableRunAttentionReadMock,
   markDurableRunAttentionUnread: markDurableRunAttentionUnreadMock,
 }));

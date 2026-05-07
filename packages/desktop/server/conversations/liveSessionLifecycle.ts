@@ -33,7 +33,10 @@ export function getDefaultLifecycleHandlers(): Array<LiveSessionLifecycleHandler
   return defaultHandlers ?? [];
 }
 
-export function notifyLiveSessionLifecycleHandlers(event: LiveSessionLifecycleEvent, handlers: Array<LiveSessionLifecycleHandler>): void {
+export function notifyLiveSessionLifecycleHandlers(
+  event: LiveSessionLifecycleEvent,
+  handlers: Array<LiveSessionLifecycleHandler> = [],
+): void {
   for (const handler of handlers) {
     Promise.resolve(handler(event)).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);

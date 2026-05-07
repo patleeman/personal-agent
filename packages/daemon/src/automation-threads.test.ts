@@ -67,7 +67,7 @@ describe('ensureAutomationThread', () => {
     const ensured = ensureAutomationThread(task.id, { dbPath, stateRoot });
 
     const session = SessionManager.open(ensured.threadSessionFile as string);
-    expect(session.getCwd()).toBe(join(stateRoot, 'pi-agent-runtime', 'chat-workspaces', 'assistant'));
+    expect(session.getCwd()).toBe(join(stateRoot, 'pi-agent-runtime', 'chat-workspaces', 'shared'));
     expect(existsSync(session.getCwd())).toBe(true);
   });
 

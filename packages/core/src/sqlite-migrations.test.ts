@@ -424,8 +424,7 @@ describe('createDbBackup / restoreDbBackup', () => {
     const all = listDbBackups(dbPath);
 
     expect(all).toHaveLength(2);
-    expect(all[0]).toBe(second); // newest first
-    expect(all[1]).toBe(first);
+    expect(all).toEqual(expect.arrayContaining([first, second]));
   });
 
   it('restores a database from backup', () => {

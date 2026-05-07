@@ -21,6 +21,7 @@ const apiMocks = vi.hoisted(() => ({
   setOpenConversationTabs: vi.fn(),
   setSavedWorkspacePaths: vi.fn(),
   changeConversationCwd: vi.fn(),
+  gateways: vi.fn(),
   sessions: vi.fn(),
 }));
 
@@ -167,6 +168,7 @@ describe('Sidebar group drag reordering', () => {
     apiMocks.setOpenConversationTabs.mockReset();
     apiMocks.setSavedWorkspacePaths.mockReset();
     apiMocks.changeConversationCwd.mockReset();
+    apiMocks.gateways.mockReset();
     apiMocks.sessions.mockReset();
     apiMocks.setOpenConversationTabs.mockResolvedValue({
       ok: true,
@@ -176,6 +178,7 @@ describe('Sidebar group drag reordering', () => {
       workspacePaths: [],
     });
     apiMocks.setSavedWorkspacePaths.mockResolvedValue([]);
+    apiMocks.gateways.mockResolvedValue({ providers: [], connections: [], bindings: [], events: [], chatTargets: [] });
     apiMocks.sessions.mockResolvedValue([]);
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));

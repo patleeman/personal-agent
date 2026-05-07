@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
@@ -100,7 +101,11 @@ function renderTree() {
   const onFileSelect = vi.fn();
 
   act(() => {
-    root.render(<VaultFileTree activeFileId={null} onFileSelect={onFileSelect} />);
+    root.render(
+      <MemoryRouter>
+        <VaultFileTree activeFileId={null} onFileSelect={onFileSelect} />
+      </MemoryRouter>,
+    );
   });
 
   mountedRoots.push(root);
@@ -109,7 +114,11 @@ function renderTree() {
 
 function ManagedTree({ initialActiveFileId = null }: { initialActiveFileId?: string | null }) {
   const [activeFileId, setActiveFileId] = React.useState<string | null>(initialActiveFileId);
-  return <VaultFileTree activeFileId={activeFileId} onFileSelect={setActiveFileId} />;
+  return (
+    <MemoryRouter>
+      <VaultFileTree activeFileId={activeFileId} onFileSelect={setActiveFileId} />
+    </MemoryRouter>
+  );
 }
 
 function renderManagedTree(initialActiveFileId?: string | null) {
@@ -289,8 +298,8 @@ describe('VaultFileTree', () => {
     const { container } = renderTree();
     await flushAsyncWork();
 
-    expect(container.textContent).toContain('Sync a repo to enable Knowledge.');
-    expect(container.textContent).toContain('The Knowledge UI stays empty until a managed repo is configured.');
+    expect(container.textContent).toContain('Connect a git repo to use Knowledge');
+    expect(container.textContent).toContain('PA needs a git repo to store and sync durable docs.');
     expect(queryInShadowRoots(container, 'button[aria-label="New file"]')).toBeNull();
     expect(apiMocks.vaultFiles).not.toHaveBeenCalled();
   });

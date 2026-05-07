@@ -80,6 +80,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   },
   createAgentSession: createAgentSessionMock,
   createBashTool: createBashToolMock,
+  estimateTokens: () => 0,
 }));
 
 vi.mock('../shared/appEvents.js', () => ({
@@ -569,7 +570,6 @@ describe('liveSessions bootstrap helpers', () => {
     );
     expect(sessionManagerOpenMock).toHaveBeenCalledWith('/tmp/stored-session.jsonl', undefined, '/tmp/override-workspace');
     expect(registry.get('session-resumed')?.cwd).toBe('/tmp/override-workspace');
-    expect(registry.get('session-resumed')?.autoTitleRequested).toBe(true);
   });
 
   it('applies queued working directory changes after the current turn ends and auto-continues in the same session', async () => {

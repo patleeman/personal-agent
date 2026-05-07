@@ -48,11 +48,8 @@ describe('ConversationPreferencesRow', () => {
     expect(html).toContain('Provider A');
     expect(html).toContain('Model A');
     expect(html).toContain('Run mode');
-    expect(html).toContain('Manual');
-    expect(html).toContain('Manual');
-    expect(html).toContain('Nudge');
-    expect(html).toContain('Mission');
-    expect(html).toContain('Loop');
+    expect(html).toContain('Chat');
+    expect(html).toContain('Chat');
   });
 
   it('renders the compact settings affordance without opening the menu on server render', () => {
