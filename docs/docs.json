@@ -15,6 +15,7 @@
         { "title": "Diff Viewer", "path": "diff-viewer.md" },
         { "title": "Artifacts", "path": "artifacts.md" },
         { "title": "Apps", "path": "apps.md" },
+        { "title": "Extensions", "path": "extensions.md" },
         { "title": "Git Integration", "path": "git-integration.md" },
         { "title": "Projects", "path": "projects.md" },
         { "title": "Knowledge System", "path": "knowledge-system.md" },

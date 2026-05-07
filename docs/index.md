@@ -20,6 +20,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Telemetry](telemetry.md) — local trace stats and monitoring views
 - [Gateways](gateways.md) — external app routing into conversations
 - [Apps](apps.md) — durable workflow UIs stored in the knowledge base
+- [Extensions](extensions.md) — planned self-extensibility package model
 - [Knowledge System](knowledge-system.md) — vault, docs, skills, instruction files
 - [Configuration](configuration.md) — file-based config, env vars
 - [Daemon](daemon.md) — background process, runs, automations, companion
@@ -28,7 +29,7 @@ See [Getting Started](getting-started.md) for the full setup.
 
 **View Modes** — Conversation, Workbench, and Zen views, plus conversation context attachments.
 
-**Core Product Model** — conversations, checkpoints, diffs, artifacts, apps, git integration, projects, knowledge system, and KB sync.
+**Core Product Model** — conversations, checkpoints, diffs, artifacts, apps, extensions, git integration, projects, knowledge system, and KB sync.
 
 **Desktop App** — Electron shell, settings UI, file explorer, telemetry, gateways, and automations management.
 
