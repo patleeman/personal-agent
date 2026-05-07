@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { getStateRoot } from '@personal-agent/core';
@@ -33,6 +35,12 @@ export interface ExtensionBackendContext {
 }
 
 type ExtensionBackendModule = Record<string, unknown>;
+
+interface ExtensionBackendBuildResult {
+  path: string;
+  rebuilt: boolean;
+  stale: boolean;
+}
 
 export interface ExtensionActionInvokeResult {
   ok: true;
@@ -85,21 +93,92 @@ function createBackendContext(extensionId: string, serverContext?: Pick<ServerRo
   };
 }
 
-async function buildExtensionBackend(extensionId: string, entryPath: string): Promise<string> {
-  const outfile = join(getExtensionCacheRoot(), extensionId, 'backend.mjs');
-  await mkdir(dirname(outfile), { recursive: true });
-  await build({
-    entryPoints: [entryPath],
-    outfile,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    target: 'node20',
-    sourcemap: 'inline',
-    logLevel: 'silent',
-    external: ['@personal-agent/*', 'electron'],
-  });
-  return outfile;
+function hashExtensionPackage(packageRoot: string): string {
+  const hash = createHash('sha256');
+  const visit = (directory: string): void => {
+    for (const entryName of readdirSync(directory).sort((left, right) => left.localeCompare(right))) {
+      if (entryName === 'node_modules' || entryName === '.git') {
+        continue;
+      }
+
+      const entryPath = join(directory, entryName);
+      const relativePath = relative(packageRoot, entryPath);
+      if (relativePath.startsWith('..')) {
+        continue;
+      }
+
+      const stat = readdirSafeStat(entryPath);
+      if (!stat) {
+        continue;
+      }
+
+      if (stat.isDirectory()) {
+        visit(entryPath);
+        continue;
+      }
+      if (!stat.isFile()) {
+        continue;
+      }
+
+      hash.update(relativePath);
+      hash.update('\0');
+      hash.update(readFileSync(entryPath));
+      hash.update('\0');
+    }
+  };
+
+  visit(packageRoot);
+  return hash.digest('hex');
+}
+
+function readdirSafeStat(entryPath: string) {
+  try {
+    return statSync(entryPath);
+  } catch {
+    return null;
+  }
+}
+
+async function buildExtensionBackend(
+  extensionId: string,
+  packageRoot: string,
+  entryPath: string,
+  options: { allowStaleOnFailure?: boolean } = {},
+): Promise<ExtensionBackendBuildResult> {
+  const cacheDir = join(getExtensionCacheRoot(), extensionId);
+  const outfile = join(cacheDir, 'backend.mjs');
+  const hashFile = join(cacheDir, 'backend.hash');
+  const packageHash = hashExtensionPackage(packageRoot);
+  await mkdir(cacheDir, { recursive: true });
+
+  if (existsSync(outfile) && existsSync(hashFile) && readFileSync(hashFile, 'utf-8').trim() === packageHash) {
+    return { path: outfile, rebuilt: false, stale: false };
+  }
+
+  const candidate = join(cacheDir, `backend.${packageHash}.candidate.mjs`);
+  try {
+    rmSync(candidate, { force: true });
+    await build({
+      entryPoints: [entryPath],
+      outfile: candidate,
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node20',
+      sourcemap: 'inline',
+      logLevel: 'silent',
+      external: ['@personal-agent/*', 'electron'],
+    });
+    renameSync(candidate, outfile);
+    writeFileSync(hashFile, `${packageHash}\n`);
+    return { path: outfile, rebuilt: true, stale: false };
+  } catch (error) {
+    rmSync(candidate, { force: true });
+    if (options.allowStaleOnFailure && existsSync(outfile)) {
+      return { path: outfile, rebuilt: false, stale: true };
+    }
+    throw error;
+  }
 }
 
 export async function loadExtensionBackend(extensionId: string): Promise<ExtensionBackendModule> {
@@ -118,8 +197,11 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
   const packageRoot = resolve(entry.packageRoot);
   const entryPath = resolve(packageRoot, backendEntry);
   assertInside(packageRoot, entryPath);
-  const compiledPath = await buildExtensionBackend(extensionId, entryPath);
-  return import(`${pathToFileURL(compiledPath).href}?t=${Date.now()}`) as Promise<ExtensionBackendModule>;
+  const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: true });
+  if (compiled.stale) {
+    console.warn(`[extension:${extensionId}] backend build failed; using previous compiled backend`);
+  }
+  return import(`${pathToFileURL(compiled.path).href}?t=${Date.now()}`) as Promise<ExtensionBackendModule>;
 }
 
 export async function invokeExtensionAction(
@@ -148,6 +230,22 @@ export async function invokeExtensionAction(
 }
 
 export async function reloadExtensionBackend(extensionId: string): Promise<{ ok: true; extensionId: string; rebuilt: boolean }> {
-  await loadExtensionBackend(extensionId);
-  return { ok: true, extensionId, rebuilt: true };
+  const entry = findExtensionEntry(extensionId);
+  if (!entry) {
+    throw new Error('Extension not found.');
+  }
+  if (!entry.packageRoot) {
+    throw new Error('Extension backend code is only available for runtime extensions.');
+  }
+  const backendEntry = entry.manifest.backend?.entry;
+  if (!backendEntry) {
+    throw new Error('Extension has no backend entry.');
+  }
+
+  const packageRoot = resolve(entry.packageRoot);
+  const entryPath = resolve(packageRoot, backendEntry);
+  assertInside(packageRoot, entryPath);
+  const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: false });
+  await import(`${pathToFileURL(compiled.path).href}?t=${Date.now()}`);
+  return { ok: true, extensionId, rebuilt: compiled.rebuilt };
 }

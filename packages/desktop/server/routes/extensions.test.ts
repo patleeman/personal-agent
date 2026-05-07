@@ -287,6 +287,18 @@ describe('registerExtensionRoutes', () => {
         conversationsList: 'function',
       },
     });
+
+    writeFileSync(join(extensionRoot, 'backend', 'index.ts'), `export async function saveTask(`);
+    const staleRes = createResponse();
+    await harness.postHandler('/api/extensions/:id/actions/:actionId')(
+      { params: { id: 'agent-board', actionId: 'saveTask' }, body: { title: 'Still works from cache' } },
+      staleRes,
+    );
+
+    expect(staleRes.json).toHaveBeenCalledWith({
+      ok: true,
+      result: expect.objectContaining({ saved: { title: 'Still works from cache' } }),
+    });
   });
 
   it('accepts explicit reload calls for runtime manifests', () => {

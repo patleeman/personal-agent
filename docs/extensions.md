@@ -339,7 +339,7 @@ POST /api/extensions/reload
 POST /api/extensions/:id/reload
 ```
 
-If a reload/build fails, PA keeps the previously loaded version active and reports the new error in the Extension Manager. Broken generated code should not brick the shell.
+If a reload/build fails, PA keeps the previously compiled backend active for action invocation and reports the new error in the Extension Manager. Broken generated code should not brick the shell.
 
 System extensions are bundled with PA. User edits create a runtime override:
 
@@ -577,7 +577,7 @@ The server invokes handlers through the action endpoint:
 POST /api/extensions/:extensionId/actions/:actionId
 ```
 
-Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.extension.invoke(actionId, input)`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`.
+Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. The backend build is content-hash cached; unchanged packages reuse the compiled module. If an action invoke sees a broken edit but a previous compiled backend exists, PA uses the previous compiled backend instead of bricking the extension. Explicit reload still reports build failures. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.extension.invoke(actionId, input)`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`.
 
 The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage`, `ctx.runs`, `ctx.automations`, `ctx.vault`, `ctx.conversations`, and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
 
