@@ -111,7 +111,7 @@ describe('ConversationComposerInputControls', () => {
       />,
     );
 
-    expect(html).toContain('tasks');
+    expect(html).toContain('Tasks');
     expect(html).toContain('Patch bug');
     expect(html).not.toContain('Goal: what should be accomplished?');
   });
@@ -131,7 +131,7 @@ describe('ConversationComposerInputControls', () => {
       />,
     );
 
-    expect(html).toContain('iterations');
+    expect(html).toContain('Run');
     expect(html).toContain('Prompt to repeat each iteration');
     expect(html).toContain('value="2s"');
   });
