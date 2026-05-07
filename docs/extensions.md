@@ -1,794 +1,468 @@
 # Extensions
 
-Extensions are the planned self-extensibility layer for Personal Agent. They package UI surfaces, backend actions, storage, and commands so a user can ask the agent to create or modify local product functionality.
+Extensions are Personal Agent's native product-module system. They let Patrick or an agent add app functionality without editing the core shell for every new workflow.
 
-The original prototype proved the core idea: durable user-created UI can live outside the compiled desktop app. Extensions are now the package model for pages, sidebar entries, right-rail tools, backend actions, and extension-owned state.
+The old iframe/HTML extension model is deprecated and should be removed. New extensions render native React inside the Personal Agent UI, declare their surfaces in a manifest, call stable PA capabilities, and use separate frontend/backend entries.
 
-This document is the target implementation spec for the first extension runtime, not an exploratory brainstorm.
+## Design direction
 
-## Goals
+Personal Agent should feel like one app, not a pile of embedded mini-sites. The extension system follows the VS Code/Raycast pattern:
 
-Extensions should make Personal Agent self-extensible without turning the core app into unstructured plugin soup.
+- A manifest declares discoverable contributions: pages, nav items, right-rail panels, commands, slash commands, settings, skills, and backend actions.
+- A frontend bundle exports native React surface components loaded lazily by the desktop UI.
+- Backend actions run as trusted local Node/TypeScript code behind capability-scoped APIs.
+- Extension CSS is allowed, but it is mounted under a host-provided extension root with reset boundaries and cascade layers so it does not casually poison the shell.
+- Webview/iframe surfaces are not the product path. Do not create new iframe extensions.
 
-A good extension system should let a user say:
-
-> Create a kanban extension for agent tasks. Put it in the sidebar, persist tasks, and let cards start runs.
-
-The agent should then create a local extension package with a manifest, UI files, backend handlers, storage, and docs. The user can inspect, edit, disable, or delete it.
+The north star is simple: an agent should be able to create a real native feature by generating an extension package, building it, and reloading Personal Agent.
 
 ## Package layout
 
-User extensions live in runtime state by default, not the knowledge base. The knowledge base can still hold docs, exports, or generated source notes, but installed extension packages are runtime-owned product code.
-
-Default user extension location:
+User extensions live in runtime state by default:
 
 ```text
 ~/.local/state/personal-agent/extensions/{extension-id}/
 ```
 
-Bundled system extensions live in the app/repo and are loaded by PA as first-party extensions. If the user or agent edits a system extension, PA creates a copy-on-write override in runtime state instead of mutating the bundled files.
+Bundled system extensions live in the repo/app bundle and use the same extension contract. System pages can move out of the core shell once the native runtime is stable.
 
-A simple package looks like this:
+A native extension package looks like this:
 
 ```text
 extensions/
   agent-board/
     extension.json
+    package.json
     README.md
-    frontend/
-      page.html
-      rail.html
-    backend/
-      index.ts
+    src/
+      frontend.tsx
+      backend.ts
+      styles.css
+    dist/
+      frontend.js
+      frontend.css
+      backend.mjs
+    skills/
+      agent-board/SKILL.md
 ```
 
-The manifest is the contract between the extension and Personal Agent:
+Agents should generate editable source files, run the PA-owned extension build, and keep built `dist/` output available for runtime loading. Do not generate dist-only extensions; compiled soup is where maintainability goes to die.
+
+## Manifest
+
+`extension.json` is the readable contract. The app can inspect it without executing extension code, which keeps routing, command registration, permissions, and extension management predictable.
+
+Example:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "agent-board",
   "name": "Agent Board",
-  "packageType": "user",
-  "description": "Kanban board for agent-executed tasks",
+  "description": "Kanban board for agent-executed tasks.",
   "version": "0.1.0",
-  "surfaces": [
-    {
-      "id": "nav",
-      "placement": "left",
-      "kind": "navItem",
-      "label": "Agent Board",
-      "icon": "kanban",
-      "route": "/ext/agent-board"
-    },
-    {
-      "id": "page",
-      "placement": "main",
-      "kind": "page",
-      "route": "/ext/agent-board",
-      "entry": "frontend/page.html"
-    },
-    {
-      "id": "rail",
-      "placement": "right",
-      "kind": "toolPanel",
-      "label": "Board",
-      "icon": "kanban",
-      "entry": "frontend/rail.html",
-      "scope": "conversation"
-    }
-  ],
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": ["dist/frontend.css"]
+  },
   "backend": {
-    "entry": "backend/index.ts",
+    "entry": "dist/backend.mjs",
     "actions": [
-      { "id": "createTaskFromConversation", "handler": "createTaskFromConversation" },
-      { "id": "syncRunStatuses", "handler": "syncRunStatuses" }
+      { "id": "createTask", "handler": "createTask", "title": "Create task" },
+      { "id": "startTaskRun", "handler": "startTaskRun", "title": "Start task run" }
+    ]
+  },
+  "contributes": {
+    "skills": ["skills/agent-board/SKILL.md"],
+    "views": [
+      {
+        "id": "board-page",
+        "title": "Agent Board",
+        "location": "main",
+        "route": "/ext/agent-board",
+        "component": "AgentBoardPage"
+      },
+      {
+        "id": "conversation-board",
+        "title": "Tasks",
+        "location": "rightRail",
+        "scope": "conversation",
+        "component": "ConversationTaskPanel"
+      }
+    ],
+    "nav": [
+      {
+        "id": "agent-board-nav",
+        "label": "Agent Board",
+        "icon": "kanban",
+        "route": "/ext/agent-board"
+      }
+    ],
+    "commands": [
+      {
+        "id": "agentBoard.createTask",
+        "title": "Agent Board: Create task",
+        "action": "createTask"
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "task",
+        "description": "Create an Agent Board task from the current prompt.",
+        "action": "createTask"
+      }
     ]
   },
   "permissions": ["runs:read", "runs:start", "storage:readwrite", "conversations:read"]
 }
 ```
 
-For v0, permissions are declared and shown but not enforced. They are still useful because they document intent and make capability creep visible in diffs when the agent edits an extension.
-
-## Manifest schema
-
-The manifest schema is TypeScript-first. `packages/desktop/server/extensions/extensionManifest.ts` is the source of truth for placements, surface kinds, right-rail scopes, icon names, permissions, and the `ExtensionManifest` TypeScript type. Do not hand-maintain a parallel JSON Schema as the canonical contract; that creates drift, and drift is where bugs go to start a family.
-
-Every manifest must include:
-
-| Field           | Type   | Description                         |
-| --------------- | ------ | ----------------------------------- |
-| `schemaVersion` | `1`    | Manifest schema version             |
-| `id`            | string | Stable extension ID; use kebab-case |
-| `name`          | string | Display name                        |
-
-Optional top-level fields:
-
-| Field         | Type                 | Description                                           |
-| ------------- | -------------------- | ----------------------------------------------------- |
-| `packageType` | `'user' \| 'system'` | Extension source class; defaults to `user`            |
-| `description` | string               | Short summary for the Extension Manager               |
-| `version`     | string               | Extension package version                             |
-| `surfaces`    | `ExtensionSurface[]` | UI/command/slash surfaces registered by the extension |
-| `backend`     | `ExtensionBackend`   | Backend TypeScript entry and exported action handlers |
-| `permissions` | string[]             | Declared capabilities; shown in v0, enforced later    |
-
-The TypeScript definition below is embedded here so an agent can craft a valid manifest without spelunking through source files. Keep this section in sync with `extensionManifest.ts` when the schema changes:
-
-```ts
-export const EXTENSION_MANIFEST_VERSION = 1;
-
-export const EXTENSION_PACKAGE_TYPES = ['user', 'system'] as const;
-export type ExtensionPackageType = (typeof EXTENSION_PACKAGE_TYPES)[number];
-
-export const EXTENSION_PLACEMENTS = ['left', 'main', 'right', 'conversation', 'command', 'slash'] as const;
-export type ExtensionPlacement = (typeof EXTENSION_PLACEMENTS)[number];
-
-export const EXTENSION_SURFACE_KINDS = ['navItem', 'navSection', 'page', 'toolPanel', 'inlineAction', 'command', 'slashCommand'] as const;
-export type ExtensionSurfaceKind = (typeof EXTENSION_SURFACE_KINDS)[number];
-
-export const EXTENSION_RIGHT_SURFACE_SCOPES = ['global', 'conversation', 'workspace', 'selection'] as const;
-export type ExtensionRightSurfaceScope = (typeof EXTENSION_RIGHT_SURFACE_SCOPES)[number];
-
-export const EXTENSION_ICON_NAMES = [
-  'app',
-  'automation',
-  'browser',
-  'database',
-  'diff',
-  'file',
-  'gear',
-  'graph',
-  'kanban',
-  'play',
-  'sparkle',
-  'terminal',
-] as const;
-export type ExtensionIconName = (typeof EXTENSION_ICON_NAMES)[number];
-
-export const EXTENSION_PERMISSIONS = [
-  'runs:read',
-  'runs:start',
-  'runs:cancel',
-  'storage:read',
-  'storage:write',
-  'storage:readwrite',
-  'vault:read',
-  'vault:write',
-  'vault:readwrite',
-  'conversations:read',
-  'conversations:write',
-  'conversations:readwrite',
-  'ui:notify',
-] as const;
-export type ExtensionPermission = (typeof EXTENSION_PERMISSIONS)[number] | `${string}:${string}`;
-
-export interface ExtensionManifest {
-  schemaVersion: typeof EXTENSION_MANIFEST_VERSION;
-  id: string;
-  name: string;
-  packageType?: ExtensionPackageType;
-  description?: string;
-  version?: string;
-  surfaces?: ExtensionSurface[];
-  backend?: ExtensionBackend;
-  permissions?: ExtensionPermission[];
-}
-
-export type ExtensionSurface =
-  | ExtensionLeftNavItemSurface
-  | ExtensionLeftNavSectionSurface
-  | ExtensionMainPageSurface
-  | ExtensionRightToolPanelSurface
-  | ExtensionConversationInlineActionSurface
-  | ExtensionCommandSurface
-  | ExtensionSlashCommandSurface;
-
-interface ExtensionSurfaceBase {
-  id: string;
-  placement: ExtensionPlacement;
-  kind: ExtensionSurfaceKind;
-  title?: string;
-  label?: string;
-  icon?: ExtensionIconName;
-  action?: string;
-}
-
-export interface ExtensionLeftNavItemSurface extends ExtensionSurfaceBase {
-  placement: 'left';
-  kind: 'navItem';
-  label: string;
-  route: string;
-  icon?: ExtensionIconName;
-  badgeAction?: string;
-}
-
-export interface ExtensionLeftNavSectionSurface extends ExtensionSurfaceBase {
-  placement: 'left';
-  kind: 'navSection';
-  label: string;
-  icon?: ExtensionIconName;
-  items?: Array<{ label: string; route: string; icon?: ExtensionIconName; badgeAction?: string }>;
-}
-
-export interface ExtensionMainPageSurface extends ExtensionSurfaceBase {
-  placement: 'main';
-  kind: 'page';
-  route: string;
-  entry?: string;
-}
-
-export interface ExtensionRightToolPanelSurface extends ExtensionSurfaceBase {
-  placement: 'right';
-  kind: 'toolPanel';
-  label: string;
-  entry: string;
-  scope: ExtensionRightSurfaceScope;
-  icon?: ExtensionIconName;
-  defaultOpen?: boolean;
-}
-
-export interface ExtensionConversationInlineActionSurface extends ExtensionSurfaceBase {
-  placement: 'conversation';
-  kind: 'inlineAction';
-  label: string;
-  action: string;
-  icon?: ExtensionIconName;
-  when?: 'message' | 'selection' | 'composer';
-}
-
-export interface ExtensionCommandSurface extends ExtensionSurfaceBase {
-  placement: 'command';
-  kind: 'command';
-  title: string;
-  action: string;
-  icon?: ExtensionIconName;
-}
-
-export interface ExtensionSlashCommandSurface extends ExtensionSurfaceBase {
-  placement: 'slash';
-  kind: 'slashCommand';
-  name: string;
-  description: string;
-  action: string;
-}
-
-export interface ExtensionBackend {
-  entry: string;
-  actions?: ExtensionBackendAction[];
-}
-
-export interface ExtensionBackendAction {
-  id: string;
-  handler: string;
-  title?: string;
-  description?: string;
-}
-```
-
-Agents should import or inspect this TypeScript schema instead of inventing new placements or icon names.
-
-Runtime validation should be generated from the TypeScript source of truth. The intended flow is:
-
-1. Define types and registries in `extensionManifest.ts`.
-2. Generate JSON Schema for validating `extension.json` files.
-3. Generate docs/snippets from the same constants where practical.
-4. Export the public types from a future `@personal-agent/extensions` package.
-
-Until schema generation exists, runtime validation can use a small manual validator backed by the exported constants. The manual validator is a bridge, not a second source of truth.
-
-## Agent-readable registry and schema
-
-The extension system needs first-class schema docs and runtime introspection so agents do not guess route names, icon names, placements, or existing extension IDs. These should be available in both human docs and machine-readable endpoints.
-
-Expose the TypeScript schema and generated JSON Schema through the app docs. Extension authors can also use an emoji or inline SVG later, but named icons are the safe default for agent-created extensions.
-
-Expose registry endpoints for agents and the Extension Manager:
-
-```http
-GET /api/extensions/schema          # placements, kinds, scopes, icon names
-GET /api/extensions                 # enabled system + runtime extension manifests
-GET /api/extensions/installed       # Extension Manager summaries: enabled state, manifest, permissions, routes, package path
-GET /api/extensions/routes          # claimed routes and owning extension
-GET /api/extensions/surfaces        # registered surfaces by placement/kind
-GET /api/extensions/:id/files/*     # serve iframe assets from a runtime extension package
-POST /api/extensions                # create a starter runtime extension with { id, name, description? }
-POST /api/extensions/import         # import a .zip bundle from { zipPath }
-POST /api/extensions/:id/snapshot   # snapshot a runtime extension directory before edits
-POST /api/extensions/:id/export     # export a runtime extension package to a .zip bundle
-PATCH /api/extensions/:id           # enable/disable runtime extensions with { enabled: boolean }
-```
-
-The agent workflow for creating an extension should be:
-
-1. Read `docs/extensions.md` and `packages/desktop/server/extensions/extensionManifest.ts`.
-2. Call or inspect the extension registry to avoid route/surface collisions.
-3. Pick icon names from the registry, not from vibes.
-4. Create the package.
-5. Ask PA to reload extensions. In the current skeleton, runtime manifests are read on demand; reload exists as the explicit API seam for the future cached TS backend loader.
-
-## Lifecycle and package management
-
-V0 supports two install paths:
-
-1. The agent creates or edits files directly in `~/.local/state/personal-agent/extensions/{id}/`.
-2. The user imports an extension zip bundle, which PA unpacks into the runtime extensions directory.
-
-The Extension Manager lives at `/extensions` and supports the minimum operational lifecycle:
-
-- list installed system and runtime extensions
-- create a starter runtime extension package
-- import a runtime extension zip bundle from a local path
-- export a runtime extension package to a zip bundle
-- snapshot a runtime extension directory before risky edits
-- enable/disable runtime extensions; system extensions stay enabled in v0
-- reload all extensions
-- open a runtime extension folder in Finder from the desktop app
-- show manifest, surfaces, routes, and declared permissions
-
-Export bundles include extension code and manifest by default. Extension state export is optional and must be explicit so users do not accidentally move private task data, logs, or workflow history. The current import/export slice handles package code only, not SQLite extension state.
-
-Agents edit runtime extension files directly. Before the extension-edit tool writes files, it must snapshot the current extension directory. The implemented snapshot API copies runtime packages to `~/.local/state/personal-agent/extension-snapshots/{id}/{timestamp}`. Snapshots are used for rollback/debugging; they are not a replacement for source control.
-
-Reload is explicit, not file-watcher magic:
-
-```http
-POST /api/extensions/reload
-POST /api/extensions/:id/reload
-```
-
-If a reload/build fails, PA keeps the previously compiled backend active for action invocation and reports the new error in the Extension Manager. Broken generated code should not brick the shell.
-
-System extensions are bundled with PA. User edits create a runtime override:
-
-```text
-~/.local/state/personal-agent/extensions/_overrides/system/automations/
-```
-
-The override shadows the bundled system extension until disabled or removed.
-
-## Surface model
-
-Extensions add functionality by declaring surfaces. Placement and kind are separate so the UI model stays clear.
-
-| Placement      | Purpose                                                 | Good examples                                                    |
-| -------------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
-| `left`         | Navigation and durable places                           | top-level nav items, extension sections, badges                  |
-| `main`         | Full workflow pages                                     | Agent Board, Automations, Telemetry, Extension Manager           |
-| `right`        | Contextual tools for the current conversation/workspace | file explorer, diffs, browser, artifacts, runs, board mini-panel |
-| `conversation` | Inline transcript/composer affordances                  | task chips, custom message actions                               |
-| `command`      | Command palette actions                                 | new task, open board, summarize into task                        |
-| `slash`        | Composer slash commands                                 | `/task`, `/bugbash`, `/release-note`                             |
-
-Surface IDs are unique inside one extension. Routes are globally unique. User extensions must use `/ext/{extensionId}/...` for main-page routes. Only bundled system extensions may claim built-in routes such as `/automations`. The loader should reject duplicate routes unless an extension is explicitly replacing a disabled extension or a system extension has an active copy-on-write override.
-
-Left sidebar surfaces should be mostly declarative: labels, icons, routes, badges, and sections. The left bar is the app spine; arbitrary rendering there makes the whole app feel unstable.
-
-Right rail surfaces can be richer. They are contextual, dismissible tools. File Explorer, Diffs, Browser, Artifacts, Runs, and custom board panels all fit here.
-
-Main pages are for full workflows. A bundled system extension can own a normal PA page; a user extension can own `/ext/{id}` routes.
-
-### Right rail scope
-
-Right sidebar tools need an explicit scope because some panels are tied to the active conversation and some are global utilities. Add `scope` to right-side surfaces:
-
-```ts
-export type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
-```
-
-Examples:
-
-```json
-{
-  "id": "board-rail",
-  "placement": "right",
-  "kind": "toolPanel",
-  "scope": "global",
-  "label": "Board",
-  "entry": "frontend/rail.html"
-}
-```
-
-```json
-{
-  "id": "conversation-task-panel",
-  "placement": "right",
-  "kind": "toolPanel",
-  "scope": "conversation",
-  "label": "Tasks",
-  "entry": "frontend/conversation-tasks.html"
-}
-```
-
-Conversation-scoped panels receive the active conversation ID in their launch context. Global panels do not. Workspace-scoped panels receive cwd/workspace metadata. Selection-scoped panels receive selected text/message/file context when opened.
-
-Current implementation wires enabled `placement: "right"` / `kind: "toolPanel"` surfaces into the Workbench right rail. Global panels are always available there, conversation panels require an active conversation, workspace panels require a workspace cwd, and selection panels are hidden until selection context exists. Selecting the rail item renders the declared iframe `entry` and passes `surfaceId`, `pathname`, `search`, `hash`, plus `conversationId` and `cwd` when available.
-
-## Commands and slash commands
-
-Personal Agent does not yet have a full command palette, but the extension model should reserve the surface. Command registration should be manifest-first so commands can appear in a future palette, menus, and keyboard bindings.
-
-```json
-{
-  "id": "new-task",
-  "placement": "command",
-  "kind": "command",
-  "title": "Agent Board: New task",
-  "action": "openNewTask"
-}
-```
-
-Slash commands are separate because they live in the conversation composer and usually transform or submit text:
-
-```json
-{
-  "id": "task",
-  "placement": "slash",
-  "kind": "slashCommand",
-  "name": "task",
-  "description": "Create an Agent Board task from the current prompt",
-  "action": "createTaskFromPrompt"
-}
-```
-
-The current implementation exposes manifest-declared command registrations through:
-
-```http
-GET /api/extensions/commands
-GET /api/extensions/slash-commands
-```
-
-Those endpoints return enabled extension surfaces normalized into `{ extensionId, surfaceId, packageType, ... }` records. Command registrations are loaded into the command palette's Commands scope and invoke their backend `action`. Slash-command registrations are loaded into the conversation composer slash menu and inserted as `/{name}` entries. When submitted, PA calls the registered backend `action` through `POST /api/extensions/:extensionId/actions/:actionId`.
-
-Slash actions receive `{ commandName, argument, text, conversationId, cwd, draft }`. They can return `null`/`undefined` to mark handled, a string to submit as the prompt, or an object with `{ text | prompt | replaceComposerText | appendComposerText | notice }`. Full attachment and selection context is still target follow-up work.
+Manifest rules:
+
+- `id` is stable kebab-case and owns `/ext/{id}` routes.
+- The manifest declares what exists; code implements behavior.
+- Renderable views declare the frontend bundle and exported component name explicitly.
+- Backend actions declare stable action IDs and exported handler names.
+- Permissions are required as intent declarations even before strict enforcement exists.
 
 ## Frontend runtime
 
-Extension frontend entries render in iframes by default. The iframe gives CSS and DOM isolation, so extension styles do not leak into the desktop shell.
+Native frontend extensions are React modules rendered inside the Personal Agent React tree.
 
-Styling should be boring and reliable. Extension UI should look like Personal Agent, but it should not depend on desktop React internals.
+The extension frontend bundle exports named components referenced by manifest views:
 
-Use these references when generating or editing extension UI:
+```tsx
+import { Button, EmptyState, Page, Toolbar, type ExtensionSurfaceProps } from '@personal-agent/extensions';
+import './styles.css';
 
-- `docs/extension-templates/page.html` — default main-page HTML shape.
-- `docs/extension-templates/page.css` — default main-page CSS tokens, layout, buttons, panels, and responsive rules.
-- `docs/extension-templates/rail.html` — compact right-rail tool panel shape.
-- `packages/desktop/server/extensions/pa-components.css` — current shared PA component stylesheet served as `/pa/components.css` and `/api/pa/components.css`.
-- `extensions/system-automations/frontend/index.html` and `extensions/system-automations/frontend/styles.css` — first real bundled system extension; use it as the reference for iframe extension pages.
-
-Default styling rules for generated extensions:
-
-- Start from `docs/extension-templates/page.html` for page surfaces and `docs/extension-templates/rail.html` for right-rail surfaces.
-- Prefer a single-column app shell with a clear header, one-sentence summary, high-signal actions, and bordered row separators. Avoid dashboard chrome unless the extension is genuinely a dashboard.
-- Use the injected app theme tokens (`--color-base`, `--color-primary`, `--color-secondary`, `--color-border-subtle`, `--color-surface`, `--color-accent`, `--color-danger`, `--color-success`) or the PA component aliases (`--pa-bg`, `--pa-text`, `--pa-text-secondary`, `--pa-border-subtle`, `--pa-surface`, `--pa-accent`, `--pa-danger`, `--pa-success`). `ExtensionFrame` sets `data-theme` on iframe HTML so these tokens match the active desktop theme.
-- Keep CSS scoped to the iframe document. Do not style generic desktop selectors outside the iframe. The iframe isolates DOM/CSS from the PA shell, but sloppy global CSS still makes the extension itself a swamp.
-- Avoid nested bordered cards. Use spacing, typography, and separators for hierarchy. One bordered panel around an editor/form is fine; boxes inside boxes are visual debt with interest.
-- Inline critical CSS in `index.html` for bundled system extensions when reliability matters. External local CSS is fine for user/runtime extensions, but srcdoc frames and custom protocols can be fussy; when in doubt, inline the critical shell styles.
-- Do not import app UI bundles, desktop CSS, React components, or Tailwind classes as the extension contract. Extensions should use plain HTML/CSS/JS plus `window.PA`.
-- Use explicit closing tags for custom elements (`<pa-field></pa-field>`), not XML-style self-closing tags.
-- Right-rail surfaces are narrow. Keep rail content dense: title, short context, list/actions. No wide tables, huge forms, or main-page layouts crammed into a rail. Tiny rectangle, tiny ambitions.
-
-`/pa/components.css` is the shared component-library stylesheet. `ExtensionFrame` also fetches `/api/pa/components.css` and inlines it for srcdoc iframe surfaces before the extension's own styles, so app theme tokens are available even in plain HTML/CSS entries. Generated extensions may use either raw HTML classes from the templates or the `<pa-*>` custom element library from `/pa/client.js`; prefer raw HTML/CSS for product-like pages and `<pa-*>` for fast form-driven utilities.
-
-Frontend entries receive a `window.PA` API plus launch context. Bundled system extensions and user extensions both use iframe HTML `entry` files by default; core React component shortcuts are not part of the v0 manifest contract.
-
-The v0 surface below is intentionally broad because extensions need to behave like product modules:
-
-```ts
-PA.context.get() // extension id, surface id, route, current pathname/search/hash, theme
-
-PA.run.start({ prompt, cwd?, source?, conversationId? })
-PA.run.get(runId)
-PA.run.list(filter?)
-PA.run.subscribe(runId, handler)
-PA.run.cancel(runId)
-
-PA.storage.get(key)
-PA.storage.put(key, value, { expectedVersion? })
-PA.storage.delete(key)
-PA.storage.list(prefix?)
-
-PA.vault.read(path)
-PA.vault.write(path, content)
-PA.vault.list(path?)
-PA.vault.search(query)
-PA.vault.assetUrl(path)
-
-PA.conversations.list()
-PA.conversations.get(id, { tailBlocks? })
-PA.conversations.getMeta(id)
-PA.conversations.searchIndex(sessionIds)
-// Target follow-up APIs: open, create, append
-
-PA.automations.list()
-PA.automations.get(taskId)
-PA.automations.create(input)
-PA.automations.update(taskId, input)
-PA.automations.delete(taskId)
-PA.automations.run(taskId)
-PA.automations.readLog(taskId)
-PA.automations.readSchedulerHealth()
-
-PA.extension.invoke(actionId, input)
-PA.extension.getManifest()
-PA.extension.listSurfaces()
-PA.extension.listCommands()
-PA.extension.listSlashCommands()
-
-PA.ui.toast(message)
-PA.ui.openSurface(surfaceId, params?)
-PA.ui.closeSurface(surfaceId?)
-PA.ui.setBadge(value)
-PA.ui.setTitle(title)
-PA.ui.confirm(options)
-PA.ui.pickFile(options?)
-PA.ui.pickDirectory(options?)
-
-PA.events.subscribe(topic, handler)
-PA.events.emit(topic, payload)
-```
-
-The app should avoid exposing raw desktop internals to iframe code. Frontend extensions should call stable PA APIs or custom backend actions.
-
-## Backend actions
-
-Backend code is a core part of the extension model. For v0, backend extensions are trusted local code: no sandboxing, no permission enforcement, but no direct import of PA internals as the public contract.
-
-### Loading TypeScript without rebuilding PA
-
-Extensions should not require rebuilding the desktop app. The extension host should load backend entries dynamically. For TypeScript, use an on-demand transpilation step into a runtime cache:
-
-```text
-extensions/agent-board/backend/index.ts
-  -> ~/.local/state/personal-agent/extension-cache/agent-board/index.mjs
-```
-
-Implementation options:
-
-- Use `esbuild` to bundle/transpile extension backend TS to ESM in the cache.
-- In dev mode, load through `tsx` or an equivalent transpiler, but production should prefer a deterministic build cache.
-- Track content hashes for `extension.json` and backend files. Rebuild only when changed.
-- Import the cached module with a cache-busting URL query or unload/reload the extension host process.
-
-Hot reload should be explicit and observable:
-
-```http
-POST /api/extensions/reload
-POST /api/extensions/:id/reload
-```
-
-Reload behavior:
-
-1. Re-scan manifests.
-2. Rebuild changed backend entries.
-3. Re-register surfaces/routes/actions.
-4. Dispose old backend module if it exported `dispose(ctx)`.
-5. Emit extension reload events to open iframes so they can refresh.
-
-Ship a public types-only package for extension authors and agents:
-
-```ts
-import type { ExtensionBackendContext, ExtensionManifest } from '@personal-agent/extensions';
-```
-
-`@personal-agent/extensions` is the public type contract for manifests, surfaces, backend actions, and the backend context. The runtime still passes `ctx`; extensions should not import PA internals.
-
-A backend module exports named async handlers:
-
-```ts
-export async function createTaskFromConversation(input, ctx) {
-  const conversation = await ctx.conversations.get(input.conversationId);
-  const task = {
-    title: conversation.title ?? 'Untitled task',
-    phase: 'backlog',
-    conversationId: input.conversationId,
-  };
-  await ctx.storage.put(`tasks/${task.conversationId}`, task);
-  return task;
+export function AgentBoardPage({ pa, context }: ExtensionSurfaceProps) {
+  return (
+    <Page title="Agent Board" summary="Track work that agents can execute.">
+      <Toolbar>
+        <Button
+          onClick={() =>
+            pa.extension.invoke('createTask', {
+              source: 'manual',
+              conversationId: context.conversationId,
+            })
+          }
+        >
+          New task
+        </Button>
+      </Toolbar>
+      <EmptyState title="No tasks yet" body="Create a task from a conversation or start one here." />
+    </Page>
+  );
 }
 ```
 
-The server invokes handlers through the action endpoint:
-
-```http
-POST /api/extensions/:extensionId/actions/:actionId
-```
-
-Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. The backend build is content-hash cached; unchanged packages reuse the compiled module. If an action invoke sees a broken edit but a previous compiled backend exists, PA uses the previous compiled backend instead of bricking the extension. Explicit reload still reports build failures. HTML extension pages and right-rail tool panels get `/pa/client.js` injected automatically, so iframe code can call `PA.context.get()`, `PA.extension.invoke/getManifest/listSurfaces`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`. `PA.context.get()` includes `conversationId` and `cwd` when the surface was launched with that context.
-
-The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage`, `ctx.runs`, `ctx.automations`, `ctx.vault`, `ctx.conversations`, and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
+Surface components receive props instead of reading globals:
 
 ```ts
-ctx.storage.get(key)
-ctx.storage.put(key, value, opts?)
-ctx.storage.delete(key)
-ctx.storage.list(prefix?)
-
-ctx.runs.start({ prompt, cwd?, source? })
-ctx.runs.get(runId)
-ctx.runs.list(filter?)
-ctx.runs.readLog(runId, tail?)
-ctx.runs.cancel(runId)
-
-ctx.conversations.list()
-ctx.conversations.get(id, { tailBlocks? })
-ctx.conversations.getMeta(id)
-ctx.conversations.searchIndex(sessionIds)
-// Target follow-up APIs: create, append
-
-ctx.automations.list()
-ctx.automations.get(taskId)
-ctx.automations.create(input)
-ctx.automations.update(taskId, input)
-ctx.automations.delete(taskId)
-ctx.automations.run(taskId)
-ctx.automations.readLog(taskId)
-ctx.automations.readSchedulerHealth()
-
-ctx.vault.read(path)
-ctx.vault.write(path, content)
-ctx.vault.list(path?)
-ctx.vault.search(query)
-
-ctx.log.info(message, fields?)
-ctx.log.warn(message, fields?)
-ctx.log.error(message, fields?)
-
-ctx.events.emit(topic, payload)
-ctx.events.subscribe(topic, handler)
-
-ctx.ui.notify(message, options?)
-ctx.ui.setBadge(surfaceId, value)
+interface ExtensionSurfaceProps<Params = Record<string, string>> {
+  pa: PersonalAgentClient;
+  context: ExtensionRenderContext;
+  surface: ExtensionViewContribution;
+  params: Params;
+}
 ```
 
-Backend actions can also implement command and slash-command handlers. Those handlers receive typed input from the surface that invoked them.
+Use props for testability and clarity. Do not use `window.PA` in native extensions.
 
-Do not expose raw SQLite handles, Express routers, Electron main process objects, arbitrary PA internal modules, or the full process environment as the extension API. Trusted does not mean coupled to every private implementation detail.
+### UI freedom and guardrails
+
+Extensions may use normal React and CSS. They are not forced to use PA components.
+
+That freedom comes with host-level guardrails:
+
+- Every extension renders under a host root such as `<section data-extension-id="agent-board">`.
+- The host applies an extension reset boundary so extension styles start from predictable defaults.
+- Extension styles load into an extension-specific cascade layer.
+- PA theme tokens are available as CSS variables.
+- The extension manager should show when an extension ships global-looking CSS selectors.
+
+Recommended path: use PA components for common UI and custom CSS for product-specific layout.
+
+`@personal-agent/extensions` should export optional primitives and hooks, for example:
+
+```ts
+Page;
+Toolbar;
+Button;
+IconButton;
+Form;
+TextField;
+Select;
+List;
+ListItem;
+Detail;
+EmptyState;
+LoadingState;
+ErrorState;
+RunCard;
+RunList;
+useExtensionStorage;
+useRuns;
+useConversation;
+```
+
+These are the paved road, not a prison. If an extension needs a custom timeline, board, graph, or editor, it can build one with React and scoped CSS.
+
+## Build and loading
+
+Personal Agent owns the extension build command. Extension authors should not need custom Vite configs for normal packages.
+
+Target command:
+
+```bash
+pa extension build ~/.local/state/personal-agent/extensions/agent-board
+```
+
+The builder should:
+
+1. Compile `src/frontend.tsx` to `dist/frontend.js`.
+2. Extract or bundle extension CSS to `dist/frontend.css`.
+3. Compile `src/backend.ts` to `dist/backend.mjs`.
+4. Bundle extension dependencies into the output, except host peer packages.
+5. Treat `react`, `react-dom`, and `@personal-agent/extensions` as host-provided peers.
+6. Produce a clear build error that the agent can fix.
+
+The desktop UI lazy-loads frontend bundles when a declared surface is opened or command UI is needed. It should not execute every extension at startup.
+
+Lazy activation triggers:
+
+- Open a route owned by an extension view.
+- Open a right-rail surface.
+- Invoke an extension command or slash command.
+- Run a backend action.
+- Load extension settings/details in the Extension Manager.
+
+## Backend runtime
+
+Backend entries are separate from frontend entries. Keep browser React code and Node capability code apart; shared code can live in a common module if needed.
+
+A backend module exports named handlers declared in the manifest:
+
+```ts
+import type { ExtensionBackendContext } from '@personal-agent/extensions';
+
+export async function createTask(input: { title?: string; conversationId?: string }, ctx: ExtensionBackendContext) {
+  const id = crypto.randomUUID();
+  const task = {
+    id,
+    title: input.title || 'Untitled task',
+    status: 'backlog',
+    conversationId: input.conversationId ?? null,
+    createdAt: new Date().toISOString(),
+  };
+
+  await ctx.storage.put(`tasks/${id}`, task);
+  return task;
+}
+
+export async function startTaskRun(input: { taskId: string }, ctx: ExtensionBackendContext) {
+  const task = await ctx.storage.get<{ title: string }>(`tasks/${input.taskId}`);
+  if (!task) throw new Error('Task not found');
+
+  return ctx.runs.start({
+    taskSlug: 'agent-board',
+    prompt: `Work this task: ${task.title}`,
+    source: 'extension:agent-board',
+  });
+}
+```
+
+Frontend code calls backend actions through the host seam:
+
+```ts
+await pa.extension.invoke('startTaskRun', { taskId });
+```
+
+Do not import backend handlers directly into frontend components. Browser/Node boundary lies are expensive and stupid.
+
+## Host APIs
+
+Native extensions use a stable `pa` client object. The exact implementation lives in the app, but the public shape should be documented and typed through `@personal-agent/extensions`.
+
+Target namespaces:
+
+```ts
+pa.extension.invoke(actionId, input)
+pa.extension.getManifest()
+pa.extension.listSurfaces()
+
+pa.storage.get(key)
+pa.storage.put(key, value, { expectedVersion? })
+pa.storage.delete(key)
+pa.storage.list(prefix?)
+
+pa.runs.start(input)
+pa.runs.get(runId)
+pa.runs.list(filter?)
+pa.runs.readLog(runId, tail?)
+pa.runs.cancel(runId)
+
+pa.conversations.list()
+pa.conversations.get(id, options?)
+pa.conversations.getMeta(id)
+pa.conversations.search(query)
+
+pa.vault.read(path)
+pa.vault.write(path, content)
+pa.vault.list(path?)
+pa.vault.search(query)
+
+pa.automations.list()
+pa.automations.get(taskId)
+pa.automations.create(input)
+pa.automations.update(taskId, input)
+pa.automations.delete(taskId)
+pa.automations.run(taskId)
+pa.automations.readLog(taskId)
+pa.automations.readSchedulerHealth()
+
+pa.ui.toast(message, options?)
+pa.ui.confirm(options)
+pa.ui.openSurface(surfaceId, params?)
+pa.ui.closeSurface(surfaceId?)
+pa.ui.setBadge(surfaceId, value)
+```
+
+Backend actions receive equivalent capability namespaces through `ctx`.
+
+Do not expose raw SQLite handles, Express routers, Electron main process objects, arbitrary app internals, or the full process environment as the extension API.
 
 ## Storage
 
-Extensions need app-owned state. The implemented model is server-side SQLite under Personal Agent runtime state, outside the knowledge base.
+Extensions need app-owned state. Use runtime SQLite under Personal Agent state, scoped per extension.
 
 ```text
 ~/.local/state/personal-agent/app-state/app-state.sqlite
 ```
 
-Extension storage is per-extension by default. One extension cannot read another extension's storage through `PA.storage` or `ctx.storage` unless a future explicit shared-state API is added.
+Expose document-style storage, not raw SQL:
 
-Expose document-style storage instead of raw SQL:
-
-```http
-GET    /api/extensions/:id/state/:key
-PUT    /api/extensions/:id/state/:key       # body: { value, expectedVersion? }
-DELETE /api/extensions/:id/state/:key
-GET    /api/extensions/:id/state?prefix=tasks/
+```ts
+pa.storage.get('tasks/123');
+pa.storage.put('tasks/123', task, { expectedVersion });
+pa.storage.list('tasks/');
+pa.storage.delete('tasks/123');
 ```
 
-Iframe extensions can call the same API through `PA.storage.get/put/delete/list`. Backend actions use `ctx.storage` against the same per-extension SQLite documents.
+Backend actions use `ctx.storage` against the same per-extension document store.
 
-A simple table is enough for v0:
-
-```sql
-CREATE TABLE extension_state (
-  extension_id TEXT NOT NULL,
-  key TEXT NOT NULL,
-  value_json TEXT NOT NULL,
-  version INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (extension_id, key)
-);
-```
-
-Writes should support optimistic concurrency with `expectedVersion`. If the supplied version is stale, return `409 Conflict` with the current document.
-
-The knowledge base is still useful, but not as the primary live-state DB. Use KB files for extension source, human-readable exports, docs, snapshots, and artifacts. Use runtime SQLite for interactive state like kanban tasks, run status indexes, and drag/drop positions.
-
-## Sync direction
-
-Do not sync raw SQLite files. Sync app-level documents or mutation events.
-
-If extension state needs cross-device sync, add an append-only event table:
-
-```sql
-CREATE TABLE extension_state_events (
-  event_id TEXT PRIMARY KEY,
-  extension_id TEXT NOT NULL,
-  key TEXT NOT NULL,
-  op TEXT NOT NULL,
-  value_json TEXT,
-  base_version INTEGER,
-  created_at INTEGER NOT NULL,
-  device_id TEXT NOT NULL
-);
-```
-
-Each mutation updates current state and appends an event in one transaction. Devices push/pull events and replay them locally. For kanban, each task should be its own document (`tasks/{id}`), with position-based ordering instead of rewriting one giant board array.
+Each extension is isolated by default. One extension cannot read another extension's state unless a future shared-state API explicitly allows it.
 
 ## Trust and permissions
 
-The v0 trust model is pragmatic:
+V1 native extensions are trusted local code. They are not sandboxed.
 
-- Local/generated extensions are trusted code.
-- Extension manifests declare permissions.
-- Personal Agent displays permissions and warns when they expand.
-- Permissions are not enforced in v0.
-- No sandboxing for backend actions in v0.
+That is acceptable because Personal Agent already runs local agent tools with broad authority. The goal is not fake security theater; the goal is a clear contract and review surface.
 
-This is not theater about stopping the local agent from touching files. The agent already has broad local capabilities. Permissions still matter as intent declaration, review aid, future sharing guardrail, and a foundation for eventual enforcement.
+Rules:
 
-## Automations system extension target
+- Extensions declare permissions in `extension.json`.
+- The Extension Manager displays permissions and highlights permission expansion in diffs/edits.
+- Runtime APIs should be shaped so permissions can be enforced later.
+- User-installed extensions should be inspectable, disableable, exportable, and removable.
+- Backend code runs locally and should be treated like any other trusted script.
 
-Automations is the first implementation target. It should be a feature-equivalent bundled system extension that owns the existing `/automations` route.
+## Surfaces
 
-The current server already exposes the necessary product capabilities through task routes:
+Extensions contribute native surfaces through the manifest.
 
-```http
-GET    /api/tasks
-GET    /api/tasks/scheduler-health
-POST   /api/tasks
-GET    /api/tasks/:id
-PATCH  /api/tasks/:id
-DELETE /api/tasks/:id
-GET    /api/tasks/:id/log
-POST   /api/tasks/:id/run
+| Contribution      | Purpose                                      |
+| ----------------- | -------------------------------------------- |
+| `views`           | Main pages and right-rail panels             |
+| `nav`             | Left navigation items or sections            |
+| `commands`        | Command palette actions                      |
+| `slashCommands`   | Composer slash commands                      |
+| `settings`        | Extension settings shown in the app settings |
+| `skills`          | Agent skills bundled with the extension      |
+| `backend.actions` | Trusted local handlers callable by surfaces  |
+
+Main pages are durable workflows. User extensions should use `/ext/{extensionId}` routes. System extensions may own first-party routes such as `/automations`.
+
+Right-rail panels are contextual tools. They need scope:
+
+```ts
+type RightRailScope = 'global' | 'conversation' | 'workspace' | 'selection';
 ```
 
-The extension should not call those routes directly from backend code. Instead, the extension runtime should expose `ctx.automations` as a stable capability wrapping the current task service functions. The frontend should use `PA.automations` rather than scattering raw `/api/tasks` fetches across extension UI code.
+Conversation-scoped panels receive `conversationId`. Workspace-scoped panels receive cwd/workspace context. Selection-scoped panels receive selection context when opened.
 
-The v0 Automations extension must support:
+## Extension Manager
 
-- list automations
-- read scheduler health
-- view automation detail
-- create automation
-- update automation
-- delete automation
-- run automation now
-- read latest automation log
-- preserve current conversation-thread binding behavior
-- preserve current scheduler/activity/status information
+The Extension Manager should support the operational lifecycle:
 
-This target is intentionally more demanding than a read-only dashboard. It proves that extensions can replace a real product page with frontend UI, backend capabilities, route ownership, and domain APIs.
+- list installed system and user extensions
+- show manifest, surfaces, commands, routes, build status, and permissions
+- create a starter native extension package
+- build/rebuild an extension
+- reload extension registry/runtime
+- enable/disable user extensions
+- export/import extension packages
+- snapshot a user extension before agent edits
+- open an extension folder in Finder/editor
+- show build/runtime errors in a way the agent can fix
 
-## System extensions
+## Agent workflow
 
-Some built-in PA pages can become bundled system extensions once the runtime is solid. System extensions use the same manifest/surface model but ship with the app and can receive broader trusted APIs.
+When asked to create or modify an extension, agents should:
 
-The first implementation target is a feature-equivalent Automations system extension. It owns the existing `/automations` route as a bundled system extension under `extensions/system-automations/` and renders through the same iframe path as user extensions. It uses `PA.automations` for task list/get/create/update/delete/run/log/health instead of importing the old React Automations page.
+1. Read this document and inspect the current extension schema/types.
+2. Inspect existing extension IDs, routes, surfaces, and commands to avoid collisions.
+3. Create or edit source files under the runtime extension package.
+4. Prefer PA components for common UI, custom CSS for genuinely custom layout.
+5. Declare permissions and contributions explicitly in `extension.json`.
+6. Run the PA extension build.
+7. Reload extensions.
+8. Visually inspect the native surface.
+9. Snapshot/checkpoint only the files touched.
 
-Good later candidates:
+Do not create new iframe `frontend/*.html` surfaces. If old iframe extension files remain during migration, treat them as legacy code to replace, not examples to copy.
 
-- Extensions manager
-- Telemetry
-- Agent Board
+## Migration from iframe extensions
 
-Poor first candidates:
+The iframe extension runtime was useful as a prototype but is the wrong long-term substrate. It creates a mini-app inside the app, with separate DOM, styling, focus, routing, and communication problems.
 
-- Conversation transcript/composer
-- Settings
-- Knowledge editor
-- Browser internals
+Hard-pivot migration target:
 
-The core shell should stay small and stable: navigation, layout, conversations, runs, auth/providers, app/extension registry, storage, and capability APIs.
+1. Implement native frontend bundle loading.
+2. Add manifest schema v2 with `frontend.entry`, `frontend.styles`, and component-based view contributions.
+3. Replace `ExtensionFrame` with native `ExtensionSurfaceHost`.
+4. Migrate `system-automations` from `frontend/index.html` to native React exports.
+5. Remove iframe file-serving/injection paths for extension UI.
+6. Keep artifacts as iframe/rendered outputs where appropriate; artifacts are not extensions.
+7. Update starter package generation to create native source, not HTML templates.
+8. Delete or archive `docs/extension-templates/*.html` after native starters exist.
 
-## Apps removal
+Artifacts remain the sketchpad for generated reports, previews, and custom throwaway UI. Extensions are native product modules.
 
-The old `apps/{id}/APP.md + index.html` model was removed after the Automations port. New work should use extensions directly: install or create an extension package, declare surfaces in `extension.json`, and render through `/ext/{extensionId}` or a system-owned route.
+## First target: Automations
 
-## Recommended implementation path
+Automations should be the first native system extension migration.
 
-1. Define `extension.json` schema, TypeScript types, icon registry, and introspection endpoints.
-2. Add extension registry UI that lists installed local extensions, routes, surfaces, and declared permissions.
-3. Support `main.page`, `left.nav`, and `right.toolPanel` surfaces, including right-panel scope.
-4. Promote the documented extension templates into a stable `/pa/extension.css` styling library for iframe surfaces.
-5. Add runtime SQLite-backed `PA.storage` / `ctx.storage`.
-6. Add TypeScript backend action loading with explicit reload/hot-reload endpoints.
-7. Add `PA.extension.call()` and backend action invocation.
-8. Add command and slash-command registration, even before the full command palette exists.
-9. Build the feature-equivalent Automations bundled system extension on the existing `/automations` route.
-10. Add copy-on-write overrides for system extension edits.
-11. Convert Agent Board into a user extension.
+Why:
 
-The north star is a small trusted PA kernel surrounded by editable local extensions. Users should be able to create product features by talking to the agent, without every new workflow needing to land in the compiled desktop app.
+- It is already extension-shaped.
+- It owns a real first-party route.
+- It exercises list/detail/create/update/delete/run/log behavior.
+- It proves native extensions can replace a product page, not just render a toy demo.
+
+The native Automations extension should own `/automations`, call `pa.automations` / `ctx.automations`, and render as a normal PA page inside the React tree.
+
+## Implementation checklist
+
+Target order:
+
+1. Add manifest schema v2 and public types in `@personal-agent/extensions`.
+2. Build `pa extension build` for frontend/backend bundles.
+3. Add native `ExtensionSurfaceHost` with lazy dynamic import.
+4. Add scoped CSS loading with extension root, reset boundary, theme tokens, and cascade layer.
+5. Add typed `pa` surface props and optional PA UI components/hooks.
+6. Wire manifest `views`, `nav`, commands, and slash commands to native components/actions.
+7. Migrate system Automations to native extension.
+8. Remove iframe extension UI runtime and starter HTML templates.
+9. Update Extension Manager for native build/reload/status flows.
+10. Backfill tests around manifest parsing, lazy loading, action invocation, CSS scoping, and Automations migration.
