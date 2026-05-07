@@ -125,11 +125,13 @@ describe('SettingsPage provider model editor', () => {
   let saveModelProviderModelMock: ReturnType<typeof vi.spyOn>;
   let updateModelPreferencesMock: ReturnType<typeof vi.spyOn>;
   let startProviderOAuthLoginMock: ReturnType<typeof vi.spyOn>;
+  let removeProviderCredentialMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     saveModelProviderModelMock = vi.spyOn(api, 'saveModelProviderModel');
     updateModelPreferencesMock = vi.spyOn(api, 'updateModelPreferences');
     startProviderOAuthLoginMock = vi.spyOn(api, 'startProviderOAuthLogin');
+    removeProviderCredentialMock = vi.spyOn(api, 'removeProviderCredential');
     vi.clearAllMocks();
 
     vi.mocked(useTheme).mockReturnValue({
@@ -398,6 +400,7 @@ describe('SettingsPage provider model editor', () => {
     saveModelProviderModelMock.mockRestore();
     updateModelPreferencesMock.mockRestore();
     startProviderOAuthLoginMock.mockRestore();
+    removeProviderCredentialMock.mockRestore();
     delete (window as { personalAgentDesktop?: unknown }).personalAgentDesktop;
     for (const root of mountedRoots.splice(0)) {
       act(() => {
@@ -515,6 +518,49 @@ describe('SettingsPage provider model editor', () => {
 
     expect(startProviderOAuthLoginMock).toHaveBeenCalledWith('openai-codex');
     expect(openExternalUrl).toHaveBeenCalledWith('https://auth.openai.com/oauth');
+  });
+
+  it('removes a stored provider credential from the provider editor', async () => {
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    removeProviderCredentialMock.mockResolvedValue({
+      authFile: '/tmp/auth.json',
+      providers: [
+        {
+          id: 'openai-codex',
+          modelCount: 12,
+          authType: 'none',
+          hasStoredCredential: false,
+          apiKeySupported: false,
+          oauthSupported: true,
+          oauthProviderName: 'OpenAI',
+          oauthUsesCallbackServer: true,
+        },
+      ],
+    });
+
+    try {
+      const { container } = renderPage();
+      await flushAsyncWork();
+
+      const providerButton = Array.from(container.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('openai-codex'),
+      );
+      if (!(providerButton instanceof HTMLButtonElement)) {
+        throw new Error('Expected openai-codex provider button');
+      }
+      click(providerButton);
+      await flushAsyncWork();
+
+      const removeButton = queryButton(container, 'Remove stored credential');
+      expect(removeButton.disabled).toBe(false);
+      click(removeButton);
+      await flushAsyncWork();
+
+      expect(confirmMock).toHaveBeenCalledWith('Remove the stored credential for openai-codex from auth.json?');
+      expect(removeProviderCredentialMock).toHaveBeenCalledWith('openai-codex');
+    } finally {
+      confirmMock.mockRestore();
+    }
   });
 
   it('opens known providers from the preconfigured provider picker', async () => {
