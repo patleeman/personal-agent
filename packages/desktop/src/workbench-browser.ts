@@ -264,6 +264,33 @@ export class WorkbenchBrowserViewController {
     return colonIndex >= 0 ? viewKey.slice(colonIndex + 1) : null;
   }
 
+  listTabs(ownerWebContentsId: number): Array<{ sessionKey: string; url: string; title: string }> {
+    const tabs: Array<{ sessionKey: string; url: string; title: string }> = [];
+    for (const [viewKey, entry] of this.views) {
+      if (!viewKey.startsWith(`${ownerWebContentsId}:`)) {
+        continue;
+      }
+
+      const colonIndex = viewKey.indexOf(':');
+      const sessionKey = colonIndex >= 0 ? viewKey.slice(colonIndex + 1) : viewKey;
+      if (!sessionKey.startsWith('@global:tab-')) {
+        continue;
+      }
+
+      if (entry.view.webContents.isDestroyed()) {
+        continue;
+      }
+
+      tabs.push({
+        sessionKey,
+        url: entry.view.webContents.getURL(),
+        title: entry.view.webContents.getTitle() || 'New Tab',
+      });
+    }
+
+    return tabs;
+  }
+
   hasView(ownerWebContentsId: number, sessionKey?: string | null): boolean {
     const entry = this.views.get(this.viewKey(ownerWebContentsId, sessionKey));
     return Boolean(entry && !entry.view.webContents.isDestroyed());

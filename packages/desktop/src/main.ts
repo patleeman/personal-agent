@@ -372,8 +372,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     .then((module) => {
       module.setDesktopWorkbenchBrowserToolHost?.({
         isActive: () => Promise.resolve(windowController!.isWorkbenchBrowserActive()),
-        snapshot: () => windowController!.snapshotWorkbenchBrowser(),
-        screenshot: () => windowController!.screenshotWorkbenchBrowser(),
+        listTabs: () => Promise.resolve(windowController!.listBrowserTabs()),
+        snapshot: (_conversationId, tabId) => windowController!.snapshotWorkbenchBrowser(tabId),
+        screenshot: (_conversationId, tabId) => windowController!.screenshotWorkbenchBrowser(tabId),
         cdp: (input) => windowController!.cdpWorkbenchBrowser(input),
       });
     })

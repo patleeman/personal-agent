@@ -51,6 +51,7 @@ describe('workbench browser agent extension', () => {
   it('routes tools through the desktop host', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => true,
+      listTabs: async () => [{ sessionKey: '@global:tab-abc', url: 'https://example.com/', title: 'Example' }],
       snapshot: async () => ({ url: 'https://example.com/', title: 'Example', loading: false, text: 'Example text', elements: [] }),
       cdp: async (input) => ({ ok: true, command: input.command, results: [{}], state: { url: 'https://example.com/' } }),
       screenshot: async () => ({
@@ -89,6 +90,7 @@ describe('workbench browser agent extension', () => {
   it('keeps browser tools inactive until the workbench browser is active', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => false,
+      listTabs: async () => [],
       snapshot: async () => ({}),
       cdp: async () => ({}),
       screenshot: async () => ({}),
@@ -105,6 +107,7 @@ describe('workbench browser agent extension', () => {
   it('activates browser tools for active workbench browser sessions', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => true,
+      listTabs: async () => [],
       snapshot: async () => ({}),
       cdp: async () => ({}),
       screenshot: async () => ({}),
@@ -122,6 +125,7 @@ describe('workbench browser agent extension', () => {
   it('returns inactive browser error from stale tool calls', async () => {
     setWorkbenchBrowserToolHost({
       isActive: async () => false,
+      listTabs: async () => [],
       snapshot: async () => ({ url: 'https://example.com/' }),
       cdp: async () => ({}),
       screenshot: async () => ({}),

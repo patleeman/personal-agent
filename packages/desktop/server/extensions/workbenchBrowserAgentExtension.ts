@@ -3,9 +3,10 @@ import { Type } from '@sinclair/typebox';
 
 export interface WorkbenchBrowserToolHost {
   isActive(conversationId: string): Promise<boolean>;
-  snapshot(conversationId: string): Promise<unknown>;
-  screenshot(conversationId: string): Promise<unknown>;
-  cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
+  listTabs(): Promise<Array<{ sessionKey: string; url: string; title: string }>>;
+  snapshot(conversationId: string, tabId?: string): Promise<unknown>;
+  screenshot(conversationId: string, tabId?: string): Promise<unknown>;
+  cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean; tabId?: string }): Promise<unknown>;
 }
 
 const BrowserToolNames = ['browser_snapshot', 'browser_cdp', 'browser_screenshot'] as const;
@@ -58,8 +59,13 @@ async function syncBrowserToolsForSession(pi: ExtensionAPI, conversationId: stri
   setBrowserToolsActive(pi, await isWorkbenchBrowserActive(conversationId));
 }
 
-function formatSnapshot(value: unknown): string {
-  const snapshot = value as {
+function tabIdFromSessionKey(sessionKey: string): string {
+  const prefix = '@global:tab-';
+  return sessionKey.startsWith(prefix) ? sessionKey.slice(prefix.length) : sessionKey;
+}
+
+function formatSnapshot(snapshot: unknown, tabs: Array<{ sessionKey: string; url: string; title: string }>, targetTabId?: string): string {
+  const data = snapshot as {
     url?: string;
     title?: string;
     loading?: boolean;
@@ -79,22 +85,33 @@ function formatSnapshot(value: unknown): string {
       checked?: boolean;
     }>;
   };
+
+  const snapshotUrl = data.url ?? '';
+
   const lines = [
-    `URL: ${snapshot.url ?? ''}`,
-    `Title: ${snapshot.title ?? ''}`,
-    `Loading: ${snapshot.loading === true ? 'yes' : 'no'}`,
-    `Browser revision: ${snapshot.browserRevision ?? 0}`,
-    `Changed since last snapshot: ${snapshot.changedSinceLastSnapshot === true ? 'yes' : 'no'}`,
+    `URL: ${snapshotUrl}`,
+    `Title: ${data.title ?? ''}`,
+    `Loading: ${data.loading === true ? 'yes' : 'no'}`,
+    `Browser revision: ${data.browserRevision ?? 0}`,
+    `Changed since last snapshot: ${data.changedSinceLastSnapshot === true ? 'yes' : 'no'}`,
   ];
-  if (snapshot.lastChangeReason || snapshot.lastChangedAt) {
-    lines.push(
-      `Last browser change: ${snapshot.lastChangeReason ?? 'unknown'}${snapshot.lastChangedAt ? ` at ${snapshot.lastChangedAt}` : ''}`,
-    );
+  if (data.lastChangeReason || data.lastChangedAt) {
+    lines.push(`Last browser change: ${data.lastChangeReason ?? 'unknown'}${data.lastChangedAt ? ` at ${data.lastChangedAt}` : ''}`);
   }
 
-  if (snapshot.elements?.length) {
+  if (tabs.length > 0) {
+    lines.push('', `Open tabs (${tabs.length}):`);
+    for (const tab of tabs) {
+      const tabId = tabIdFromSessionKey(tab.sessionKey);
+      const isActive = tabId === targetTabId || (!targetTabId && tab.url === snapshotUrl);
+      const isActiveMarker = isActive ? ' (active)' : '';
+      lines.push(`  tabId=${tabId} title=${JSON.stringify(tab.title)} url=${tab.url}${isActiveMarker}`);
+    }
+  }
+
+  if (data.elements?.length) {
     lines.push('', 'Elements:');
-    for (const element of snapshot.elements.slice(0, 120)) {
+    for (const element of data.elements.slice(0, 120)) {
       const state = [
         element.enabled === false ? 'disabled' : 'enabled',
         typeof element.checked === 'boolean' ? `checked=${element.checked}` : '',
@@ -112,14 +129,23 @@ function formatSnapshot(value: unknown): string {
     }
   }
 
-  if (snapshot.text) {
-    lines.push('', 'Visible text:', snapshot.text.slice(0, 20_000));
+  if (data.text) {
+    lines.push('', 'Visible text:', data.text.slice(0, 20_000));
   }
 
   return lines.join('\n');
 }
 
-const EmptyParams = Type.Object({});
+const TabIdParam = Type.Optional(
+  Type.String({
+    description:
+      'Optional tab ID to target a specific tab. Get tab IDs from the "Open tabs" section of browser_snapshot output. Defaults to the active tab.',
+  }),
+);
+
+const SnapshotParams = Type.Object({
+  tabId: TabIdParam,
+});
 
 const CdpCommand = Type.Object({
   method: Type.String({
@@ -136,6 +162,11 @@ const CdpParams = Type.Object({
   continueOnError: Type.Optional(
     Type.Boolean({ description: 'Continue executing later commands after a protocol command fails. Defaults to false.' }),
   ),
+  tabId: TabIdParam,
+});
+
+const ScreenshotParams = Type.Object({
+  tabId: TabIdParam,
 });
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
@@ -151,24 +182,29 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
     pi.registerTool({
       name: 'browser_snapshot',
       label: 'Browser Snapshot',
-      description: 'Observe the current built-in Workbench Browser state and interactive elements.',
+      description:
+        'Observe the built-in Workbench Browser — active tab snapshot with structured elements, plus a list of all open tabs. Use tabId to target a specific tab.',
       promptSnippet:
-        'Use browser_snapshot to understand the shared Workbench Browser, which is a user/agent communication surface. For development validation, use the agent-browser skill/CLI through bash instead.',
+        'Use browser_snapshot to understand the shared Workbench Browser. It returns the active tab snapshot plus a list of all open tabs with their tabId values. Pass tabId to target any tab. For development validation, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
         "Targets the user's visible built-in Workbench Browser for this conversation, not agent-browser, Chrome, or an independent automation session.",
+        'The snapshot includes an "Open tabs" section listing all browser tabs with their tabId. Use these tabId values with any browser tool to target a specific tab.',
         'Treat the Workbench Browser as shared conversation context: use it when the user is showing you a page, commenting on page elements, or wants you to inspect/control the same visible page.',
         'Do not use Workbench Browser tools for autonomous app-development validation, CI-style checks, or black-box UI testing; load the agent-browser skill and use its CLI/wrapper from bash for that.',
         'Prefer browser_snapshot before navigating or acting because it is efficient, structured, and gives refs/selectors.',
         'Refs are snapshot-scoped; refresh the snapshot after navigation or major page changes.',
       ],
-      parameters: EmptyParams,
-      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      parameters: SnapshotParams,
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const snapshot = await (await requireActiveWorkbenchBrowser(conversationId)).snapshot(conversationId);
+          const host = await requireActiveWorkbenchBrowser(conversationId);
+          const tabs = await host.listTabs();
+          const tabId = (params as { tabId?: string }).tabId;
+          const snapshot = await host.snapshot(conversationId, tabId);
           return {
-            content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
-            details: snapshot as Record<string, unknown>,
+            content: [{ type: 'text' as const, text: formatSnapshot(snapshot, tabs, tabId) }],
+            details: { snapshot, tabs } as Record<string, unknown>,
           };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -184,11 +220,12 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
     pi.registerTool({
       name: 'browser_cdp',
       label: 'Browser CDP',
-      description: 'Send one or more Chrome DevTools Protocol commands to the built-in Workbench Browser.',
+      description: 'Send one or more Chrome DevTools Protocol commands to the Workbench Browser. Use tabId to target a specific tab.',
       promptSnippet:
-        'Use browser_cdp only to act on the shared Workbench Browser conversation surface. For dev automation/testing, use the agent-browser skill/CLI through bash instead.',
+        'Use browser_cdp to act on the shared Workbench Browser. Pass tabId to target a specific tab (get tab IDs from browser_snapshot). For dev automation/testing, use the agent-browser skill/CLI through bash instead.',
       promptGuidelines: [
         "Targets the user's visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.",
+        'Use the tabId parameter to target a specific tab listed in browser_snapshot output. If omitted, targets the active tab.',
         "Treat this as operating on shared user/agent context; avoid changing the user's visible page for unrelated development validation.",
         'For autonomous UI testing, local app validation, screenshots of the product under test, or repeatable browser automation, load the agent-browser skill and use its CLI/wrapper from bash.',
         'This is a thin CDP command surface; provide raw command objects exactly as Chrome DevTools Protocol expects, for example: {"method":"Runtime.evaluate","params":{"expression":"document.title","returnByValue":true}}.',
@@ -206,6 +243,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
             conversationId,
             command: params.command,
             ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
+            ...((params as { tabId?: string }).tabId ? { tabId: (params as { tabId: string }).tabId } : {}),
           });
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
@@ -230,21 +268,24 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
     pi.registerTool({
       name: 'browser_screenshot',
       label: 'Browser Screenshot',
-      description: 'Capture a PNG screenshot of the built-in Workbench Browser.',
+      description: 'Capture a PNG screenshot of the Workbench Browser. Use tabId to target a specific tab.',
       promptSnippet:
-        'Use browser_screenshot for the shared Workbench Browser when visual communication matters. For dev validation screenshots, use the agent-browser skill/CLI through bash.',
+        'Use browser_screenshot for the shared Workbench Browser when visual communication matters. Pass tabId to target a specific tab (get tab IDs from browser_snapshot). For dev validation screenshots, use the agent-browser skill/CLI through bash.',
       promptGuidelines: [
         "Targets the user's visible built-in Workbench Browser session for this conversation, not agent-browser, Chrome, or an independent automation session.",
+        'Use the tabId parameter to target a specific tab listed in browser_snapshot output. If omitted, targets the active tab.',
         'Treat screenshots as shared conversation context: use them when the user wants visual inspection of the page currently open in the Workbench Browser.',
         'For autonomous visual checks of the app you are developing, load the agent-browser skill and use its CLI/wrapper from bash.',
         'browser_screenshot is useful for visual appearance and image-heavy content.',
         'Prefer browser_snapshot when navigating or when you need efficient text, selectors, refs, or page state.',
       ],
-      parameters: EmptyParams,
-      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      parameters: ScreenshotParams,
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         try {
-          const screenshot = (await (await requireActiveWorkbenchBrowser(conversationId)).screenshot(conversationId)) as {
+          const host = await requireActiveWorkbenchBrowser(conversationId);
+          const tabId = (params as { tabId?: string }).tabId;
+          const screenshot = (await host.screenshot(conversationId, tabId)) as {
             dataBase64?: string;
             mimeType?: string;
             url?: string;

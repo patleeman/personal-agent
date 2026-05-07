@@ -500,8 +500,24 @@ export class DesktopWindowController {
     return key !== null && this.workbenchBrowser.getState(this.mainWindow!.webContents.id, key)?.active === true;
   }
 
-  async snapshotWorkbenchBrowser(): Promise<unknown> {
-    const key = this.getActiveBrowserSessionKey();
+  listBrowserTabs(): Array<{ sessionKey: string; url: string; title: string }> {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return [];
+    }
+
+    return this.workbenchBrowser.listTabs(this.mainWindow.webContents.id);
+  }
+
+  private resolveBrowserSessionKey(tabId?: string): string | null {
+    if (tabId) {
+      return `@global:tab-${tabId}`;
+    }
+
+    return this.getActiveBrowserSessionKey();
+  }
+
+  async snapshotWorkbenchBrowser(tabId?: string): Promise<unknown> {
+    const key = this.resolveBrowserSessionKey(tabId);
     if (!key) {
       throw new Error('Workbench Browser is not active');
     }
@@ -510,8 +526,8 @@ export class DesktopWindowController {
     return this.workbenchBrowser.snapshot(owner, key);
   }
 
-  async screenshotWorkbenchBrowser(): Promise<unknown> {
-    const key = this.getActiveBrowserSessionKey();
+  async screenshotWorkbenchBrowser(tabId?: string): Promise<unknown> {
+    const key = this.resolveBrowserSessionKey(tabId);
     if (!key) {
       throw new Error('Workbench Browser is not active');
     }
@@ -520,8 +536,8 @@ export class DesktopWindowController {
     return this.workbenchBrowser.screenshot(owner, key);
   }
 
-  async cdpWorkbenchBrowser(input: { command?: unknown; continueOnError?: unknown }): Promise<unknown> {
-    const key = this.getActiveBrowserSessionKey();
+  async cdpWorkbenchBrowser(input: { command?: unknown; continueOnError?: unknown; tabId?: string }): Promise<unknown> {
+    const key = this.resolveBrowserSessionKey(input.tabId);
     if (!key) {
       throw new Error('Workbench Browser is not active');
     }
