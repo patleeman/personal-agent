@@ -3,7 +3,13 @@ import { existsSync, statSync } from 'node:fs';
 import { type ExtensionFactory, SessionManager } from '@mariozechner/pi-coding-agent';
 import type { Express } from 'express';
 
-import { readConversationAutoModeStateFromSessionManager, writeConversationAutoModeState } from '../conversations/conversationAutoMode.js';
+import {
+  normalizeLoopState,
+  normalizeMissionState,
+  normalizeRunMode,
+  readConversationAutoModeStateFromSessionManager,
+  writeConversationAutoModeState,
+} from '../conversations/conversationAutoMode.js';
 import { isMissingConversationBootstrapState, readConversationBootstrapState } from '../conversations/conversationBootstrap.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { applyConversationModelPreferencesToSessionManager } from '../conversations/conversationModelPreferences.js';
@@ -224,24 +230,57 @@ export function registerConversationStateRoutes(
 
   router.patch('/api/conversations/:id/auto-mode', async (req, res) => {
     try {
-      const { enabled } = req.body as {
-        enabled?: unknown;
+      const body = req.body as {
+        mode?: string;
+        enabled?: boolean;
+        mission?: unknown;
+        loop?: unknown;
         surfaceId?: string;
       };
 
-      if (typeof enabled !== 'boolean') {
-        res.status(400).json({ error: 'enabled must be boolean' });
+      let input: ConversationAutoModeStateInput;
+
+      if (body.mode) {
+        // Mode-based update (mission, loop, nudge, manual)
+        const mode = normalizeRunMode(body.mode);
+        if (mode === 'mission' && body.mission) {
+          const mission = normalizeMissionState(body.mission);
+          if (!mission) {
+            res.status(400).json({ error: 'Invalid mission state' });
+            return;
+          }
+          input = { enabled: true, mode: 'mission', mission };
+        } else if (mode === 'loop' && body.loop) {
+          const loop = normalizeLoopState(body.loop);
+          if (!loop) {
+            res.status(400).json({ error: 'Invalid loop state' });
+            return;
+          }
+          input = { enabled: true, mode: 'loop', loop };
+        } else if (mode === 'nudge') {
+          input = { enabled: true, mode: 'nudge' };
+        } else if (mode === 'manual') {
+          input = { enabled: false, mode: 'manual' };
+        } else {
+          res.status(400).json({ error: 'Unknown mode or missing state' });
+          return;
+        }
+      } else if (typeof body.enabled === 'boolean') {
+        // Legacy boolean toggle
+        input = { enabled: body.enabled };
+      } else {
+        res.status(400).json({ error: 'mode or enabled required' });
         return;
       }
 
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-        const state = await setLiveSessionAutoModeState(req.params.id, { enabled });
+        const state = await setLiveSessionAutoModeState(req.params.id, input);
         res.json(state);
         return;
       }
 
-      if (enabled) {
+      if (input.enabled) {
         const recovered = await recoverConversationCapability(req.params.id, {
           getCurrentProfile: getCurrentProfileFn,
           buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
@@ -249,7 +288,7 @@ export function registerConversationStateRoutes(
           flushLiveDeferredResumes: flushLiveDeferredResumesFn,
         });
         ensureRequestControlsLocalLiveConversation(recovered.conversationId, req.body);
-        const state = await setLiveSessionAutoModeState(recovered.conversationId, { enabled });
+        const state = await setLiveSessionAutoModeState(recovered.conversationId, input);
         res.json(state);
         return;
       }
@@ -261,7 +300,7 @@ export function registerConversationStateRoutes(
       }
 
       const sessionManager = SessionManager.open(sessionFile);
-      const state = writeConversationAutoModeState(sessionManager, { enabled });
+      const state = writeConversationAutoModeState(sessionManager, input);
       publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
       res.json(state);
     } catch (err) {

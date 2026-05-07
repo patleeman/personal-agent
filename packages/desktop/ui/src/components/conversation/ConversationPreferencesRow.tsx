@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getModelSelectableServiceTierOptions, getModelThinkingLevelOptions, groupModelsByProvider } from '../../model/modelPreferences';
-import type { ModelInfo } from '../../shared/types';
+import type { ModelInfo, RunMode } from '../../shared/types';
 import { cx, IconButton } from '../ui';
+
+const MODE_LABELS: Record<RunMode, string> = {
+  manual: 'Manual',
+  nudge: 'Nudge',
+  mission: 'Mission',
+  loop: 'Loop',
+};
 
 const COMPOSER_PREFERENCE_SELECT_CLASS =
   'h-8 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
@@ -132,6 +139,59 @@ function ConversationModelSelect({
   );
 }
 
+function ConversationModeSelect({
+  currentMode,
+  onChange,
+  disabled,
+  variant = 'inline',
+}: {
+  currentMode: RunMode;
+  onChange: (mode: RunMode) => void;
+  disabled: boolean;
+  variant?: 'inline' | 'menu';
+}) {
+  const modes: RunMode[] = ['manual', 'nudge', 'mission', 'loop'];
+  const selectClassName =
+    variant === 'menu'
+      ? 'h-9 w-full min-w-0 appearance-none rounded-lg border border-border-subtle bg-surface/45 px-2.5 pr-7 text-[12px] font-medium text-primary outline-none transition-colors hover:bg-surface/65 focus-visible:border-accent/50 focus-visible:bg-surface/65 disabled:cursor-default disabled:opacity-40'
+      : cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[6rem] min-w-[4.5rem] appearance-none');
+
+  return (
+    <label className={variant === 'menu' ? 'relative flex min-w-0 items-center' : 'relative inline-flex min-w-0 items-center'}>
+      <span className="sr-only">Run mode</span>
+      <select
+        value={currentMode}
+        onChange={(event) => {
+          onChange(event.target.value as RunMode);
+        }}
+        disabled={disabled}
+        className={selectClassName}
+        aria-label="Run mode"
+      >
+        {modes.map((mode) => (
+          <option key={mode} value={mode}>
+            {MODE_LABELS[mode]}
+          </option>
+        ))}
+      </select>
+      <svg
+        aria-hidden="true"
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="pointer-events-none absolute right-2.5 text-dim/70"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </label>
+  );
+}
+
 function ConversationPreferenceToggle({
   label,
   enabled,
@@ -202,12 +262,14 @@ export function ConversationPreferencesRow({
   currentServiceTier,
   savingPreference,
   showAutoModeToggle,
-  autoModeEnabled,
+  autoModeEnabled: _autoModeEnabled,
   autoModeBusy,
+  mode,
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
-  onToggleAutoMode,
+  onToggleAutoMode: _onToggleAutoMode,
+  onSelectMode,
   compact,
 }: {
   models: ModelInfo[];
@@ -218,14 +280,16 @@ export function ConversationPreferencesRow({
   showAutoModeToggle: boolean;
   autoModeEnabled: boolean;
   autoModeBusy: boolean;
+  mode: RunMode;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
   onToggleAutoMode: () => void;
+  onSelectMode: (mode: RunMode) => void;
   compact: boolean;
 }) {
-  const [compactMenuOpen, setCompactMenuOpen] = useState(false);
-  const compactMenuRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
   const selectedModel = useMemo(() => models.find((model) => model.id === currentModel) ?? null, [currentModel, models]);
   const serviceTierOptions = useMemo(() => getModelSelectableServiceTierOptions(selectedModel), [selectedModel]);
@@ -233,21 +297,21 @@ export function ConversationPreferencesRow({
   const fastModeEnabled = currentServiceTier === 'priority';
 
   useEffect(() => {
-    if (!compactMenuOpen) {
+    if (!menuOpen) {
       return;
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (compactMenuRef.current?.contains(event.target as Node)) {
+      if (menuRef.current?.contains(event.target as Node)) {
         return;
       }
 
-      setCompactMenuOpen(false);
+      setMenuOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setCompactMenuOpen(false);
+        setMenuOpen(false);
       }
     }
 
@@ -257,81 +321,52 @@ export function ConversationPreferencesRow({
       window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [compactMenuOpen]);
+  }, [menuOpen]);
 
   return (
     <div className="flex min-w-0 flex-nowrap items-center gap-2">
-      {!compact ? (
-        <>
-          <ConversationModelSelect
-            groupedModels={groupedModels}
-            currentModel={currentModel}
-            disabled={savingPreference !== null || models.length === 0}
-            onChange={onSelectModel}
-          />
-          <ConversationThinkingLevelSelect
-            value={currentThinkingLevel}
-            disabled={savingPreference !== null}
-            model={selectedModel}
-            onChange={onSelectThinkingLevel}
-          />
-          {supportsFastMode ? (
-            <ConversationPreferenceToggle
-              label="Fast"
-              enabled={fastModeEnabled}
-              disabled={savingPreference !== null}
-              tone="accent"
-              title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
-              layout="inline"
-              onToggle={() => {
-                onSelectServiceTier(!fastModeEnabled);
-              }}
-            />
-          ) : null}
-          {showAutoModeToggle ? (
-            <ConversationPreferenceToggle
-              label="Auto"
-              enabled={autoModeEnabled}
-              busy={autoModeBusy}
-              disabled={false}
-              tone="warning"
-              title={
-                autoModeBusy
-                  ? 'Updating auto mode…'
-                  : autoModeEnabled
-                    ? 'Turn off conversation auto mode'
-                    : 'Turn on conversation auto mode'
-              }
-              layout="inline"
-              onToggle={onToggleAutoMode}
-            />
-          ) : null}
-        </>
-      ) : null}
+      {!compact && (
+        <ConversationModelSelect
+          groupedModels={groupedModels}
+          currentModel={currentModel}
+          disabled={savingPreference !== null || models.length === 0}
+          onChange={onSelectModel}
+        />
+      )}
 
-      {compact ? (
-        <div ref={compactMenuRef} className="relative">
-          <IconButton
-            type="button"
-            onClick={() => setCompactMenuOpen((current) => !current)}
-            className={cx(
-              'h-8 w-8 rounded-md border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-              compactMenuOpen && 'bg-surface/55 text-primary',
-            )}
-            aria-label="More composer settings"
-            aria-expanded={compactMenuOpen}
-            aria-haspopup="dialog"
-            title="More composer settings"
+      {!compact && showAutoModeToggle && (
+        <ConversationModeSelect
+          currentMode={mode}
+          disabled={autoModeBusy}
+          onChange={(nextMode) => {
+            onSelectMode(nextMode);
+          }}
+        />
+      )}
+
+      <div ref={menuRef} className="relative">
+        <IconButton
+          type="button"
+          onClick={() => setMenuOpen((current) => !current)}
+          className={cx(
+            'h-8 w-8 rounded-md border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+            menuOpen && 'bg-surface/55 text-primary',
+          )}
+          aria-label="More composer settings"
+          aria-expanded={menuOpen}
+          aria-haspopup="dialog"
+          title="Model, thinking, and priority settings"
+        >
+          <MoreHorizontalIcon />
+        </IconButton>
+        {menuOpen && (
+          <div
+            className="ui-context-menu-shell absolute bottom-full left-0 z-50 mb-2 w-[15rem] p-2.5"
+            role="dialog"
+            aria-label="Composer settings"
           >
-            <MoreHorizontalIcon />
-          </IconButton>
-          {compactMenuOpen && (
-            <div
-              className="ui-context-menu-shell absolute bottom-full left-0 z-50 mb-2 w-[15rem] p-2.5"
-              role="dialog"
-              aria-label="Composer settings"
-            >
-              <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2">
+              {compact && (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Model</p>
                   <ConversationModelSelect
@@ -341,63 +376,56 @@ export function ConversationPreferencesRow({
                     variant="menu"
                     onChange={(modelId) => {
                       onSelectModel(modelId);
-                      setCompactMenuOpen(false);
+                      setMenuOpen(false);
                     }}
                   />
                 </div>
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
-                  <ConversationThinkingLevelSelect
-                    value={currentThinkingLevel}
-                    disabled={savingPreference !== null}
-                    variant="menu"
-                    model={selectedModel}
-                    onChange={(thinkingLevel) => {
-                      onSelectThinkingLevel(thinkingLevel);
-                      setCompactMenuOpen(false);
-                    }}
-                  />
-                </div>
-                {supportsFastMode && (
-                  <ConversationPreferenceToggle
-                    label="Fast mode"
-                    enabled={fastModeEnabled}
-                    disabled={savingPreference !== null}
-                    tone="accent"
-                    title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
-                    layout="menu"
-                    onToggle={() => {
-                      onSelectServiceTier(!fastModeEnabled);
-                      setCompactMenuOpen(false);
-                    }}
-                  />
-                )}
-                {showAutoModeToggle && (
-                  <ConversationPreferenceToggle
-                    label="Auto mode"
-                    enabled={autoModeEnabled}
-                    busy={autoModeBusy}
-                    disabled={false}
-                    tone="warning"
-                    title={
-                      autoModeBusy
-                        ? 'Updating auto mode…'
-                        : autoModeEnabled
-                          ? 'Turn off conversation auto mode'
-                          : 'Turn on conversation auto mode'
-                    }
-                    layout="menu"
-                    onToggle={() => {
-                      onToggleAutoMode();
-                      setCompactMenuOpen(false);
-                    }}
-                  />
-                )}
+              )}
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
+                <ConversationThinkingLevelSelect
+                  value={currentThinkingLevel}
+                  disabled={savingPreference !== null}
+                  variant="menu"
+                  model={selectedModel}
+                  onChange={(thinkingLevel) => {
+                    onSelectThinkingLevel(thinkingLevel);
+                    setMenuOpen(false);
+                  }}
+                />
               </div>
+              {supportsFastMode && (
+                <ConversationPreferenceToggle
+                  label="Fast mode"
+                  enabled={fastModeEnabled}
+                  disabled={savingPreference !== null}
+                  tone="accent"
+                  title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
+                  layout="menu"
+                  onToggle={() => {
+                    onSelectServiceTier(!fastModeEnabled);
+                    setMenuOpen(false);
+                  }}
+                />
+              )}
+              {showAutoModeToggle && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Run mode</p>
+                  <ConversationModeSelect
+                    currentMode={mode}
+                    disabled={autoModeBusy}
+                    variant="menu"
+                    onChange={(nextMode) => {
+                      onSelectMode(nextMode);
+                      setMenuOpen(false);
+                    }}
+                  />
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

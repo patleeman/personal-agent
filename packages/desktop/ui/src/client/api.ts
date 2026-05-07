@@ -1119,7 +1119,16 @@ export const api = {
   conversationAutoMode: async (id: string) => {
     return get<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`);
   },
-  updateConversationAutoMode: async (id: string, input: { enabled: boolean }, surfaceId?: string) => {
+  updateConversationAutoMode: async (
+    id: string,
+    input: {
+      enabled?: boolean;
+      mode?: 'manual' | 'nudge' | 'mission' | 'loop';
+      mission?: import('../../../server/conversations/conversationAutoMode').MissionState;
+      loop?: import('../../../server/conversations/conversationAutoMode').LoopState;
+    },
+    surfaceId?: string,
+  ) => {
     return patch<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`, {
       ...input,
       ...(surfaceId ? { surfaceId } : {}),

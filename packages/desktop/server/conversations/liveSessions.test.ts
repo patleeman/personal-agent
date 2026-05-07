@@ -3149,6 +3149,7 @@ describe('conversation auto mode', () => {
 
     expect(state).toEqual({
       enabled: true,
+      mode: 'nudge',
       stopReason: null,
       updatedAt: '2026-04-12T15:00:00.000Z',
     });
@@ -3281,7 +3282,7 @@ describe('conversation auto mode', () => {
       expect.objectContaining({
         customType: 'conversation_automation_auto_continue',
         display: false,
-        details: { source: 'conversation-auto-mode' },
+        details: expect.objectContaining({ source: 'conversation-auto-mode' }),
       }),
       {
         deliverAs: 'followUp',

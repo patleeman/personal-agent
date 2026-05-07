@@ -3,6 +3,7 @@ import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, 
 import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
+import { ConversationRunModePanel, ConversationRunStatusStrip } from './ConversationRunModePanel';
 
 const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 780;
 
@@ -13,8 +14,7 @@ export function ConversationComposerInputControls({
   pendingAskUserQuestion,
   composerDisabled,
   composerShellWidth,
-  screenshotCaptureAvailable,
-  screenshotCaptureBusy,
+
   streamIsStreaming,
   models,
   currentModel,
@@ -24,6 +24,7 @@ export function ConversationComposerInputControls({
   showAutoModeToggle,
   conversationAutoModeEnabled,
   conversationAutoModeBusy,
+  conversationAutoMode,
   dictationState,
   dictationLevelSamples,
   dictationStartedAt,
@@ -42,12 +43,13 @@ export function ConversationComposerInputControls({
   onKeyDown,
   onPaste,
   onOpenFilePicker,
-  onCaptureScreenshot,
+
   onOpenDrawingEditor,
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
   onToggleAutoMode,
+  onSelectMode,
   onDictationPointerDown,
   onDictationPointerUp,
   onDictationPointerCancel,
@@ -61,8 +63,7 @@ export function ConversationComposerInputControls({
   pendingAskUserQuestion: boolean;
   composerDisabled: boolean;
   composerShellWidth: number | null;
-  screenshotCaptureAvailable: boolean;
-  screenshotCaptureBusy: boolean;
+
   streamIsStreaming: boolean;
   models: ModelInfo[];
   currentModel: string;
@@ -72,6 +73,7 @@ export function ConversationComposerInputControls({
   showAutoModeToggle: boolean;
   conversationAutoModeEnabled: boolean;
   conversationAutoModeBusy: boolean;
+  conversationAutoMode: import('../../shared/types').ConversationAutoModeState | null;
   dictationState: 'idle' | 'recording' | 'transcribing';
   dictationLevelSamples: number[];
   dictationStartedAt: number | null;
@@ -90,12 +92,13 @@ export function ConversationComposerInputControls({
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>;
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onOpenFilePicker: () => void;
-  onCaptureScreenshot: () => void;
+
   onOpenDrawingEditor: () => void;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
   onToggleAutoMode: () => void;
+  onSelectMode: (mode: import('../../shared/types').RunMode) => void;
   onDictationPointerDown: PointerEventHandler<HTMLButtonElement>;
   onDictationPointerUp: PointerEventHandler<HTMLButtonElement>;
   onDictationPointerCancel: PointerEventHandler<HTMLButtonElement>;
@@ -121,6 +124,20 @@ export function ConversationComposerInputControls({
       />
 
       <div className="flex flex-col gap-0">
+        <div className="px-3 pt-0">
+          <ConversationRunStatusStrip
+            mode={conversationAutoMode?.mode ?? 'manual'}
+            running={conversationAutoModeEnabled && (conversationAutoMode?.mode === 'mission' || conversationAutoMode?.mode === 'loop')}
+            mission={conversationAutoMode?.mission ?? null}
+            loop={conversationAutoMode?.loop ?? null}
+          />
+          <ConversationRunModePanel
+            mode={conversationAutoMode?.mode ?? 'manual'}
+            running={Boolean(conversationAutoModeEnabled && streamIsStreaming)}
+            mission={conversationAutoMode?.mission ?? null}
+            loop={conversationAutoMode?.loop ?? null}
+          />
+        </div>
         <div className="px-3 pt-1">
           <textarea
             ref={textareaRef}
@@ -179,35 +196,7 @@ export function ConversationComposerInputControls({
                 <path d="M5 12h14" />
               </svg>
             </button>
-            {screenshotCaptureAvailable && (
-              <button
-                type="button"
-                onClick={onCaptureScreenshot}
-                disabled={composerDisabled || screenshotCaptureBusy}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-                title="Capture screenshot"
-                aria-label="Capture screenshot"
-              >
-                {screenshotCaptureBusy ? (
-                  <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
-                ) : (
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z" />
-                    <path d="M9 5 10.5 3.5h3L15 5" />
-                    <circle cx="12" cy="12" r="3.25" />
-                  </svg>
-                )}
-              </button>
-            )}
+
             <button
               type="button"
               onClick={onOpenDrawingEditor}
@@ -239,10 +228,12 @@ export function ConversationComposerInputControls({
               showAutoModeToggle={showAutoModeToggle}
               autoModeEnabled={conversationAutoModeEnabled}
               autoModeBusy={conversationAutoModeBusy}
+              mode={conversationAutoMode?.mode ?? 'manual'}
               onSelectModel={onSelectModel}
               onSelectThinkingLevel={onSelectThinkingLevel}
               onSelectServiceTier={onSelectServiceTier}
               onToggleAutoMode={onToggleAutoMode}
+              onSelectMode={onSelectMode}
               compact={(composerShellWidth ?? Number.POSITIVE_INFINITY) < COMPOSER_PREFERENCES_MENU_WIDTH_PX}
             />
           </div>

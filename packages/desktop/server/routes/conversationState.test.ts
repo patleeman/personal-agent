@@ -517,7 +517,7 @@ describe('registerConversationStateRoutes', () => {
     const invalidRes = createResponse();
     await handler({ params: { id: 'conversation-1' }, body: {} }, invalidRes);
     expect(invalidRes.status).toHaveBeenCalledWith(400);
-    expect(invalidRes.json).toHaveBeenCalledWith({ error: 'enabled must be boolean' });
+    expect(invalidRes.json).toHaveBeenCalledWith({ error: 'mode or enabled required' });
 
     isLocalLiveMock.mockReturnValueOnce(true);
     setLiveSessionAutoModeStateMock.mockResolvedValueOnce({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:10:00.000Z' });

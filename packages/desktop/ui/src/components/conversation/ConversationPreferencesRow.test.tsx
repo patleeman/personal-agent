@@ -32,6 +32,8 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof ConversationPr
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
       onToggleAutoMode={vi.fn()}
+      onSelectMode={vi.fn()}
+      mode="manual"
       compact={false}
       {...overrides}
     />,
@@ -39,15 +41,18 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof ConversationPr
 }
 
 describe('ConversationPreferencesRow', () => {
-  it('renders inline model, thinking, fast, and auto controls', () => {
+  it('renders inline model, thinking, fast, and mode controls', () => {
     const html = renderRow();
 
     expect(html).toContain('Conversation model');
     expect(html).toContain('Provider A');
     expect(html).toContain('Model A');
-    expect(html).toContain('Conversation thinking level');
-    expect(html).toContain('Disable fast mode');
-    expect(html).toContain('Turn on conversation auto mode');
+    expect(html).toContain('Run mode');
+    expect(html).toContain('Manual');
+    expect(html).toContain('Manual');
+    expect(html).toContain('Nudge');
+    expect(html).toContain('Mission');
+    expect(html).toContain('Loop');
   });
 
   it('renders the compact settings affordance without opening the menu on server render', () => {
@@ -65,6 +70,6 @@ describe('ConversationPreferencesRow', () => {
     });
 
     expect(html).not.toContain('Enable fast mode');
-    expect(html).toContain('Turn on conversation auto mode');
+    expect(html).toContain('Run mode');
   });
 });

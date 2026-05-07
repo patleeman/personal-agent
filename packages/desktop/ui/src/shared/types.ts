@@ -755,10 +755,35 @@ export interface DeferredResumeSummary {
   };
 }
 
+export type RunMode = 'manual' | 'nudge' | 'mission' | 'loop';
+
+export interface TaskState {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'done' | 'blocked';
+}
+
+export interface MissionState {
+  goal: string;
+  tasks: TaskState[];
+  maxTurns: number;
+  turnsUsed: number;
+}
+
+export interface LoopState {
+  prompt: string;
+  maxIterations: number;
+  iterationsUsed: number;
+  delay: string;
+}
+
 export interface ConversationAutoModeState {
   enabled: boolean;
+  mode: RunMode;
   stopReason: string | null;
   updatedAt: string | null;
+  mission?: MissionState | null;
+  loop?: LoopState | null;
 }
 
 export interface ConversationCwdChangeResult {

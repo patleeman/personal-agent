@@ -1,13 +1,41 @@
+export interface Task {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'done' | 'blocked';
+}
+
+export interface MissionState {
+  goal: string;
+  tasks: Task[];
+  maxTurns: number;
+  turnsUsed: number;
+}
+
+export interface LoopState {
+  prompt: string;
+  maxIterations: number;
+  iterationsUsed: number;
+  delay: string;
+}
+
+export type RunMode = 'manual' | 'nudge' | 'mission' | 'loop';
+
 export interface ConversationAutoModeState {
   enabled: boolean;
+  mode: RunMode;
   stopReason: string | null;
   updatedAt: string | null;
+  mission?: MissionState;
+  loop?: LoopState;
 }
 
 export interface ConversationAutoModeStateInput {
   enabled: boolean;
+  mode?: RunMode;
   stopReason?: string | null;
   updatedAt?: string | Date;
+  mission?: MissionState;
+  loop?: LoopState;
 }
 
 export interface ConversationAutoModeSessionManagerLike {
@@ -35,6 +63,7 @@ export const CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT = [
 ].join('\n');
 export const DEFAULT_CONVERSATION_AUTO_MODE_STATE: ConversationAutoModeState = {
   enabled: false,
+  mode: 'manual',
   stopReason: null,
   updatedAt: null,
 };
@@ -57,8 +86,96 @@ export const CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT = [
   '- Do not call other tools in this hidden review turn.',
 ].join('\n');
 
+const VALID_RUN_MODES = new Set<string>(['manual', 'nudge', 'mission', 'loop']);
+const VALID_TASK_STATUSES = new Set<string>(['pending', 'in_progress', 'done', 'blocked']);
+
+export function normalizeRunMode(value: unknown): RunMode {
+  if (typeof value === 'string' && VALID_RUN_MODES.has(value)) {
+    return value as RunMode;
+  }
+  return 'manual';
+}
+
+export function createTask(description: string, status?: Task['status']): Task {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return { id, description, status: status ?? 'pending' };
+}
+
+export function areAllTasksDone(tasks: Task[]): boolean {
+  return tasks.every((task) => task.status === 'done');
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+export function normalizeMissionState(value: unknown): MissionState | undefined {
+  if (!isRecord(value) || typeof value.goal !== 'string') {
+    return undefined;
+  }
+
+  const tasks: Task[] = [];
+  if (Array.isArray(value.tasks)) {
+    for (const task of value.tasks) {
+      if (!isRecord(task) || typeof task.id !== 'string' || typeof task.description !== 'string') {
+        continue;
+      }
+      const status = typeof task.status === 'string' && VALID_TASK_STATUSES.has(task.status) ? task.status : 'pending';
+      tasks.push({ id: task.id, description: task.description, status: status as Task['status'] });
+    }
+  }
+
+  return {
+    goal: value.goal,
+    tasks,
+    maxTurns: typeof value.maxTurns === 'number' ? Math.max(1, Math.min(1000, Math.floor(value.maxTurns))) : 20,
+    turnsUsed: typeof value.turnsUsed === 'number' ? Math.max(0, Math.floor(value.turnsUsed)) : 0,
+  };
+}
+
+export function normalizeLoopState(value: unknown): LoopState | undefined {
+  if (!isRecord(value) || typeof value.prompt !== 'string') {
+    return undefined;
+  }
+
+  return {
+    prompt: value.prompt,
+    maxIterations: typeof value.maxIterations === 'number' ? Math.max(1, Math.min(1000, Math.floor(value.maxIterations))) : 5,
+    iterationsUsed: typeof value.iterationsUsed === 'number' ? Math.max(0, Math.floor(value.iterationsUsed)) : 0,
+    delay: typeof value.delay === 'string' ? value.delay.trim() || 'After each turn' : 'After each turn',
+  };
+}
+
+/**
+ * Infer mode from stored state.
+ * If `mode` was explicitly stored and is invalid, return `null` so the
+ * caller can reject the whole entry. If `mode` was not stored at all
+ * (undefined), fall back to backward-compat inference: enabled → nudge.
+ */
+function inferModeFromState(mode: unknown, enabled: boolean): RunMode | null {
+  // No explicit mode field → backward compat
+  if (mode === undefined) {
+    return enabled ? 'nudge' : 'manual';
+  }
+  // Explicit mode field present
+  const explicitMode = normalizeRunMode(mode);
+  if (explicitMode !== 'manual') {
+    return explicitMode;
+  }
+  // Invalid explicit mode → reject
+  if (typeof mode === 'string' && mode !== 'manual') {
+    return null;
+  }
+  return 'manual';
+}
+
+function normalizeStopReason(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized.slice(0, 160) : null;
 }
 
 function normalizeUpdatedAt(value: unknown): string | null {
@@ -103,24 +220,27 @@ function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
   );
 }
 
-function normalizeStopReason(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized.slice(0, 160) : null;
-}
-
 export function normalizeConversationAutoModeState(value: unknown): ConversationAutoModeState | null {
   if (!isRecord(value) || typeof value.enabled !== 'boolean') {
     return null;
   }
 
+  const enabled = value.enabled;
+  const mode = inferModeFromState(value.mode, enabled);
+  if (!mode) {
+    return null;
+  }
+
+  const mission = mode === 'mission' ? normalizeMissionState(value.mission) : undefined;
+  const loop = mode === 'loop' ? normalizeLoopState(value.loop) : undefined;
+
   return {
-    enabled: value.enabled,
+    enabled: mode !== 'manual',
+    mode,
     stopReason: normalizeStopReason(value.stopReason),
     updatedAt: normalizeUpdatedAt(value.updatedAt),
+    mission,
+    loop,
   };
 }
 
@@ -150,10 +270,18 @@ export function writeConversationAutoModeState(
   sessionManager: ConversationAutoModeSessionManagerLike,
   input: ConversationAutoModeStateInput,
 ): ConversationAutoModeState {
+  const mode = input.mode ?? (input.enabled ? 'nudge' : 'manual');
+
+  const mission = mode === 'mission' && input.mission ? input.mission : undefined;
+  const loop = mode === 'loop' && input.loop ? input.loop : undefined;
+
   const nextState: ConversationAutoModeState = {
-    enabled: input.enabled,
-    stopReason: input.enabled ? null : normalizeStopReason(input.stopReason),
+    enabled: mode !== 'manual',
+    mode,
+    stopReason: mode !== 'manual' ? null : normalizeStopReason(input.stopReason),
     updatedAt: normalizeUpdatedAt(input.updatedAt ?? new Date()) ?? new Date().toISOString(),
+    mission,
+    loop,
   };
 
   sessionManager.appendCustomEntry(CONVERSATION_AUTO_MODE_STATE_CUSTOM_TYPE, nextState);

@@ -180,7 +180,6 @@ import {
   removeComposerImageFileAtIndex,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
-  screenshotCaptureImageToFile,
 } from '../conversation/promptAttachments';
 import {
   listRecentConversationResults,
@@ -1765,7 +1764,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [attachments, setAttachments] = useState<File[]>([]);
   const showTextOnlyImageHint =
     attachments.length > 0 && selectedComposerModel !== null && !selectedComposerModel.input?.includes('image') && !defaultVisionModel;
-  const [screenshotCaptureBusy, setScreenshotCaptureBusy] = useState(false);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
   const [pendingBrowserComments, setPendingBrowserComments] = useReloadState<PendingBrowserComment[]>({
     storageKey: browserCommentsStorageKey,
@@ -3929,6 +3927,45 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     showNotice,
   ]);
 
+  const selectConversationAutoMode = useCallback(
+    async (nextMode: import('../shared/types').RunMode) => {
+      if (conversationAutoModeBusy) {
+        return;
+      }
+
+      setConversationAutoModeBusy(true);
+
+      try {
+        if (draft) {
+          if (nextMode === 'manual') {
+            return;
+          }
+
+          await materializeDraftConversation({ enableAutoModeOnLoad: true });
+          return;
+        }
+
+        if (!id) {
+          return;
+        }
+
+        const needsLive = nextMode !== 'manual';
+        const targetConversationId = needsLive ? await ensureConversationIsLive('set run mode') : id;
+        const input: { mode: string } = { mode: nextMode };
+        const nextState = await api.updateConversationAutoMode(targetConversationId, input, currentSurfaceId);
+
+        if (targetConversationId === id) {
+          setConversationAutoModeState(nextState);
+        }
+      } catch (error) {
+        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      } finally {
+        setConversationAutoModeBusy(false);
+      }
+    },
+    [conversationAutoModeBusy, currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice],
+  );
+
   const rewindConversationFromMessage = useCallback(
     async (messageIndex: number) => {
       if (!id || !realMessages) {
@@ -4280,33 +4317,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   function openFilePicker() {
     fileInputRef.current?.click();
-  }
-
-  async function captureComposerScreenshot() {
-    if (composerDisabled || screenshotCaptureBusy) {
-      return;
-    }
-
-    setScreenshotCaptureBusy(true);
-    try {
-      const desktopBridge = getDesktopBridge();
-      if (!desktopBridge) {
-        throw new Error('Screenshot capture is only available in the desktop app.');
-      }
-
-      const result = await desktopBridge.captureScreenshot();
-      if (result.cancelled || !result.image) {
-        return;
-      }
-      const { image } = result;
-
-      setAttachments((current) => [...current, screenshotCaptureImageToFile(image)]);
-      textareaRef.current?.focus();
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setScreenshotCaptureBusy(false);
-    }
   }
 
   function openDrawingEditor() {
@@ -5925,7 +5935,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     composerParallelHeld,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
-  const screenshotCaptureAvailable = getDesktopBridge() !== null && (typeof navigator === 'undefined' || /Mac/i.test(navigator.userAgent));
   const renameConversationDisabled = conversationNeedsTakeover || conversationCwdEditorOpen || conversationCwdBusy;
   const hasComposerShelfContent =
     attachedContextDocs.length > 0 ||
@@ -6416,6 +6425,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   dragOver,
                   hasInteractiveOverlay: showModelPicker || showSlash || showMention,
                   autoModeEnabled: conversationAutoModeEnabled,
+                  runMode: effectiveConversationAutoModeState?.mode,
                 }),
               )}
               ref={composerShellRef}
@@ -6547,8 +6557,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 pendingAskUserQuestion={Boolean(pendingAskUserQuestion)}
                 composerDisabled={composerDisabled}
                 composerShellWidth={composerShellWidth}
-                screenshotCaptureAvailable={screenshotCaptureAvailable}
-                screenshotCaptureBusy={screenshotCaptureBusy}
                 streamIsStreaming={stream.isStreaming}
                 models={models}
                 currentModel={currentModel || model || defaultModel}
@@ -6558,6 +6566,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 showAutoModeToggle={Boolean(draft || id)}
                 conversationAutoModeEnabled={conversationAutoModeEnabled}
                 conversationAutoModeBusy={conversationAutoModeBusy}
+                conversationAutoMode={effectiveConversationAutoModeState}
                 dictationState={dictationState}
                 dictationLevelSamples={dictationLevelSamples}
                 dictationStartedAt={dictationStartedAt}
@@ -6583,9 +6592,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 onOpenFilePicker={openFilePicker}
-                onCaptureScreenshot={() => {
-                  void captureComposerScreenshot();
-                }}
                 onOpenDrawingEditor={openDrawingEditor}
                 onSelectModel={(modelId) => {
                   void saveModelPreference(modelId);
@@ -6598,6 +6604,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 }}
                 onToggleAutoMode={() => {
                   void toggleConversationAutoMode();
+                }}
+                onSelectMode={(nextMode) => {
+                  void selectConversationAutoMode(nextMode);
                 }}
                 onDictationPointerDown={handleDictationPointerDown}
                 onDictationPointerUp={handleDictationPointerUp}
