@@ -23,6 +23,10 @@ function buildAutoContextPath(sessionId: string): string {
 export interface LiveSessionAutoModeHost extends LiveSessionHiddenTurnState {
   session: AgentSession;
   pendingAutoModeContinuation?: boolean;
+  /** Re-entrancy guard for requestLiveSessionAutoModeContinuationTurn.
+   *  Set while the async send is in-flight to prevent stacked continuations
+   *  when turn_end fires multiple times (e.g. compaction recovery). */
+  schedulingContinuationTurn?: boolean;
 }
 
 export function readLiveSessionAutoModeHostState(host: Pick<LiveSessionAutoModeHost, 'session'>): ConversationAutoModeState {
@@ -95,25 +99,42 @@ export async function requestLiveSessionAutoModeContinuationTurn(host: LiveSessi
     return false;
   }
 
-  const state = readLiveSessionAutoModeHostState(host);
-  repairDanglingToolCallContext(host.session);
-  const autoContextPath = buildAutoContextPath(host.session.sessionId);
+  // Re-entrancy guard: skip if we're already in the process of scheduling a
+  // continuation (e.g. from a re-entrant turn_end or compaction recovery).
+  // Uses a dedicated field separate from pendingAutoModeContinuation (which is
+  // set by the nudge-mode auto_control tool and consumed by the event handler).
+  if (host.schedulingContinuationTurn) {
+    return false;
+  }
 
-  const content = buildModeContinuationPrompt(state, autoContextPath);
+  host.schedulingContinuationTurn = true;
 
-  await host.session.sendCustomMessage(
-    {
-      customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-      content,
-      display: false,
-      details: { source: 'conversation-auto-mode', mode: state.mode },
-    },
-    {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    },
-  );
-  return true;
+  try {
+    const state = readLiveSessionAutoModeHostState(host);
+    repairDanglingToolCallContext(host.session);
+    const autoContextPath = buildAutoContextPath(host.session.sessionId);
+
+    const content = buildModeContinuationPrompt(state, autoContextPath);
+
+    await host.session.sendCustomMessage(
+      {
+        customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
+        content,
+        display: false,
+        details: { source: 'conversation-auto-mode', mode: state.mode },
+      },
+      {
+        deliverAs: 'followUp',
+        triggerTurn: true,
+      },
+    );
+
+    host.schedulingContinuationTurn = false;
+    return true;
+  } catch (error) {
+    host.schedulingContinuationTurn = false;
+    throw error;
+  }
 }
 
 function buildModeContinuationPrompt(state: ConversationAutoModeState, autoContextPath: string): string {
