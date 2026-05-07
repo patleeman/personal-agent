@@ -2,6 +2,7 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
 
 import {
+  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
   CONVERSATION_AUTO_MODE_CONTROL_TOOL,
   CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
   readConversationAutoModeStateFromSessionManager,
@@ -15,15 +16,14 @@ import {
 import { logWarn } from '../middleware/index.js';
 
 const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
-const CONTINUE_IDEMPOTENCY_WINDOW_MS = 30_000;
 
 const AutoModeControlToolNames = [CONVERSATION_AUTO_MODE_CONTROL_TOOL] as const;
 const AutoModeControlToolNameSet = new Set<string>(AutoModeControlToolNames);
 const REVIEW_TOOL_NAMES = new Set<string>([CONVERSATION_AUTO_MODE_CONTROL_TOOL, 'read', 'edit']);
 
-// Track last continue call per session manager instance to make continue
-// idempotent within a turn. WeakMap is cleanable across test runs.
-const lastContinueTimestamps = new WeakMap<object, number>();
+// Track whether continue was already processed in the current turn.
+// Cleared on turn_end so the next turn can call continue fresh.
+const continueProcessedInTurn = new WeakMap<object, true>();
 
 const ConversationAutoControlParams = Type.Object({
   action: Type.Union([Type.Literal('continue'), Type.Literal('stop')], {
@@ -168,6 +168,12 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           throw new Error('conversation_auto_control is only available during hidden auto-review turns.');
         }
 
+        // Safety check: explicitly reject if this is a continuation turn, not a review turn.
+        const currentType = resolveCurrentTurnSourceCustomType(ctx.sessionManager);
+        if (currentType === CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE) {
+          throw new Error('conversation_auto_control cannot be called during continuation turns.');
+        }
+
         if (params.action === 'continue') {
           if (!sessionId) {
             throw new Error('Conversation auto mode requires a persisted live session.');
@@ -181,19 +187,16 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
 
           const remainingTurns = state.budget?.maxTurns;
 
-          // Idempotency guard: skip duplicate continue calls within 30s of the
-          // first call in the same hidden review turn (agent calling twice, or
-          // recovery replaying the turn). Uses the session manager object as key
-          // so each turn instance gets its own tracking.
-          const lastContinueAt = lastContinueTimestamps.get(ctx.sessionManager as object) ?? 0;
-          if (Date.now() - lastContinueAt < CONTINUE_IDEMPOTENCY_WINDOW_MS) {
+          // Idempotency guard: skip duplicate continue calls within the same turn.
+          // Uses the session manager object as key so it's naturally cleared on
+          // turn_end (new turn = new agent start = fresh WeakMap access).
+          if (continueProcessedInTurn.has(ctx.sessionManager as object)) {
             markConversationAutoModeContinueRequested(sessionId);
             return {
-              content: [{ type: 'text' as const, text: 'Continue already processed.' }],
+              content: [{ type: 'text' as const, text: 'Continue already processed in this turn.' }],
               details: { enabled: true, action: 'continue' },
             };
           }
-          lastContinueTimestamps.set(ctx.sessionManager as object, Date.now());
 
           if (state.mode === 'forced' && remainingTurns === 0) {
             const nextState = await setLiveSessionAutoModeState(sessionId, {
@@ -222,6 +225,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             });
           }
 
+          continueProcessedInTurn.set(ctx.sessionManager as object, true as const);
           markConversationAutoModeContinueRequested(sessionId);
           return {
             content: [{ type: 'text' as const, text: 'Auto mode will continue after this hidden review turn.' }],
@@ -260,6 +264,9 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     pi.on('turn_end', async (_event, ctx) => {
       const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
       const sessionFile = ctx.sessionManager.getSessionFile?.()?.trim();
+
+      // Clear the continue-processed flag for the next turn
+      continueProcessedInTurn.delete(ctx.sessionManager as object);
 
       if (!sessionId && !sessionFile) {
         return;
