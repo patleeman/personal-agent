@@ -260,6 +260,7 @@ export function DesktopTopBar({
   }
 
   const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
+  const dragStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
   const launchBadgeLabel = environment?.launchMode === 'testing' ? environment.launchLabel?.trim() || 'Testing' : null;
 
   const caffinating = daemonPower?.keepAwake === true && daemonPower?.active === true;
@@ -271,9 +272,8 @@ export function DesktopTopBar({
 
   return (
     <div className="ui-desktop-top-bar border-b-0 bg-base/80">
-      <div className="ui-desktop-top-bar__drag-region" />
       <div className="ui-desktop-top-bar__leading">
-        <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
+        <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" style={dragStyle} />
         <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
           {!zenMode ? (
             <ToolbarButton
@@ -314,7 +314,7 @@ export function DesktopTopBar({
           </div>
         ) : null}
       </div>
-      <div className="ui-desktop-top-bar__center" />
+      <div className="ui-desktop-top-bar__center" style={dragStyle} />
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
         {daemonPower !== null && daemonPower.keepAwake ? (
           <div

@@ -2235,7 +2235,14 @@ export function Layout() {
       writeAppLayoutMode(mode);
 
       if (mode === 'compact') {
-        setSearchParams((current) => new URLSearchParams(clearWorkbenchOnlySearchParamsForCompact(current.toString())), { replace: true });
+        setSearchParams(
+          (current) => {
+            const next = new URLSearchParams(clearWorkbenchOnlySearchParamsForCompact(current.toString()));
+            next.delete('view');
+            return next;
+          },
+          { replace: true },
+        );
       }
     },
     [setSearchParams],
