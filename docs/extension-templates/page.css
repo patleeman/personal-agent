@@ -1,0 +1,138 @@
+:root {
+  color-scheme: light dark;
+  --pa-bg: #eef1f7;
+  --pa-text: #171b2a;
+  --pa-muted: #68708a;
+  --pa-line: #c8cfdd;
+  --pa-surface: rgba(255, 255, 255, 0.38);
+  --pa-accent: #5f75ff;
+  --pa-danger: #b42318;
+  --pa-success: #1f7a4d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pa-bg: #181b28;
+    --pa-text: #e9edf8;
+    --pa-muted: #9ca5c3;
+    --pa-line: #30384d;
+    --pa-surface: rgba(255, 255, 255, 0.04);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--pa-bg);
+  color: var(--pa-text);
+  font:
+    13px/1.5 Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+.pa-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 32px 34px 56px;
+}
+
+.pa-hero,
+.pa-section-heading,
+.pa-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pa-hero {
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--pa-line);
+}
+
+.pa-eyebrow {
+  margin: 0 0 6px;
+  color: var(--pa-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 6px;
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 18px;
+}
+
+.pa-lede,
+.pa-meta,
+.pa-empty {
+  color: var(--pa-muted);
+}
+
+.pa-panel {
+  margin-top: 20px;
+  border: 1px solid var(--pa-line);
+  background: var(--pa-surface);
+  padding: 18px;
+}
+
+.pa-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.pa-button {
+  border: 1px solid var(--pa-line);
+  border-radius: 9px;
+  padding: 7px 11px;
+  background: transparent;
+  color: var(--pa-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pa-button:hover {
+  border-color: var(--pa-accent);
+}
+
+.pa-button-primary {
+  border-color: color-mix(in srgb, var(--pa-accent), var(--pa-line) 45%);
+  background: color-mix(in srgb, var(--pa-accent), transparent 88%);
+}
+
+.pa-empty {
+  padding: 24px 0;
+}
+
+@media (max-width: 760px) {
+  .pa-shell {
+    padding: 24px 18px;
+  }
+
+  .pa-hero,
+  .pa-section-heading {
+    display: grid;
+  }
+}

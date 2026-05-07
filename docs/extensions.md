@@ -447,13 +447,30 @@ Slash actions receive `{ commandName, argument, text, conversationId, cwd, draft
 
 Extension frontend entries render in iframes by default. The iframe gives CSS and DOM isolation, so extension styles do not leak into the desktop shell.
 
-Styling should be boring and reliable:
+Styling should be boring and reliable. Extension UI should look like Personal Agent, but it should not depend on desktop React internals.
 
-- PA injects a stable extension style library into the iframe, for example `/pa/extension.css`.
-- The style library defines tokens, reset, typography, buttons, inputs, cards, tables, empty states, and layout helpers.
-- Extensions can opt out or override locally, but generated extensions should start from the shared classes.
-- The style library is versioned with PA and documented as a public extension API.
-- Extension HTML should still be resilient if the shared CSS fails; self-contained critical layout is acceptable for generated apps.
+Use these references when generating or editing extension UI:
+
+- `docs/extension-templates/page.html` — default main-page HTML shape.
+- `docs/extension-templates/page.css` — default main-page CSS tokens, layout, buttons, panels, and responsive rules.
+- `docs/extension-templates/rail.html` — compact right-rail tool panel shape.
+- `packages/desktop/server/apps/pa-components.css` — current shared PA component stylesheet served as `/pa/components.css` and `/api/pa/components.css`.
+- `packages/desktop/server/apps/app-scaffold.html` — older skill-app component scaffold; useful for `<pa-card>`, `<pa-form>`, `<pa-field>`, `<pa-button>`, `<pa-status>`, and `<pa-table>` examples.
+- `extensions/system-automations/frontend/index.html` and `extensions/system-automations/frontend/styles.css` — first real bundled system extension; use it as the reference for iframe extension pages.
+
+Default styling rules for generated extensions:
+
+- Start from `docs/extension-templates/page.html` for page surfaces and `docs/extension-templates/rail.html` for right-rail surfaces.
+- Prefer a single-column app shell with a clear header, one-sentence summary, high-signal actions, and bordered row separators. Avoid dashboard chrome unless the extension is genuinely a dashboard.
+- Use PA-ish tokens: `--pa-bg`, `--pa-text`, `--pa-muted`, `--pa-line`, `--pa-surface`, `--pa-accent`, `--pa-danger`, `--pa-success`. Support `prefers-color-scheme`.
+- Keep CSS scoped to the iframe document. Do not style generic desktop selectors outside the iframe. The iframe isolates DOM/CSS from the PA shell, but sloppy global CSS still makes the extension itself a swamp.
+- Avoid nested bordered cards. Use spacing, typography, and separators for hierarchy. One bordered panel around an editor/form is fine; boxes inside boxes are visual debt with interest.
+- Inline critical CSS in `index.html` for bundled system extensions when reliability matters. External local CSS is fine for user/runtime extensions, but srcdoc frames and custom protocols can be fussy; when in doubt, inline the critical shell styles.
+- Do not import app UI bundles, desktop CSS, React components, or Tailwind classes as the extension contract. Extensions should use plain HTML/CSS/JS plus `window.PA`.
+- Use explicit closing tags for custom elements (`<pa-field></pa-field>`), not XML-style self-closing tags.
+- Right-rail surfaces are narrow. Keep rail content dense: title, short context, list/actions. No wide tables, huge forms, or main-page layouts crammed into a rail. Tiny rectangle, tiny ambitions.
+
+`/pa/components.css` is the shared component-library stylesheet. `ExtensionFrame` also fetches `/api/pa/components.css` and inlines it for srcdoc iframe surfaces. Generated extensions may use either raw HTML classes from the templates or the `<pa-*>` custom element library from `/pa/client.js`; prefer raw HTML/CSS for product-like pages and `<pa-*>` for fast form-driven utilities.
 
 Frontend entries receive a `window.PA` API plus launch context. Bundled system extensions and user extensions both use iframe HTML `entry` files by default; core React component shortcuts are not part of the v0 manifest contract.
 
@@ -788,7 +805,7 @@ This keeps existing apps working while the product moves toward an extension man
 1. Define `extension.json` schema, TypeScript types, icon registry, and introspection endpoints.
 2. Add extension registry UI that lists installed local extensions, routes, surfaces, and declared permissions.
 3. Support `main.page`, `left.nav`, and `right.toolPanel` surfaces, including right-panel scope.
-4. Add stable `/pa/extension.css` styling library for iframe surfaces.
+4. Promote the documented extension templates into a stable `/pa/extension.css` styling library for iframe surfaces.
 5. Add runtime SQLite-backed `PA.storage` / `ctx.storage`.
 6. Add TypeScript backend action loading with explicit reload/hot-reload endpoints.
 7. Add `PA.extension.call()` and backend action invocation.
