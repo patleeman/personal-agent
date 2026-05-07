@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { type BrowserTabItem, type BrowserTabsState, readBrowserTabsState } from '../local/workbenchBrowserTabs';
 import { WorkbenchBrowserTab } from './Layout';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -48,6 +49,10 @@ describe('WorkbenchBrowserTab', () => {
       snapshotRevision: 0,
       changedSinceSnapshot: true,
     }));
+    const browserTabsState: BrowserTabsState = readBrowserTabsState();
+    const activeBrowserTab: BrowserTabItem =
+      browserTabsState.tabs.find((t) => t.id === browserTabsState.activeTabId) ?? browserTabsState.tabs[0]!;
+
     window.personalAgentDesktop = { setWorkbenchBrowserBounds, navigateWorkbenchBrowser } as unknown as typeof window.personalAgentDesktop;
 
     const container = document.createElement('div');
@@ -59,7 +64,14 @@ describe('WorkbenchBrowserTab', () => {
 
     root = createRoot(container);
     act(() => {
-      root?.render(<WorkbenchBrowserTab onClose={() => undefined} />);
+      root?.render(
+        <WorkbenchBrowserTab
+          tabsState={browserTabsState}
+          activeTab={activeBrowserTab}
+          onSetTabsState={vi.fn()}
+          onClose={() => undefined}
+        />,
+      );
     });
     await flushAsyncWork();
 

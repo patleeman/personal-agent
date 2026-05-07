@@ -39,6 +39,7 @@ import {
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
 import {
+  DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT,
   type DesktopConversationContextMenuAction,
   type DesktopConversationCwdGroupContextMenuAction,
   getDesktopBridge,
@@ -1938,7 +1939,7 @@ function OpenConversationRow({
   );
 }
 
-export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boolean }) {
+export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { hideKnowledgeNav?: boolean; hideBrowserNav?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
@@ -3566,6 +3567,34 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
           <TopNavItem to="/telemetry" icon={PATH.list} label="Telemetry" forceActive={location.pathname.startsWith('/telemetry')} />
           {!hideKnowledgeNav ? (
             <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
+          ) : null}
+          {!hideBrowserNav ? (
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent(DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT));
+              }}
+              className="ui-sidebar-nav-item w-full text-left"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 opacity-70"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="8.25" />
+                <path d="M3.75 12h16.5" />
+                <path d="M12 3.75c2.1 2.25 3.15 5 3.15 8.25S14.1 18 12 20.25" />
+                <path d="M12 3.75C9.9 6 8.85 8.75 8.85 12S9.9 18 12 20.25" />
+              </svg>
+              <span className="flex-1 text-left">Browser</span>
+            </button>
           ) : null}
         </div>
 
