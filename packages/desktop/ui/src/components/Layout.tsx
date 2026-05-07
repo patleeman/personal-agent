@@ -786,21 +786,25 @@ export function WorkbenchBrowserTab({
     setUrlDraft(draft);
   }, [activeTab.id]);
 
-  // Navigate the Electron view to the tab's saved URL if it doesn't match
+  // Navigate each tab once on first activation to restore its saved URL.
+  // Subsequent tab switches only show/hide views via syncBounds — no reload.
+  const [navigatedTabs, setNavigatedTabs] = useState<Set<string>>(() => new Set());
+
   useEffect(() => {
-    if (!bridge || !activeTab.url) {
+    if (!bridge || !activeTab.url || navigatedTabs.has(activeTab.id)) {
       return;
     }
 
-    // Only navigate if the view doesn't already have this URL loaded
-    if (!state || state.url !== activeTab.url) {
-      void bridge
-        .navigateWorkbenchBrowser({ url: activeTab.url, sessionKey: browserSessionKey })
-        .then((nextState) => {
+    setNavigatedTabs((prev) => new Set(prev).add(activeTab.id));
+
+    void bridge
+      .navigateWorkbenchBrowser({ url: activeTab.url, sessionKey: browserSessionKey })
+      .then((nextState) => {
+        if (nextState) {
           setState(nextState);
-        })
-        .catch(() => undefined);
-    }
+        }
+      })
+      .catch(() => undefined);
   }, [activeTab.id]);
 
   // Update tab URL/title from browser state changes
