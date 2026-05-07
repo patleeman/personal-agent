@@ -32,6 +32,7 @@ const fieldClassName =
   'min-w-0 rounded-none border-0 border-b border-border-subtle bg-transparent px-0 py-0.5 text-[12px] font-medium text-primary outline-none transition-colors placeholder:text-dim hover:border-border-default focus:border-accent/60';
 
 const compactNumberClassName = cx('w-10 text-center', fieldClassName);
+const loopDelayOptions = ['After each turn', '30s', '1m', '5m', '10m'];
 
 function ModeLabel({ mode, children }: { mode: 'mission' | 'loop'; children: string }) {
   return <span className={cx('shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]', modeTextClassName[mode])}>{children}</span>;
@@ -126,12 +127,12 @@ export function ConversationRunModePanel({
     const iterationsUsed = loop?.iterationsUsed ?? 0;
     const maxIterations = draftLoop?.maxIterations ?? loop?.maxIterations ?? 5;
     const delay = draftLoop?.delay ?? loop?.delay ?? 'After each turn';
+    const delayOptions = loopDelayOptions.includes(delay) ? loopDelayOptions : [delay, ...loopDelayOptions];
 
     return (
       <div className="border-b border-border-subtle/60 bg-surface/20 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
           <ModeLabel mode="loop">Loop</ModeLabel>
-          <span className="shrink-0">Repeat</span>
           <input
             aria-label="Loop prompt"
             value={prompt}
@@ -164,7 +165,7 @@ export function ConversationRunModePanel({
             className={compactNumberClassName}
           />
           <span className="shrink-0">times · wait</span>
-          <input
+          <select
             value={delay}
             onChange={(event) =>
               onDraftLoopChange?.({
@@ -174,8 +175,14 @@ export function ConversationRunModePanel({
               })
             }
             aria-label="Loop delay"
-            className={cx('w-28', fieldClassName)}
-          />
+            className={cx('w-32 appearance-none', fieldClassName)}
+          >
+            {delayOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     );

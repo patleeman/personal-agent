@@ -139,7 +139,9 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('aria-label="Loop prompt"');
     expect(html).toContain('aria-label="Loop max iterations"');
     expect(html).toContain('aria-label="Loop delay"');
+    expect(html).toContain('<select');
     expect(html).toContain('value="2s"');
+    expect(html).not.toContain('>Repeat</span>');
   });
 
   it('renders the dictation waveform while recording', () => {
