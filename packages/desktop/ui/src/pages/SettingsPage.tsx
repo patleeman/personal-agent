@@ -3129,7 +3129,7 @@ export function SettingsPage() {
   }
 
   async function handleStartProviderOAuthLogin() {
-    if (!selectedProvider || !selectedProvider.oauthSupported || oauthAction !== null) {
+    if (!modalProviderAuth || !modalProviderAuth.oauthSupported || oauthAction !== null) {
       return;
     }
 
@@ -3140,7 +3140,7 @@ export function SettingsPage() {
     setOauthAction('start');
 
     try {
-      const login = await api.startProviderOAuthLogin(selectedProvider.id);
+      const login = await api.startProviderOAuthLogin(modalProviderAuth.id);
       setOauthLoginState(login);
 
       if (login.status === 'completed') {
