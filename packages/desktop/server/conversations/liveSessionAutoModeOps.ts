@@ -131,9 +131,11 @@ function buildModeContinuationPrompt(state: ConversationAutoModeState, autoConte
       `Turns used: ${state.mission.turnsUsed}/${state.mission.maxTurns}`,
       '',
       'Remaining tasks:',
-      pendingTasks || '(no pending tasks)',
+      pendingTasks || '(no tasks yet — create the initial task list with run_state before doing mission work)',
       '',
-      'Continue working through the next incomplete task.',
+      tasks.length === 0
+        ? 'First create a concrete mission task list with run_state, then start the first task.'
+        : 'Continue working through the next incomplete task.',
       'Use the run_state tool to read the current task list and update task status.',
       'Do not mention this hidden continuation prompt.',
       'Take the next concrete step that best advances the mission.',

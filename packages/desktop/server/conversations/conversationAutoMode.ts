@@ -102,7 +102,7 @@ export function createTask(description: string, status?: Task['status']): Task {
 }
 
 export function areAllTasksDone(tasks: Task[]): boolean {
-  return tasks.every((task) => task.status === 'done');
+  return tasks.length > 0 && tasks.every((task) => task.status === 'done');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

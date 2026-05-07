@@ -1349,8 +1349,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       syncTimerRef.current = setTimeout(() => {
         syncTimerRef.current = null;
         if (!id || !conversationAutoModeState?.enabled) return;
-        try {
-          void api.updateConversationAutoMode(id, {
+        void api
+          .updateConversationAutoMode(id, {
             mode: 'mission',
             mission: {
               goal: draftMissionConfig.goal || 'Mission',
@@ -1358,10 +1358,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               maxTurns: draftMissionConfig.maxTurns,
               turnsUsed: conversationAutoModeState?.mission?.turnsUsed ?? 0,
             },
-          });
-        } catch {
-          // ignore sync failures
-        }
+          })
+          .then(setConversationAutoModeState)
+          .catch(() => undefined);
       }, 500);
     } else if (mode === 'loop') {
       const serialized = JSON.stringify(draftLoopConfig);
@@ -1373,8 +1372,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       syncTimerRef.current = setTimeout(() => {
         syncTimerRef.current = null;
         if (!id || !conversationAutoModeState?.enabled) return;
-        try {
-          void api.updateConversationAutoMode(id, {
+        void api
+          .updateConversationAutoMode(id, {
             mode: 'loop',
             loop: {
               prompt: draftLoopConfig.prompt || 'Run loop iteration',
@@ -1382,10 +1381,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               iterationsUsed: conversationAutoModeState?.loop?.iterationsUsed ?? 0,
               delay: draftLoopConfig.delay,
             },
-          });
-        } catch {
-          // ignore sync failures
-        }
+          })
+          .then(setConversationAutoModeState)
+          .catch(() => undefined);
       }, 500);
     }
 
@@ -4007,23 +4005,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setConversationAutoModeBusy(true);
 
       try {
-        if (draft) {
-          if (nextMode === 'manual') {
-            return;
-          }
-
-          await materializeDraftConversation({ enableAutoModeOnLoad: true });
-          return;
-        }
-
-        if (!id) {
-          return;
-        }
-
-        const needsLive = nextMode !== 'manual';
-        const targetConversationId = needsLive ? await ensureConversationIsLive('set run mode') : id;
-
-        // Build the input based on the mode
         const input: Record<string, unknown> = { mode: nextMode };
         if (nextMode === 'mission') {
           const goal = draftMissionConfig.goal.trim();
@@ -4041,6 +4022,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             delay: draftLoopConfig.delay,
           };
         }
+
+        if (draft) {
+          if (nextMode === 'manual') {
+            return;
+          }
+
+          const targetConversationId = await materializeDraftConversation();
+          const nextState = await api.updateConversationAutoMode(targetConversationId, input, currentSurfaceId);
+          setConversationAutoModeState(nextState);
+          return;
+        }
+
+        if (!id) {
+          return;
+        }
+
+        const needsLive = nextMode !== 'manual';
+        const targetConversationId = needsLive ? await ensureConversationIsLive('set run mode') : id;
 
         const nextState = await api.updateConversationAutoMode(targetConversationId, input, currentSurfaceId);
 

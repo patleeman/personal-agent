@@ -369,12 +369,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
-      // Skip continuation turns themselves
-      if (isContinuationTurn(ctx.sessionManager)) {
+      const mode = state.mode;
+
+      if (mode === 'nudge' && isContinuationTurn(ctx.sessionManager)) {
         return;
       }
-
-      const mode = state.mode;
 
       if (mode === 'mission') {
         handleMissionTurnEnd(ctx, state, sessionId);
@@ -452,6 +451,32 @@ function handleMissionTurnEnd(
   }
 }
 
+function parseLoopDelayMs(delay: string): number {
+  const trimmed = delay.trim().toLowerCase();
+  if (!trimmed || trimmed === 'after each turn' || trimmed === 'immediate') {
+    return 0;
+  }
+
+  const match =
+    /^(\d+(?:\.\d+)?)\s*(ms|millisecond|milliseconds|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)$/.exec(
+      trimmed,
+    );
+  if (!match) {
+    return 0;
+  }
+
+  const value = Number(match[1]);
+  const unit = match[2];
+  if (!Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+
+  if (unit.startsWith('ms') || unit.startsWith('millisecond')) return value;
+  if (unit === 's' || unit.startsWith('sec')) return value * 1000;
+  if (unit === 'm' || unit.startsWith('min')) return value * 60_000;
+  return value * 60 * 60_000;
+}
+
 function handleLoopTurnEnd(
   ctx: { sessionManager: { appendCustomEntry: (type: string, data: unknown) => string; getEntries: () => unknown[] } },
   state: ConversationAutoModeState,
@@ -476,13 +501,19 @@ function handleLoopTurnEnd(
 
   // Signal continuation via direct call (bypasses pendingAutoModeContinuation flag)
   if (sessionId) {
-    queueMicrotask(() => {
+    const requestContinuation = () => {
       void requestConversationAutoModeContinuationTurn(sessionId).catch((error) => {
         logWarn('loop mode direct continuation failed', {
           sessionId,
           message: error instanceof Error ? error.message : String(error),
         });
       });
-    });
+    };
+    const delayMs = parseLoopDelayMs(loop.delay);
+    if (delayMs > 0) {
+      setTimeout(requestContinuation, delayMs);
+    } else {
+      queueMicrotask(requestContinuation);
+    }
   }
 }

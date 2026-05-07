@@ -126,56 +126,54 @@ export function ConversationRunModePanel({
             <span className="text-[10px] text-dim">Run exactly N iterations</span>
           )}
         </div>
-        {!running && (
-          <div className="flex flex-col gap-2">
-            <textarea
-              value={draftLoop?.prompt ?? ''}
-              onChange={(e) =>
-                onDraftLoopChange?.({
-                  prompt: e.target.value,
-                  maxIterations: draftLoop?.maxIterations ?? 5,
-                  delay: draftLoop?.delay ?? 'After each turn',
-                })
-              }
-              rows={2}
-              className="w-full resize-none rounded-md border border-border-subtle bg-surface/45 px-2.5 py-1.5 text-[12px] text-primary outline-none placeholder:text-dim focus:border-accent/40"
-              placeholder="Prompt to repeat each iteration"
-            />
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5 text-[11px] text-dim">
-                Iterations
-                <input
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={draftLoop?.maxIterations ?? 5}
-                  onChange={(e) =>
-                    onDraftLoopChange?.({
-                      prompt: draftLoop?.prompt ?? '',
-                      maxIterations: Math.max(1, parseInt(e.target.value, 10) || 5),
-                      delay: draftLoop?.delay ?? 'After each turn',
-                    })
-                  }
-                  className="w-16 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
-                />
-              </label>
-              <label className="flex items-center gap-1.5 text-[11px] text-dim">
-                Delay
-                <input
-                  value={draftLoop?.delay ?? 'After each turn'}
-                  onChange={(e) =>
-                    onDraftLoopChange?.({
-                      prompt: draftLoop?.prompt ?? '',
-                      maxIterations: draftLoop?.maxIterations ?? 5,
-                      delay: e.target.value,
-                    })
-                  }
-                  className="w-28 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
-                />
-              </label>
-            </div>
+        <div className="flex flex-col gap-2">
+          <textarea
+            value={draftLoop?.prompt ?? loop?.prompt ?? ''}
+            onChange={(e) =>
+              onDraftLoopChange?.({
+                prompt: e.target.value,
+                maxIterations: draftLoop?.maxIterations ?? loop?.maxIterations ?? 5,
+                delay: draftLoop?.delay ?? loop?.delay ?? 'After each turn',
+              })
+            }
+            rows={2}
+            className="w-full resize-none rounded-md border border-border-subtle bg-surface/45 px-2.5 py-1.5 text-[12px] text-primary outline-none placeholder:text-dim focus:border-accent/40"
+            placeholder="Prompt to repeat each iteration"
+          />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-[11px] text-dim">
+              Iterations
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={draftLoop?.maxIterations ?? loop?.maxIterations ?? 5}
+                onChange={(e) =>
+                  onDraftLoopChange?.({
+                    prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+                    maxIterations: Math.max(1, parseInt(e.target.value, 10) || 5),
+                    delay: draftLoop?.delay ?? loop?.delay ?? 'After each turn',
+                  })
+                }
+                className="w-16 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px] text-dim">
+              Delay
+              <input
+                value={draftLoop?.delay ?? loop?.delay ?? 'After each turn'}
+                onChange={(e) =>
+                  onDraftLoopChange?.({
+                    prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+                    maxIterations: draftLoop?.maxIterations ?? loop?.maxIterations ?? 5,
+                    delay: e.target.value,
+                  })
+                }
+                className="w-28 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
+              />
+            </label>
           </div>
-        )}
+        </div>
       </div>
     );
   }

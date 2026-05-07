@@ -93,6 +93,54 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('Submit answers');
   });
 
+  it('renders active mission tasks even when the stream is idle', () => {
+    const html = renderControls({
+      conversationAutoModeEnabled: true,
+      streamIsStreaming: false,
+      conversationAutoMode: {
+        enabled: true,
+        mode: 'mission',
+        mission: {
+          goal: 'Fix the page',
+          tasks: [
+            { id: 't1', description: 'Run tests', status: 'done' },
+            { id: 't2', description: 'Patch bug', status: 'pending' },
+          ],
+          maxTurns: 20,
+          turnsUsed: 2,
+        },
+        updatedAt: '2026-05-07T00:00:00.000Z',
+      },
+    });
+
+    expect(html).toContain('tasks');
+    expect(html).toContain('Patch bug');
+    expect(html).not.toContain('Goal: what should be accomplished?');
+  });
+
+  it('keeps active loop controls visible while the stream is idle', () => {
+    const html = renderControls({
+      conversationAutoModeEnabled: true,
+      streamIsStreaming: false,
+      draftLoopConfig: { prompt: 'Find bugs', maxIterations: 5, delay: '2s' },
+      conversationAutoMode: {
+        enabled: true,
+        mode: 'loop',
+        loop: {
+          prompt: 'Find bugs',
+          maxIterations: 5,
+          iterationsUsed: 2,
+          delay: '2s',
+        },
+        updatedAt: '2026-05-07T00:00:00.000Z',
+      },
+    });
+
+    expect(html).toContain('iterations');
+    expect(html).toContain('Prompt to repeat each iteration');
+    expect(html).toContain('value="2s"');
+  });
+
   it('renders the dictation waveform while recording', () => {
     const html = renderControls({
       dictationState: 'recording',

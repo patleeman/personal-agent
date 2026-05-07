@@ -53,8 +53,8 @@ describe('createTask', () => {
 });
 
 describe('areAllTasksDone', () => {
-  it('returns true for empty task list', () => {
-    expect(areAllTasksDone([])).toBe(true);
+  it('returns false for empty task list so mission mode can bootstrap tasks', () => {
+    expect(areAllTasksDone([])).toBe(false);
   });
 
   it('returns true when all tasks are done', () => {

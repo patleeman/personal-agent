@@ -78,7 +78,7 @@ function createSessionManager(options: { enabled?: boolean; mode?: string; branc
   };
 }
 
-function createMissionSessionManager(options: { tasks?: unknown[] } = {}) {
+function createMissionSessionManager(options: { tasks?: unknown[]; branch?: unknown[]; turnsUsed?: number; maxTurns?: number } = {}) {
   return {
     getSessionId: () => 'conversation-1',
     getEntries: () => [
@@ -94,19 +94,19 @@ function createMissionSessionManager(options: { tasks?: unknown[] } = {}) {
               { id: 't1', description: 'Task 1', status: 'done' },
               { id: 't2', description: 'Task 2', status: 'pending' },
             ],
-            maxTurns: 20,
-            turnsUsed: 1,
+            maxTurns: options.maxTurns ?? 20,
+            turnsUsed: options.turnsUsed ?? 1,
           },
           updatedAt: '2026-04-12T10:00:00.000Z',
         },
       },
     ],
-    getBranch: () => [{ type: 'message', message: { role: 'assistant' } }],
+    getBranch: () => options.branch ?? [{ type: 'message', message: { role: 'assistant' } }],
     appendCustomEntry: vi.fn(),
   };
 }
 
-function createLoopSessionManager() {
+function createLoopSessionManager(options: { branch?: unknown[]; delay?: string; iterationsUsed?: number; maxIterations?: number } = {}) {
   return {
     getSessionId: () => 'conversation-1',
     getEntries: () => [
@@ -118,15 +118,15 @@ function createLoopSessionManager() {
           mode: 'loop',
           loop: {
             prompt: 'Find bugs',
-            maxIterations: 5,
-            iterationsUsed: 2,
-            delay: 'After each turn',
+            maxIterations: options.maxIterations ?? 5,
+            iterationsUsed: options.iterationsUsed ?? 2,
+            delay: options.delay ?? 'After each turn',
           },
           updatedAt: '2026-04-12T10:00:00.000Z',
         },
       },
     ],
-    getBranch: () => [{ type: 'message', message: { role: 'assistant' } }],
+    getBranch: () => options.branch ?? [{ type: 'message', message: { role: 'assistant' } }],
     appendCustomEntry: vi.fn(),
   };
 }
@@ -136,6 +136,8 @@ beforeEach(() => {
   markConversationAutoModeContinueRequestedMock.mockReset();
   registerLiveSessionLifecycleHandlerMock.mockReset();
   requestConversationAutoModeTurnMock.mockReset();
+  requestConversationAutoModeContinuationTurnMock.mockReset();
+  requestConversationAutoModeContinuationTurnMock.mockResolvedValue(true);
   setLiveSessionAutoModeStateMock.mockReset();
 });
 
@@ -421,6 +423,59 @@ describe('conversation auto mode agent extension', () => {
       // Loop mode: should directly request continuation, not go through hidden review path
       expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
       expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps mission mode chaining from continuation turns while tasks remain', async () => {
+      const { handlers } = createHarness();
+      const turnEndHandlers = handlers.get('turn_end') ?? [];
+
+      await turnEndHandlers[0]?.(
+        {} as never,
+        {
+          sessionManager: createMissionSessionManager({
+            branch: [{ type: 'custom_message', customType: 'conversation_automation_auto_continue' }],
+          }),
+        } as never,
+      );
+
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
+    });
+
+    it('does not treat an empty mission task list as complete', async () => {
+      const { handlers } = createHarness();
+      const turnEndHandlers = handlers.get('turn_end') ?? [];
+
+      await turnEndHandlers[0]?.(
+        {} as never,
+        {
+          sessionManager: createMissionSessionManager({ tasks: [] }),
+        } as never,
+      );
+
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
+    });
+
+    it('honors simple loop delay durations before requesting continuation', async () => {
+      vi.useFakeTimers();
+      const { handlers } = createHarness();
+      const turnEndHandlers = handlers.get('turn_end') ?? [];
+
+      await turnEndHandlers[0]?.(
+        {} as never,
+        {
+          sessionManager: createLoopSessionManager({ delay: '2s' }),
+        } as never,
+      );
+
+      expect(requestConversationAutoModeContinuationTurnMock).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(requestConversationAutoModeContinuationTurnMock).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
     });
   });
 

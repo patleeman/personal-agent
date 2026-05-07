@@ -146,7 +146,7 @@ export function ConversationComposerInputControls({
           />
           <ConversationRunModePanel
             mode={conversationAutoMode?.mode ?? 'manual'}
-            running={Boolean(conversationAutoModeEnabled && streamIsStreaming)}
+            running={conversationAutoModeEnabled && (conversationAutoMode?.mode === 'mission' || conversationAutoMode?.mode === 'loop')}
             mission={conversationAutoMode?.mission ?? null}
             loop={conversationAutoMode?.loop ?? null}
             draftMission={draftMissionConfig}

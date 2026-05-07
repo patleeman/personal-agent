@@ -3291,6 +3291,277 @@ describe('conversation auto mode', () => {
     );
     expect(registry.get('session-auto-continue')?.pendingHiddenTurnCustomTypes ?? []).toEqual([]);
   });
+
+  it('run_state tool reads and writes mission task state through session manager', async () => {
+    const entries: Array<{ type: string; customType: string; data: unknown }> = [
+      {
+        type: 'custom',
+        customType: 'conversation-auto-mode',
+        data: {
+          enabled: true,
+          mode: 'mission',
+          mission: {
+            goal: 'Deploy the feature',
+            tasks: [
+              { id: 'a1', description: 'Run tests', status: 'pending' },
+              { id: 'a2', description: 'Build', status: 'pending' },
+            ],
+            maxTurns: 10,
+            turnsUsed: 1,
+          },
+          updatedAt: '2026-04-12T15:00:00.000Z',
+        },
+      },
+    ];
+
+    setLiveEntry('session-runstate', {
+      sessionId: 'session-runstate',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Run state tool',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'work' }] }], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => entries,
+          appendCustomEntry: (customType: string, data: unknown) => {
+            entries.push({ type: 'custom', customType, data });
+            return 'entry-rs';
+          },
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage: vi.fn(),
+      },
+    });
+
+    // Read back state
+    const state = readLiveSessionAutoModeState('session-runstate');
+    expect(state.mode).toBe('mission');
+    expect(state.mission?.tasks).toHaveLength(2);
+    expect(state.mission?.tasks[0].status).toBe('pending');
+
+    // Simulate agent updating tasks by writing updated state
+    state.mission!.tasks[0].status = 'done';
+    await setLiveSessionAutoModeState('session-runstate', {
+      enabled: true,
+      mode: 'mission',
+      mission: state.mission!,
+    });
+
+    // Verify update persisted
+    const finalState = readLiveSessionAutoModeState('session-runstate');
+    expect(finalState.mission?.tasks[0].status).toBe('done');
+    expect(finalState.mission?.tasks[1].status).toBe('pending');
+  });
+
+  it('legacy enabled:true maps to mode nudge with backward compat', async () => {
+    const appendCustomEntry = vi.fn();
+
+    setLiveEntry('session-legacy', {
+      sessionId: 'session-legacy',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Legacy mode',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'work' }] }], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: { enabled: true, updatedAt: '2026-04-12T15:00:00.000Z' },
+            },
+          ],
+          appendCustomEntry,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage: vi.fn(),
+      },
+    });
+
+    const state = readLiveSessionAutoModeState('session-legacy');
+    expect(state.mode).toBe('nudge');
+    expect(state.enabled).toBe(true);
+  });
+});
+
+describe('auto mode continuation message content', () => {
+  it('sends a mode-specific continuation message for nudge mode', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-msg-nudge', {
+      sessionId: 'session-msg-nudge',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Nudge continuation message',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      pendingAutoModeContinuation: true,
+      session: {
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'work done' }] }], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: { enabled: true, mode: 'nudge', updatedAt: '2026-04-12T15:00:00.000Z' },
+            },
+          ],
+          appendCustomEntry: vi.fn(),
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await expect(requestConversationAutoModeContinuationTurn('session-msg-nudge')).resolves.toBe(true);
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'conversation_automation_auto_continue',
+        details: expect.objectContaining({ mode: 'nudge' }),
+      }),
+      expect.objectContaining({ deliverAs: 'followUp', triggerTurn: true }),
+    );
+
+    // Verify it contains the nudge continuation prompt (not mission-specific)
+    const callArg = sendCustomMessage.mock.calls[0][0] as { content: string };
+    expect(callArg.content).toContain('Continue working on the current user request');
+  });
+
+  it('sends a mode-specific continuation message for mission mode', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-msg-mission', {
+      sessionId: 'session-msg-mission',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Mission continuation message',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      pendingAutoModeContinuation: true,
+      session: {
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'work done' }] }], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: {
+                enabled: true,
+                mode: 'mission',
+                mission: {
+                  goal: 'Fix the page',
+                  tasks: [
+                    { id: 't1', description: 'Task 1', status: 'done' },
+                    { id: 't2', description: 'Task 2', status: 'pending' },
+                  ],
+                  maxTurns: 20,
+                  turnsUsed: 1,
+                },
+                updatedAt: '2026-04-12T15:00:00.000Z',
+              },
+            },
+          ],
+          appendCustomEntry: vi.fn(),
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await expect(requestConversationAutoModeContinuationTurn('session-msg-mission')).resolves.toBe(true);
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'conversation_automation_auto_continue',
+        details: expect.objectContaining({ mode: 'mission' }),
+      }),
+      expect.objectContaining({ deliverAs: 'followUp', triggerTurn: true }),
+    );
+
+    // Verify it contains the mission-specific continuation prompt
+    const callArg = sendCustomMessage.mock.calls[0][0] as { content: string };
+    expect(callArg.content).toContain('Mission');
+    expect(callArg.content).toContain('Fix the page');
+    expect(callArg.content).toContain('Task 2');
+    expect(callArg.content).toContain('run_state');
+  });
+
+  it('sends a mode-specific continuation message for loop mode', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-msg-loop', {
+      sessionId: 'session-msg-loop',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Loop continuation message',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      pendingAutoModeContinuation: true,
+      session: {
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'work done' }] }], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [
+            {
+              type: 'custom',
+              customType: 'conversation-auto-mode',
+              data: {
+                enabled: true,
+                mode: 'loop',
+                loop: {
+                  prompt: 'Find and fix a bug',
+                  maxIterations: 5,
+                  iterationsUsed: 2,
+                  delay: 'After each turn',
+                },
+                updatedAt: '2026-04-12T15:00:00.000Z',
+              },
+            },
+          ],
+          appendCustomEntry: vi.fn(),
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await expect(requestConversationAutoModeContinuationTurn('session-msg-loop')).resolves.toBe(true);
+    expect(sendCustomMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: 'conversation_automation_auto_continue',
+        details: expect.objectContaining({ mode: 'loop' }),
+      }),
+      expect.objectContaining({ deliverAs: 'followUp', triggerTurn: true }),
+    );
+
+    // Verify it contains the loop-specific continuation prompt
+    const callArg = sendCustomMessage.mock.calls[0][0] as { content: string };
+    expect(callArg.content).toContain('Loop continuation');
+    expect(callArg.content).toContain('Find and fix a bug');
+    expect(callArg.content).toContain('2/5');
+  });
 });
 
 describe('appendDetachedUserMessage', () => {

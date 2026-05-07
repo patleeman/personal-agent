@@ -1124,8 +1124,8 @@ export const api = {
     input: {
       enabled?: boolean;
       mode?: 'manual' | 'nudge' | 'mission' | 'loop';
-      mission?: import('../../../server/conversations/conversationAutoMode').MissionState;
-      loop?: import('../../../server/conversations/conversationAutoMode').LoopState;
+      mission?: import('../shared/types').MissionState;
+      loop?: import('../shared/types').LoopState;
     },
     surfaceId?: string,
   ) => {
