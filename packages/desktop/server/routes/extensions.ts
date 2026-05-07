@@ -3,6 +3,7 @@ import { resolve, sep } from 'node:path';
 
 import type { Express, Request, Response } from 'express';
 
+import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
 import {
   findExtensionEntry,
   listExtensionInstallSummaries,
@@ -11,6 +12,7 @@ import {
   setExtensionEnabled,
 } from '../extensions/extensionRegistry.js';
 import { logError } from '../middleware/index.js';
+import type { ServerRouteContext } from './context.js';
 
 function sendRouteError(res: Response, label: string, err: unknown): void {
   logError(label, { message: err instanceof Error ? err.message : String(err) });
@@ -32,6 +34,14 @@ function resolveExtensionFilePath(extensionId: string, relativePath: string): st
   return filePath;
 }
 
+function injectPaClient(html: string): string {
+  const injection = '<script src="/pa/client.js"></script><link rel="stylesheet" href="/pa/components.css">';
+  if (html.includes('/pa/client.js')) return html;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${injection}</head>`);
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${injection}</body>`);
+  return `${injection}${html}`;
+}
+
 function readExtensionFile(req: Request, res: Response): void {
   try {
     const extensionId = req.params.id;
@@ -48,7 +58,7 @@ function readExtensionFile(req: Request, res: Response): void {
     }
 
     if (filePath.endsWith('.html')) {
-      res.type('html').send(readFileSync(filePath, 'utf-8'));
+      res.type('html').send(injectPaClient(readFileSync(filePath, 'utf-8')));
       return;
     }
     if (filePath.endsWith('.css')) {
@@ -71,7 +81,10 @@ function readExtensionFile(req: Request, res: Response): void {
   }
 }
 
-export function registerExtensionRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerExtensionRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
   router.get('/api/extensions/schema', (_req, res) => {
     try {
       res.json(readExtensionSchema());
@@ -114,6 +127,17 @@ export function registerExtensionRoutes(router: Pick<Express, 'get' | 'post' | '
 
   router.get('/api/extensions/:id/files/*', readExtensionFile);
 
+  router.post('/api/extensions/:id/actions/:actionId', async (req, res) => {
+    try {
+      res.json(await invokeExtensionAction(req.params.id, req.params.actionId, req.body, context));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /not found/i.test(message) ? 404 : 500;
+      logError('extension action error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
+    }
+  });
+
   router.patch('/api/extensions/:id', (req, res) => {
     try {
       const entry = findExtensionEntry(req.params.id);
@@ -141,7 +165,17 @@ export function registerExtensionRoutes(router: Pick<Express, 'get' | 'post' | '
     res.json({ ok: true, reloaded: false, message: 'Runtime manifests are read on demand.' });
   });
 
-  router.post('/api/extensions/:id/reload', (req, res) => {
-    res.json({ ok: true, id: req.params.id, reloaded: false, message: 'Runtime manifests are read on demand.' });
+  router.post('/api/extensions/:id/reload', async (req, res) => {
+    try {
+      const entry = findExtensionEntry(req.params.id);
+      if (!entry?.manifest.backend?.entry) {
+        res.json({ ok: true, id: req.params.id, reloaded: false, message: 'Runtime manifests are read on demand.' });
+        return;
+      }
+      await reloadExtensionBackend(req.params.id);
+      res.json({ ok: true, id: req.params.id, reloaded: true, message: 'Extension backend rebuilt.' });
+    } catch (err) {
+      sendRouteError(res, 'extension reload error', err);
+    }
   });
 }

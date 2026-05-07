@@ -557,13 +557,15 @@ export async function createTaskFromConversation(input, ctx) {
 }
 ```
 
-The server invokes handlers through an endpoint like:
+The server invokes handlers through the action endpoint:
 
 ```http
 POST /api/extensions/:extensionId/actions/:actionId
 ```
 
-The backend context is the stable API for trusted extension code:
+Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.extension.invoke(actionId, input)`.
+
+The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage` and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
 
 ```ts
 ctx.storage.get(key)

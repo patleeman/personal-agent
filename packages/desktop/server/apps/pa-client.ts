@@ -14,6 +14,10 @@ export const PA_CLIENT_JS: string = `
 
   // ── State ─────────────────────────────────────────────────────────────────
   const activeSSE = new Map();
+  const extensionIdFromPath = (() => {
+    const match = window.location.pathname.match(new RegExp('^/api/extensions/([^/]+)/files/'));
+    return match ? decodeURIComponent(match[1]) : null;
+  })();
 
   // ── PA client ──────────────────────────────────────────────────────────────
   window.PA = {
@@ -97,6 +101,14 @@ export const PA_CLIENT_JS: string = `
           activeSSE.delete(runId);
         }
       };
+    },
+
+    extension: {
+      invoke(actionId, input) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/actions/' + encodeURIComponent(actionId), { method: 'POST', body: input || {} });
+      }
     },
 
     automations: {

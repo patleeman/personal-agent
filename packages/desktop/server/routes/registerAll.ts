@@ -28,7 +28,7 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
 
   registerTaskRoutes(app, context);
 
-  registerExtensionRoutes(app);
+  registerExtensionRoutes(app, context);
 
   registerModelRoutes(app, context);
 

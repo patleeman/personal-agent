@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerExtensionRoutes } from './extensions.js';
 
-type Handler = (req: { params?: Record<string, string>; body?: unknown }, res: ReturnType<typeof createResponse>) => void;
+type Handler = (req: { params?: Record<string, string>; body?: unknown }, res: ReturnType<typeof createResponse>) => void | Promise<void>;
 
 function createResponse() {
   return {
@@ -81,7 +81,8 @@ describe('registerExtensionRoutes', () => {
     harness.getHandler('/api/extensions/:id/files/*')({ params: { id: 'agent-board', 0: 'frontend/page.html' } }, res);
 
     expect(res.type).toHaveBeenCalledWith('html');
-    expect(res.send).toHaveBeenCalledWith('<h1>Agent Board</h1>');
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('<h1>Agent Board</h1>'));
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('/pa/client.js'));
   });
 
   it('rejects extension file traversal', () => {
@@ -120,6 +121,35 @@ describe('registerExtensionRoutes', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'System extensions cannot be disabled.' });
+  });
+
+  it('invokes runtime extension backend actions', async () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'backend'), { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'agent-board',
+        name: 'Agent Board',
+        backend: { entry: 'backend/index.ts', actions: [{ id: 'saveTask', handler: 'saveTask' }] },
+      }),
+    );
+    writeFileSync(
+      join(extensionRoot, 'backend', 'index.ts'),
+      `export async function saveTask(input, ctx) { await ctx.storage.put('tasks/one', input); return { saved: await ctx.storage.get('tasks/one') }; }`,
+    );
+
+    const harness = createHarness();
+    const res = createResponse();
+    await harness.postHandler('/api/extensions/:id/actions/:actionId')(
+      { params: { id: 'agent-board', actionId: 'saveTask' }, body: { title: 'Ship it' } },
+      res,
+    );
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, result: { saved: { title: 'Ship it' } } });
   });
 
   it('accepts explicit reload calls for runtime manifests', () => {

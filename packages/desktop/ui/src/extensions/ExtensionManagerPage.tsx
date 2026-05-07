@@ -118,6 +118,14 @@ export function ExtensionManagerPage() {
                   {selected.permissions?.length ? selected.permissions.join(', ') : 'None declared'}
                 </p>
               </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Backend actions</p>
+                <p className="mt-2 leading-6 text-secondary">
+                  {selected.backendActions?.length
+                    ? selected.backendActions.map((action) => `${action.id} → ${action.handler}`).join(', ')
+                    : 'None'}
+                </p>
+              </div>
             </aside>
           ) : null
         }

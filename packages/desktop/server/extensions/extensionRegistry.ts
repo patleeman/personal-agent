@@ -29,6 +29,7 @@ export interface ExtensionInstallSummary {
   manifest: ExtensionManifest;
   permissions: ExtensionManifest['permissions'];
   surfaces: ExtensionSurface[];
+  backendActions: NonNullable<ExtensionManifest['backend']>['actions'];
   routes: Array<{ route: string; surfaceId: string }>;
 }
 
@@ -161,6 +162,7 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       manifest,
       permissions: manifest.permissions ?? [],
       surfaces,
+      backendActions: manifest.backend?.actions ?? [],
       routes: surfaces.flatMap((surface) =>
         surface.kind === 'page' && 'route' in surface ? [{ route: surface.route, surfaceId: surface.id }] : [],
       ),

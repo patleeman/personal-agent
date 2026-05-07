@@ -71,6 +71,13 @@ export interface ExtensionManifest {
   permissions?: string[];
 }
 
+export interface ExtensionBackendActionSummary {
+  id: string;
+  handler: string;
+  title?: string;
+  description?: string;
+}
+
 export interface ExtensionInstallSummary {
   id: string;
   name: string;
@@ -82,6 +89,7 @@ export interface ExtensionInstallSummary {
   manifest: ExtensionManifest;
   permissions?: string[];
   surfaces: ExtensionSurface[];
+  backendActions?: ExtensionBackendActionSummary[];
   routes: Array<{ route: string; surfaceId: string }>;
 }
 
