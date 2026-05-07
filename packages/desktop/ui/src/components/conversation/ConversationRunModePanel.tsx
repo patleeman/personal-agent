@@ -25,19 +25,19 @@ export interface RunModePanelProps {
   onDraftLoopChange?: (draft: DraftLoopConfig) => void;
 }
 
-const shelfAccent: Record<'mission' | 'loop', string> = {
-  mission: 'border-accent/45 text-accent',
-  loop: 'border-warning/55 text-warning',
+const modeTextClassName: Record<'mission' | 'loop', string> = {
+  mission: 'text-accent',
+  loop: 'text-warning',
 };
 
 const fieldClassName =
   'rounded-none border-0 border-b border-border-subtle bg-transparent px-0 py-1 text-[12px] text-primary outline-none transition-colors placeholder:text-dim hover:border-border-default focus:border-accent/60';
 
-function RunShelf({ mode, label, meta, children }: { mode: 'mission' | 'loop'; label: string; meta: string; children: ReactNode }) {
+function RunBand({ mode, label, meta, children }: { mode: 'mission' | 'loop'; label: string; meta: string; children: ReactNode }) {
   return (
-    <div className={cx('mb-2 border-l-2 bg-surface/20 px-3 py-2.5', shelfAccent[mode])}>
+    <div className="border-b border-border-subtle/60 bg-surface/20 px-4 py-2.5">
       <div className="mb-1.5 flex items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>
+        <span className={cx('text-[10px] font-bold uppercase tracking-[0.08em]', modeTextClassName[mode])}>{label}</span>
         <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-primary">{meta}</span>
       </div>
       {children}
@@ -63,13 +63,13 @@ export function ConversationRunModePanel({
     const done = mission?.tasks.filter((task) => task.status === 'done').length ?? 0;
     const total = mission?.tasks.length ?? 0;
     const goal = mission?.goal || draftMission?.goal || 'Mission';
+    const maxTurns = mission?.maxTurns ?? draftMission?.maxTurns ?? 20;
+    const turnsUsed = mission?.turnsUsed ?? 0;
     const meta =
-      running && mission
-        ? `${goal} · ${done}/${total} tasks · ${mission.turnsUsed}/${mission.maxTurns} turns`
-        : 'Set a goal; the agent manages the task list';
+      running && mission ? `${goal} · ${done}/${total} tasks · ${turnsUsed}/${maxTurns} turns` : 'Set a goal; the agent manages tasks';
 
     return (
-      <RunShelf mode="mission" label="Mission" meta={meta}>
+      <RunBand mode="mission" label="Mission" meta={meta}>
         {running && mission ? (
           mission.tasks.length > 0 ? (
             <div className="max-h-36 overflow-y-auto pr-1">
@@ -96,16 +96,19 @@ export function ConversationRunModePanel({
             <p className="text-[12px] text-dim">Task list will appear after the agent starts the mission.</p>
           )
         ) : (
-          <div className="flex flex-col gap-2">
-            <textarea
-              value={draftMission?.goal ?? ''}
-              onChange={(event) => onDraftMissionChange?.({ goal: event.target.value, maxTurns: draftMission?.maxTurns ?? 20 })}
-              rows={1}
-              className={cx('w-full resize-none', fieldClassName)}
-              placeholder="Goal — inferred from conversation if blank"
-            />
-            <label className="flex items-center gap-2 text-[11px] text-dim">
-              Max turns
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <label className="flex min-w-0 flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-dim">
+              Goal
+              <textarea
+                value={draftMission?.goal ?? ''}
+                onChange={(event) => onDraftMissionChange?.({ goal: event.target.value, maxTurns: draftMission?.maxTurns ?? 20 })}
+                rows={1}
+                className={cx('w-full resize-none normal-case tracking-normal', fieldClassName)}
+                placeholder="Infer from conversation if blank"
+              />
+            </label>
+            <label className="flex items-end gap-2 text-[11px] text-dim">
+              <span>Max turns</span>
               <input
                 type="number"
                 min={1}
@@ -114,12 +117,12 @@ export function ConversationRunModePanel({
                 onChange={(event) =>
                   onDraftMissionChange?.({ goal: draftMission?.goal ?? '', maxTurns: Math.max(1, parseInt(event.target.value, 10) || 20) })
                 }
-                className={cx('w-12', fieldClassName)}
+                className={cx('w-12 text-center', fieldClassName)}
               />
             </label>
           </div>
         )}
-      </RunShelf>
+      </RunBand>
     );
   }
 
@@ -131,50 +134,55 @@ export function ConversationRunModePanel({
     const meta = `${prompt} · ${iterationsUsed}/${maxIterations} iterations · ${delay}`;
 
     return (
-      <RunShelf mode="loop" label="Loop" meta={meta}>
-        <textarea
-          value={draftLoop?.prompt ?? loop?.prompt ?? ''}
-          onChange={(event) =>
-            onDraftLoopChange?.({
-              prompt: event.target.value,
-              maxIterations,
-              delay,
-            })
-          }
-          rows={1}
-          className={cx('mb-2 w-full resize-none', fieldClassName)}
-          placeholder="Prompt to repeat each iteration"
-        />
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
-          <span>Run</span>
-          <input
-            type="number"
-            min={1}
-            max={1000}
-            value={maxIterations}
-            onChange={(event) =>
-              onDraftLoopChange?.({
-                prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
-                maxIterations: Math.max(1, parseInt(event.target.value, 10) || 5),
-                delay,
-              })
-            }
-            className={cx('w-10 text-center', fieldClassName)}
-          />
-          <span>times · wait</span>
-          <input
-            value={delay}
-            onChange={(event) =>
-              onDraftLoopChange?.({
-                prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
-                maxIterations,
-                delay: event.target.value,
-              })
-            }
-            className={cx('w-28', fieldClassName)}
-          />
+      <RunBand mode="loop" label="Loop" meta={meta}>
+        <div className="grid gap-2">
+          <label className="flex min-w-0 flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-dim">
+            Repeat
+            <textarea
+              value={draftLoop?.prompt ?? loop?.prompt ?? ''}
+              onChange={(event) =>
+                onDraftLoopChange?.({
+                  prompt: event.target.value,
+                  maxIterations,
+                  delay,
+                })
+              }
+              rows={1}
+              className={cx('w-full resize-none normal-case tracking-normal', fieldClassName)}
+              placeholder="Prompt to repeat each iteration"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
+            <span>Iterations</span>
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={maxIterations}
+              onChange={(event) =>
+                onDraftLoopChange?.({
+                  prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+                  maxIterations: Math.max(1, parseInt(event.target.value, 10) || 5),
+                  delay,
+                })
+              }
+              className={cx('w-10 text-center', fieldClassName)}
+            />
+            <span>Delay</span>
+            <input
+              value={delay}
+              onChange={(event) =>
+                onDraftLoopChange?.({
+                  prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+                  maxIterations,
+                  delay: event.target.value,
+                })
+              }
+              className={cx('w-28', fieldClassName)}
+            />
+          </div>
         </div>
-      </RunShelf>
+      </RunBand>
     );
   }
 

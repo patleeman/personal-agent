@@ -6527,20 +6527,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </p>
             ) : null}
 
-            <ConversationRunModePanel
-              mode={effectiveConversationAutoModeState?.mode ?? 'manual'}
-              running={
-                conversationAutoModeEnabled &&
-                (effectiveConversationAutoModeState?.mode === 'mission' || effectiveConversationAutoModeState?.mode === 'loop')
-              }
-              mission={effectiveConversationAutoModeState?.mission ?? null}
-              loop={effectiveConversationAutoModeState?.loop ?? null}
-              draftMission={draftMissionConfig}
-              draftLoop={draftLoopConfig}
-              onDraftMissionChange={setDraftMissionConfig}
-              onDraftLoopChange={setDraftLoopConfig}
-            />
-
             <div
               className={cx(
                 'ui-input-shell',
@@ -6557,6 +6543,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               {dragOver && (
                 <div className="px-4 py-3 text-center text-[12px] text-accent border-b border-accent/20">📎 Drop files to attach</div>
               )}
+
+              <ConversationRunModePanel
+                mode={effectiveConversationAutoModeState?.mode ?? 'manual'}
+                running={
+                  conversationAutoModeEnabled &&
+                  (effectiveConversationAutoModeState?.mode === 'mission' || effectiveConversationAutoModeState?.mode === 'loop')
+                }
+                mission={effectiveConversationAutoModeState?.mission ?? null}
+                loop={effectiveConversationAutoModeState?.loop ?? null}
+                draftMission={draftMissionConfig}
+                draftLoop={draftLoopConfig}
+                onDraftMissionChange={setDraftMissionConfig}
+                onDraftLoopChange={setDraftLoopConfig}
+              />
 
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
