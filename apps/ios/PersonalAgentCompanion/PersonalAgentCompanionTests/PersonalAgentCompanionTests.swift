@@ -561,6 +561,17 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(dataURLData(wrapped), Data("hello".utf8))
     }
 
+    func testRemoteDirectoryEndpointEncodesQueryPathAndTargetSegment() {
+        XCTAssertEqual(
+            companionRemoteDirectoryEndpoint(targetId: "ssh/prod", path: "/tmp/a & b?x=1"),
+            "/companion/v1/execution-targets/ssh%2Fprod/directories?path=/tmp/a%20%26%20b?x%3D1"
+        )
+        XCTAssertEqual(
+            companionRemoteDirectoryEndpoint(targetId: "local", path: "  "),
+            "/companion/v1/execution-targets/local/directories"
+        )
+    }
+
     func testDisplayBlockDecodesImagesWithoutAltText() throws {
         let payload = Data(#"{"type":"text","id":"block-1","ts":"2026-04-25T00:00:00Z","text":"Image attached","images":[{"src":"/companion/v1/conversations/conv-1/blocks/block-1/images/0"}]}"#.utf8)
 

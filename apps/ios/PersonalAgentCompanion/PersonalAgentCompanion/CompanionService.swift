@@ -342,13 +342,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
     }
 
     func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {
-        let endpoint: String
-        if let path = path?.trimmed.nilIfBlank {
-            endpoint = "/companion/v1/execution-targets/\(targetId)/directories?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)"
-        } else {
-            endpoint = "/companion/v1/execution-targets/\(targetId)/directories"
-        }
-        return try await authorizedJSON(path: endpoint, method: "GET", body: nil, decode: CompanionRemoteDirectoryListing.self)
+        try await authorizedJSON(path: companionRemoteDirectoryEndpoint(targetId: targetId, path: path), method: "GET", body: nil, decode: CompanionRemoteDirectoryListing.self)
     }
 
     func conversationBootstrap(conversationId: String, options: ConversationBootstrapRequestOptions) async throws -> ConversationBootstrapEnvelope {

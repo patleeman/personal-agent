@@ -1391,6 +1391,27 @@ func makeDataURL(mimeType: String, base64Data: String) -> String {
     "data:\(mimeType);base64,\(base64Data)"
 }
 
+func companionRemoteDirectoryEndpoint(targetId: String, path: String?) -> String {
+    let encodedTargetId = companionPathSegment(targetId)
+    let basePath = "/companion/v1/execution-targets/\(encodedTargetId)/directories"
+    guard let path = path?.trimmed.nilIfBlank else {
+        return basePath
+    }
+
+    var components = URLComponents()
+    components.queryItems = [URLQueryItem(name: "path", value: path)]
+    guard let query = components.percentEncodedQuery?.nilIfBlank else {
+        return basePath
+    }
+    return "\(basePath)?\(query)"
+}
+
+private func companionPathSegment(_ value: String) -> String {
+    var allowed = CharacterSet.urlPathAllowed
+    allowed.remove(charactersIn: "/?#[]@!$&'()*+,;=")
+    return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+}
+
 func companionTranscriptImageAssetPath(_ src: String?) -> String? {
     guard let normalized = src?.trimmed.nilIfBlank else {
         return nil
