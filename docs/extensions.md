@@ -131,6 +131,9 @@ export type ExtensionSurfaceKind = (typeof EXTENSION_SURFACE_KINDS)[number];
 export const EXTENSION_RIGHT_SURFACE_SCOPES = ['global', 'conversation', 'workspace', 'selection'] as const;
 export type ExtensionRightSurfaceScope = (typeof EXTENSION_RIGHT_SURFACE_SCOPES)[number];
 
+export const EXTENSION_SYSTEM_COMPONENT_KEYS = ['automations'] as const;
+export type ExtensionSystemComponentKey = (typeof EXTENSION_SYSTEM_COMPONENT_KEYS)[number];
+
 export const EXTENSION_ICON_NAMES = [
   'app',
   'automation',
@@ -216,7 +219,8 @@ export interface ExtensionMainPageSurface extends ExtensionSurfaceBase {
   placement: 'main';
   kind: 'page';
   route: string;
-  entry: string;
+  entry?: string;
+  component?: ExtensionSystemComponentKey;
 }
 
 export interface ExtensionRightToolPanelSurface extends ExtensionSurfaceBase {
@@ -435,7 +439,9 @@ Styling should be boring and reliable:
 - The style library is versioned with PA and documented as a public extension API.
 - Extension HTML should still be resilient if the shared CSS fails; self-contained critical layout is acceptable for generated apps.
 
-Frontend entries receive a `window.PA` API plus launch context. The v0 surface below is intentionally broader than apps because extensions need to behave like product modules:
+Frontend entries receive a `window.PA` API plus launch context. Bundled system extensions may also render a registered React component through `component` instead of iframe HTML `entry`; user extensions should use iframe entries by default.
+
+The v0 surface below is intentionally broader than apps because extensions need to behave like product modules:
 
 ```ts
 PA.context.get() // extension id, surface id, route params, active conversation, cwd, theme
@@ -709,7 +715,7 @@ This target is intentionally more demanding than a read-only dashboard. It prove
 
 Some built-in PA pages can become bundled system extensions once the runtime is solid. System extensions use the same manifest/surface model but ship with the app and can receive broader trusted APIs.
 
-The first implementation target is a feature-equivalent Automations system extension. It should own the existing `/automations` route as a bundled system extension and use `PA.automations` / `ctx.automations` rather than direct imports or raw `/api/tasks` fetches.
+The first implementation target is a feature-equivalent Automations system extension. It owns the existing `/automations` route as a bundled system extension and uses the registered `automations` React component while the extension runtime grows iframe support for user extensions. It should use `PA.automations` / `ctx.automations` rather than direct imports or raw `/api/tasks` fetches.
 
 Good later candidates:
 

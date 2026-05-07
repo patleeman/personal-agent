@@ -99,6 +99,17 @@ export const PA_CLIENT_JS: string = `
       };
     },
 
+    automations: {
+      list() { return requestJson('/api/tasks'); },
+      get(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId)); },
+      create(input) { return requestJson('/api/tasks', { method: 'POST', body: input }); },
+      update(taskId, input) { return requestJson('/api/tasks/' + encodeURIComponent(taskId), { method: 'PATCH', body: input }); },
+      delete(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId), { method: 'DELETE' }); },
+      run(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId) + '/run', { method: 'POST' }); },
+      readLog(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId) + '/log'); },
+      readSchedulerHealth() { return requestJson('/api/tasks/scheduler-health'); }
+    },
+
     /**
      * Navigate to another app page.
      * @param {string} page - e.g. 'history.html'
@@ -108,6 +119,21 @@ export const PA_CLIENT_JS: string = `
       window.dispatchEvent(event);
     }
   };
+
+  async function requestJson(path, opts) {
+    const init = opts || {};
+    const fetchOpts = { method: init.method || 'GET', headers: { ...(init.headers || {}) } };
+    if (init.body !== undefined) {
+      fetchOpts.headers['Content-Type'] = fetchOpts.headers['Content-Type'] || 'application/json';
+      fetchOpts.body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
+    }
+    const res = await fetch(path, fetchOpts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Request failed');
+    }
+    return res.json();
+  }
 
   // ── Helper: emit a custom event ────────────────────────────────────────────
   function emit(name, detail) {
