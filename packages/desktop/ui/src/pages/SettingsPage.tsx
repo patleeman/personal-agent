@@ -2265,28 +2265,15 @@ export function SettingsPage() {
   }, [instructionFilesState?.configFile, instructionFilesState?.instructionFiles]);
 
   useEffect(() => {
-    if (!modelProviderState) {
-      return;
-    }
-
-    if (!selectedModelProviderId) {
-      if (modelProviderState.providers.length > 0) {
-        const firstProvider = modelProviderState.providers[0] ?? null;
-        setSelectedModelProviderId(firstProvider?.id ?? NEW_MODEL_PROVIDER_ID);
-        setModelProviderDraft(createProviderEditorDraft(firstProvider));
-      } else {
-        setSelectedModelProviderId(NEW_MODEL_PROVIDER_ID);
-        setModelProviderDraft(createProviderEditorDraft(null));
-      }
+    if (!modelProviderState || !selectedModelProviderId) {
       return;
     }
 
     if (selectedModelProviderId !== NEW_MODEL_PROVIDER_ID) {
       const selectedStillExists = modelProviderState.providers.some((provider) => provider.id === selectedModelProviderId);
       if (!selectedStillExists) {
-        const firstProvider = modelProviderState.providers[0] ?? null;
-        setSelectedModelProviderId(firstProvider?.id ?? NEW_MODEL_PROVIDER_ID);
-        setModelProviderDraft(createProviderEditorDraft(firstProvider));
+        setSelectedModelProviderId('');
+        setSelectedProviderId('');
         setEditingModelId(null);
         setModelDraft(createModelEditorDraft(null));
       }
