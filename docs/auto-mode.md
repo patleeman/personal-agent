@@ -1,102 +1,88 @@
-# Auto Mode
+# Auto Mode and Run Modes
 
-Auto mode adds a hidden review turn after each visible assistant turn. The review runs in the background and can perform follow-up work, self-correct, or continue the task — all without user interaction.
+Auto mode is conversation-scoped background continuation. The composer exposes it as a run-mode selector with four states: Manual, Nudge, Mission, and Loop.
 
-## How It Works
+## Modes
+
+| Mode    | Behavior                                                                                                                 | Stop condition                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Manual  | No automatic continuation.                                                                                               | User sends the next prompt.                                                                        |
+| Nudge   | Legacy soft auto mode. A hidden review turn decides whether useful work remains.                                         | The review calls stop, misses the control tool too many times, or the user stops the conversation. |
+| Mission | Goal-driven mode with an AI-managed task list. The agent must keep updating `run_state` and continue while tasks remain. | All mission tasks are `done`, max turns is reached, or the user stops the conversation.            |
+| Loop    | Fixed-count mode. The same loop prompt is continued until the iteration counter reaches N.                               | Iterations used reaches max iterations, or the user stops the conversation.                        |
+
+Manual, Mission, and Loop are selected from the run-mode control in the composer. Mission and Loop show their setup/status panel above the input area only while active.
+
+## Nudge Flow
 
 ```
-User sends prompt
+Visible assistant turn
        │
        ▼
-Visible turn: agent responds, calls tools, produces output
+Hidden review turn
        │
-       ▼
-Hidden review turn: agent examines output, updates context file
+       ├── conversation_auto_control { action: "continue" }
+       │      └── hidden continuation turn, then another review
        │
-       ├── agent calls auto_mode_control "continue"
-       │      │
-       │      ▼
-       │   Continuation hidden turn: agent continues the task
-       │      │
-       │      ▼
-       │   Another hidden review turn → loop until "stop"
+       ├── conversation_auto_control { action: "stop" }
+       │      └── auto mode ends
        │
-       ├── agent calls auto_mode_control "stop"
-       │      │
-       │      ▼
-       │   Auto mode ends, waiting for user
-       │
-       └── agent does not call auto_mode_control
-              │
-              ▼
-           Retry hidden review turn (up to 2 times)
-              │
-              ▼
-           If still no tool call → auto mode stops
+       └── no tool call
+              └── retry review up to 2 times, then stop
 ```
 
-## Control Tool
+Nudge mode is intentionally soft. It is best for “keep an eye on yourself” work like linting, small self-corrections, or continuing when the next step is obvious.
 
-Each hidden review turn must call the `auto_mode_control` tool exactly once:
+## Mission Flow
 
-| Action     | When to use                                                            |
-| ---------- | ---------------------------------------------------------------------- |
-| `continue` | Meaningful work remains — keep auto mode running for the next turn     |
-| `stop`     | Task is complete, blocked, or needs user input. Include a short reason |
+Mission mode stores a mission state containing a goal, tasks, turn count, and max turns. The model sees the `run_state` tool only while Mission or Loop is active.
 
-### Stop examples
+On each mission turn, the agent should:
+
+1. Call `run_state { action: "get" }`.
+2. Create the initial task list if the list is empty.
+3. Work the next incomplete task.
+4. Call `run_state { action: "update_tasks" }` to add tasks or mark status changes.
+
+Mission continuation is structural: the harness keeps scheduling hidden continuation turns while at least one task is not `done`. An empty task list is not complete; it forces the model to bootstrap tasks instead of silently ending.
+
+## Loop Flow
+
+Loop mode stores a prompt, max iteration count, iterations used, and delay. After each loop turn, the harness increments the counter and schedules the next hidden continuation until the counter reaches the configured max.
+
+Simple delays are supported in the loop delay field: `immediate`, `After each turn`, `500ms`, `2s`, `5m`, or `1h`. Unknown delay text falls back to immediate continuation.
+
+## Tools
+
+### `conversation_auto_control`
+
+Visible only during Nudge hidden review turns.
 
 ```json
+{ "action": "continue" }
 { "action": "stop", "reason": "done" }
-{ "action": "stop", "reason": "needs user input" }
-{ "action": "stop", "reason": "blocked on failing tests" }
 ```
 
-If the agent does not call the control tool, auto mode retries the review turn up to 2 times, then stops.
+### `run_state`
 
-## Persistent Context File
+Visible only during Mission or Loop.
 
-Each auto-mode session has a persistent context file at:
-
+```json
+{ "action": "get" }
+{
+  "action": "update_tasks",
+  "tasks": [
+    { "description": "Run tests", "status": "pending" },
+    { "id": "task-id", "status": "done" }
+  ]
+}
 ```
-<runtime-dir>/auto-context/<session-id>.md
-```
 
-The agent should read this file on each wakeup to orient itself and write to it after each action to persist state across turns. The harness does not parse or validate its content — structure it however works for the task.
+`update_tasks` is mission-only. It can add new tasks or update existing task status/description.
 
-## Use Cases
+## UI Contract
 
-### Code review
-
-After the agent generates code, the hidden turn runs tests or lints the output:
-
-1. Visible turn: agent writes a function
-2. Hidden review turn: agent runs `npm run lint` on the generated code
-3. If lint fails, the continuation turn fixes issues
-4. If lint passes, review turn calls `stop`
-
-### Self-correction
-
-The hidden turn checks the visible response for errors or missing details:
-
-1. Visible turn: agent answers a question
-2. Hidden review turn: agent reviews the answer for factual accuracy
-3. If errors found, continuation turn corrects them
-4. If accurate, review turn calls `stop`
-
-### Multi-step tasks
-
-Each step queues the next logical step:
-
-1. Visible turn: agent completes step 1
-2. Hidden review turn: agent verifies step 1, updates context file, calls `continue`
-3. Continuation turn: agent executes step 2
-4. Loop repeats until all steps are done
-
-## Hidden Turn Detection
-
-The hidden review turn and continuation turn have distinct custom types (`conversation_automation_post_turn_review` and `conversation_automation_auto_continue`). The agent can detect which type of turn it is in by inspecting the session context.
-
-## Configuration
-
-Auto mode is enabled per-conversation through the conversation settings. There is no global auto mode toggle.
+- The run-mode selector replaces the old auto toggle and stays in the composer preferences area.
+- Mission setup/status sits above the input area. The task list has a capped height and scrolls.
+- Loop setup/status sits in the same above-input area and keeps prompt, count, and delay editable while active.
+- There is no separate pause or abort affordance; the normal conversation stop button is the escape hatch.

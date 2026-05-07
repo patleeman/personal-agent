@@ -459,6 +459,55 @@ describe('conversation auto mode agent extension', () => {
       expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
     });
 
+    it('chains loop mode until the configured iteration count is reached', async () => {
+      const { handlers } = createHarness();
+      const turnEndHandlers = handlers.get('turn_end') ?? [];
+      let branch: unknown[] = [{ type: 'message', message: { role: 'assistant' } }];
+      const entries: Array<{ type: string; customType: string; data: unknown }> = [
+        {
+          type: 'custom',
+          customType: 'conversation-auto-mode',
+          data: {
+            enabled: true,
+            mode: 'loop',
+            loop: {
+              prompt: 'Find bugs',
+              maxIterations: 2,
+              iterationsUsed: 0,
+              delay: 'After each turn',
+            },
+            updatedAt: '2026-04-12T10:00:00.000Z',
+          },
+        },
+      ];
+      const sessionManager = {
+        getSessionId: () => 'conversation-1',
+        getEntries: () => entries,
+        getBranch: () => branch,
+        appendCustomEntry: (customType: string, data: unknown) => {
+          entries.push({ type: 'custom', customType, data });
+          return `entry-${entries.length}`;
+        },
+      };
+
+      await turnEndHandlers[0]?.({} as never, { sessionManager } as never);
+      await new Promise((resolve) => queueMicrotask(resolve));
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledTimes(1);
+      expect(entries.at(-1)?.data).toMatchObject({ loop: { iterationsUsed: 1 } });
+
+      requestConversationAutoModeContinuationTurnMock.mockClear();
+      branch = [{ type: 'custom_message', customType: 'conversation_automation_auto_continue' }];
+      await turnEndHandlers[0]?.({} as never, { sessionManager } as never);
+      await new Promise((resolve) => queueMicrotask(resolve));
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledTimes(1);
+      expect(entries.at(-1)?.data).toMatchObject({ loop: { iterationsUsed: 2 } });
+
+      requestConversationAutoModeContinuationTurnMock.mockClear();
+      await turnEndHandlers[0]?.({} as never, { sessionManager } as never);
+      await new Promise((resolve) => queueMicrotask(resolve));
+      expect(requestConversationAutoModeContinuationTurnMock).not.toHaveBeenCalled();
+    });
+
     it('honors simple loop delay durations before requesting continuation', async () => {
       vi.useFakeTimers();
       const { handlers } = createHarness();

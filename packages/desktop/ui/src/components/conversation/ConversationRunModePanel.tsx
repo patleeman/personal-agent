@@ -1,3 +1,4 @@
+import type { LoopState, MissionState, RunMode } from '../../shared/types';
 import { cx } from '../ui';
 
 export interface DraftMissionConfig {
@@ -12,20 +13,10 @@ export interface DraftLoopConfig {
 }
 
 export interface RunModePanelProps {
-  mode: 'manual' | 'nudge' | 'mission' | 'loop';
+  mode: RunMode;
   running: boolean;
-  mission?: {
-    goal: string;
-    tasks: Array<{ id: string; description: string; status: string }>;
-    maxTurns: number;
-    turnsUsed: number;
-  } | null;
-  loop?: {
-    prompt: string;
-    maxIterations: number;
-    iterationsUsed: number;
-    delay: string;
-  } | null;
+  mission?: MissionState | null;
+  loop?: LoopState | null;
   draftMission?: DraftMissionConfig;
   draftLoop?: DraftLoopConfig;
   onDraftMissionChange?: (draft: DraftMissionConfig) => void;
@@ -48,8 +39,8 @@ export function ConversationRunModePanel({
 
   if (mode === 'mission') {
     return (
-      <div className="mb-2 rounded-lg border border-border-subtle bg-surface/35 p-2.5">
-        <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-2 px-0 py-1">
+        <div className="mb-1.5 flex items-center justify-between px-0.5">
           <strong className="text-[11px] font-semibold text-secondary">Mission</strong>
           {running && mission ? (
             <span className="text-[10px] text-dim">
@@ -115,8 +106,8 @@ export function ConversationRunModePanel({
 
   if (mode === 'loop') {
     return (
-      <div className="mb-2 rounded-lg border border-border-subtle bg-surface/35 p-2.5">
-        <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-2 px-0 py-1">
+        <div className="mb-1.5 flex items-center justify-between px-0.5">
           <strong className="text-[11px] font-semibold text-secondary">Loop</strong>
           {running && loop ? (
             <span className="text-[10px] text-dim">
@@ -191,8 +182,8 @@ export function ConversationRunStatusStrip({ mode, running, mission, loop }: Run
     const done = mission.tasks.filter((t) => t.status === 'done').length;
     const total = mission.tasks.length;
     return (
-      <div className="mb-2 flex items-center gap-2 rounded-md border border-accent/20 bg-accent/5 px-2.5 py-1.5">
-        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-accent">Mission</span>
+      <div className="mb-1 flex items-center gap-2 px-0.5 py-1">
+        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-accent">Mission</span>
         <span className="truncate text-[12px] font-medium text-primary">{mission.goal}</span>
         <span className="ml-auto shrink-0 text-[11px] text-dim">
           {done}/{total} tasks
@@ -203,8 +194,8 @@ export function ConversationRunStatusStrip({ mode, running, mission, loop }: Run
 
   if (mode === 'loop' && loop) {
     return (
-      <div className="mb-2 flex items-center gap-2 rounded-md border border-warning/20 bg-warning/5 px-2.5 py-1.5">
-        <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-warning">Loop</span>
+      <div className="mb-1 flex items-center gap-2 px-0.5 py-1">
+        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-warning">Loop</span>
         <span className="truncate text-[12px] font-medium text-primary">
           {loop.prompt.slice(0, 60)}
           {loop.prompt.length > 60 ? '…' : ''}

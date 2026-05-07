@@ -1672,6 +1672,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    if (initialDraftHydrationState?.autoModeState) {
+      setConversationAutoModeState(initialDraftHydrationState.autoModeState);
+      return;
+    }
+
     let cancelled = false;
     api
       .conversationAutoMode(id)
@@ -1689,7 +1694,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [conversationEventVersion, draft, id]);
+  }, [conversationEventVersion, draft, id, initialDraftHydrationState]);
 
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
@@ -3902,9 +3907,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         persistForkPromptDraft(newId, input);
       }
 
-      if (options.autoModeInput) {
-        await api.updateConversationAutoMode(newId, options.autoModeInput, currentSurfaceId);
-      }
+      const initialAutoModeState = options.autoModeInput
+        ? await api.updateConversationAutoMode(newId, options.autoModeInput, currentSurfaceId)
+        : null;
 
       clearDraftConversationComposer();
       clearDraftConversationCwd();
@@ -3931,6 +3936,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           draftHydrationState: {
             conversationId: newId,
             ...(options.enableAutoModeOnLoad ? { enableAutoModeOnLoad: true } : {}),
+            ...(initialAutoModeState ? { autoModeState: initialAutoModeState } : {}),
           },
         } satisfies ConversationLocationState,
       });
