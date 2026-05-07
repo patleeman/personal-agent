@@ -70,6 +70,9 @@ describe('WorkbenchBrowserTab', () => {
           activeTab={activeBrowserTab}
           onSetTabsState={vi.fn()}
           onClose={() => undefined}
+          onNewTab={vi.fn()}
+          onReopenTab={vi.fn()}
+          onCloseCurrentTab={vi.fn()}
         />,
       );
     });

@@ -487,23 +487,47 @@ export class DesktopWindowController {
     return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: input.conversationId });
   }
 
+  private getActiveBrowserSessionKey(): string | null {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return null;
+    }
+
+    return this.workbenchBrowser.getActiveSessionKey(this.mainWindow.webContents.id);
+  }
+
   isWorkbenchBrowserActive(): boolean {
-    return this.isWorkbenchBrowserActiveForConversation('@global');
+    const key = this.getActiveBrowserSessionKey();
+    return key !== null && this.workbenchBrowser.getState(this.mainWindow!.webContents.id, key)?.active === true;
   }
 
   async snapshotWorkbenchBrowser(): Promise<unknown> {
-    const owner = await this.ensureWorkbenchBrowserOwner('@global');
-    return this.workbenchBrowser.snapshot(owner, '@global');
+    const key = this.getActiveBrowserSessionKey();
+    if (!key) {
+      throw new Error('Workbench Browser is not active');
+    }
+
+    const owner = await this.ensureWorkbenchBrowserOwner(key);
+    return this.workbenchBrowser.snapshot(owner, key);
   }
 
   async screenshotWorkbenchBrowser(): Promise<unknown> {
-    const owner = await this.ensureWorkbenchBrowserOwner('@global');
-    return this.workbenchBrowser.screenshot(owner, '@global');
+    const key = this.getActiveBrowserSessionKey();
+    if (!key) {
+      throw new Error('Workbench Browser is not active');
+    }
+
+    const owner = await this.ensureWorkbenchBrowserOwner(key);
+    return this.workbenchBrowser.screenshot(owner, key);
   }
 
   async cdpWorkbenchBrowser(input: { command?: unknown; continueOnError?: unknown }): Promise<unknown> {
-    const owner = await this.ensureWorkbenchBrowserOwner('@global');
-    return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: '@global' });
+    const key = this.getActiveBrowserSessionKey();
+    if (!key) {
+      throw new Error('Workbench Browser is not active');
+    }
+
+    const owner = await this.ensureWorkbenchBrowserOwner(key);
+    return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: key });
   }
 
   sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {

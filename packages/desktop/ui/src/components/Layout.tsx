@@ -606,6 +606,9 @@ function WorkbenchDocumentPane({
   browserTabsState,
   activeBrowserTab,
   onSetBrowserTabsState,
+  onBrowserTabAdd,
+  onBrowserTabClose,
+  onBrowserTabReopen,
 }: {
   conversationId: string | null;
   artifactId: string | null;
@@ -626,6 +629,9 @@ function WorkbenchDocumentPane({
   browserTabsState: BrowserTabsState;
   activeBrowserTab: BrowserTabItem;
   onSetBrowserTabsState: React.Dispatch<React.SetStateAction<BrowserTabsState>>;
+  onBrowserTabAdd: () => void;
+  onBrowserTabClose: (tabId: string) => void;
+  onBrowserTabReopen: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { sessions, tasks } = useAppData();
@@ -675,6 +681,9 @@ function WorkbenchDocumentPane({
         activeTab={activeBrowserTab}
         onSetTabsState={onSetBrowserTabsState}
         onClose={() => onActiveToolChange('knowledge')}
+        onNewTab={onBrowserTabAdd}
+        onReopenTab={onBrowserTabReopen}
+        onCloseCurrentTab={() => onBrowserTabClose(activeBrowserTab.id)}
       />
     );
   }
@@ -734,11 +743,17 @@ export function WorkbenchBrowserTab({
   activeTab,
   onSetTabsState,
   onClose,
+  onNewTab,
+  onReopenTab,
+  onCloseCurrentTab,
 }: {
   tabsState: BrowserTabsState;
   activeTab: BrowserTabItem;
   onSetTabsState: React.Dispatch<React.SetStateAction<BrowserTabsState>>;
   onClose: () => void;
+  onNewTab: () => void;
+  onReopenTab: () => void;
+  onCloseCurrentTab: () => void;
 }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
@@ -896,6 +911,40 @@ export function WorkbenchBrowserTab({
       }
     };
   }, [bridge, browserSessionKey, syncBounds]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const meta = event.metaKey || event.ctrlKey;
+      if (!meta) return;
+
+      switch (event.key.toLowerCase()) {
+        case 't':
+          if (event.shiftKey) {
+            event.preventDefault();
+            onReopenTab();
+          } else {
+            event.preventDefault();
+            onNewTab();
+          }
+          return;
+        case 'w':
+          event.preventDefault();
+          onCloseCurrentTab();
+          return;
+        case 'l':
+          event.preventDefault();
+          if (urlInputRef.current) {
+            urlInputRef.current.focus();
+            urlInputRef.current.select();
+          }
+          return;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNewTab, onReopenTab, onCloseCurrentTab]);
 
   useEffect(() => {
     function handleBrowserCommentTarget(event: Event) {
@@ -1808,17 +1857,46 @@ export function Layout() {
 
   const handleBrowserTabClose = useCallback((tabId: string) => {
     setBrowserTabsState((prev) => {
+      const closedTab = prev.tabs.find((t) => t.id === tabId);
       if (prev.tabs.length <= 1) {
         const newTab = createNewTab();
-        return { ...prev, tabs: [newTab], activeTabId: newTab.id };
+        return {
+          ...prev,
+          tabs: [newTab],
+          activeTabId: newTab.id,
+          closedTabs: closedTab ? [closedTab, ...prev.closedTabs].slice(0, 10) : prev.closedTabs,
+        };
       }
       const newTabId = getAdjacentTabId(prev, tabId) ?? prev.tabs[0]!.id;
-      return { ...prev, tabs: prev.tabs.filter((t) => t.id !== tabId), activeTabId: newTabId };
+      return {
+        ...prev,
+        tabs: prev.tabs.filter((t) => t.id !== tabId),
+        activeTabId: newTabId,
+        closedTabs: closedTab ? [closedTab, ...prev.closedTabs].slice(0, 10) : prev.closedTabs,
+      };
     });
     const bridge = getDesktopBridge();
     void bridge
       ?.setWorkbenchBrowserBounds({ visible: false, sessionKey: getTabSessionKey(tabId), deactivate: true })
       .catch(() => undefined);
+  }, []);
+
+  const handleBrowserTabReopen = useCallback(() => {
+    setBrowserTabsState((prev) => {
+      if (prev.closedTabs.length === 0) return prev;
+      const [restored, ...remaining] = prev.closedTabs;
+      const newTab = {
+        ...restored,
+        id: crypto.randomUUID(),
+        urlDraft: '',
+      };
+      return {
+        ...prev,
+        tabs: [...prev.tabs, newTab],
+        activeTabId: newTab.id,
+        closedTabs: remaining,
+      };
+    });
   }, []);
 
   useEffect(() => {
@@ -2358,6 +2436,9 @@ export function Layout() {
                         browserTabsState={browserTabsState}
                         activeBrowserTab={activeBrowserTab}
                         onSetBrowserTabsState={setBrowserTabsState}
+                        onBrowserTabAdd={handleBrowserTabAdd}
+                        onBrowserTabClose={handleBrowserTabClose}
+                        onBrowserTabReopen={handleBrowserTabReopen}
                       />
                     </section>
                     {workbenchExplorerOpen ? (

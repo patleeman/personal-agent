@@ -254,6 +254,16 @@ export class WorkbenchBrowserViewController {
     return entry ? getState(entry.view.webContents, entry) : null;
   }
 
+  getActiveSessionKey(ownerWebContentsId: number): string | null {
+    const viewKey = this.activeViewKeysByOwner.get(ownerWebContentsId);
+    if (!viewKey) {
+      return null;
+    }
+
+    const colonIndex = viewKey.indexOf(':');
+    return colonIndex >= 0 ? viewKey.slice(colonIndex + 1) : null;
+  }
+
   hasView(ownerWebContentsId: number, sessionKey?: string | null): boolean {
     const entry = this.views.get(this.viewKey(ownerWebContentsId, sessionKey));
     return Boolean(entry && !entry.view.webContents.isDestroyed());

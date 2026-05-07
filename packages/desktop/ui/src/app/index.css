@@ -29,7 +29,7 @@
   }
 
   .ui-desktop-top-bar__drag-region {
-    @apply absolute inset-0;
+    @apply absolute inset-0 pointer-events-none;
     -webkit-app-region: drag;
   }
 

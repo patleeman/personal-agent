@@ -12,6 +12,7 @@ export interface BrowserTabsState {
   version: 1;
   tabs: BrowserTabItem[];
   activeTabId: string;
+  closedTabs: BrowserTabItem[];
 }
 
 function generateId(): string {
@@ -24,6 +25,7 @@ function createDefaultState(): BrowserTabsState {
     version: 1,
     tabs: [{ id, title: 'New Tab', url: DEFAULT_URL, urlDraft: '' }],
     activeTabId: id,
+    closedTabs: [],
   };
 }
 
@@ -58,6 +60,22 @@ function validateState(raw: unknown): BrowserTabsState | null {
     return null;
   }
 
+  const closedTabs = Array.isArray(state.closedTabs)
+    ? state.closedTabs
+        .map((t: unknown) => {
+          const tab = t as Record<string, unknown>;
+          if (!tab.id) return null;
+          return {
+            id: String(tab.id ?? ''),
+            title: String(tab.title ?? 'New Tab'),
+            url: String(tab.url ?? DEFAULT_URL),
+            urlDraft: String(tab.urlDraft ?? ''),
+          };
+        })
+        .filter((t): t is BrowserTabItem => t !== null)
+        .slice(0, 10)
+    : [];
+
   return {
     version: 1,
     tabs: state.tabs.map((t: unknown) => {
@@ -70,6 +88,7 @@ function validateState(raw: unknown): BrowserTabsState | null {
       };
     }),
     activeTabId: String(state.activeTabId),
+    closedTabs,
   };
 }
 
