@@ -417,3 +417,90 @@ describe('trace persistence hooks', () => {
     expect(persistTraceToolCallMock.mock.calls[1][0].toolName).toBe('bash');
   });
 });
+
+describe('auto mode continuation flow', () => {
+  const REVIEW_TYPE = 'conversation_automation_post_turn_review';
+
+  function makeEntry(overrides: Record<string, unknown> = {}) {
+    return {
+      sessionId: 'sess-auto',
+      session: {} as any,
+      title: 'Auto mode',
+      pendingAutoModeContinuation: false,
+      pendingHiddenTurnCustomTypes: [] as string[],
+      activeHiddenTurnCustomType: null,
+      ...overrides,
+    } as any;
+  }
+
+  function makeCallbacks() {
+    return {
+      requestConversationAutoModeContinuationTurn: vi.fn().mockResolvedValue(true),
+      requestConversationAutoModeTurn: vi.fn().mockResolvedValue(true),
+      syncDurableConversationRun: vi.fn(),
+      notifyLifecycleHandlers: vi.fn(),
+      applyPendingConversationWorkingDirectoryChange: vi.fn(),
+      scheduleContextUsage: vi.fn(),
+      publishSessionMetaChanged: vi.fn(),
+      syncRunningState: vi.fn(),
+      broadcastQueueState: vi.fn(),
+      broadcastTitle: vi.fn(),
+      broadcastStats: vi.fn(),
+      clearContextUsageTimer: vi.fn(),
+      broadcastContextUsage: vi.fn(),
+      broadcastSnapshot: vi.fn(),
+      broadcast: vi.fn(),
+      tryImportReadyParallelJobs: vi.fn(),
+    };
+  }
+
+  describe('nudge mode review turn', () => {
+    it('schedules continuation when pendingAutoModeContinuation is true', async () => {
+      const entry = makeEntry({
+        pendingAutoModeContinuation: true,
+        activeHiddenTurnCustomType: REVIEW_TYPE,
+      });
+      const cbs = makeCallbacks();
+
+      handleLiveSessionEvent(entry, { type: 'turn_end' } as any, cbs);
+
+      // The handler uses queueMicrotask; flush microtasks
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      expect(cbs.requestConversationAutoModeContinuationTurn).toHaveBeenCalledWith('sess-auto');
+      expect(cbs.requestConversationAutoModeTurn).not.toHaveBeenCalled();
+    });
+
+    it('clears pendingAutoModeContinuation flag after consuming it', () => {
+      const entry = makeEntry({
+        pendingAutoModeContinuation: true,
+        activeHiddenTurnCustomType: REVIEW_TYPE,
+      });
+      const cbs = makeCallbacks();
+
+      handleLiveSessionEvent(entry, { type: 'turn_end' } as any, cbs);
+
+      // Flag is cleared synchronously, not in microtask
+      expect(entry.pendingAutoModeContinuation).toBe(false);
+    });
+  });
+
+  describe('auto mode continuation NOT triggered for non-review turns', () => {
+    it('does NOT schedule continuation for a non-hidden turn when flag is set', async () => {
+      // This tests the bug: non-hidden turns should NOT consume
+      // pendingAutoModeContinuation. The flag is only for the review turn handler.
+      const entry = makeEntry({
+        pendingAutoModeContinuation: true,
+        activeHiddenTurnCustomType: null, // not a hidden review turn
+      });
+      const cbs = makeCallbacks();
+
+      handleLiveSessionEvent(entry, { type: 'turn_end' } as any, cbs);
+
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      // Should NOT schedule continuation - flag is only for review turn
+      expect(cbs.requestConversationAutoModeContinuationTurn).not.toHaveBeenCalled();
+    });
+  });
+});

@@ -215,20 +215,8 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
       }
     }
 
-    // Non-hidden turn continuation: mission/loop modes set pendingAutoModeContinuation
-    // directly from the extension's turn_end handler, bypassing the hidden review turn.
-    if (activeHiddenTurnCustomType !== CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE && entry.pendingAutoModeContinuation) {
-      entry.pendingAutoModeContinuation = false;
-      queueMicrotask(() => {
-        void Promise.resolve(callbacks.requestConversationAutoModeContinuationTurn(entry.sessionId)).catch((error) => {
-          logWarn('auto mode direct continuation request failed', {
-            sessionId: entry.sessionId,
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          });
-        });
-      });
-    }
+    // Non-hidden turn continuation: mission/loop modes request continuation
+    // directly from the extension. No flag-based check needed here.
 
     void callbacks.syncDurableConversationRun(entry, 'waiting');
     callbacks.notifyLifecycleHandlers(entry, 'turn_end');

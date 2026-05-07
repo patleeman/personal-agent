@@ -15,6 +15,7 @@ import {
 import {
   markConversationAutoModeContinueRequested,
   registerLiveSessionLifecycleHandler,
+  requestConversationAutoModeContinuationTurn,
   requestConversationAutoModeTurn,
   setLiveSessionAutoModeState,
 } from '../conversations/liveSessions.js';
@@ -438,9 +439,16 @@ function handleMissionTurnEnd(
     mission: { ...mission, turnsUsed: nextTurnsUsed },
   });
 
-  // Signal continuation
+  // Signal continuation via direct call (bypasses pendingAutoModeContinuation flag)
   if (sessionId) {
-    markConversationAutoModeContinueRequested(sessionId);
+    queueMicrotask(() => {
+      void requestConversationAutoModeContinuationTurn(sessionId).catch((error) => {
+        logWarn('mission mode direct continuation failed', {
+          sessionId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+    });
   }
 }
 
@@ -466,8 +474,15 @@ function handleLoopTurnEnd(
     loop: { ...loop, iterationsUsed: nextIterationsUsed },
   });
 
-  // Signal continuation
+  // Signal continuation via direct call (bypasses pendingAutoModeContinuation flag)
   if (sessionId) {
-    markConversationAutoModeContinueRequested(sessionId);
+    queueMicrotask(() => {
+      void requestConversationAutoModeContinuationTurn(sessionId).catch((error) => {
+        logWarn('loop mode direct continuation failed', {
+          sessionId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+    });
   }
 }

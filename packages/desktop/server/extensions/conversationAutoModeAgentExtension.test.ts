@@ -6,11 +6,13 @@ import { createConversationAutoModeAgentExtension } from './conversationAutoMode
 const {
   markConversationAutoModeContinueRequestedMock,
   registerLiveSessionLifecycleHandlerMock,
+  requestConversationAutoModeContinuationTurnMock,
   requestConversationAutoModeTurnMock,
   setLiveSessionAutoModeStateMock,
 } = vi.hoisted(() => ({
   markConversationAutoModeContinueRequestedMock: vi.fn(),
   registerLiveSessionLifecycleHandlerMock: vi.fn(),
+  requestConversationAutoModeContinuationTurnMock: vi.fn().mockResolvedValue(true),
   requestConversationAutoModeTurnMock: vi.fn(),
   setLiveSessionAutoModeStateMock: vi.fn(),
 }));
@@ -18,6 +20,7 @@ const {
 vi.mock('../conversations/liveSessions.js', () => ({
   markConversationAutoModeContinueRequested: markConversationAutoModeContinueRequestedMock,
   registerLiveSessionLifecycleHandler: registerLiveSessionLifecycleHandlerMock,
+  requestConversationAutoModeContinuationTurn: requestConversationAutoModeContinuationTurnMock,
   requestConversationAutoModeTurn: requestConversationAutoModeTurnMock,
   setLiveSessionAutoModeState: setLiveSessionAutoModeStateMock,
 }));
@@ -383,7 +386,7 @@ describe('conversation auto mode agent extension', () => {
     });
 
     it('signals continuation for mission mode (structural task check, no hidden review)', async () => {
-      markConversationAutoModeContinueRequestedMock.mockClear();
+      requestConversationAutoModeContinuationTurnMock.mockClear();
       const { handlers } = createHarness();
       const turnEndHandlers = handlers.get('turn_end') ?? [];
 
@@ -394,13 +397,15 @@ describe('conversation auto mode agent extension', () => {
         } as never,
       );
 
-      // Mission mode: should directly signal continuation, not go through hidden review path
-      expect(markConversationAutoModeContinueRequestedMock).toHaveBeenCalledWith('conversation-1');
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      // Mission mode: should directly request continuation, not go through hidden review path
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
       expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
     });
 
     it('signals continuation for loop mode (counter check, no hidden review)', async () => {
-      markConversationAutoModeContinueRequestedMock.mockClear();
+      requestConversationAutoModeContinuationTurnMock.mockClear();
       const { handlers } = createHarness();
       const turnEndHandlers = handlers.get('turn_end') ?? [];
 
@@ -411,8 +416,10 @@ describe('conversation auto mode agent extension', () => {
         } as never,
       );
 
-      // Loop mode: should directly signal continuation, not go through hidden review path
-      expect(markConversationAutoModeContinueRequestedMock).toHaveBeenCalledWith('conversation-1');
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      // Loop mode: should directly request continuation, not go through hidden review path
+      expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
       expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
     });
   });
