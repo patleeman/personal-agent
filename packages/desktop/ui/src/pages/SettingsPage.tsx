@@ -4746,19 +4746,21 @@ export function SettingsPage() {
                                     OAuth login running for {selectedProviderLogin.providerName}.
                                     {selectedProviderLogin.authUrl ? (
                                       <>
-                                        {' Opened '}
+                                        {' Opened the '}
                                         <a
                                           href={selectedProviderLogin.authUrl}
                                           target="_blank"
                                           rel="noopener noreferrer"
+                                          title={selectedProviderLogin.authUrl}
                                           className="underline text-interactive hover:text-interactive-hover"
                                           onClick={(e) => {
                                             e.preventDefault();
                                             window.open(selectedProviderLogin.authUrl, '_blank');
                                           }}
                                         >
-                                          {selectedProviderLogin.authUrl}
+                                          authorization page
                                         </a>
+                                        .
                                       </>
                                     ) : (
                                       ''
