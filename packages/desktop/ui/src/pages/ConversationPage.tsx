@@ -6577,7 +6577,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
               )}
 
-              {effectiveConversationAutoModeState?.enabled === true && autoModeMissionDraft === null && (
+              {effectiveConversationAutoModeState?.enabled === true && (
                 <div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5">
                   <svg
                     width="14"
