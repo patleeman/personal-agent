@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerInputControls } from './ConversationComposerInputControls';
+import { ConversationRunModePanel } from './ConversationRunModePanel';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -93,14 +94,12 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('Submit answers');
   });
 
-  it('renders active mission tasks even when the stream is idle', () => {
-    const html = renderControls({
-      conversationAutoModeEnabled: true,
-      streamIsStreaming: false,
-      conversationAutoMode: {
-        enabled: true,
-        mode: 'mission',
-        mission: {
+  it('renders active mission tasks in the run-mode shelf', () => {
+    const html = renderToString(
+      <ConversationRunModePanel
+        mode="mission"
+        running
+        mission={{
           goal: 'Fix the page',
           tasks: [
             { id: 't1', description: 'Run tests', status: 'done' },
@@ -108,33 +107,29 @@ describe('ConversationComposerInputControls', () => {
           ],
           maxTurns: 20,
           turnsUsed: 2,
-        },
-        updatedAt: '2026-05-07T00:00:00.000Z',
-      },
-    });
+        }}
+      />,
+    );
 
     expect(html).toContain('tasks');
     expect(html).toContain('Patch bug');
     expect(html).not.toContain('Goal: what should be accomplished?');
   });
 
-  it('keeps active loop controls visible while the stream is idle', () => {
-    const html = renderControls({
-      conversationAutoModeEnabled: true,
-      streamIsStreaming: false,
-      draftLoopConfig: { prompt: 'Find bugs', maxIterations: 5, delay: '2s' },
-      conversationAutoMode: {
-        enabled: true,
-        mode: 'loop',
-        loop: {
+  it('keeps active loop controls visible in the run-mode shelf', () => {
+    const html = renderToString(
+      <ConversationRunModePanel
+        mode="loop"
+        running
+        draftLoop={{ prompt: 'Find bugs', maxIterations: 5, delay: '2s' }}
+        loop={{
           prompt: 'Find bugs',
           maxIterations: 5,
           iterationsUsed: 2,
           delay: '2s',
-        },
-        updatedAt: '2026-05-07T00:00:00.000Z',
-      },
-    });
+        }}
+      />,
+    );
 
     expect(html).toContain('iterations');
     expect(html).toContain('Prompt to repeat each iteration');

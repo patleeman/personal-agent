@@ -20,6 +20,7 @@ import {
 } from '../components/conversation/ConversationDraftEmptyAction';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
+import { ConversationRunModePanel } from '../components/conversation/ConversationRunModePanel';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
@@ -6526,6 +6527,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </p>
             ) : null}
 
+            <ConversationRunModePanel
+              mode={effectiveConversationAutoModeState?.mode ?? 'manual'}
+              running={
+                conversationAutoModeEnabled &&
+                (effectiveConversationAutoModeState?.mode === 'mission' || effectiveConversationAutoModeState?.mode === 'loop')
+              }
+              mission={effectiveConversationAutoModeState?.mission ?? null}
+              loop={effectiveConversationAutoModeState?.loop ?? null}
+              draftMission={draftMissionConfig}
+              draftLoop={draftLoopConfig}
+              onDraftMissionChange={setDraftMissionConfig}
+              onDraftLoopChange={setDraftLoopConfig}
+            />
+
             <div
               className={cx(
                 'ui-input-shell',
@@ -6675,10 +6690,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 conversationAutoModeEnabled={conversationAutoModeEnabled}
                 conversationAutoModeBusy={conversationAutoModeBusy}
                 conversationAutoMode={effectiveConversationAutoModeState}
-                draftMissionConfig={draftMissionConfig}
-                draftLoopConfig={draftLoopConfig}
-                onDraftMissionChange={setDraftMissionConfig}
-                onDraftLoopChange={setDraftLoopConfig}
                 dictationState={dictationState}
                 dictationLevelSamples={dictationLevelSamples}
                 dictationStartedAt={dictationStartedAt}

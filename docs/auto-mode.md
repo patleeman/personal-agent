@@ -83,6 +83,8 @@ Visible only during Mission or Loop.
 ## UI Contract
 
 - The run-mode selector replaces the old auto toggle and stays in the composer preferences area.
-- Mission setup/status sits above the input area. The task list has a capped height and scrolls.
-- Loop setup/status sits in the same above-input area and keeps prompt, count, and delay editable while active.
+- Mission and Loop render as a slim planning shelf above the composer, separate from the message input shell.
+- The shelf uses one shared visual language: compact status header, borderless/underlined fields, and plain list rows.
+- Mission task lists have a capped height and scroll.
+- Loop keeps prompt, count, and delay editable while active in a single compact control line.
 - There is no separate pause or abort affordance; the normal conversation stop button is the escape hatch.

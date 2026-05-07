@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { LoopState, MissionState, RunMode } from '../../shared/types';
 import { cx } from '../ui';
 
@@ -23,6 +25,26 @@ export interface RunModePanelProps {
   onDraftLoopChange?: (draft: DraftLoopConfig) => void;
 }
 
+const shelfAccent: Record<'mission' | 'loop', string> = {
+  mission: 'border-accent/45 text-accent',
+  loop: 'border-warning/55 text-warning',
+};
+
+const fieldClassName =
+  'rounded-none border-0 border-b border-border-subtle bg-transparent px-0 py-1 text-[12px] text-primary outline-none transition-colors placeholder:text-dim hover:border-border-default focus:border-accent/60';
+
+function RunShelf({ mode, label, meta, children }: { mode: 'mission' | 'loop'; label: string; meta: string; children: ReactNode }) {
+  return (
+    <div className={cx('mb-2 border-l-2 bg-surface/20 px-3 py-2.5', shelfAccent[mode])}>
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-primary">{meta}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function ConversationRunModePanel({
   mode,
   running,
@@ -38,172 +60,121 @@ export function ConversationRunModePanel({
   }
 
   if (mode === 'mission') {
+    const done = mission?.tasks.filter((task) => task.status === 'done').length ?? 0;
+    const total = mission?.tasks.length ?? 0;
+    const goal = mission?.goal || draftMission?.goal || 'Mission';
+    const meta =
+      running && mission
+        ? `${goal} · ${done}/${total} tasks · ${mission.turnsUsed}/${mission.maxTurns} turns`
+        : 'Set a goal; the agent manages the task list';
+
     return (
-      <div className="mb-2 px-0 py-1">
-        <div className="mb-1.5 flex items-center justify-between px-0.5">
-          <strong className="text-[11px] font-semibold text-secondary">Mission</strong>
-          {running && mission ? (
-            <span className="text-[10px] text-dim">
-              {mission.tasks.filter((t) => t.status === 'done').length}/{mission.tasks.length} tasks · {mission.turnsUsed}/
-              {mission.maxTurns} turns
-            </span>
-          ) : (
-            <span className="text-[10px] text-dim">AI proposes task list, you can edit anytime</span>
-          )}
-        </div>
+      <RunShelf mode="mission" label="Mission" meta={meta}>
         {running && mission ? (
-          <div className="max-h-[120px] overflow-y-auto">
-            {mission.tasks.map((task) => (
-              <div
-                key={task.id}
-                className={cx(
-                  'flex items-center gap-2 rounded px-2 py-1 text-[12px]',
-                  task.status === 'done' ? 'opacity-50' : 'hover:bg-surface/45',
-                )}
-              >
-                <span
-                  className={cx(
-                    'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border text-[8px]',
-                    task.status === 'done' ? 'border-success/60 bg-success/10 text-success' : 'border-border-default text-transparent',
-                  )}
-                >
-                  {task.status === 'done' ? '✓' : ''}
-                </span>
-                <span className={cx('flex-1', task.status === 'done' && 'text-dim line-through')}>{task.description}</span>
-              </div>
-            ))}
-          </div>
+          mission.tasks.length > 0 ? (
+            <div className="max-h-36 overflow-y-auto pr-1">
+              {mission.tasks.map((task) => (
+                <div key={task.id} className={cx('flex items-center gap-2 py-1 text-[12px]', task.status === 'done' && 'opacity-55')}>
+                  <span
+                    className={cx(
+                      'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border text-[8px]',
+                      task.status === 'done' ? 'border-success/60 bg-success/10 text-success' : 'border-border-default text-transparent',
+                    )}
+                  >
+                    {task.status === 'done' ? '✓' : ''}
+                  </span>
+                  <span className={cx('min-w-0 flex-1 truncate', task.status === 'done' && 'text-dim line-through')}>
+                    {task.description}
+                  </span>
+                  {task.status !== 'pending' && task.status !== 'done' ? (
+                    <span className="shrink-0 text-[10px] text-dim">{task.status}</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-dim">Task list will appear after the agent starts the mission.</p>
+          )
         ) : (
           <div className="flex flex-col gap-2">
             <textarea
               value={draftMission?.goal ?? ''}
-              onChange={(e) => onDraftMissionChange?.({ goal: e.target.value, maxTurns: draftMission?.maxTurns ?? 20 })}
-              rows={2}
-              className="w-full resize-none rounded-md border border-border-subtle bg-surface/45 px-2.5 py-1.5 text-[12px] text-primary outline-none placeholder:text-dim focus:border-accent/40"
-              placeholder="Goal: what should be accomplished? (optional — inferred from conversation if blank)"
+              onChange={(event) => onDraftMissionChange?.({ goal: event.target.value, maxTurns: draftMission?.maxTurns ?? 20 })}
+              rows={1}
+              className={cx('w-full resize-none', fieldClassName)}
+              placeholder="Goal — inferred from conversation if blank"
             />
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5 text-[11px] text-dim">
-                Max turns
-                <input
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={draftMission?.maxTurns ?? 20}
-                  onChange={(e) =>
-                    onDraftMissionChange?.({ goal: draftMission?.goal ?? '', maxTurns: Math.max(1, parseInt(e.target.value, 10) || 20) })
-                  }
-                  className="w-16 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
-                />
-              </label>
-              <span className="text-[10px] text-dim">Stop when all tasks done or max turns reached</span>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (mode === 'loop') {
-    return (
-      <div className="mb-2 px-0 py-1">
-        <div className="mb-1.5 flex items-center justify-between px-0.5">
-          <strong className="text-[11px] font-semibold text-secondary">Loop</strong>
-          {running && loop ? (
-            <span className="text-[10px] text-dim">
-              {loop.iterationsUsed}/{loop.maxIterations} iterations
-            </span>
-          ) : (
-            <span className="text-[10px] text-dim">Run exactly N iterations</span>
-          )}
-        </div>
-        <div className="flex flex-col gap-2">
-          <textarea
-            value={draftLoop?.prompt ?? loop?.prompt ?? ''}
-            onChange={(e) =>
-              onDraftLoopChange?.({
-                prompt: e.target.value,
-                maxIterations: draftLoop?.maxIterations ?? loop?.maxIterations ?? 5,
-                delay: draftLoop?.delay ?? loop?.delay ?? 'After each turn',
-              })
-            }
-            rows={2}
-            className="w-full resize-none rounded-md border border-border-subtle bg-surface/45 px-2.5 py-1.5 text-[12px] text-primary outline-none placeholder:text-dim focus:border-accent/40"
-            placeholder="Prompt to repeat each iteration"
-          />
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-[11px] text-dim">
-              Iterations
+            <label className="flex items-center gap-2 text-[11px] text-dim">
+              Max turns
               <input
                 type="number"
                 min={1}
                 max={1000}
-                value={draftLoop?.maxIterations ?? loop?.maxIterations ?? 5}
-                onChange={(e) =>
-                  onDraftLoopChange?.({
-                    prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
-                    maxIterations: Math.max(1, parseInt(e.target.value, 10) || 5),
-                    delay: draftLoop?.delay ?? loop?.delay ?? 'After each turn',
-                  })
+                value={draftMission?.maxTurns ?? 20}
+                onChange={(event) =>
+                  onDraftMissionChange?.({ goal: draftMission?.goal ?? '', maxTurns: Math.max(1, parseInt(event.target.value, 10) || 20) })
                 }
-                className="w-16 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-dim">
-              Delay
-              <input
-                value={draftLoop?.delay ?? loop?.delay ?? 'After each turn'}
-                onChange={(e) =>
-                  onDraftLoopChange?.({
-                    prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
-                    maxIterations: draftLoop?.maxIterations ?? loop?.maxIterations ?? 5,
-                    delay: e.target.value,
-                  })
-                }
-                className="w-28 rounded-md border border-border-subtle bg-surface/45 px-2 py-1 text-[12px] text-primary outline-none"
+                className={cx('w-12', fieldClassName)}
               />
             </label>
           </div>
+        )}
+      </RunShelf>
+    );
+  }
+
+  if (mode === 'loop') {
+    const prompt = loop?.prompt || draftLoop?.prompt || 'Run loop iteration';
+    const iterationsUsed = loop?.iterationsUsed ?? 0;
+    const maxIterations = draftLoop?.maxIterations ?? loop?.maxIterations ?? 5;
+    const delay = draftLoop?.delay ?? loop?.delay ?? 'After each turn';
+    const meta = `${prompt} · ${iterationsUsed}/${maxIterations} iterations · ${delay}`;
+
+    return (
+      <RunShelf mode="loop" label="Loop" meta={meta}>
+        <textarea
+          value={draftLoop?.prompt ?? loop?.prompt ?? ''}
+          onChange={(event) =>
+            onDraftLoopChange?.({
+              prompt: event.target.value,
+              maxIterations,
+              delay,
+            })
+          }
+          rows={1}
+          className={cx('mb-2 w-full resize-none', fieldClassName)}
+          placeholder="Prompt to repeat each iteration"
+        />
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
+          <span>Run</span>
+          <input
+            type="number"
+            min={1}
+            max={1000}
+            value={maxIterations}
+            onChange={(event) =>
+              onDraftLoopChange?.({
+                prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+                maxIterations: Math.max(1, parseInt(event.target.value, 10) || 5),
+                delay,
+              })
+            }
+            className={cx('w-10 text-center', fieldClassName)}
+          />
+          <span>times · wait</span>
+          <input
+            value={delay}
+            onChange={(event) =>
+              onDraftLoopChange?.({
+                prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+                maxIterations,
+                delay: event.target.value,
+              })
+            }
+            className={cx('w-28', fieldClassName)}
+          />
         </div>
-      </div>
-    );
-  }
-
-  return null;
-}
-
-export function ConversationRunStatusStrip({ mode, running, mission, loop }: RunModePanelProps) {
-  const isActive = running && (mode === 'mission' || mode === 'loop');
-  if (!isActive) {
-    return null;
-  }
-
-  if (mode === 'mission' && mission) {
-    const done = mission.tasks.filter((t) => t.status === 'done').length;
-    const total = mission.tasks.length;
-    return (
-      <div className="mb-1 flex items-center gap-2 px-0.5 py-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-accent">Mission</span>
-        <span className="truncate text-[12px] font-medium text-primary">{mission.goal}</span>
-        <span className="ml-auto shrink-0 text-[11px] text-dim">
-          {done}/{total} tasks
-        </span>
-      </div>
-    );
-  }
-
-  if (mode === 'loop' && loop) {
-    return (
-      <div className="mb-1 flex items-center gap-2 px-0.5 py-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-warning">Loop</span>
-        <span className="truncate text-[12px] font-medium text-primary">
-          {loop.prompt.slice(0, 60)}
-          {loop.prompt.length > 60 ? '…' : ''}
-        </span>
-        <span className="ml-auto shrink-0 text-[11px] text-dim">
-          {loop.iterationsUsed}/{loop.maxIterations}
-        </span>
-      </div>
+      </RunShelf>
     );
   }
 

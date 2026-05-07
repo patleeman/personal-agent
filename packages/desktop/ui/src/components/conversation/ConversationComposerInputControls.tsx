@@ -3,12 +3,6 @@ import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, 
 import type { ConversationAutoModeState, ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
-import {
-  ConversationRunModePanel,
-  ConversationRunStatusStrip,
-  type DraftLoopConfig,
-  type DraftMissionConfig,
-} from './ConversationRunModePanel';
 
 const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 780;
 
@@ -30,10 +24,6 @@ export function ConversationComposerInputControls({
   conversationAutoModeEnabled,
   conversationAutoModeBusy,
   conversationAutoMode,
-  draftMissionConfig,
-  draftLoopConfig,
-  onDraftMissionChange,
-  onDraftLoopChange,
   dictationState,
   dictationLevelSamples,
   dictationStartedAt,
@@ -83,10 +73,6 @@ export function ConversationComposerInputControls({
   conversationAutoModeEnabled: boolean;
   conversationAutoModeBusy: boolean;
   conversationAutoMode: ConversationAutoModeState | null;
-  draftMissionConfig?: DraftMissionConfig;
-  draftLoopConfig?: DraftLoopConfig;
-  onDraftMissionChange?: (draft: DraftMissionConfig) => void;
-  onDraftLoopChange?: (draft: DraftLoopConfig) => void;
   dictationState: 'idle' | 'recording' | 'transcribing';
   dictationLevelSamples: number[];
   dictationStartedAt: number | null;
@@ -137,24 +123,6 @@ export function ConversationComposerInputControls({
       />
 
       <div className="flex flex-col gap-0">
-        <div className="px-3 pt-0">
-          <ConversationRunStatusStrip
-            mode={conversationAutoMode?.mode ?? 'manual'}
-            running={conversationAutoModeEnabled && (conversationAutoMode?.mode === 'mission' || conversationAutoMode?.mode === 'loop')}
-            mission={conversationAutoMode?.mission ?? null}
-            loop={conversationAutoMode?.loop ?? null}
-          />
-          <ConversationRunModePanel
-            mode={conversationAutoMode?.mode ?? 'manual'}
-            running={conversationAutoModeEnabled && (conversationAutoMode?.mode === 'mission' || conversationAutoMode?.mode === 'loop')}
-            mission={conversationAutoMode?.mission ?? null}
-            loop={conversationAutoMode?.loop ?? null}
-            draftMission={draftMissionConfig}
-            draftLoop={draftLoopConfig}
-            onDraftMissionChange={onDraftMissionChange}
-            onDraftLoopChange={onDraftLoopChange}
-          />
-        </div>
         <div className="px-3 pt-1">
           <textarea
             ref={textareaRef}
