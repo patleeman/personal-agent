@@ -1325,6 +1325,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
   const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
+  const [autoModeMissionDraft, setAutoModeMissionDraft] = useState<string | null>(null);
   const initialModelPreferenceState = useMemo(
     () =>
       resolveConversationInitialModelPreferenceState({
@@ -3931,34 +3932,48 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
 
   const configureConversationAutoMode = useCallback(
-    async (config: {
-      enabled: boolean;
-      mission: string | null;
-      mode: ConversationAutoModeMode;
-      budget: ConversationAutoModeBudget | null;
-    }) => {
+    (config: { enabled: boolean; mission: string | null; mode: ConversationAutoModeMode; budget: ConversationAutoModeBudget | null }) => {
       if (conversationAutoModeBusy) {
         return;
       }
 
-      setConversationAutoModeBusy(true);
+      // Toggle off while draft is showing → cancel draft
+      if (!config.enabled) {
+        setAutoModeMissionDraft(null);
+        void executeSetAutoMode(config);
+        return;
+      }
 
+      // If a draft is already showing, clicking Auto again cancels it
+      if (autoModeMissionDraft !== null) {
+        setAutoModeMissionDraft(null);
+        return;
+      }
+
+      // Show the mission confirmation bar
+      setAutoModeMissionDraft(config.mission ?? '');
+    },
+    [conversationAutoModeBusy, autoModeMissionDraft],
+  );
+
+  const confirmAutoMode = useCallback(
+    async (mission: string) => {
+      setAutoModeMissionDraft(null);
+      setConversationAutoModeBusy(true);
       try {
         let targetConversationId = id;
         if (draft) {
-          if (!config.enabled) {
-            return;
-          }
           targetConversationId = await materializeDraftConversation();
         }
-
         if (!targetConversationId) {
           return;
         }
-
-        const liveConversationId = config.enabled && !draft ? await ensureConversationIsLive('enable auto mode') : targetConversationId;
-        const nextState = await api.updateConversationAutoMode(liveConversationId, config, currentSurfaceId);
-
+        const liveConversationId = !draft ? await ensureConversationIsLive('enable auto mode') : targetConversationId;
+        const nextState = await api.updateConversationAutoMode(
+          liveConversationId,
+          { enabled: true, mission, mode: 'tenacious', budget: null },
+          currentSurfaceId,
+        );
         if (liveConversationId === id || targetConversationId === id) {
           setConversationAutoModeState(nextState);
         }
@@ -3968,7 +3983,44 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setConversationAutoModeBusy(false);
       }
     },
-    [conversationAutoModeBusy, currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice],
+    [currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice],
+  );
+
+  const cancelAutoModeDraft = useCallback(() => {
+    setAutoModeMissionDraft(null);
+  }, []);
+
+  const executeSetAutoMode = useCallback(
+    async (config: {
+      enabled: boolean;
+      mission: string | null;
+      mode: ConversationAutoModeMode;
+      budget: ConversationAutoModeBudget | null;
+    }) => {
+      setConversationAutoModeBusy(true);
+      try {
+        let targetConversationId = id;
+        if (draft) {
+          if (!config.enabled) {
+            return;
+          }
+          targetConversationId = await materializeDraftConversation();
+        }
+        if (!targetConversationId) {
+          return;
+        }
+        const liveConversationId = config.enabled && !draft ? await ensureConversationIsLive('enable auto mode') : targetConversationId;
+        const nextState = await api.updateConversationAutoMode(liveConversationId, config, currentSurfaceId);
+        if (liveConversationId === id || targetConversationId === id) {
+          setConversationAutoModeState(nextState);
+        }
+      } catch (error) {
+        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      } finally {
+        setConversationAutoModeBusy(false);
+      }
+    },
+    [currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice],
   );
 
   const rewindConversationFromMessage = useCallback(
@@ -6582,7 +6634,43 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
               )}
 
-              {effectiveConversationAutoModeState?.enabled === true && (
+              {autoModeMissionDraft !== null && (
+                <div className="flex items-center gap-2 border-y border-warning/10 bg-warning/[0.03] px-4 py-1.5">
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning/70">Mission</span>
+                  <input
+                    type="text"
+                    value={autoModeMissionDraft}
+                    onChange={(e) => setAutoModeMissionDraft(e.target.value)}
+                    className="min-w-0 flex-1 bg-transparent text-[12px] text-primary outline-none placeholder:text-dim/50"
+                    placeholder="What should auto mode work on?"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && autoModeMissionDraft.trim()) {
+                        void confirmAutoMode(autoModeMissionDraft.trim());
+                      }
+                      if (e.key === 'Escape') {
+                        cancelAutoModeDraft();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!autoModeMissionDraft.trim()}
+                    onClick={() => void confirmAutoMode(autoModeMissionDraft.trim())}
+                    className="shrink-0 rounded-md bg-warning/80 px-2.5 py-1 text-[10px] font-semibold text-black hover:bg-warning disabled:opacity-40"
+                  >
+                    Start
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelAutoModeDraft}
+                    className="shrink-0 rounded-md px-1.5 py-1 text-[10px] font-medium text-dim hover:text-primary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {effectiveConversationAutoModeState?.enabled === true && autoModeMissionDraft === null && (
                 <div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5">
                   <svg
                     width="14"
