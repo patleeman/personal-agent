@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext } from '../app/contexts.js';
 import { constrainPromptImageDimensions } from '../conversation/promptAttachments.js';
 import {
+  buildMissionAutoModeInputFromDraft,
   ConversationPage,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   replaceConversationMetaInSessionList,
@@ -82,6 +83,35 @@ describe('desktop conversation state fallback', () => {
         handledKey: 'conv-1\n/tmp/next\n1',
       }),
     ).toEqual({ action: 'none', key: null });
+  });
+
+  it('preserves mission tasks when syncing mission draft changes', () => {
+    const input = buildMissionAutoModeInputFromDraft(
+      { goal: 'Ship mission mode', maxTurns: 12 },
+      {
+        enabled: true,
+        mode: 'mission',
+        stopReason: null,
+        updatedAt: '2026-05-07T00:00:00.000Z',
+        mission: {
+          goal: 'Old goal',
+          maxTurns: 20,
+          turnsUsed: 3,
+          tasks: [
+            { id: 't1', description: 'Create task list', status: 'done' },
+            { id: 't2', description: 'Persist task list', status: 'pending' },
+          ],
+        },
+      },
+    );
+
+    expect(input.mission.goal).toBe('Ship mission mode');
+    expect(input.mission.maxTurns).toBe(12);
+    expect(input.mission.turnsUsed).toBe(3);
+    expect(input.mission.tasks).toEqual([
+      { id: 't1', description: 'Create task list', status: 'done' },
+      { id: 't2', description: 'Persist task list', status: 'pending' },
+    ]);
   });
 
   it('preserves partial remote execution identity overrides', () => {

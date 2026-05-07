@@ -264,6 +264,7 @@ import type {
   MessageBlock,
   PromptAttachmentRefInput,
   SessionMeta,
+  type TaskState,
   VaultFileListResult,
 } from '../shared/types';
 import type { ConversationSummaryRecord } from '../shared/types';
@@ -490,6 +491,29 @@ export function shouldEnableMessageForkControls({
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
+
+export function createDraftMissionTask(description: string): TaskState {
+  return {
+    id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    description,
+    status: 'pending',
+  };
+}
+
+export function buildMissionAutoModeInputFromDraft(
+  draftMissionConfig: { goal: string; maxTurns: number },
+  latestState: ConversationAutoModeState | null,
+): { mode: 'mission'; mission: NonNullable<ConversationAutoModeState['mission']> } {
+  return {
+    mode: 'mission',
+    mission: {
+      goal: draftMissionConfig.goal || latestState?.mission?.goal || 'Mission',
+      tasks: latestState?.mission?.tasks ?? [],
+      maxTurns: draftMissionConfig.maxTurns,
+      turnsUsed: latestState?.mission?.turnsUsed ?? 0,
+    },
+  };
+}
 
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { id: routeId } = useParams<{ id?: string }>();
@@ -1329,6 +1353,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     maxIterations: 5,
     delay: 'After each turn',
   });
+  const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
+  const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
+  const latestConversationAutoModeStateRef = useRef<ConversationAutoModeState | null>(null);
+  useEffect(() => {
+    latestConversationAutoModeStateRef.current = effectiveConversationAutoModeState ?? null;
+  }, [effectiveConversationAutoModeState]);
 
   // Sync draft config to API when mission/loop mode is active and config changes
   const lastSyncedMissionRef = useRef<string>('');
@@ -1339,7 +1369,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const mode = conversationAutoModeState?.mode;
+    const mode = effectiveConversationAutoModeState?.mode;
     if (mode === 'mission') {
       const serialized = JSON.stringify(draftMissionConfig);
       if (serialized === lastSyncedMissionRef.current) {
@@ -1349,17 +1379,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
         syncTimerRef.current = null;
-        if (!id || !conversationAutoModeState?.enabled) return;
+        const latestState = latestConversationAutoModeStateRef.current;
+        if (!id || !latestState?.enabled) return;
         void api
-          .updateConversationAutoMode(id, {
-            mode: 'mission',
-            mission: {
-              goal: draftMissionConfig.goal || 'Mission',
-              tasks: conversationAutoModeState?.mission?.tasks ?? [],
-              maxTurns: draftMissionConfig.maxTurns,
-              turnsUsed: conversationAutoModeState?.mission?.turnsUsed ?? 0,
-            },
-          })
+          .updateConversationAutoMode(id, buildMissionAutoModeInputFromDraft(draftMissionConfig, latestState))
           .then(setConversationAutoModeState)
           .catch(() => undefined);
       }, 500);
@@ -1372,14 +1395,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
       syncTimerRef.current = setTimeout(() => {
         syncTimerRef.current = null;
-        if (!id || !conversationAutoModeState?.enabled) return;
+        const latestState = latestConversationAutoModeStateRef.current;
+        if (!id || !latestState?.enabled) return;
         void api
           .updateConversationAutoMode(id, {
             mode: 'loop',
             loop: {
-              prompt: draftLoopConfig.prompt || 'Run loop iteration',
+              prompt: draftLoopConfig.prompt || latestState.loop?.prompt || 'Run loop iteration',
               maxIterations: draftLoopConfig.maxIterations,
-              iterationsUsed: conversationAutoModeState?.loop?.iterationsUsed ?? 0,
+              iterationsUsed: latestState.loop?.iterationsUsed ?? 0,
               delay: draftLoopConfig.delay,
             },
           })
@@ -1391,7 +1415,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
-  }, [draftMissionConfig, draftLoopConfig, id, conversationAutoModeBusy, conversationAutoModeState]);
+  }, [draftMissionConfig, draftLoopConfig, id, conversationAutoModeBusy, effectiveConversationAutoModeState?.mode]);
   const initialModelPreferenceState = useMemo(
     () =>
       resolveConversationInitialModelPreferenceState({
@@ -1697,8 +1721,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [conversationEventVersion, draft, id, initialDraftHydrationState]);
 
-  const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
-  const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
   const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
   const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
 
@@ -4073,6 +4095,46 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       draftMissionConfig,
       draftLoopConfig,
     ],
+  );
+
+  const addMissionTask = useCallback(
+    async (description: string) => {
+      const trimmed = description.trim();
+      const latestState = latestConversationAutoModeStateRef.current;
+      if (!trimmed || !id || latestState?.mode !== 'mission') {
+        return;
+      }
+
+      const currentMission = latestState.mission ?? {
+        goal: draftMissionConfig.goal || 'Mission',
+        tasks: [],
+        maxTurns: draftMissionConfig.maxTurns,
+        turnsUsed: 0,
+      };
+      const nextMission = {
+        ...currentMission,
+        tasks: [...currentMission.tasks, createDraftMissionTask(trimmed)],
+      };
+      const optimisticState: ConversationAutoModeState = {
+        ...latestState,
+        enabled: true,
+        mode: 'mission',
+        mission: nextMission,
+      };
+
+      latestConversationAutoModeStateRef.current = optimisticState;
+      setConversationAutoModeState(optimisticState);
+
+      try {
+        const nextState = await api.updateConversationAutoMode(id, { mode: 'mission', mission: nextMission }, currentSurfaceId);
+        setConversationAutoModeState(nextState);
+      } catch (error) {
+        latestConversationAutoModeStateRef.current = latestState;
+        setConversationAutoModeState(latestState);
+        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      }
+    },
+    [currentSurfaceId, draftMissionConfig.goal, draftMissionConfig.maxTurns, id, showNotice],
   );
 
   const rewindConversationFromMessage = useCallback(
@@ -6556,6 +6618,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 draftLoop={draftLoopConfig}
                 onDraftMissionChange={setDraftMissionConfig}
                 onDraftLoopChange={setDraftLoopConfig}
+                onAddMissionTask={(description) => {
+                  void addMissionTask(description);
+                }}
               />
 
               {hasComposerShelfContent && (

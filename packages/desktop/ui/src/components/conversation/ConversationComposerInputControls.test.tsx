@@ -108,6 +108,7 @@ describe('ConversationComposerInputControls', () => {
           maxTurns: 20,
           turnsUsed: 2,
         }}
+        onAddMissionTask={vi.fn()}
       />,
     );
 
@@ -115,7 +116,9 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('Patch bug');
     expect(html).toContain('aria-label="Mission goal"');
     expect(html).toContain('aria-label="Mission max turns"');
-    expect(html).not.toContain('disabled');
+    expect(html).toContain('aria-label="Add mission task"');
+    expect(html).not.toContain('aria-label="Mission goal" disabled');
+    expect(html).not.toContain('aria-label="Mission max turns" disabled');
     expect(html).not.toContain('Goal: what should be accomplished?');
   });
 
