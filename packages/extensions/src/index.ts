@@ -181,6 +181,12 @@ export interface ExtensionBackendContext {
     list(path?: string): Promise<unknown>;
     search(query: string): Promise<unknown>;
   };
+  conversations: {
+    list(): Promise<unknown>;
+    get(conversationId: string, options?: { tailBlocks?: number }): Promise<unknown>;
+    getMeta(conversationId: string): Promise<unknown>;
+    searchIndex(sessionIds: string[]): Promise<unknown>;
+  };
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;

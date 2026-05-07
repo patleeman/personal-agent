@@ -130,6 +130,16 @@ export const PA_CLIENT_JS: string = `
       search(query) { return requestJson('/api/vault/search?q=' + encodeURIComponent(query)); }
     },
 
+    conversations: {
+      list() { return requestJson('/api/sessions'); },
+      get(conversationId, opts) {
+        var tail = opts && opts.tailBlocks ? '?tailBlocks=' + encodeURIComponent(opts.tailBlocks) : '';
+        return requestJson('/api/sessions/' + encodeURIComponent(conversationId) + tail);
+      },
+      getMeta(conversationId) { return requestJson('/api/sessions/' + encodeURIComponent(conversationId) + '/meta'); },
+      searchIndex(sessionIds) { return requestJson('/api/sessions/search-index', { method: 'POST', body: { sessionIds: sessionIds || [] } }); }
+    },
+
     storage: {
       get(key) {
         var extensionId = extensionIdFromPath;

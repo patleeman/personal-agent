@@ -7,6 +7,7 @@ import { build } from 'esbuild';
 
 import type { ServerRouteContext } from '../routes/context.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
+import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { findExtensionEntry } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
@@ -23,6 +24,7 @@ export interface ExtensionBackendContext {
   automations: ReturnType<typeof createExtensionAutomationsCapability>;
   runs: ReturnType<typeof createExtensionRunsCapability>;
   vault: ReturnType<typeof createExtensionVaultCapability>;
+  conversations: ReturnType<typeof createExtensionConversationsCapability>;
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
@@ -74,6 +76,7 @@ function createBackendContext(extensionId: string, serverContext?: Pick<ServerRo
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
     vault: createExtensionVaultCapability(),
+    conversations: createExtensionConversationsCapability(serverContext),
     log: {
       info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
       warn: (message, fields) => console.warn(`[extension:${extensionId}] ${message}`, fields ?? {}),

@@ -465,11 +465,11 @@ PA.vault.list(path?)
 PA.vault.search(query)
 PA.vault.assetUrl(path)
 
-PA.conversations.open(id)
-PA.conversations.create({ prompt?, cwd? })
-PA.conversations.get(id)
-PA.conversations.list(filter?)
-PA.conversations.append(id, message)
+PA.conversations.list()
+PA.conversations.get(id, { tailBlocks? })
+PA.conversations.getMeta(id)
+PA.conversations.searchIndex(sessionIds)
+// Target follow-up APIs: open, create, append
 
 PA.automations.list()
 PA.automations.get(taskId)
@@ -563,9 +563,9 @@ The server invokes handlers through the action endpoint:
 POST /api/extensions/:extensionId/actions/:actionId
 ```
 
-Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.extension.invoke(actionId, input)`, `PA.storage.*`, and `PA.runs.*`.
+Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.extension.invoke(actionId, input)`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`.
 
-The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage`, `ctx.runs`, `ctx.automations`, `ctx.vault`, and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
+The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage`, `ctx.runs`, `ctx.automations`, `ctx.vault`, `ctx.conversations`, and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
 
 ```ts
 ctx.storage.get(key)
@@ -579,10 +579,11 @@ ctx.runs.list(filter?)
 ctx.runs.readLog(runId, tail?)
 ctx.runs.cancel(runId)
 
-ctx.conversations.get(id)
-ctx.conversations.list(filter?)
-ctx.conversations.create(input)
-ctx.conversations.append(id, message)
+ctx.conversations.list()
+ctx.conversations.get(id, { tailBlocks? })
+ctx.conversations.getMeta(id)
+ctx.conversations.searchIndex(sessionIds)
+// Target follow-up APIs: create, append
 
 ctx.automations.list()
 ctx.automations.get(taskId)
