@@ -4,6 +4,7 @@ import { resolve, sep } from 'node:path';
 import type { Express, Request, Response } from 'express';
 
 import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
+import { createRuntimeExtension, snapshotRuntimeExtension } from '../extensions/extensionLifecycle.js';
 import {
   findExtensionEntry,
   listExtensionCommandRegistrations,
@@ -113,6 +114,17 @@ export function registerExtensionRoutes(
     }
   });
 
+  router.post('/api/extensions', (req, res) => {
+    try {
+      res.status(201).json(createRuntimeExtension(req.body as { id?: unknown; name?: unknown; description?: unknown }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /required|must|already exists/i.test(message) ? 400 : 500;
+      logError('extension create error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
+    }
+  });
+
   router.get('/api/extensions/routes', (_req, res) => {
     try {
       res.json(readExtensionRegistrySnapshot().routes);
@@ -207,6 +219,17 @@ export function registerExtensionRoutes(
       const message = err instanceof Error ? err.message : String(err);
       const status = /not found/i.test(message) ? 404 : 500;
       logError('extension action error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
+    }
+  });
+
+  router.post('/api/extensions/:id/snapshot', (req, res) => {
+    try {
+      res.status(201).json(snapshotRuntimeExtension(req.params.id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /not found/i.test(message) ? 404 : /runtime/i.test(message) ? 400 : 500;
+      logError('extension snapshot error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
     }
   });

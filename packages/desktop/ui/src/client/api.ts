@@ -309,6 +309,8 @@ export const api = {
   updateDaemonPower: async (input: { keepAwake: boolean }) => patch<DaemonState>('/daemon/power', input),
   extensions: async () => get<ExtensionManifest[]>('/extensions'),
   extensionInstallations: async () => get<ExtensionInstallSummary[]>('/extensions/installed'),
+  createExtension: async (input: { id: string; name: string; description?: string }) =>
+    post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions', input),
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
@@ -318,6 +320,8 @@ export const api = {
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),
+  snapshotExtension: async (extensionId: string) =>
+    post<{ ok: true; extensionId: string; snapshotPath: string }>(`/extensions/${encodeURIComponent(extensionId)}/snapshot`),
   sessions: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && (await shouldUseDesktopLocalCapabilities())) {

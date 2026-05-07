@@ -26,6 +26,40 @@ describe('api.extensions', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/extensions/slash-commands', { method: 'GET', cache: 'no-store' });
   });
 
+  it('creates extension packages', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, packageRoot: '/tmp/extensions/agent-board' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api.js');
+    await expect(api.createExtension({ id: 'agent-board', name: 'Agent Board' })).resolves.toEqual({
+      ok: true,
+      packageRoot: '/tmp/extensions/agent-board',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/extensions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'agent-board', name: 'Agent Board' }),
+    });
+  });
+
+  it('snapshots extension packages', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, extensionId: 'agent-board', snapshotPath: '/tmp/snapshots/agent-board' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api.js');
+    await expect(api.snapshotExtension('agent-board')).resolves.toEqual({
+      ok: true,
+      extensionId: 'agent-board',
+      snapshotPath: '/tmp/snapshots/agent-board',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/extensions/agent-board/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
   it('invokes extension actions', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true, result: { text: 'created' } }));
     vi.stubGlobal('fetch', fetchMock);

@@ -19,6 +19,15 @@ function firstRoute(extension: ExtensionInstallSummary): string | null {
   return extension.routes[0]?.route ?? null;
 }
 
+function slugifyExtensionId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63);
+}
+
 export function ExtensionManagerPage() {
   const [extensions, setExtensions] = useState<ExtensionInstallSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +72,24 @@ export function ExtensionManagerPage() {
       .catch((err: Error) => setError(err.message));
   }, [load]);
 
+  const createExtension = useCallback(async () => {
+    const name = window.prompt('Extension name');
+    if (!name?.trim()) return;
+    const defaultId = slugifyExtensionId(name);
+    const id = window.prompt('Extension id', defaultId);
+    if (!id?.trim()) return;
+
+    setNotice(null);
+    try {
+      const result = await api.createExtension({ id: id.trim(), name: name.trim() });
+      setNotice(`Created ${result.packageRoot}`);
+      load();
+      setSelectedId(id.trim());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [load]);
+
   const toggleExtension = useCallback(
     (extension: ExtensionInstallSummary) => {
       setBusyId(extension.id);
@@ -88,6 +115,19 @@ export function ExtensionManagerPage() {
         setNotice(result.error ?? extension.packageRoot ?? 'Could not open extension folder.');
       }
     });
+  }, []);
+
+  const snapshotExtension = useCallback(async (extension: ExtensionInstallSummary) => {
+    setBusyId(extension.id);
+    setNotice(null);
+    try {
+      const result = await api.snapshotExtension(extension.id);
+      setNotice(`Snapshot saved to ${result.snapshotPath}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
   }, []);
 
   if (loading) {
@@ -134,7 +174,12 @@ export function ExtensionManagerPage() {
           eyebrow="Extension Manager"
           title="Extensions"
           summary="Local product modules loaded from system bundles and runtime extension packages."
-          actions={<ToolbarButton onClick={reload}>Reload</ToolbarButton>}
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <ToolbarButton onClick={createExtension}>Create starter</ToolbarButton>
+              <ToolbarButton onClick={reload}>Reload</ToolbarButton>
+            </div>
+          }
         />
 
         {notice ? <div className="border-t border-border-subtle pt-4 text-[13px] text-secondary">{notice}</div> : null}
@@ -177,9 +222,20 @@ export function ExtensionManagerPage() {
                       </Link>
                     ) : null}
                     {extension.packageRoot ? (
-                      <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] shadow-none" onClick={() => openFolder(extension)}>
-                        Open folder
-                      </ToolbarButton>
+                      <>
+                        <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] shadow-none" onClick={() => openFolder(extension)}>
+                          Open folder
+                        </ToolbarButton>
+                        <ToolbarButton
+                          className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                          disabled={busyId === extension.id}
+                          onClick={() => {
+                            void snapshotExtension(extension);
+                          }}
+                        >
+                          Snapshot
+                        </ToolbarButton>
+                      </>
                     ) : null}
                     <ToolbarButton
                       className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"

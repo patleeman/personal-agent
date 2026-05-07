@@ -297,6 +297,8 @@ GET /api/extensions/installed       # Extension Manager summaries: enabled state
 GET /api/extensions/routes          # claimed routes and owning extension
 GET /api/extensions/surfaces        # registered surfaces by placement/kind
 GET /api/extensions/:id/files/*     # serve iframe assets from a runtime extension package
+POST /api/extensions                # create a starter runtime extension with { id, name, description? }
+POST /api/extensions/:id/snapshot   # snapshot a runtime extension directory before edits
 PATCH /api/extensions/:id           # enable/disable runtime extensions with { enabled: boolean }
 ```
 
@@ -318,6 +320,8 @@ V0 supports two install paths:
 The Extension Manager lives at `/extensions` and supports the minimum operational lifecycle:
 
 - list installed system and runtime extensions
+- create a starter runtime extension package
+- snapshot a runtime extension directory before risky edits
 - enable/disable runtime extensions; system extensions stay enabled in v0
 - reload all extensions
 - open a runtime extension folder in Finder from the desktop app
@@ -326,7 +330,7 @@ The Extension Manager lives at `/extensions` and supports the minimum operationa
 
 Export bundles include extension code and manifest by default. Extension state export is optional and must be explicit so users do not accidentally move private task data, logs, or workflow history.
 
-Agents edit runtime extension files directly. Before the extension-edit tool writes files, it must snapshot the current extension directory. Snapshots live under runtime state and are used for rollback/debugging; they are not a replacement for source control.
+Agents edit runtime extension files directly. Before the extension-edit tool writes files, it must snapshot the current extension directory. The implemented snapshot API copies runtime packages to `~/.local/state/personal-agent/extension-snapshots/{id}/{timestamp}`. Snapshots are used for rollback/debugging; they are not a replacement for source control.
 
 Reload is explicit, not file-watcher magic:
 

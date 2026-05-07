@@ -188,6 +188,46 @@ describe('registerExtensionRoutes', () => {
     expect(deleteRes.json).toHaveBeenCalledWith({ ok: true, deleted: true });
   });
 
+  it('creates starter runtime extensions', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const harness = createHarness();
+
+    const res = createResponse();
+    harness.postHandler('/api/extensions')({ body: { id: 'agent-board', name: 'Agent Board', description: 'Track work' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      packageRoot: join(stateRoot, 'extensions', 'agent-board'),
+      extension: expect.objectContaining({
+        id: 'agent-board',
+        name: 'Agent Board',
+        packageRoot: join(stateRoot, 'extensions', 'agent-board'),
+        routes: [{ route: '/ext/agent-board', surfaceId: 'page' }],
+      }),
+    });
+  });
+
+  it('snapshots runtime extensions', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
+
+    const harness = createHarness();
+    const res = createResponse();
+    harness.postHandler('/api/extensions/:id/snapshot')({ params: { id: 'agent-board' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      extensionId: 'agent-board',
+      snapshotPath: expect.stringContaining(join('extension-snapshots', 'agent-board')),
+    });
+  });
+
   it('toggles runtime extensions', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
