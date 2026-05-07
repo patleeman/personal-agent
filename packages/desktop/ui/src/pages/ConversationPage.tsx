@@ -6372,9 +6372,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
           {effectiveConversationAutoModeState?.enabled === true && (
             <div className="pb-1">
-              <div className="flex items-start gap-2 rounded-lg border border-warning/15 bg-warning/[0.04] px-2.5 py-1.5">
-                <span className="mt-px shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning/80">Auto</span>
-                <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-secondary">
+              <div className="flex items-center gap-2 rounded-md bg-warning/[0.03] px-2 py-1">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0 text-warning/70"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z" />
+                </svg>
+                <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-secondary/80">
                   {effectiveConversationAutoModeState?.mission ?? suggestedAutoModeMission}
                 </p>
               </div>
