@@ -6635,6 +6635,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               />
             </div>
 
+            {effectiveConversationAutoModeState?.enabled === true && (
+              <div className="px-3 pb-1">
+                <div className="flex items-start gap-2 rounded-lg border border-warning/15 bg-warning/[0.04] px-2.5 py-1.5">
+                  <span className="mt-px shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning/80">Auto</span>
+                  <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-secondary">
+                    {effectiveConversationAutoModeState?.mission ?? suggestedAutoModeMission}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {showComposerMeta ? (
               <ConversationComposerMeta
                 showExecutionTargetPicker={showExecutionTargetPicker}

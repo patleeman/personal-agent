@@ -130,23 +130,6 @@ export function ConversationComposerInputControls({
       />
 
       <div className="flex flex-col gap-0">
-        {conversationAutoModeEnabled && (
-          <div className="px-3 pt-1.5">
-            <div className="flex items-start gap-2 rounded-lg border border-warning/15 bg-warning/[0.04] px-2.5 py-1.5">
-              <span className="mt-px shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning/80">Mission</span>
-              <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-secondary">
-                {conversationAutoModeState?.mission ?? suggestedAutoModeMission}
-              </p>
-              <button
-                type="button"
-                onClick={() => onConfigureAutoMode({ enabled: false, mission: null, mode: 'normal', budget: null })}
-                className="-mr-0.5 mt-px shrink-0 rounded px-1 py-0.5 text-[10px] font-medium text-dim hover:bg-surface/60 hover:text-primary"
-              >
-                Stop
-              </button>
-            </div>
-          </div>
-        )}
         <div className="px-3 pt-1">
           <textarea
             ref={textareaRef}
