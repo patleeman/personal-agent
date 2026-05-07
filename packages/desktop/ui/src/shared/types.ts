@@ -755,22 +755,10 @@ export interface DeferredResumeSummary {
   };
 }
 
-export type ConversationAutoModeMode = 'normal' | 'tenacious' | 'forced';
-
-export interface ConversationAutoModeBudget {
-  maxTurns?: number;
-  until?: string;
-}
-
 export interface ConversationAutoModeState {
   enabled: boolean;
   stopReason: string | null;
   updatedAt: string | null;
-  mission: string | null;
-  mode: ConversationAutoModeMode;
-  budget: ConversationAutoModeBudget | null;
-  stopCategory: 'complete' | 'blocked' | 'needs_user' | 'budget_exhausted' | null;
-  stopConfidence: number | null;
 }
 
 export interface ConversationCwdChangeResult {

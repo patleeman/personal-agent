@@ -26,54 +26,14 @@ Auto mode is for work that may span:
 
 Autonomy is only useful if the agent stays both **controlled** and **tenacious**.
 
-Auto mode should be driven by a visible, bounded **mission**, not by vague self-selection. The mission is the current goal auto mode is allowed to pursue inside the conversation. It can be explicit from the user or inferred from the active request, but it should be inspectable and editable instead of hidden agent vibes.
-
 That means:
 
 - keep scope narrow per step
-- define the active mission before continuing autonomously
 - keep one clear state file when work spans turns or wakeups
 - validate real behavior, not just code shape
 - keep at most one active deferred resume for the same task thread
 - push through fixable failures instead of stopping at the first bump
 - stop and report concrete blockers instead of thrashing
-
-## Mission model
-
-Auto mode has a current mission:
-
-```ts
-{
-  enabled: true,
-  mission: 'Rebase the two iOS reliability commits onto origin/master, validate tests, and report blockers.',
-  mode: 'normal' | 'tenacious' | 'forced',
-  budget?: {
-    maxTurns?: number,
-    until?: string,
-  },
-  stopWhen: ['goal_complete', 'needs_user_input', 'external_blocker', 'budget_exhausted'],
-}
-```
-
-The mission is narrower than the whole conversation. A conversation might be broadly about the iOS app, while the auto mission is specifically “continue the chat reliability pass through reconnect/resubscribe validation.”
-
-### Deriving the mission
-
-When auto mode is enabled, derive the mission from the strongest available source:
-
-1. explicit slash-command text, for example `/auto tenacious until tests pass: fix reconnect bugs`
-2. the current pending user request
-3. recent thread context and summaries
-
-If confidence is low, do not start silently. Ask for a mission or show an editable draft. Hidden inferred goals are a bad product smell.
-
-### Mode semantics
-
-- `normal`: continue when meaningful work remains and stop when the mission appears satisfied.
-- `tenacious`: continue unless there is a concrete terminal reason: complete, needs user input, external blocker, or validation failure that changes scope.
-- `forced`: continue until the mission is complete, a hard blocker appears, or the explicit budget is exhausted.
-
-Avoid unbounded forced loops. They are useful as a pressure relief valve when the model is being lazy, but they should always have a turn, time, or completion budget.
 
 ## Auto mode controller behavior
 
@@ -83,19 +43,6 @@ That hidden controller turn must call `conversation_auto_control` exactly once:
 
 - use `action="continue"` when meaningful work remains and the agent can still make progress
 - use `action="stop"` only when the requested task is complete, blocked on a real dependency, or needs user input
-
-The controller should judge against the active mission. “I made progress” is not a stop condition. In tenacious or forced mode, weak stops should be rejected unless the stop reason is tied to a terminal category.
-
-Preferred structured stop shape:
-
-```ts
-{
-  action: 'stop',
-  reason: 'Focused iOS regressions pass; full suite has unrelated existing failures.',
-  stopCategory: 'complete' | 'blocked' | 'needs_user' | 'budget_exhausted',
-  confidence: 0.9,
-}
-```
 
 The hidden review turn should not do the work itself and should not call other tools. Its job is only to decide whether the conversation should continue.
 
@@ -241,12 +188,10 @@ So for now:
 
 Stop and report if:
 
-- the active mission is demonstrably complete
 - the blocker is external and unchanged across retries
 - the required runtime or credentials are missing
 - validation fails in a way that changes the task shape materially
 - the task is no longer matching the user's actual quality bar
-- the explicit forced-mode budget is exhausted
 
 Examples:
 

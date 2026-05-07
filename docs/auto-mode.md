@@ -1,47 +1,6 @@
 # Auto Mode
 
-Auto mode lets a conversation keep moving without the user manually prompting every next step. It works best when it has a visible, bounded **mission**: the current goal auto mode is allowed to pursue inside the conversation.
-
-The mission is narrower than the whole thread. A conversation can be broadly about the iOS app while the current auto mission is specifically “rebase the iOS reliability commits onto `origin/master`, validate tests, and report blockers.”
-
-Auto mode adds a hidden review turn after each visible assistant turn. The review runs in the background and decides whether to continue, stop, or report a blocker.
-
-## Mission
-
-Auto mode should be configured around a mission contract:
-
-```ts
-{
-  enabled: true,
-  mission: 'Fix iOS chat reconnect/resubscribe reliability and validate focused tests.',
-  mode: 'normal' | 'tenacious' | 'forced',
-  budget?: {
-    maxTurns?: number,
-    until?: string,
-  },
-  stopWhen: ['goal_complete', 'needs_user_input', 'external_blocker', 'budget_exhausted'],
-}
-```
-
-### Deriving the mission
-
-Auto mode can be enabled at any time, so the mission comes from the strongest available signal:
-
-1. explicit slash-command text, for example `/auto tenacious until tests pass: fix reconnect bugs`
-2. the current pending user request
-3. recent conversation context and summaries
-
-If confidence is low, auto mode should not start silently. Show an editable draft mission or ask the user for one. Hidden inferred goals make the UI feel spooky and brittle.
-
-### Modes
-
-| Mode        | Behavior                                                                                                                                |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `normal`    | Current default. Continue when meaningful work remains; stop when the mission appears satisfied or blocked                              |
-| `tenacious` | Continue unless there is a concrete terminal reason: complete, needs user input, external blocker, or scope-changing validation failure |
-| `forced`    | Continue until the mission is complete, a hard blocker appears, or an explicit turn/time budget is exhausted                            |
-
-Forced mode should always have a budget. Infinite loops are a footgun; scoped forced loops are the pressure relief valve for when the model is stopping too early.
+Auto mode adds a hidden review turn after each visible assistant turn. The review runs in the background and can perform follow-up work, self-correct, or continue the task — all without user interaction.
 
 ## How It Works
 
@@ -84,19 +43,6 @@ Each hidden review turn must call the `auto_mode_control` tool exactly once:
 | ---------- | ---------------------------------------------------------------------- |
 | `continue` | Meaningful work remains — keep auto mode running for the next turn     |
 | `stop`     | Task is complete, blocked, or needs user input. Include a short reason |
-
-The hidden review should judge against the active mission. “I made progress” is not enough to stop. In tenacious or forced mode, stop reasons should be concrete and terminal.
-
-Preferred stop shape:
-
-```json
-{
-  "action": "stop",
-  "reason": "Focused reconnect regressions pass; full suite only has unrelated existing failures.",
-  "stopCategory": "complete",
-  "confidence": 0.9
-}
-```
 
 ### Stop examples
 

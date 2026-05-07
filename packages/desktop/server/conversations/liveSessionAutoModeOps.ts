@@ -10,7 +10,6 @@ import {
   CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
   type ConversationAutoModeStateInput,
-  formatConversationAutoModePrompt,
   readConversationAutoModeStateFromSessionManager,
   writeConversationAutoModeState,
 } from './conversationAutoMode.js';
@@ -37,8 +36,7 @@ function hasQueuedPrompt(host: Pick<LiveSessionAutoModeHost, 'session'>): boolea
 }
 
 export async function requestLiveSessionAutoModeTurn(host: LiveSessionAutoModeHost): Promise<boolean> {
-  const state = readLiveSessionAutoModeHostState(host);
-  if (!state.enabled) {
+  if (!readLiveSessionAutoModeHostState(host).enabled) {
     return false;
   }
 
@@ -65,10 +63,7 @@ export async function requestLiveSessionAutoModeTurn(host: LiveSessionAutoModeHo
     await host.session.sendCustomMessage(
       {
         customType: CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
-        content: formatConversationAutoModePrompt(CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT, state).replaceAll(
-          '{autoContextPath}',
-          autoContextPath,
-        ),
+        content: CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT.replaceAll('{autoContextPath}', autoContextPath),
         display: false,
         details: { source: 'conversation-auto-mode' },
       },
@@ -92,8 +87,7 @@ export function markLiveSessionAutoModeContinueRequested(host: LiveSessionAutoMo
 }
 
 export async function requestLiveSessionAutoModeContinuationTurn(host: LiveSessionAutoModeHost): Promise<boolean> {
-  const state = readLiveSessionAutoModeHostState(host);
-  if (!state.enabled || host.session.isStreaming) {
+  if (!readLiveSessionAutoModeHostState(host).enabled || host.session.isStreaming) {
     return false;
   }
 
@@ -106,10 +100,7 @@ export async function requestLiveSessionAutoModeContinuationTurn(host: LiveSessi
   await host.session.sendCustomMessage(
     {
       customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-      content: formatConversationAutoModePrompt(CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT, state).replaceAll(
-        '{autoContextPath}',
-        autoContextPath,
-      ),
+      content: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT.replaceAll('{autoContextPath}', autoContextPath),
       display: false,
       details: { source: 'conversation-auto-mode' },
     },

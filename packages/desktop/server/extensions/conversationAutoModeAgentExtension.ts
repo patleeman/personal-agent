@@ -22,7 +22,7 @@ const AutoModeControlToolNameSet = new Set<string>(AutoModeControlToolNames);
 const ConversationAutoControlParams = Type.Object({
   action: Type.Union([Type.Literal('continue'), Type.Literal('stop')], {
     description:
-      'Use "continue" when meaningful work remains against the active mission, or "stop" only when the mission is complete, blocked, needs user input, or budget is exhausted.',
+      'Use "continue" when meaningful work remains and auto mode should keep going, or "stop" only when the task is complete, blocked, or needs user input.',
   }),
   reason: Type.Optional(
     Type.String({
@@ -30,12 +30,6 @@ const ConversationAutoControlParams = Type.Object({
         'Required when stopping. Keep it short and human-readable, for example "done", "needs user input", or "blocked on tests".',
     }),
   ),
-  stopCategory: Type.Optional(
-    Type.Union([Type.Literal('complete'), Type.Literal('blocked'), Type.Literal('needs_user'), Type.Literal('budget_exhausted')], {
-      description: 'Structured terminal reason when stopping.',
-    }),
-  ),
-  confidence: Type.Optional(Type.Number({ description: 'Stop confidence from 0 to 1.' })),
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -137,9 +131,8 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       promptSnippet: 'Decide whether conversation auto mode should continue or stop.',
       promptGuidelines: [
         'Use this tool only during hidden auto-review turns for conversation auto mode.',
-        'The user enabled auto mode because they want uninterrupted progress, so prefer action="continue" when meaningful work remains against the active mission.',
-        'Use action="stop" only when the mission is complete, blocked on a real dependency, needs user input, or the explicit budget is exhausted.',
-        'In tenacious or forced mode, weak stops are wrong: continue unless you can name a terminal stop category.',
+        'The user enabled auto mode because they want uninterrupted progress, so prefer action="continue" when meaningful work remains.',
+        'Use action="stop" only when the task is complete for the user\'s request, blocked on a real dependency, or needs user input.',
         'If no explicit validation target was given, infer the expected level of doneness from the prompt and work so far.',
       ],
       parameters: ConversationAutoControlParams,
@@ -162,34 +155,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             };
           }
 
-          const remainingTurns = state.budget?.maxTurns;
-          if (state.mode === 'forced' && remainingTurns === 0) {
-            const nextState = await setLiveSessionAutoModeState(sessionId, {
-              enabled: false,
-              stopReason: 'budget exhausted',
-              stopCategory: 'budget_exhausted',
-              stopConfidence: 1,
-            });
-            return {
-              content: [{ type: 'text' as const, text: 'Stopped auto mode: budget exhausted.' }],
-              details: {
-                enabled: nextState.enabled,
-                action: 'stop',
-                stopReason: nextState.stopReason,
-                stopCategory: nextState.stopCategory,
-                stopConfidence: nextState.stopConfidence,
-                updatedAt: nextState.updatedAt,
-              },
-            };
-          }
-
-          if (state.mode === 'forced' && typeof remainingTurns === 'number') {
-            await setLiveSessionAutoModeState(sessionId, {
-              enabled: true,
-              budget: { ...state.budget, maxTurns: remainingTurns - 1 },
-            });
-          }
-
           markConversationAutoModeContinueRequested(sessionId);
           return {
             content: [{ type: 'text' as const, text: 'Auto mode will continue after this hidden review turn.' }],
@@ -201,8 +166,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           ? await setLiveSessionAutoModeState(sessionId, {
               enabled: false,
               stopReason: params.reason,
-              stopCategory: params.stopCategory,
-              stopConfidence: params.confidence,
             })
           : state;
 
@@ -217,8 +180,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             enabled: nextState.enabled,
             action: 'stop',
             stopReason: nextState.stopReason,
-            stopCategory: nextState.stopCategory,
-            stopConfidence: nextState.stopConfidence,
             updatedAt: nextState.updatedAt,
           },
         };
