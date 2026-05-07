@@ -7,8 +7,6 @@ export interface Task {
 export interface MissionState {
   goal: string;
   tasks: Task[];
-  maxTurns: number;
-  turnsUsed: number;
 }
 
 export interface LoopState {
@@ -74,7 +72,6 @@ export function buildModeContinuationPrompt(state: ConversationAutoModeState, au
       '',
       `Mission: ${state.mission.goal}`,
       `Progress: ${tasks.filter((t) => t.status === 'done').length}/${tasks.length} tasks done`,
-      `Turns used: ${state.mission.turnsUsed}/${state.mission.maxTurns}`,
       '',
       'Remaining tasks:',
       pendingTasks || '(no tasks yet — create the initial task list with run_state before doing mission work)',
@@ -138,6 +135,44 @@ export const CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT = [
 const VALID_RUN_MODES = new Set<string>(['manual', 'nudge', 'mission', 'loop']);
 const VALID_TASK_STATUSES = new Set<string>(['pending', 'in_progress', 'done', 'blocked']);
 
+export function buildModeContextMessage(state: ConversationAutoModeState): string {
+  if (state.mode === 'mission' && state.mission) {
+    const doneTasks = state.mission.tasks.filter((t) => t.status === 'done').length;
+    const totalTasks = state.mission.tasks.length;
+    return [
+      'System mode: Mission',
+      '',
+      `Goal: ${state.mission.goal}`,
+      `Progress: ${doneTasks}/${totalTasks} tasks done`,
+      '',
+      'Use the run_state tool to manage tasks and track progress.',
+    ].join('\n');
+  }
+
+  if (state.mode === 'loop' && state.loop) {
+    return [
+      'System mode: Loop',
+      '',
+      `Prompt: ${state.loop.prompt}`,
+      `Iteration: ${state.loop.iterationsUsed}/${state.loop.maxIterations}`,
+      `Delay: ${state.loop.delay}`,
+      '',
+      'Continue executing the loop prompt each iteration. The run_state tool is available to check state.',
+    ].join('\n');
+  }
+
+  if (state.mode === 'nudge') {
+    return [
+      'System mode: Nudge',
+      '',
+      'Auto mode is enabled. After each visible turn, the system will continue working without waiting for approval.',
+      'Use the conversation_auto_control tool to continue or stop during review turns.',
+    ].join('\n');
+  }
+
+  return ['System mode: Manual', '', 'Auto mode is disabled. The system will wait for your input.'].join('\n');
+}
+
 export function normalizeRunMode(value: unknown): RunMode {
   if (typeof value === 'string' && VALID_RUN_MODES.has(value)) {
     return value as RunMode;
@@ -177,8 +212,6 @@ export function normalizeMissionState(value: unknown): MissionState | undefined 
   return {
     goal: value.goal,
     tasks,
-    maxTurns: typeof value.maxTurns === 'number' ? Math.max(1, Math.min(1000, Math.floor(value.maxTurns))) : 20,
-    turnsUsed: typeof value.turnsUsed === 'number' ? Math.max(0, Math.floor(value.turnsUsed)) : 0,
   };
 }
 

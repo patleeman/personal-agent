@@ -766,8 +766,6 @@ export interface TaskState {
 export interface MissionState {
   goal: string;
   tasks: TaskState[];
-  maxTurns: number;
-  turnsUsed: number;
 }
 
 export interface LoopState {

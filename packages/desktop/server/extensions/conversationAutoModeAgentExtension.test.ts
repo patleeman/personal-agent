@@ -78,7 +78,7 @@ function createSessionManager(options: { enabled?: boolean; mode?: string; branc
   };
 }
 
-function createMissionSessionManager(options: { tasks?: unknown[]; branch?: unknown[]; turnsUsed?: number; maxTurns?: number } = {}) {
+function createMissionSessionManager(options: { tasks?: unknown[]; branch?: unknown[] } = {}) {
   return {
     getSessionId: () => 'conversation-1',
     getEntries: () => [
@@ -94,8 +94,6 @@ function createMissionSessionManager(options: { tasks?: unknown[]; branch?: unkn
               { id: 't1', description: 'Task 1', status: 'done' },
               { id: 't2', description: 'Task 2', status: 'pending' },
             ],
-            maxTurns: options.maxTurns ?? 20,
-            turnsUsed: options.turnsUsed ?? 1,
           },
           updatedAt: '2026-04-12T10:00:00.000Z',
         },

@@ -106,7 +106,7 @@ describe('desktop conversation state fallback', () => {
 
   it('preserves mission tasks when syncing mission draft changes', () => {
     const input = buildMissionAutoModeInputFromDraft(
-      { goal: 'Ship mission mode', maxTurns: 12 },
+      { goal: 'Ship mission mode' },
       {
         enabled: true,
         mode: 'mission',
@@ -114,8 +114,6 @@ describe('desktop conversation state fallback', () => {
         updatedAt: '2026-05-07T00:00:00.000Z',
         mission: {
           goal: 'Old goal',
-          maxTurns: 20,
-          turnsUsed: 3,
           tasks: [
             { id: 't1', description: 'Create task list', status: 'done' },
             { id: 't2', description: 'Persist task list', status: 'pending' },
@@ -125,8 +123,6 @@ describe('desktop conversation state fallback', () => {
     );
 
     expect(input.mission.goal).toBe('Ship mission mode');
-    expect(input.mission.maxTurns).toBe(12);
-    expect(input.mission.turnsUsed).toBe(3);
     expect(input.mission.tasks).toEqual([
       { id: 't1', description: 'Create task list', status: 'done' },
       { id: 't2', description: 'Persist task list', status: 'pending' },

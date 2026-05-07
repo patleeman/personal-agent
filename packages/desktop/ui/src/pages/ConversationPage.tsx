@@ -502,7 +502,7 @@ export function createDraftMissionTask(description: string): TaskState {
 }
 
 export function buildMissionAutoModeInputFromDraft(
-  draftMissionConfig: { goal: string; maxTurns: number },
+  draftMissionConfig: { goal: string },
   latestState: ConversationAutoModeState | null,
 ): { mode: 'mission'; mission: NonNullable<ConversationAutoModeState['mission']> } {
   return {
@@ -510,8 +510,6 @@ export function buildMissionAutoModeInputFromDraft(
     mission: {
       goal: draftMissionConfig.goal || latestState?.mission?.goal || 'Mission',
       tasks: latestState?.mission?.tasks ?? [],
-      maxTurns: draftMissionConfig.maxTurns,
-      turnsUsed: latestState?.mission?.turnsUsed ?? 0,
     },
   };
 }
@@ -1348,7 +1346,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
   const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
-  const [draftMissionConfig, setDraftMissionConfig] = useState<{ goal: string; maxTurns: number }>({ goal: '', maxTurns: 20 });
+  const [draftMissionConfig, setDraftMissionConfig] = useState<{ goal: string }>({ goal: '' });
   const [draftLoopConfig, setDraftLoopConfig] = useState<{ prompt: string; maxIterations: number; delay: string }>({
     prompt: '',
     maxIterations: 5,
@@ -4070,8 +4068,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           input.mission = {
             goal: goal || 'Mission',
             tasks: [],
-            maxTurns: draftMissionConfig.maxTurns,
-            turnsUsed: 0,
           };
         } else if (nextMode === 'loop') {
           input.loop = {
@@ -4133,8 +4129,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const currentMission = latestState.mission ?? {
         goal: draftMissionConfig.goal || 'Mission',
         tasks: [],
-        maxTurns: draftMissionConfig.maxTurns,
-        turnsUsed: 0,
       };
       const nextMission = {
         ...currentMission,
@@ -4159,7 +4153,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
       }
     },
-    [currentSurfaceId, draftMissionConfig.goal, draftMissionConfig.maxTurns, id, showNotice],
+    [currentSurfaceId, draftMissionConfig.goal, id, showNotice],
   );
 
   const rewindConversationFromMessage = useCallback(

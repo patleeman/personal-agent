@@ -143,8 +143,6 @@ describe('readConversationAutoModeStateFromEntries', () => {
                 { id: 't1', description: 'Inspect layout', status: 'done' },
                 { id: 't2', description: 'Fix overflow', status: 'pending' },
               ],
-              maxTurns: 20,
-              turnsUsed: 1,
             },
             updatedAt: '2026-04-12T10:00:00.000Z',
           },
@@ -161,8 +159,6 @@ describe('readConversationAutoModeStateFromEntries', () => {
           { id: 't1', description: 'Inspect layout', status: 'done' },
           { id: 't2', description: 'Fix overflow', status: 'pending' },
         ],
-        maxTurns: 20,
-        turnsUsed: 1,
       },
     });
   });
@@ -282,8 +278,6 @@ describe('writeConversationAutoModeState', () => {
         mission: {
           goal: 'Fix the page',
           tasks: [createTask('Inspect')],
-          maxTurns: 20,
-          turnsUsed: 0,
         },
       },
     );

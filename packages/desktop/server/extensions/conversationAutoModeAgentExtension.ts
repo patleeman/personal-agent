@@ -277,7 +277,6 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
                   text: [
                     `Mission: ${state.mission.goal}`,
                     `Tasks: ${state.mission.tasks.filter((t) => t.status === 'done').length}/${state.mission.tasks.length}`,
-                    `Turns used: ${state.mission.turnsUsed}/${state.mission.maxTurns}`,
                     '',
                     tasksText,
                   ].join('\n'),
@@ -429,19 +428,6 @@ function handleMissionTurnEnd(
   if (areAllTasksDone(mission.tasks)) {
     return;
   }
-
-  // Not all done — increment turns
-  const nextTurnsUsed = mission.turnsUsed + 1;
-  if (nextTurnsUsed >= mission.maxTurns) {
-    logWarn('mission mode hit max turns', { sessionId, turnsUsed: nextTurnsUsed, maxTurns: mission.maxTurns });
-    return;
-  }
-
-  // Update turnsUsed in state
-  writeConversationAutoModeState(ctx.sessionManager, {
-    ...state,
-    mission: { ...mission, turnsUsed: nextTurnsUsed },
-  });
 
   // Signal continuation via direct call (bypasses pendingAutoModeContinuation flag)
   if (sessionId) {

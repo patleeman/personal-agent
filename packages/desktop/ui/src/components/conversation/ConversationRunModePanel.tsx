@@ -5,7 +5,6 @@ import { cx } from '../ui';
 
 interface DraftMissionConfig {
   goal: string;
-  maxTurns: number;
 }
 
 interface DraftLoopConfig {
@@ -117,18 +116,9 @@ export function ConversationRunModePanel({
     const done = mission?.tasks.filter((task) => task.status === 'done').length ?? 0;
     const total = mission?.tasks.length ?? 0;
     const goal = draftMission?.goal ?? mission?.goal ?? '';
-    const maxTurns = mission?.maxTurns ?? draftMission?.maxTurns ?? 20;
-    const turnsUsed = mission?.turnsUsed ?? 0;
 
     const commitMissionGoal = (value: string) => {
-      onDraftMissionChange?.({ goal: value, maxTurns });
-    };
-    const commitMissionMaxTurns = (value: string) => {
-      const num = Math.max(1, parseInt(value, 10) || 20);
-      onDraftMissionChange?.({
-        goal: draftMission?.goal ?? mission?.goal ?? '',
-        maxTurns: num,
-      });
+      onDraftMissionChange?.({ goal: value });
     };
 
     return (
@@ -146,17 +136,6 @@ export function ConversationRunModePanel({
           <span className="shrink-0">
             Tasks {done}/{total}
           </span>
-          <span className="shrink-0">Turns</span>
-          <span className="shrink-0 text-primary">{turnsUsed}</span>
-          <span className="shrink-0">/</span>
-          <LazyInput
-            aria-label="Mission max turns"
-            value={String(maxTurns)}
-            onBlur={commitMissionMaxTurns}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            className={compactNumberClassName}
-          />
         </div>
         {running && mission ? (
           <>

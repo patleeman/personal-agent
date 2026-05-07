@@ -134,8 +134,6 @@ describe('ConversationComposerInputControls', () => {
             { id: 't1', description: 'Run tests', status: 'done' },
             { id: 't2', description: 'Patch bug', status: 'pending' },
           ],
-          maxTurns: 20,
-          turnsUsed: 2,
         }}
         onAddMissionTask={vi.fn()}
       />,
@@ -144,14 +142,12 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('Tasks');
     expect(html).toContain('Patch bug');
     expect(html).toContain('aria-label="Mission goal"');
-    expect(html).toContain('aria-label="Mission max turns"');
     expect(html).toContain('aria-label="Add mission task"');
     expect(html).not.toContain('aria-label="Mission goal" disabled');
-    expect(html).not.toContain('aria-label="Mission max turns" disabled');
     expect(html).not.toContain('Goal: what should be accomplished?');
   });
 
-  it('commits mission goal and turn edits on blur', () => {
+  it('commits mission goal edit on blur', () => {
     const onDraftMissionChange = vi.fn();
     const rendered = renderInteractive(
       <ConversationRunModePanel
@@ -160,8 +156,6 @@ describe('ConversationComposerInputControls', () => {
         mission={{
           goal: 'Fix the page',
           tasks: [{ id: 't1', description: 'Run tests', status: 'pending' }],
-          maxTurns: 20,
-          turnsUsed: 2,
         }}
         onDraftMissionChange={onDraftMissionChange}
       />,
@@ -169,21 +163,13 @@ describe('ConversationComposerInputControls', () => {
 
     try {
       const goal = rendered.container.querySelector<HTMLInputElement>('input[aria-label="Mission goal"]');
-      const maxTurns = rendered.container.querySelector<HTMLInputElement>('input[aria-label="Mission max turns"]');
       expect(goal).toBeTruthy();
-      expect(maxTurns).toBeTruthy();
 
       act(() => {
         setInputValue(goal!, 'Ship the thing');
         goal!.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
       });
-      expect(onDraftMissionChange).toHaveBeenLastCalledWith({ goal: 'Ship the thing', maxTurns: 20 });
-
-      act(() => {
-        setInputValue(maxTurns!, '12');
-        maxTurns!.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      });
-      expect(onDraftMissionChange).toHaveBeenLastCalledWith({ goal: 'Fix the page', maxTurns: 12 });
+      expect(onDraftMissionChange).toHaveBeenLastCalledWith({ goal: 'Ship the thing' });
     } finally {
       rendered.unmount();
     }
@@ -198,8 +184,6 @@ describe('ConversationComposerInputControls', () => {
         mission={{
           goal: 'Fix the page',
           tasks: [],
-          maxTurns: 20,
-          turnsUsed: 0,
         }}
         onAddMissionTask={onAddMissionTask}
       />,
