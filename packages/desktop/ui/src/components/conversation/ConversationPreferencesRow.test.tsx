@@ -28,10 +28,12 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof ConversationPr
       showAutoModeToggle
       autoModeEnabled={false}
       autoModeBusy={false}
+      autoModeState={null}
+      suggestedAutoModeMission="Finish the current task"
       onSelectModel={vi.fn()}
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
-      onToggleAutoMode={vi.fn()}
+      onConfigureAutoMode={vi.fn()}
       compact={false}
       {...overrides}
     />,
@@ -47,7 +49,7 @@ describe('ConversationPreferencesRow', () => {
     expect(html).toContain('Model A');
     expect(html).toContain('Conversation thinking level');
     expect(html).toContain('Disable fast mode');
-    expect(html).toContain('Turn on conversation auto mode');
+    expect(html).toContain('Configure conversation auto mode');
   });
 
   it('renders the compact settings affordance without opening the menu on server render', () => {
@@ -65,6 +67,6 @@ describe('ConversationPreferencesRow', () => {
     });
 
     expect(html).not.toContain('Enable fast mode');
-    expect(html).toContain('Turn on conversation auto mode');
+    expect(html).toContain('Configure conversation auto mode');
   });
 });
