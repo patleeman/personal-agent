@@ -20,7 +20,7 @@ npm run release:desktop:major
 Each release command performs these steps in order:
 
 1. **Version bump** — `npm version` bumps the version following semver
-2. **Pi update** — refreshes `@mariozechner/pi-coding-agent` to the latest published version
+2. **Pi update** — refreshes the direct Pi runtime packages to the latest published version
 3. **Dependency sync** — updates workspace package versions and regenerates `package-lock.json`
 4. **Build** — builds signed desktop artifacts locally
 5. **Notarize** — submits the built `.app` for Apple notarization

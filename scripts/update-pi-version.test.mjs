@@ -7,6 +7,7 @@ describe('update-pi-version', () => {
     const rootPackage = {
       name: 'personal-agent',
       dependencies: {
+        '@mariozechner/pi-ai': '^0.69.0',
         '@mariozechner/pi-coding-agent': '^0.69.0',
         jsdom: '^24.0.0',
       },
@@ -16,6 +17,7 @@ describe('update-pi-version', () => {
 
     expect(result.changed).toBe(true);
     expect(result.nextRange).toBe('^0.70.0');
+    expect(result.packageJson.dependencies['@mariozechner/pi-ai']).toBe('^0.70.0');
     expect(result.packageJson.dependencies['@mariozechner/pi-coding-agent']).toBe('^0.70.0');
     expect(result.packageJson.dependencies.jsdom).toBe('^24.0.0');
   });
@@ -24,6 +26,7 @@ describe('update-pi-version', () => {
     const rootPackage = {
       name: 'personal-agent',
       dependencies: {
+        '@mariozechner/pi-ai': '^0.70.0',
         '@mariozechner/pi-coding-agent': '^0.70.0',
       },
     };

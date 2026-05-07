@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
+const PI_PACKAGE_NAMES = ['@mariozechner/pi-coding-agent', '@mariozechner/pi-ai'];
 
 export function resolvePiDependencyRange(version) {
   if (typeof version !== 'string' || version.trim().length === 0) {
@@ -24,12 +24,15 @@ export function applyLatestPiVersion(rootPackage, latestVersion) {
     throw new Error('Root package.json is missing a dependencies object.');
   }
 
-  if (typeof rootPackage.dependencies[PI_PACKAGE_NAME] !== 'string') {
-    throw new Error(`Root package.json is missing dependency ${PI_PACKAGE_NAME}.`);
+  for (const packageName of PI_PACKAGE_NAMES) {
+    if (typeof rootPackage.dependencies[packageName] !== 'string') {
+      throw new Error(`Root package.json is missing dependency ${packageName}.`);
+    }
   }
 
   const nextRange = resolvePiDependencyRange(latestVersion);
-  if (rootPackage.dependencies[PI_PACKAGE_NAME] === nextRange) {
+  const changed = PI_PACKAGE_NAMES.some((packageName) => rootPackage.dependencies[packageName] !== nextRange);
+  if (!changed) {
     return {
       changed: false,
       packageJson: rootPackage,
@@ -43,7 +46,7 @@ export function applyLatestPiVersion(rootPackage, latestVersion) {
       ...rootPackage,
       dependencies: {
         ...rootPackage.dependencies,
-        [PI_PACKAGE_NAME]: nextRange,
+        ...Object.fromEntries(PI_PACKAGE_NAMES.map((packageName) => [packageName, nextRange])),
       },
     },
     nextRange,
@@ -51,11 +54,12 @@ export function applyLatestPiVersion(rootPackage, latestVersion) {
 }
 
 export function fetchLatestPiVersion() {
-  const stdout = execFileSync('npm', ['view', PI_PACKAGE_NAME, 'version', '--json'], { encoding: 'utf-8' }).trim();
+  const [primaryPackageName] = PI_PACKAGE_NAMES;
+  const stdout = execFileSync('npm', ['view', primaryPackageName, 'version', '--json'], { encoding: 'utf-8' }).trim();
 
   const parsed = JSON.parse(stdout);
   if (typeof parsed !== 'string' || parsed.trim().length === 0) {
-    throw new Error(`npm view returned an invalid version for ${PI_PACKAGE_NAME}.`);
+    throw new Error(`npm view returned an invalid version for ${primaryPackageName}.`);
   }
 
   return parsed.trim();
