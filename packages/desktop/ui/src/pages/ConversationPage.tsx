@@ -1661,8 +1661,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
+  const lastUserMessageText = useMemo(() => {
+    if (!realMessages || realMessages.length === 0) {
+      return '';
+    }
+    for (let i = realMessages.length - 1; i >= 0; i -= 1) {
+      const msg = realMessages[i];
+      if (msg.type === 'user' && msg.text) {
+        return msg.text;
+      }
+    }
+    return '';
+  }, [realMessages]);
+
   const suggestedAutoModeMission =
-    input.trim() || effectiveConversationAutoModeState?.mission || 'Continue the current task until it is complete, validated, or blocked.';
+    input.trim() ||
+    lastUserMessageText ||
+    effectiveConversationAutoModeState?.mission ||
+    'Continue the current task until it is complete, validated, or blocked.';
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(
