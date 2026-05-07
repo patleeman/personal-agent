@@ -3139,19 +3139,27 @@ export function SettingsPage() {
     setOauthInputValue('');
     setOauthAction('start');
 
-    try {
-      const login = await api.startProviderOAuthLogin(modalProviderAuth.id);
-      setOauthLoginState(login);
+    // Defer the async IPC work outside React's batch context so the 'start' state
+    // update flushes and the button visibly changes before the call. React 18 with
+    // createRoot keeps the batch open across the entire async handler, merging
+    // 'start' and the finally-block 'null' into a single render without this.
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const login = await api.startProviderOAuthLogin(modalProviderAuth.id);
+          setOauthLoginState(login);
 
-      if (login.status === 'completed') {
-        setProviderCredentialNotice(`Logged in to ${login.providerName}.`);
-        await Promise.all([refetchProviderAuth({ resetLoading: false }), refetchModels({ resetLoading: false })]);
-      }
-    } catch (error) {
-      setOauthError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setOauthAction(null);
-    }
+          if (login.status === 'completed') {
+            setProviderCredentialNotice(`Logged in to ${login.providerName}.`);
+            await Promise.all([refetchProviderAuth({ resetLoading: false }), refetchModels({ resetLoading: false })]);
+          }
+        } catch (error) {
+          setOauthError(error instanceof Error ? error.message : String(error));
+        } finally {
+          setOauthAction(null);
+        }
+      })();
+    }, 0);
   }
 
   async function handleSubmitProviderOAuthInput() {
