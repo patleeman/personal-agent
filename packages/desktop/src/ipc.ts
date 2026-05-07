@@ -195,6 +195,29 @@ export function registerDesktopIpc(options: {
     };
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:open-external-url`, async (_event, targetUrl: unknown) => {
+    const normalizedUrl = typeof targetUrl === 'string' ? targetUrl.trim() : '';
+    if (!normalizedUrl) {
+      return { url: '', opened: false, error: 'URL is required.' };
+    }
+
+    try {
+      const parsed = new URL(normalizedUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { url: normalizedUrl, opened: false, error: 'Only http and https URLs can be opened.' };
+      }
+    } catch {
+      return { url: normalizedUrl, opened: false, error: 'Invalid URL.' };
+    }
+
+    try {
+      await shell.openExternal(normalizedUrl);
+      return { url: normalizedUrl, opened: true };
+    } catch (error) {
+      return { url: normalizedUrl, opened: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-desktop-app-preferences`, async () => {
     if (!options.readDesktopAppPreferences) {
       throw new Error('Desktop app preferences are unavailable.');

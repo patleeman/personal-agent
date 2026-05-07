@@ -194,6 +194,7 @@ export interface PersonalAgentDesktopBridge {
     canCopy?: boolean;
   }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
+  openExternalUrl(targetUrl: string): Promise<{ url: string; opened: boolean; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
   updateDesktopAppPreferences(input: {
     autoInstallUpdates?: boolean;

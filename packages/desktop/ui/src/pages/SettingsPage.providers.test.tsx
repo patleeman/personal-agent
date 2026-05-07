@@ -124,10 +124,12 @@ function updateSelectValue(select: HTMLSelectElement, value: string) {
 describe('SettingsPage provider model editor', () => {
   let saveModelProviderModelMock: ReturnType<typeof vi.spyOn>;
   let updateModelPreferencesMock: ReturnType<typeof vi.spyOn>;
+  let startProviderOAuthLoginMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     saveModelProviderModelMock = vi.spyOn(api, 'saveModelProviderModel');
     updateModelPreferencesMock = vi.spyOn(api, 'updateModelPreferences');
+    startProviderOAuthLoginMock = vi.spyOn(api, 'startProviderOAuthLogin');
     vi.clearAllMocks();
 
     vi.mocked(useTheme).mockReturnValue({
@@ -394,6 +396,9 @@ describe('SettingsPage provider model editor', () => {
 
   afterEach(() => {
     saveModelProviderModelMock.mockRestore();
+    updateModelPreferencesMock.mockRestore();
+    startProviderOAuthLoginMock.mockRestore();
+    delete (window as { personalAgentDesktop?: unknown }).personalAgentDesktop;
     for (const root of mountedRoots.splice(0)) {
       act(() => {
         root.unmount();
@@ -433,6 +438,83 @@ describe('SettingsPage provider model editor', () => {
         modelId: 'claude-sonnet-4-7',
       }),
     );
+  });
+
+  it('opens OAuth login URLs through the desktop shell bridge', async () => {
+    const openExternalUrl = vi.fn().mockResolvedValue({ url: 'https://auth.openai.com/oauth', opened: true });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({ isElectron: false, activeHostKind: 'local' }),
+        readDesktopAppPreferences: vi.fn().mockResolvedValue({
+          available: true,
+          supportsStartOnSystemStart: true,
+          autoInstallUpdates: false,
+          startOnSystemStart: false,
+          keyboardShortcuts: {
+            showApp: 'CommandOrControl+Shift+A',
+            newConversation: 'CommandOrControl+N',
+            closeTab: 'CommandOrControl+W',
+            reopenClosedTab: 'Command+Shift+N',
+            previousConversation: 'CommandOrControl+[',
+            nextConversation: 'CommandOrControl+]',
+            togglePinned: 'CommandOrControl+Alt+P',
+            archiveRestoreConversation: 'CommandOrControl+Alt+A',
+            renameConversation: 'CommandOrControl+Alt+R',
+            focusComposer: 'CommandOrControl+L',
+            editWorkingDirectory: 'CommandOrControl+Shift+L',
+            findOnPage: 'CommandOrControl+F',
+            settings: 'CommandOrControl+,',
+            quit: 'CommandOrControl+Q',
+            conversationMode: 'F1',
+            workbenchMode: 'F2',
+            zenMode: 'F3',
+            toggleSidebar: 'CommandOrControl+/',
+            toggleRightRail: 'CommandOrControl+\\',
+          },
+          update: { supported: false, status: 'idle', currentVersion: '0.0.0' },
+        }),
+        updateDesktopAppPreferences: vi.fn(),
+        startProviderOAuthLogin: vi.fn(),
+        subscribeProviderOAuthLogin: vi.fn().mockResolvedValue({ subscriptionId: 'oauth-sub-1' }),
+        unsubscribeProviderOAuthLogin: vi.fn().mockResolvedValue(undefined),
+        openExternalUrl,
+      },
+    });
+    startProviderOAuthLoginMock.mockResolvedValue({
+      id: 'login-1',
+      provider: 'openai-codex',
+      providerName: 'OpenAI',
+      status: 'running',
+      authUrl: 'https://auth.openai.com/oauth',
+      authInstructions: 'A browser window should open.',
+      prompt: null,
+      progress: [],
+      error: '',
+      createdAt: '2026-05-07T00:00:00.000Z',
+      updatedAt: '2026-05-07T00:00:00.000Z',
+    });
+
+    const { container } = renderPage();
+    await flushAsyncWork();
+
+    const providerButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('openai-codex'));
+    if (!(providerButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected openai-codex provider button');
+    }
+    click(providerButton);
+    await flushAsyncWork();
+
+    const oauthButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Start OAuth login'),
+    );
+    if (!(oauthButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected OAuth login button');
+    }
+    click(oauthButton);
+    await flushAsyncWork();
+
+    expect(startProviderOAuthLoginMock).toHaveBeenCalledWith('openai-codex');
+    expect(openExternalUrl).toHaveBeenCalledWith('https://auth.openai.com/oauth');
   });
 
   it('opens known providers from the preconfigured provider picker', async () => {

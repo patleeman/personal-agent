@@ -2373,12 +2373,21 @@ export function SettingsPage() {
     };
   }, [desktopEnvironment?.activeHostKind, oauthLoginState?.id, oauthLoginState?.status]);
 
-  // Open auth URL in system browser when it becomes available during OAuth login
+  // Open auth URL in system browser when it becomes available during OAuth login.
+  // Electron's shell.openExternal is not subject to popup-blocker timing, unlike window.open from this async effect.
   useEffect(() => {
-    if (oauthLoginState?.status === 'running' && oauthLoginState.authUrl && oauthLoginState.authUrl.length > 0) {
-      window.open(oauthLoginState.authUrl, '_blank');
+    if (oauthLoginState?.status !== 'running' || !oauthLoginState.authUrl) {
+      return;
     }
-  }, [oauthLoginState?.authUrl, oauthLoginState?.status]);
+
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && desktopEnvironment?.activeHostKind === 'local') {
+      void desktopBridge.openExternalUrl(oauthLoginState.authUrl);
+      return;
+    }
+
+    window.open(oauthLoginState.authUrl, '_blank');
+  }, [desktopEnvironment?.activeHostKind, oauthLoginState?.authUrl, oauthLoginState?.status]);
 
   useEffect(() => {
     if (!oauthLoginState?.id) {
