@@ -77,6 +77,7 @@ describe('registerRunAppRoutes', () => {
       detailHandler: handlers['GET /api/runs/:id']!,
       eventsHandler: handlers['GET /api/runs/:id/events']!,
       logHandler: handlers['GET /api/runs/:id/log']!,
+      paComponentsHandler: handlers['GET /api/pa/components.css']!,
       cancelHandler: handlers['POST /api/runs/:id/cancel']!,
     };
   }
@@ -85,6 +86,15 @@ describe('registerRunAppRoutes', () => {
     return {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
+    };
+  }
+
+  function createAssetResponse() {
+    return {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+      setHeader: vi.fn(),
+      send: vi.fn(),
     };
   }
 
@@ -98,6 +108,16 @@ describe('registerRunAppRoutes', () => {
       end: vi.fn(),
     };
   }
+
+  it('serves PA component CSS for extension frames', () => {
+    const { paComponentsHandler } = createHarness();
+    const res = createAssetResponse();
+
+    paComponentsHandler({}, res);
+
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/css');
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('--color-base'));
+  });
 
   it('lists durable runs and logs list failures', async () => {
     const { listHandler } = createHarness();

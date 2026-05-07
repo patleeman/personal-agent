@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
 
+type ExtensionTheme = 'light' | 'dark';
+
 export interface ExtensionFrameLaunchContext {
   extensionId: string;
   surfaceId: string;
@@ -28,7 +30,7 @@ export function buildExtensionFileSrc(input: ExtensionFrameLaunchContext & { ent
   );
 }
 
-function buildLaunchContextScript(context: ExtensionFrameLaunchContext): string {
+function buildLaunchContextScript(context: ExtensionFrameLaunchContext, theme: ExtensionTheme): string {
   return `<script>window.__PA_LAUNCH_CONTEXT__=${JSON.stringify({
     extensionId: context.extensionId,
     surfaceId: context.surfaceId,
@@ -38,8 +40,38 @@ function buildLaunchContextScript(context: ExtensionFrameLaunchContext): string 
     hash: context.hash,
     conversationId: context.conversationId ?? null,
     cwd: context.cwd ?? null,
-    theme: 'system',
+    theme,
   }).replace(/</g, '\\u003c')};</script>`;
+}
+
+function applyThemeAttribute(html: string, theme: ExtensionTheme): string {
+  if (/<html[^>]*>/i.test(html)) {
+    return html.replace(/<html([^>]*)>/i, (_match, attributes: string) => {
+      const withoutTheme = attributes.replace(/\sdata-theme=(['"])[^'"]*\1/i, '');
+      return `<html${withoutTheme} data-theme="${theme}">`;
+    });
+  }
+  return html;
+}
+
+function readDocumentTheme(): ExtensionTheme {
+  if (typeof document === 'undefined') return 'light';
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+function useDocumentTheme(): ExtensionTheme {
+  const [theme, setTheme] = useState<ExtensionTheme>(() => readDocumentTheme());
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return undefined;
+
+    const observer = new MutationObserver(() => setTheme(readDocumentTheme()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    setTheme(readDocumentTheme());
+    return () => observer.disconnect();
+  }, []);
+
+  return theme;
 }
 
 function stripExternalPaAssets(html: string): string {
@@ -62,11 +94,12 @@ function injectLaunchContext(
   baseHref: string,
   paClientSource: string,
   paComponentsCss: string,
+  theme: ExtensionTheme,
 ): string {
-  const script = buildLaunchContextScript(context);
+  const script = buildLaunchContextScript(context, theme);
   const base = `<base href="${baseHref.replace(/"/g, '&quot;')}">`;
   const assets = `${inlineStyle(paComponentsCss)}${script}${inlineScript(paClientSource)}`;
-  const stripped = stripExternalPaAssets(html);
+  const stripped = applyThemeAttribute(stripExternalPaAssets(html), theme);
   if (/<head[^>]*>/i.test(stripped)) return stripped.replace(/<head([^>]*)>/i, `<head$1>${base}${assets}`);
   return `${base}${assets}${stripped}`;
 }
@@ -96,6 +129,7 @@ export function ExtensionFrame({
   cwd?: string | null;
   className?: string;
 }) {
+  const theme = useDocumentTheme();
   const launchContext = useMemo(
     () => ({ extensionId, surfaceId, route, pathname, search, hash, conversationId, cwd }),
     [conversationId, cwd, extensionId, hash, pathname, route, search, surfaceId],
@@ -123,7 +157,7 @@ export function ExtensionFrame({
     ])
       .then(([html, paClientSource, paComponentsCss]) => {
         const baseHref = src.slice(0, src.lastIndexOf('/') + 1);
-        if (!cancelled) setSrcDoc(injectLaunchContext(html, launchContext, baseHref, paClientSource, paComponentsCss));
+        if (!cancelled) setSrcDoc(injectLaunchContext(html, launchContext, baseHref, paClientSource, paComponentsCss, theme));
       })
       .catch((error: Error) => {
         if (!cancelled) {
@@ -134,7 +168,7 @@ export function ExtensionFrame({
     return () => {
       cancelled = true;
     };
-  }, [entry, launchContext, src]);
+  }, [entry, launchContext, src, theme]);
 
   return (
     <iframe

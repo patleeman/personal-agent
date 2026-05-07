@@ -4,8 +4,9 @@
  * Handles durable run listing, status, logs, cancel, import, and SSE events.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
 import type { Express, Response } from 'express';
@@ -24,18 +25,36 @@ import type { ServerRouteContext } from './context.js';
 
 // Lazy-load PA component CSS
 let paComponentsCss: string | null = null;
-const __dirname = new URL('.', import.meta.url).pathname;
-const EXTENSIONS_DIR = join(__dirname, '..', 'extensions');
+const currentDir = dirname(fileURLToPath(import.meta.url));
+
+function candidatePaComponentsCssPaths(): string[] {
+  return [
+    process.env.PERSONAL_AGENT_REPO_ROOT
+      ? resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/extensions/pa-components.css')
+      : null,
+    typeof process.resourcesPath === 'string' ? resolve(process.resourcesPath, 'extensions/pa-components.css') : null,
+    resolve(process.cwd(), 'server/extensions/pa-components.css'),
+    resolve(process.cwd(), 'extensions/pa-components.css'),
+    resolve(currentDir, '../extensions/pa-components.css'),
+    resolve(currentDir, '../../../server/extensions/pa-components.css'),
+    resolve(currentDir, '../../../../packages/desktop/server/extensions/pa-components.css'),
+  ].filter((value): value is string => Boolean(value));
+}
 
 function getPaComponentsCss(): string {
-  if (paComponentsCss === null) {
-    try {
-      paComponentsCss = readFileSync(join(EXTENSIONS_DIR, 'pa-components.css'), 'utf-8');
-    } catch {
-      paComponentsCss = '/* PA components not available */';
-    }
+  if (paComponentsCss !== null) {
+    return paComponentsCss;
   }
 
+  for (const cssPath of candidatePaComponentsCssPaths()) {
+    if (!existsSync(cssPath)) {
+      continue;
+    }
+    paComponentsCss = readFileSync(cssPath, 'utf-8');
+    return paComponentsCss;
+  }
+
+  paComponentsCss = '/* PA components not available */';
   return paComponentsCss;
 }
 

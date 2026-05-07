@@ -6,20 +6,11 @@
     <title><!-- Rail title --></title>
     <style>
       :root {
-        color-scheme: light dark;
-        --pa-bg: #eef1f7;
-        --pa-text: #171b2a;
-        --pa-muted: #68708a;
-        --pa-line: #c8cfdd;
-        --pa-accent: #5f75ff;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --pa-bg: #181b28;
-          --pa-text: #e9edf8;
-          --pa-muted: #9ca5c3;
-          --pa-line: #30384d;
-        }
+        --pa-bg: rgb(var(--color-base, 238 240 244));
+        --pa-text: rgb(var(--color-primary, 22 26 40));
+        --pa-muted: rgb(var(--color-secondary, 55 63 90));
+        --pa-line: rgb(var(--color-border-subtle, 192 197 210));
+        --pa-accent: rgb(var(--color-accent, 120 71 189));
       }
       * {
         box-sizing: border-box;
@@ -29,7 +20,9 @@
         background: var(--pa-bg);
         color: var(--pa-text);
         font:
-          12px/1.5 ui-sans-serif,
+          12px/1.5 'DM Sans Variable',
+          'DM Sans',
+          ui-sans-serif,
           system-ui,
           -apple-system,
           BlinkMacSystemFont,

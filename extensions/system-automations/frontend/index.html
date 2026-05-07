@@ -6,24 +6,14 @@
     <title>Automations</title>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #eef1f7;
-        --text: #171b2a;
-        --muted: #68708a;
-        --line: #c8cfdd;
-        --surface: rgba(255, 255, 255, 0.38);
-        --accent: #5f75ff;
-        --danger: #b42318;
-        --success: #1f7a4d;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #181b28;
-          --text: #e9edf8;
-          --muted: #9ca5c3;
-          --line: #30384d;
-          --surface: rgba(255, 255, 255, 0.04);
-        }
+        --bg: rgb(var(--color-base, 238 240 244));
+        --text: rgb(var(--color-primary, 22 26 40));
+        --muted: rgb(var(--color-secondary, 55 63 90));
+        --line: rgb(var(--color-border-subtle, 192 197 210));
+        --surface: rgb(var(--color-surface, 228 231 236) / 0.58);
+        --accent: rgb(var(--color-accent, 120 71 189));
+        --danger: rgb(var(--color-danger, 183 54 80));
+        --success: rgb(var(--color-success, 73 105 44));
       }
       * {
         box-sizing: border-box;
@@ -33,7 +23,8 @@
         background: var(--bg);
         color: var(--text);
         font:
-          13px/1.5 Inter,
+          13px/1.5 'DM Sans Variable',
+          'DM Sans',
           ui-sans-serif,
           system-ui,
           -apple-system,
@@ -42,9 +33,9 @@
           sans-serif;
       }
       .shell {
-        max-width: 980px;
+        max-width: 72rem;
         margin: 0 auto;
-        padding: 32px 34px 56px;
+        padding: 4rem 2rem 5rem;
       }
       .hero,
       .editor-head,
@@ -95,7 +86,7 @@
       }
       .button {
         border: 1px solid var(--line);
-        border-radius: 9px;
+        border-radius: 8px;
         padding: 7px 11px;
         background: transparent;
         color: var(--text);

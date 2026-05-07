@@ -461,7 +461,7 @@ Default styling rules for generated extensions:
 
 - Start from `docs/extension-templates/page.html` for page surfaces and `docs/extension-templates/rail.html` for right-rail surfaces.
 - Prefer a single-column app shell with a clear header, one-sentence summary, high-signal actions, and bordered row separators. Avoid dashboard chrome unless the extension is genuinely a dashboard.
-- Use PA-ish tokens: `--pa-bg`, `--pa-text`, `--pa-muted`, `--pa-line`, `--pa-surface`, `--pa-accent`, `--pa-danger`, `--pa-success`. Support `prefers-color-scheme`.
+- Use the injected app theme tokens (`--color-base`, `--color-primary`, `--color-secondary`, `--color-border-subtle`, `--color-surface`, `--color-accent`, `--color-danger`, `--color-success`) or the PA component aliases (`--pa-bg`, `--pa-text`, `--pa-text-secondary`, `--pa-border-subtle`, `--pa-surface`, `--pa-accent`, `--pa-danger`, `--pa-success`). `ExtensionFrame` sets `data-theme` on iframe HTML so these tokens match the active desktop theme.
 - Keep CSS scoped to the iframe document. Do not style generic desktop selectors outside the iframe. The iframe isolates DOM/CSS from the PA shell, but sloppy global CSS still makes the extension itself a swamp.
 - Avoid nested bordered cards. Use spacing, typography, and separators for hierarchy. One bordered panel around an editor/form is fine; boxes inside boxes are visual debt with interest.
 - Inline critical CSS in `index.html` for bundled system extensions when reliability matters. External local CSS is fine for user/runtime extensions, but srcdoc frames and custom protocols can be fussy; when in doubt, inline the critical shell styles.
@@ -469,7 +469,7 @@ Default styling rules for generated extensions:
 - Use explicit closing tags for custom elements (`<pa-field></pa-field>`), not XML-style self-closing tags.
 - Right-rail surfaces are narrow. Keep rail content dense: title, short context, list/actions. No wide tables, huge forms, or main-page layouts crammed into a rail. Tiny rectangle, tiny ambitions.
 
-`/pa/components.css` is the shared component-library stylesheet. `ExtensionFrame` also fetches `/api/pa/components.css` and inlines it for srcdoc iframe surfaces. Generated extensions may use either raw HTML classes from the templates or the `<pa-*>` custom element library from `/pa/client.js`; prefer raw HTML/CSS for product-like pages and `<pa-*>` for fast form-driven utilities.
+`/pa/components.css` is the shared component-library stylesheet. `ExtensionFrame` also fetches `/api/pa/components.css` and inlines it for srcdoc iframe surfaces before the extension's own styles, so app theme tokens are available even in plain HTML/CSS entries. Generated extensions may use either raw HTML classes from the templates or the `<pa-*>` custom element library from `/pa/client.js`; prefer raw HTML/CSS for product-like pages and `<pa-*>` for fast form-driven utilities.
 
 Frontend entries receive a `window.PA` API plus launch context. Bundled system extensions and user extensions both use iframe HTML `entry` files by default; core React component shortcuts are not part of the v0 manifest contract.
 

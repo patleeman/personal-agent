@@ -1,23 +1,12 @@
 :root {
-  color-scheme: light dark;
-  --pa-bg: #eef1f7;
-  --pa-text: #171b2a;
-  --pa-muted: #68708a;
-  --pa-line: #c8cfdd;
-  --pa-surface: rgba(255, 255, 255, 0.38);
-  --pa-accent: #5f75ff;
-  --pa-danger: #b42318;
-  --pa-success: #1f7a4d;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --pa-bg: #181b28;
-    --pa-text: #e9edf8;
-    --pa-muted: #9ca5c3;
-    --pa-line: #30384d;
-    --pa-surface: rgba(255, 255, 255, 0.04);
-  }
+  --pa-bg: rgb(var(--color-base, 238 240 244));
+  --pa-text: rgb(var(--color-primary, 22 26 40));
+  --pa-muted: rgb(var(--color-secondary, 55 63 90));
+  --pa-line: rgb(var(--color-border-subtle, 192 197 210));
+  --pa-surface: rgb(var(--color-surface, 228 231 236) / 0.58);
+  --pa-accent: rgb(var(--color-accent, 120 71 189));
+  --pa-danger: rgb(var(--color-danger, 183 54 80));
+  --pa-success: rgb(var(--color-success, 73 105 44));
 }
 
 * {
@@ -29,7 +18,8 @@ body {
   background: var(--pa-bg);
   color: var(--pa-text);
   font:
-    13px/1.5 Inter,
+    13px/1.5 'DM Sans Variable',
+    'DM Sans',
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -39,9 +29,9 @@ body {
 }
 
 .pa-shell {
-  max-width: 980px;
+  max-width: 72rem;
   margin: 0 auto;
-  padding: 32px 34px 56px;
+  padding: 4rem 2rem 5rem;
 }
 
 .pa-hero,
