@@ -5,10 +5,17 @@ import type { ModelInfo, RunMode } from '../../shared/types';
 import { cx, IconButton } from '../ui';
 
 const MODE_LABELS: Record<RunMode, string> = {
-  manual: 'Manual',
+  manual: 'Chat',
   nudge: 'Nudge',
   mission: 'Mission',
   loop: 'Loop',
+};
+
+const MODE_COLORS: Record<RunMode, string> = {
+  manual: '',
+  nudge: 'text-warning',
+  mission: 'text-accent',
+  loop: 'text-teal',
 };
 
 const COMPOSER_PREFERENCE_SELECT_CLASS =
@@ -139,56 +146,91 @@ function ConversationModelSelect({
   );
 }
 
-function ConversationModeSelect({
+function ConversationModeControl({
   currentMode,
   onChange,
   disabled,
-  variant = 'inline',
 }: {
   currentMode: RunMode;
   onChange: (mode: RunMode) => void;
   disabled: boolean;
-  variant?: 'inline' | 'menu';
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
   const modes: RunMode[] = ['manual', 'nudge', 'mission', 'loop'];
-  const selectClassName =
-    variant === 'menu'
-      ? 'h-9 w-full min-w-0 appearance-none rounded-lg border border-border-subtle bg-surface/45 px-2.5 pr-7 text-[12px] font-medium text-primary outline-none transition-colors hover:bg-surface/65 focus-visible:border-accent/50 focus-visible:bg-surface/65 disabled:cursor-default disabled:opacity-40'
-      : cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[6rem] min-w-[4.5rem] appearance-none');
+  const colorClass = MODE_COLORS[currentMode];
+
+  // Close on outside click / Escape
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   return (
-    <label className={variant === 'menu' ? 'relative flex min-w-0 items-center' : 'relative inline-flex min-w-0 items-center'}>
-      <span className="sr-only">Run mode</span>
-      <select
-        value={currentMode}
-        onChange={(event) => {
-          onChange(event.target.value as RunMode);
-        }}
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
         disabled={disabled}
-        className={selectClassName}
         aria-label="Run mode"
+        aria-expanded={open}
+        className={cx(
+          'flex h-8 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium transition-colors',
+          'border-transparent hover:bg-surface/45 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25',
+          open && 'bg-surface/55',
+          colorClass || 'text-secondary',
+        )}
       >
-        {modes.map((mode) => (
-          <option key={mode} value={mode}>
-            {MODE_LABELS[mode]}
-          </option>
-        ))}
-      </select>
-      <svg
-        aria-hidden="true"
-        width="11"
-        height="11"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="pointer-events-none absolute right-2.5 text-dim/70"
-      >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </label>
+        <span>{MODE_LABELS[currentMode]}</span>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-dim/70"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="ui-context-menu-shell absolute bottom-full left-0 z-50 mb-1.5 w-[8rem] p-1.5">
+          <div className="flex flex-col gap-0.5">
+            {modes.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  onChange(m);
+                  setOpen(false);
+                }}
+                className={cx(
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] font-medium transition-colors',
+                  m === currentMode ? 'bg-accent/10 text-accent' : 'text-secondary hover:bg-surface/45 hover:text-primary',
+                  MODE_COLORS[m],
+                )}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -334,15 +376,16 @@ export function ConversationPreferencesRow({
         />
       )}
 
-      {!compact && showAutoModeToggle && (
-        <ConversationModeSelect
-          currentMode={mode}
-          disabled={autoModeBusy}
-          onChange={(nextMode) => {
-            onSelectMode(nextMode);
-          }}
+      {!compact && (
+        <ConversationThinkingLevelSelect
+          value={currentThinkingLevel}
+          disabled={savingPreference !== null}
+          model={selectedModel}
+          onChange={onSelectThinkingLevel}
         />
       )}
+
+      {!compact && showAutoModeToggle && <ConversationModeControl currentMode={mode} disabled={autoModeBusy} onChange={onSelectMode} />}
 
       <div ref={menuRef} className="relative">
         <IconButton
@@ -408,18 +451,41 @@ export function ConversationPreferencesRow({
                   }}
                 />
               )}
-              {showAutoModeToggle && (
+              {compact && showAutoModeToggle && (
                 <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Run mode</p>
-                  <ConversationModeSelect
-                    currentMode={mode}
-                    disabled={autoModeBusy}
-                    variant="menu"
-                    onChange={(nextMode) => {
-                      onSelectMode(nextMode);
-                      setMenuOpen(false);
-                    }}
-                  />
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Mode</p>
+                  <label className="relative flex min-w-0 items-center">
+                    <span className="sr-only">Mode</span>
+                    <select
+                      value={mode}
+                      onChange={(event) => {
+                        onSelectMode(event.target.value as RunMode);
+                        setMenuOpen(false);
+                      }}
+                      disabled={autoModeBusy}
+                      className="h-9 w-full min-w-0 appearance-none rounded-lg border border-border-subtle bg-surface/45 px-2.5 pr-7 text-[12px] font-medium text-primary outline-none transition-colors hover:bg-surface/65 focus-visible:border-accent/50 focus-visible:bg-surface/65 disabled:cursor-default disabled:opacity-40"
+                      aria-label="Mode"
+                    >
+                      <option value="manual">Chat</option>
+                      <option value="nudge">Nudge</option>
+                      <option value="mission">Mission</option>
+                      <option value="loop">Loop</option>
+                    </select>
+                    <svg
+                      aria-hidden="true"
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="pointer-events-none absolute right-2.5 text-dim/70"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </label>
                 </div>
               )}
             </div>
