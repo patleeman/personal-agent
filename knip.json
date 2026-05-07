@@ -1,22 +1,56 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
+  "exclude": ["exports", "types", "nsExports", "nsTypes", "enumMembers", "namespaceMembers", "unlisted"],
+  "treatConfigHintsAsErrors": false,
+  "ignoreBinaries": ["tail"],
+  "ignoreFiles": [
+    "packages/desktop/src/config.ts",
+    "packages/desktop/src/hosts/api-stream.ts",
+    "packages/desktop/src/preload.cts",
+    "packages/desktop/src/preload.ts",
+    "packages/desktop/ui/src/app/globals.d.ts",
+    "packages/desktop/ui/src/app/vite-env.d.ts",
+    "packages/desktop/ui/src/hooks/useConversationAutoMode.ts"
+  ],
+  "ignoreDependencies": [
+    "@mozilla/readability",
+    "@sinclair/typebox",
+    "@types/better-sqlite3",
+    "@types/nunjucks",
+    "@types/turndown",
+    "autoprefixer",
+    "better-sqlite3",
+    "dprint",
+    "nunjucks",
+    "postcss",
+    "tailwindcss",
+    "turndown"
+  ],
+  "ignoreUnresolved": ["../relatedConversationSearch.js"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.mjs", "*.config.mjs", "vitest.setup.ts"],
+      "entry": ["scripts/*.mjs", "*.config.mjs"],
       "project": ["scripts/*.mjs", "*.config.mjs"]
     },
     "packages/core": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/daemon": {
-      "entry": ["src/index.ts", "src/index-cli.ts"],
+      "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/desktop": {
-      "entry": ["src/main.ts", "ui/src/app/main.tsx", "ui/vite.config.ts"],
+      "entry": [
+        "src/**/*.test.ts",
+        "ui/src/app/main.tsx",
+        "ui/src/**/*.test.ts",
+        "ui/src/**/*.test.tsx",
+        "ui/vite.config.ts",
+        "server/**/*.test.ts"
+      ],
       "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts"]
     }
   },
-  "ignore": ["packages/desktop/server/**/*.ts", "electron-builder.config.mjs"]
+  "ignore": ["packages/desktop/server/**/*.ts"]
 }
