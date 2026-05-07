@@ -7,6 +7,7 @@ import { getStateRoot } from '@personal-agent/core';
 import { build } from 'esbuild';
 
 import type { ServerRouteContext } from '../routes/context.js';
+import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { findExtensionEntry } from './extensionRegistry.js';
 
 export interface ExtensionBackendContext {
@@ -17,6 +18,7 @@ export interface ExtensionBackendContext {
     delete(key: string): Promise<{ ok: true; deleted: boolean }>;
     list<T = unknown>(prefix?: string): Promise<Array<{ key: string; value: T }>>;
   };
+  automations: ReturnType<typeof createExtensionAutomationsCapability>;
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
@@ -108,10 +110,11 @@ function createStorage(extensionId: string): ExtensionBackendContext['storage'] 
   };
 }
 
-function createBackendContext(extensionId: string): ExtensionBackendContext {
+function createBackendContext(extensionId: string, serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>): ExtensionBackendContext {
   return {
     extensionId,
     storage: createStorage(extensionId),
+    automations: createExtensionAutomationsCapability(serverContext),
     log: {
       info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
       warn: (message, fields) => console.warn(`[extension:${extensionId}] ${message}`, fields ?? {}),
@@ -161,7 +164,7 @@ export async function invokeExtensionAction(
   extensionId: string,
   actionId: string,
   input: unknown,
-  _serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+  serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
 ): Promise<ExtensionActionInvokeResult> {
   const entry = findExtensionEntry(extensionId);
   if (!entry) {
@@ -177,7 +180,7 @@ export async function invokeExtensionAction(
 
   const result = await (handler as (input: unknown, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
     input,
-    createBackendContext(extensionId),
+    createBackendContext(extensionId, serverContext),
   );
   return { ok: true, result };
 }
