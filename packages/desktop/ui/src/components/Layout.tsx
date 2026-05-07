@@ -312,7 +312,7 @@ function ResizeHandle({ onMouseDown, onDoubleClick }: { onMouseDown: (e: React.M
       onMouseLeave={() => setHovered(false)}
     >
       {/* Wider invisible hit area */}
-      <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+      <div className="absolute inset-y-0 -left-0.5 -right-0.5" />
       {/* Visual line — thickens on hover */}
       <div
         className="absolute inset-y-0 left-[2px] w-[1px] transition-all duration-100"
