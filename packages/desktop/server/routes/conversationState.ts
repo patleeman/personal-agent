@@ -4,6 +4,7 @@ import { type ExtensionFactory, SessionManager } from '@earendil-works/pi-coding
 import type { Express } from 'express';
 
 import {
+  buildModeContextMessage,
   normalizeLoopState,
   normalizeMissionState,
   normalizeRunMode,
@@ -25,6 +26,7 @@ import {
   destroySession,
   getAvailableModelObjects,
   isLive as isLocalLive,
+  queuePromptContext,
   readLiveSessionAutoModeState,
   registry as liveRegistry,
   renameSession,
@@ -276,6 +278,7 @@ export function registerConversationStateRoutes(
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
         const state = await setLiveSessionAutoModeState(req.params.id, input);
+        injectModeContext(req.params.id, state);
         res.json(state);
         return;
       }
@@ -289,6 +292,7 @@ export function registerConversationStateRoutes(
         });
         ensureRequestControlsLocalLiveConversation(recovered.conversationId, req.body);
         const state = await setLiveSessionAutoModeState(recovered.conversationId, input);
+        injectModeContext(recovered.conversationId, state);
         res.json(state);
         return;
       }
@@ -542,5 +546,15 @@ export function registerConversationStateRoutes(
       });
       res.status(500).json({ error: String(err) });
     }
+  });
+}
+
+function injectModeContext(sessionId: string, state: import('../conversations/conversationAutoMode.js').ConversationAutoModeState): void {
+  const message = buildModeContextMessage(state);
+  if (!message) {
+    return;
+  }
+  queuePromptContext(sessionId, 'system-mode-context', message).catch(() => {
+    // Best-effort — mode state is already persisted
   });
 }
