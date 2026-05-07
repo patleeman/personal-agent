@@ -12,7 +12,7 @@ vi.mock('@personal-agent/core', () => ({
   getPiAgentRuntimeDir: getPiAgentRuntimeDirMock,
 }));
 
-vi.mock('@mariozechner/pi-coding-agent', () => ({
+vi.mock('@earendil-works/pi-coding-agent', () => ({
   AuthStorage: {
     create: authStorageCreateMock,
   },

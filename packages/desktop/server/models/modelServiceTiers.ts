@@ -1,4 +1,4 @@
-import type { Api, Model } from '@mariozechner/pi-ai';
+import type { Api, Model } from '@earendil-works/pi-ai';
 
 const SERVICE_TIER_VALUES = ['auto', 'default', 'flex', 'priority', 'scale'] as const;
 export type ServiceTierValue = (typeof SERVICE_TIER_VALUES)[number];

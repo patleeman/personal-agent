@@ -1,4 +1,4 @@
-import { DefaultResourceLoader, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import { DefaultResourceLoader, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { logWarn } from '../shared/logging.js';

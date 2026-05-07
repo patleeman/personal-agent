@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '@earendil-works/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
 
 // Read Exa API key: env var first, then auth.json (via context).

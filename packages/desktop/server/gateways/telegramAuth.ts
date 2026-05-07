@@ -1,4 +1,4 @@
-import { AuthStorage } from '@mariozechner/pi-coding-agent';
+import { AuthStorage } from '@earendil-works/pi-coding-agent';
 
 const TELEGRAM_AUTH_PROVIDER = 'telegram';
 

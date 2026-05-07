@@ -158,7 +158,7 @@ vi.mock('../conversations/liveSessions.js', () => ({
   requestConversationWorkingDirectoryChange: requestConversationWorkingDirectoryChangeMock,
 }));
 
-vi.mock('@mariozechner/pi-coding-agent', () => ({
+vi.mock('@earendil-works/pi-coding-agent', () => ({
   AuthStorage: authStorageMock,
 }));
 

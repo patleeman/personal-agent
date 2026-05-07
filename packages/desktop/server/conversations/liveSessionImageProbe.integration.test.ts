@@ -10,8 +10,8 @@ const { createAgentSessionMock, readSavedModelPreferencesMock } = vi.hoisted(() 
   readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
 }));
 
-vi.mock('@mariozechner/pi-coding-agent', async () => {
-  const actual = await vi.importActual<typeof import('@mariozechner/pi-coding-agent')>('@mariozechner/pi-coding-agent');
+vi.mock('@earendil-works/pi-coding-agent', async () => {
+  const actual = await vi.importActual<typeof import('@earendil-works/pi-coding-agent')>('@earendil-works/pi-coding-agent');
   return {
     ...actual,
     createAgentSession: createAgentSessionMock,

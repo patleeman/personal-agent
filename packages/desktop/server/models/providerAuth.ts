@@ -1,5 +1,5 @@
-import type { OAuthPrompt } from '@mariozechner/pi-ai';
-import { AuthStorage, type OAuthCredential } from '@mariozechner/pi-coding-agent';
+import type { OAuthPrompt } from '@earendil-works/pi-ai';
+import { AuthStorage, type OAuthCredential } from '@earendil-works/pi-coding-agent';
 
 import { createModelRegistryForAuthFile } from './modelRegistry.js';
 

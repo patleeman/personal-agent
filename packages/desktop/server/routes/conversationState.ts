@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 
-import { type ExtensionFactory, SessionManager } from '@mariozechner/pi-coding-agent';
+import { type ExtensionFactory, SessionManager } from '@earendil-works/pi-coding-agent';
 import type { Express } from 'express';
 
 import {

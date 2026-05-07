@@ -67,7 +67,7 @@ vi.mock('@personal-agent/core', async (importOriginal) => {
   };
 });
 
-vi.mock('@mariozechner/pi-coding-agent', () => ({
+vi.mock('@earendil-works/pi-coding-agent', () => ({
   AuthStorage: {
     create: authCreateMock,
   },

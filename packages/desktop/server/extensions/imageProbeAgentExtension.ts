@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 import { Type } from '@sinclair/typebox';
 

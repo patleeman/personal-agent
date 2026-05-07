@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync } from 'node:fs';
 
-import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
+import { type AgentSession, type SessionManager } from '@earendil-works/pi-coding-agent';
 
 interface PersistableSessionManager {
   persist?: boolean;

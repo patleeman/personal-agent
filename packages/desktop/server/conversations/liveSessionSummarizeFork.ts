@@ -1,4 +1,4 @@
-import { SessionManager } from '@mariozechner/pi-coding-agent';
+import { SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { logWarn } from '../shared/logging.js';
 import { resolveLastCompletedConversationEntryId } from './liveSessionForking.js';

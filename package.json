@@ -76,8 +76,8 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "^0.73.1",
-    "@mariozechner/pi-coding-agent": "^0.73.1",
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@earendil-works/pi-coding-agent": "^0.74.0",
     "@mozilla/readability": "^0.5.0",
     "@sinclair/typebox": "^0.34.48",
     "jsdom": "^24.0.0",

@@ -1,4 +1,4 @@
-import { type AgentSession, createAgentSession, SessionManager } from '@mariozechner/pi-coding-agent';
+import { type AgentSession, createAgentSession, SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { makeAuth, makeRegistry } from './liveSessionFactory.js';
 import { type LiveSessionLoaderOptions, makeLoader } from './liveSessionLoader.js';

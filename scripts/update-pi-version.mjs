@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const PI_PACKAGE_NAMES = ['@mariozechner/pi-coding-agent', '@mariozechner/pi-ai'];
+const PI_PACKAGE_NAMES = ['@earendil-works/pi-coding-agent', '@earendil-works/pi-ai'];
 
 export function resolvePiDependencyRange(version) {
   if (typeof version !== 'string' || version.trim().length === 0) {

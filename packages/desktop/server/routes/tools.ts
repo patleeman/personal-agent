@@ -1,4 +1,4 @@
-import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { readPackageSourceTargetState } from '@personal-agent/core';
 import { buildMergedMcpConfigDocument, inspectCliBinary, readBundledSkillMcpManifests, readMcpConfigDocument } from '@personal-agent/core';
 import type { Express, Response } from 'express';

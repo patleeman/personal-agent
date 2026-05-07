@@ -1,4 +1,4 @@
-import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import type { Express, Request, Response } from 'express';
 
 import { resolveConversationCwd } from '../conversations/conversationCwd.js';

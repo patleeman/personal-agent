@@ -33,9 +33,9 @@ export function resolveDesktopAboutVersionsForPaths(currentDir: string, cwd = pr
   const applicationVersion = readVersionFromPackageJson([resolve(packageDir, 'package.json')]) ?? 'Unknown';
   const piVersion =
     readVersionFromPackageJson([
-      resolve(packageDir, 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
-      resolve(packageDir, '..', '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
-      resolve(cwd, 'node_modules', '@mariozechner', 'pi-coding-agent', 'package.json'),
+      resolve(packageDir, 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'),
+      resolve(packageDir, '..', '..', 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'),
+      resolve(cwd, 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'),
     ]) ?? 'Unknown';
 
   return {

@@ -70,7 +70,7 @@ function setLoginImplementation(
   mockState.loginImplementationsByKey.set(`${authFile}:${provider}`, implementation);
 }
 
-vi.mock('@mariozechner/pi-coding-agent', () => {
+vi.mock('@earendil-works/pi-coding-agent', () => {
   class FakeAuthStorage {
     constructor(private readonly authFile: string) {}
 

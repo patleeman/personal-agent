@@ -23,7 +23,7 @@ const sharedEsbuildOptions = {
   external: [
     '@personal-agent/core',
     '@personal-agent/daemon',
-    '@mariozechner/pi-coding-agent',
+    '@earendil-works/pi-coding-agent',
     '@xenova/transformers',
     'better-sqlite3',
     'electron',

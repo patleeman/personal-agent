@@ -1,7 +1,7 @@
 import { arch, platform } from 'node:os';
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { compact, type ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { compact, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type JsonRecord = { [key: string]: unknown };

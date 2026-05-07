@@ -1,4 +1,4 @@
-import type { AgentSession } from '@mariozechner/pi-coding-agent';
+import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import type { SseEvent } from './liveSessionEvents.js';
 import { ensureHiddenTurnState, type LiveSessionHiddenTurnState, shouldExposeHiddenTurnInTranscript } from './liveSessionHiddenTurns.js';

@@ -1,8 +1,8 @@
 import { arch, platform } from 'node:os';
 
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Api, ImageContent, Model } from '@mariozechner/pi-ai';
-import { buildSessionContext, type ExtensionAPI, type SessionEntry } from '@mariozechner/pi-coding-agent';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Api, ImageContent, Model } from '@earendil-works/pi-ai';
+import { buildSessionContext, type ExtensionAPI, type SessionEntry } from '@earendil-works/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
 
 const IMAGE_QUALITY_VALUES = ['auto', 'low', 'medium', 'high'] as const;

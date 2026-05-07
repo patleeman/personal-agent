@@ -4,7 +4,7 @@ const { compactMock } = vi.hoisted(() => ({
   compactMock: vi.fn(),
 }));
 
-vi.mock('@mariozechner/pi-coding-agent', () => ({
+vi.mock('@earendil-works/pi-coding-agent', () => ({
   compact: compactMock,
 }));
 

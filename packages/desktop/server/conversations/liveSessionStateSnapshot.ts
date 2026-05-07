@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import type { AgentSession } from '@mariozechner/pi-coding-agent';
+import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import type { ConversationAutoModeState } from './conversationAutoMode.js';
 import type { LiveContextUsage } from './liveSessionEvents.js';

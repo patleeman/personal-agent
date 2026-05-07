@@ -1,6 +1,6 @@
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import { type Api, getSupportedThinkingLevels, type Model } from '@mariozechner/pi-ai';
-import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
+import { type Api, getSupportedThinkingLevels, type Model } from '@earendil-works/pi-ai';
+import { type AgentSession, type SessionManager } from '@earendil-works/pi-coding-agent';
 
 import {
   getSupportedServiceTiersForModel,

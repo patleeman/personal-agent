@@ -6,7 +6,7 @@ import {
   type ExtensionFactory,
   ModelRegistry,
   type SessionManager,
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import { resolveChildProcessEnv } from '@personal-agent/core';
 
 import { readSavedModelPreferences } from '../models/modelPreferences.js';

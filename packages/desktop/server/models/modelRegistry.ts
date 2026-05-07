@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 
-import { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { normalizeModelContextWindow } from './modelContextWindows.js';

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { readMachineUiConfig } from '@personal-agent/core';
 import { parsePendingOperation } from '@personal-agent/daemon';
 

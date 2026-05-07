@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 // No-op. System prompt modifications are handled exclusively through
 // file-based layers (SYSTEM.md, APPEND_SYSTEM.md, AGENTS.md from CWD).

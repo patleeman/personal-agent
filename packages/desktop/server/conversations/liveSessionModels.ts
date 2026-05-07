@@ -6,8 +6,8 @@ import {
   type SimpleStreamOptions,
   stream,
   streamSimple,
-} from '@mariozechner/pi-ai';
-import { type AgentSession, type ModelRegistry, type SessionManager } from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-ai';
+import { type AgentSession, type ModelRegistry, type SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { modelSupportsServiceTier } from '../models/modelServiceTiers.js';

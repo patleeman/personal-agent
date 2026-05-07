@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { type Api, completeSimple, type Model } from '@mariozechner/pi-ai';
-import { AuthStorage } from '@mariozechner/pi-coding-agent';
+import { type Api, completeSimple, type Model } from '@earendil-works/pi-ai';
+import { AuthStorage } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir, openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
 
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';

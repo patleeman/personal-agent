@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { AuthStorage, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 

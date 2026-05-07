@@ -1,4 +1,4 @@
-import { type AgentSession, SessionManager } from '@mariozechner/pi-coding-agent';
+import { type AgentSession, SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { createPreparedLiveAgentSession } from './liveSessionFactory.js';
 import { type LiveSessionLoaderOptions, queuePrewarmLiveSessionLoader } from './liveSessionLoader.js';

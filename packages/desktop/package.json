@@ -21,7 +21,7 @@
     "clean": "rm -rf dist ui/dist server/dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "*",
+    "@earendil-works/pi-coding-agent": "*",
     "@personal-agent/core": "*",
     "@personal-agent/daemon": "*",
     "electron-updater": "^6.8.3",

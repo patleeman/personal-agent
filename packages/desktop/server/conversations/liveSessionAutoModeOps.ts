@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import type { AgentSession } from '@mariozechner/pi-coding-agent';
+import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import {

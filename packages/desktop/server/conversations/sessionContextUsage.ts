@@ -9,7 +9,7 @@ import {
   migrateSessionEntries,
   parseSessionEntries,
   type SessionEntry,
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 
 export type ContextUsageSegmentKey = 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
 

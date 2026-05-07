@@ -1,4 +1,4 @@
-import { type AgentSession, type SessionEntry, type SessionManager } from '@mariozechner/pi-coding-agent';
+import { type AgentSession, type SessionEntry, type SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { getAssistantErrorDisplayMessage } from './sessions.js';
 

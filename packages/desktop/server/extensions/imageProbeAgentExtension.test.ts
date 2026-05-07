@@ -6,7 +6,7 @@ const { createAgentSessionMock, getImageProbeAttachmentsMock, getImageProbeAttac
   getImageProbeAttachmentsByIdMock: vi.fn(),
 }));
 
-vi.mock('@mariozechner/pi-coding-agent', () => ({
+vi.mock('@earendil-works/pi-coding-agent', () => ({
   AuthStorage: {
     create: vi.fn((path: string) => ({ path })),
   },

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import { type ThinkingLevel } from '@mariozechner/pi-ai';
+import { type ThinkingLevel } from '@earendil-works/pi-ai';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.4-mini';

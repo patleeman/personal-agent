@@ -1,11 +1,11 @@
 /**
  * Live Pi session registry.
- * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
+ * Wraps @earendil-works/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
 import { join } from 'node:path';
 
-import { AgentSession, estimateTokens } from '@mariozechner/pi-coding-agent';
+import { AgentSession, estimateTokens } from '@earendil-works/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';

@@ -2,8 +2,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Model } from '@mariozechner/pi-ai';
-import { SessionManager } from '@mariozechner/pi-coding-agent';
+import type { Model } from '@earendil-works/pi-ai';
+import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
 import {
