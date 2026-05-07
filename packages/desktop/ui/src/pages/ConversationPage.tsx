@@ -1645,6 +1645,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
+  const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
+  const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
+
+  // Input state
+  const [input, setInputState] = useReloadState<string>({
+    storageKey: composerDraftStorageKey,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
   const suggestedAutoModeMission =
     input.trim() || effectiveConversationAutoModeState?.mission || 'Continue the current task until it is complete, validated, or blocked.';
 
@@ -1752,15 +1761,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const ensureConversationCanControl = useCallback((_action: string): boolean => {
     return true;
   }, []);
-  const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
-  const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
-
-  // Input state
-  const [input, setInputState] = useReloadState<string>({
-    storageKey: composerDraftStorageKey,
-    initialValue: '',
-    shouldPersist: (value) => value.length > 0,
-  });
   const setInput = useCallback(
     (next: string) => {
       if (draft) {
