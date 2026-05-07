@@ -100,6 +100,24 @@ export interface ExtensionRouteSummary {
   packageType?: ExtensionPackageType;
 }
 
+export interface ExtensionCommandRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType?: ExtensionPackageType;
+  title: string;
+  action: string;
+  icon?: string;
+}
+
+export interface ExtensionSlashCommandRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType?: ExtensionPackageType;
+  name: string;
+  description: string;
+  action: string;
+}
+
 export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; packageType?: ExtensionPackageType };
 
 export function isExtensionLeftNavItemSurface(

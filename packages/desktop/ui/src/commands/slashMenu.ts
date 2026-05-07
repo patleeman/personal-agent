@@ -1,14 +1,25 @@
 import type { MemorySkillItem } from '../shared/types';
 
+export interface ExtensionSlashCommandItem {
+  extensionId: string;
+  surfaceId: string;
+  packageType?: string;
+  name: string;
+  description: string;
+  action: string;
+}
+
 export interface SlashMenuItem {
   key: string;
   insertText: string;
   displayCmd: string;
   icon: string;
   desc: string;
-  section: 'Commands' | 'Skills';
+  section: 'Commands' | 'Skills' | 'Extensions';
   source?: string;
-  kind: 'command' | 'skill';
+  kind: 'command' | 'skill' | 'extensionSlashCommand';
+  extensionId?: string;
+  action?: string;
 }
 
 const BASE_SLASH_COMMANDS = [
@@ -155,7 +166,11 @@ function scoreSkill(query: string, skill: MemorySkillItem, slashQuery: string, e
   return null;
 }
 
-export function buildSlashMenuItems(query: string, skills: MemorySkillItem[]): SlashMenuItem[] {
+export function buildSlashMenuItems(
+  query: string,
+  skills: MemorySkillItem[],
+  extensionCommands: ExtensionSlashCommandItem[] = [],
+): SlashMenuItem[] {
   const parsedInput = parseSlashInput(query);
   const commandQuery = parsedInput?.command ?? query;
   const normalized = normalizeSlashQuery(commandQuery);
@@ -199,5 +214,25 @@ export function buildSlashMenuItems(query: string, skills: MemorySkillItem[]): S
             kind: 'skill',
           }));
 
-  return [...commandItems, ...skillItems];
+  const extensionItems: SlashMenuItem[] = [...extensionCommands]
+    .map((command) => ({
+      command,
+      score: normalized.length === 0 ? 0 : fuzzyScore(normalized, command.name),
+    }))
+    .filter((entry) => normalized.length === 0 || entry.score !== null)
+    .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.command.name.localeCompare(right.command.name))
+    .map(({ command }) => ({
+      key: `extension:${command.extensionId}:${command.surfaceId}`,
+      insertText: `/${command.name} `,
+      displayCmd: `/${command.name}`,
+      icon: '◇',
+      desc: command.description,
+      section: 'Extensions',
+      source: command.extensionId,
+      kind: 'extensionSlashCommand',
+      extensionId: command.extensionId,
+      action: command.action,
+    }));
+
+  return [...commandItems, ...extensionItems, ...skillItems];
 }

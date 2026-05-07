@@ -1,5 +1,12 @@
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
-import type { ExtensionInstallSummary, ExtensionManifest, ExtensionRouteSummary, ExtensionSurfaceSummary } from '../extensions/types';
+import type {
+  ExtensionCommandRegistration,
+  ExtensionInstallSummary,
+  ExtensionManifest,
+  ExtensionRouteSummary,
+  ExtensionSlashCommandRegistration,
+  ExtensionSurfaceSummary,
+} from '../extensions/types';
 import type {
   AppStatus,
   AutoModeSummary,
@@ -304,6 +311,8 @@ export const api = {
   extensionInstallations: async () => get<ExtensionInstallSummary[]>('/extensions/installed'),
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
+  extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
+  extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),

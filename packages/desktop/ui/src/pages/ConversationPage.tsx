@@ -222,6 +222,7 @@ import {
   resolveSelectedConversationExecutionTargetId,
 } from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
+import type { ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -1634,6 +1635,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
+  const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .extensionSlashCommands()
+      .then((commands) => {
+        if (!cancelled) {
+          setExtensionSlashCommands(commands);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExtensionSlashCommands([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(
@@ -2345,7 +2367,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const slashQuery = slashInput?.command ?? '';
   const modelQuery = showModelPicker ? (slashInput?.argument ?? '') : '';
   const mentionQuery = mentionMatch?.[2] ?? '';
-  const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
+  const slashItems = useMemo(
+    () => buildSlashMenuItems(input, memoryData?.skills ?? [], extensionSlashCommands),
+    [extensionSlashCommands, input, memoryData],
+  );
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
   const mentionItems = useMemo(
     () =>

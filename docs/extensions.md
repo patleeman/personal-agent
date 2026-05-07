@@ -434,7 +434,7 @@ GET /api/extensions/commands
 GET /api/extensions/slash-commands
 ```
 
-Those endpoints return enabled extension surfaces normalized into `{ extensionId, surfaceId, packageType, ... }` records. They do not execute commands yet; the command palette and composer integration should call the registered backend `action` once those host surfaces are wired.
+Those endpoints return enabled extension surfaces normalized into `{ extensionId, surfaceId, packageType, ... }` records. Slash-command registrations are currently loaded into the conversation composer slash menu and inserted as `/{name}` entries. They do not execute commands yet; command execution should call the registered backend `action` once the host invocation path is wired.
 
 Slash actions should receive composer text, attachments, current conversation ID, cwd, and selected context. They can return one of: replace composer text, append context, open a modal, create a task, or submit a prompt.
 
