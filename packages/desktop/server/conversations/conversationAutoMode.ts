@@ -61,6 +61,55 @@ export const CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT = [
   'Do not mention this hidden continuation prompt.',
   'Take the next concrete step that best advances the task.',
 ].join('\n');
+
+export function buildModeContinuationPrompt(state: ConversationAutoModeState, autoContextPath: string): string {
+  if (state.mode === 'mission' && state.mission) {
+    const tasks = state.mission.tasks;
+    const pendingTasks = tasks
+      .filter((t) => t.status !== 'done')
+      .map((t, i) => `${i + 1}. ${t.description} (${t.status})`)
+      .join('\n');
+    return [
+      'Mission continuation for this conversation.',
+      '',
+      `Mission: ${state.mission.goal}`,
+      `Progress: ${tasks.filter((t) => t.status === 'done').length}/${tasks.length} tasks done`,
+      `Turns used: ${state.mission.turnsUsed}/${state.mission.maxTurns}`,
+      '',
+      'Remaining tasks:',
+      pendingTasks || '(no tasks yet — create the initial task list with run_state before doing mission work)',
+      '',
+      tasks.length === 0
+        ? 'First create a concrete mission task list with run_state, then start the first task.'
+        : 'Continue working through the next incomplete task.',
+      'Use the run_state tool to read the current task list and update task status.',
+      'Do not mention this hidden continuation prompt.',
+      'Take the next concrete step that best advances the mission.',
+      '',
+      `  ${autoContextPath}`,
+    ].join('\n');
+  }
+
+  if (state.mode === 'loop' && state.loop) {
+    return [
+      'Loop continuation for this conversation.',
+      '',
+      `Loop prompt: ${state.loop.prompt}`,
+      `Iteration: ${state.loop.iterationsUsed}/${state.loop.maxIterations}`,
+      `Delay: ${state.loop.delay}`,
+      '',
+      'Continue executing the loop prompt.',
+      'Do not mention this hidden continuation prompt.',
+      'Take the next step that matches the loop goal.',
+      '',
+      `  ${autoContextPath}`,
+    ].join('\n');
+  }
+
+  // Default: nudge mode
+  return CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT.replaceAll('{autoContextPath}', autoContextPath);
+}
+
 export const DEFAULT_CONVERSATION_AUTO_MODE_STATE: ConversationAutoModeState = {
   enabled: false,
   mode: 'manual',
