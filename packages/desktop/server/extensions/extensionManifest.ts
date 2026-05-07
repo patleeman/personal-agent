@@ -12,9 +12,6 @@ export type ExtensionSurfaceKind = (typeof EXTENSION_SURFACE_KINDS)[number];
 export const EXTENSION_RIGHT_SURFACE_SCOPES = ['global', 'conversation', 'workspace', 'selection'] as const;
 export type ExtensionRightSurfaceScope = (typeof EXTENSION_RIGHT_SURFACE_SCOPES)[number];
 
-export const EXTENSION_SYSTEM_COMPONENT_KEYS = ['automations'] as const;
-export type ExtensionSystemComponentKey = (typeof EXTENSION_SYSTEM_COMPONENT_KEYS)[number];
-
 export const EXTENSION_ICON_NAMES = [
   'app',
   'automation',
@@ -101,7 +98,6 @@ export interface ExtensionMainPageSurface extends ExtensionSurfaceBase {
   kind: 'page';
   route: string;
   entry?: string;
-  component?: ExtensionSystemComponentKey;
 }
 
 export interface ExtensionRightToolPanelSurface extends ExtensionSurfaceBase {

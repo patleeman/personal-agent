@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "system-automations",
+  "name": "Automations",
+  "packageType": "system",
+  "description": "Manage scheduled and conversation-bound automations.",
+  "version": "0.1.0",
+  "surfaces": [
+    {
+      "id": "page",
+      "placement": "main",
+      "kind": "page",
+      "route": "/automations",
+      "entry": "frontend/index.html"
+    }
+  ],
+  "permissions": ["runs:read", "runs:start", "conversations:readwrite", "ui:notify"]
+}

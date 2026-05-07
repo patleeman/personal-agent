@@ -4,7 +4,6 @@ export type ExtensionPackageType = 'user' | 'system';
 export type ExtensionPlacement = 'left' | 'main' | 'right' | 'conversation' | 'command' | 'slash';
 export type ExtensionSurfaceKind = 'navItem' | 'navSection' | 'page' | 'toolPanel' | 'inlineAction' | 'command' | 'slashCommand';
 export type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
-export type ExtensionSystemComponentKey = 'automations';
 export type ExtensionIconName =
   | 'app'
   | 'automation'
@@ -87,7 +86,6 @@ export interface ExtensionMainPageSurface extends ExtensionSurfaceBase {
   kind: 'page';
   route: string;
   entry?: string;
-  component?: ExtensionSystemComponentKey;
 }
 
 export interface ExtensionRightToolPanelSurface extends ExtensionSurfaceBase {

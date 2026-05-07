@@ -9,7 +9,7 @@ import { extname, join, resolve, sep } from 'node:path';
 
 import { getVaultRoot } from '@personal-agent/core';
 import { pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
-import type { Express } from 'express';
+import type { Express, Response } from 'express';
 
 import { PA_CLIENT_JS } from '../apps/pa-client.js';
 import {
@@ -111,8 +111,7 @@ export function registerRunAppRoutes(
 ): void {
   initializeRunsAppRoutesContext(context);
 
-  // Serve PA client JS for skill apps (used by artifact sandbox and app pages)
-  router.get('/pa/client.js', (_req, res) => {
+  function sendPaClient(_req: unknown, res: Response) {
     try {
       res.setHeader('Content-Type', 'application/javascript');
       res.setHeader('Cache-Control', 'public, max-age=300');
@@ -123,10 +122,9 @@ export function registerRunAppRoutes(
       });
       res.status(500).json({ error: 'Failed to serve PA client' });
     }
-  });
+  }
 
-  // Serve PA component CSS for skill apps
-  router.get('/pa/components.css', (_req, res) => {
+  function sendPaComponents(_req: unknown, res: Response) {
     try {
       res.setHeader('Content-Type', 'text/css');
       res.setHeader('Cache-Control', 'public, max-age=300');
@@ -137,7 +135,14 @@ export function registerRunAppRoutes(
       });
       res.status(500).json({ error: 'Failed to serve PA components' });
     }
-  });
+  }
+
+  // Serve PA client assets for skill apps and extension iframes. The /api aliases
+  // avoid renderer-dev-server history fallback when iframe srcdoc fetches them.
+  router.get('/pa/client.js', sendPaClient);
+  router.get('/api/pa/client.js', sendPaClient);
+  router.get('/pa/components.css', sendPaComponents);
+  router.get('/api/pa/components.css', sendPaComponents);
 
   // GET /api/apps — list skill apps from the KB vault
   router.get('/api/apps', async (_req, res) => {

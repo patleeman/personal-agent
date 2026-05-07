@@ -27,7 +27,7 @@ describe('extension registry', () => {
       packageType: 'system',
     });
     expect(snapshot.surfaces).toEqual([
-      expect.objectContaining({ extensionId: 'system-automations', placement: 'main', kind: 'page', component: 'automations' }),
+      expect.objectContaining({ extensionId: 'system-automations', placement: 'main', kind: 'page', entry: 'frontend/index.html' }),
     ]);
   });
 

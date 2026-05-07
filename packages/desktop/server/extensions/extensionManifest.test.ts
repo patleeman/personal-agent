@@ -7,7 +7,6 @@ import {
   EXTENSION_PLACEMENTS,
   EXTENSION_RIGHT_SURFACE_SCOPES,
   EXTENSION_SURFACE_KINDS,
-  EXTENSION_SYSTEM_COMPONENT_KEYS,
   type ExtensionManifest,
   isExtensionIconName,
   isExtensionPlacement,
@@ -21,7 +20,6 @@ describe('extension manifest schema constants', () => {
     expect(EXTENSION_PLACEMENTS).toEqual(['left', 'main', 'right', 'conversation', 'command', 'slash']);
     expect(EXTENSION_SURFACE_KINDS).toContain('toolPanel');
     expect(EXTENSION_RIGHT_SURFACE_SCOPES).toEqual(['global', 'conversation', 'workspace', 'selection']);
-    expect(EXTENSION_SYSTEM_COMPONENT_KEYS).toEqual(['automations']);
     expect(EXTENSION_ICON_NAMES).toContain('kanban');
   });
 

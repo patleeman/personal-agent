@@ -42,10 +42,33 @@ function buildLaunchContextScript(context: ExtensionFrameLaunchContext): string 
   }).replace(/</g, '\\u003c')};</script>`;
 }
 
-function injectLaunchContext(html: string, context: ExtensionFrameLaunchContext): string {
+function stripExternalPaAssets(html: string): string {
+  return html
+    .replace(/<script\s+src=["']\/pa\/client\.js["']\s*><\/script>/gi, '')
+    .replace(/<link\s+rel=["']stylesheet["']\s+href=["']\/pa\/components\.css["']\s*\/?>/gi, '');
+}
+
+function inlineScript(source: string): string {
+  return `<script>${source.replace(/<\/script/gi, '<\\/script')}</script>`;
+}
+
+function inlineStyle(source: string): string {
+  return source ? `<style>${source.replace(/<\/style/gi, '<\\/style')}</style>` : '';
+}
+
+function injectLaunchContext(
+  html: string,
+  context: ExtensionFrameLaunchContext,
+  baseHref: string,
+  paClientSource: string,
+  paComponentsCss: string,
+): string {
   const script = buildLaunchContextScript(context);
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head([^>]*)>/i, `<head$1>${script}`);
-  return `${script}${html}`;
+  const base = `<base href="${baseHref.replace(/"/g, '&quot;')}">`;
+  const assets = `${inlineStyle(paComponentsCss)}${script}${inlineScript(paClientSource)}`;
+  const stripped = stripExternalPaAssets(html);
+  if (/<head[^>]*>/i.test(stripped)) return stripped.replace(/<head([^>]*)>/i, `<head$1>${base}${assets}`);
+  return `${base}${assets}${stripped}`;
 }
 
 export function ExtensionFrame({
@@ -88,13 +111,19 @@ export function ExtensionFrame({
 
     let cancelled = false;
     setSrcDoc(null);
-    fetch(src)
-      .then(async (response) => {
+    Promise.all([
+      fetch(src).then(async (response) => {
         if (!response.ok) throw new Error(`Failed to load extension frame: ${response.status}`);
         return response.text();
-      })
-      .then((html) => {
-        if (!cancelled) setSrcDoc(injectLaunchContext(html, launchContext));
+      }),
+      fetch(buildApiPath('/pa/client.js')).then(async (response) => (response.ok ? response.text() : '')),
+      fetch(buildApiPath('/pa/components.css'))
+        .then(async (response) => (response.ok ? response.text() : ''))
+        .catch(() => ''),
+    ])
+      .then(([html, paClientSource, paComponentsCss]) => {
+        const baseHref = src.slice(0, src.lastIndexOf('/') + 1);
+        if (!cancelled) setSrcDoc(injectLaunchContext(html, launchContext, baseHref, paClientSource, paComponentsCss));
       })
       .catch((error: Error) => {
         if (!cancelled) {

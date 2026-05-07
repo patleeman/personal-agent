@@ -10,7 +10,7 @@ import {
   EXTENSION_RIGHT_SURFACE_SCOPES,
   EXTENSION_SURFACE_KINDS,
 } from './extensionManifest.js';
-import { SYSTEM_EXTENSIONS } from './systemExtensions.js';
+import { SYSTEM_EXTENSION_ENTRIES } from './systemExtensions.js';
 
 export interface ExtensionRegistryEntry {
   manifest: ExtensionManifest;
@@ -154,7 +154,10 @@ export function readRuntimeExtensionEntries(stateRoot: string = getStateRoot()):
 }
 
 export function listExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {
-  return [...SYSTEM_EXTENSIONS.map((manifest) => ({ manifest, source: 'system' as const })), ...readRuntimeExtensionEntries(stateRoot)];
+  return [
+    ...SYSTEM_EXTENSION_ENTRIES.map((entry) => ({ manifest: entry.manifest, packageRoot: entry.packageRoot, source: 'system' as const })),
+    ...readRuntimeExtensionEntries(stateRoot),
+  ];
 }
 
 export function listEnabledExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {

@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { ErrorState, LoadingState } from '../components/ui';
-import { TasksPage } from '../pages/TasksPage';
 import { ExtensionFrame } from './ExtensionFrame';
 import { isExtensionPageSurface } from './types';
 import { useExtensionRegistry } from './useExtensionRegistry';
@@ -25,10 +24,6 @@ export function ExtensionPage() {
 
   if (registry.error) {
     return <ErrorState message={`Extensions unavailable: ${registry.error}`} />;
-  }
-
-  if (surface?.component === 'automations') {
-    return <TasksPage />;
   }
 
   if (surface?.entry) {
