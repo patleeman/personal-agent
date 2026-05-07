@@ -458,7 +458,7 @@ describe('durable run store', () => {
       status: 'running',
       createdAt: '2026-03-12T18:00:00.000Z',
       updatedAt: '2026-03-12T18:01:00.000Z',
-      activeAttempt: 9007199254740993,
+      activeAttempt: Number.MAX_SAFE_INTEGER + 1,
     });
 
     expect(loadDurableRunStatus(paths.statusPath)).toBeUndefined();

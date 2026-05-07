@@ -61,7 +61,7 @@ export function buildWikiLinkExtension(
       level: 'inline' as const,
       start: '[[',
       tokenize(src: string) {
-        const match = src.match(/^\[\[([^\[\]\|]+)(?:\|([^\[\]]+))?\]\]/);
+        const match = src.match(new RegExp(String.raw`^\[\[([^\[\]\|]+)(?:\|([^\[\]]+))?\]\]`));
         if (!match) return undefined;
         return { type: 'wikiLink', raw: match[0], target: match[1]!.trim(), label: match[2]?.trim() ?? null, tokens: [] };
       },
