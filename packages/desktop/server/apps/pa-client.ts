@@ -111,6 +111,18 @@ export const PA_CLIENT_JS: string = `
       }
     },
 
+    runs: {
+      start(input) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/runs', { method: 'POST', body: input || {} });
+      },
+      get(runId) { return requestJson('/api/runs/' + encodeURIComponent(runId)); },
+      list() { return requestJson('/api/runs'); },
+      readLog(runId, tail) { return requestJson('/api/runs/' + encodeURIComponent(runId) + '/log' + (tail ? '?tail=' + encodeURIComponent(tail) : '')); },
+      cancel(runId) { return requestJson('/api/runs/' + encodeURIComponent(runId) + '/cancel', { method: 'POST' }); }
+    },
+
     storage: {
       get(key) {
         var extensionId = extensionIdFromPath;

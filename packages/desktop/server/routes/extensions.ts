@@ -11,6 +11,7 @@ import {
   readExtensionSchema,
   setExtensionEnabled,
 } from '../extensions/extensionRegistry.js';
+import { createExtensionRunsCapability } from '../extensions/extensionRuns.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from '../extensions/extensionStorage.js';
 import { logError } from '../middleware/index.js';
 import type { ServerRouteContext } from './context.js';
@@ -168,6 +169,14 @@ export function registerExtensionRoutes(
       res.json(deleteExtensionState(req.params.id, req.params[0]));
     } catch (err) {
       sendRouteError(res, 'extension state delete error', err);
+    }
+  });
+
+  router.post('/api/extensions/:id/runs', async (req, res) => {
+    try {
+      res.status(201).json(await createExtensionRunsCapability(req.params.id).start(req.body));
+    } catch (err) {
+      sendRouteError(res, 'extension run start error', err);
     }
   });
 
