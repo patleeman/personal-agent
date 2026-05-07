@@ -85,7 +85,7 @@
   }
 
   .ui-desktop-top-bar__center {
-    @apply relative z-10 flex-1;
+    @apply relative z-10 flex-1 self-stretch;
   }
 
   .ui-desktop-top-bar__trailing {
