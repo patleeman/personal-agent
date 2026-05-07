@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 import type { LoopState, MissionState, RunMode } from '../../shared/types';
 import { cx } from '../ui';
 
@@ -21,6 +23,63 @@ export interface RunModePanelProps {
   draftLoop?: DraftLoopConfig;
   onDraftMissionChange?: (draft: DraftMissionConfig) => void;
   onDraftLoopChange?: (draft: DraftLoopConfig) => void;
+  onAddMissionTask?: (description: string) => void;
+}
+
+/**
+ * Local-state input that only commits to the parent on blur.
+ * Prevents expensive parent re-renders on every keystroke.
+ */
+function LazyInput({
+  value,
+  onChange,
+  onBlur,
+  className,
+  'aria-label': ariaLabel,
+  placeholder,
+  inputMode,
+  pattern,
+}: {
+  value: string;
+  onChange?: (value: string) => void;
+  onBlur?: (value: string) => void;
+  className?: string;
+  'aria-label'?: string;
+  placeholder?: string;
+  inputMode?: 'text' | 'numeric';
+  pattern?: string;
+}) {
+  const [local, setLocal] = useState(value);
+  const committedRef = useRef(value);
+
+  // Sync from props when external value changes (not from our own blur)
+  useEffect(() => {
+    if (committedRef.current !== value) {
+      committedRef.current = value;
+      setLocal(value);
+    }
+  }, [value]);
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      value={local}
+      inputMode={inputMode}
+      pattern={pattern}
+      placeholder={placeholder}
+      onChange={(e) => {
+        setLocal(e.target.value);
+        onChange?.(e.target.value);
+      }}
+      onBlur={() => {
+        if (local !== committedRef.current) {
+          committedRef.current = local;
+          onBlur?.(local);
+        }
+      }}
+      className={className}
+    />
+  );
 }
 
 const modeTextClassName: Record<'mission' | 'loop', string> = {
@@ -47,7 +106,9 @@ export function ConversationRunModePanel({
   draftLoop,
   onDraftMissionChange,
   onDraftLoopChange,
+  onAddMissionTask,
 }: RunModePanelProps) {
+  const [missionTaskDraft, setMissionTaskDraft] = useState('');
   if (mode === 'manual' || mode === 'nudge') {
     return null;
   }
@@ -59,15 +120,26 @@ export function ConversationRunModePanel({
     const maxTurns = mission?.maxTurns ?? draftMission?.maxTurns ?? 20;
     const turnsUsed = mission?.turnsUsed ?? 0;
 
+    const commitMissionGoal = (value: string) => {
+      onDraftMissionChange?.({ goal: value, maxTurns });
+    };
+    const commitMissionMaxTurns = (value: string) => {
+      const num = Math.max(1, parseInt(value, 10) || 20);
+      onDraftMissionChange?.({
+        goal: draftMission?.goal ?? mission?.goal ?? '',
+        maxTurns: num,
+      });
+    };
+
     return (
       <div className="border-b border-border-subtle/60 bg-surface/20 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
           <ModeLabel mode="mission">Mission</ModeLabel>
           <span className="shrink-0">Goal</span>
-          <input
+          <LazyInput
             aria-label="Mission goal"
             value={goal}
-            onChange={(event) => onDraftMissionChange?.({ goal: event.target.value, maxTurns })}
+            onBlur={commitMissionGoal}
             className={cx('min-w-[12rem] flex-1', fieldClassName)}
             placeholder="Infer from conversation if blank"
           />
@@ -77,46 +149,71 @@ export function ConversationRunModePanel({
           <span className="shrink-0">Turns</span>
           <span className="shrink-0 text-primary">{turnsUsed}</span>
           <span className="shrink-0">/</span>
-          <input
-            type="text"
+          <LazyInput
+            aria-label="Mission max turns"
+            value={String(maxTurns)}
+            onBlur={commitMissionMaxTurns}
             inputMode="numeric"
             pattern="[0-9]*"
-            value={maxTurns}
-            onChange={(event) =>
-              onDraftMissionChange?.({
-                goal: draftMission?.goal ?? mission?.goal ?? '',
-                maxTurns: Math.max(1, parseInt(event.target.value, 10) || 20),
-              })
-            }
-            aria-label="Mission max turns"
             className={compactNumberClassName}
           />
         </div>
         {running && mission ? (
-          mission.tasks.length > 0 ? (
-            <div className="mt-1.5 max-h-36 overflow-y-auto pr-1">
-              {mission.tasks.map((task) => (
-                <div key={task.id} className={cx('flex items-center gap-2 py-1 text-[12px]', task.status === 'done' && 'opacity-55')}>
-                  <span
-                    className={cx(
-                      'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border text-[8px]',
-                      task.status === 'done' ? 'border-success/60 bg-success/10 text-success' : 'border-border-default text-transparent',
-                    )}
-                  >
-                    {task.status === 'done' ? '✓' : ''}
-                  </span>
-                  <span className={cx('min-w-0 flex-1 truncate', task.status === 'done' && 'text-dim line-through')}>
-                    {task.description}
-                  </span>
-                  {task.status !== 'pending' && task.status !== 'done' ? (
-                    <span className="shrink-0 text-[10px] text-dim">{task.status}</span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1.5 text-[12px] text-dim">Task list will appear after the agent starts the mission.</p>
-          )
+          <>
+            {mission.tasks.length > 0 ? (
+              <div className="mt-1.5 max-h-36 overflow-y-auto pr-1">
+                {mission.tasks.map((task) => (
+                  <div key={task.id} className={cx('flex items-center gap-2 py-1 text-[12px]', task.status === 'done' && 'opacity-55')}>
+                    <span
+                      className={cx(
+                        'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border text-[8px]',
+                        task.status === 'done' ? 'border-success/60 bg-success/10 text-success' : 'border-border-default text-transparent',
+                      )}
+                    >
+                      {task.status === 'done' ? '✓' : ''}
+                    </span>
+                    <span className={cx('min-w-0 flex-1 truncate', task.status === 'done' && 'text-dim line-through')}>
+                      {task.description}
+                    </span>
+                    {task.status !== 'pending' && task.status !== 'done' ? (
+                      <span className="shrink-0 text-[10px] text-dim">{task.status}</span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[12px] text-dim">Task list will appear after the agent starts the mission.</p>
+            )}
+            {onAddMissionTask ? (
+              <form
+                className="mt-1.5 flex items-center gap-2 text-[12px]"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const description = missionTaskDraft.trim();
+                  if (!description) {
+                    return;
+                  }
+                  onAddMissionTask(description);
+                  setMissionTaskDraft('');
+                }}
+              >
+                <input
+                  aria-label="Add mission task"
+                  value={missionTaskDraft}
+                  onChange={(event) => setMissionTaskDraft(event.target.value)}
+                  className={cx('min-w-[12rem] flex-1', fieldClassName)}
+                  placeholder="Add task"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 text-[11px] font-semibold text-accent transition-colors hover:text-accent/80 disabled:text-dim"
+                  disabled={!missionTaskDraft.trim()}
+                >
+                  Add
+                </button>
+              </form>
+            ) : null}
+          </>
         ) : null}
       </div>
     );
@@ -129,39 +226,38 @@ export function ConversationRunModePanel({
     const delay = draftLoop?.delay ?? loop?.delay ?? 'After each turn';
     const delayOptions = loopDelayOptions.includes(delay) ? loopDelayOptions : [delay, ...loopDelayOptions];
 
+    const commitLoopPrompt = (value: string) => {
+      onDraftLoopChange?.({ prompt: value, maxIterations, delay });
+    };
+    const commitLoopMaxIterations = (value: string) => {
+      const num = Math.max(1, parseInt(value, 10) || 5);
+      onDraftLoopChange?.({
+        prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
+        maxIterations: num,
+        delay,
+      });
+    };
+
     return (
       <div className="border-b border-border-subtle/60 bg-surface/20 px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
           <ModeLabel mode="loop">Loop</ModeLabel>
-          <input
+          <LazyInput
             aria-label="Loop prompt"
             value={prompt}
-            onChange={(event) =>
-              onDraftLoopChange?.({
-                prompt: event.target.value,
-                maxIterations,
-                delay,
-              })
-            }
+            onBlur={commitLoopPrompt}
             className={cx('min-w-[14rem] flex-1', fieldClassName)}
             placeholder="Prompt to repeat each iteration"
           />
           <span className="shrink-0">Run</span>
           <span className="shrink-0 text-primary">{iterationsUsed}</span>
           <span className="shrink-0">/</span>
-          <input
-            type="text"
+          <LazyInput
+            aria-label="Loop max iterations"
+            value={String(maxIterations)}
+            onBlur={commitLoopMaxIterations}
             inputMode="numeric"
             pattern="[0-9]*"
-            value={maxIterations}
-            onChange={(event) =>
-              onDraftLoopChange?.({
-                prompt: draftLoop?.prompt ?? loop?.prompt ?? '',
-                maxIterations: Math.max(1, parseInt(event.target.value, 10) || 5),
-                delay,
-              })
-            }
-            aria-label="Loop max iterations"
             className={compactNumberClassName}
           />
           <span className="shrink-0">times · wait</span>
