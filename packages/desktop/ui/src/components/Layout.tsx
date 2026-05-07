@@ -1835,6 +1835,7 @@ export function Layout() {
     location.pathname.startsWith('/settings') ||
     location.pathname.startsWith('/system') ||
     location.pathname.startsWith('/automations') ||
+    location.pathname.startsWith('/extensions') ||
     location.pathname.startsWith('/gateways') ||
     location.pathname.startsWith('/knowledge') ||
     location.pathname.startsWith('/telemetry') ||

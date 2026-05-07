@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../client/api';
@@ -19,6 +19,16 @@ function firstRoute(extension: ExtensionInstallSummary): string | null {
   return extension.routes[0]?.route ?? null;
 }
 
+function formatPermissionSummary(extension: ExtensionInstallSummary): string {
+  return extension.permissions?.length ? extension.permissions.join(', ') : 'None declared';
+}
+
+function formatBackendActionSummary(extension: ExtensionInstallSummary): string {
+  return extension.backendActions?.length
+    ? extension.backendActions.map((action) => `${action.id} → ${action.handler}`).join(', ')
+    : 'None';
+}
+
 function slugifyExtensionId(value: string): string {
   return value
     .trim()
@@ -32,7 +42,6 @@ export function ExtensionManagerPage() {
   const [extensions, setExtensions] = useState<ExtensionInstallSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -43,7 +52,6 @@ export function ExtensionManagerPage() {
       .extensionInstallations()
       .then((items) => {
         setExtensions(items);
-        setSelectedId((current) => (current && items.some((item) => item.id === current) ? current : (items[0]?.id ?? null)));
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -55,11 +63,6 @@ export function ExtensionManagerPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const selected = useMemo(
-    () => extensions.find((extension) => extension.id === selectedId) ?? extensions[0] ?? null,
-    [extensions, selectedId],
-  );
 
   const reload = useCallback(() => {
     setNotice(null);
@@ -84,7 +87,6 @@ export function ExtensionManagerPage() {
       const result = await api.createExtension({ id: id.trim(), name: name.trim() });
       setNotice(`Created ${result.packageRoot}`);
       load();
-      setSelectedId(id.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -99,9 +101,6 @@ export function ExtensionManagerPage() {
       const result = await api.importExtension({ zipPath: zipPath.trim() });
       setNotice(`Imported ${result.packageRoot}`);
       load();
-      if (result.extension?.id) {
-        setSelectedId(result.extension.id);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -170,36 +169,7 @@ export function ExtensionManagerPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <AppPageLayout
-        shellClassName="max-w-[84rem]"
-        contentClassName="space-y-8"
-        aside={
-          selected ? (
-            <aside className="space-y-5 text-[12px]">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Manifest</p>
-                <pre className="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-surface/70 p-3 font-mono text-[11px] leading-5 text-secondary">
-                  {JSON.stringify(selected.manifest, null, 2)}
-                </pre>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Permissions</p>
-                <p className="mt-2 leading-6 text-secondary">
-                  {selected.permissions?.length ? selected.permissions.join(', ') : 'None declared'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Backend actions</p>
-                <p className="mt-2 leading-6 text-secondary">
-                  {selected.backendActions?.length
-                    ? selected.backendActions.map((action) => `${action.id} → ${action.handler}`).join(', ')
-                    : 'None'}
-                </p>
-              </div>
-            </aside>
-          ) : null
-        }
-      >
+      <AppPageLayout shellClassName="max-w-[84rem]" contentClassName="space-y-8">
         <AppPageIntro
           eyebrow="Extension Manager"
           title="Extensions"
@@ -221,18 +191,12 @@ export function ExtensionManagerPage() {
           <section className="border-t border-border-subtle">
             {extensions.map((extension) => {
               const route = firstRoute(extension);
-              const selectedExtension = selected?.id === extension.id;
               return (
-                <button
+                <article
                   key={extension.id}
-                  type="button"
-                  className={cx(
-                    'grid w-full gap-4 border-b border-border-subtle py-5 text-left transition-colors sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start',
-                    selectedExtension ? 'text-primary' : 'text-secondary hover:text-primary',
-                  )}
-                  onClick={() => setSelectedId(extension.id)}
+                  className="grid w-full gap-4 border-b border-border-subtle py-5 text-left sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                 >
-                  <div className="min-w-0 space-y-2">
+                  <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <p className="text-[15px] font-semibold tracking-tight text-primary">{extension.name}</p>
                       <span className="text-[11px] uppercase tracking-[0.14em] text-dim">{extension.packageType ?? 'user'}</span>
@@ -243,10 +207,26 @@ export function ExtensionManagerPage() {
                     {extension.description ? (
                       <p className="max-w-3xl text-[13px] leading-6 text-secondary">{extension.description}</p>
                     ) : null}
-                    <p className="font-mono text-[11px] text-dim">{extension.id}</p>
-                    <p className="text-[12px] text-secondary">{formatSurfaceSummary(extension)}</p>
+                    <div className="space-y-1 text-[12px] text-secondary">
+                      <p className="font-mono text-[11px] text-dim">{extension.id}</p>
+                      <p>{formatSurfaceSummary(extension)}</p>
+                      <p>
+                        <span className="text-dim">Permissions:</span> {formatPermissionSummary(extension)}
+                      </p>
+                      <p>
+                        <span className="text-dim">Backend:</span> {formatBackendActionSummary(extension)}
+                      </p>
+                    </div>
+                    <details className="group max-w-3xl">
+                      <summary className="cursor-pointer select-none text-[12px] text-dim transition-colors hover:text-secondary">
+                        Manifest
+                      </summary>
+                      <pre className="mt-3 max-h-[22rem] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-secondary">
+                        {JSON.stringify(extension.manifest, null, 2)}
+                      </pre>
+                    </details>
                   </div>
-                  <div className="flex flex-wrap justify-start gap-2 sm:justify-end" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
                     {route && extension.enabled ? (
                       <Link className="ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none" to={route}>
                         Open
@@ -285,7 +265,7 @@ export function ExtensionManagerPage() {
                       {extension.enabled ? 'Disable' : 'Enable'}
                     </ToolbarButton>
                   </div>
-                </button>
+                </article>
               );
             })}
           </section>
