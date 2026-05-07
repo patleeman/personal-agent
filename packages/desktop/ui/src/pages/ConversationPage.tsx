@@ -1634,8 +1634,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
-  const suggestedAutoModeMission =
-    input.trim() || effectiveConversationAutoModeState?.mission || 'Continue the current task until it is complete, validated, or blocked.';
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(
@@ -6539,28 +6537,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       onSelectOption={handleComposerQuestionOptionSelect}
                     />
                   )}
-                </div>
-              )}
-
-              {effectiveConversationAutoModeState?.enabled === true && (
-                <div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-warning/60"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z" />
-                  </svg>
-                  <p className="min-w-0 flex-1 truncate text-[11px] leading-4 text-secondary/70">
-                    {effectiveConversationAutoModeState?.mission ?? suggestedAutoModeMission}
-                  </p>
                 </div>
               )}
 
