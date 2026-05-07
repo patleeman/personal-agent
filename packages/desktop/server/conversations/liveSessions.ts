@@ -5,14 +5,13 @@
  */
 import { join } from 'node:path';
 
-import { AgentSession, estimateTokens } from '@earendil-works/pi-coding-agent';
+import { AgentSession } from '@earendil-works/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
-import { persistTraceContext, persistTraceStats } from '../traces/tracePersistence.js';
+import { persistTraceStats } from '../traces/tracePersistence.js';
 import { type ConversationAutoModeState, type ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
-import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
   broadcastConversationAutoModeState as broadcastConversationAutoModeStateForEntry,
   markConversationAutoModeContinueRequested as markConversationAutoModeContinueRequestedForEntry,
@@ -25,6 +24,20 @@ import { executeLiveSessionBash } from './liveSessionBash.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
 import { branchLiveSession, forkLiveSession } from './liveSessionBranching.js';
 import {
+  broadcast,
+  broadcastAutoModeState,
+  broadcastContextUsage,
+  broadcastParallelState,
+  broadcastPresenceState,
+  broadcastQueueState,
+  broadcastSnapshot,
+  broadcastTitle,
+  clearContextUsageTimer,
+  publishRunningChange,
+  scheduleContextUsage,
+  syncDurableConversationRun,
+} from './liveSessionBroadcasts.js';
+import {
   createLiveSession as createLiveSessionWithCallbacks,
   createLiveSessionFromExisting as createLiveSessionFromExistingWithCallbacks,
   resumeLiveSession as resumeLiveSessionWithCallbacks,
@@ -35,16 +48,10 @@ import {
   requestLiveSessionWorkingDirectoryChange,
 } from './liveSessionCwdChange.js';
 import { destroyLiveSession } from './liveSessionDestroy.js';
-import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
 import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 import { type LiveContextUsage, type SseEvent } from './liveSessionEvents.js';
 import { makeAuth as makeFactoryAuth, makeRegistry } from './liveSessionFactory.js';
-import {
-  createLiveSessionHiddenTurnState,
-  ensureHiddenTurnState,
-  hasQueuedOrActiveHiddenTurn,
-  type LiveSessionHiddenTurnState,
-} from './liveSessionHiddenTurns.js';
+import { createLiveSessionHiddenTurnState, ensureHiddenTurnState, hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
 import { type LiveSessionLoaderOptions } from './liveSessionLoader.js';
 import {
   compactLiveSession,
@@ -67,20 +74,11 @@ import {
   startParallelPromptSession as startParallelPromptSessionWithCallbacks,
   tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
 } from './liveSessionParallelImportOps.js';
-import { type ParallelPromptJob, writePersistedParallelJobs } from './liveSessionParallelJobs.js';
+import { writePersistedParallelJobs } from './liveSessionParallelJobs.js';
 import { loadPersistedParallelJobs, type ResolveParallelChildSession } from './liveSessionParallelReconciliation.js';
 import { resolveLiveSessionFile } from './liveSessionPersistence.js';
-import {
-  createLiveSessionPresenceHost,
-  type LiveSessionPresenceHost,
-  type LiveSessionPresenceState,
-  type LiveSessionSurfaceType,
-} from './liveSessionPresence.js';
-import {
-  broadcastLiveSessionPresenceState,
-  ensureLiveSessionSurfaceCanControl,
-  takeOverLiveSessionControl,
-} from './liveSessionPresenceFacade.js';
+import { createLiveSessionPresenceHost, type LiveSessionPresenceState, type LiveSessionSurfaceType } from './liveSessionPresence.js';
+import { ensureLiveSessionSurfaceCanControl, takeOverLiveSessionControl } from './liveSessionPresenceFacade.js';
 import { runPromptOnLiveEntry as runPromptOnLiveEntryWithCallbacks, submitPromptOnLiveEntry } from './liveSessionPromptOps.js';
 import { normalizeQueuedPromptBehavior, type PromptImageAttachment, type QueuedPromptPreview } from './liveSessionQueue.js';
 import { cancelLiveSessionQueuedPrompt, restoreLiveSessionQueuedMessage } from './liveSessionQueueOperations.js';
@@ -102,19 +100,11 @@ import {
   reloadAllLiveSessionAuth as reloadLiveSessionAuth,
 } from './liveSessionRegistryMaintenance.js';
 import {
-  broadcastLiveSessionAutoModeState,
-  broadcastLiveSessionContextUsage,
-  broadcastLiveSessionParallelState,
-  broadcastLiveSessionQueueState,
-  clearLiveSessionContextUsageTimer,
-  scheduleLiveSessionContextUsage,
-} from './liveSessionStateBroadcasts.js';
-import {
   buildLiveSessionSnapshot,
   type LiveSessionStateSnapshot,
   readLiveSessionStateSnapshotFromEntry,
 } from './liveSessionStateSnapshot.js';
-import { type LiveSessionSubscriptionListener, subscribeLiveSession } from './liveSessionSubscription.js';
+import { subscribeLiveSession } from './liveSessionSubscription.js';
 import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
 import { resolveStableSessionTitle } from './liveSessionTitle.js';
 import { type BeforeAgentStartProbeMessage, inspectAvailableLiveSessionTools } from './liveSessionToolInspection.js';
@@ -161,35 +151,7 @@ function resolveConversationPreferenceStateForSession(
 
 // ── Internal entry ────────────────────────────────────────────────────────────
 
-type LiveListener = LiveSessionSubscriptionListener;
-
-interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
-  sessionId: string;
-  session: AgentSession;
-  cwd: string;
-  listeners: Set<LiveListener>;
-  title: string;
-  lastContextUsageJson: string | null;
-  lastQueueStateJson: string | null;
-  lastParallelStateJson?: string | null;
-  lastAutoModeStateJson?: string | null;
-  currentTurnError?: string | null;
-  lastDurableRunState?: WebLiveConversationRunState;
-  contextUsageTimer?: ReturnType<typeof setTimeout>;
-  pendingAutoModeContinuation?: boolean;
-  pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
-  lastCompactionSummaryTitle?: string | null;
-  isCompacting?: boolean;
-  running: boolean;
-  traceRunId?: string | null;
-  traceRunStartedAtMs?: number | null;
-  traceRunTurnCount?: number;
-  traceRunStepCount?: number;
-  traceRunFirstAssistantAtMs?: number | null;
-  traceRunFirstToolAtMs?: number | null;
-  parallelJobs?: ParallelPromptJob[];
-  importingParallelJobs?: boolean;
-}
+import type { LiveEntry } from './liveSessionTypes.js';
 
 export type { LiveSessionStateSnapshot } from './liveSessionStateSnapshot.js';
 
@@ -264,24 +226,6 @@ function createParallelPromptJobId(): string {
   return `parallel-${parallelPromptJobCounter}`;
 }
 
-function broadcastSnapshot(entry: LiveEntry): void {
-  ensureHiddenTurnState(entry);
-  for (const listener of entry.listeners) {
-    listener.send({
-      type: 'snapshot',
-      ...buildLiveSessionSnapshot(entry, listener.tailBlocks),
-    });
-  }
-}
-
-function publishRunningChange(entry: LiveEntry): void {
-  const next = computeLiveSessionRunning(entry);
-  if (next === entry.running) return;
-  entry.running = next;
-  publishAppEvent({ type: 'session_meta_changed', sessionId: entry.sessionId, running: next });
-  invalidateAppTopics('sessions');
-}
-
 function publishSessionMetaChanged(sessionId: string): void {
   const entry = registry.get(sessionId);
   const package_: { type: 'session_meta_changed'; sessionId: string; running?: boolean } = {
@@ -306,89 +250,6 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
   }
   ensureHiddenTurnState(entry);
   return readLiveSessionStateSnapshotFromEntry(entry, resolveEntryTitle(entry), tailBlocks);
-}
-
-function broadcastTitle(entry: LiveEntry): void {
-  const title = resolveEntryTitle(entry);
-  if (!title) {
-    return;
-  }
-
-  entry.title = title;
-  broadcast(entry, { type: 'title_update', title });
-  publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title });
-  publishSessionMetaChanged(entry.sessionId);
-}
-
-function applySessionTitle(entry: LiveEntry, title: string): void {
-  const normalizedTitle = title.trim();
-  if (!normalizedTitle) {
-    return;
-  }
-
-  entry.session.setSessionName(normalizedTitle);
-  entry.title = normalizedTitle;
-  broadcastTitle(entry);
-}
-
-async function syncDurableConversationRun(
-  entry: LiveEntry,
-  state: WebLiveConversationRunState,
-  input: { force?: boolean; lastError?: string } = {},
-): Promise<void> {
-  await syncLiveSessionDurableRun(entry, state, input);
-}
-
-function broadcastContextUsage(entry: LiveEntry, force = false): void {
-  const usage = readLiveSessionContextUsageForEntry(entry);
-  if (usage) {
-    const userSeg = usage.segments?.find((s) => s.key === 'user');
-    const assistantSeg = usage.segments?.find((s) => s.key === 'assistant');
-    const toolSeg = usage.segments?.find((s) => s.key === 'tool');
-    const summarySeg = usage.segments?.find((s) => s.key === 'summary');
-    // System prompt is not a message — estimate directly from the session's system prompt string
-    const systemPromptText = entry.session.systemPrompt ?? '';
-    const systemPromptTokens =
-      systemPromptText.length > 0 ? estimateTokens({ role: 'user', content: [{ type: 'text', text: systemPromptText }] }) : 0;
-    persistTraceContext({
-      sessionId: entry.sessionId,
-      modelId: usage.modelId ?? entry.session.model?.id,
-      totalTokens: usage.tokens ?? 0,
-      contextWindow: usage.contextWindow ?? 0,
-      pct: usage.percent != null ? Math.round(usage.percent * 100) / 100 : 0,
-      segSystem: systemPromptTokens,
-      segUser: userSeg?.tokens ?? 0,
-      segAssistant: assistantSeg?.tokens ?? 0,
-      segTool: toolSeg?.tokens ?? 0,
-      segSummary: summarySeg?.tokens ?? 0,
-      systemPromptTokens,
-    });
-  }
-  broadcastLiveSessionContextUsage(entry, (event) => broadcast(entry, event), force);
-}
-
-function broadcastQueueState(entry: LiveEntry, force = false): void {
-  broadcastLiveSessionQueueState(entry, (event) => broadcast(entry, event), force);
-}
-
-function broadcastParallelState(entry: LiveEntry, force = false): void {
-  broadcastLiveSessionParallelState(entry, (event) => broadcast(entry, event), force);
-}
-
-function broadcastAutoModeState(entry: LiveEntry, force = false): void {
-  broadcastLiveSessionAutoModeState(entry, (event) => broadcast(entry, event), force);
-}
-
-function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {
-  scheduleLiveSessionContextUsage(entry, (event) => broadcast(entry, event), delayMs);
-}
-
-function clearContextUsageTimer(entry: LiveEntry): void {
-  clearLiveSessionContextUsageTimer(entry);
-}
-
-function broadcastPresenceState(entry: LiveEntry, options?: { exclude?: LiveListener }): void {
-  broadcastLiveSessionPresenceState(entry, { broadcast }, options);
 }
 
 export function ensureSessionSurfaceCanControl(sessionId: string, surfaceId?: string): void {
@@ -477,7 +338,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
         publishRunningChange(target);
       },
       broadcastQueueState,
-      broadcastTitle,
+      broadcastTitle: (entry) => broadcastTitle(entry, { resolveEntryTitle, publishSessionMetaChanged }),
       broadcastStats: (target, tokens, cost, traceRun) => {
         broadcast(target, {
           type: 'stats_update',
@@ -505,23 +366,14 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
         });
       },
       clearContextUsageTimer,
-      broadcastContextUsage,
-      broadcastSnapshot,
+      broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
+      broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
       broadcast,
       tryImportReadyParallelJobs,
     }),
   );
 
   return entry;
-}
-
-function broadcast(entry: LiveEntry, event: SseEvent, options?: { exclude?: LiveListener }) {
-  for (const listener of entry.listeners) {
-    if (listener === options?.exclude) {
-      continue;
-    }
-    listener.send(event);
-  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -793,7 +645,7 @@ export async function appendDetachedUserMessage(sessionId: string, text: string)
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await appendDetachedLiveSessionUserMessage(entry, text, {
-    broadcastTitle,
+    broadcastTitle: (entry) => broadcastTitle(entry, { resolveEntryTitle, publishSessionMetaChanged }),
     publishSessionMetaChanged,
   });
 }
@@ -802,7 +654,7 @@ export async function appendVisibleCustomMessage(sessionId: string, customType: 
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await appendVisibleLiveSessionCustomMessage(entry, customType, content, details, {
-    broadcastSnapshot,
+    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
     publishSessionMetaChanged,
   });
 }
@@ -817,10 +669,10 @@ async function appendParallelImportedMessage(
   await appendParallelImportedLiveSessionMessage(entry, content, details, {
     appendDetachedUserMessage: (target, text) =>
       appendDetachedLiveSessionUserMessage(target, text, {
-        broadcastTitle,
+        broadcastTitle: (entry) => broadcastTitle(entry, { resolveEntryTitle, publishSessionMetaChanged }),
         publishSessionMetaChanged,
       }),
-    broadcastSnapshot,
+    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
     publishSessionMetaChanged,
   });
 }
@@ -914,9 +766,9 @@ export function repairLiveSessionTranscriptTail(sessionId: string): {
     throw new Error(`Session ${sessionId} is not live`);
   }
   return repairLiveSessionTranscriptTailWithCallbacks(entry, {
-    broadcastSnapshot,
+    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
     clearContextUsageTimer,
-    broadcastContextUsage,
+    broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
     publishSessionMetaChanged: () => publishSessionMetaChanged(sessionId),
   });
 }
@@ -980,11 +832,11 @@ export async function executeSessionBash(
   });
 
   finalizeLiveSessionBashExecution(entry, normalizedCommand, {
-    broadcastTitle,
+    broadcastTitle: (entry) => broadcastTitle(entry, { resolveEntryTitle, publishSessionMetaChanged }),
     broadcast,
     clearContextUsageTimer,
-    broadcastContextUsage,
-    broadcastSnapshot,
+    broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
+    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
     publishSessionMetaChanged,
   });
 
@@ -1023,9 +875,9 @@ export async function compactSession(sessionId: string, customInstructions?: str
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   return compactLiveSession(entry, customInstructions, {
-    broadcastSnapshot,
+    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
     clearContextUsageTimer,
-    broadcastContextUsage,
+    broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
     publishSessionMetaChanged,
   });
 }
@@ -1046,7 +898,7 @@ export function renameSession(sessionId: string, name: string): void {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   renameLiveSession(entry, name, {
-    applySessionTitle,
+    applySessionTitle: (entry, title) => applySessionTitle(entry, title, { resolveEntryTitle, publishSessionMetaChanged }),
     syncDurableConversationRun,
   });
 }
