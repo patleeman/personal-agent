@@ -3867,7 +3867,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
 
   const materializeDraftConversation = useCallback(
-    async (options: { enableAutoModeOnLoad?: boolean } = {}) => {
+    async (options: { enableAutoModeOnLoad?: boolean; autoModeInput?: Record<string, unknown> } = {}) => {
       if (!draft) {
         if (!id) {
           throw new Error('Conversation unavailable.');
@@ -3900,6 +3900,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const newId = created.id;
       if (input.length > 0) {
         persistForkPromptDraft(newId, input);
+      }
+
+      if (options.autoModeInput) {
+        await api.updateConversationAutoMode(newId, options.autoModeInput, currentSurfaceId);
       }
 
       clearDraftConversationComposer();
@@ -3938,6 +3942,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       conversationVersionKey,
       createLiveSessionPreferenceInput,
       currentModel,
+      currentSurfaceId,
       currentThinkingLevel,
       currentServiceTier,
       defaultModel,
@@ -4028,9 +4033,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
 
-          const targetConversationId = await materializeDraftConversation();
-          const nextState = await api.updateConversationAutoMode(targetConversationId, input, currentSurfaceId);
-          setConversationAutoModeState(nextState);
+          await materializeDraftConversation({ autoModeInput: input });
           return;
         }
 

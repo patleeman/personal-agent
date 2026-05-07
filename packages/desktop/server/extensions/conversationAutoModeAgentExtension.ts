@@ -25,12 +25,6 @@ export const RUN_STATE_TOOL = 'run_state' as const;
 
 const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
 
-const AutoModeControlToolNames = [CONVERSATION_AUTO_MODE_CONTROL_TOOL] as const;
-const AutoModeControlToolNameSet = new Set<string>(AutoModeControlToolNames);
-
-const RunStateToolNames = [RUN_STATE_TOOL] as const;
-const RunStateToolNameSet = new Set<string>(RunStateToolNames);
-
 const ConversationAutoControlParams = Type.Object({
   action: Type.Union([Type.Literal('continue'), Type.Literal('stop')], {
     description:
@@ -105,21 +99,32 @@ function readMode(ctx: { sessionManager: { getEntries: () => unknown[] } }): Run
 
 function syncToolsForMode(pi: ExtensionAPI, state: ConversationAutoModeState, isReviewTurn: boolean): void {
   const current = pi.getActiveTools();
-  const withoutAutoControl = current.filter((name) => !AutoModeControlToolNameSet.has(name) && !RunStateToolNameSet.has(name));
+  const hasAutoControl = current.includes(CONVERSATION_AUTO_MODE_CONTROL_TOOL);
+  const hasRunState = current.includes(RUN_STATE_TOOL);
 
-  const next: string[] = [];
+  const shouldHaveAutoControl = state.mode === 'nudge' && isReviewTurn;
+  const shouldHaveRunState = state.mode === 'mission' || state.mode === 'loop';
 
-  if (state.mode === 'mission' || state.mode === 'loop') {
-    next.push(...withoutAutoControl, RUN_STATE_TOOL);
-  } else if (state.mode === 'nudge' && isReviewTurn) {
-    next.push(...withoutAutoControl, CONVERSATION_AUTO_MODE_CONTROL_TOOL);
-  } else {
-    next.push(...withoutAutoControl);
-  }
-
-  if (current.length === next.length && current.every((name, index) => name === next[index])) {
+  if (hasAutoControl === shouldHaveAutoControl && hasRunState === shouldHaveRunState) {
     return;
   }
+
+  const next = [...current];
+
+  if (hasAutoControl && !shouldHaveAutoControl) {
+    const idx = next.indexOf(CONVERSATION_AUTO_MODE_CONTROL_TOOL);
+    if (idx >= 0) next.splice(idx, 1);
+  } else if (!hasAutoControl && shouldHaveAutoControl) {
+    next.push(CONVERSATION_AUTO_MODE_CONTROL_TOOL);
+  }
+
+  if (hasRunState && !shouldHaveRunState) {
+    const idx = next.indexOf(RUN_STATE_TOOL);
+    if (idx >= 0) next.splice(idx, 1);
+  } else if (!hasRunState && shouldHaveRunState) {
+    next.push(RUN_STATE_TOOL);
+  }
+
   pi.setActiveTools(next);
 }
 
