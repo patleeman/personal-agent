@@ -4814,31 +4814,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     command: ConversationSlashCommand,
   ): Promise<{ kind: 'handled' } | { kind: 'send'; text: string }> {
     switch (command.action) {
-      case 'auto': {
-        setInput('');
-        try {
-          const targetConversationId = command.enabled ? await ensureConversationIsLive('enable auto mode') : id;
-          if (!targetConversationId) {
-            showNotice('danger', 'Auto mode requires a conversation.', 4000);
-            return { kind: 'handled' };
-          }
-          const nextState = await api.updateConversationAutoMode(
-            targetConversationId,
-            { enabled: command.enabled, mode: command.mode, mission: command.mission ?? null, budget: command.budget ?? null },
-            currentSurfaceId,
-          );
-          if (targetConversationId === id) {
-            setConversationAutoModeState(nextState);
-          }
-          showNotice(
-            'accent',
-            command.enabled ? `Auto mode enabled (${command.mode})${command.mission ? `: ${command.mission}` : ''}` : 'Auto mode disabled.',
-          );
-        } catch (error) {
-          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-        }
-        return { kind: 'handled' };
-      }
       case 'clear':
         setInput('');
         setAttachments([]);
