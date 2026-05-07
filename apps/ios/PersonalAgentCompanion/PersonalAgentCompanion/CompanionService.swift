@@ -636,14 +636,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
     }
 
     func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse {
-        let path: String
-        if let directoryId = directoryId?.nilIfBlank,
-           let encoded = directoryId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-            path = "/companion/v1/knowledge/tree?dir=\(encoded)"
-        } else {
-            path = "/companion/v1/knowledge/tree"
-        }
-        return try await authorizedJSON(path: path, method: "GET", body: nil, decode: CompanionKnowledgeTreeResponse.self)
+        try await authorizedJSON(path: companionKnowledgeTreeEndpoint(directoryId: directoryId), method: "GET", body: nil, decode: CompanionKnowledgeTreeResponse.self)
     }
 
     func searchKnowledge(query: String, limit: Int) async throws -> CompanionKnowledgeSearchResponse {
@@ -659,10 +652,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
     }
 
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse {
-        guard let encoded = fileId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            throw CompanionClientError.requestFailed("The knowledge file id is invalid.")
-        }
-        return try await authorizedJSON(path: "/companion/v1/knowledge/file?id=\(encoded)", method: "GET", body: nil, decode: CompanionKnowledgeFileResponse.self)
+        try await authorizedJSON(path: companionKnowledgeFileEndpoint(fileId: fileId), method: "GET", body: nil, decode: CompanionKnowledgeFileResponse.self)
     }
 
     func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry {
@@ -683,10 +673,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
     func deleteKnowledgeEntry(id: String) async throws {
         struct DeleteResponse: Decodable { let ok: Bool }
-        guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            throw CompanionClientError.requestFailed("The knowledge entry id is invalid.")
-        }
-        _ = try await authorizedJSON(path: "/companion/v1/knowledge/entry?id=\(encoded)", method: "DELETE", body: nil, decode: DeleteResponse.self)
+        _ = try await authorizedJSON(path: companionKnowledgeEntryEndpoint(id: id), method: "DELETE", body: nil, decode: DeleteResponse.self)
     }
 
     func createKnowledgeImageAsset(fileName: String?, mimeType: String?, dataBase64: String) async throws -> CompanionKnowledgeImageAssetResponse {

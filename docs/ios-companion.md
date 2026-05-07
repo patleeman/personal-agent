@@ -54,6 +54,8 @@ iOS App ──► Companion API (HTTP/WebSocket) ──► Daemon
 
 The iOS project lives at `apps/ios/PersonalAgentCompanion` and is developed in Xcode with Swift.
 
+When adding companion API calls, build query strings through `URLComponents`-backed endpoint helpers in `CompanionModels.swift`. Knowledge note and folder IDs can contain characters like `&`, so direct `.urlQueryAllowed` interpolation will corrupt requests.
+
 ### Prerequisites
 
 - Xcode 16+

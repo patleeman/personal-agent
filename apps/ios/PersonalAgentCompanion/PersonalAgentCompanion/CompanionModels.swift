@@ -1397,13 +1397,31 @@ func companionRemoteDirectoryEndpoint(targetId: String, path: String?) -> String
     guard let path = path?.trimmed.nilIfBlank else {
         return basePath
     }
+    return companionEndpoint(path: basePath, queryItems: [URLQueryItem(name: "path", value: path)])
+}
 
-    var components = URLComponents()
-    components.queryItems = [URLQueryItem(name: "path", value: path)]
-    guard let query = components.percentEncodedQuery?.nilIfBlank else {
-        return basePath
+func companionKnowledgeTreeEndpoint(directoryId: String?) -> String {
+    guard let directoryId = directoryId?.nilIfBlank else {
+        return "/companion/v1/knowledge/tree"
     }
-    return "\(basePath)?\(query)"
+    return companionEndpoint(path: "/companion/v1/knowledge/tree", queryItems: [URLQueryItem(name: "dir", value: directoryId)])
+}
+
+func companionKnowledgeFileEndpoint(fileId: String) -> String {
+    companionEndpoint(path: "/companion/v1/knowledge/file", queryItems: [URLQueryItem(name: "id", value: fileId)])
+}
+
+func companionKnowledgeEntryEndpoint(id: String) -> String {
+    companionEndpoint(path: "/companion/v1/knowledge/entry", queryItems: [URLQueryItem(name: "id", value: id)])
+}
+
+private func companionEndpoint(path: String, queryItems: [URLQueryItem]) -> String {
+    var components = URLComponents()
+    components.queryItems = queryItems
+    guard let query = components.percentEncodedQuery?.nilIfBlank else {
+        return path
+    }
+    return "\(path)?\(query)"
 }
 
 private func companionPathSegment(_ value: String) -> String {

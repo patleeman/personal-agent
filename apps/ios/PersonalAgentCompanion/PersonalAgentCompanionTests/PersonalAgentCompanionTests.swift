@@ -572,6 +572,21 @@ final class PersonalAgentCompanionTests: XCTestCase {
         )
     }
 
+    func testKnowledgeEndpointsEncodeAmpersandsInQueryValues() {
+        XCTAssertEqual(
+            companionKnowledgeTreeEndpoint(directoryId: "Research/R&D"),
+            "/companion/v1/knowledge/tree?dir=Research/R%26D"
+        )
+        XCTAssertEqual(
+            companionKnowledgeFileEndpoint(fileId: "Research/R&D.md"),
+            "/companion/v1/knowledge/file?id=Research/R%26D.md"
+        )
+        XCTAssertEqual(
+            companionKnowledgeEntryEndpoint(id: "Research/R&D.md"),
+            "/companion/v1/knowledge/entry?id=Research/R%26D.md"
+        )
+    }
+
     func testDisplayBlockDecodesImagesWithoutAltText() throws {
         let payload = Data(#"{"type":"text","id":"block-1","ts":"2026-04-25T00:00:00Z","text":"Image attached","images":[{"src":"/companion/v1/conversations/conv-1/blocks/block-1/images/0"}]}"#.utf8)
 
