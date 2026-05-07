@@ -51,6 +51,7 @@ const {
   buildReferencedTasksContextMock,
   buildReferencedVaultFilesContextMock,
   expandPromptReferencesWithNodeGraphMock,
+  publishAppEventMock,
   createSessionListenerUnsubscribeMock,
 } = vi.hoisted(() => ({
   LiveSessionControlErrorClass: class LiveSessionControlError extends Error {},
@@ -104,6 +105,7 @@ const {
   buildReferencedTasksContextMock: vi.fn(),
   buildReferencedVaultFilesContextMock: vi.fn(),
   expandPromptReferencesWithNodeGraphMock: vi.fn(),
+  publishAppEventMock: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
@@ -193,6 +195,10 @@ vi.mock('../knowledge/vaultFiles.js', () => ({
 
 vi.mock('../conversations/conversationRuns.js', () => ({
   syncWebLiveConversationRun: syncWebLiveConversationRunMock,
+}));
+
+vi.mock('../shared/appEvents.js', () => ({
+  publishAppEvent: publishAppEventMock,
 }));
 
 vi.mock('../workspace/gitStatus.js', () => ({
@@ -782,6 +788,8 @@ describe('live session routes', () => {
       initialModel: 'gpt-4o',
       initialThinkingLevel: 'high',
     });
+    expect(publishAppEventMock).toHaveBeenCalledWith({ type: 'open_session', sessionId: 'live-new' });
+
     expect(createRes.json).toHaveBeenCalledWith({
       id: 'live-new',
       sessionFile: '/sessions/live-new.jsonl',
