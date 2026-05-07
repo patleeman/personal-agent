@@ -224,7 +224,7 @@ describe('conversation auto mode agent extension', () => {
       } as never,
     );
 
-    expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash', 'conversation_auto_control']);
+    expect(pi.setActiveTools).toHaveBeenCalledWith(['conversation_auto_control', 'read', 'edit']);
   });
 
   it('rejects stale auto control tool calls outside hidden auto-review turns', async () => {

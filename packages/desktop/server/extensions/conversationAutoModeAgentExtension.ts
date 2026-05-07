@@ -15,9 +15,15 @@ import {
 import { logWarn } from '../middleware/index.js';
 
 const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
+const CONTINUE_IDEMPOTENCY_WINDOW_MS = 30_000;
 
 const AutoModeControlToolNames = [CONVERSATION_AUTO_MODE_CONTROL_TOOL] as const;
 const AutoModeControlToolNameSet = new Set<string>(AutoModeControlToolNames);
+const REVIEW_TOOL_NAMES = new Set<string>([CONVERSATION_AUTO_MODE_CONTROL_TOOL, 'read', 'edit']);
+
+// Track last continue call per session manager instance to make continue
+// idempotent within a turn. WeakMap is cleanable across test runs.
+const lastContinueTimestamps = new WeakMap<object, number>();
 
 const ConversationAutoControlParams = Type.Object({
   action: Type.Union([Type.Literal('continue'), Type.Literal('stop')], {
@@ -68,9 +74,20 @@ function isAutoModeHiddenReviewTurn(sessionManager: { getBranch?: () => unknown[
 }
 
 function setAutoModeControlToolActive(pi: ExtensionAPI, active: boolean): void {
+  if (active) {
+    // During hidden review turns, restrict to only the control tool + read/edit
+    // so the agent cannot run bash or call other tools.
+    const current = pi.getActiveTools();
+    if (current.length === REVIEW_TOOL_NAMES.size && current.every((name) => REVIEW_TOOL_NAMES.has(name))) {
+      return;
+    }
+    pi.setActiveTools([...REVIEW_TOOL_NAMES]);
+    return;
+  }
+
+  // Outside review turns, remove the auto control tool from the normal set.
   const current = pi.getActiveTools();
-  const withoutAutoControlTool = current.filter((name) => !AutoModeControlToolNameSet.has(name));
-  const next = active ? [...withoutAutoControlTool, ...AutoModeControlToolNames] : withoutAutoControlTool;
+  const next = current.filter((name) => !AutoModeControlToolNameSet.has(name));
   if (current.length === next.length && current.every((name, index) => name === next[index])) {
     return;
   }
@@ -163,6 +180,21 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           }
 
           const remainingTurns = state.budget?.maxTurns;
+
+          // Idempotency guard: skip duplicate continue calls within 30s of the
+          // first call in the same hidden review turn (agent calling twice, or
+          // recovery replaying the turn). Uses the session manager object as key
+          // so each turn instance gets its own tracking.
+          const lastContinueAt = lastContinueTimestamps.get(ctx.sessionManager as object) ?? 0;
+          if (Date.now() - lastContinueAt < CONTINUE_IDEMPOTENCY_WINDOW_MS) {
+            markConversationAutoModeContinueRequested(sessionId);
+            return {
+              content: [{ type: 'text' as const, text: 'Continue already processed.' }],
+              details: { enabled: true, action: 'continue' },
+            };
+          }
+          lastContinueTimestamps.set(ctx.sessionManager as object, Date.now());
+
           if (state.mode === 'forced' && remainingTurns === 0) {
             const nextState = await setLiveSessionAutoModeState(sessionId, {
               enabled: false,
