@@ -77,6 +77,7 @@ describe('ChatView rendering stability', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     for (const root of mountedRoots.splice(0)) {
       act(() => {
@@ -124,6 +125,44 @@ describe('ChatView rendering stability', () => {
     });
 
     expect(setIntervalSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the tail trace cluster open across transient streaming-state drops', () => {
+    vi.useFakeTimers();
+    const toolBlock = {
+      id: 'tool-1',
+      type: 'tool_use',
+      ts: '2026-04-23T18:00:02.000Z',
+      tool: 'bash',
+      input: { command: 'npm test -- --runInBand' },
+      output: '',
+      status: 'ok',
+    } satisfies Extract<MessageBlock, { type: 'tool_use' }>;
+    const { container, root } = renderChatView([toolBlock], { isStreaming: true });
+
+    expect(container.textContent).toContain('Working');
+    expect(container.textContent).toContain('npm test -- --runInBand');
+
+    act(() => {
+      root.render(<ChatView messages={[toolBlock]} isStreaming={false} />);
+    });
+
+    expect(container.textContent).toContain('Working');
+    expect(container.textContent).toContain('npm test -- --runInBand');
+
+    act(() => {
+      vi.advanceTimersByTime(899);
+    });
+
+    expect(container.textContent).toContain('Working');
+    expect(container.textContent).toContain('npm test -- --runInBand');
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(container.textContent).toContain('Internal work');
+    expect(container.textContent).not.toContain('npm test -- --runInBand');
   });
 
   it('requests composer focus when the transcript background is clicked', () => {

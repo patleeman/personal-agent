@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MessageBlock } from '../../shared/types';
 import { getStreamingThroughputLabel } from '../../transcript/streamingThroughput';
@@ -117,6 +117,38 @@ function traceSummaryTone(category: TraceClusterSummaryCategory) {
 }
 
 const MAX_VISIBLE_TRACE_BLOCKS = 5;
+const TRACE_CLUSTER_INACTIVE_GRACE_MS = 900;
+
+function useGracefulTraceClusterActive(active: boolean): boolean {
+  const [stableActive, setStableActive] = useState(active);
+  const inactiveTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (inactiveTimeoutRef.current !== null) {
+      window.clearTimeout(inactiveTimeoutRef.current);
+      inactiveTimeoutRef.current = null;
+    }
+
+    if (active) {
+      setStableActive(true);
+      return undefined;
+    }
+
+    inactiveTimeoutRef.current = window.setTimeout(() => {
+      setStableActive(false);
+      inactiveTimeoutRef.current = null;
+    }, TRACE_CLUSTER_INACTIVE_GRACE_MS);
+
+    return () => {
+      if (inactiveTimeoutRef.current !== null) {
+        window.clearTimeout(inactiveTimeoutRef.current);
+        inactiveTimeoutRef.current = null;
+      }
+    };
+  }, [active]);
+
+  return stableActive;
+}
 
 export function TraceClusterBlock({
   clusterStartIndex,
@@ -163,10 +195,11 @@ export function TraceClusterBlock({
   const expandedCategories = summary.categories.slice(0, 3);
   const remainingCategoryCount = Math.max(0, summary.categories.length - expandedCategories.length);
   const durationLabel = summary.durationMs && summary.durationMs > 0 ? `${(summary.durationMs / 1000).toFixed(1)}s` : null;
-  const throughputLabel = useMemo(() => getStreamingThroughputLabel(blocks, live), [blocks, live]);
   const isActive = live || summary.hasRunning;
-  const title = isActive ? 'Working' : 'Internal work';
-  const autoOpen = shouldAutoOpenTraceCluster(live, summary.hasRunning);
+  const stableActive = useGracefulTraceClusterActive(isActive);
+  const throughputLabel = useMemo(() => getStreamingThroughputLabel(blocks, stableActive), [blocks, stableActive]);
+  const title = stableActive ? 'Working' : 'Internal work';
+  const autoOpen = shouldAutoOpenTraceCluster(stableActive, false);
   const open = resolveDisclosureOpen(autoOpen, preference);
   const hiddenBlockCount = Math.max(0, blocks.length - MAX_VISIBLE_TRACE_BLOCKS);
   const visibleBlocks = showAllBlocks || hiddenBlockCount === 0 ? blocks : blocks.slice(-MAX_VISIBLE_TRACE_BLOCKS);
@@ -186,7 +219,7 @@ export function TraceClusterBlock({
           className={panelClassName}
         >
           <div className="flex items-center gap-2 text-[12px]">
-            {isActive ? (
+            {stableActive ? (
               <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
             ) : (
               <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>
@@ -198,7 +231,7 @@ export function TraceClusterBlock({
               · {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}
             </span>
             <span className="flex-1" />
-            {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
+            {stableActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
             {throughputLabel && (
               <span
                 className="font-mono text-[11px] text-accent/80"
@@ -273,7 +306,7 @@ export function TraceClusterBlock({
           )}
           {visibleBlocks.map((block, index) => {
             const blockIndex = visibleStartIndex + index;
-            const autoOpen = shouldAutoOpenConversationBlock(block, blockIndex, blocks.length, live);
+            const autoOpen = shouldAutoOpenConversationBlock(block, blockIndex, blocks.length, stableActive);
 
             switch (block.type) {
               case 'thinking':
