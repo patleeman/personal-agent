@@ -14,7 +14,11 @@ export const PA_CLIENT_JS: string = `
 
   // ── State ─────────────────────────────────────────────────────────────────
   const activeSSE = new Map();
+  const injectedLaunchContext = window.__PA_LAUNCH_CONTEXT__ && typeof window.__PA_LAUNCH_CONTEXT__ === 'object'
+    ? window.__PA_LAUNCH_CONTEXT__
+    : null;
   const extensionIdFromPath = (() => {
+    if (typeof injectedLaunchContext?.extensionId === 'string') return injectedLaunchContext.extensionId;
     const match = window.location.pathname.match(new RegExp('^/api/extensions/([^/]+)/files/'));
     return match ? decodeURIComponent(match[1]) : null;
   })();
@@ -23,12 +27,14 @@ export const PA_CLIENT_JS: string = `
   function readLaunchContext() {
     return {
       extensionId: extensionIdFromPath,
-      surfaceId: launchParams.get('surfaceId'),
-      route: launchParams.get('route'),
-      pathname: launchParams.get('pathname'),
-      search: launchParams.get('search') || '',
-      hash: launchParams.get('hash') || '',
-      theme: launchParams.get('theme') || 'system'
+      surfaceId: typeof injectedLaunchContext?.surfaceId === 'string' ? injectedLaunchContext.surfaceId : launchParams.get('surfaceId'),
+      route: typeof injectedLaunchContext?.route === 'string' ? injectedLaunchContext.route : launchParams.get('route'),
+      pathname: typeof injectedLaunchContext?.pathname === 'string' ? injectedLaunchContext.pathname : launchParams.get('pathname'),
+      search: typeof injectedLaunchContext?.search === 'string' ? injectedLaunchContext.search : launchParams.get('search') || '',
+      hash: typeof injectedLaunchContext?.hash === 'string' ? injectedLaunchContext.hash : launchParams.get('hash') || '',
+      conversationId: typeof injectedLaunchContext?.conversationId === 'string' ? injectedLaunchContext.conversationId : launchParams.get('conversationId'),
+      cwd: typeof injectedLaunchContext?.cwd === 'string' ? injectedLaunchContext.cwd : launchParams.get('cwd'),
+      theme: typeof injectedLaunchContext?.theme === 'string' ? injectedLaunchContext.theme : launchParams.get('theme') || 'system'
     };
   }
 

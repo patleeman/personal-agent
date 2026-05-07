@@ -338,6 +338,11 @@ function buildRoutePattern(path: string): { pattern: RegExp; keys: string[] } {
         return '';
       }
 
+      if (segment === '*') {
+        keys.push('0');
+        return '(.+)';
+      }
+
       if (segment.startsWith(':')) {
         keys.push(segment.slice(1));
         return '([^/]+)';

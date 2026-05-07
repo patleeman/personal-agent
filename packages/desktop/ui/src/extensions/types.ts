@@ -131,3 +131,15 @@ export function isExtensionLeftNavItemSurface(
 export function isExtensionPageSurface(surface: ExtensionSurfaceSummary): surface is ExtensionMainPageSurface & ExtensionSurfaceSummary {
   return surface.placement === 'main' && surface.kind === 'page' && typeof surface.route === 'string';
 }
+
+export function isExtensionRightToolPanelSurface(
+  surface: ExtensionSurfaceSummary,
+): surface is ExtensionRightToolPanelSurface & ExtensionSurfaceSummary {
+  return (
+    surface.placement === 'right' &&
+    surface.kind === 'toolPanel' &&
+    typeof surface.label === 'string' &&
+    typeof surface.entry === 'string' &&
+    typeof surface.scope === 'string'
+  );
+}

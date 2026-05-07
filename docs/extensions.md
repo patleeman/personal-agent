@@ -407,6 +407,8 @@ Examples:
 
 Conversation-scoped panels receive the active conversation ID in their launch context. Global panels do not. Workspace-scoped panels receive cwd/workspace metadata. Selection-scoped panels receive selected text/message/file context when opened.
 
+Current implementation wires enabled `placement: "right"` / `kind: "toolPanel"` surfaces into the Workbench right rail. Global panels are always available there, conversation panels require an active conversation, workspace panels require a workspace cwd, and selection panels are hidden until selection context exists. Selecting the rail item renders the declared iframe `entry` and passes `surfaceId`, `pathname`, `search`, `hash`, plus `conversationId` and `cwd` when available.
+
 ## Commands and slash commands
 
 Personal Agent does not yet have a full command palette, but the extension model should reserve the surface. Command registration should be manifest-first so commands can appear in a future palette, menus, and keyboard bindings.
@@ -581,7 +583,7 @@ The server invokes handlers through the action endpoint:
 POST /api/extensions/:extensionId/actions/:actionId
 ```
 
-Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. The backend build is content-hash cached; unchanged packages reuse the compiled module. If an action invoke sees a broken edit but a previous compiled backend exists, PA uses the previous compiled backend instead of bricking the extension. Explicit reload still reports build failures. HTML extension pages get `/pa/client.js` injected automatically, so iframe code can call `PA.context.get()`, `PA.extension.invoke/getManifest/listSurfaces`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`.
+Current implementation transpiles runtime extension backend TypeScript with esbuild into `~/.local/state/personal-agent/extension-cache/{extensionId}/backend.mjs`, imports it with a cache-busting URL, and calls the manifest-declared handler. The backend build is content-hash cached; unchanged packages reuse the compiled module. If an action invoke sees a broken edit but a previous compiled backend exists, PA uses the previous compiled backend instead of bricking the extension. Explicit reload still reports build failures. HTML extension pages and right-rail tool panels get `/pa/client.js` injected automatically, so iframe code can call `PA.context.get()`, `PA.extension.invoke/getManifest/listSurfaces`, `PA.storage.*`, `PA.runs.*`, `PA.vault.*`, `PA.conversations.*`, and `PA.automations.*`. `PA.context.get()` includes `conversationId` and `cwd` when the surface was launched with that context.
 
 The backend context is the stable API for trusted extension code. The current implementation includes `ctx.storage`, `ctx.runs`, `ctx.automations`, `ctx.vault`, `ctx.conversations`, and `ctx.log`; the remaining namespaces below are the target surface for follow-up work:
 
