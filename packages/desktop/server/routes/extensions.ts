@@ -11,6 +11,7 @@ import {
   readExtensionSchema,
   setExtensionEnabled,
 } from '../extensions/extensionRegistry.js';
+import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from '../extensions/extensionStorage.js';
 import { logError } from '../middleware/index.js';
 import type { ServerRouteContext } from './context.js';
 
@@ -82,7 +83,7 @@ function readExtensionFile(req: Request, res: Response): void {
 }
 
 export function registerExtensionRoutes(
-  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  router: Pick<Express, 'delete' | 'get' | 'patch' | 'post' | 'put'>,
   context?: Pick<ServerRouteContext, 'getCurrentProfile'>,
 ): void {
   router.get('/api/extensions/schema', (_req, res) => {
@@ -122,6 +123,51 @@ export function registerExtensionRoutes(
       res.json(readExtensionRegistrySnapshot().surfaces);
     } catch (err) {
       sendRouteError(res, 'extensions surfaces error', err);
+    }
+  });
+
+  router.get('/api/extensions/:id/state', (req, res) => {
+    try {
+      res.json(listExtensionState(req.params.id, typeof req.query.prefix === 'string' ? req.query.prefix : ''));
+    } catch (err) {
+      sendRouteError(res, 'extension state list error', err);
+    }
+  });
+
+  router.get('/api/extensions/:id/state/*', (req, res) => {
+    try {
+      const document = readExtensionState(req.params.id, req.params[0]);
+      if (!document) {
+        res.status(404).json({ error: 'Extension state document not found.' });
+        return;
+      }
+      res.json(document);
+    } catch (err) {
+      sendRouteError(res, 'extension state read error', err);
+    }
+  });
+
+  router.put('/api/extensions/:id/state/*', (req, res) => {
+    try {
+      const body = req.body as { value?: unknown; expectedVersion?: unknown };
+      const expectedVersion =
+        typeof body.expectedVersion === 'number' && Number.isSafeInteger(body.expectedVersion) ? body.expectedVersion : undefined;
+      res.json(writeExtensionState(req.params.id, req.params[0], body.value, { expectedVersion }));
+    } catch (err) {
+      const conflict = err instanceof Error && err.message === 'Extension state version conflict.';
+      if (conflict) {
+        res.status(409).json({ error: err.message, current: (err as Error & { current?: unknown }).current ?? null });
+        return;
+      }
+      sendRouteError(res, 'extension state write error', err);
+    }
+  });
+
+  router.delete('/api/extensions/:id/state/*', (req, res) => {
+    try {
+      res.json(deleteExtensionState(req.params.id, req.params[0]));
+    } catch (err) {
+      sendRouteError(res, 'extension state delete error', err);
     }
   });
 

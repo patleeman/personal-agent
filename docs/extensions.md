@@ -613,7 +613,7 @@ Do not expose raw SQLite handles, Express routers, Electron main process objects
 
 ## Storage
 
-Extensions need app-owned state. The preferred model is server-side SQLite under Personal Agent runtime state, outside the knowledge base.
+Extensions need app-owned state. The implemented model is server-side SQLite under Personal Agent runtime state, outside the knowledge base.
 
 ```text
 ~/.local/state/personal-agent/app-state/app-state.sqlite
@@ -625,10 +625,12 @@ Expose document-style storage instead of raw SQL:
 
 ```http
 GET    /api/extensions/:id/state/:key
-PUT    /api/extensions/:id/state/:key
+PUT    /api/extensions/:id/state/:key       # body: { value, expectedVersion? }
 DELETE /api/extensions/:id/state/:key
 GET    /api/extensions/:id/state?prefix=tasks/
 ```
+
+Iframe extensions can call the same API through `PA.storage.get/put/delete/list`. Backend actions use `ctx.storage` against the same per-extension SQLite documents.
 
 A simple table is enough for v0:
 

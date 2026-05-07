@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerExtensionRoutes } from './extensions.js';
 
-type Handler = (req: { params?: Record<string, string>; body?: unknown }, res: ReturnType<typeof createResponse>) => void | Promise<void>;
+type Handler = (
+  req: { params?: Record<string, string>; body?: unknown; query?: Record<string, string> },
+  res: ReturnType<typeof createResponse>,
+) => void | Promise<void>;
 
 function createResponse() {
   return {
@@ -22,16 +25,22 @@ function createHarness() {
   const getHandlers = new Map<string, Handler>();
   const postHandlers = new Map<string, Handler>();
   const patchHandlers = new Map<string, Handler>();
+  const putHandlers = new Map<string, Handler>();
+  const deleteHandlers = new Map<string, Handler>();
   const router = {
     get: vi.fn((path: string, handler: Handler) => getHandlers.set(path, handler)),
     post: vi.fn((path: string, handler: Handler) => postHandlers.set(path, handler)),
     patch: vi.fn((path: string, handler: Handler) => patchHandlers.set(path, handler)),
+    put: vi.fn((path: string, handler: Handler) => putHandlers.set(path, handler)),
+    delete: vi.fn((path: string, handler: Handler) => deleteHandlers.set(path, handler)),
   };
   registerExtensionRoutes(router as never);
   return {
     getHandler: (path: string) => getHandlers.get(path)!,
     postHandler: (path: string) => postHandlers.get(path)!,
     patchHandler: (path: string) => patchHandlers.get(path)!,
+    putHandler: (path: string) => putHandlers.get(path)!,
+    deleteHandler: (path: string) => deleteHandlers.get(path)!,
   };
 }
 
@@ -98,6 +107,39 @@ describe('registerExtensionRoutes', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Extension file path escapes package root.' });
+  });
+
+  it('serves extension state documents with optimistic concurrency', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const harness = createHarness();
+
+    const putRes = createResponse();
+    harness.putHandler('/api/extensions/:id/state/*')(
+      { params: { id: 'agent-board', 0: 'tasks/one' }, body: { value: { title: 'Ship it' } } },
+      putRes,
+    );
+    expect(putRes.json).toHaveBeenCalledWith(expect.objectContaining({ key: 'tasks/one', value: { title: 'Ship it' }, version: 1 }));
+
+    const getRes = createResponse();
+    harness.getHandler('/api/extensions/:id/state/*')({ params: { id: 'agent-board', 0: 'tasks/one' } }, getRes);
+    expect(getRes.json).toHaveBeenCalledWith(expect.objectContaining({ key: 'tasks/one', value: { title: 'Ship it' }, version: 1 }));
+
+    const conflictRes = createResponse();
+    harness.putHandler('/api/extensions/:id/state/*')(
+      { params: { id: 'agent-board', 0: 'tasks/one' }, body: { value: { title: 'Nope' }, expectedVersion: 99 } },
+      conflictRes,
+    );
+    expect(conflictRes.status).toHaveBeenCalledWith(409);
+    expect(conflictRes.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Extension state version conflict.' }));
+
+    const listRes = createResponse();
+    harness.getHandler('/api/extensions/:id/state')({ params: { id: 'agent-board' }, query: { prefix: 'tasks/' } }, listRes);
+    expect(listRes.json).toHaveBeenCalledWith([expect.objectContaining({ key: 'tasks/one' })]);
+
+    const deleteRes = createResponse();
+    harness.deleteHandler('/api/extensions/:id/state/*')({ params: { id: 'agent-board', 0: 'tasks/one' } }, deleteRes);
+    expect(deleteRes.json).toHaveBeenCalledWith({ ok: true, deleted: true });
   });
 
   it('toggles runtime extensions', () => {

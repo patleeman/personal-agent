@@ -1,5 +1,4 @@
-import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -9,6 +8,7 @@ import { build } from 'esbuild';
 import type { ServerRouteContext } from '../routes/context.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { findExtensionEntry } from './extensionRegistry.js';
+import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
 
 export interface ExtensionBackendContext {
   extensionId: string;
@@ -37,10 +37,6 @@ function getExtensionCacheRoot(stateRoot: string = getStateRoot()): string {
   return join(stateRoot, 'extension-cache');
 }
 
-function getExtensionStateRoot(extensionId: string, stateRoot: string = getStateRoot()): string {
-  return join(stateRoot, 'extension-state', extensionId);
-}
-
 function assertInside(root: string, candidate: string): void {
   const resolvedRoot = resolve(root);
   const resolvedCandidate = resolve(candidate);
@@ -49,63 +45,20 @@ function assertInside(root: string, candidate: string): void {
   }
 }
 
-function normalizeStorageKey(key: string): string {
-  const normalized = key.trim().replace(/^\/+/, '');
-  if (!normalized || normalized.includes('\0')) {
-    throw new Error('Storage key is required.');
-  }
-  return normalized.endsWith('.json') ? normalized : `${normalized}.json`;
-}
-
-function resolveStoragePath(extensionId: string, key: string): { root: string; filePath: string; normalizedKey: string } {
-  const root = join(getExtensionStateRoot(extensionId), 'kv');
-  const normalizedKey = normalizeStorageKey(key);
-  const filePath = resolve(root, normalizedKey);
-  assertInside(root, filePath);
-  return { root, filePath, normalizedKey };
-}
-
 function createStorage(extensionId: string): ExtensionBackendContext['storage'] {
   return {
     async get<T = unknown>(key: string): Promise<T | null> {
-      const { filePath } = resolveStoragePath(extensionId, key);
-      if (!existsSync(filePath)) return null;
-      return JSON.parse(await readFile(filePath, 'utf-8')) as T;
+      return readExtensionState<T>(extensionId, key)?.value ?? null;
     },
     async put(key: string, value: unknown): Promise<{ ok: true }> {
-      const { filePath } = resolveStoragePath(extensionId, key);
-      await mkdir(dirname(filePath), { recursive: true });
-      await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+      writeExtensionState(extensionId, key, value);
       return { ok: true };
     },
     async delete(key: string): Promise<{ ok: true; deleted: boolean }> {
-      const { filePath } = resolveStoragePath(extensionId, key);
-      const deleted = existsSync(filePath);
-      await rm(filePath, { force: true });
-      return { ok: true, deleted };
+      return deleteExtensionState(extensionId, key);
     },
     async list<T = unknown>(prefix = ''): Promise<Array<{ key: string; value: T }>> {
-      const root = join(getExtensionStateRoot(extensionId), 'kv');
-      if (!existsSync(root)) return [];
-      const normalizedPrefix = prefix.trim().replace(/^\/+/, '');
-      const items: Array<{ key: string; value: T }> = [];
-
-      async function visit(dir: string): Promise<void> {
-        for (const entry of await readdir(dir, { withFileTypes: true })) {
-          const entryPath = join(dir, entry.name);
-          if (entry.isDirectory()) {
-            await visit(entryPath);
-            continue;
-          }
-          if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
-          const relativeKey = entryPath.slice(root.length + 1).replace(/\.json$/, '');
-          if (normalizedPrefix && !relativeKey.startsWith(normalizedPrefix)) continue;
-          items.push({ key: relativeKey, value: JSON.parse(await readFile(entryPath, 'utf-8')) as T });
-        }
-      }
-
-      await visit(root);
-      return items.sort((left, right) => left.key.localeCompare(right.key));
+      return listExtensionState<T>(extensionId, prefix).map((document) => ({ key: document.key, value: document.value }));
     },
   };
 }

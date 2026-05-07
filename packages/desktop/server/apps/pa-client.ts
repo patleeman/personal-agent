@@ -111,6 +111,30 @@ export const PA_CLIENT_JS: string = `
       }
     },
 
+    storage: {
+      get(key) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state/' + encodeStateKey(key));
+      },
+      put(key, value, opts) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state/' + encodeStateKey(key), { method: 'PUT', body: { value: value, expectedVersion: opts && opts.expectedVersion } });
+      },
+      delete(key) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state/' + encodeStateKey(key), { method: 'DELETE' });
+      },
+      list(prefix) {
+        var extensionId = extensionIdFromPath;
+        if (!extensionId) throw new Error('Extension id is unavailable');
+        var suffix = prefix ? '?prefix=' + encodeURIComponent(prefix) : '';
+        return requestJson('/api/extensions/' + encodeURIComponent(extensionId) + '/state' + suffix);
+      }
+    },
+
     automations: {
       list() { return requestJson('/api/tasks'); },
       get(taskId) { return requestJson('/api/tasks/' + encodeURIComponent(taskId)); },
@@ -131,6 +155,10 @@ export const PA_CLIENT_JS: string = `
       window.dispatchEvent(event);
     }
   };
+
+  function encodeStateKey(key) {
+    return String(key || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  }
 
   async function requestJson(path, opts) {
     const init = opts || {};
