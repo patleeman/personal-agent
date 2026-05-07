@@ -130,10 +130,6 @@ export function getTabSessionKey(tabId: string): string {
   return `@global:tab-${tabId}`;
 }
 
-export function isLastTab(state: BrowserTabsState): boolean {
-  return state.tabs.length <= 1;
-}
-
 export function getAdjacentTabId(state: BrowserTabsState, closedTabId: string): string | null {
   const index = state.tabs.findIndex((t) => t.id === closedTabId);
   if (index < 0) {

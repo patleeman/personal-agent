@@ -4,7 +4,7 @@ import { Suggestion } from '@tiptap/suggestion';
 
 import type { VaultEntry } from '../../shared/types';
 
-export interface WikiLinkAttributes {
+interface WikiLinkAttributes {
   target: string;
   label: string | null;
 }

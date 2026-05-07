@@ -11,17 +11,15 @@ export type DesktopHostRecord =
       sshTarget: string;
     };
 
-export interface DesktopRemoteDirectoryEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  isHidden: boolean;
-}
-
 export interface DesktopRemoteDirectoryListing {
   path: string;
   parent?: string;
-  entries: DesktopRemoteDirectoryEntry[];
+  entries: Array<{
+    name: string;
+    path: string;
+    isDir: boolean;
+    isHidden: boolean;
+  }>;
 }
 
 export interface DesktopSshConnectionTestResult {
@@ -57,11 +55,6 @@ export interface DesktopRemoteOperationStatus {
   status: 'running' | 'success' | 'error';
   message: string;
   at: string;
-}
-
-export interface DesktopRemoteOperationBridgeEvent {
-  type: 'open' | 'event' | 'close';
-  event?: DesktopRemoteOperationStatus;
 }
 
 export interface DesktopAppPreferences {
@@ -153,41 +146,26 @@ export interface DesktopConversationBootstrapRequest {
   knownLastBlockId?: string;
 }
 
-export interface DesktopProviderApiKeyRequest {
+interface DesktopProviderApiKeyRequest {
   provider: string;
   apiKey: string;
 }
 
-export interface DesktopProviderOAuthInputRequest {
+interface DesktopProviderOAuthInputRequest {
   loginId: string;
   value: string;
 }
 
-export interface DesktopModelPreferencesUpdateRequest {
+interface DesktopModelPreferencesUpdateRequest {
   model?: string | null;
   visionModel?: string | null;
   thinkingLevel?: string | null;
   serviceTier?: string | null;
 }
 
-export interface DesktopConversationPlanDefaultsUpdateRequest {
-  defaultEnabled?: boolean;
-}
-
-export interface DesktopConversationPlanLibraryUpdateRequest {
-  presets?: unknown;
-  defaultPresetIds?: unknown;
-}
-
-export interface DesktopConversationAttentionRequest {
+interface DesktopConversationAttentionRequest {
   conversationId: string;
   read?: boolean;
-}
-
-export interface DesktopAlertSnoozeRequest {
-  alertId: string;
-  delay?: string;
-  at?: string;
 }
 
 export interface DesktopConversationRenameRequest {
@@ -261,7 +239,7 @@ export interface DesktopDurableRunAttentionRequest {
   read?: boolean;
 }
 
-export interface DesktopScheduledTaskUpdateRequest {
+interface DesktopScheduledTaskUpdateRequest {
   taskId: string;
   title?: string;
   enabled?: boolean;

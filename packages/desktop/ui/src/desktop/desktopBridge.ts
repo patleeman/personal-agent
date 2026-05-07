@@ -111,7 +111,7 @@ interface DesktopKnowledgeEntryContextMenuRequest {
   canDelete?: boolean;
 }
 
-export interface DesktopScreenshotCaptureResult {
+interface DesktopScreenshotCaptureResult {
   cancelled: boolean;
   image?: {
     name?: string;
@@ -120,7 +120,7 @@ export interface DesktopScreenshotCaptureResult {
   };
 }
 
-export interface DesktopWorkbenchBrowserBounds {
+interface DesktopWorkbenchBrowserBounds {
   x: number;
   y: number;
   width: number;
@@ -141,7 +141,7 @@ export interface DesktopWorkbenchBrowserState {
   lastChangedAt?: string;
 }
 
-export interface DesktopWorkbenchBrowserSnapshot extends DesktopWorkbenchBrowserState {
+interface DesktopWorkbenchBrowserSnapshot extends DesktopWorkbenchBrowserState {
   text: string;
 }
 

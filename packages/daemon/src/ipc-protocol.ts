@@ -15,82 +15,82 @@ import type {
   SyncWebLiveConversationRunResult,
 } from './types.js';
 
-export interface EmitRequest {
+interface EmitRequest {
   id: string;
   type: 'emit';
   event: DaemonEvent;
 }
 
-export interface StatusRequest {
+interface StatusRequest {
   id: string;
   type: 'status';
 }
 
-export interface StopRequest {
+interface StopRequest {
   id: string;
   type: 'stop';
 }
 
-export interface PingRequest {
+interface PingRequest {
   id: string;
   type: 'ping';
 }
 
-export interface SetDaemonPowerKeepAwakeRequest {
+interface SetDaemonPowerKeepAwakeRequest {
   id: string;
   type: 'power.setKeepAwake';
   keepAwake: boolean;
 }
 
-export interface ListDurableRunsRequest {
+interface ListDurableRunsRequest {
   id: string;
   type: 'runs.list';
 }
 
-export interface GetDurableRunRequest {
+interface GetDurableRunRequest {
   id: string;
   type: 'runs.get';
   runId: string;
 }
 
-export interface StartScheduledTaskRunRequest {
+interface StartScheduledTaskRunRequest {
   id: string;
   type: 'runs.startTask';
   taskId: string;
 }
 
-export interface StartBackgroundRunRequest {
+interface StartBackgroundRunRequest {
   id: string;
   type: 'runs.startBackground';
   input: StartBackgroundRunRequestInput;
 }
 
-export interface CancelDurableRunRequest {
+interface CancelDurableRunRequest {
   id: string;
   type: 'runs.cancel';
   runId: string;
 }
 
-export interface RerunDurableRunRequest {
+interface RerunDurableRunRequest {
   id: string;
   type: 'runs.rerun';
   runId: string;
 }
 
-export interface FollowUpDurableRunRequest {
+interface FollowUpDurableRunRequest {
   id: string;
   type: 'runs.followUp';
   runId: string;
   prompt?: string;
 }
 
-export interface SyncWebLiveConversationRunRequest {
+interface SyncWebLiveConversationRunRequest {
   id: string;
   type: 'conversations.sync';
   input: SyncWebLiveConversationRunRequestInput;
 }
 
-export interface ListRecoverableWebLiveConversationRunsRequest {
+interface ListRecoverableWebLiveConversationRunsRequest {
   id: string;
   type: 'conversations.recoverable';
 }
@@ -111,7 +111,7 @@ export type DaemonRequest =
   | SyncWebLiveConversationRunRequest
   | ListRecoverableWebLiveConversationRunsRequest;
 
-export interface DaemonSuccessResponse {
+interface DaemonSuccessResponse {
   id: string;
   ok: true;
   result:
@@ -130,7 +130,7 @@ export interface DaemonSuccessResponse {
     | ListRecoverableWebLiveConversationRunsResult;
 }
 
-export interface DaemonErrorResponse {
+interface DaemonErrorResponse {
   id: string;
   ok: false;
   error: string;

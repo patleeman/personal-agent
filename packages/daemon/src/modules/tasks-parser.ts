@@ -21,13 +21,13 @@ export interface ParsedCronExpression {
   dayOfWeek: ParsedCronField;
 }
 
-export interface CronTaskSchedule {
+interface CronTaskSchedule {
   type: 'cron';
   expression: string;
   parsed: ParsedCronExpression;
 }
 
-export interface AtTaskSchedule {
+interface AtTaskSchedule {
   type: 'at';
   at: string;
   atMs: number;

@@ -1,13 +1,13 @@
 import { type ChildProcess, spawn } from 'child_process';
 
-export interface DaemonPowerStatus {
+interface DaemonPowerStatus {
   keepAwake: boolean;
   supported: boolean;
   active: boolean;
   error?: string;
 }
 
-export interface DaemonPowerControllerOptions {
+interface DaemonPowerControllerOptions {
   platform?: NodeJS.Platform;
   spawnCaffeinate?: () => ChildProcess;
   logger?: {

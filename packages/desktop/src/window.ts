@@ -34,12 +34,12 @@ function resolvePreloadPath(): string {
   return resolve(currentDir, 'preload.cjs');
 }
 
-export interface DesktopNavigationState {
+interface DesktopNavigationState {
   canGoBack: boolean;
   canGoForward: boolean;
 }
 
-export type DesktopRendererShortcutAction =
+type DesktopRendererShortcutAction =
   | 'close-conversation'
   | 'reopen-closed-conversation'
   | 'previous-conversation'

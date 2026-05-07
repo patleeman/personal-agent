@@ -59,7 +59,7 @@ export interface ConversationCommitCheckpointFile {
   patch: string;
 }
 
-export interface ConversationCommitCheckpointComment {
+interface ConversationCommitCheckpointComment {
   id: string;
   authorName: string;
   authorProfile?: string;
@@ -278,7 +278,7 @@ export interface ScheduledTaskSummary {
 
 type ScheduledTaskThreadMode = 'dedicated' | 'existing' | 'none';
 
-export type ScheduledTaskActivityEntry =
+type ScheduledTaskActivityEntry =
   | {
       id: string;
       kind: 'missed';
@@ -494,7 +494,7 @@ export interface SessionMeta {
 export type GatewayProviderId = 'telegram' | 'slack_mcp';
 export type GatewayStatus = 'needs_config' | 'connected' | 'active' | 'paused' | 'needs_attention';
 
-export interface GatewayProviderSummary {
+interface GatewayProviderSummary {
   id: GatewayProviderId;
   label: string;
   implemented: boolean;
@@ -525,7 +525,7 @@ export interface GatewayThreadBinding {
   updatedAt: string;
 }
 
-export interface GatewayChatTarget {
+interface GatewayChatTarget {
   id: string;
   provider: GatewayProviderId;
   connectionId: string;
@@ -556,7 +556,7 @@ export interface GatewayState {
   events: GatewayEvent[];
 }
 
-export type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
+type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
 
 export interface ConversationSummaryRecord {
   sessionId: string;
@@ -863,7 +863,7 @@ export interface DesktopConnectionsState {
   hosts: Array<Extract<DesktopHostRecord, { kind: 'ssh' }>>;
 }
 
-export interface DesktopRemoteDirectoryEntry {
+interface DesktopRemoteDirectoryEntry {
   name: string;
   path: string;
   isDir: boolean;
@@ -1189,7 +1189,7 @@ export interface DefaultCwdState {
   effectiveCwd: string;
 }
 
-export interface KnowledgeBaseGitStatus {
+interface KnowledgeBaseGitStatus {
   localChangeCount: number;
   aheadCount: number;
   behindCount: number;
@@ -1432,7 +1432,7 @@ export interface VaultShareImportResult {
 // ── Workspace explorer ──────────────────────────────────────────────────────
 
 export type WorkspaceGitStatusChange = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'untracked' | 'conflicted';
-export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
+type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
 
 export interface WorkspaceEntry {
   name: string;
@@ -1444,7 +1444,7 @@ export interface WorkspaceEntry {
   descendantGitStatusCount: number;
 }
 
-export interface WorkspaceRootSnapshot {
+interface WorkspaceRootSnapshot {
   cwd: string;
   root: string;
   rootName: string;
@@ -1494,7 +1494,7 @@ export interface UncommittedDiffResult {
 
 export type TranscriptionProviderId = 'local-whisper';
 
-export interface TranscriptionSettings {
+interface TranscriptionSettings {
   provider: TranscriptionProviderId | null;
   model: string;
 }
@@ -1587,7 +1587,7 @@ export interface TraceToolHealth {
   bashComplexity?: TraceBashComplexity;
 }
 
-export interface TraceBashBreakdown {
+interface TraceBashBreakdown {
   command: string;
   calls: number;
   errors: number;
@@ -1598,7 +1598,7 @@ export interface TraceBashBreakdown {
   maxLatencyMs: number;
 }
 
-export interface TraceBashComplexity {
+interface TraceBashComplexity {
   avgScore: number;
   maxScore: number;
   avgCommandCount: number;
@@ -1671,19 +1671,19 @@ export interface TraceTokenDaily {
   cost: number;
 }
 
-export interface ToolTransition {
+interface ToolTransition {
   fromTool: string;
   toTool: string;
   count: number;
 }
 
-export interface ToolCoOccurrence {
+interface ToolCoOccurrence {
   toolA: string;
   toolB: string;
   sessions: number;
 }
 
-export interface FailureTrajectory {
+interface FailureTrajectory {
   toolName: string;
   errorMessage: string;
   previousCalls: string[];
@@ -1697,7 +1697,7 @@ export interface ToolFlowResult {
   failureTrajectories: FailureTrajectory[];
 }
 
-export interface AutoModeEvent {
+interface AutoModeEvent {
   sessionId: string;
   ts: string;
   enabled: boolean;
@@ -1751,7 +1751,7 @@ export interface SystemPromptPoint {
   pctOfContextWindow: number;
 }
 
-export interface SystemPromptModelAggregate {
+interface SystemPromptModelAggregate {
   modelId: string;
   avgSystemPromptTokens: number;
   maxSystemPromptTokens: number;
@@ -1769,7 +1769,7 @@ export interface SystemPromptAggregate {
   byModel: SystemPromptModelAggregate[];
 }
 
-export interface ContextPointerUsageSummary {
+interface ContextPointerUsageSummary {
   totalInspects: number;
   sessionsWithInspect: number;
   totalSuggested: number;
@@ -1779,7 +1779,7 @@ export interface ContextPointerUsageSummary {
   avgPointersPerTurn: number;
 }
 
-export interface ContextPointerDailyRow {
+interface ContextPointerDailyRow {
   date: string;
   suggested: number;
   inspected: number;

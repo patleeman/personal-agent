@@ -244,7 +244,7 @@ export interface AutomationSchedulerState {
 export type AutomationActivityKind = 'missed' | 'run-failed';
 export type AutomationActivityOutcome = 'skipped' | 'catch-up-started';
 
-export interface AutomationMissedActivityEntry {
+interface AutomationMissedActivityEntry {
   id: string;
   automationId: string;
   kind: 'missed';
@@ -256,7 +256,7 @@ export interface AutomationMissedActivityEntry {
   outcome: AutomationActivityOutcome;
 }
 
-export interface AutomationRunFailedActivityEntry {
+interface AutomationRunFailedActivityEntry {
   id: string;
   automationId: string;
   kind: 'run-failed';

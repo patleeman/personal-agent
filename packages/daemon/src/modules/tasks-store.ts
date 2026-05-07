@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 
-export type TaskRunStatus = 'running' | 'success' | 'failed' | 'skipped';
+type TaskRunStatus = 'running' | 'success' | 'failed' | 'skipped';
 
 export interface TaskRuntimeState {
   id: string;

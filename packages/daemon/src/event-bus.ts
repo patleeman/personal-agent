@@ -1,6 +1,6 @@
 import type { DaemonEvent, DaemonQueueStatus } from './types.js';
 
-export type EventHandler = (event: DaemonEvent) => Promise<void> | void;
+type EventHandler = (event: DaemonEvent) => Promise<void> | void;
 
 interface EventBusOptions {
   maxDepth: number;

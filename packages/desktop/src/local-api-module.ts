@@ -9,11 +9,7 @@ import type {
 } from './hosts/types.js';
 import { LocalApiWorkerClient } from './local-api-worker-client.js';
 
-export type DesktopAppBridgeEvent =
-  | { type: 'open' }
-  | { type: 'event'; event: unknown }
-  | { type: 'error'; message: string }
-  | { type: 'close' };
+type DesktopAppBridgeEvent = { type: 'open' } | { type: 'event'; event: unknown } | { type: 'error'; message: string } | { type: 'close' };
 
 export interface DesktopLocalApiDispatchResult {
   statusCode: number;

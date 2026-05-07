@@ -3,7 +3,7 @@ import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useEff
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 import { findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement } from './replySelection.js';
 
-export interface ReplySelectionState {
+interface ReplySelectionState {
   text: string;
   messageIndex: number;
   blockId?: string;

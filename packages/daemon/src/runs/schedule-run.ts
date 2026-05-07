@@ -24,32 +24,28 @@ import {
 // Input types
 // ---------------------------------------------------------------------------
 
-export type TriggerType = 'now' | 'at' | 'cron' | 'defer';
-
 export interface TriggerNow {
   type: 'now';
 }
 
-export interface TriggerAt {
+interface TriggerAt {
   type: 'at';
   at: Date;
 }
 
-export interface TriggerCron {
+interface TriggerCron {
   type: 'cron';
   expression: string;
 }
 
-export interface TriggerDefer {
+interface TriggerDefer {
   type: 'defer';
   delay: string; // e.g. "30s", "10m", "2h", "1d"
 }
 
-export type Trigger = TriggerNow | TriggerAt | TriggerCron | TriggerDefer;
+type Trigger = TriggerNow | TriggerAt | TriggerCron | TriggerDefer;
 
-export type TargetType = 'conversation' | 'agent' | 'shell';
-
-export interface TargetConversation {
+interface TargetConversation {
   type: 'conversation';
   conversationId: string;
   prompt: string;
@@ -71,15 +67,15 @@ export interface TargetShell {
   argv?: string[];
 }
 
-export type Target = TargetConversation | TargetAgent | TargetShell;
+type Target = TargetConversation | TargetAgent | TargetShell;
 
-export interface CallbackOptions {
+interface CallbackOptions {
   alertLevel?: 'none' | 'passive' | 'disruptive';
   autoResumeIfOpen?: boolean;
   requireAck?: boolean;
 }
 
-export interface LoopOptions {
+interface LoopOptions {
   enabled: boolean;
   delay?: string; // default inter-loop delay
   maxIterations?: number;
@@ -306,7 +302,7 @@ function parseDelayToMs(delay: string): number | undefined {
 // Validation
 // ---------------------------------------------------------------------------
 
-export interface ValidationError {
+interface ValidationError {
   field: string;
   message: string;
 }

@@ -8,7 +8,7 @@ export interface ConversationInitialModelPreferenceState {
   hasExplicitServiceTier: boolean;
 }
 
-export interface ConversationInitialDeferredResumeState {
+interface ConversationInitialDeferredResumeState {
   conversationId: string;
   resumes: DeferredResumeSummary[];
 }

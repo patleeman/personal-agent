@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export interface ComposerAttachmentShelfDrawingAttachment {
+interface ComposerAttachmentShelfDrawingAttachment {
   localId: string;
   title: string;
   attachmentId?: string;

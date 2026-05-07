@@ -6,7 +6,7 @@ import type { CompanionRuntime } from '../companion/types.js';
 import { loadDaemonConfig } from '../config.js';
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
-export interface TaskRunThreadBinding {
+interface TaskRunThreadBinding {
   threadMode?: 'dedicated' | 'existing' | 'none';
   threadSessionFile?: string;
   threadConversationId?: string;

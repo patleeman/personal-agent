@@ -35,7 +35,7 @@ import {
 
 export type McpTransportStrategy = 'sse-only' | 'http-only' | 'sse-first' | 'http-first';
 
-export interface McpRemoteDiscoveryResult {
+interface McpRemoteDiscoveryResult {
   authorizationServerUrl: string;
   authorizationServerMetadata?: AuthorizationServerMetadata;
   protectedResourceMetadata?: OAuthProtectedResourceMetadata;

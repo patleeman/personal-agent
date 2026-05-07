@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-export interface SessionHeaderRecord {
+interface SessionHeaderRecord {
   type: 'session';
   id: string;
   timestamp: string;
@@ -12,7 +12,7 @@ export interface SessionHeaderRecord {
   remoteConversationId?: string;
 }
 
-export function readSessionHeader(filePath: string): { lines: string[]; headerIndex: number; header: SessionHeaderRecord } {
+function readSessionHeader(filePath: string): { lines: string[]; headerIndex: number; header: SessionHeaderRecord } {
   const raw = readFileSync(filePath, 'utf-8');
   const lines = raw.split(/\r?\n/);
   const headerIndex = lines.findIndex((line) => line.trim().length > 0);
@@ -37,7 +37,7 @@ export function readSessionHeader(filePath: string): { lines: string[]; headerIn
   };
 }
 
-export function writeSessionHeader(filePath: string, header: SessionHeaderRecord, lines: string[], headerIndex: number): void {
+function writeSessionHeader(filePath: string, header: SessionHeaderRecord, lines: string[], headerIndex: number): void {
   lines[headerIndex] = JSON.stringify(header);
   writeFileSync(filePath, `${lines.filter((line) => line.length > 0).join('\n')}\n`, 'utf-8');
 }

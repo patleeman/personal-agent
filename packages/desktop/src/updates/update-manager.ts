@@ -8,9 +8,9 @@ import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 
-export type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
+type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
 
-export interface DesktopAppUpdateState {
+interface DesktopAppUpdateState {
   supported: boolean;
   currentVersion: string;
   status: DesktopUpdateStatus;

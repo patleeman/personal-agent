@@ -10,7 +10,7 @@ interface WikiLinkListProps {
   command: (item: VaultEntry) => void;
 }
 
-export interface WikiLinkListRef {
+interface WikiLinkListRef {
   onKeyDown: (props: SuggestionKeyDownProps) => boolean;
 }
 

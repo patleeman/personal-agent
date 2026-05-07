@@ -43,7 +43,7 @@ export const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopKeyboardShortcuts = {
   toggleRightRail: 'CommandOrControl+\\',
 };
 
-export const DESKTOP_KEYBOARD_SHORTCUT_IDS: DesktopKeyboardShortcutId[] = [
+const DESKTOP_KEYBOARD_SHORTCUT_IDS: DesktopKeyboardShortcutId[] = [
   'showApp',
   'newConversation',
   'closeTab',
@@ -140,7 +140,7 @@ function normalizeShortcutKey(key: string): string | null {
   return null;
 }
 
-export function normalizeDesktopKeyboardShortcut(value: string): string | null {
+function normalizeDesktopKeyboardShortcut(value: string): string | null {
   const parts = value
     .split('+')
     .map((part) => part.trim())
@@ -166,10 +166,6 @@ export function normalizeDesktopKeyboardShortcut(value: string): string | null {
   }
 
   return [...MODIFIER_ORDER.filter((modifier) => modifiers.has(modifier)), key].join('+');
-}
-
-export function isDesktopKeyboardShortcutId(value: string): value is DesktopKeyboardShortcutId {
-  return (DESKTOP_KEYBOARD_SHORTCUT_IDS as string[]).includes(value);
 }
 
 export function normalizeDesktopKeyboardShortcuts(value: unknown): DesktopKeyboardShortcuts {

@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { LoopState, MissionState, RunMode } from '../../shared/types';
 import { cx } from '../ui';
 
-export interface DraftMissionConfig {
+interface DraftMissionConfig {
   goal: string;
   maxTurns: number;
 }
 
-export interface DraftLoopConfig {
+interface DraftLoopConfig {
   prompt: string;
   maxIterations: number;
   delay: string;

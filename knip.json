@@ -1,32 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "exclude": ["exports", "types", "nsExports", "nsTypes", "enumMembers", "namespaceMembers", "unlisted"],
-  "treatConfigHintsAsErrors": false,
-  "ignoreBinaries": ["tail"],
-  "ignoreFiles": [
-    "packages/desktop/src/config.ts",
-    "packages/desktop/src/hosts/api-stream.ts",
-    "packages/desktop/src/preload.cts",
-    "packages/desktop/src/preload.ts",
-    "packages/desktop/ui/src/app/globals.d.ts",
-    "packages/desktop/ui/src/app/vite-env.d.ts",
-    "packages/desktop/ui/src/hooks/useConversationAutoMode.ts"
-  ],
-  "ignoreDependencies": [
-    "@mozilla/readability",
-    "@sinclair/typebox",
-    "@types/better-sqlite3",
-    "@types/nunjucks",
-    "@types/turndown",
-    "autoprefixer",
-    "better-sqlite3",
-    "dprint",
-    "nunjucks",
-    "postcss",
-    "tailwindcss",
-    "turndown"
-  ],
-  "ignoreUnresolved": ["../relatedConversationSearch.js"],
+  "ignoreDependencies": ["autoprefixer", "postcss"],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs", "*.config.mjs"],
@@ -42,11 +16,16 @@
     },
     "packages/desktop": {
       "entry": [
+        "src/preload.cts",
         "src/**/*.test.ts",
         "ui/src/app/main.tsx",
+        "ui/src/app/globals.d.ts",
+        "ui/src/app/vite-env.d.ts",
         "ui/src/**/*.test.ts",
         "ui/src/**/*.test.tsx",
         "ui/vite.config.ts",
+        "ui/postcss.config.js",
+        "ui/tailwind.config.js",
         "server/**/*.test.ts"
       ],
       "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts"]

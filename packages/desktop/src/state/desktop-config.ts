@@ -104,7 +104,7 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
   };
 }
 
-export function createDefaultDesktopConfig(): DesktopConfig {
+function createDefaultDesktopConfig(): DesktopConfig {
   return {
     version: 2,
     openWindowOnLaunch: true,

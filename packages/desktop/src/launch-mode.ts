@@ -1,4 +1,4 @@
-export type DesktopLaunchMode = 'stable' | 'testing';
+type DesktopLaunchMode = 'stable' | 'testing';
 
 export interface DesktopLaunchPresentation {
   mode: DesktopLaunchMode;

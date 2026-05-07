@@ -13,7 +13,7 @@ import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-modul
 import { dispatchReadonlyLocalApiRequest, shouldDispatchReadonlyLocalApiInWorker } from './readonly-local-api.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 
-export const DESKTOP_APP_SCHEME = 'personal-agent';
+const DESKTOP_APP_SCHEME = 'personal-agent';
 const DESKTOP_APP_HOST = 'app';
 
 protocol.registerSchemesAsPrivileged([
@@ -265,7 +265,7 @@ function createSseProtocolResponse(
   });
 }
 
-export function createDesktopProtocolHandler(options?: {
+function createDesktopProtocolHandler(options?: {
   loadLocalApiModule?: LocalApiModuleLoader;
   dispatchReadonlyLocalApiRequest?: typeof dispatchReadonlyLocalApiRequest;
   hostManager?: HostManager;

@@ -17,7 +17,7 @@ import {
   type ScannedDurableRun,
 } from './store.js';
 
-export interface BackgroundRunCallbackBinding {
+interface BackgroundRunCallbackBinding {
   conversationId: string;
   sessionFile: string;
   profile: string;

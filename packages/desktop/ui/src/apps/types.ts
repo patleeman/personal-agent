@@ -2,7 +2,7 @@
  * Skill app types — shared between components and API.
  */
 
-export interface SkillAppNavItem {
+interface SkillAppNavItem {
   label: string;
   page: string;
 }

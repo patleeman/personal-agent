@@ -1,7 +1,7 @@
 import type { DaemonConfig } from '../config.js';
 import type { DaemonEvent, DaemonPaths, EventPayload, TimerDefinition } from '../types.js';
 
-export interface ModuleLogger {
+interface ModuleLogger {
   debug: (message: string) => void;
   info: (message: string) => void;
   warn: (message: string) => void;

@@ -17,7 +17,7 @@ export const DESKTOP_RELEASE_REPO_SLUG = resolveDesktopReleaseRepoSlug();
 const [DESKTOP_RELEASE_REPO_OWNER_VALUE, DESKTOP_RELEASE_REPO_NAME_VALUE] = DESKTOP_RELEASE_REPO_SLUG.split('/', 2);
 export const DESKTOP_RELEASE_REPO_OWNER = DESKTOP_RELEASE_REPO_OWNER_VALUE;
 export const DESKTOP_RELEASE_REPO_NAME = DESKTOP_RELEASE_REPO_NAME_VALUE;
-export const DESKTOP_RELEASE_ARTIFACT_PREFIX = 'Personal-Agent';
+const DESKTOP_RELEASE_ARTIFACT_PREFIX = 'Personal-Agent';
 
 function normalizeVersion(version: string): string {
   return version.trim().replace(/^v/i, '');

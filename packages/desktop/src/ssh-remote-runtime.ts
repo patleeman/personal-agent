@@ -9,24 +9,11 @@ import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { getAvailableTcpPort } from './backend/ports.js';
 import { applyRemoteMetadataToSessionContent, stripRemoteMetadataFromSessionContent } from './conversation-session-header.js';
-import type { DesktopRemoteOperationStatus } from './hosts/types.js';
+import type { DesktopRemoteDirectoryListing, DesktopRemoteOperationStatus } from './hosts/types.js';
 import { ensurePiReleaseBinary } from './pi-release-cache.js';
 import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
 import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
 import { downloadFileOverScp, runSshCommand, spawnSshTunnel, uploadDirectoryOverScp, uploadFileOverScp } from './system-ssh.js';
-
-export interface RemoteDirectoryEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  isHidden: boolean;
-}
-
-export interface RemoteDirectoryListing {
-  path: string;
-  parent?: string;
-  entries: RemoteDirectoryEntry[];
-}
 
 interface HelperRuntimeInfo {
   helperVersion: string;
@@ -184,7 +171,7 @@ export class SshRemoteConversationRuntime {
     return this.platformPromise;
   }
 
-  async readDirectory(path: string | null | undefined): Promise<RemoteDirectoryListing> {
+  async readDirectory(path: string | null | undefined): Promise<DesktopRemoteDirectoryListing> {
     const context: RemoteStatusContext = { scope: 'directory' };
     const normalizedPath = typeof path === 'string' ? path.trim() : '';
     const pathLabel = normalizedPath || '~';
@@ -215,7 +202,7 @@ export class SshRemoteConversationRuntime {
         status: 'success',
         message: `Loaded ${pathLabel} on ${this.hostLabel}.`,
       });
-      return JSON.parse(output) as RemoteDirectoryListing;
+      return JSON.parse(output) as DesktopRemoteDirectoryListing;
     } catch (error) {
       this.emitStatus({
         ...context,

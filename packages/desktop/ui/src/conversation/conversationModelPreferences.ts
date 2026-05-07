@@ -1,6 +1,6 @@
 import { DRAFT_SERVICE_TIER_DISABLED_SENTINEL, resolveFastModeToggleServiceTier } from './conversationInitialState';
 
-export type DraftPreferenceStorageAction = { kind: 'clear' } | { kind: 'persist'; value: string };
+type DraftPreferenceStorageAction = { kind: 'clear' } | { kind: 'persist'; value: string };
 
 export interface DraftModelPreferenceUpdate {
   storage: DraftPreferenceStorageAction;

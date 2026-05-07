@@ -8,4 +8,4 @@ export function createBuiltinModules(config: DaemonConfig): DaemonModule[] {
   return [createMaintenanceModule(config.modules.maintenance), createTasksModule(config.modules.tasks), createDeferredResumeModule()];
 }
 
-export type { DaemonModule, DaemonModuleContext, ModuleLogger } from './types.js';
+export type { DaemonModule, DaemonModuleContext } from './types.js';
