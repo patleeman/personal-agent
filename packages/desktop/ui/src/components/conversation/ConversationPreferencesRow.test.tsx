@@ -49,7 +49,7 @@ describe('ConversationPreferencesRow', () => {
     expect(html).toContain('Model A');
     expect(html).toContain('Conversation thinking level');
     expect(html).toContain('Disable fast mode');
-    expect(html).toContain('Configure conversation auto mode');
+    expect(html).toContain('Turn on conversation auto mode');
   });
 
   it('renders the compact settings affordance without opening the menu on server render', () => {
@@ -67,6 +67,6 @@ describe('ConversationPreferencesRow', () => {
     });
 
     expect(html).not.toContain('Enable fast mode');
-    expect(html).toContain('Configure conversation auto mode');
+    expect(html).toContain('Turn on conversation auto mode');
   });
 });

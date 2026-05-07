@@ -195,117 +195,6 @@ function ConversationPreferenceToggle({
   );
 }
 
-function AutoModePopover({
-  state,
-  busy,
-  suggestedMission,
-  onApply,
-  onClose,
-}: {
-  state: ConversationAutoModeState | null;
-  busy: boolean;
-  suggestedMission: string;
-  onApply: (input: {
-    enabled: boolean;
-    mission: string | null;
-    mode: ConversationAutoModeMode;
-    budget: ConversationAutoModeBudget | null;
-  }) => void;
-  onClose: () => void;
-}) {
-  const [mission, setMission] = useState(state?.mission ?? suggestedMission);
-  const [mode, setMode] = useState<ConversationAutoModeMode>(state?.mode ?? 'tenacious');
-  const [turnBudget, setTurnBudget] = useState(state?.budget?.maxTurns ? String(state.budget.maxTurns) : '5');
-  const enabled = state?.enabled === true;
-  const trimmedMission = mission.trim();
-  const budget = mode === 'forced' ? { maxTurns: Math.max(1, Math.min(100, Number.parseInt(turnBudget, 10) || 5)) } : null;
-
-  return (
-    <div
-      className="ui-context-menu-shell absolute bottom-full right-0 z-50 mb-2 w-[22rem] p-3"
-      role="dialog"
-      aria-label="Auto mode settings"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[12px] font-semibold text-primary">Auto mode</p>
-          <p className="mt-0.5 text-[11px] leading-4 text-dim">Give the agent a mission and a stopping rule.</p>
-        </div>
-        {enabled ? <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-warning">On</span> : null}
-      </div>
-
-      <label className="mt-3 block">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/75">Mission</span>
-        <textarea
-          value={mission}
-          onChange={(event) => setMission(event.target.value)}
-          className="mt-1 min-h-[5rem] w-full resize-none rounded-lg border border-border-subtle bg-base/60 px-2.5 py-2 text-[12px] leading-5 text-primary outline-none focus:border-warning/50 focus:ring-1 focus:ring-warning/20"
-          placeholder="What should auto mode keep working on?"
-        />
-      </label>
-
-      <label className="mt-3 block">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/75">Mode</span>
-        <select
-          value={mode}
-          onChange={(event) => setMode(event.target.value as ConversationAutoModeMode)}
-          className="mt-1 h-9 w-full rounded-lg border border-border-subtle bg-base/60 px-2.5 text-[12px] text-primary outline-none focus:border-warning/50 focus:ring-1 focus:ring-warning/20"
-        >
-          <option value="normal">Normal — continue while useful work remains</option>
-          <option value="tenacious">Tenacious — stop only when complete or blocked</option>
-          <option value="forced">Forced — use a turn budget</option>
-        </select>
-      </label>
-
-      {mode === 'forced' ? (
-        <label className="mt-3 block">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/75">Turn budget</span>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={turnBudget}
-            onChange={(event) => setTurnBudget(event.target.value)}
-            className="mt-1 h-9 w-24 rounded-lg border border-border-subtle bg-base/60 px-2.5 text-[12px] text-primary outline-none focus:border-warning/50 focus:ring-1 focus:ring-warning/20"
-          />
-        </label>
-      ) : null}
-
-      {state?.stopReason ? <p className="mt-3 text-[11px] leading-4 text-dim">Last stop: {state.stopReason}</p> : null}
-
-      <div className="mt-3 flex items-center justify-end gap-2">
-        {enabled ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              onApply({ enabled: false, mission: state?.mission ?? null, mode: state?.mode ?? 'normal', budget: state?.budget ?? null })
-            }
-            className="h-8 rounded-md px-2.5 text-[11px] font-medium text-secondary hover:bg-surface/60 hover:text-primary disabled:opacity-50"
-          >
-            Turn off
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-8 rounded-md px-2.5 text-[11px] font-medium text-secondary hover:bg-surface/60 hover:text-primary"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={busy || !trimmedMission}
-          onClick={() => onApply({ enabled: true, mission: trimmedMission, mode, budget })}
-          className="h-8 rounded-md bg-warning/80 px-3 text-[11px] font-semibold text-black shadow-sm hover:bg-warning disabled:opacity-50"
-        >
-          {enabled ? 'Update' : 'Start'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function ConversationPreferencesRow({
   models,
   currentModel,
@@ -345,8 +234,6 @@ export function ConversationPreferencesRow({
   compact: boolean;
 }) {
   const [compactMenuOpen, setCompactMenuOpen] = useState(false);
-  const [autoModePopoverOpen, setAutoModePopoverOpen] = useState(false);
-  const autoModeRef = useRef<HTMLDivElement | null>(null);
   const compactMenuRef = useRef<HTMLDivElement | null>(null);
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
   const selectedModel = useMemo(() => models.find((model) => model.id === currentModel) ?? null, [currentModel, models]);
@@ -355,24 +242,21 @@ export function ConversationPreferencesRow({
   const fastModeEnabled = currentServiceTier === 'priority';
 
   useEffect(() => {
-    if (!compactMenuOpen && !autoModePopoverOpen) {
+    if (!compactMenuOpen) {
       return;
     }
 
     function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (compactMenuRef.current?.contains(target) || autoModeRef.current?.contains(target)) {
+      if (compactMenuRef.current?.contains(event.target as Node)) {
         return;
       }
 
       setCompactMenuOpen(false);
-      setAutoModePopoverOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setCompactMenuOpen(false);
-        setAutoModePopoverOpen(false);
       }
     }
 
@@ -382,10 +266,10 @@ export function ConversationPreferencesRow({
       window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [autoModePopoverOpen, compactMenuOpen]);
+  }, [compactMenuOpen]);
 
   return (
-    <div ref={autoModeRef} className="relative flex min-w-0 flex-nowrap items-center gap-2">
+    <div className="flex min-w-0 flex-nowrap items-center gap-2">
       {!compact ? (
         <>
           <ConversationModelSelect
@@ -414,35 +298,31 @@ export function ConversationPreferencesRow({
             />
           ) : null}
           {showAutoModeToggle ? (
-            <div className="relative">
-              <ConversationPreferenceToggle
-                label="Auto"
-                enabled={autoModeEnabled}
-                busy={autoModeBusy}
-                disabled={false}
-                tone="warning"
-                title={autoModeBusy ? 'Updating auto mode…' : 'Configure conversation auto mode'}
-                layout="inline"
-                onToggle={() => {
-                  setAutoModePopoverOpen((current) => !current);
-                }}
-              />
-            </div>
+            <ConversationPreferenceToggle
+              label="Auto"
+              enabled={autoModeEnabled}
+              busy={autoModeBusy}
+              disabled={false}
+              tone="warning"
+              title={
+                autoModeBusy
+                  ? 'Updating auto mode…'
+                  : autoModeEnabled
+                    ? 'Turn off conversation auto mode'
+                    : 'Turn on conversation auto mode'
+              }
+              layout="inline"
+              onToggle={() => {
+                onConfigureAutoMode({
+                  enabled: !autoModeEnabled,
+                  mission: autoModeEnabled ? (autoModeState?.mission ?? null) : suggestedAutoModeMission,
+                  mode: autoModeEnabled ? (autoModeState?.mode ?? 'normal') : 'tenacious',
+                  budget: autoModeEnabled ? (autoModeState?.budget ?? null) : null,
+                });
+              }}
+            />
           ) : null}
         </>
-      ) : null}
-
-      {autoModePopoverOpen ? (
-        <AutoModePopover
-          state={autoModeState}
-          busy={autoModeBusy}
-          suggestedMission={suggestedAutoModeMission}
-          onApply={(next) => {
-            onConfigureAutoMode(next);
-            setAutoModePopoverOpen(false);
-          }}
-          onClose={() => setAutoModePopoverOpen(false)}
-        />
       ) : null}
 
       {compact ? (
@@ -515,10 +395,21 @@ export function ConversationPreferencesRow({
                     busy={autoModeBusy}
                     disabled={false}
                     tone="warning"
-                    title={autoModeBusy ? 'Updating auto mode…' : 'Configure conversation auto mode'}
+                    title={
+                      autoModeBusy
+                        ? 'Updating auto mode…'
+                        : autoModeEnabled
+                          ? 'Turn off conversation auto mode'
+                          : 'Turn on conversation auto mode'
+                    }
                     layout="menu"
                     onToggle={() => {
-                      setAutoModePopoverOpen(true);
+                      onConfigureAutoMode({
+                        enabled: !autoModeEnabled,
+                        mission: autoModeEnabled ? (autoModeState?.mission ?? null) : suggestedAutoModeMission,
+                        mode: autoModeEnabled ? (autoModeState?.mode ?? 'normal') : 'tenacious',
+                        budget: autoModeEnabled ? (autoModeState?.budget ?? null) : null,
+                      });
                       setCompactMenuOpen(false);
                     }}
                   />
