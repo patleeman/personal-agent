@@ -1328,6 +1328,71 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     maxIterations: 5,
     delay: 'After each turn',
   });
+
+  // Sync draft config to API when mission/loop mode is active and config changes
+  const lastSyncedMissionRef = useRef<string>('');
+  const lastSyncedLoopRef = useRef<string>('');
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!id || conversationAutoModeBusy) {
+      return;
+    }
+
+    const mode = conversationAutoModeState?.mode;
+    if (mode === 'mission') {
+      const serialized = JSON.stringify(draftMissionConfig);
+      if (serialized === lastSyncedMissionRef.current) {
+        return;
+      }
+      lastSyncedMissionRef.current = serialized;
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        syncTimerRef.current = null;
+        if (!id || !conversationAutoModeState?.enabled) return;
+        try {
+          void api.updateConversationAutoMode(id, {
+            mode: 'mission',
+            mission: {
+              goal: draftMissionConfig.goal || 'Mission',
+              tasks: conversationAutoModeState?.mission?.tasks ?? [],
+              maxTurns: draftMissionConfig.maxTurns,
+              turnsUsed: conversationAutoModeState?.mission?.turnsUsed ?? 0,
+            },
+          });
+        } catch {
+          // ignore sync failures
+        }
+      }, 500);
+    } else if (mode === 'loop') {
+      const serialized = JSON.stringify(draftLoopConfig);
+      if (serialized === lastSyncedLoopRef.current) {
+        return;
+      }
+      lastSyncedLoopRef.current = serialized;
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        syncTimerRef.current = null;
+        if (!id || !conversationAutoModeState?.enabled) return;
+        try {
+          void api.updateConversationAutoMode(id, {
+            mode: 'loop',
+            loop: {
+              prompt: draftLoopConfig.prompt || 'Run loop iteration',
+              maxIterations: draftLoopConfig.maxIterations,
+              iterationsUsed: conversationAutoModeState?.loop?.iterationsUsed ?? 0,
+              delay: draftLoopConfig.delay,
+            },
+          });
+        } catch {
+          // ignore sync failures
+        }
+      }, 500);
+    }
+
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [draftMissionConfig, draftLoopConfig, id, conversationAutoModeBusy, conversationAutoModeState]);
   const initialModelPreferenceState = useMemo(
     () =>
       resolveConversationInitialModelPreferenceState({
