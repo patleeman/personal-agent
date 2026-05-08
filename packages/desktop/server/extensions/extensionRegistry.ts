@@ -13,6 +13,7 @@ import type {
 } from './extensionManifest.js';
 import {
   EXTENSION_ICON_NAMES,
+  EXTENSION_PACKAGE_TYPES,
   EXTENSION_PLACEMENTS,
   EXTENSION_RIGHT_SURFACE_SCOPES,
   EXTENSION_ROUTE_CAPABILITIES,
@@ -364,6 +365,184 @@ export function setExtensionKeybinding(input: {
   );
 }
 
+function requireString(value: unknown, path: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`Extension manifest ${path} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function requireStringArray(value: unknown, path: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+    throw new Error(`Extension manifest ${path} must be an array of non-empty strings.`);
+  }
+  return value;
+}
+
+function assertArray(value: unknown, path: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Extension manifest ${path} must be an array.`);
+  }
+  return value;
+}
+
+function assertRecordArray(value: unknown, path: string): Record<string, unknown>[] {
+  return assertArray(value, path).map((item, index) => {
+    if (!isRecord(item)) {
+      throw new Error(`Extension manifest ${path}[${index}] must be an object.`);
+    }
+    return item;
+  });
+}
+
+function validateOptionalString(value: unknown, path: string): void {
+  if (value !== undefined && typeof value !== 'string') {
+    throw new Error(`Extension manifest ${path} must be a string.`);
+  }
+}
+
+function validateEnum(value: unknown, allowed: readonly string[], path: string): void {
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    throw new Error(`Extension manifest ${path} must be one of: ${allowed.join(', ')}.`);
+  }
+}
+
+function validateExtensionContributions(contributes: Record<string, unknown>): void {
+  if (contributes.views !== undefined) {
+    for (const [index, view] of assertRecordArray(contributes.views, 'contributes.views').entries()) {
+      requireString(view.id, `contributes.views[${index}].id`);
+      requireString(view.title, `contributes.views[${index}].title`);
+      validateEnum(view.location, ['main', 'rightRail', 'workbench'], `contributes.views[${index}].location`);
+      requireString(view.component, `contributes.views[${index}].component`);
+      validateOptionalString(view.route, `contributes.views[${index}].route`);
+      if (view.scope !== undefined) validateEnum(view.scope, EXTENSION_RIGHT_SURFACE_SCOPES, `contributes.views[${index}].scope`);
+      if (view.icon !== undefined) validateEnum(view.icon, EXTENSION_ICON_NAMES, `contributes.views[${index}].icon`);
+      validateOptionalString(view.detailView, `contributes.views[${index}].detailView`);
+      if (view.routeCapabilities !== undefined) {
+        for (const [capabilityIndex, capability] of requireStringArray(
+          view.routeCapabilities,
+          `contributes.views[${index}].routeCapabilities`,
+        ).entries()) {
+          validateEnum(capability, EXTENSION_ROUTE_CAPABILITIES, `contributes.views[${index}].routeCapabilities[${capabilityIndex}]`);
+        }
+      }
+    }
+  }
+
+  if (contributes.nav !== undefined) {
+    for (const [index, nav] of assertRecordArray(contributes.nav, 'contributes.nav').entries()) {
+      requireString(nav.id, `contributes.nav[${index}].id`);
+      requireString(nav.label, `contributes.nav[${index}].label`);
+      requireString(nav.route, `contributes.nav[${index}].route`);
+      if (nav.icon !== undefined) validateEnum(nav.icon, EXTENSION_ICON_NAMES, `contributes.nav[${index}].icon`);
+      validateOptionalString(nav.badgeAction, `contributes.nav[${index}].badgeAction`);
+    }
+  }
+
+  if (contributes.commands !== undefined) {
+    for (const [index, command] of assertRecordArray(contributes.commands, 'contributes.commands').entries()) {
+      requireString(command.id, `contributes.commands[${index}].id`);
+      requireString(command.title, `contributes.commands[${index}].title`);
+      requireString(command.action, `contributes.commands[${index}].action`);
+      if (command.icon !== undefined) validateEnum(command.icon, EXTENSION_ICON_NAMES, `contributes.commands[${index}].icon`);
+    }
+  }
+
+  if (contributes.keybindings !== undefined) {
+    for (const [index, keybinding] of assertRecordArray(contributes.keybindings, 'contributes.keybindings').entries()) {
+      requireString(keybinding.id, `contributes.keybindings[${index}].id`);
+      requireString(keybinding.title, `contributes.keybindings[${index}].title`);
+      requireStringArray(keybinding.keys, `contributes.keybindings[${index}].keys`);
+      requireString(keybinding.command, `contributes.keybindings[${index}].command`);
+      validateOptionalString(keybinding.when, `contributes.keybindings[${index}].when`);
+      if (keybinding.scope !== undefined) validateEnum(keybinding.scope, ['global', 'surface'], `contributes.keybindings[${index}].scope`);
+    }
+  }
+
+  if (contributes.slashCommands !== undefined) {
+    for (const [index, command] of assertRecordArray(contributes.slashCommands, 'contributes.slashCommands').entries()) {
+      requireString(command.name, `contributes.slashCommands[${index}].name`);
+      requireString(command.description, `contributes.slashCommands[${index}].description`);
+      requireString(command.action, `contributes.slashCommands[${index}].action`);
+    }
+  }
+
+  if (contributes.mentions !== undefined) {
+    for (const [index, mention] of assertRecordArray(contributes.mentions, 'contributes.mentions').entries()) {
+      requireString(mention.id, `contributes.mentions[${index}].id`);
+      requireString(mention.title, `contributes.mentions[${index}].title`);
+      validateOptionalString(mention.description, `contributes.mentions[${index}].description`);
+      requireStringArray(mention.kinds, `contributes.mentions[${index}].kinds`);
+      requireString(mention.provider, `contributes.mentions[${index}].provider`);
+    }
+  }
+
+  if (contributes.skills !== undefined) {
+    for (const [index, skill] of assertArray(contributes.skills, 'contributes.skills').entries()) {
+      if (typeof skill === 'string') {
+        requireString(skill, `contributes.skills[${index}]`);
+        continue;
+      }
+      if (!isRecord(skill)) throw new Error(`Extension manifest contributes.skills[${index}] must be a string or object.`);
+      requireString(skill.id, `contributes.skills[${index}].id`);
+      requireString(skill.path, `contributes.skills[${index}].path`);
+      validateOptionalString(skill.title, `contributes.skills[${index}].title`);
+      validateOptionalString(skill.description, `contributes.skills[${index}].description`);
+    }
+  }
+
+  if (contributes.tools !== undefined) {
+    for (const [index, tool] of assertRecordArray(contributes.tools, 'contributes.tools').entries()) {
+      requireString(tool.id, `contributes.tools[${index}].id`);
+      requireString(tool.description, `contributes.tools[${index}].description`);
+      validateOptionalString(tool.title, `contributes.tools[${index}].title`);
+      validateOptionalString(tool.label, `contributes.tools[${index}].label`);
+      validateOptionalString(tool.action, `contributes.tools[${index}].action`);
+      validateOptionalString(tool.handler, `contributes.tools[${index}].handler`);
+      validateOptionalString(tool.systemFactory, `contributes.tools[${index}].systemFactory`);
+      validateOptionalString(tool.name, `contributes.tools[${index}].name`);
+      if (tool.promptGuidelines !== undefined) requireStringArray(tool.promptGuidelines, `contributes.tools[${index}].promptGuidelines`);
+    }
+  }
+
+  if (contributes.transcriptRenderers !== undefined) {
+    for (const [index, renderer] of assertRecordArray(contributes.transcriptRenderers, 'contributes.transcriptRenderers').entries()) {
+      requireString(renderer.id, `contributes.transcriptRenderers[${index}].id`);
+      requireString(renderer.tool, `contributes.transcriptRenderers[${index}].tool`);
+      requireString(renderer.component, `contributes.transcriptRenderers[${index}].component`);
+    }
+  }
+
+  if (contributes.settings !== undefined && !isRecord(contributes.settings)) {
+    throw new Error('Extension manifest contributes.settings must be an object.');
+  }
+}
+
+function validateExtensionBackend(backend: Record<string, unknown>): void {
+  requireString(backend.entry, 'backend.entry');
+  validateOptionalString(backend.agentExtension, 'backend.agentExtension');
+  if (backend.actions !== undefined) {
+    for (const [index, action] of assertRecordArray(backend.actions, 'backend.actions').entries()) {
+      requireString(action.id, `backend.actions[${index}].id`);
+      requireString(action.handler, `backend.actions[${index}].handler`);
+      validateOptionalString(action.title, `backend.actions[${index}].title`);
+      validateOptionalString(action.description, `backend.actions[${index}].description`);
+    }
+  }
+}
+
+function validateExtensionSurfaces(surfaces: unknown): void {
+  for (const [index, surface] of assertRecordArray(surfaces, 'surfaces').entries()) {
+    requireString(surface.id, `surfaces[${index}].id`);
+    validateEnum(surface.placement, EXTENSION_PLACEMENTS, `surfaces[${index}].placement`);
+    validateEnum(surface.kind, EXTENSION_SURFACE_KINDS, `surfaces[${index}].kind`);
+    validateOptionalString(surface.title, `surfaces[${index}].title`);
+    validateOptionalString(surface.label, `surfaces[${index}].label`);
+    if (surface.icon !== undefined) validateEnum(surface.icon, EXTENSION_ICON_NAMES, `surfaces[${index}].icon`);
+    validateOptionalString(surface.action, `surfaces[${index}].action`);
+  }
+}
+
 export function parseExtensionManifest(value: unknown): ExtensionManifest {
   if (!isRecord(value)) {
     throw new Error('Extension manifest must be an object.');
@@ -371,12 +550,26 @@ export function parseExtensionManifest(value: unknown): ExtensionManifest {
   if (value.schemaVersion !== 1 && value.schemaVersion !== 2) {
     throw new Error('Extension manifest schemaVersion must be 1 or 2.');
   }
-  if (typeof value.id !== 'string' || value.id.trim().length === 0) {
-    throw new Error('Extension manifest id is required.');
+  requireString(value.id, 'id');
+  requireString(value.name, 'name');
+  if (value.packageType !== undefined) validateEnum(value.packageType, EXTENSION_PACKAGE_TYPES, 'packageType');
+  validateOptionalString(value.description, 'description');
+  validateOptionalString(value.version, 'version');
+  if (value.frontend !== undefined) {
+    if (!isRecord(value.frontend)) throw new Error('Extension manifest frontend must be an object.');
+    requireString(value.frontend.entry, 'frontend.entry');
+    if (value.frontend.styles !== undefined) requireStringArray(value.frontend.styles, 'frontend.styles');
   }
-  if (typeof value.name !== 'string' || value.name.trim().length === 0) {
-    throw new Error('Extension manifest name is required.');
+  if (value.contributes !== undefined) {
+    if (!isRecord(value.contributes)) throw new Error('Extension manifest contributes must be an object.');
+    validateExtensionContributions(value.contributes);
   }
+  if (value.backend !== undefined) {
+    if (!isRecord(value.backend)) throw new Error('Extension manifest backend must be an object.');
+    validateExtensionBackend(value.backend);
+  }
+  if (value.surfaces !== undefined) validateExtensionSurfaces(value.surfaces);
+  if (value.permissions !== undefined) requireStringArray(value.permissions, 'permissions');
 
   return value as unknown as ExtensionManifest;
 }

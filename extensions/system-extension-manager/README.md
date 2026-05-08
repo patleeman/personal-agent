@@ -58,6 +58,8 @@ extensions/
 
 Agents should generate editable source files, run the PA-owned extension build, and keep built `dist/` output available for runtime loading. Do not generate dist-only extensions; compiled soup is where maintainability goes to die.
 
+The stable SDK import contract lives in [`packages/extensions`](../../packages/extensions/README.md). If a system extension needs host behavior that is not exported there, add it deliberately instead of importing app internals.
+
 ## Manifest
 
 `extension.json` is the readable contract. The app can inspect it without executing extension code, which keeps routing, command registration, permissions, and extension management predictable.

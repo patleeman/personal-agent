@@ -47,6 +47,8 @@ export interface ExtensionViewContribution {
   defaultOpen?: boolean;
   /** For rightRail views, optional paired workbench view id rendered in the center pane while this rail tool is active. */
   detailView?: string;
+  /** Optional host layout behaviors enabled when this main view's route is active. */
+  routeCapabilities?: Array<'contextRail' | 'workbench' | 'workbenchFilePane' | 'knowledgeFiles' | 'settingsSection'>;
 }
 
 export interface ExtensionNavContribution {
@@ -64,18 +66,66 @@ export interface ExtensionCommandContribution {
   icon?: ExtensionIconName;
 }
 
+export interface ExtensionKeybindingContribution {
+  id: string;
+  title: string;
+  keys: string[];
+  command: string;
+  when?: string;
+  scope?: 'global' | 'surface';
+}
+
 export interface ExtensionSlashCommandContribution {
   name: string;
   description: string;
   action: string;
 }
 
+export interface ExtensionMentionContribution {
+  id: string;
+  title: string;
+  description?: string;
+  kinds: string[];
+  provider: string;
+}
+
+export interface ExtensionSkillContribution {
+  id: string;
+  title?: string;
+  description?: string;
+  path: string;
+}
+
+export interface ExtensionToolContribution {
+  id: string;
+  title?: string;
+  label?: string;
+  description: string;
+  action?: string;
+  handler?: string;
+  inputSchema?: Record<string, unknown>;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
+  systemFactory?: string;
+  name?: string;
+}
+
+export interface ExtensionTranscriptRendererContribution {
+  id: string;
+  tool: string;
+  component: string;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
   commands?: ExtensionCommandContribution[];
+  keybindings?: ExtensionKeybindingContribution[];
   slashCommands?: ExtensionSlashCommandContribution[];
-  skills?: string[];
+  mentions?: ExtensionMentionContribution[];
+  skills?: Array<string | ExtensionSkillContribution>;
+  tools?: ExtensionToolContribution[];
+  transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -95,6 +145,7 @@ export interface ExtensionManifest {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  agentExtension?: string;
 }
 
 export interface ExtensionBackendAction {

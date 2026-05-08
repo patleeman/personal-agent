@@ -9,6 +9,7 @@ import {
   listExtensionInstallSummaries,
   listExtensionSkillRegistrations,
   listExtensionToolRegistrations,
+  parseExtensionManifest,
   readExtensionRegistrySnapshot,
   readExtensionSchema,
   readRuntimeExtensionEntries,
@@ -68,6 +69,30 @@ describe('extension registry', () => {
         expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: 'ConversationRunDetailPanel' }),
       ]),
     );
+  });
+
+  it('validates manifest contributions before accepting runtime extensions', () => {
+    expect(() =>
+      parseExtensionManifest({
+        schemaVersion: 2,
+        id: 'bad-ext',
+        name: 'Bad Ext',
+        contributes: {
+          views: [{ id: 'page', title: 'Bad', location: 'somewhere', component: 'BadPage' }],
+        },
+      }),
+    ).toThrow(/contributes\.views\[0\]\.location/);
+
+    expect(() =>
+      parseExtensionManifest({
+        schemaVersion: 2,
+        id: 'bad-ext',
+        name: 'Bad Ext',
+        contributes: {
+          keybindings: [{ id: 'open', title: 'Open', keys: 'mod+o', command: 'navigate:/bad' }],
+        },
+      }),
+    ).toThrow(/contributes\.keybindings\[0\]\.keys/);
   });
 
   it('loads runtime extension manifests from the state root', () => {
