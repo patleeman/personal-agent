@@ -1,18 +1,24 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "system-automations",
   "name": "Automations",
   "packageType": "system",
   "description": "Manage scheduled and conversation-bound automations.",
-  "version": "0.1.0",
-  "surfaces": [
-    {
-      "id": "page",
-      "placement": "main",
-      "kind": "page",
-      "route": "/automations",
-      "entry": "frontend/index.html"
-    }
-  ],
+  "version": "0.2.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "contributes": {
+    "views": [
+      {
+        "id": "page",
+        "title": "Automations",
+        "location": "main",
+        "route": "/automations",
+        "component": "AutomationsPage"
+      }
+    ]
+  },
   "permissions": ["runs:read", "runs:start", "conversations:readwrite", "ui:notify"]
 }

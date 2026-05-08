@@ -12,21 +12,72 @@ type ExtensionIconName =
   | 'play'
   | 'sparkle'
   | 'terminal';
-type ExtensionSurfaceKind = 'navItem' | 'navSection' | 'page' | 'toolPanel' | 'inlineAction' | 'command' | 'slashCommand';
-type ExtensionPlacement = 'left' | 'main' | 'right' | 'conversation' | 'command' | 'slash';
 type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
 
-interface ExtensionSurfaceBase {
+interface ExtensionBackendActionSummary {
   id: string;
-  placement: ExtensionPlacement;
-  kind: ExtensionSurfaceKind;
+  handler: string;
+  title?: string;
+  description?: string;
+}
+
+interface ExtensionFrontendManifest {
+  entry: string;
+  styles?: string[];
+}
+
+interface ExtensionViewContribution {
+  id: string;
+  title: string;
+  location: 'main' | 'rightRail';
+  component: string;
+  route?: string;
+  scope?: ExtensionRightSurfaceScope;
+  icon?: ExtensionIconName;
+  defaultOpen?: boolean;
+}
+
+interface ExtensionNavContribution {
+  id: string;
+  label: string;
+  route: string;
+  icon?: ExtensionIconName;
+  badgeAction?: string;
+}
+
+interface ExtensionCommandContribution {
+  id: string;
+  title: string;
+  action: string;
+  icon?: ExtensionIconName;
+}
+
+interface ExtensionSlashCommandContribution {
+  name: string;
+  description: string;
+  action: string;
+}
+
+interface ExtensionContributions {
+  views?: ExtensionViewContribution[];
+  nav?: ExtensionNavContribution[];
+  commands?: ExtensionCommandContribution[];
+  slashCommands?: ExtensionSlashCommandContribution[];
+  skills?: string[];
+  settings?: Record<string, unknown>;
+}
+
+interface LegacyExtensionSurfaceBase {
+  id: string;
+  placement: 'left' | 'main' | 'right' | 'conversation' | 'command' | 'slash';
+  kind: 'navItem' | 'navSection' | 'page' | 'toolPanel' | 'inlineAction' | 'command' | 'slashCommand';
   title?: string;
   label?: string;
   icon?: ExtensionIconName;
   action?: string;
 }
 
-export interface ExtensionLeftNavItemSurface extends ExtensionSurfaceBase {
+export interface ExtensionLeftNavItemSurface extends LegacyExtensionSurfaceBase {
   placement: 'left';
   kind: 'navItem';
   label: string;
@@ -35,14 +86,14 @@ export interface ExtensionLeftNavItemSurface extends ExtensionSurfaceBase {
   badgeAction?: string;
 }
 
-export interface ExtensionMainPageSurface extends ExtensionSurfaceBase {
+interface ExtensionMainPageSurface extends LegacyExtensionSurfaceBase {
   placement: 'main';
   kind: 'page';
   route: string;
   entry?: string;
 }
 
-export interface ExtensionRightToolPanelSurface extends ExtensionSurfaceBase {
+export interface ExtensionRightToolPanelSurface extends LegacyExtensionSurfaceBase {
   placement: 'right';
   kind: 'toolPanel';
   label: string;
@@ -56,24 +107,23 @@ type ExtensionSurface =
   | ExtensionLeftNavItemSurface
   | ExtensionMainPageSurface
   | ExtensionRightToolPanelSurface
-  | (ExtensionSurfaceBase & Record<string, unknown>);
+  | (LegacyExtensionSurfaceBase & Record<string, unknown>);
 
 export interface ExtensionManifest {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   id: string;
   name: string;
   packageType?: ExtensionPackageType;
   description?: string;
   version?: string;
+  frontend?: ExtensionFrontendManifest;
+  contributes?: ExtensionContributions;
   surfaces?: ExtensionSurface[];
   permissions?: string[];
-}
-
-interface ExtensionBackendActionSummary {
-  id: string;
-  handler: string;
-  title?: string;
-  description?: string;
+  backend?: {
+    entry: string;
+    actions?: ExtensionBackendActionSummary[];
+  };
 }
 
 export interface ExtensionInstallSummary {
@@ -117,17 +167,17 @@ export interface ExtensionSlashCommandRegistration {
 }
 
 export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; packageType?: ExtensionPackageType };
-
+export type NativeExtensionViewSummary = ExtensionViewContribution & {
+  extensionId: string;
+  packageType?: ExtensionPackageType;
+  frontend?: ExtensionFrontendManifest;
+};
 export function isExtensionLeftNavItemSurface(
   surface: ExtensionSurfaceSummary,
 ): surface is ExtensionLeftNavItemSurface & ExtensionSurfaceSummary {
   return (
     surface.placement === 'left' && surface.kind === 'navItem' && typeof surface.route === 'string' && typeof surface.label === 'string'
   );
-}
-
-export function isExtensionPageSurface(surface: ExtensionSurfaceSummary): surface is ExtensionMainPageSurface & ExtensionSurfaceSummary {
-  return surface.placement === 'main' && surface.kind === 'page' && typeof surface.route === 'string';
 }
 
 export function isExtensionRightToolPanelSurface(
@@ -140,4 +190,27 @@ export function isExtensionRightToolPanelSurface(
     typeof surface.entry === 'string' &&
     typeof surface.scope === 'string'
   );
+}
+
+function isNativeExtensionViewSurface(surface: unknown): surface is NativeExtensionViewSummary {
+  return Boolean(
+    surface &&
+    typeof surface === 'object' &&
+    'extensionId' in surface &&
+    'location' in surface &&
+    'component' in surface &&
+    typeof (surface as NativeExtensionViewSummary).component === 'string',
+  );
+}
+
+export function isNativeExtensionPageSurface(
+  surface: unknown,
+): surface is NativeExtensionViewSummary & { route: string; location: 'main' } {
+  return isNativeExtensionViewSurface(surface) && surface.location === 'main' && typeof surface.route === 'string';
+}
+
+export function isNativeExtensionRightRailSurface(
+  surface: unknown,
+): surface is NativeExtensionViewSummary & { location: 'rightRail'; scope: ExtensionRightSurfaceScope } {
+  return isNativeExtensionViewSurface(surface) && surface.location === 'rightRail' && typeof surface.scope === 'string';
 }

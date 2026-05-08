@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { ErrorState, LoadingState } from '../components/ui';
-import { ExtensionFrame } from './ExtensionFrame';
-import { isExtensionPageSurface } from './types';
+import { NativeExtensionSurfaceHost } from './NativeExtensionSurfaceHost';
+import { isNativeExtensionPageSurface } from './types';
 import { useExtensionRegistry } from './useExtensionRegistry';
 
 function routeMatches(route: string, pathname: string): boolean {
@@ -13,8 +13,9 @@ function routeMatches(route: string, pathname: string): boolean {
 export function ExtensionPage() {
   const location = useLocation();
   const registry = useExtensionRegistry();
-  const surface = useMemo(
-    () => registry.surfaces.find((candidate) => isExtensionPageSurface(candidate) && routeMatches(candidate.route, location.pathname)),
+  const nativeSurface = useMemo(
+    () =>
+      registry.surfaces.find((candidate) => isNativeExtensionPageSurface(candidate) && routeMatches(candidate.route, location.pathname)),
     [location.pathname, registry.surfaces],
   );
 
@@ -26,20 +27,11 @@ export function ExtensionPage() {
     return <ErrorState message={`Extensions unavailable: ${registry.error}`} />;
   }
 
-  if (surface?.entry) {
+  if (nativeSurface) {
     return (
-      <ExtensionFrame
-        title={surface.title ?? surface.label ?? surface.extensionId}
-        extensionId={surface.extensionId}
-        entry={surface.entry}
-        surfaceId={surface.id}
-        route={surface.route}
-        pathname={location.pathname}
-        search={location.search}
-        hash={location.hash}
-      />
+      <NativeExtensionSurfaceHost surface={nativeSurface} pathname={location.pathname} search={location.search} hash={location.hash} />
     );
   }
 
-  return <ErrorState message="Extension surface unavailable: no extension page is registered for this route." />;
+  return <ErrorState message="Extension surface unavailable: no native extension page is registered for this route." />;
 }

@@ -52,7 +52,8 @@
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
     "daemon": "node packages/daemon/dist/index.js",
     "ab:run": "node scripts/agent-browser-session.mjs run",
-    "ab:cleanup": "node scripts/agent-browser-session.mjs cleanup"
+    "ab:cleanup": "node scripts/agent-browser-session.mjs cleanup",
+    "extension:build": "node scripts/extension-build.mjs"
   },
   "devDependencies": {
     "@personal-agent/core": "*",

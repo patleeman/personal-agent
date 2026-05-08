@@ -32,7 +32,7 @@ function sendRouteError(res: Response, label: string, err: unknown): void {
 function resolveExtensionFilePath(extensionId: string, relativePath: string): string {
   const entry = findExtensionEntry(extensionId);
   if (!entry?.packageRoot) {
-    throw new Error('Extension files are only available for runtime extensions.');
+    throw new Error('Extension files are unavailable for this extension.');
   }
 
   const packageRoot = resolve(entry.packageRoot);
@@ -42,14 +42,6 @@ function resolveExtensionFilePath(extensionId: string, relativePath: string): st
   }
 
   return filePath;
-}
-
-function injectPaClient(html: string): string {
-  const injection = '<script src="/pa/client.js"></script><link rel="stylesheet" href="/pa/components.css">';
-  if (html.includes('/pa/client.js')) return html;
-  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${injection}</head>`);
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${injection}</body>`);
-  return `${injection}${html}`;
 }
 
 function readExtensionFile(req: Request, res: Response): void {
@@ -68,7 +60,7 @@ function readExtensionFile(req: Request, res: Response): void {
     }
 
     if (filePath.endsWith('.html')) {
-      res.type('html').send(injectPaClient(readFileSync(filePath, 'utf-8')));
+      res.type('html').send(readFileSync(filePath, 'utf-8'));
       return;
     }
     if (filePath.endsWith('.css')) {
@@ -169,7 +161,7 @@ export function registerExtensionRoutes(
         res.status(404).json({ error: 'Extension not found.' });
         return;
       }
-      res.json(entry.manifest.surfaces ?? []);
+      res.json([...(entry.manifest.surfaces ?? []), ...(entry.manifest.contributes?.views ?? [])]);
     } catch (err) {
       sendRouteError(res, 'extension surfaces error', err);
     }
@@ -177,7 +169,8 @@ export function registerExtensionRoutes(
 
   router.get('/api/extensions/surfaces', (_req, res) => {
     try {
-      res.json(readExtensionRegistrySnapshot().surfaces);
+      const snapshot = readExtensionRegistrySnapshot();
+      res.json([...snapshot.surfaces, ...snapshot.views]);
     } catch (err) {
       sendRouteError(res, 'extensions surfaces error', err);
     }

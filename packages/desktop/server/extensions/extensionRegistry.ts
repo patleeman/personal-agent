@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { getStateRoot } from '@personal-agent/core';
 
-import type { ExtensionManifest, ExtensionSurface } from './extensionManifest.js';
+import type { ExtensionManifest, ExtensionSurface, ExtensionViewContribution } from './extensionManifest.js';
 import {
   EXTENSION_ICON_NAMES,
   EXTENSION_PLACEMENTS,
@@ -37,6 +37,13 @@ export interface ExtensionRegistrySnapshot {
   extensions: ExtensionManifest[];
   routes: Array<{ route: string; extensionId: string; surfaceId: string; packageType: ExtensionManifest['packageType'] }>;
   surfaces: Array<ExtensionSurface & { extensionId: string; packageType: ExtensionManifest['packageType'] }>;
+  views: Array<
+    ExtensionViewContribution & {
+      extensionId: string;
+      packageType: ExtensionManifest['packageType'];
+      frontend?: ExtensionManifest['frontend'];
+    }
+  >;
 }
 
 export interface ExtensionCommandRegistration {
@@ -116,8 +123,8 @@ export function parseExtensionManifest(value: unknown): ExtensionManifest {
   if (!isRecord(value)) {
     throw new Error('Extension manifest must be an object.');
   }
-  if (value.schemaVersion !== 1) {
-    throw new Error('Extension manifest schemaVersion must be 1.');
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) {
+    throw new Error('Extension manifest schemaVersion must be 1 or 2.');
   }
   if (typeof value.id !== 'string' || value.id.trim().length === 0) {
     throw new Error('Extension manifest id is required.');
@@ -172,6 +179,7 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
   return listExtensionEntries(stateRoot).map((entry) => {
     const manifest = entry.manifest;
     const surfaces = manifest.surfaces ?? [];
+    const views = manifest.contributes?.views ?? [];
     return {
       id: manifest.id,
       name: manifest.name,
@@ -184,16 +192,19 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       permissions: manifest.permissions ?? [],
       surfaces,
       backendActions: manifest.backend?.actions ?? [],
-      routes: surfaces.flatMap((surface) =>
-        surface.kind === 'page' && 'route' in surface ? [{ route: surface.route, surfaceId: surface.id }] : [],
-      ),
+      routes: [
+        ...surfaces.flatMap((surface) =>
+          surface.kind === 'page' && 'route' in surface ? [{ route: surface.route, surfaceId: surface.id }] : [],
+        ),
+        ...views.flatMap((view) => (view.location === 'main' && view.route ? [{ route: view.route, surfaceId: view.id }] : [])),
+      ],
     };
   });
 }
 
 export function readExtensionSchema() {
   return {
-    manifestVersion: 1,
+    manifestVersion: 2,
     placements: EXTENSION_PLACEMENTS,
     surfaceKinds: EXTENSION_SURFACE_KINDS,
     rightSurfaceScopes: EXTENSION_RIGHT_SURFACE_SCOPES,
@@ -206,16 +217,32 @@ export function readExtensionRegistrySnapshot(): ExtensionRegistrySnapshot {
   const surfaces = extensions.flatMap((extension) =>
     (extension.surfaces ?? []).map((surface) => ({ ...surface, extensionId: extension.id, packageType: extension.packageType ?? 'user' })),
   );
-  const routes = surfaces.flatMap((surface) =>
-    surface.kind === 'page' && 'route' in surface
-      ? [{ route: surface.route, extensionId: surface.extensionId, surfaceId: surface.id, packageType: surface.packageType }]
-      : [],
+  const views = extensions.flatMap((extension) =>
+    (extension.contributes?.views ?? []).map((view) => ({
+      ...view,
+      extensionId: extension.id,
+      packageType: extension.packageType ?? 'user',
+      ...(extension.frontend ? { frontend: extension.frontend } : {}),
+    })),
   );
-  return { extensions, routes, surfaces };
+  const routes = [
+    ...surfaces.flatMap((surface) =>
+      surface.kind === 'page' && 'route' in surface
+        ? [{ route: surface.route, extensionId: surface.extensionId, surfaceId: surface.id, packageType: surface.packageType }]
+        : [],
+    ),
+    ...views.flatMap((view) =>
+      view.location === 'main' && view.route
+        ? [{ route: view.route, extensionId: view.extensionId, surfaceId: view.id, packageType: view.packageType }]
+        : [],
+    ),
+  ];
+  return { extensions, routes, surfaces, views };
 }
 
 export function listExtensionCommandRegistrations(): ExtensionCommandRegistration[] {
-  return readExtensionRegistrySnapshot().surfaces.flatMap((surface) =>
+  const snapshot = readExtensionRegistrySnapshot();
+  const legacy = snapshot.surfaces.flatMap((surface) =>
     surface.kind === 'command'
       ? [
           {
@@ -229,10 +256,22 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
         ]
       : [],
   );
+  const native = snapshot.extensions.flatMap((extension) =>
+    (extension.contributes?.commands ?? []).map((command) => ({
+      extensionId: extension.id,
+      surfaceId: command.id,
+      packageType: extension.packageType ?? 'user',
+      title: command.title,
+      action: command.action,
+      ...(command.icon ? { icon: command.icon } : {}),
+    })),
+  );
+  return [...legacy, ...native];
 }
 
 export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandRegistration[] {
-  return readExtensionRegistrySnapshot().surfaces.flatMap((surface) =>
+  const snapshot = readExtensionRegistrySnapshot();
+  const legacy = snapshot.surfaces.flatMap((surface) =>
     surface.kind === 'slashCommand'
       ? [
           {
@@ -246,6 +285,17 @@ export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandR
         ]
       : [],
   );
+  const native = snapshot.extensions.flatMap((extension) =>
+    (extension.contributes?.slashCommands ?? []).map((command) => ({
+      extensionId: extension.id,
+      surfaceId: command.name,
+      packageType: extension.packageType ?? 'user',
+      name: command.name,
+      description: command.description,
+      action: command.action,
+    })),
+  );
+  return [...legacy, ...native];
 }
 
 export function findExtensionEntry(extensionId: string): ExtensionRegistryEntry | null {

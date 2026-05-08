@@ -63,23 +63,33 @@ function createSafeTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
-function createStarterHtml(name: string): string {
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>${name}</title>
-  </head>
-  <body>
-    <main class="pa-page pa-stack">
-      <section class="pa-card">
-        <p class="pa-eyebrow">Extension</p>
-        <h1>${name}</h1>
-        <p>Edit this runtime extension from its folder. The PA client API is available as <code>window.PA</code>.</p>
-      </section>
+function createStarterFrontend(name: string): string {
+  return `import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
+
+export function ExtensionPage({ pa }: ExtensionSurfaceProps) {
+  return (
+    <main className="mx-auto max-w-5xl px-8 py-14">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Extension</p>
+      <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.04em] text-primary">${name}</h1>
+      <p className="mt-2 max-w-2xl text-[13px] leading-6 text-secondary">
+        Edit <code>src/frontend.tsx</code>, run <code>pa extension build</code>, then reload extensions.
+      </p>
+      <button className="ui-toolbar-button mt-6" type="button" onClick={() => pa.ui.toast('${name} is wired up.')}>
+        Test toast
+      </button>
     </main>
-  </body>
-</html>
+  );
+}
+`;
+}
+
+function createStarterBackend(): string {
+  return `import type { ExtensionBackendContext } from '@personal-agent/extensions';
+
+export async function ping(_input: unknown, ctx: ExtensionBackendContext) {
+  ctx.log.info('ping');
+  return { ok: true, at: new Date().toISOString() };
+}
 `;
 }
 
@@ -96,26 +106,29 @@ export function createRuntimeExtension(input: CreateRuntimeExtensionInput, state
     throw new Error('Extension directory already exists.');
   }
 
-  mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
+  mkdirSync(join(extensionRoot, 'src'), { recursive: true });
+  mkdirSync(join(extensionRoot, 'dist'), { recursive: true });
   const manifest = parseExtensionManifest({
-    schemaVersion: 1,
+    schemaVersion: 2,
     id,
     name,
     packageType: 'user',
     ...(description ? { description } : {}),
-    surfaces: [
-      {
-        id: 'page',
-        placement: 'main',
-        kind: 'page',
-        route: `/ext/${id}`,
-        entry: 'frontend/index.html',
-      },
-    ],
+    frontend: { entry: 'dist/frontend.js', styles: [] },
+    backend: { entry: 'dist/backend.mjs', actions: [{ id: 'ping', handler: 'ping', title: 'Ping' }] },
+    contributes: {
+      views: [{ id: 'page', title: name, location: 'main', route: `/ext/${id}`, component: 'ExtensionPage' }],
+      nav: [{ id: 'nav', label: name, route: `/ext/${id}`, icon: 'app' }],
+    },
     permissions: [],
   });
   writeFileSync(join(extensionRoot, 'extension.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  writeFileSync(join(extensionRoot, 'frontend', 'index.html'), createStarterHtml(name));
+  writeFileSync(join(extensionRoot, 'src', 'frontend.tsx'), createStarterFrontend(name));
+  writeFileSync(join(extensionRoot, 'src', 'backend.ts'), createStarterBackend());
+  writeFileSync(
+    join(extensionRoot, 'package.json'),
+    `${JSON.stringify({ type: 'module', scripts: { build: 'pa extension build' }, dependencies: { '@personal-agent/extensions': '*' } }, null, 2)}\n`,
+  );
 
   const summary = listExtensionInstallSummaries(stateRoot).find((extension) => extension.id === id);
   return { ok: true as const, extension: summary, packageRoot: extensionRoot };

@@ -1,4 +1,4 @@
-export const EXTENSION_MANIFEST_VERSION = 1;
+export const EXTENSION_MANIFEST_VERSION = 2;
 
 export const EXTENSION_PACKAGE_TYPES = ['user', 'system'] as const;
 export type ExtensionPackageType = (typeof EXTENSION_PACKAGE_TYPES)[number];
@@ -46,15 +46,63 @@ export const EXTENSION_PERMISSIONS = [
 export type ExtensionPermission = (typeof EXTENSION_PERMISSIONS)[number] | `${string}:${string}`;
 
 export interface ExtensionManifest {
-  schemaVersion: typeof EXTENSION_MANIFEST_VERSION;
+  schemaVersion: 1 | typeof EXTENSION_MANIFEST_VERSION;
   id: string;
   name: string;
   packageType?: ExtensionPackageType;
   description?: string;
   version?: string;
+  frontend?: ExtensionFrontend;
+  contributes?: ExtensionContributions;
   surfaces?: ExtensionSurface[];
   backend?: ExtensionBackend;
   permissions?: ExtensionPermission[];
+}
+
+export interface ExtensionFrontend {
+  entry: string;
+  styles?: string[];
+}
+
+export interface ExtensionContributions {
+  views?: ExtensionViewContribution[];
+  nav?: ExtensionNavContribution[];
+  commands?: ExtensionCommandContribution[];
+  slashCommands?: ExtensionSlashCommandContribution[];
+  skills?: string[];
+  settings?: Record<string, unknown>;
+}
+
+export interface ExtensionViewContribution {
+  id: string;
+  title: string;
+  location: 'main' | 'rightRail';
+  component: string;
+  route?: string;
+  scope?: ExtensionRightSurfaceScope;
+  icon?: ExtensionIconName;
+  defaultOpen?: boolean;
+}
+
+export interface ExtensionNavContribution {
+  id: string;
+  label: string;
+  route: string;
+  icon?: ExtensionIconName;
+  badgeAction?: string;
+}
+
+export interface ExtensionCommandContribution {
+  id: string;
+  title: string;
+  action: string;
+  icon?: ExtensionIconName;
+}
+
+export interface ExtensionSlashCommandContribution {
+  name: string;
+  description: string;
+  action: string;
 }
 
 export type ExtensionSurface =

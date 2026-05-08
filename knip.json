@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreDependencies": ["autoprefixer", "postcss"],
+  "ignoreDependencies": ["autoprefixer", "postcss", "esbuild"],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs", "*.config.mjs"],

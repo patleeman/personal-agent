@@ -317,6 +317,26 @@ export const api = {
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
+  extensionManifest: async (extensionId: string) => get<ExtensionManifest>(`/extensions/${encodeURIComponent(extensionId)}/manifest`),
+  extensionSurfacesForExtension: async (extensionId: string) =>
+    get<ExtensionSurfaceSummary[]>(`/extensions/${encodeURIComponent(extensionId)}/surfaces`),
+  extensionStateList: async <T = unknown>(extensionId: string, prefix = '') =>
+    get<Array<{ key: string; value: T; version: number; createdAt: number; updatedAt: number }>>(
+      `/extensions/${encodeURIComponent(extensionId)}/state${prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''}`,
+    ),
+  extensionState: async <T = unknown>(extensionId: string, key: string) =>
+    get<{ key: string; value: T; version: number; createdAt: number; updatedAt: number }>(
+      `/extensions/${encodeURIComponent(extensionId)}/state/${encodeURIComponent(key)}`,
+    ),
+  putExtensionState: async (extensionId: string, key: string, value: unknown, opts?: { expectedVersion?: number }) =>
+    put<{ ok: true; key: string; version: number }>(`/extensions/${encodeURIComponent(extensionId)}/state/${encodeURIComponent(key)}`, {
+      value,
+      expectedVersion: opts?.expectedVersion,
+    }),
+  deleteExtensionState: async (extensionId: string, key: string) =>
+    del<{ ok: true; deleted: boolean }>(`/extensions/${encodeURIComponent(extensionId)}/state/${encodeURIComponent(key)}`),
+  startExtensionRun: async (extensionId: string, input: unknown) =>
+    post<unknown>(`/extensions/${encodeURIComponent(extensionId)}/runs`, input),
   invokeExtensionAction: async (extensionId: string, actionId: string, input: unknown) =>
     post<{ ok: true; result: unknown }>(`/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionId)}`, input),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
@@ -745,6 +765,16 @@ export const api = {
     }
 
     return post<{ ok: boolean; accepted: boolean; runId: string }>(`/tasks/${encodeURIComponent(id)}/run`);
+  },
+  automations: {
+    list: () => api.tasks(),
+    get: (taskId: string) => api.taskDetail(taskId),
+    create: (input: Parameters<typeof api.createTask>[0]) => api.createTask(input),
+    update: (taskId: string, input: Parameters<typeof api.saveTask>[1]) => api.saveTask(taskId, input),
+    delete: (taskId: string) => api.deleteTask(taskId),
+    run: (taskId: string) => api.runTaskNow(taskId),
+    readLog: (taskId: string) => api.taskLog(taskId),
+    readSchedulerHealth: () => api.taskSchedulerHealth(),
   },
   runs: async () => {
     const desktopBridge = getDesktopBridge();

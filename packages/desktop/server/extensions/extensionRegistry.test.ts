@@ -26,8 +26,8 @@ describe('extension registry', () => {
       surfaceId: 'page',
       packageType: 'system',
     });
-    expect(snapshot.surfaces).toEqual([
-      expect.objectContaining({ extensionId: 'system-automations', placement: 'main', kind: 'page', entry: 'frontend/index.html' }),
+    expect(snapshot.views).toEqual([
+      expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage', route: '/automations' }),
     ]);
   });
 

@@ -14,8 +14,8 @@ import {
 } from './extensionManifest.js';
 
 describe('extension manifest schema constants', () => {
-  it('defines the v0 placement, surface, scope, and icon registries', () => {
-    expect(EXTENSION_MANIFEST_VERSION).toBe(1);
+  it('defines the native extension registry constants', () => {
+    expect(EXTENSION_MANIFEST_VERSION).toBe(2);
     expect(EXTENSION_PACKAGE_TYPES).toEqual(['user', 'system']);
     expect(EXTENSION_PLACEMENTS).toEqual(['left', 'main', 'right', 'conversation', 'command', 'slash']);
     expect(EXTENSION_SURFACE_KINDS).toContain('toolPanel');
@@ -25,36 +25,26 @@ describe('extension manifest schema constants', () => {
 
   it('supports strongly typed extension manifests', () => {
     const manifest: ExtensionManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: 'agent-board',
       name: 'Agent Board',
       packageType: 'user',
-      surfaces: [
-        {
-          id: 'nav',
-          placement: 'left',
-          kind: 'navItem',
-          label: 'Agent Board',
-          route: '/ext/agent-board',
-          icon: 'kanban',
-        },
-        {
-          id: 'rail',
-          placement: 'right',
-          kind: 'toolPanel',
-          label: 'Board',
-          entry: 'frontend/rail.html',
-          scope: 'conversation',
-        },
-      ],
+      frontend: { entry: 'dist/frontend.js', styles: ['dist/frontend.css'] },
+      contributes: {
+        views: [
+          { id: 'page', title: 'Agent Board', location: 'main', route: '/ext/agent-board', component: 'AgentBoardPage' },
+          { id: 'rail', title: 'Board', location: 'rightRail', scope: 'conversation', component: 'AgentBoardRail' },
+        ],
+        nav: [{ id: 'nav', label: 'Agent Board', route: '/ext/agent-board', icon: 'kanban' }],
+      },
       backend: {
-        entry: 'backend/index.ts',
+        entry: 'dist/backend.mjs',
         actions: [{ id: 'syncRunStatuses', handler: 'syncRunStatuses' }],
       },
       permissions: ['runs:start', 'storage:readwrite'],
     };
 
-    expect(manifest.surfaces?.map((surface) => surface.id)).toEqual(['nav', 'rail']);
+    expect(manifest.contributes?.views?.map((surface) => surface.id)).toEqual(['page', 'rail']);
   });
 
   it('exposes type guards for manifest generation and validation', () => {

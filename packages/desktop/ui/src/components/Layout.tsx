@@ -15,8 +15,14 @@ import {
   readDesktopEnvironment,
 } from '../desktop/desktopBridge';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
-import { ExtensionFrame } from '../extensions/ExtensionFrame';
-import { type ExtensionRightToolPanelSurface, type ExtensionSurfaceSummary, isExtensionRightToolPanelSurface } from '../extensions/types';
+import { NativeExtensionSurfaceHost } from '../extensions/NativeExtensionSurfaceHost';
+import {
+  type ExtensionRightToolPanelSurface,
+  type ExtensionSurfaceSummary,
+  isExtensionRightToolPanelSurface,
+  isNativeExtensionRightRailSurface,
+  type NativeExtensionViewSummary,
+} from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';
@@ -97,7 +103,9 @@ type BuiltInWorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 
 type ExtensionWorkbenchRailMode = `extension:${string}:${string}`;
 type WorkbenchRailMode = BuiltInWorkbenchRailMode | ExtensionWorkbenchRailMode;
 
-function extensionToolPanelMode(surface: ExtensionRightToolPanelSurface & ExtensionSurfaceSummary): ExtensionWorkbenchRailMode {
+function extensionToolPanelMode(
+  surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
+): ExtensionWorkbenchRailMode {
   return `extension:${surface.extensionId}:${surface.id}`;
 }
 
@@ -105,6 +113,10 @@ function parseExtensionToolPanelMode(mode: WorkbenchRailMode): { extensionId: st
   if (!mode.startsWith('extension:')) return null;
   const [, extensionId, surfaceId] = mode.split(':');
   return extensionId && surfaceId ? { extensionId, surfaceId } : null;
+}
+
+function labelForExtensionToolPanel(surface: { title?: string; label?: string }): string {
+  return surface.title ?? surface.label ?? 'Extension';
 }
 
 function iconGlyphForExtensionSurface(icon: string | undefined): string {
@@ -137,7 +149,7 @@ function iconGlyphForExtensionSurface(icon: string | undefined): string {
 }
 
 function isExtensionToolPanelAvailableForContext(
-  surface: ExtensionRightToolPanelSurface & ExtensionSurfaceSummary,
+  surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
   input: { conversationId: string | null; workspaceCwd: string | null },
 ): boolean {
   if (surface.scope === 'conversation') return Boolean(input.conversationId);
@@ -1231,7 +1243,7 @@ function WorkbenchKnowledgeRail({
   onBrowserTabSwitch: (tabId: string) => void;
   onBrowserTabAdd: () => void;
   onBrowserTabClose: (tabId: string) => void;
-  extensionToolPanels: Array<ExtensionRightToolPanelSurface & ExtensionSurfaceSummary>;
+  extensionToolPanels: Array<(ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary>;
 }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1684,13 +1696,13 @@ function WorkbenchKnowledgeRail({
               'ui-sidebar-nav-item w-full text-left',
               activeTool === extensionToolPanelMode(surface) && 'ui-sidebar-nav-item-active',
             )}
-            title={surface.title ?? surface.label}
+            title={labelForExtensionToolPanel(surface)}
             onClick={() => handleExtensionToolPanelSelect(surface)}
           >
             <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
               {iconGlyphForExtensionSurface(surface.icon)}
             </span>
-            <span className="min-w-0 flex-1 truncate text-left">{surface.label}</span>
+            <span className="min-w-0 flex-1 truncate text-left">{labelForExtensionToolPanel(surface)}</span>
           </button>
         ))}
       </div>
@@ -1754,18 +1766,16 @@ function WorkbenchKnowledgeRail({
         </div>
       ) : activeExtensionToolPanel ? (
         <div className="min-h-0 flex-1 overflow-hidden bg-base">
-          <ExtensionFrame
-            title={activeExtensionToolPanel.title ?? activeExtensionToolPanel.label}
-            extensionId={activeExtensionToolPanel.extensionId}
-            entry={activeExtensionToolPanel.entry}
-            surfaceId={activeExtensionToolPanel.id}
-            route={null}
-            pathname={location.pathname}
-            search={location.search}
-            hash={location.hash}
-            conversationId={conversationId}
-            cwd={workspaceCwd}
-          />
+          {'component' in activeExtensionToolPanel ? (
+            <NativeExtensionSurfaceHost
+              surface={activeExtensionToolPanel}
+              pathname={location.pathname}
+              search={location.search}
+              hash={location.hash}
+              conversationId={conversationId}
+              cwd={workspaceCwd}
+            />
+          ) : null}
         </div>
       ) : activeTool === 'browser' ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 py-1.5 gap-px">
@@ -2022,7 +2032,10 @@ export function Layout() {
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
   const extensionRegistry = useExtensionRegistry();
   const extensionRightToolPanels = useMemo(
-    () => extensionRegistry.surfaces.filter(isExtensionRightToolPanelSurface),
+    () =>
+      extensionRegistry.surfaces.filter(
+        (surface) => isExtensionRightToolPanelSurface(surface) || isNativeExtensionRightRailSurface(surface),
+      ),
     [extensionRegistry.surfaces],
   );
   const setActiveConversationTool = useCallback(

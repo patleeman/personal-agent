@@ -74,7 +74,7 @@ describe('registerExtensionRoutes', () => {
     const surfacesRes = createResponse();
     harness.getHandler('/api/extensions/surfaces')({}, surfacesRes);
     expect(surfacesRes.json).toHaveBeenCalledWith([
-      expect.objectContaining({ extensionId: 'system-automations', placement: 'main', kind: 'page' }),
+      expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage' }),
     ]);
   });
 
@@ -113,7 +113,7 @@ describe('registerExtensionRoutes', () => {
 
     expect(res.type).toHaveBeenCalledWith('html');
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining('<h1>Agent Board</h1>'));
-    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('/pa/client.js'));
+    expect(res.send).not.toHaveBeenCalledWith(expect.stringContaining('/pa/client.js'));
   });
 
   it('rejects extension file traversal', () => {

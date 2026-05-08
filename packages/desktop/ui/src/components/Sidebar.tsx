@@ -45,7 +45,7 @@ import {
   getDesktopBridge,
   shouldUseNativeAppContextMenus,
 } from '../desktop/desktopBridge';
-import { isExtensionLeftNavItemSurface } from '../extensions/types';
+import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
@@ -3559,7 +3559,16 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
   }
 
   const extensionRegistry = useExtensionRegistry();
-  const extensionNavItems = useMemo(() => extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface), [extensionRegistry.surfaces]);
+  const extensionNavItems = useMemo(() => {
+    const legacy = extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface);
+    const native = extensionRegistry.extensions.flatMap((extension) =>
+      (extension.contributes?.nav ?? []).map(
+        (item) =>
+          ({ ...item, extensionId: extension.id, packageType: extension.packageType ?? 'user' }) as ExtensionSurfaceSummary & typeof item,
+      ),
+    );
+    return [...legacy, ...native];
+  }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
   const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
