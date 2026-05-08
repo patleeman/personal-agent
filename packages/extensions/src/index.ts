@@ -116,6 +116,12 @@ export interface ExtensionTranscriptRendererContribution {
   component: string;
 }
 
+export interface ExtensionPromptReferenceContribution {
+  id: string;
+  handler: string;
+  title?: string;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -126,6 +132,7 @@ export interface ExtensionContributions {
   skills?: Array<string | ExtensionSkillContribution>;
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
+  promptReferences?: ExtensionPromptReferenceContribution[];
   settings?: Record<string, unknown>;
 }
 

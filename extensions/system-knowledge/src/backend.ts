@@ -1,7 +1,5 @@
 import { knowledgeVault, readKnowledgeState, syncKnowledgeState, updateKnowledgeState } from '@personal-agent/extensions/backend';
 
-import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../../../packages/desktop/server/knowledge/vaultFiles';
-
 export function readState() {
   return readKnowledgeState();
 }
@@ -63,9 +61,5 @@ export function vaultImportUrl(input: { url: string; title?: string; directoryId
 }
 
 export function resolvePromptReferences(input: { text: string }) {
-  const files = resolveMentionedVaultFiles(input.text);
-  return {
-    contextBlocks: files.length > 0 ? [{ content: buildReferencedVaultFilesContext(files) }] : [],
-    references: files.map((file) => ({ kind: 'knowledgeFile', id: file.id, path: file.path })),
-  };
+  return knowledgeVault.resolvePromptReferences(input);
 }

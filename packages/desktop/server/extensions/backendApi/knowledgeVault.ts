@@ -3,7 +3,7 @@ import { basename, dirname, join } from 'node:path';
 
 import { getVaultRoot } from '@personal-agent/core';
 
-import { listVaultFiles } from '../../knowledge/vaultFiles.js';
+import { buildReferencedVaultFilesContext, listVaultFiles, resolveMentionedVaultFiles } from '../../knowledge/vaultFiles.js';
 import {
   buildVaultImageUploadFileName,
   decodeVaultImageDataUrl,
@@ -101,5 +101,12 @@ export const knowledgeVault = {
     const result = await importVaultSharedItem({ kind: 'url', ...input });
     emitChanged();
     return result;
+  },
+  resolvePromptReferences(input: { text: string }) {
+    const files = resolveMentionedVaultFiles(input.text);
+    return {
+      contextBlocks: files.length > 0 ? [{ content: buildReferencedVaultFilesContext(files) }] : [],
+      references: files.map((file) => ({ kind: 'knowledgeFile', id: file.id, path: file.path })),
+    };
   },
 };
