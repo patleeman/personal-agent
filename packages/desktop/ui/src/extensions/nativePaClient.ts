@@ -20,6 +20,18 @@ export interface NativeExtensionClient {
     delete(key: string): Promise<unknown>;
     list<T = unknown>(prefix?: string): Promise<Array<{ key: string; value: T }>>;
   };
+  workspace: {
+    tree(cwd: string, path?: string): Promise<unknown>;
+    readFile(cwd: string, path: string, opts?: { force?: boolean }): Promise<unknown>;
+    writeFile(cwd: string, path: string, content: string): Promise<unknown>;
+    createFile(cwd: string, path: string, content?: string): Promise<unknown>;
+    createFolder(cwd: string, path: string): Promise<unknown>;
+    deletePath(cwd: string, path: string): Promise<unknown>;
+    renamePath(cwd: string, path: string, newName: string): Promise<unknown>;
+    movePath(cwd: string, path: string, targetDir: string): Promise<unknown>;
+    diff(cwd: string, path: string): Promise<unknown>;
+    uncommittedDiff(cwd: string): Promise<unknown>;
+  };
   ui: {
     toast(message: string): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
@@ -76,6 +88,38 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       async list<T = unknown>(prefix = '') {
         const documents = await api.extensionStateList<T>(extensionId, prefix);
         return documents.map((document) => ({ key: document.key, value: document.value }));
+      },
+    },
+    workspace: {
+      tree(cwd, path) {
+        return api.workspaceTree(cwd, path);
+      },
+      readFile(cwd, path, opts) {
+        return api.workspaceFile(cwd, path, opts);
+      },
+      writeFile(cwd, path, content) {
+        return api.writeWorkspaceFile(cwd, path, content);
+      },
+      createFile(cwd, path, content) {
+        return api.createWorkspaceFile(cwd, path, content);
+      },
+      createFolder(cwd, path) {
+        return api.createWorkspaceFolder(cwd, path);
+      },
+      deletePath(cwd, path) {
+        return api.deleteWorkspacePath(cwd, path);
+      },
+      renamePath(cwd, path, newName) {
+        return api.renameWorkspacePath(cwd, path, newName);
+      },
+      movePath(cwd, path, targetDir) {
+        return api.moveWorkspacePath(cwd, path, targetDir);
+      },
+      diff(cwd, path) {
+        return api.workspaceDiff(cwd, path);
+      },
+      uncommittedDiff(cwd) {
+        return api.workspaceUncommittedDiff(cwd);
       },
     },
     ui: {

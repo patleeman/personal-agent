@@ -5,6 +5,7 @@ import type { Express, Request, Response } from 'express';
 
 import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
 import {
+  buildRuntimeExtension,
   createRuntimeExtension,
   exportRuntimeExtension,
   importRuntimeExtensionBundle,
@@ -301,6 +302,17 @@ export function registerExtensionRoutes(
 
   router.post('/api/extensions/reload', (_req, res) => {
     res.json({ ok: true, reloaded: false, message: 'Runtime manifests are read on demand.' });
+  });
+
+  router.post('/api/extensions/:id/build', async (req, res) => {
+    try {
+      res.json(await buildRuntimeExtension(req.params.id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /not found/i.test(message) ? 404 : /runtime|schemaVersion/i.test(message) ? 400 : 500;
+      logError('extension build error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
+    }
   });
 
   router.post('/api/extensions/:id/reload', async (req, res) => {

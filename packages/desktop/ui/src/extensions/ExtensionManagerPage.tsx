@@ -156,6 +156,47 @@ export function ExtensionManagerPage() {
     });
   }, []);
 
+  const buildExtension = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      setBusyId(extension.id);
+      setNotice(null);
+      try {
+        const result = await api.buildExtension(extension.id);
+        setNotice(
+          result.outputs.length > 0
+            ? `Built ${result.outputs.length} bundle output${result.outputs.length === 1 ? '' : 's'}.`
+            : 'Nothing to build.',
+        );
+        notifyExtensionRegistryChanged();
+        await api.reloadExtension(extension.id).catch(() => null);
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [load],
+  );
+
+  const reloadExtension = useCallback(
+    async (extension: ExtensionInstallSummary) => {
+      setBusyId(extension.id);
+      setNotice(null);
+      try {
+        await api.reloadExtension(extension.id);
+        setNotice(`Reloaded ${extension.name}.`);
+        notifyExtensionRegistryChanged();
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [load],
+  );
+
   const snapshotExtension = useCallback(async (extension: ExtensionInstallSummary) => {
     setBusyId(extension.id);
     setNotice(null);
@@ -259,6 +300,24 @@ export function ExtensionManagerPage() {
                       <>
                         <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] shadow-none" onClick={() => openFolder(extension)}>
                           Open folder
+                        </ToolbarButton>
+                        <ToolbarButton
+                          className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                          disabled={busyId === extension.id}
+                          onClick={() => {
+                            void buildExtension(extension);
+                          }}
+                        >
+                          Build
+                        </ToolbarButton>
+                        <ToolbarButton
+                          className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
+                          disabled={busyId === extension.id}
+                          onClick={() => {
+                            void reloadExtension(extension);
+                          }}
+                        >
+                          Reload
                         </ToolbarButton>
                         <ToolbarButton
                           className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"

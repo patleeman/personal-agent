@@ -125,12 +125,36 @@ const FALLBACK_SYSTEM_DIFFS_MANIFEST: ExtensionManifest = {
   permissions: ['workspace:read', 'conversations:read'],
 };
 
+const FALLBACK_SYSTEM_SETTINGS_MANIFEST: ExtensionManifest = {
+  schemaVersion: 2,
+  id: 'system-settings',
+  name: 'Settings panels',
+  packageType: 'system',
+  description: 'Native extension routes for first-party settings panels.',
+  version: '0.1.0',
+  frontend: { entry: 'dist/frontend.js', styles: [] },
+  contributes: {
+    views: [
+      { id: 'providers', title: 'Provider settings', location: 'main', route: '/settings/providers', component: 'ProviderSettingsPage' },
+      { id: 'dictation', title: 'Dictation settings', location: 'main', route: '/settings/dictation', component: 'DictationSettingsPage' },
+      { id: 'desktop', title: 'Desktop settings', location: 'main', route: '/settings/desktop', component: 'DesktopSettingsPage' },
+    ],
+    nav: [
+      { id: 'providers-nav', label: 'Provider settings', route: '/settings/providers', icon: 'gear' },
+      { id: 'dictation-nav', label: 'Dictation settings', route: '/settings/dictation', icon: 'gear' },
+      { id: 'desktop-nav', label: 'Desktop settings', route: '/settings/desktop', icon: 'gear' },
+    ],
+  },
+  permissions: ['settings:read', 'settings:write'],
+};
+
 export const SYSTEM_EXTENSION_ENTRIES: SystemExtensionEntry[] = [
   readBundledSystemExtension('system-automations', FALLBACK_SYSTEM_AUTOMATIONS_MANIFEST),
   readBundledSystemExtension('system-gateways', FALLBACK_SYSTEM_GATEWAYS_MANIFEST),
   readBundledSystemExtension('system-telemetry', FALLBACK_SYSTEM_TELEMETRY_MANIFEST),
   readBundledSystemExtension('system-runs', FALLBACK_SYSTEM_RUNS_MANIFEST),
   readBundledSystemExtension('system-diffs', FALLBACK_SYSTEM_DIFFS_MANIFEST),
+  readBundledSystemExtension('system-settings', FALLBACK_SYSTEM_SETTINGS_MANIFEST),
 ];
 
 export const SYSTEM_EXTENSIONS: ExtensionManifest[] = SYSTEM_EXTENSION_ENTRIES.map((entry) => entry.manifest);

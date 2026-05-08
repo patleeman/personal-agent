@@ -417,7 +417,7 @@ When asked to create or modify an extension, agents should:
 3. Create or edit source files under the runtime extension package.
 4. Prefer PA components for common UI, custom CSS for genuinely custom layout.
 5. Declare permissions and contributions explicitly in `extension.json`.
-6. Run `npm run extension:build -- <extension-dir>` from the repo, or use the Extension Manager build action once it exists.
+6. Run `npm run extension:build -- <extension-dir>` from the repo, or use the Extension Manager **Build** action.
 7. Reload extensions.
 8. Visually inspect the native surface.
 9. Snapshot/checkpoint only the files touched.
@@ -450,8 +450,11 @@ The first native system extensions are:
 - `system-telemetry` owns `/telemetry` while telemetry collection remains core infrastructure.
 - `system-runs` owns the conversation right-rail Runs surface while durable run execution remains core infrastructure.
 - `system-diffs` owns the conversation right-rail Diffs surface while workspace/checkpoint diff APIs remain core infrastructure.
+- `system-settings` owns deep links for first-party settings subpanels while settings persistence remains core infrastructure.
 
 This is the preferred split: core records and serves cross-cutting state; native extensions own the product surfaces.
+
+Extension Manager can build runtime extensions in-app. Use the per-extension **Build** action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** to refresh backend modules and registry surfaces.
 
 ## Implementation checklist
 

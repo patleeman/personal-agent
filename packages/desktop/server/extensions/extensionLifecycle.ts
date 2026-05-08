@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 
 import { getStateRoot } from '@personal-agent/core';
 
@@ -150,6 +150,61 @@ export function snapshotRuntimeExtension(extensionId: string, stateRoot: string 
   cpSync(entry.packageRoot, snapshotPath, { recursive: true, errorOnExist: true });
 
   return { ok: true as const, extensionId, snapshotPath };
+}
+
+export async function buildRuntimeExtension(extensionId: string) {
+  const entry = findExtensionEntry(extensionId);
+  if (!entry) {
+    throw new Error('Extension not found.');
+  }
+  if (!entry.packageRoot) {
+    throw new Error('Only runtime extensions can be built.');
+  }
+  if (entry.manifest.schemaVersion !== 2) {
+    throw new Error('Only native extension manifest schemaVersion 2 can be built.');
+  }
+
+  const packageRoot = resolve(entry.packageRoot);
+  const { build } = await import('esbuild');
+  const outputs: string[] = [];
+  const frontendSource = join(packageRoot, 'src', 'frontend.tsx');
+  if (entry.manifest.frontend?.entry && existsSync(frontendSource)) {
+    const outfile = resolve(packageRoot, entry.manifest.frontend.entry);
+    assertInside(packageRoot, outfile);
+    mkdirSync(dirname(outfile), { recursive: true });
+    await build({
+      entryPoints: [frontendSource],
+      outfile,
+      bundle: true,
+      platform: 'browser',
+      format: 'esm',
+      target: 'es2022',
+      jsx: 'automatic',
+      sourcemap: true,
+      external: ['@personal-agent/extensions'],
+    });
+    outputs.push(outfile);
+  }
+
+  const backendSource = join(packageRoot, 'src', 'backend.ts');
+  if (entry.manifest.backend?.entry && existsSync(backendSource)) {
+    const outfile = resolve(packageRoot, entry.manifest.backend.entry);
+    assertInside(packageRoot, outfile);
+    mkdirSync(dirname(outfile), { recursive: true });
+    await build({
+      entryPoints: [backendSource],
+      outfile,
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node20',
+      sourcemap: true,
+      external: ['@personal-agent/*', 'electron'],
+    });
+    outputs.push(outfile);
+  }
+
+  return { ok: true as const, extensionId, outputs };
 }
 
 export function exportRuntimeExtension(extensionId: string, stateRoot: string = getStateRoot()) {

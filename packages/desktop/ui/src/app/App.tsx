@@ -455,6 +455,7 @@ export function App() {
                         <Route path="gateways" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="telemetry" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
+                        <Route path="settings/*" element={suspendRoute(<ExtensionPage />)} />
                       </Route>
                     </Routes>
                   </BrowserRouter>

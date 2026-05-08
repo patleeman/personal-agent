@@ -342,6 +342,10 @@ export const api = {
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),
+  buildExtension: async (extensionId: string) =>
+    post<{ ok: true; extensionId: string; outputs: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/build`),
+  reloadExtension: async (extensionId: string) =>
+    post<{ ok: true; extensionId: string; rebuilt: boolean }>(`/extensions/${encodeURIComponent(extensionId)}/reload`),
   snapshotExtension: async (extensionId: string) =>
     post<{ ok: true; extensionId: string; snapshotPath: string }>(`/extensions/${encodeURIComponent(extensionId)}/snapshot`),
   exportExtension: async (extensionId: string) =>
