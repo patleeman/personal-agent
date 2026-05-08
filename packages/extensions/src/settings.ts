@@ -15,7 +15,14 @@ export type ProviderAuthSummary = unknown;
 export type ProviderEditorDraft = unknown;
 export type ProviderOAuthLoginState = unknown;
 export type ProviderOAuthLoginStreamEvent = unknown;
-export type ThemePreference = unknown;
+export interface ColorTheme {
+  id: string;
+  label: string;
+  appearance: 'light' | 'dark';
+  tokens?: Record<string, string>;
+  extensionId?: string;
+}
+export type ThemePreference = string;
 export type TranscriptionModelStatus = unknown;
 export type TranscriptionProviderId = unknown;
 
@@ -54,4 +61,10 @@ export declare function resetStoredLayoutPreferences(...args: never[]): unknown;
 export declare function subscribeDesktopProviderOAuthLogin(...args: never[]): unknown;
 export declare function useApi(...args: never[]): unknown;
 export declare function useInvalidateOnTopics(...args: never[]): unknown;
-export declare function useTheme(...args: never[]): unknown;
+export declare function useTheme(): {
+  theme: string;
+  themePreference: ThemePreference;
+  availableThemes: ColorTheme[];
+  setThemePreference: (theme: ThemePreference) => void;
+  toggle: () => void;
+};

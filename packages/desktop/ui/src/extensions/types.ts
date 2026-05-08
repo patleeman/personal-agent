@@ -33,6 +33,13 @@ interface ExtensionPromptReferenceContribution {
   title?: string;
 }
 
+interface ExtensionQuickOpenContribution {
+  id: string;
+  provider: string;
+  title?: string;
+  section?: string;
+}
+
 interface ExtensionViewContribution {
   id: string;
   title: string;
@@ -122,7 +129,16 @@ interface ExtensionContributions {
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   promptReferences?: ExtensionPromptReferenceContribution[];
+  quickOpen?: ExtensionQuickOpenContribution[];
+  themes?: ExtensionThemeContribution[];
   settings?: Record<string, unknown>;
+}
+
+interface ExtensionThemeContribution {
+  id: string;
+  label: string;
+  appearance: 'light' | 'dark';
+  tokens: Record<string, string>;
 }
 
 interface LegacyExtensionSurfaceBase {
@@ -277,6 +293,15 @@ export interface ExtensionSlashCommandRegistration {
   name: string;
   description: string;
   action: string;
+}
+
+export interface ExtensionQuickOpenRegistration {
+  extensionId: string;
+  id: string;
+  provider: string;
+  packageType?: ExtensionPackageType;
+  title?: string;
+  section?: string;
 }
 
 export type ExtensionSurfaceSummary = ExtensionSurface & { extensionId: string; packageType?: ExtensionPackageType };

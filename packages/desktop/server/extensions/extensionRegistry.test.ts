@@ -101,6 +101,17 @@ describe('extension registry', () => {
         },
       }),
     ).toThrow(/contributes\.keybindings\[0\]\.keys/);
+
+    expect(() =>
+      parseExtensionManifest({
+        schemaVersion: 2,
+        id: 'bad-ext',
+        name: 'Bad Ext',
+        contributes: {
+          themes: [{ id: 'bad-theme', label: 'Bad Theme', appearance: 'dark', tokens: { '--not-color': '1 2 3' } }],
+        },
+      }),
+    ).toThrow(/contributes\.themes\[0\]\.tokens\.*/);
   });
 
   it('loads runtime extension manifests from the state root', () => {
@@ -266,6 +277,7 @@ describe('extension registry', () => {
         placements: expect.arrayContaining(['main', 'right', 'slash']),
         surfaceKinds: expect.arrayContaining(['page', 'toolPanel', 'slashCommand']),
         iconNames: expect.arrayContaining(['automation', 'kanban']),
+        contributions: expect.arrayContaining(['themes']),
       }),
     );
   });

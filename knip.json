@@ -5,6 +5,7 @@
     "postcss",
     "esbuild",
     "qrcode",
+    "@personal-agent/extensions",
     "@tiptap/core",
     "@tiptap/extension-image",
     "@tiptap/extension-link",

@@ -335,7 +335,7 @@ function ThemeButton({
   value: ThemePreference;
   current: ThemePreference;
   onSelect: (theme: ThemePreference) => void;
-  label?: string;
+  label: string;
 }) {
   return (
     <button
@@ -344,7 +344,7 @@ function ThemeButton({
       className={cx('ui-segmented-button capitalize', current === value && 'ui-segmented-button-active')}
       aria-pressed={current === value}
     >
-      {label ?? value}
+      {label}
     </button>
   );
 }
@@ -1870,7 +1870,7 @@ export function DesktopConnectionsSettingsPanel() {
 }
 
 export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
-  const { theme, themePreference, setThemePreference } = useTheme();
+  const { theme, themePreference, availableThemes, setThemePreference } = useTheme();
   const {
     data: skillFoldersState,
     loading: skillFoldersLoading,
@@ -3275,13 +3275,20 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               <div className="space-y-0">
                 <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="ui-segmented-control" role="group" aria-label="Theme selection">
-                      <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
-                      <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
-                      <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
+                    <div className="ui-segmented-control flex-wrap" role="group" aria-label="Theme selection">
+                      <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="Auto" />
+                      {availableThemes.map((availableTheme) => (
+                        <ThemeButton
+                          key={availableTheme.id}
+                          value={availableTheme.id}
+                          current={themePreference}
+                          onSelect={setThemePreference}
+                          label={availableTheme.label}
+                        />
+                      ))}
                     </div>
                     <span className="ui-card-meta">
-                      Current theme: {theme}
+                      Current theme: {availableThemes.find((availableTheme) => availableTheme.id === theme)?.label ?? theme}
                       {themePreference === 'system' ? ' (auto)' : ''}
                     </span>
                   </div>

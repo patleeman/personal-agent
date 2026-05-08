@@ -17,6 +17,7 @@ import {
   listExtensionInstallSummaries,
   listExtensionKeybindingRegistrations,
   listExtensionMentionRegistrations,
+  listExtensionQuickOpenRegistrations,
   listExtensionSlashCommandRegistrations,
   readExtensionRegistrySnapshot,
   readExtensionSchema,
@@ -224,6 +225,14 @@ export function registerExtensionRoutes(
       res.json(listExtensionMentionRegistrations());
     } catch (err) {
       sendRouteError(res, 'extensions mentions error', err);
+    }
+  });
+
+  router.get('/api/extensions/quick-open', (_req, res) => {
+    try {
+      res.json(listExtensionQuickOpenRegistrations());
+    } catch (err) {
+      sendRouteError(res, 'extensions quick-open error', err);
     }
   });
 

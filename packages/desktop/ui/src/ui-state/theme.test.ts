@@ -61,26 +61,26 @@ describe('theme preferences', () => {
 
   it('defaults to the system preference when nothing is stored', () => {
     expect(renderThemeProbe()).toEqual({
-      theme: 'light',
+      theme: 'tokyo-night-light',
       themePreference: 'system',
     });
   });
 
-  it('reads an explicit stored theme preference', () => {
+  it('reads an explicit stored legacy theme preference', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
 
     expect(renderThemeProbe()).toEqual({
-      theme: 'dark',
+      theme: 'tokyo-night-dark',
       themePreference: 'dark',
     });
   });
 
-  it('falls back to system for invalid stored values', () => {
+  it('keeps unknown stored theme ids but falls back to the built-in light theme', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'sepia');
 
     expect(renderThemeProbe()).toEqual({
-      theme: 'light',
-      themePreference: 'system',
+      theme: 'tokyo-night-light',
+      themePreference: 'sepia',
     });
   });
 
@@ -96,7 +96,7 @@ describe('theme preferences', () => {
     });
 
     expect(renderThemeProbe()).toEqual({
-      theme: 'dark',
+      theme: 'tokyo-night-dark',
       themePreference: 'system',
     });
   });

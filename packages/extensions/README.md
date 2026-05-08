@@ -116,7 +116,44 @@ Rules:
 - The manifest declares what exists; code implements the behavior.
 - Renderable views point to named frontend exports.
 - Backend actions point to named backend exports.
+- Color themes are token maps under `contributes.themes`; use `--color-*` CSS variables with RGB triplet strings.
 - Permissions are intent declarations today and should match what the extension can do.
+
+## Color themes
+
+Extensions can contribute color-only themes without frontend code. Theme IDs are scoped by extension at runtime, so `solarized-dark` from `agent-board` is stored and applied as `agent-board/solarized-dark`.
+
+```json
+{
+  "contributes": {
+    "themes": [
+      {
+        "id": "solarized-dark",
+        "label": "Solarized Dark",
+        "appearance": "dark",
+        "tokens": {
+          "--color-base": "0 43 54",
+          "--color-surface": "7 54 66",
+          "--color-elevated": "13 65 78",
+          "--color-panel": "0 36 46",
+          "--color-border-subtle": "38 84 94",
+          "--color-border-default": "48 104 117",
+          "--color-primary": "238 232 213",
+          "--color-secondary": "147 161 161",
+          "--color-dim": "101 123 131",
+          "--color-accent": "38 139 210",
+          "--color-accent-bg": "7 54 66",
+          "--color-success": "133 153 0",
+          "--color-warning": "181 137 0",
+          "--color-danger": "220 50 47"
+        }
+      }
+    ]
+  }
+}
+```
+
+The built-in themes are `tokyo-night-light` and `tokyo-night-dark`. Legacy stored preferences `light` and `dark` still resolve to those built-ins.
 
 ## Dependencies
 

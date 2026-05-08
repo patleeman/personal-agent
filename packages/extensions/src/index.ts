@@ -122,6 +122,20 @@ export interface ExtensionPromptReferenceContribution {
   title?: string;
 }
 
+export interface ExtensionQuickOpenContribution {
+  id: string;
+  provider: string;
+  title?: string;
+  section?: string;
+}
+
+export interface ExtensionThemeContribution {
+  id: string;
+  label: string;
+  appearance: 'light' | 'dark';
+  tokens: Record<string, string>;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -133,6 +147,8 @@ export interface ExtensionContributions {
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   promptReferences?: ExtensionPromptReferenceContribution[];
+  quickOpen?: ExtensionQuickOpenContribution[];
+  themes?: ExtensionThemeContribution[];
   settings?: Record<string, unknown>;
 }
 

@@ -5,6 +5,7 @@ import type {
   ExtensionKeybindingRegistration,
   ExtensionManifest,
   ExtensionMentionRegistration,
+  ExtensionQuickOpenRegistration,
   ExtensionRouteSummary,
   ExtensionSlashCommandRegistration,
   ExtensionSurfaceSummary,
@@ -330,6 +331,7 @@ export const api = {
   ) => patch<{ ok: true }>(`/extensions/keybindings/${encodeURIComponent(extensionId)}/${encodeURIComponent(keybindingId)}`, input),
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
   extensionMentions: async () => get<ExtensionMentionRegistration[]>('/extensions/mentions'),
+  extensionQuickOpen: async () => get<ExtensionQuickOpenRegistration[]>('/extensions/quick-open'),
   extensionManifest: async (extensionId: string) => get<ExtensionManifest>(`/extensions/${encodeURIComponent(extensionId)}/manifest`),
   extensionSurfacesForExtension: async (extensionId: string) =>
     get<ExtensionSurfaceSummary[]>(`/extensions/${encodeURIComponent(extensionId)}/surfaces`),

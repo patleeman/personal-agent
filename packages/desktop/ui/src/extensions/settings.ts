@@ -43,6 +43,6 @@ export type {
   TranscriptionModelStatus,
   TranscriptionProviderId,
 } from '../shared/types';
-export { type ThemePreference, useTheme } from '../ui-state/theme';
+export { type ColorTheme, type ThemePreference, useTheme } from '../ui-state/theme';
 export type { ExtensionKeybindingRegistration } from './types';
 export { getKnowledgeBaseSyncPresentation } from '@personal-agent/extensions/knowledge';

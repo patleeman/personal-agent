@@ -152,6 +152,15 @@ export interface ExtensionPromptReferenceRegistration {
   title?: string;
 }
 
+export interface ExtensionQuickOpenRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  provider: string;
+  title?: string;
+  section?: string;
+}
+
 interface ExtensionRegistryConfig {
   disabledIds?: string[];
   disabledKeybindings?: string[];
@@ -467,6 +476,21 @@ function validateEnum(value: unknown, allowed: readonly string[], path: string):
   }
 }
 
+function validateThemeTokens(value: unknown, path: string): void {
+  if (!isRecord(value)) {
+    throw new Error(`Extension manifest ${path} must be an object.`);
+  }
+
+  for (const [key, tokenValue] of Object.entries(value)) {
+    if (!/^--color-[a-z0-9-]+$/.test(key)) {
+      throw new Error(`Extension manifest ${path}.${key} must be a --color-* CSS variable.`);
+    }
+    if (typeof tokenValue !== 'string' || !/^\d{1,3}\s+\d{1,3}\s+\d{1,3}$/.test(tokenValue.trim())) {
+      throw new Error(`Extension manifest ${path}.${key} must be an RGB triplet string like "187 154 247".`);
+    }
+  }
+}
+
 function validateExtensionContributions(contributes: Record<string, unknown>): void {
   if (contributes.views !== undefined) {
     for (const [index, view] of assertRecordArray(contributes.views, 'contributes.views').entries()) {
@@ -545,6 +569,15 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.quickOpen !== undefined) {
+    for (const [index, provider] of assertRecordArray(contributes.quickOpen, 'contributes.quickOpen').entries()) {
+      requireString(provider.id, `contributes.quickOpen[${index}].id`);
+      requireString(provider.provider, `contributes.quickOpen[${index}].provider`);
+      validateOptionalString(provider.title, `contributes.quickOpen[${index}].title`);
+      validateOptionalString(provider.section, `contributes.quickOpen[${index}].section`);
+    }
+  }
+
   if (contributes.skills !== undefined) {
     for (const [index, skill] of assertArray(contributes.skills, 'contributes.skills').entries()) {
       if (typeof skill === 'string') {
@@ -578,6 +611,15 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(renderer.id, `contributes.transcriptRenderers[${index}].id`);
       requireString(renderer.tool, `contributes.transcriptRenderers[${index}].tool`);
       requireString(renderer.component, `contributes.transcriptRenderers[${index}].component`);
+    }
+  }
+
+  if (contributes.themes !== undefined) {
+    for (const [index, theme] of assertRecordArray(contributes.themes, 'contributes.themes').entries()) {
+      requireString(theme.id, `contributes.themes[${index}].id`);
+      requireString(theme.label, `contributes.themes[${index}].label`);
+      validateEnum(theme.appearance, ['light', 'dark'], `contributes.themes[${index}].appearance`);
+      validateThemeTokens(theme.tokens, `contributes.themes[${index}].tokens`);
     }
   }
 
@@ -793,6 +835,8 @@ export function readExtensionSchema() {
       'skills',
       'tools',
       'promptReferences',
+      'quickOpen',
+      'themes',
     ],
   };
 }
@@ -934,6 +978,26 @@ export function listExtensionPromptReferenceRegistrations(stateRoot: string = ge
           packageType: entry.manifest.packageType ?? 'user',
           handler,
           ...(resolver.title ? { title: resolver.title } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionQuickOpenRegistrations(stateRoot: string = getStateRoot()): ExtensionQuickOpenRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.quickOpen ?? []).flatMap((provider): ExtensionQuickOpenRegistration[] => {
+      const id = provider.id.trim();
+      const resolvedProvider = provider.provider.trim();
+      if (!id || !resolvedProvider) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          provider: resolvedProvider,
+          ...(provider.title ? { title: provider.title } : {}),
+          ...(provider.section ? { section: provider.section } : {}),
         },
       ];
     }),

@@ -29,6 +29,7 @@
   },
   "contributes": {
     "promptReferences": [{ "id": "knowledge-files", "handler": "resolvePromptReferences", "title": "Knowledge files" }],
+    "quickOpen": [{ "id": "knowledge-files", "provider": "knowledgeQuickOpenProvider", "title": "Knowledge files", "section": "files" }],
     "mentions": [
       {
         "id": "knowledge-files",
@@ -38,7 +39,16 @@
         "provider": "buildKnowledgeMentionItems"
       }
     ],
+    "nav": [{ "id": "knowledge", "label": "Knowledge", "route": "/knowledge", "icon": "file" }],
     "views": [
+      {
+        "id": "knowledge-page",
+        "title": "Knowledge",
+        "location": "main",
+        "route": "/knowledge",
+        "component": "KnowledgePageSurface",
+        "routeCapabilities": ["contextRail", "knowledgeFiles"]
+      },
       {
         "id": "knowledge-tree",
         "title": "Knowledge",

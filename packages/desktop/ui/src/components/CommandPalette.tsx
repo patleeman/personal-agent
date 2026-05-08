@@ -1,5 +1,4 @@
 import { onKBEvent } from '@personal-agent/extensions/knowledge';
-import { knowledgeApi } from '@personal-agent/extensions/knowledge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -19,12 +18,29 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
-import type { ExtensionCommandRegistration, ExtensionSurfaceSummary } from '../extensions/types';
+import { systemExtensionModules } from '../extensions/systemExtensionModules';
+import type { ExtensionCommandRegistration, ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
-import type { ConversationContentSearchMatch, SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
+import type { ConversationContentSearchMatch, SessionMeta } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 import { readAppLayoutMode } from '../ui-state/appLayoutMode';
 import { cx } from './ui';
+
+interface ExtensionQuickOpenItem {
+  id: string;
+  section?: string;
+  title: string;
+  subtitle?: string;
+  meta?: string;
+  keywords?: Array<string | undefined>;
+  order?: number;
+  action?: CommandPaletteAction;
+}
+
+type ExtensionQuickOpenProvider = {
+  list?: () => Promise<ExtensionQuickOpenItem[]> | ExtensionQuickOpenItem[];
+  search?: (query: string, limit: number) => Promise<ExtensionQuickOpenItem[]> | ExtensionQuickOpenItem[];
+};
 
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
@@ -57,15 +73,6 @@ function excerpt(value: string | undefined, maxLength = 110): string | undefined
   }
 
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
-}
-
-function fileTitle(name: string): string {
-  return name.replace(/\.md$/i, '');
-}
-
-function fileLocation(id: string): string | undefined {
-  const parts = id.split('/').slice(0, -1).filter(Boolean);
-  return parts.length > 0 ? parts.join('/') : undefined;
 }
 
 function buildConversationItems(section: 'open' | 'archived', sessions: ScopedSessionMeta[]): CommandPaletteItem<CommandPaletteAction>[] {
@@ -114,32 +121,24 @@ function buildConversationItems(section: 'open' | 'archived', sessions: ScopedSe
   });
 }
 
-function buildFileItems(files: VaultEntry[]): CommandPaletteItem<CommandPaletteAction>[] {
-  return files
-    .filter((file) => file.kind === 'file' && file.name.endsWith('.md'))
-    .map((file, index) => ({
-      id: `file:${file.id}`,
-      section: 'files' as const,
-      title: fileTitle(file.name),
-      subtitle: fileLocation(file.id),
-      meta: file.id,
-      keywords: [file.id, file.name, file.path],
-      order: index,
-      action: { kind: 'openFile', fileId: file.id },
-    }));
-}
-
-function buildFileSearchItems(results: VaultSearchResult[]): CommandPaletteItem<CommandPaletteAction>[] {
-  return results.map((result, index) => ({
-    id: `file-search:${result.id}`,
-    section: 'files' as const,
-    title: fileTitle(result.name),
-    subtitle: fileLocation(result.id),
-    meta: excerpt(result.excerpt, 140) ?? result.id,
-    keywords: [result.id, result.name, result.excerpt],
-    order: index,
-    action: { kind: 'openFile', fileId: result.id },
-  }));
+function normalizeQuickOpenItem(
+  registration: ExtensionQuickOpenRegistration,
+  item: ExtensionQuickOpenItem,
+  index: number,
+): CommandPaletteItem<CommandPaletteAction> | null {
+  const section = item.section ?? registration.section;
+  if (section !== 'files' && section !== 'commands' && section !== 'open' && section !== 'archived') return null;
+  if (!item.action) return null;
+  return {
+    id: `extension-quick-open:${registration.extensionId}:${registration.id}:${item.id}`,
+    section,
+    title: item.title,
+    subtitle: item.subtitle,
+    meta: item.meta,
+    keywords: item.keywords,
+    order: item.order ?? index,
+    action: item.action,
+  };
 }
 
 function buildExtensionCommandItems(commands: ExtensionCommandRegistration[]): CommandPaletteItem<CommandPaletteAction>[] {
@@ -220,12 +219,13 @@ export function CommandPalette() {
   const [conversationContentSearchResults, setConversationContentSearchResults] = useState<ConversationContentSearchMatch[]>([]);
   const [conversationContentSearchLoading, setConversationContentSearchLoading] = useState(false);
   const [conversationContentSearchError, setConversationContentSearchError] = useState<string | null>(null);
-  const [vaultFiles, setVaultFiles] = useState<VaultEntry[]>([]);
-  const [vaultFilesLoading, setVaultFilesLoading] = useState(false);
-  const [vaultFilesError, setVaultFilesError] = useState<string | null>(null);
-  const [vaultSearchResults, setVaultSearchResults] = useState<VaultSearchResult[]>([]);
-  const [vaultSearchLoading, setVaultSearchLoading] = useState(false);
-  const [vaultSearchError, setVaultSearchError] = useState<string | null>(null);
+  const [quickOpenRegistrations, setQuickOpenRegistrations] = useState<ExtensionQuickOpenRegistration[]>([]);
+  const [quickOpenItems, setQuickOpenItems] = useState<CommandPaletteItem<CommandPaletteAction>[]>([]);
+  const [quickOpenLoading, setQuickOpenLoading] = useState(false);
+  const [quickOpenError, setQuickOpenError] = useState<string | null>(null);
+  const [quickOpenSearchItems, setQuickOpenSearchItems] = useState<CommandPaletteItem<CommandPaletteAction>[]>([]);
+  const [quickOpenSearchLoading, setQuickOpenSearchLoading] = useState(false);
+  const [quickOpenSearchError, setQuickOpenSearchError] = useState<string | null>(null);
   const [extensionCommands, setExtensionCommands] = useState<ExtensionCommandRegistration[]>([]);
   const [extensionCommandsLoading, setExtensionCommandsLoading] = useState(false);
   const [extensionCommandsError, setExtensionCommandsError] = useState<string | null>(null);
@@ -237,8 +237,8 @@ export function CommandPalette() {
 
   const openConversationItems = useMemo(() => buildConversationItems('open', openThreadSessions), [openThreadSessions]);
   const archivedConversationItems = useMemo(() => buildConversationItems('archived', archivedSessions), [archivedSessions]);
-  const fileItems = useMemo(() => buildFileItems(vaultFiles), [vaultFiles]);
-  const searchedFileItems = useMemo(() => buildFileSearchItems(vaultSearchResults), [vaultSearchResults]);
+  const fileItems = quickOpenItems;
+  const searchedFileItems = quickOpenSearchItems;
   const extensionCommandItems = useMemo(() => buildExtensionCommandItems(extensionCommands), [extensionCommands]);
   const searchedConversationItems = useMemo(
     () => buildConversationContentSearchItems(conversationContentSearchResults, query.trim()),
@@ -292,18 +292,34 @@ export function CommandPalette() {
     setOpen(true);
   }, []);
 
-  const loadVaultFiles = useCallback(async () => {
-    setVaultFilesLoading(true);
-    setVaultFilesError(null);
+  const loadQuickOpenItems = useCallback(async () => {
+    setQuickOpenLoading(true);
+    setQuickOpenError(null);
     try {
-      const result = await knowledgeApi.listFiles();
-      setVaultFiles(result.files);
+      const registrations = quickOpenRegistrations.length > 0 ? quickOpenRegistrations : await api.extensionQuickOpen();
+      setQuickOpenRegistrations(registrations);
+      const groups = await Promise.all(
+        registrations.map(async (registration) => {
+          const loader = systemExtensionModules.get(registration.extensionId);
+          if (!loader) return [];
+          const module = await loader();
+          const provider = module[registration.provider] as ExtensionQuickOpenProvider | undefined;
+          if (!provider?.list) return [];
+          const items = await provider.list();
+          return items.flatMap((item, index) => {
+            const normalized = normalizeQuickOpenItem(registration, item, index);
+            return normalized ? [normalized] : [];
+          });
+        }),
+      );
+      setQuickOpenItems(groups.flat());
     } catch (error) {
-      setVaultFilesError(error instanceof Error ? error.message : String(error));
+      setQuickOpenError(error instanceof Error ? error.message : String(error));
+      setQuickOpenItems([]);
     } finally {
-      setVaultFilesLoading(false);
+      setQuickOpenLoading(false);
     }
-  }, []);
+  }, [quickOpenRegistrations]);
 
   const loadExtensionCommands = useCallback(async () => {
     setExtensionCommandsLoading(true);
@@ -375,12 +391,12 @@ export function CommandPalette() {
       return;
     }
 
-    if (vaultFilesLoading || vaultFiles.length > 0) {
+    if (quickOpenLoading || quickOpenItems.length > 0) {
       return;
     }
 
-    void loadVaultFiles();
-  }, [loadVaultFiles, open, scope, vaultFiles.length, vaultFilesLoading]);
+    void loadQuickOpenItems();
+  }, [loadQuickOpenItems, open, quickOpenItems.length, quickOpenLoading, scope]);
 
   useEffect(() => {
     if (!open) {
@@ -389,21 +405,21 @@ export function CommandPalette() {
 
     const offHandlers = [
       onKBEvent('kb:entries-changed', () => {
-        void loadVaultFiles();
+        void loadQuickOpenItems();
       }),
       onKBEvent('kb:file-created', () => {
-        void loadVaultFiles();
+        void loadQuickOpenItems();
       }),
       onKBEvent('kb:file-renamed', () => {
-        void loadVaultFiles();
+        void loadQuickOpenItems();
       }),
       onKBEvent('kb:file-deleted', () => {
-        void loadVaultFiles();
+        void loadQuickOpenItems();
       }),
     ];
 
     return () => offHandlers.forEach((off) => off());
-  }, [loadVaultFiles, open]);
+  }, [loadQuickOpenItems, open]);
 
   const archivedGroup = useMemo(() => groups.find((group) => group.section === 'archived') ?? null, [groups]);
   const canLoadMoreArchivedThreads = Boolean(
@@ -474,36 +490,47 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!shouldSearchFilesByContent) {
-      setVaultSearchLoading(false);
-      setVaultSearchError(null);
-      setVaultSearchResults([]);
+      setQuickOpenSearchLoading(false);
+      setQuickOpenSearchError(null);
+      setQuickOpenSearchItems([]);
       return;
     }
 
     let cancelled = false;
-    setVaultSearchLoading(true);
-    setVaultSearchError(null);
+    setQuickOpenSearchLoading(true);
+    setQuickOpenSearchError(null);
 
     const handle = window.setTimeout(() => {
-      void knowledgeApi
-        .search(query.trim(), FILE_SEARCH_LIMIT)
-        .then((result) => {
-          if (cancelled) {
-            return;
-          }
-          setVaultSearchResults(result.results);
+      void (async () => {
+        const registrations = quickOpenRegistrations.length > 0 ? quickOpenRegistrations : await api.extensionQuickOpen();
+        setQuickOpenRegistrations(registrations);
+        const groups = await Promise.all(
+          registrations.map(async (registration) => {
+            const loader = systemExtensionModules.get(registration.extensionId);
+            if (!loader) return [];
+            const module = await loader();
+            const provider = module[registration.provider] as ExtensionQuickOpenProvider | undefined;
+            if (!provider?.search) return [];
+            const items = await provider.search(query.trim(), FILE_SEARCH_LIMIT);
+            return items.flatMap((item, index) => {
+              const normalized = normalizeQuickOpenItem(registration, item, index);
+              return normalized ? [normalized] : [];
+            });
+          }),
+        );
+        return groups.flat();
+      })()
+        .then((items) => {
+          if (cancelled) return;
+          setQuickOpenSearchItems(items);
         })
         .catch((error) => {
-          if (cancelled) {
-            return;
-          }
-          setVaultSearchError(error instanceof Error ? error.message : String(error));
-          setVaultSearchResults([]);
+          if (cancelled) return;
+          setQuickOpenSearchError(error instanceof Error ? error.message : String(error));
+          setQuickOpenSearchItems([]);
         })
         .finally(() => {
-          if (!cancelled) {
-            setVaultSearchLoading(false);
-          }
+          if (!cancelled) setQuickOpenSearchLoading(false);
         });
     }, FILE_CONTENT_SEARCH_DEBOUNCE_MS);
 
@@ -511,7 +538,7 @@ export function CommandPalette() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [query, shouldSearchFilesByContent]);
+  }, [query, quickOpenRegistrations, shouldSearchFilesByContent]);
 
   const activateItem = useCallback(
     async (item: CommandPaletteItem<CommandPaletteAction>) => {
@@ -708,7 +735,7 @@ export function CommandPalette() {
       sections.add('archived');
     }
 
-    if ((scope === 'files' || scope === 'search') && vaultFilesLoading && fileItems.length === 0) {
+    if ((scope === 'files' || scope === 'search') && quickOpenLoading && fileItems.length === 0) {
       sections.add('files');
     }
 
@@ -716,7 +743,7 @@ export function CommandPalette() {
       sections.add('commands');
     }
 
-    if (scope === 'search' && vaultSearchLoading) {
+    if (scope === 'search' && quickOpenSearchLoading) {
       sections.add('files');
     }
 
@@ -729,8 +756,8 @@ export function CommandPalette() {
     scope,
     sessions,
     sessionsLoading,
-    vaultFilesLoading,
-    vaultSearchLoading,
+    quickOpenLoading,
+    quickOpenSearchLoading,
   ]);
   const showSectionHeaders = groups.length > 1;
   const searchPlaceholder =
@@ -927,15 +954,15 @@ export function CommandPalette() {
             </section>
           )}
 
-          {vaultFilesError && (scope === 'files' || scope === 'search') && (
+          {quickOpenError && (scope === 'files' || scope === 'search') && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load files: {vaultFilesError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load files: {quickOpenError}</p>
             </section>
           )}
 
-          {vaultSearchError && scope === 'search' && (
+          {quickOpenSearchError && scope === 'search' && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search file contents: {vaultSearchError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search file contents: {quickOpenSearchError}</p>
             </section>
           )}
 
@@ -948,8 +975,8 @@ export function CommandPalette() {
           {visibleCount === 0 &&
             loadingSections.length === 0 &&
             !(conversationContentSearchError && (scope === 'threads' || scope === 'search')) &&
-            !(vaultFilesError && (scope === 'files' || scope === 'search')) &&
-            !(vaultSearchError && scope === 'search') &&
+            !(quickOpenError && (scope === 'files' || scope === 'search')) &&
+            !(quickOpenSearchError && scope === 'search') &&
             !(extensionCommandsError && (scope === 'commands' || scope === 'search')) && (
               <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
             )}

@@ -1,9 +1,25 @@
 import { createContext, createElement, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { api } from '../client/api';
+import type { ExtensionManifest } from '../extensions/types';
 import { THEME_STORAGE_KEY } from '../local/localSettings';
 
-type Theme = 'light' | 'dark';
+type ThemeAppearance = 'light' | 'dark';
+type Theme = 'tokyo-night-light' | 'tokyo-night-dark' | 'light' | 'dark' | string;
 export type ThemePreference = Theme | 'system';
+
+export interface ColorTheme {
+  id: Theme;
+  label: string;
+  appearance: ThemeAppearance;
+  tokens?: Record<string, string>;
+  extensionId?: string;
+}
+
+const BUILT_IN_THEMES: ColorTheme[] = [
+  { id: 'tokyo-night-light', label: 'Tokyo Night Light', appearance: 'light' },
+  { id: 'tokyo-night-dark', label: 'Tokyo Night Dark', appearance: 'dark' },
+];
 
 const DEFAULT_THEME_PREFERENCE: ThemePreference = 'system';
 const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
@@ -11,25 +27,59 @@ const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
 interface ThemeContextValue {
   theme: Theme;
   themePreference: ThemePreference;
+  availableThemes: ColorTheme[];
   setThemePreference: (theme: ThemePreference) => void;
   toggle: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function applyTheme(theme: Theme) {
+function normalizeThemeId(theme: Theme): Theme {
+  if (theme === 'light') return 'tokyo-night-light';
+  if (theme === 'dark') return 'tokyo-night-dark';
+  return theme;
+}
+
+function findTheme(themes: ColorTheme[], theme: Theme): ColorTheme {
+  const normalizedTheme = normalizeThemeId(theme);
+  return themes.find((candidate) => candidate.id === normalizedTheme) ?? BUILT_IN_THEMES[0];
+}
+
+function applyTheme(theme: ColorTheme) {
   if (typeof document === 'undefined') {
     return;
   }
 
-  if (theme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', theme.id);
+  document.documentElement.setAttribute('data-theme-appearance', theme.appearance);
+  document.documentElement.style.colorScheme = theme.appearance;
+
+  for (const property of Array.from(document.documentElement.style)) {
+    if (property.startsWith('--color-')) {
+      document.documentElement.style.removeProperty(property);
+    }
   }
+
+  for (const [property, value] of Object.entries(theme.tokens ?? {})) {
+    document.documentElement.style.setProperty(property, value);
+  }
+
+  document.documentElement.style.setProperty('--pa-bg', 'rgb(var(--color-base))');
+  document.documentElement.style.setProperty('--pa-surface', 'rgb(var(--color-surface))');
+  document.documentElement.style.setProperty('--pa-surface-hover', 'rgb(var(--color-elevated))');
+  document.documentElement.style.setProperty('--pa-border', 'rgb(var(--color-border-default))');
+  document.documentElement.style.setProperty('--pa-border-subtle', 'rgb(var(--color-border-subtle))');
+  document.documentElement.style.setProperty('--pa-text', 'rgb(var(--color-primary))');
+  document.documentElement.style.setProperty('--pa-text-secondary', 'rgb(var(--color-secondary))');
+  document.documentElement.style.setProperty('--pa-text-dim', 'rgb(var(--color-dim))');
+  document.documentElement.style.setProperty('--pa-accent', 'rgb(var(--color-accent))');
+  document.documentElement.style.setProperty('--pa-accent-hover', 'rgb(var(--color-accent))');
+  document.documentElement.style.setProperty('--pa-danger', 'rgb(var(--color-danger))');
+  document.documentElement.style.setProperty('--pa-success', 'rgb(var(--color-success))');
+  document.documentElement.style.setProperty('--pa-warning', 'rgb(var(--color-warning))');
 }
 
-function readSystemTheme(): Theme {
+function readSystemTheme(): ThemeAppearance {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return 'light';
   }
@@ -37,14 +87,38 @@ function readSystemTheme(): Theme {
   return window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
 }
 
-function resolveThemePreference(preference: ThemePreference, systemTheme: Theme = 'light'): Theme {
-  return preference === 'system' ? systemTheme : preference;
+function resolveThemePreference(preference: ThemePreference, systemTheme: ThemeAppearance = 'light'): Theme {
+  if (preference !== 'system') return normalizeThemeId(preference);
+  return systemTheme === 'dark' ? 'tokyo-night-dark' : 'tokyo-night-light';
+}
+
+function isColorThemeContribution(value: unknown): value is ColorTheme {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.label === 'string' &&
+    (record.appearance === 'light' || record.appearance === 'dark') &&
+    (record.tokens === undefined || (typeof record.tokens === 'object' && record.tokens !== null && !Array.isArray(record.tokens)))
+  );
+}
+
+function readExtensionThemes(extensions: ExtensionManifest[]): ColorTheme[] {
+  return extensions.flatMap((extension) =>
+    (extension.contributes?.themes ?? []).filter(isColorThemeContribution).map((theme) => ({
+      id: `${extension.id}/${theme.id}`,
+      label: theme.label,
+      appearance: theme.appearance,
+      tokens: theme.tokens,
+      extensionId: extension.id,
+    })),
+  );
 }
 
 function readStoredThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'system' || stored === 'light' || stored === 'dark') {
+    if (stored === 'system' || stored.trim().length > 0) {
       return stored;
     }
   } catch {
@@ -57,16 +131,36 @@ function readStoredThemePreference(): ThemePreference {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => {
     const currentPreference = readStoredThemePreference();
-    applyTheme(resolveThemePreference(currentPreference, readSystemTheme()));
+    applyTheme(findTheme(BUILT_IN_THEMES, resolveThemePreference(currentPreference, readSystemTheme())));
     return currentPreference;
   });
-  const [systemTheme, setSystemTheme] = useState<Theme>(() => readSystemTheme());
+  const [systemTheme, setSystemTheme] = useState<ThemeAppearance>(() => readSystemTheme());
+  const [extensionThemes, setExtensionThemes] = useState<ColorTheme[]>([]);
+  const availableThemes = useMemo(() => [...BUILT_IN_THEMES, ...extensionThemes], [extensionThemes]);
 
-  const theme = useMemo(() => resolveThemePreference(themePreference, systemTheme), [systemTheme, themePreference]);
+  const theme = useMemo(() => {
+    const resolvedTheme = resolveThemePreference(themePreference, systemTheme);
+    return findTheme(availableThemes, resolvedTheme).id;
+  }, [availableThemes, systemTheme, themePreference]);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    applyTheme(findTheme(availableThemes, theme));
+  }, [availableThemes, theme]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .extensions()
+      .then((extensions) => {
+        if (!cancelled) setExtensionThemes(readExtensionThemes(extensions));
+      })
+      .catch(() => {
+        if (!cancelled) setExtensionThemes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (themePreference !== 'system' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -102,7 +196,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setThemePreference = useCallback(
     (nextThemePreference: ThemePreference) => {
       const nextSystemTheme = nextThemePreference === 'system' ? readSystemTheme() : systemTheme;
-      const nextTheme = resolveThemePreference(nextThemePreference, nextSystemTheme);
+      const nextTheme = findTheme(availableThemes, resolveThemePreference(nextThemePreference, nextSystemTheme));
 
       setThemePreferenceState(nextThemePreference);
       if (nextThemePreference === 'system') {
@@ -116,16 +210,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         // Ignore storage failures.
       }
     },
-    [systemTheme],
+    [availableThemes, systemTheme],
   );
 
   const toggle = useCallback(() => {
-    setThemePreference(theme === 'light' ? 'dark' : 'light');
-  }, [setThemePreference, theme]);
+    setThemePreference(findTheme(availableThemes, theme).appearance === 'light' ? 'tokyo-night-dark' : 'tokyo-night-light');
+  }, [availableThemes, setThemePreference, theme]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, themePreference, setThemePreference, toggle }),
-    [setThemePreference, theme, themePreference, toggle],
+    () => ({ theme, themePreference, availableThemes, setThemePreference, toggle }),
+    [availableThemes, setThemePreference, theme, themePreference, toggle],
   );
 
   return createElement(ThemeContext.Provider, { value }, children);
