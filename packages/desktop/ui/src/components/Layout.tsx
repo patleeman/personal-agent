@@ -23,7 +23,7 @@ import { useSessionStream } from '../hooks/useSessionStream';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
-import { routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
+import { routeIsKnowledge, routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { useRouteTelemetry } from '../telemetry/appTelemetry';
@@ -1503,6 +1503,10 @@ export function Layout() {
     () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-browser') ?? null,
     [extensionRightToolPanels],
   );
+  const systemKnowledgeExtensionSurface = useMemo(
+    () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null,
+    [extensionRightToolPanels],
+  );
   const activeExtensionWorkbenchSurface = useMemo(() => {
     const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
     if (!parsed) return null;
@@ -1528,6 +1532,15 @@ export function Layout() {
     },
     [activeConversationId],
   );
+  const lastWorkbenchRouteRef = useRef<{ pathname: string; search: string }>({ pathname: '/conversations/new', search: '' });
+
+  useEffect(() => {
+    if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {
+      return;
+    }
+    lastWorkbenchRouteRef.current = { pathname: location.pathname, search: location.search };
+  }, [extensionRegistry.surfaces, location.pathname, location.search]);
+
   const setActiveConversationCheckpoint = useCallback(
     (checkpointId: string | null) => {
       if (!activeConversationId) {
@@ -1754,6 +1767,7 @@ export function Layout() {
 
   const handleAppLayoutModeChange = useCallback(
     (mode: AppLayoutMode) => {
+      const previousMode = appLayoutMode;
       setAppLayoutMode(mode);
       writeAppLayoutMode(mode);
 
@@ -1766,9 +1780,49 @@ export function Layout() {
           },
           { replace: true },
         );
+        return;
+      }
+
+      if (mode === 'workbench' && previousMode === 'compact') {
+        setWorkbenchExplorerOpen(true);
+        writeStoredWorkbenchExplorerOpen(true);
+
+        if (routeIsKnowledge(location.pathname, extensionRegistry.surfaces)) {
+          const nextSearch = new URLSearchParams(lastWorkbenchRouteRef.current.search);
+          nextSearch.delete('artifact');
+          nextSearch.delete('checkpoint');
+          nextSearch.delete('run');
+          const activeKnowledgeFileId = searchParams.get('file');
+          if (activeKnowledgeFileId) {
+            nextSearch.set('file', activeKnowledgeFileId);
+          } else {
+            nextSearch.delete('file');
+          }
+          setActiveConversationTool(
+            systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge',
+          );
+          navigate({
+            pathname: lastWorkbenchRouteRef.current.pathname,
+            search: nextSearch.toString(),
+          });
+          return;
+        }
+
+        if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {
+          navigate(lastWorkbenchRouteRef.current);
+        }
       }
     },
-    [setSearchParams],
+    [
+      appLayoutMode,
+      extensionRegistry.surfaces,
+      location.pathname,
+      navigate,
+      searchParams,
+      setActiveConversationTool,
+      setSearchParams,
+      systemKnowledgeExtensionSurface,
+    ],
   );
 
   const handleZenModeChange = useCallback(
