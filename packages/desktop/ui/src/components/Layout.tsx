@@ -1,5 +1,3 @@
-import { VaultEditor } from '@personal-agent/extensions/knowledge';
-import { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';
 import { Component, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -61,9 +59,6 @@ const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
 const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
   import('./ContextRail').then((module) => ({ default: module.ContextRail })),
-);
-const VaultFileTree = lazyRouteWithRecovery('layout-vault-file-tree', () =>
-  import('@personal-agent/extensions/knowledge').then((module) => ({ default: module.VaultFileTree })),
 );
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
@@ -654,26 +649,7 @@ function WorkbenchDocumentPane({
   extensionWorkbenchSurface: NativeExtensionViewSummary | null;
 }) {
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { sessions, tasks } = useAppData();
-  const activeFileId = searchParams.get('file') ?? null;
-  const fileName = activeFileId ? activeFileId.split('/').filter(Boolean).pop() : undefined;
-
-  const handleFileNavigate = useCallback(
-    (id: string) => {
-      navigateKnowledgeFile(setSearchParams, id);
-    },
-    [setSearchParams],
-  );
-
-  const handleFileRenamed = useCallback(
-    (oldId: string, newId: string) => {
-      if (activeFileId === oldId) {
-        navigateKnowledgeFile(setSearchParams, newId, { replace: true });
-      }
-    },
-    [activeFileId, setSearchParams],
-  );
 
   if (activeTool === 'artifacts' && conversationId && artifactId) {
     return <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />;
@@ -712,19 +688,15 @@ function WorkbenchDocumentPane({
     return null;
   }
 
-  if (!activeFileId) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center select-text">
-        <div className="max-w-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Workbench</p>
-          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a file</h2>
-          <p className="mt-2 text-[13px] leading-6 text-secondary">Pick a file from the right rail to keep it beside the transcript.</p>
-        </div>
+  return (
+    <div className="flex h-full items-center justify-center px-6 text-center select-text">
+      <div className="max-w-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Workbench</p>
+        <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a file</h2>
+        <p className="mt-2 text-[13px] leading-6 text-secondary">Pick a file from the right rail to keep it beside the transcript.</p>
       </div>
-    );
-  }
-
-  return <VaultEditor fileId={activeFileId} fileName={fileName} onFileNavigate={handleFileNavigate} onFileRenamed={handleFileRenamed} />;
+    </div>
+  );
 }
 
 function WorkbenchKnowledgeRail({
@@ -755,7 +727,7 @@ function WorkbenchKnowledgeRail({
   extensionToolPanels: Array<(ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary>;
 }) {
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
   const { checkpoints, loading: checkpointsLoading, error: checkpointsError } = useConversationCheckpointSummaries(conversationId);
@@ -788,23 +760,6 @@ function WorkbenchKnowledgeRail({
   const systemFilesExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null;
   const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
   const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
-  const activeFileId = searchParams.get('file') ?? null;
-  const handleFileSelect = useCallback(
-    (id: string) => {
-      onActiveToolChange(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge');
-      onWorkspaceFileClear();
-      onCheckpointSelect(null);
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.delete('artifact');
-        next.delete('checkpoint');
-        next.delete('run');
-        next.set('file', id);
-        return next;
-      });
-    },
-    [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemKnowledgeExtensionSurface],
-  );
   const handleKnowledgeModeSelect = useCallback(() => {
     onActiveToolChange(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge');
     onWorkspaceFileClear();
@@ -1246,13 +1201,7 @@ function WorkbenchKnowledgeRail({
             </button>
           ))}
       </div>
-      {activeTool === 'knowledge' && !systemKnowledgeExtensionSurface ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
-            <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
-          </Suspense>
-        </div>
-      ) : activeTool === 'artifacts' ? (
+      {activeTool === 'artifacts' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationArtifactRailContent
             artifacts={artifacts}
