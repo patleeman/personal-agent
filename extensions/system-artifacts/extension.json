@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "id": "system-artifacts",
+  "name": "Artifacts",
+  "packageType": "system",
+  "description": "Review rendered artifacts beside the active conversation.",
+  "version": "0.1.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [
+      {
+        "id": "conversation-artifacts",
+        "title": "Artifacts",
+        "location": "rightRail",
+        "scope": "conversation",
+        "component": "ArtifactsPanel",
+        "icon": "file",
+        "detailView": "artifact-detail"
+      },
+      {
+        "id": "artifact-detail",
+        "title": "Artifact",
+        "location": "workbench",
+        "component": "ArtifactDetailPanel"
+      }
+    ]
+  },
+  "permissions": ["conversations:read"]
+}

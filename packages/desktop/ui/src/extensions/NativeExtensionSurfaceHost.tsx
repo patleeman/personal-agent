@@ -26,6 +26,7 @@ const systemComponents = new Map<string, () => Promise<Record<string, unknown>>>
   ['system-gateways', () => import('../pages/GatewaysPage')],
   ['system-telemetry', () => import('../pages/TracesPage').then((module) => ({ TelemetryPage: module.TracesPage }))],
   ['system-files', () => import('./systemWorkbench/SystemFilesExtension')],
+  ['system-artifacts', () => import('./systemWorkbench/SystemArtifactsExtension')],
   ['system-browser', () => import('./systemWorkbench/SystemBrowserExtension')],
   ['system-diffs', () => import('./systemWorkbench/SystemDiffsExtension')],
   ['system-runs', () => import('./systemWorkbench/SystemRunsExtension')],

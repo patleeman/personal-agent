@@ -679,7 +679,7 @@ function WorkbenchDocumentPane({
     [activeFileId, setSearchParams],
   );
 
-  if (conversationId && artifactId) {
+  if (activeTool === 'artifacts' && conversationId && artifactId) {
     return <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />;
   }
 
@@ -802,6 +802,8 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
+  const systemArtifactsExtensionSurface =
+    availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-artifacts') ?? null;
   const systemBrowserExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-browser') ?? null;
   const systemFilesExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null;
   const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
@@ -892,7 +894,7 @@ function WorkbenchKnowledgeRail({
   ]);
   const handleArtifactsModeSelect = useCallback(() => {
     const firstArtifactId = activeArtifactId ?? artifacts[0]?.id ?? null;
-    onActiveToolChange('artifacts');
+    onActiveToolChange(systemArtifactsExtensionSurface ? extensionToolPanelMode(systemArtifactsExtensionSurface) : 'artifacts');
     onWorkspaceFileClear();
     onCheckpointSelect(null);
     setSearchParams((current) => {
@@ -905,7 +907,15 @@ function WorkbenchKnowledgeRail({
       }
       return next;
     });
-  }, [activeArtifactId, artifacts, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  }, [
+    activeArtifactId,
+    artifacts,
+    onActiveToolChange,
+    onCheckpointSelect,
+    onWorkspaceFileClear,
+    setSearchParams,
+    systemArtifactsExtensionSurface,
+  ]);
   const handleBrowserModeSelect = useCallback(() => {
     onActiveToolChange(systemBrowserExtensionSurface ? extensionToolPanelMode(systemBrowserExtensionSurface) : 'browser');
     onWorkspaceFileClear();
@@ -988,10 +998,10 @@ function WorkbenchKnowledgeRail({
 
   useEffect(() => {
     if (activeArtifactId && artifacts.length > 0) {
-      onActiveToolChange('artifacts');
+      onActiveToolChange(systemArtifactsExtensionSurface ? extensionToolPanelMode(systemArtifactsExtensionSurface) : 'artifacts');
       onWorkspaceFileClear();
     }
-  }, [activeArtifactId, artifacts.length, onActiveToolChange, onWorkspaceFileClear]);
+  }, [activeArtifactId, artifacts.length, onActiveToolChange, onWorkspaceFileClear, systemArtifactsExtensionSurface]);
 
   useEffect(() => {
     if (activeCheckpointId && checkpoints.some((checkpoint) => checkpoint.id === activeCheckpointId)) {
@@ -1187,7 +1197,7 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Diffs</span>
           </button>
         ) : null}
-        {artifacts.length > 0 ? (
+        {!systemArtifactsExtensionSurface && artifacts.length > 0 ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'artifacts' && 'ui-sidebar-nav-item-active')}
@@ -1241,7 +1251,12 @@ function WorkbenchKnowledgeRail({
           </button>
         ) : null}
         {availableExtensionToolPanels
-          .filter((surface) => surface.extensionId !== 'system-browser' && surface.extensionId !== 'system-files')
+          .filter(
+            (surface) =>
+              surface.extensionId !== 'system-artifacts' &&
+              surface.extensionId !== 'system-browser' &&
+              surface.extensionId !== 'system-files',
+          )
           .map((surface) => (
             <button
               key={`${surface.extensionId}:${surface.id}`}

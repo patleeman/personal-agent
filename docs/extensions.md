@@ -407,7 +407,7 @@ type RightRailScope = 'global' | 'conversation' | 'workspace' | 'selection';
 
 Conversation-scoped panels receive `conversationId`. Workspace-scoped panels receive cwd/workspace context. Selection-scoped panels receive selection context when opened.
 
-If a feature needs a selector/list plus a large detail renderer, use a right-rail view with `detailView` pointing at a paired `location: "workbench"` view. The rail chooses the target; the workbench view renders the large detail pane. Runs, Diffs, File Explorer, and Browser are the model shape: rail selection on the right, logs/diffs/file contents/browser detail in the center.
+If a feature needs a selector/list plus a large detail renderer, use a right-rail view with `detailView` pointing at a paired `location: "workbench"` view. The rail chooses the target; the workbench view renders the large detail pane. Runs, Diffs, File Explorer, Artifacts, and Browser are the model shape: rail selection on the right, logs/diffs/files/artifacts/browser detail in the center.
 
 The frontend client exposes host-owned primitives for richer workbench surfaces:
 
