@@ -9,6 +9,10 @@
     "entry": "dist/frontend.js",
     "styles": []
   },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [{ "id": "reminder", "handler": "reminder", "title": "Reminder" }]
+  },
   "contributes": {
     "tools": [
       {
@@ -30,7 +34,21 @@
         "name": "reminder",
         "title": "Reminder",
         "description": "Schedule a reminder for this same conversation and make sure it will visibly alert later.",
-        "systemFactory": "reminders"
+        "action": "reminder",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "delay": { "type": "string" },
+            "at": { "type": "string" },
+            "prompt": { "type": "string" },
+            "title": { "type": "string" },
+            "notify": { "type": "string", "enum": ["passive", "disruptive"] },
+            "requireAck": { "type": "boolean" },
+            "autoResumeIfOpen": { "type": "boolean" }
+          },
+          "required": ["prompt"],
+          "additionalProperties": false
+        }
       }
     ],
     "nav": [{ "id": "nav", "label": "Automations", "route": "/automations", "icon": "automation" }],

@@ -6,7 +6,6 @@ import { invokeExtensionAction } from './extensionBackend.js';
 import { type ExtensionToolRegistration, listExtensionToolRegistrations } from './extensionRegistry.js';
 import { createImageAgentExtension } from './imageAgentExtension.js';
 import { createImageProbeAgentExtension } from './imageProbeAgentExtension.js';
-import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 
@@ -32,8 +31,6 @@ function createSystemFactory(factoryId: string, options: ManifestToolFactoryOpti
       });
     case 'conversation-queue':
       return createConversationQueueAgentExtension({ getCurrentProfile: options.getCurrentProfile });
-    case 'reminders':
-      return createReminderAgentExtension();
     case 'image':
       return options.hasOpenAiImageProvider?.() ? createImageAgentExtension() : null;
     case 'image-probe': {
@@ -90,7 +87,9 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
           const result = await invokeExtensionAction(tool.extensionId, tool.action, params, options.serverContext, {
             conversationId: ctx.sessionManager.getSessionId(),
+            sessionId: ctx.sessionManager.getSessionId(),
             cwd: ctx.sessionManager.getCwd?.(),
+            sessionFile: ctx.sessionManager.getSessionFile?.(),
           });
           const text =
             result.result && typeof result.result === 'object' && 'text' in result.result && typeof result.result.text === 'string'

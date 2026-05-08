@@ -24,6 +24,8 @@ export interface ExtensionBackendContext {
   toolContext?: {
     conversationId?: string;
     cwd?: string;
+    sessionFile?: string;
+    sessionId?: string;
   };
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
