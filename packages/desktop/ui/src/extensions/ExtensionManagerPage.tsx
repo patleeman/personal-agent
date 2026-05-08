@@ -39,22 +39,41 @@ function getLogicalSurfaces(extension: ExtensionInstallSummary): LogicalSurfaceS
   const views = extension.manifest.contributes?.views ?? [];
   const viewsById = new Map(views.map((view) => [view.id, view] as const));
   const pairedDetailIds = new Set<string>();
+  const pairedDetails = views
+    .filter((view) => view.location === 'rightRail' && view.detailView)
+    .map((view) => viewsById.get(view.detailView!))
+    .filter((view): view is NativeViewContribution => Boolean(view));
+  for (const detail of pairedDetails) {
+    pairedDetailIds.add(detail.id);
+  }
+
   const nativeSurfaces = views.flatMap((view): LogicalSurfaceSummary[] => {
     if (view.location === 'rightRail' && view.detailView) {
       const detail = viewsById.get(view.detailView);
-      if (detail) pairedDetailIds.add(detail.id);
+      const wrongLocation = detail && detail.location !== 'workbench';
       return [
         {
           id: view.id,
           title: view.title,
-          kind: detail ? 'Right rail + workbench detail' : 'Right rail',
-          ...(detail ? { detail } : {}),
-          ...(detail ? {} : { warning: `Missing detail view: ${view.detailView}` }),
+          kind: detail && !wrongLocation ? 'Right rail + workbench detail' : 'Right rail',
+          ...(detail && !wrongLocation ? { detail } : {}),
+          ...(detail
+            ? wrongLocation
+              ? { warning: `Detail view ${view.detailView} is ${formatSurfaceKind(detail.location)}, expected Workbench detail` }
+              : {}
+            : { warning: `Missing detail view: ${view.detailView}` }),
         },
       ];
     }
     if (pairedDetailIds.has(view.id)) return [];
-    return [{ id: view.id, title: view.title, kind: formatSurfaceKind(view.location) }];
+    return [
+      {
+        id: view.id,
+        title: view.title,
+        kind: formatSurfaceKind(view.location),
+        ...(view.location === 'workbench' ? { warning: 'Orphan workbench detail view; no right rail view points at it' } : {}),
+      },
+    ];
   });
   return [...legacySurfaces, ...nativeSurfaces];
 }
