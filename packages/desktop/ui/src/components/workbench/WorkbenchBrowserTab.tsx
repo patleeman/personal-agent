@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { api } from '../../client/api';
 import {
   DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT,
   type DesktopWorkbenchBrowserCommentTarget,
   type DesktopWorkbenchBrowserState,
   getDesktopBridge,
 } from '../../desktop/desktopBridge';
+import { findMatchingExtensionKeybinding } from '../../extensions/keybindings';
+import type { ExtensionKeybindingRegistration } from '../../extensions/types';
 import { type BrowserTabItem, type BrowserTabsState, getTabSessionKey } from '../../local/workbenchBrowserTabs';
 
 const WORKBENCH_BROWSER_COMMENT_ADDED_EVENT = 'pa:workbench-browser-comment-added';
@@ -41,6 +44,7 @@ export function WorkbenchBrowserTab({
   const tabsStateRef = useRef(tabsState);
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
+  const [surfaceKeybindings, setSurfaceKeybindings] = useState<ExtensionKeybindingRegistration[]>([]);
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
   const [pendingMarkers, setPendingMarkers] = useState<
     Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>
@@ -196,39 +200,57 @@ export function WorkbenchBrowserTab({
     };
   }, [bridge, browserSessionKey, syncBounds]);
 
-  // Keyboard shortcuts
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .extensionKeybindings()
+      .then((keybindings) => {
+        if (!cancelled) {
+          setSurfaceKeybindings(
+            keybindings.filter(
+              (keybinding) => keybinding.enabled && keybinding.extensionId === 'system-browser' && keybinding.scope === 'surface',
+            ),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSurfaceKeybindings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Surface-scoped keyboard shortcuts from the browser extension manifest.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      const meta = event.metaKey || event.ctrlKey;
-      if (!meta) return;
+      const match = findMatchingExtensionKeybinding(event, surfaceKeybindings);
+      if (!match) return;
 
-      switch (event.key.toLowerCase()) {
-        case 't':
-          if (event.shiftKey) {
-            event.preventDefault();
-            onReopenTab();
-          } else {
-            event.preventDefault();
-            onNewTab();
-          }
+      switch (match.command) {
+        case 'browser.newTab':
+          event.preventDefault();
+          onNewTab();
           return;
-        case 'w':
+        case 'browser.reopenTab':
+          event.preventDefault();
+          onReopenTab();
+          return;
+        case 'browser.closeTab':
           event.preventDefault();
           onCloseCurrentTab();
           return;
-        case 'l':
+        case 'browser.focusLocation':
           event.preventDefault();
-          if (urlInputRef.current) {
-            urlInputRef.current.focus();
-            urlInputRef.current.select();
-          }
+          urlInputRef.current?.focus();
+          urlInputRef.current?.select();
           return;
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNewTab, onReopenTab, onCloseCurrentTab]);
+  }, [onNewTab, onReopenTab, onCloseCurrentTab, surfaceKeybindings]);
 
   useEffect(() => {
     function handleBrowserCommentTarget(event: Event) {

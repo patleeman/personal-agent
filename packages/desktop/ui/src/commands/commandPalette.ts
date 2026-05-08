@@ -47,47 +47,6 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'search', label: 'Search all' },
 ];
 
-export interface CommandPaletteHotkeyEventLike {
-  key: string;
-  metaKey: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
-  shiftKey: boolean;
-}
-
-function isPrimaryModifierPressed(event: CommandPaletteHotkeyEventLike): boolean {
-  return event.metaKey || event.ctrlKey;
-}
-
-function normalizeHotkeyKey(event: CommandPaletteHotkeyEventLike): string {
-  return event.key.length === 1 ? event.key.toLowerCase() : event.key;
-}
-
-export function resolveCommandPaletteHotkeyScope(event: CommandPaletteHotkeyEventLike): CommandPaletteScope | null {
-  if (!isPrimaryModifierPressed(event) || event.altKey) {
-    return null;
-  }
-
-  const key = normalizeHotkeyKey(event);
-  if (key === 'f' && event.shiftKey) {
-    return 'search';
-  }
-
-  if (event.shiftKey) {
-    return null;
-  }
-
-  if (key === 'p') {
-    return 'files';
-  }
-
-  if (key === 'k') {
-    return 'threads';
-  }
-
-  return null;
-}
-
 export function shouldBootstrapCommandPaletteThreads(options: {
   open: boolean;
   scope: CommandPaletteScope;

@@ -11,7 +11,6 @@ import {
   type CommandPaletteScope,
   type CommandPaletteSection,
   isCommandPaletteThreadDataLoading,
-  resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
   selectCommandPaletteScopedItems,
   shouldBootstrapCommandPaletteThreads,
@@ -41,10 +40,6 @@ const CONVERSATION_CONTENT_SEARCH_LIMIT = 80;
 const FILE_SEARCH_LIMIT = 50;
 const FILE_CONTENT_SEARCH_DEBOUNCE_MS = 160;
 const CONVERSATION_CONTENT_SEARCH_DEBOUNCE_MS = 160;
-
-function hasBlockingOverlayOpen(): boolean {
-  return document.querySelector('.ui-overlay-backdrop:not([data-command-palette="true"])') !== null;
-}
 
 function isMacPlatform(): boolean {
   if (typeof navigator === 'undefined') {
@@ -615,22 +610,6 @@ export function CommandPalette() {
         return;
       }
 
-      const nextScope = resolveCommandPaletteHotkeyScope(event);
-
-      if (nextScope) {
-        if (!open && hasBlockingOverlayOpen()) {
-          return;
-        }
-
-        event.preventDefault();
-        if (nextScope === 'threads' && open) {
-          closePalette();
-        } else {
-          openPalette({ scope: nextScope });
-        }
-        return;
-      }
-
       if (!open) {
         return;
       }
@@ -704,7 +683,7 @@ export function CommandPalette() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activateItem, closePalette, cursor, open, openPalette, scope, visibleItems]);
+  }, [activateItem, closePalette, cursor, open, scope, visibleItems]);
 
   useEffect(() => {
     closePalette();
