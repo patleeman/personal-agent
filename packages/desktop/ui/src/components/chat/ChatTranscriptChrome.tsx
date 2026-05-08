@@ -20,31 +20,44 @@ export function StreamingIndicator({ label }: { label: string }) {
   );
 }
 
+export interface WindowingBadgeStats {
+  loadedMessageCount: number;
+  mountedMessageCount: number;
+  mountedChunkCount: number;
+  totalChunkCount: number;
+}
+
 export function WindowingBadge({
   topOffset,
   loadedMessageCount,
   mountedMessageCount,
   mountedChunkCount,
   totalChunkCount,
-}: {
-  topOffset: number;
-  loadedMessageCount: number;
-  mountedMessageCount: number;
-  mountedChunkCount: number;
-  totalChunkCount: number;
+  inline = false,
+}: WindowingBadgeStats & {
+  topOffset?: number;
+  inline?: boolean;
 }) {
+  const badge = (
+    <div className="inline-flex min-h-[2rem] items-center gap-2 rounded-lg border border-border-subtle bg-surface/88 px-3 py-1.5 text-[10px] text-secondary shadow-sm backdrop-blur">
+      <span className="font-medium uppercase tracking-[0.16em] text-primary/85">windowing</span>
+      <span>{formatWindowingCount(loadedMessageCount)} loaded</span>
+      <span className="text-dim">·</span>
+      <span>{formatWindowingCount(mountedMessageCount)} mounted</span>
+      <span className="text-dim">·</span>
+      <span>
+        {mountedChunkCount}/{totalChunkCount} chunks
+      </span>
+    </div>
+  );
+
+  if (inline) {
+    return badge;
+  }
+
   return (
-    <div className="sticky z-10 mb-3 flex justify-end pointer-events-none" style={{ top: `${Math.max(0, topOffset)}px` }}>
-      <div className="inline-flex min-h-[2rem] items-center gap-2 rounded-lg border border-border-subtle bg-surface/88 px-3 py-1.5 text-[10px] text-secondary shadow-sm backdrop-blur">
-        <span className="font-medium uppercase tracking-[0.16em] text-primary/85">windowing</span>
-        <span>{formatWindowingCount(loadedMessageCount)} loaded</span>
-        <span className="text-dim">·</span>
-        <span>{formatWindowingCount(mountedMessageCount)} mounted</span>
-        <span className="text-dim">·</span>
-        <span>
-          {mountedChunkCount}/{totalChunkCount} chunks
-        </span>
-      </div>
+    <div className="sticky z-10 mb-3 flex justify-end pointer-events-none" style={{ top: `${Math.max(0, topOffset ?? 0)}px` }}>
+      {badge}
     </div>
   );
 }

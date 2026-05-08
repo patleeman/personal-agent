@@ -1390,4 +1390,23 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('windowing');
     expect(html).toContain('style="top:56px"');
   });
+
+  it('renders history controls and windowing counts in one chrome row', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatView, {
+        messages: Array.from({ length: 96 }, (_, index) => ({
+          type: 'text' as const,
+          ts: `2026-03-11T18:02:${String(index).padStart(2, '0')}.000Z`,
+          text: `Windowed block ${index + 1}`,
+        })),
+        performanceMode: 'aggressive',
+        scrollContainerRef: { current: null },
+        windowingHeaderContent: createElement('div', null, 'Showing latest 96 of 2128 blocks.'),
+      }),
+    );
+
+    expect(html).toContain('Showing latest 96 of 2128 blocks.');
+    expect(html).toContain('windowing');
+    expect(html).not.toContain('style="top:');
+  });
 });

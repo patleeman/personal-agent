@@ -6394,23 +6394,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   />
                 )}
               </div>
-              {visibleTranscriptHasOlderBlocks && (
-                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-subtle/30 pt-3">
-                  <div className="min-w-0 text-[11px] text-secondary/80">
-                    Showing latest{' '}
-                    <span className="font-medium text-primary/85">{realMessages?.length ?? visibleTranscriptMessages?.length ?? 0}</span> of{' '}
-                    <span className="font-medium text-primary/85">{historicalTotalBlocks}</span> blocks.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => loadOlderMessages()}
-                    disabled={sessionLoading}
-                    className="ui-toolbar-button shrink-0 text-[11px] text-secondary/90 hover:text-primary"
-                  >
-                    {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older`}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
           {showBlockingConversationLoadingState ? (
@@ -6449,6 +6432,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
                 resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
                 resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
+                windowingHeaderContent={
+                  visibleTranscriptHasOlderBlocks ? (
+                    <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                      <div className="min-w-0 text-secondary/80">
+                        Showing latest{' '}
+                        <span className="font-medium text-primary/85">
+                          {realMessages?.length ?? visibleTranscriptMessages?.length ?? 0}
+                        </span>{' '}
+                        of <span className="font-medium text-primary/85">{historicalTotalBlocks}</span> blocks.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => loadOlderMessages()}
+                        disabled={sessionLoading}
+                        className="ui-toolbar-button shrink-0 text-[11px] text-secondary/90 hover:text-primary"
+                      >
+                        {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older`}
+                      </button>
+                    </div>
+                  ) : undefined
+                }
                 anchorWindowingToTail={atBottom}
                 windowingBadgeTopOffset={conversationHeaderOffset + 12}
               />

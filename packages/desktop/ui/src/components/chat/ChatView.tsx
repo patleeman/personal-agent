@@ -51,6 +51,7 @@ interface ChatViewProps {
   resumeConversationTitle?: string | null;
   resumeConversationLabel?: string;
   windowingBadgeTopOffset?: number;
+  windowingHeaderContent?: React.ReactNode;
   anchorWindowingToTail?: boolean;
 }
 
@@ -114,6 +115,7 @@ export const ChatView = memo(function ChatView({
   resumeConversationTitle,
   resumeConversationLabel = 'continue',
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
+  windowingHeaderContent,
   anchorWindowingToTail = false,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
@@ -262,7 +264,14 @@ export const ChatView = memo(function ChatView({
       mountedMessageCount={mountedMessageCount}
       mountedChunkCount={mountedChunkCount}
       totalChunkCount={renderChunks.length}
+      inline={Boolean(windowingHeaderContent)}
     />
+  ) : null;
+  const windowingHeader = windowingHeaderContent ? (
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">{windowingHeaderContent}</div>
+      {windowingBadge}
+    </div>
   ) : null;
   return (
     <>
@@ -280,7 +289,8 @@ export const ChatView = memo(function ChatView({
         {/* Bottom padding (pb-24) keeps the last message clear of the input area
             when the user is scrolled to the bottom and the textarea grows
             while typing (e.g. multi-line input). */}
-        {windowingBadge}
+        {windowingHeader}
+        {!windowingHeader ? windowingBadge : null}
         {shouldWindowTranscript ? windowedTranscript : fullTranscript}
         {showStreamingIndicator && (
           <div className={shouldWindowTranscript && visibleChunkRange?.chunks.length ? '' : 'mt-4'}>
