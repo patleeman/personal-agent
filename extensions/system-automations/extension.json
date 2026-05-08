@@ -11,7 +11,10 @@
   },
   "backend": {
     "entry": "src/backend.ts",
-    "actions": [{ "id": "reminder", "handler": "reminder", "title": "Reminder" }]
+    "actions": [
+      { "id": "reminder", "handler": "reminder", "title": "Reminder" },
+      { "id": "conversationQueue", "handler": "conversationQueue", "title": "Conversation queue" }
+    ]
   },
   "contributes": {
     "tools": [
@@ -27,7 +30,22 @@
         "name": "conversation_queue",
         "title": "Conversation queue",
         "description": "Queue future continuation work for the current conversation.",
-        "systemFactory": "conversation-queue"
+        "action": "conversationQueue",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["add", "list", "cancel"] },
+            "id": { "type": "string" },
+            "prompt": { "type": "string" },
+            "trigger": { "type": "string", "enum": ["after_turn", "delay", "at"] },
+            "delay": { "type": "string" },
+            "at": { "type": "string" },
+            "deliverAs": { "type": "string", "enum": ["steer", "followUp"] },
+            "title": { "type": "string" }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
       },
       {
         "id": "reminder",

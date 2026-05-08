@@ -1,4 +1,5 @@
 import { scheduleDeferredResumeForSessionFile } from '../../../packages/desktop/server/automation/deferredResumes.js';
+export { conversationQueue } from './conversationQueueBackend.js';
 import { parseFutureHumanDateTime } from '../../../packages/desktop/server/automation/humanDateTime.js';
 
 interface AutomationBackendContext {

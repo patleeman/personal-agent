@@ -1,7 +1,6 @@
 import type { ExtensionAPI, ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
 import type { ServerRouteContext } from '../routes/context.js';
-import { createConversationQueueAgentExtension } from './conversationQueueAgentExtension.js';
 import { invokeExtensionAction } from './extensionBackend.js';
 import { type ExtensionToolRegistration, listExtensionToolRegistrations } from './extensionRegistry.js';
 import { createImageAgentExtension } from './imageAgentExtension.js';
@@ -29,8 +28,6 @@ function createSystemFactory(factoryId: string, options: ManifestToolFactoryOpti
         repoRoot: options.repoRoot,
         profilesRoot: options.profilesRoot,
       });
-    case 'conversation-queue':
-      return createConversationQueueAgentExtension({ getCurrentProfile: options.getCurrentProfile });
     case 'image':
       return options.hasOpenAiImageProvider?.() ? createImageAgentExtension() : null;
     case 'image-probe': {
