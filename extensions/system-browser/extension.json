@@ -12,7 +12,7 @@
         "id": "browser-tabs",
         "title": "Browser",
         "location": "rightRail",
-        "scope": "conversation",
+        "scope": "global",
         "component": "BrowserTabsPanel",
         "icon": "browser",
         "detailView": "browser-workbench"

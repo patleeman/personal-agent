@@ -1866,6 +1866,9 @@ export function Layout() {
       if (zenMode) {
         handleZenModeChange(false);
       }
+      if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {
+        navigate('/conversations/new');
+      }
       handleAppLayoutModeChange('workbench');
       setActiveConversationTool(systemBrowserExtensionSurface ? extensionToolPanelMode(systemBrowserExtensionSurface) : 'knowledge');
     }
@@ -1884,6 +1887,7 @@ export function Layout() {
     handleAppLayoutModeChange,
     handleZenModeChange,
     location.hash,
+    extensionRegistry.surfaces,
     location.pathname,
     location.search,
     navigate,

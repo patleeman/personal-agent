@@ -3570,6 +3570,9 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
     );
     return [...legacy, ...native];
   }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
+  const browserNavVisible =
+    !hideBrowserNav &&
+    (extensionRegistry.loading || extensionRegistry.surfaces.some((surface) => surface.extensionId === 'system-browser'));
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
   const isKnowledgeRoute = routeIsKnowledge(location.pathname, extensionRegistry.surfaces);
@@ -3616,7 +3619,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
               forceActive={routeIsKnowledge(location.pathname, extensionRegistry.surfaces)}
             />
           ) : null}
-          {!hideBrowserNav ? (
+          {browserNavVisible ? (
             <button
               type="button"
               onClick={() => {
