@@ -246,18 +246,6 @@ describe('SettingsPage provider model editor', () => {
         },
       ],
     });
-    const knowledgeBaseResult = buildUseApiResult({
-      repoUrl: 'https://github.com/user/knowledge-base.git',
-      branch: 'main',
-      configured: true,
-      effectiveRoot: '/Users/patrick/Documents/personal-agent',
-      managedRoot: '/Users/patrick/.local/state/personal-agent/knowledge-base/repo',
-      usesManagedRoot: true,
-      syncStatus: 'idle',
-      lastSyncAt: '2026-04-16T12:00:00.000Z',
-      recoveredEntryCount: 1,
-      recoveryDir: '/Users/patrick/.local/state/personal-agent/knowledge-base/recovered',
-    });
     const defaultCwdResult = buildUseApiResult({
       currentCwd: '',
       effectiveCwd: '/Users/patrick/workingdir/personal-agent',
@@ -329,10 +317,6 @@ describe('SettingsPage provider model editor', () => {
 
       if (fetcher === api.modelProviders) {
         return modelProvidersResult;
-      }
-
-      if (fetcher === api.knowledgeBase) {
-        return knowledgeBaseResult;
       }
 
       if (fetcher === api.defaultCwd) {

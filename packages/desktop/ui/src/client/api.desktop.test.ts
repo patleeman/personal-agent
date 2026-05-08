@@ -854,62 +854,6 @@ describe('api desktop transport', () => {
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
   });
 
-  it('uses HTTP for vault files and the desktop bridge for folder picking on the local Electron host', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      createJsonResponse({
-        root: '/vault',
-        files: [
-          {
-            id: 'notes/a.md',
-            kind: 'file',
-            name: 'a.md',
-            path: '/vault/notes/a.md',
-            sizeBytes: 12,
-            updatedAt: '2026-04-18T12:00:00.000Z',
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    const readVaultFiles = vi.fn();
-    const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-        }),
-        readVaultFiles,
-        pickFolder,
-      },
-    });
-
-    const { api } = await import('./api');
-    const vaultFiles = await api.vaultFiles();
-    const pickedFolder = await api.pickFolder('/repo');
-
-    expect(readVaultFiles).not.toHaveBeenCalled();
-    expect(pickFolder).toHaveBeenCalledWith({ cwd: '/repo' });
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vault-files', { method: 'GET', cache: 'no-store' });
-    expect(vaultFiles).toEqual({
-      root: '/vault',
-      files: [
-        {
-          id: 'notes/a.md',
-          kind: 'file',
-          name: 'a.md',
-          path: '/vault/notes/a.md',
-          sizeBytes: 12,
-          updatedAt: '2026-04-18T12:00:00.000Z',
-        },
-      ],
-    });
-    expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
-  });
-
   it('passes custom folder picker prompts through the local desktop bridge', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -1063,27 +1007,9 @@ describe('api desktop transport', () => {
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
   });
 
-  it('falls back to HTTP for desktop vault-file and folder-picker bridges on non-local hosts', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          root: '/vault',
-          files: [
-            {
-              id: 'notes/a.md',
-              kind: 'file',
-              name: 'a.md',
-              path: '/vault/notes/a.md',
-              sizeBytes: 12,
-              updatedAt: '2026-04-18T12:00:00.000Z',
-            },
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(createJsonResponse({ path: '/picked/repo', cancelled: false }));
+  it('falls back to HTTP for desktop folder-picker bridges on non-local hosts', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(createJsonResponse({ path: '/picked/repo', cancelled: false }));
     vi.stubGlobal('fetch', fetchMock);
-    const readVaultFiles = vi.fn();
     const pickFolder = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
@@ -1094,35 +1020,18 @@ describe('api desktop transport', () => {
           activeHostKind: 'web',
           activeHostSummary: 'Remote host reachable.',
         }),
-        readVaultFiles,
         pickFolder,
       },
     });
 
     const { api } = await import('./api');
-    const vaultFiles = await api.vaultFiles();
     const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose folder' });
 
-    expect(readVaultFiles).not.toHaveBeenCalled();
     expect(pickFolder).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vault-files', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/folder-picker', {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/folder-picker', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: '/repo', prompt: 'Choose folder' }),
-    });
-    expect(vaultFiles).toEqual({
-      root: '/vault',
-      files: [
-        {
-          id: 'notes/a.md',
-          kind: 'file',
-          name: 'a.md',
-          path: '/vault/notes/a.md',
-          sizeBytes: 12,
-          updatedAt: '2026-04-18T12:00:00.000Z',
-        },
-      ],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
