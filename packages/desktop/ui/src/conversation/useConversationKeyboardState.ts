@@ -47,14 +47,30 @@ export function useVisualViewportKeyboardInset(): number {
   return keyboardInset;
 }
 
+export function resolveComposerModifierKeyState(event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'key' | 'type'>): {
+  altHeld: boolean;
+  parallelHeld: boolean;
+} {
+  const key = event.key;
+  const isKeyDown = event.type === 'keydown';
+  const isKeyUp = event.type === 'keyup';
+
+  return {
+    altHeld: key === 'Alt' ? isKeyDown || (!isKeyUp && event.altKey) : event.altKey,
+    parallelHeld:
+      key === 'Control' || key === 'Meta' ? isKeyDown || (!isKeyUp && (event.ctrlKey || event.metaKey)) : event.ctrlKey || event.metaKey,
+  };
+}
+
 export function useComposerModifierKeys(): { composerAltHeld: boolean; composerParallelHeld: boolean } {
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [composerParallelHeld, setComposerParallelHeld] = useState(false);
 
   useEffect(() => {
     function handleModifierChange(event: KeyboardEvent) {
-      setComposerAltHeld(event.altKey);
-      setComposerParallelHeld(event.ctrlKey || event.metaKey);
+      const nextState = resolveComposerModifierKeyState(event);
+      setComposerAltHeld(nextState.altHeld);
+      setComposerParallelHeld(nextState.parallelHeld);
     }
 
     function resetModifierState() {
