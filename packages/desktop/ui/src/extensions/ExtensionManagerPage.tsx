@@ -7,16 +7,62 @@ import { getDesktopBridge } from '../desktop/desktopBridge';
 import { notifyExtensionRegistryChanged } from './extensionRegistryEvents';
 import type { ExtensionInstallSummary } from './types';
 
+type NativeViewContribution = NonNullable<NonNullable<ExtensionInstallSummary['manifest']['contributes']>['views']>[number];
+
+interface LogicalSurfaceSummary {
+  id: string;
+  title: string;
+  kind: string;
+  detail?: NativeViewContribution;
+  warning?: string;
+}
+
+function formatSurfaceKind(location: string): string {
+  switch (location) {
+    case 'main':
+      return 'Main page';
+    case 'rightRail':
+      return 'Right rail';
+    case 'workbench':
+      return 'Workbench detail';
+    default:
+      return location;
+  }
+}
+
+function getLogicalSurfaces(extension: ExtensionInstallSummary): LogicalSurfaceSummary[] {
+  const legacySurfaces = extension.surfaces.map((surface) => ({
+    id: surface.id,
+    title: surface.title ?? surface.label ?? surface.id,
+    kind: `${surface.placement} ${surface.kind}`,
+  }));
+  const views = extension.manifest.contributes?.views ?? [];
+  const viewsById = new Map(views.map((view) => [view.id, view] as const));
+  const pairedDetailIds = new Set<string>();
+  const nativeSurfaces = views.flatMap((view): LogicalSurfaceSummary[] => {
+    if (view.location === 'rightRail' && view.detailView) {
+      const detail = viewsById.get(view.detailView);
+      if (detail) pairedDetailIds.add(detail.id);
+      return [
+        {
+          id: view.id,
+          title: view.title,
+          kind: detail ? 'Right rail + workbench detail' : 'Right rail',
+          ...(detail ? { detail } : {}),
+          ...(detail ? {} : { warning: `Missing detail view: ${view.detailView}` }),
+        },
+      ];
+    }
+    if (pairedDetailIds.has(view.id)) return [];
+    return [{ id: view.id, title: view.title, kind: formatSurfaceKind(view.location) }];
+  });
+  return [...legacySurfaces, ...nativeSurfaces];
+}
+
 function formatSurfaceSummary(extension: ExtensionInstallSummary): string {
-  const counts = new Map<string, number>();
-  for (const surface of extension.surfaces) {
-    counts.set(surface.placement, (counts.get(surface.placement) ?? 0) + 1);
-  }
-  for (const view of extension.manifest.contributes?.views ?? []) {
-    counts.set(view.location, (counts.get(view.location) ?? 0) + 1);
-  }
-  if (counts.size === 0) return 'No surfaces';
-  return [...counts.entries()].map(([placement, count]) => `${count} ${placement}`).join(', ');
+  const surfaces = getLogicalSurfaces(extension);
+  if (surfaces.length === 0) return 'No surfaces';
+  return surfaces.map((surface) => surface.kind).join(', ');
 }
 
 function firstRoute(extension: ExtensionInstallSummary): string | null {
@@ -255,6 +301,7 @@ export function ExtensionManagerPage() {
           <section className="space-y-5">
             {extensions.map((extension) => {
               const route = firstRoute(extension);
+              const logicalSurfaces = getLogicalSurfaces(extension);
               return (
                 <article key={extension.id} className="grid w-full gap-4 py-2 text-left sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                   <div className="min-w-0 space-y-3">
@@ -271,6 +318,18 @@ export function ExtensionManagerPage() {
                     <div className="space-y-1 text-[12px] text-secondary">
                       <p className="font-mono text-[11px] text-dim">{extension.id}</p>
                       <p>{formatSurfaceSummary(extension)}</p>
+                      {logicalSurfaces.length > 0 ? (
+                        <div className="space-y-1 pt-1">
+                          {logicalSurfaces.map((surface) => (
+                            <div key={surface.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="font-medium text-secondary">{surface.title}</span>
+                              <span className="text-[11px] text-dim">{surface.kind}</span>
+                              {surface.detail ? <span className="text-[11px] text-dim">detail: {surface.detail.title}</span> : null}
+                              {surface.warning ? <span className="text-[11px] text-danger">{surface.warning}</span> : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       <p>
                         <span className="text-dim">Permissions:</span> {formatPermissionSummary(extension)}
                       </p>
