@@ -22,7 +22,6 @@ describe('extension registry', () => {
         expect.objectContaining({ id: 'system-automations', packageType: 'system', name: 'Automations' }),
         expect.objectContaining({ id: 'system-gateways', packageType: 'system', name: 'Gateways' }),
         expect.objectContaining({ id: 'system-telemetry', packageType: 'system', name: 'Telemetry' }),
-        expect.objectContaining({ id: 'system-runs', packageType: 'system', name: 'Runs' }),
       ]),
     );
     expect(snapshot.routes).toContainEqual({
@@ -41,7 +40,6 @@ describe('extension registry', () => {
         }),
         expect.objectContaining({ extensionId: 'system-gateways', location: 'main', component: 'GatewaysPage', route: '/gateways' }),
         expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage', route: '/telemetry' }),
-        expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: 'ConversationRunsPanel' }),
       ]),
     );
   });

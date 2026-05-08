@@ -23,11 +23,6 @@
         "component": "DictationSettingsPage"
       },
       { "id": "desktop", "title": "Desktop settings", "location": "main", "route": "/settings/desktop", "component": "DesktopSettingsPage" }
-    ],
-    "nav": [
-      { "id": "providers-nav", "label": "Provider settings", "route": "/settings/providers", "icon": "gear" },
-      { "id": "dictation-nav", "label": "Dictation settings", "route": "/settings/dictation", "icon": "gear" },
-      { "id": "desktop-nav", "label": "Desktop settings", "route": "/settings/desktop", "icon": "gear" }
     ]
   },
   "permissions": ["settings:read", "settings:write"]

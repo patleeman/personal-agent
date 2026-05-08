@@ -1271,7 +1271,6 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
-  const systemRunsExtensionAvailable = availableExtensionToolPanels.some((surface) => surface.extensionId === 'system-runs');
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
     (id: string) => {
@@ -1661,7 +1660,7 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Artifacts</span>
           </button>
         ) : null}
-        {!systemRunsExtensionAvailable && showRunsTab ? (
+        {showRunsTab ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'runs' && 'ui-sidebar-nav-item-active')}
@@ -1753,7 +1752,7 @@ function WorkbenchKnowledgeRail({
             workspaceCwd={workspaceCwd}
           />
         </div>
-      ) : activeTool === 'runs' && !systemRunsExtensionAvailable ? (
+      ) : activeTool === 'runs' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationRunsRailContent
             conversationId={conversationId}

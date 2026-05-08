@@ -64,7 +64,6 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ id: 'system-automations', packageType: 'system' }),
         expect.objectContaining({ id: 'system-gateways', packageType: 'system' }),
         expect.objectContaining({ id: 'system-telemetry', packageType: 'system' }),
-        expect.objectContaining({ id: 'system-runs', packageType: 'system' }),
       ]),
     );
 
@@ -75,7 +74,6 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ id: 'system-automations', enabled: true }),
         expect.objectContaining({ id: 'system-gateways', enabled: true }),
         expect.objectContaining({ id: 'system-telemetry', enabled: true }),
-        expect.objectContaining({ id: 'system-runs', enabled: true }),
       ]),
     );
 
@@ -96,7 +94,6 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage' }),
         expect.objectContaining({ extensionId: 'system-gateways', location: 'main', component: 'GatewaysPage' }),
         expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage' }),
-        expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: 'ConversationRunsPanel' }),
       ]),
     );
   });

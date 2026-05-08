@@ -448,10 +448,9 @@ The first native system extensions are:
 - `system-automations` owns `/automations` and scheduled/conversation-bound automation UI.
 - `system-gateways` owns `/gateways` while the core app keeps gateway state and APIs.
 - `system-telemetry` owns `/telemetry` while telemetry collection remains core infrastructure.
-- `system-runs` owns the conversation right-rail Runs surface while durable run execution remains core infrastructure.
 - `system-settings` owns deep links for first-party settings subpanels while settings persistence remains core infrastructure.
 
-Diffs remain a core workbench surface for now because they are a two-pane interaction: the right rail lists diff targets while the center workbench renders the selected diff. Moving that cleanly needs multi-surface coordination beyond a single right-rail extension panel.
+Runs and Diffs remain core workbench surfaces for now because they are two-pane interactions: the right rail lists targets while the center workbench renders selected run logs or selected diffs. Moving them cleanly needs multi-surface coordination beyond a single right-rail extension panel.
 
 This is the preferred split: core records and serves cross-cutting state; native extensions own the product surfaces.
 
