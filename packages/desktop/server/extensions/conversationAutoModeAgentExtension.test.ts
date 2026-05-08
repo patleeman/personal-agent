@@ -222,7 +222,18 @@ describe('conversation auto mode agent extension', () => {
       );
 
       expect(result!.content[0]!.text).toContain('Updated');
-      expect(sm.appendCustomEntry).toHaveBeenCalled();
+      expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', {
+        enabled: true,
+        mode: 'mission',
+        mission: {
+          goal: 'Fix the page',
+          tasks: [
+            { id: 't1', description: 'Task 1', status: 'done' },
+            { id: 't2', description: 'Task 2', status: 'done' },
+          ],
+        },
+      });
+      expect(sm.appendCustomEntry).not.toHaveBeenCalled();
     });
   });
 
@@ -402,6 +413,31 @@ describe('conversation auto mode agent extension', () => {
       // Mission mode: should directly request continuation, not go through hidden review path
       expect(requestConversationAutoModeContinuationTurnMock).toHaveBeenCalledWith('conversation-1');
       expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
+    });
+
+    it('stops mission mode when all mission tasks are done', async () => {
+      const { handlers } = createHarness();
+      const turnEndHandlers = handlers.get('turn_end') ?? [];
+
+      await turnEndHandlers[0]?.(
+        {} as never,
+        {
+          sessionManager: createMissionSessionManager({
+            tasks: [
+              { id: 't1', description: 'Task 1', status: 'done' },
+              { id: 't2', description: 'Task 2', status: 'done' },
+            ],
+          }),
+        } as never,
+      );
+
+      await new Promise((resolve) => queueMicrotask(resolve));
+
+      expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', {
+        enabled: false,
+        stopReason: 'mission complete',
+      });
+      expect(requestConversationAutoModeContinuationTurnMock).not.toHaveBeenCalled();
     });
 
     it('signals continuation for loop mode (counter check, no hidden review)', async () => {

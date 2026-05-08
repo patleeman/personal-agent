@@ -250,7 +250,8 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       promptGuidelines: [
         'This tool is available because a Mission or Loop is active.',
         'Use action="get" at the start of each turn to read current state.',
-        'Use action="update_tasks" to mark tasks done, add new tasks, or update descriptions.',
+        'Use action="update_tasks" immediately when starting or finishing a task so the visible mission checklist stays current.',
+        'Mark the active task "in_progress" before doing it, then mark it "done" as soon as it is complete. Do not batch all updates at the end.',
         'Do not remove tasks unless they are genuinely irrelevant. Prefer marking them "done" or "blocked".',
         'When adding tasks, include a clear description so the user can understand the task list.',
       ],
@@ -331,11 +332,20 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             }
           }
 
-          writeConversationAutoModeState(ctx.sessionManager, {
-            enabled: true,
-            mode: 'mission',
-            mission: { ...state.mission, tasks },
-          });
+          const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
+          if (sessionId) {
+            await setLiveSessionAutoModeState(sessionId, {
+              enabled: true,
+              mode: 'mission',
+              mission: { ...state.mission, tasks },
+            });
+          } else {
+            writeConversationAutoModeState(ctx.sessionManager, {
+              enabled: true,
+              mode: 'mission',
+              mission: { ...state.mission, tasks },
+            });
+          }
 
           return {
             content: [
@@ -426,6 +436,26 @@ function handleMissionTurnEnd(
 
   // Structural check: are all tasks done?
   if (areAllTasksDone(mission.tasks)) {
+    if (sessionId) {
+      queueMicrotask(() => {
+        void Promise.resolve(
+          setLiveSessionAutoModeState(sessionId, {
+            enabled: false,
+            stopReason: 'mission complete',
+          }),
+        ).catch((error) => {
+          logWarn('mission mode completion stop failed', {
+            sessionId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+      });
+    } else {
+      writeConversationAutoModeState(ctx.sessionManager, {
+        enabled: false,
+        stopReason: 'mission complete',
+      });
+    }
     return;
   }
 
