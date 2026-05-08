@@ -90,7 +90,27 @@ vi.mock('./markdownEditorContent', () => ({
 vi.mock('@personal-agent/extensions/knowledge', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@personal-agent/extensions/knowledge')>()),
   api: {
-    vaultFiles: (...args: unknown[]) => vaultFilesMock(...args),
+    invokeExtensionAction: async (_extensionId: string, actionId: string, input: Record<string, unknown> = {}) => {
+      const result = await (async () => {
+        switch (actionId) {
+          case 'vaultReadFile':
+            return readFileMock(input.id);
+          case 'vaultBacklinks':
+            return backlinksMock(input.id);
+          case 'vaultListFiles':
+            return vaultFilesMock();
+          case 'vaultWriteFile':
+            return writeFileMock(input.id, input.content);
+          case 'vaultRename':
+            return renameMock(input.id, input.newName);
+          case 'vaultUploadImage':
+            return uploadImageMock(input.filename, input.dataUrl);
+          default:
+            throw new Error(`Unhandled knowledge action ${actionId}`);
+        }
+      })();
+      return { result };
+    },
   },
   vaultApi: {
     readFile: (...args: unknown[]) => readFileMock(...args),
