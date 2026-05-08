@@ -149,6 +149,20 @@ describe('resolveBranchEntryIdFromSessionDetailResult', () => {
   });
 });
 
+describe('resolveBranchEntryIdForMessage', () => {
+  it('resolves user message entry ids from session detail blocks', () => {
+    expect(
+      resolveBranchEntryIdForMessage({ type: 'user', ts: '2026-03-11T18:00:02.000Z', text: 'Second prompt' }, 12, {
+        blockOffset: 10,
+        blocks: [
+          { type: 'text', id: 'entry-1', ts: '2026-03-11T18:00:01.000Z', text: 'First reply' },
+          { type: 'user', id: 'entry-2', ts: '2026-03-11T18:00:02.000Z', text: 'Second prompt' },
+        ],
+      }),
+    ).toBe('entry-2');
+  });
+});
+
 describe('resolveRewindTargetForMessage', () => {
   it('keeps the selected prompt in history when rewinding from an assistant reply', () => {
     const messages: MessageBlock[] = [

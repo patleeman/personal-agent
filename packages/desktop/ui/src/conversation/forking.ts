@@ -61,7 +61,7 @@ export function resolveBranchEntryIdForMessage(
     return directEntryId;
   }
 
-  if (!block || block.type !== 'text' || absoluteMessageIndex < 0) {
+  if (!block || (block.type !== 'text' && block.type !== 'user') || absoluteMessageIndex < 0) {
     return null;
   }
 
@@ -92,7 +92,7 @@ export function resolveBranchEntryIdForMessage(
 
   for (const index of searchOrder) {
     const candidate = detail.blocks[index];
-    if (candidate.type !== 'text' || candidate.text !== targetText) {
+    if ((candidate.type !== 'text' && candidate.type !== 'user') || candidate.type !== block.type || candidate.text !== targetText) {
       continue;
     }
 

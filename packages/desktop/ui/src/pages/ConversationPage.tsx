@@ -4247,7 +4247,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const clickedBlock = realMessages[localMessageIndex];
         let target: { entryId: string; beforeEntry: boolean; promptDraft: string | null } | null = null;
 
-        if (clickedBlock?.type === 'text') {
+        if (clickedBlock?.type === 'text' || clickedBlock?.type === 'user') {
           let entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
           if (!entryId) {
             const detail = await api.sessionDetail(liveConversationId, {
@@ -4256,7 +4256,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             entryId = resolveBranchEntryIdFromSessionDetailResult(clickedBlock, messageIndex, detail);
           }
           if (entryId) {
-            target = { entryId, beforeEntry: false, promptDraft: null };
+            target =
+              clickedBlock.type === 'user'
+                ? { entryId, beforeEntry: true, promptDraft: clickedBlock.text }
+                : { entryId, beforeEntry: false, promptDraft: null };
           }
         }
 
