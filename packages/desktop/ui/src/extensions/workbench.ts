@@ -10,6 +10,7 @@ export {
   useConversationCheckpointSummaries,
 } from '../components/ConversationCheckpointWorkbench';
 export { ConversationRunsRailContent, ConversationRunWorkbenchPane } from '../components/ConversationRunsWorkbench';
+export { cx } from '../components/ui';
 export { WorkbenchBrowserTab } from '../components/workbench/WorkbenchBrowserTab';
 export { WorkspaceExplorer, WorkspaceFileDocument } from '../components/workspace/WorkspaceExplorer';
 export { readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';

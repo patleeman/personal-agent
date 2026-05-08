@@ -1,4 +1,4 @@
-export * from './data.js';
-export * from './settings.js';
-export * from './ui.js';
-export * from './workbench.js';
+export * as data from './data.js';
+export * as settings from './settings.js';
+export * as ui from './ui.js';
+export * as workbench from './workbench.js';

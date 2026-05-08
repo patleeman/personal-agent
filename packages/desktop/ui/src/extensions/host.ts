@@ -1,4 +1,4 @@
-export * from './data';
-export * from './settings';
-export * from './ui';
-export * from './workbench';
+export * as data from './data';
+export * as settings from './settings';
+export * as ui from './ui';
+export * as workbench from './workbench';

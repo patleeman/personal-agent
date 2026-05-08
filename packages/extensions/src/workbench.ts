@@ -20,6 +20,7 @@ export declare function setConversationRunIdInSearch(...args: never[]): unknown;
 export declare function useConversationArtifactSummaries(...args: never[]): unknown;
 export declare function useConversationCheckpointSummaries(...args: never[]): unknown;
 export declare function getDesktopBridge(...args: never[]): unknown;
+export declare function cx(...values: Array<unknown>): string;
 export declare function createNewTab(...args: never[]): unknown;
 export declare function getAdjacentTabId(...args: never[]): unknown;
 export declare function getTabSessionKey(...args: never[]): unknown;
