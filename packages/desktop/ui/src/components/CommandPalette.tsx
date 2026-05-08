@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { onKBEvent } from '../../../../../extensions/system-knowledge/src/components/knowledgeEvents';
 import { useAppData } from '../app/contexts';
 import { api, vaultApi } from '../client/api';
 import {
@@ -22,7 +23,6 @@ import { useConversations } from '../hooks/useConversations';
 import type { ConversationContentSearchMatch, SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 import { readAppLayoutMode } from '../ui-state/appLayoutMode';
-import { onKBEvent } from './knowledge/knowledgeEvents';
 import { cx } from './ui';
 
 type CommandPaletteAction =

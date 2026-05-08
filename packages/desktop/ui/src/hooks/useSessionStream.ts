@@ -4,9 +4,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { parseSkillBlock } from '../../../../../extensions/system-knowledge/src/lib/skillBlock';
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
-import { parseSkillBlock } from '../knowledge/skillBlock';
 import type {
   ConversationAutoModeState,
   LiveSessionPresenceState,

@@ -1,3 +1,4 @@
+export { getKnowledgeBaseSyncPresentation } from '../../../../../extensions/system-knowledge/src/lib/knowledgeBaseSyncStatus';
 export { api } from '../client/api';
 export { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, cx, Pill, ToolbarButton } from '../components/ui';
 export { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
@@ -6,7 +7,6 @@ export { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
 export { subscribeDesktopProviderOAuthLogin } from '../desktop/desktopProviderOAuth';
 export { useApi } from '../hooks/useApi';
 export { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
-export { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSyncStatus';
 export { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../local/localSettings';
 export { getModelSelectableServiceTierOptions, groupModelsByProvider, THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 export {

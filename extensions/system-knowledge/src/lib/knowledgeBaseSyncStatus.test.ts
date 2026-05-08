@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { KnowledgeBaseState } from '../shared/types';
+import type { KnowledgeBaseState } from '../../../../packages/desktop/ui/src/shared/types';
 import { getKnowledgeBaseSyncPresentation } from './knowledgeBaseSyncStatus';
 
 // ── knowledgeBaseSyncStatus — sync status presentation ─────────────────────

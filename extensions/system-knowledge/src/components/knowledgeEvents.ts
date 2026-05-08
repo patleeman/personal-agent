@@ -67,7 +67,7 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
     let source: EventSource | null = null;
     let closed = false;
 
-    import('../../client/apiBase')
+    import('../../../../packages/desktop/ui/src/client/apiBase')
       .then(({ buildApiPath }) => {
         if (closed) return;
         source = new EventSource(buildApiPath('/vault/events'));

@@ -4,9 +4,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
-import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
-import type { VaultEntry, VaultFileListResult } from '../../shared/types';
+import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../../../packages/desktop/ui/src/local/knowledgeOpenFiles';
+import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../../../packages/desktop/ui/src/local/knowledgeTreeState';
+import type { VaultEntry, VaultFileListResult } from '../../../../packages/desktop/ui/src/shared/types';
 import { emitKBEvent } from './knowledgeEvents';
 import { VaultFileTree } from './VaultFileTree';
 
@@ -23,7 +23,7 @@ const apiMocks = vi.hoisted(() => ({
   writeFile: vi.fn(),
 }));
 
-vi.mock('../../client/api', () => ({
+vi.mock('../../../../packages/desktop/ui/src/client/api', () => ({
   api: {
     knowledgeBase: apiMocks.knowledgeBase,
     syncKnowledgeBase: apiMocks.syncKnowledgeBase,

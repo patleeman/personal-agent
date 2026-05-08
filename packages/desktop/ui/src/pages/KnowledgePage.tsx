@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
+import { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
+import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 import { api } from '../client/api';
-import { VaultEditor } from '../components/knowledge/VaultEditor';
 import { AppPageEmptyState, AppPageIntro, AppPageLayout } from '../components/ui';
 import { useApi } from '../hooks/useApi';
-import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 
 export function KnowledgePage() {
   const [searchParams, setSearchParams] = useSearchParams();

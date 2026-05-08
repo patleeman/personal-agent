@@ -1,11 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import { stringify } from 'yaml';
 
-import {
-  countMarkdownFrontmatterFields,
-  isMarkdownFrontmatterValueEmpty,
-  type MarkdownFrontmatter,
-} from '../../knowledge/markdownDocument';
+import { countMarkdownFrontmatterFields, isMarkdownFrontmatterValueEmpty, type MarkdownFrontmatter } from '../lib/markdownDocument';
 
 function normalizeTags(value: unknown): string[] {
   if (!Array.isArray(value)) {

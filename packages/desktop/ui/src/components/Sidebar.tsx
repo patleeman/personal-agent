@@ -12,6 +12,8 @@ import {
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { emitKBEvent } from '../../../../../extensions/system-knowledge/src/components/knowledgeEvents';
+import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import {
@@ -50,7 +52,6 @@ import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
-import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { routeIsKnowledge, routeMatchesPrefix } from '../navigation/routeRegistry';
@@ -59,9 +60,10 @@ import { type ConversationShelf, type OpenConversationDropPosition, replaceConve
 import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
-import { emitKBEvent } from './knowledge/knowledgeEvents';
 
-const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
+const VaultFileTree = lazy(() =>
+  import('../../../../../extensions/system-knowledge/src/components/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
+);
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {

@@ -1,6 +1,8 @@
 import { Component, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
+import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
@@ -25,7 +27,6 @@ import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
-import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { routeIsKnowledge, routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
@@ -51,7 +52,6 @@ import {
 } from './ConversationCheckpointWorkbench';
 import { ConversationRunsRailContent, ConversationRunWorkbenchPane, useConversationRunList } from './ConversationRunsWorkbench';
 import { DesktopTopBar } from './DesktopTopBar';
-import { VaultEditor } from './knowledge/VaultEditor';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
@@ -63,7 +63,7 @@ const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
   import('./ContextRail').then((module) => ({ default: module.ContextRail })),
 );
 const VaultFileTree = lazyRouteWithRecovery('layout-vault-file-tree', () =>
-  import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
+  import('../../../../../extensions/system-knowledge/src/components/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
 );
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';

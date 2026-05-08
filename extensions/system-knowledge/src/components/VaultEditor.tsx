@@ -9,9 +9,9 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { api, vaultApi } from '../../client/api';
-import { type MarkdownFrontmatter, parseMarkdownDocument, stringifyMarkdownFrontmatter } from '../../knowledge/markdownDocument';
-import type { VaultBacklink, VaultEntry } from '../../shared/types';
+import { api, vaultApi } from '../../../../packages/desktop/ui/src/client/api';
+import { type MarkdownFrontmatter, parseMarkdownDocument, stringifyMarkdownFrontmatter } from '../lib/markdownDocument';
+import type { VaultBacklink, VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
 import { FrontmatterDisclosure } from './FrontmatterDisclosure';
 import { emitKBEvent, type KBFileChangedExternallyDetail, onKBEvent } from './knowledgeEvents';
 import { readMarkdownFromEditor } from './markdownEditorContent';

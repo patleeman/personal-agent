@@ -1,7 +1,9 @@
+export { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
+export { VaultFileTree } from '../../../../../extensions/system-knowledge/src/components/VaultFileTree';
+export { getKnowledgeBaseSyncPresentation } from '../../../../../extensions/system-knowledge/src/lib/knowledgeBaseSyncStatus';
+export { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 export { useAppData } from '../app/contexts';
 export { api } from '../client/api';
-export { VaultEditor } from '../components/knowledge/VaultEditor';
-export { VaultFileTree } from '../components/knowledge/VaultFileTree';
 export type { MentionItem } from '../conversation/conversationMentions';
 export {
   EXTENSION_REGISTRY_CHANGED_EVENT,
@@ -9,8 +11,6 @@ export {
   notifyExtensionRegistryChanged,
 } from '../extensions/extensionRegistryEvents';
 export type { ExtensionInstallSummary } from '../extensions/types';
-export { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSyncStatus';
-export { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 export { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 export type {
   AutoModeSummary,

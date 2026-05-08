@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
-import { type ParsedSkillBlock, parseSkillBlock } from '../../knowledge/skillBlock';
+import { type ParsedSkillBlock, parseSkillBlock } from '../../../../../../extensions/system-knowledge/src/lib/skillBlock';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { cx } from '../ui';
 

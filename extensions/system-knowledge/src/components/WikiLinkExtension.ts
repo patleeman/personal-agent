@@ -2,7 +2,7 @@ import { mergeAttributes, Node } from '@tiptap/core';
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
 import { Suggestion } from '@tiptap/suggestion';
 
-import type { VaultEntry } from '../../shared/types';
+import type { VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
 
 interface WikiLinkAttributes {
   target: string;

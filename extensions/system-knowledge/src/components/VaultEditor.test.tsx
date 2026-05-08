@@ -87,7 +87,7 @@ vi.mock('./markdownEditorContent', () => ({
   readMarkdownFromEditor: () => 'saved body',
 }));
 
-vi.mock('../../client/api', () => ({
+vi.mock('../../../../packages/desktop/ui/src/client/api', () => ({
   api: {
     vaultFiles: (...args: unknown[]) => vaultFilesMock(...args),
   },

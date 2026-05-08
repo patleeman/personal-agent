@@ -8,11 +8,15 @@ import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, vaultApi } from '../../client/api';
-import { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
-import { useApi } from '../../hooks/useApi';
-import { useInvalidateOnTopics } from '../../hooks/useInvalidateOnTopics';
-import { getKnowledgeBaseSyncPresentation } from '../../knowledge/knowledgeBaseSyncStatus';
+import { api, vaultApi } from '../../../../packages/desktop/ui/src/client/api';
+import {
+  type DesktopKnowledgeEntryContextMenuAction,
+  getDesktopBridge,
+  shouldUseNativeAppContextMenus,
+} from '../../../../packages/desktop/ui/src/desktop/desktopBridge';
+import { useApi } from '../../../../packages/desktop/ui/src/hooks/useApi';
+import { useInvalidateOnTopics } from '../../../../packages/desktop/ui/src/hooks/useInvalidateOnTopics';
+import { getKnowledgeBaseSyncPresentation } from '../lib/knowledgeBaseSyncStatus';
 import {
   addOpenFileId,
   normalizeOpenFileIds,
@@ -20,22 +24,26 @@ import {
   removeOpenFileId,
   renameOpenFileIds,
   writeStoredOpenFileIds,
-} from '../../local/knowledgeOpenFiles';
+} from '../../../../packages/desktop/ui/src/local/knowledgeOpenFiles';
 import {
   readStoredRecentlyClosedFileIds,
   recordRecentlyClosedFileId,
   writeStoredRecentlyClosedFileIds,
-} from '../../local/knowledgeRecentlyClosedFiles';
+} from '../../../../packages/desktop/ui/src/local/knowledgeRecentlyClosedFiles';
 import {
   collapseExpandedFolderIds,
   readStoredExpandedFolderIds,
   renameExpandedFolderIds,
   writeStoredExpandedFolderIds,
-} from '../../local/knowledgeTreeState';
-import type { VaultEntry } from '../../shared/types';
-import { ContextMenuWrapper } from '../shared/ContextMenuWrapper';
-import { canDropAllPaths, getTopLevelDraggedPaths, useFileTreeModel } from '../shared/useFileTreeModel';
-import { cx } from '../ui';
+} from '../../../../packages/desktop/ui/src/local/knowledgeTreeState';
+import type { VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
+import { ContextMenuWrapper } from '../../../../packages/desktop/ui/src/components/shared/ContextMenuWrapper';
+import {
+  canDropAllPaths,
+  getTopLevelDraggedPaths,
+  useFileTreeModel,
+} from '../../../../packages/desktop/ui/src/components/shared/useFileTreeModel';
+import { cx } from '../../../../packages/desktop/ui/src/components/ui';
 import { emitKBEvent, onKBEvent, useVaultWatcher } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 
