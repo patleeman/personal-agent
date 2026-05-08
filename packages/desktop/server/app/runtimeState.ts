@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { AuthStorage, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
@@ -15,8 +15,10 @@ import { createConversationAutoModeAgentExtension } from '../extensions/conversa
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
 import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
+import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
 import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
 import { createImageProbeAgentExtension } from '../extensions/imageProbeAgentExtension.js';
+import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
@@ -179,6 +181,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
       createConversationAutoModeAgentExtension(),
       createConversationQueueAgentExtension({ getCurrentProfile: getRuntimeScope }),
       createReminderAgentExtension(),
+      ...createManifestToolAgentExtensions({ getCurrentProfile: getRuntimeScope }),
       webToolsExtension,
 
       openaiNativeCompactionExtension,
@@ -193,7 +196,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
 
     return {
       additionalExtensionPaths: resolved.extensionEntries,
-      additionalSkillPaths: [...new Set(resolved.skillDirs)],
+      additionalSkillPaths: [...new Set([...resolved.skillDirs, ...listExtensionSkillRegistrations().map((skill) => dirname(skill.path))])],
       additionalPromptTemplatePaths: resolved.promptEntries,
       additionalThemePaths: resolved.themeEntries,
     };

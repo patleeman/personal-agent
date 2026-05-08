@@ -75,7 +75,28 @@ Example:
     ]
   },
   "contributes": {
-    "skills": ["skills/agent-board/SKILL.md"],
+    "skills": [
+      {
+        "id": "agent-board",
+        "title": "Agent Board",
+        "description": "Use when planning or executing Agent Board tasks.",
+        "path": "skills/agent-board/SKILL.md"
+      }
+    ],
+    "tools": [
+      {
+        "id": "create-task",
+        "title": "Create Agent Board task",
+        "description": "Create a task on the Agent Board.",
+        "action": "createTask",
+        "inputSchema": {
+          "type": "object",
+          "properties": { "title": { "type": "string" } },
+          "required": ["title"],
+          "additionalProperties": false
+        }
+      }
+    ],
     "views": [
       {
         "id": "board-page",
@@ -284,6 +305,81 @@ await pa.extension.invoke('startTaskRun', { taskId });
 
 Do not import backend handlers directly into frontend components. Browser/Node boundary lies are expensive and stupid.
 
+## Agent skills and tools
+
+Extensions can contribute agent skills and agent tools. These are runtime-mounted from the enabled extension package; they are not copied into the knowledge vault.
+
+### Skills
+
+Use extension skills for local instructions that explain how to use the extension, its tools, or its domain model. A skill lives in the extension folder and resolves relative references against that skill folder.
+
+```json
+{
+  "contributes": {
+    "skills": [
+      {
+        "id": "agent-board",
+        "title": "Agent Board",
+        "description": "Use when planning or executing Agent Board tasks.",
+        "path": "skills/agent-board/SKILL.md"
+      }
+    ]
+  }
+}
+```
+
+Runtime behavior:
+
+- Enabled extension skills are passed to the agent as normal skill directories.
+- Disabled extension skills disappear immediately after extension reload / new agent startup.
+- Skill IDs are presented as extension-owned context; package authors should keep IDs stable and short.
+- Do not copy extension skills into the vault. The extension owns its internal context.
+
+### Tools
+
+Use extension tools when the agent needs executable runtime behavior backed by extension code. Tool handlers run in the backend extension entry, not in frontend React.
+
+```json
+{
+  "backend": { "entry": "src/backend.ts" },
+  "contributes": {
+    "tools": [
+      {
+        "id": "create-task",
+        "title": "Create Agent Board task",
+        "description": "Create a task on the Agent Board.",
+        "action": "createTask",
+        "inputSchema": {
+          "type": "object",
+          "properties": { "title": { "type": "string" } },
+          "required": ["title"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}
+```
+
+The runtime registers the tool with a stable generated name: `extension_{extensionId}_{toolId}` with non-identifier characters normalized to underscores. The manifest `action` points to the backend action/handler invoked with the tool input.
+
+Backend example:
+
+```ts
+export async function createTask(input: { title: string }, ctx: ExtensionBackendContext) {
+  const id = crypto.randomUUID();
+  await ctx.storage.put(`tasks/${id}`, { id, title: input.title, status: 'backlog' });
+  return { id };
+}
+```
+
+Rules:
+
+- Agent-visible tools require a description and JSON-schema-like `inputSchema`.
+- Tool handlers are backend-only; frontend code can call the same backend action through `pa.extension.invoke`.
+- Permissions are declared at the extension level and should match what the tool can do.
+- Keep tools coarse enough to be useful. Do not expose every button click as an agent tool.
+
 ## Host APIs
 
 Native extensions use a stable `pa` client object. The exact implementation lives in the app, but the public shape should be documented and typed through `@personal-agent/extensions`.
@@ -375,15 +471,16 @@ Rules:
 
 Extensions contribute native surfaces through the manifest.
 
-| Contribution      | Purpose                                      |
-| ----------------- | -------------------------------------------- |
-| `views`           | Main pages and right-rail panels             |
-| `nav`             | Left navigation items or sections            |
-| `commands`        | Command palette actions                      |
-| `slashCommands`   | Composer slash commands                      |
-| `settings`        | Extension settings shown in the app settings |
-| `skills`          | Agent skills bundled with the extension      |
-| `backend.actions` | Trusted local handlers callable by surfaces  |
+| Contribution      | Purpose                                       |
+| ----------------- | --------------------------------------------- |
+| `views`           | Main pages and right-rail panels              |
+| `nav`             | Left navigation items or sections             |
+| `commands`        | Command palette actions                       |
+| `slashCommands`   | Composer slash commands                       |
+| `settings`        | Extension settings shown in the app settings  |
+| `skills`          | Agent skills bundled with the extension       |
+| `tools`           | Agent-visible tools backed by backend actions |
+| `backend.actions` | Trusted local handlers callable by surfaces   |
 
 ### Surface selection
 

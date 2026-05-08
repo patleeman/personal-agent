@@ -61,12 +61,32 @@ interface ExtensionSlashCommandContribution {
   action: string;
 }
 
+interface ExtensionSkillContribution {
+  id: string;
+  title?: string;
+  description?: string;
+  path: string;
+}
+
+interface ExtensionToolContribution {
+  id: string;
+  title?: string;
+  label?: string;
+  description: string;
+  action?: string;
+  handler?: string;
+  inputSchema?: Record<string, unknown>;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
+}
+
 interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
   commands?: ExtensionCommandContribution[];
   slashCommands?: ExtensionSlashCommandContribution[];
-  skills?: string[];
+  skills?: Array<string | ExtensionSkillContribution>;
+  tools?: ExtensionToolContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -129,6 +149,31 @@ export interface ExtensionManifest {
   };
 }
 
+interface ExtensionSkillRegistration {
+  extensionId: string;
+  packageType?: ExtensionPackageType;
+  id: string;
+  name: string;
+  title?: string;
+  description?: string;
+  path: string;
+  packageRoot: string;
+}
+
+interface ExtensionToolRegistration {
+  extensionId: string;
+  packageType?: ExtensionPackageType;
+  id: string;
+  name: string;
+  action: string;
+  title?: string;
+  label?: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
+}
+
 export interface ExtensionInstallSummary {
   id: string;
   name: string;
@@ -141,6 +186,8 @@ export interface ExtensionInstallSummary {
   permissions?: string[];
   surfaces: ExtensionSurface[];
   backendActions?: ExtensionBackendActionSummary[];
+  skills?: ExtensionSkillRegistration[];
+  tools?: ExtensionToolRegistration[];
   routes: Array<{ route: string; surfaceId: string }>;
 }
 

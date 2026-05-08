@@ -1,9 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 import { getStateRoot } from '@personal-agent/core';
 
-import type { ExtensionManifest, ExtensionSurface, ExtensionViewContribution } from './extensionManifest.js';
+import type {
+  ExtensionManifest,
+  ExtensionSkillContribution,
+  ExtensionSurface,
+  ExtensionToolContribution,
+  ExtensionViewContribution,
+} from './extensionManifest.js';
 import {
   EXTENSION_ICON_NAMES,
   EXTENSION_PLACEMENTS,
@@ -20,6 +26,31 @@ export interface ExtensionRegistryEntry {
   source: 'system' | 'runtime';
 }
 
+export interface ExtensionSkillRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  id: string;
+  name: string;
+  title?: string;
+  description?: string;
+  path: string;
+  packageRoot: string;
+}
+
+export interface ExtensionToolRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  id: string;
+  name: string;
+  action: string;
+  title?: string;
+  label?: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
+}
+
 export interface ExtensionInstallSummary {
   id: string;
   name: string;
@@ -32,6 +63,8 @@ export interface ExtensionInstallSummary {
   permissions: ExtensionManifest['permissions'];
   surfaces: ExtensionSurface[];
   backendActions: NonNullable<ExtensionManifest['backend']>['actions'];
+  skills: ExtensionSkillRegistration[];
+  tools: ExtensionToolRegistration[];
   routes: Array<{ route: string; surfaceId: string }>;
 }
 
@@ -98,6 +131,96 @@ function readExtensionRegistryConfig(stateRoot: string = getStateRoot()): Extens
   } catch {
     return {};
   }
+}
+
+function assertInside(root: string, candidate: string): void {
+  const resolvedRoot = resolve(root);
+  const resolvedCandidate = resolve(candidate);
+  if (resolvedCandidate !== resolvedRoot && !resolvedCandidate.startsWith(`${resolvedRoot}${sep}`)) {
+    throw new Error('Path escapes extension root.');
+  }
+}
+
+function normalizeToolNamePart(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function normalizeExtensionSkillContribution(skill: string | ExtensionSkillContribution): ExtensionSkillContribution {
+  if (typeof skill === 'string') {
+    const segments = skill.split(/[\\/]/).filter(Boolean);
+    const parent = segments.length > 1 ? segments[segments.length - 2] : undefined;
+    const basename = segments.at(-1)?.replace(/\.md$/i, '') ?? 'skill';
+    return { id: parent && basename.toUpperCase() === 'SKILL' ? parent : basename, path: skill };
+  }
+  return skill;
+}
+
+function buildExtensionSkillRegistrations(entry: ExtensionRegistryEntry): ExtensionSkillRegistration[] {
+  if (!entry.packageRoot) {
+    return [];
+  }
+  return (entry.manifest.contributes?.skills ?? []).flatMap((skill): ExtensionSkillRegistration[] => {
+    const normalized = normalizeExtensionSkillContribution(skill);
+    if (!normalized.id || !normalized.path) {
+      return [];
+    }
+    const skillPath = resolve(entry.packageRoot!, normalized.path);
+    try {
+      assertInside(entry.packageRoot!, skillPath);
+    } catch {
+      return [];
+    }
+    if (!existsSync(skillPath)) {
+      return [];
+    }
+    const id = normalized.id.trim();
+    const name = `${entry.manifest.id}/${id}`;
+    return [
+      {
+        extensionId: entry.manifest.id,
+        packageType: entry.manifest.packageType ?? 'user',
+        id,
+        name,
+        ...(normalized.title ? { title: normalized.title } : {}),
+        ...(normalized.description ? { description: normalized.description } : {}),
+        path: skillPath,
+        packageRoot: entry.packageRoot!,
+      },
+    ];
+  });
+}
+
+function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): ExtensionToolRegistration[] {
+  return (entry.manifest.contributes?.tools ?? []).flatMap((tool: ExtensionToolContribution): ExtensionToolRegistration[] => {
+    const id = tool.id.trim();
+    if (!id || !tool.description?.trim()) {
+      return [];
+    }
+    const extensionPart = normalizeToolNamePart(entry.manifest.id);
+    const toolPart = normalizeToolNamePart(id);
+    if (!extensionPart || !toolPart) {
+      return [];
+    }
+    return [
+      {
+        extensionId: entry.manifest.id,
+        packageType: entry.manifest.packageType ?? 'user',
+        id,
+        name: `extension_${extensionPart}_${toolPart}`,
+        action: tool.action ?? tool.handler ?? id,
+        ...(tool.title ? { title: tool.title } : {}),
+        ...(tool.label ? { label: tool.label } : {}),
+        description: tool.description,
+        inputSchema: tool.inputSchema ?? { type: 'object', properties: {}, additionalProperties: false },
+        ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
+        ...(tool.promptGuidelines ? { promptGuidelines: tool.promptGuidelines } : {}),
+      },
+    ];
+  });
 }
 
 function writeExtensionRegistryConfig(config: ExtensionRegistryConfig, stateRoot: string = getStateRoot()): void {
@@ -192,6 +315,8 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       permissions: manifest.permissions ?? [],
       surfaces,
       backendActions: manifest.backend?.actions ?? [],
+      skills: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionSkillRegistrations(entry) : [],
+      tools: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionToolRegistrations(entry) : [],
       routes: [
         ...surfaces.flatMap((surface) =>
           surface.kind === 'page' && 'route' in surface ? [{ route: surface.route, surfaceId: surface.id }] : [],
@@ -210,6 +335,7 @@ export function readExtensionSchema() {
     rightSurfaceScopes: EXTENSION_RIGHT_SURFACE_SCOPES,
     routeCapabilities: EXTENSION_ROUTE_CAPABILITIES,
     iconNames: EXTENSION_ICON_NAMES,
+    contributions: ['views', 'nav', 'commands', 'slashCommands', 'settings', 'skills', 'tools'],
   };
 }
 
@@ -297,6 +423,14 @@ export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandR
     })),
   );
   return [...legacy, ...native];
+}
+
+export function listExtensionSkillRegistrations(stateRoot: string = getStateRoot()): ExtensionSkillRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionSkillRegistrations);
+}
+
+export function listExtensionToolRegistrations(stateRoot: string = getStateRoot()): ExtensionToolRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionToolRegistrations);
 }
 
 export function findExtensionEntry(extensionId: string): ExtensionRegistryEntry | null {

@@ -72,7 +72,8 @@ export interface ExtensionContributions {
   nav?: ExtensionNavContribution[];
   commands?: ExtensionCommandContribution[];
   slashCommands?: ExtensionSlashCommandContribution[];
-  skills?: string[];
+  skills?: Array<string | ExtensionSkillContribution>;
+  tools?: ExtensionToolContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -110,6 +111,25 @@ export interface ExtensionSlashCommandContribution {
   name: string;
   description: string;
   action: string;
+}
+
+export interface ExtensionSkillContribution {
+  id: string;
+  title?: string;
+  description?: string;
+  path: string;
+}
+
+export interface ExtensionToolContribution {
+  id: string;
+  title?: string;
+  label?: string;
+  description: string;
+  action?: string;
+  handler?: string;
+  inputSchema?: Record<string, unknown>;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
 }
 
 export type ExtensionSurface =

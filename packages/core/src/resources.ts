@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { parseDocument } from 'yaml';
 
 import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
 import { listUnifiedSkillNodeDirs, loadUnifiedNodes } from './nodes.js';
@@ -786,6 +787,48 @@ function listAvailableInternalSkills(repoRoot: string): Array<{ name: string; ti
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function readSkillPromptSummary(skillDir: string): { name: string; description: string; path: string } | null {
+  const skillPath = join(skillDir, 'SKILL.md');
+  if (!existsSync(skillPath)) return null;
+
+  const fallbackName = skillDir.split(/[\\/]/).filter(Boolean).at(-1) ?? 'skill';
+  try {
+    const raw = readFileSync(skillPath, 'utf-8').replace(/\r\n/g, '\n');
+    if (!raw.startsWith('---\n')) return null;
+    const endIndex = raw.indexOf('\n---', 4);
+    if (endIndex === -1) return null;
+    const document = parseDocument(raw.slice(4, endIndex), { prettyErrors: false, uniqueKeys: true });
+    if (document.errors.length > 0) return null;
+    const frontmatter = document.toJS({ mapAsMap: false }) as unknown;
+    if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) return null;
+    const record = frontmatter as Record<string, unknown>;
+    const metadata =
+      record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata)
+        ? (record.metadata as Record<string, unknown>)
+        : {};
+    const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : fallbackName;
+    const description = [record.description, record.summary, metadata.summary, metadata.description].find(
+      (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0,
+    );
+    return description ? { name, description: description.trim(), path: skillPath } : null;
+  } catch {
+    return null;
+  }
+}
+
+function listAdditionalSkillPromptSummaries(
+  resources: ResolvedRuntimeResources,
+): Array<{ name: string; description: string; path: string }> {
+  const durableSkillRoot = resolve(getDurableSkillsDir(resources.vaultRoot));
+  return resources.skillDirs
+    .filter((skillDir) => {
+      const resolvedSkillDir = resolve(skillDir);
+      return resolvedSkillDir !== durableSkillRoot && !resolvedSkillDir.startsWith(`${durableSkillRoot}/`);
+    })
+    .map(readSkillPromptSummary)
+    .filter((skill): skill is { name: string; description: string; path: string } => skill !== null);
+}
+
 export function materializeRuntimeResourcesToAgentDir(
   resources: ResolvedRuntimeResources,
   agentDir: string,
@@ -868,11 +911,17 @@ export function materializeRuntimeResourcesToAgentDir(
       }))
       .filter((node) => node.description.length > 0)
       .sort((left, right) => left.name.localeCompare(right.name));
-    if (vaultSkills.length > 0) {
-      templateVariables.available_skills = vaultSkills;
+    const additionalSkills = listAdditionalSkillPromptSummaries(resources);
+    const skillsByName = new Map([...vaultSkills, ...additionalSkills].map((skill) => [skill.name, skill]));
+    const allSkills = [...skillsByName.values()].sort((left, right) => left.name.localeCompare(right.name));
+    if (allSkills.length > 0) {
+      templateVariables.available_skills = allSkills;
     }
   } catch {
-    // Silently skip vault skills if nodes can't be loaded
+    const additionalSkills = listAdditionalSkillPromptSummaries(resources).sort((left, right) => left.name.localeCompare(right.name));
+    if (additionalSkills.length > 0) {
+      templateVariables.available_skills = additionalSkills;
+    }
   }
 
   const generatedAppendContent = renderSystemPromptTemplate(templateVariables);
