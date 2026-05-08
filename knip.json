@@ -2,6 +2,7 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignoreDependencies": ["autoprefixer", "postcss", "esbuild", "qrcode"],
   "ignoreIssues": {
+    "packages/desktop/ui/src/components/chat/ArtifactCheckpointToolBlocks.tsx": ["exports"],
     "packages/desktop/ui/src/components/ui.tsx": ["exports", "types"],
     "packages/desktop/ui/src/extensions/data.ts": ["exports", "types"],
     "packages/desktop/ui/src/extensions/host.ts": ["files", "exports", "types"],

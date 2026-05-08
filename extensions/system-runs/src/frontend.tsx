@@ -1,10 +1,14 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { useAppData } from '../../app/contexts';
-import { ConversationRunsRailContent, ConversationRunWorkbenchPane } from '../../components/ConversationRunsWorkbench';
-import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../../conversation/conversationRuns';
-import type { ExtensionSurfaceProps } from '../types';
+import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
+import { useAppData } from '@personal-agent/extensions/data';
+import {
+  ConversationRunsRailContent,
+  ConversationRunWorkbenchPane,
+  getConversationRunIdFromSearch,
+  setConversationRunIdInSearch,
+} from '@personal-agent/extensions/workbench';
 
 export function ConversationRunsPanel({ context }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();

@@ -1,9 +1,24 @@
 export type HostComponent = (...args: never[]) => unknown;
 export type BrowserTabsState = unknown;
 
+export declare const ArtifactToolBlock: HostComponent;
+export declare const ConversationArtifactRailContent: HostComponent;
+export declare const ConversationArtifactWorkbenchPane: HostComponent;
+export declare const ConversationCheckpointWorkbenchPane: HostComponent;
+export declare const ConversationDiffRailContent: HostComponent;
+export declare const ConversationRunsRailContent: HostComponent;
+export declare const ConversationRunWorkbenchPane: HostComponent;
 export declare const WorkbenchBrowserTab: HostComponent;
 export declare const WorkspaceExplorer: HostComponent;
 export declare const WorkspaceFileDocument: HostComponent;
+export declare function getConversationCheckpointIdFromSearch(...args: never[]): unknown;
+export declare function setConversationCheckpointIdInSearch(...args: never[]): unknown;
+export declare function readArtifactPresentation(...args: never[]): unknown;
+export declare function setConversationArtifactIdInSearch(...args: never[]): unknown;
+export declare function getConversationRunIdFromSearch(...args: never[]): unknown;
+export declare function setConversationRunIdInSearch(...args: never[]): unknown;
+export declare function useConversationArtifactSummaries(...args: never[]): unknown;
+export declare function useConversationCheckpointSummaries(...args: never[]): unknown;
 export declare function getDesktopBridge(...args: never[]): unknown;
 export declare function createNewTab(...args: never[]): unknown;
 export declare function getAdjacentTabId(...args: never[]): unknown;

@@ -1,13 +1,14 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import {
   ConversationCheckpointWorkbenchPane,
   ConversationDiffRailContent,
+  getConversationCheckpointIdFromSearch,
+  setConversationCheckpointIdInSearch,
   useConversationCheckpointSummaries,
-} from '../../components/ConversationCheckpointWorkbench';
-import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../../conversation/conversationCheckpoints';
-import type { ExtensionSurfaceProps } from '../types';
+} from '@personal-agent/extensions/workbench';
 
 export function ConversationDiffsPanel({ context }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();

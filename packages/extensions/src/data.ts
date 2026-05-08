@@ -6,5 +6,6 @@ export type VaultFileSummary = unknown;
 export declare const VaultEditor: HostComponent;
 export declare const VaultFileTree: HostComponent;
 export declare const api: unknown;
+export declare function useAppData(...args: never[]): unknown;
 export declare function getKnowledgeBaseSyncPresentation(...args: never[]): unknown;
 export declare function navigateKnowledgeFile(...args: never[]): unknown;

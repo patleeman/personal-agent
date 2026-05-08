@@ -1,3 +1,4 @@
+export { useAppData } from '../app/contexts';
 export { api } from '../client/api';
 export { VaultEditor } from '../components/knowledge/VaultEditor';
 export { VaultFileTree } from '../components/knowledge/VaultFileTree';

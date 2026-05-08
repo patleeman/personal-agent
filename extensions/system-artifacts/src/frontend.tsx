@@ -1,14 +1,15 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { ArtifactToolBlock } from '../../components/chat/ArtifactCheckpointToolBlocks';
+import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import {
+  ArtifactToolBlock,
   ConversationArtifactRailContent,
   ConversationArtifactWorkbenchPane,
+  readArtifactPresentation,
+  setConversationArtifactIdInSearch,
   useConversationArtifactSummaries,
-} from '../../components/ConversationArtifactWorkbench';
-import { readArtifactPresentation, setConversationArtifactIdInSearch } from '../../conversation/conversationArtifacts';
-import type { ExtensionSurfaceProps } from '../types';
+} from '@personal-agent/extensions/workbench';
 
 export function ArtifactTranscriptRenderer({
   block,
