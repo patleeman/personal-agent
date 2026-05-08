@@ -1,4 +1,4 @@
-import type { VaultEntry } from '@personal-agent/extensions/knowledge';
+import type { VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
 
 export function normalizeVaultDir(dir: string): string {
   const trimmed = dir.trim().replace(/\\/g, '/').replace(/^\/+/, '');
