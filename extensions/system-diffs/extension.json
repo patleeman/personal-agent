@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "id": "system-diffs",
+  "name": "Diffs",
+  "packageType": "system",
+  "description": "Inspect conversation checkpoint and workspace diffs.",
+  "version": "0.2.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [
+      {
+        "id": "conversation-diffs",
+        "title": "Diffs",
+        "location": "rightRail",
+        "scope": "conversation",
+        "component": "ConversationDiffsPanel",
+        "icon": "diff",
+        "detailView": "conversation-diff-detail"
+      },
+      {
+        "id": "conversation-diff-detail",
+        "title": "Diff detail",
+        "location": "workbench",
+        "component": "ConversationDiffDetailPanel"
+      }
+    ]
+  },
+  "permissions": ["conversations:read", "storage:read"]
+}

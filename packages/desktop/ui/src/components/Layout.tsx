@@ -1288,6 +1288,7 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
+  const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
   const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
@@ -1348,7 +1349,7 @@ function WorkbenchKnowledgeRail({
   }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleDiffsModeSelect = useCallback(() => {
     const nextCheckpointId = activeCheckpointId ?? checkpoints[0]?.id ?? (uncommittedResult ? UNCOMMITTED_SENTINEL : null);
-    onActiveToolChange('diffs');
+    onActiveToolChange(systemDiffsExtensionSurface ? extensionToolPanelMode(systemDiffsExtensionSurface) : 'diffs');
     onWorkspaceFileClear();
     onCheckpointSelect(nextCheckpointId);
     setSearchParams((current) => {
@@ -1363,7 +1364,16 @@ function WorkbenchKnowledgeRail({
       }
       return next;
     });
-  }, [activeCheckpointId, checkpoints, uncommittedResult, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  }, [
+    activeCheckpointId,
+    checkpoints,
+    uncommittedResult,
+    onActiveToolChange,
+    onCheckpointSelect,
+    onWorkspaceFileClear,
+    setSearchParams,
+    systemDiffsExtensionSurface,
+  ]);
   const handleArtifactsModeSelect = useCallback(() => {
     const firstArtifactId = activeArtifactId ?? artifacts[0]?.id ?? null;
     onActiveToolChange('artifacts');
@@ -1469,10 +1479,10 @@ function WorkbenchKnowledgeRail({
 
   useEffect(() => {
     if (activeCheckpointId && checkpoints.some((checkpoint) => checkpoint.id === activeCheckpointId)) {
-      onActiveToolChange('diffs');
+      onActiveToolChange(systemDiffsExtensionSurface ? extensionToolPanelMode(systemDiffsExtensionSurface) : 'diffs');
       onWorkspaceFileClear();
     }
-  }, [activeCheckpointId, checkpoints, onActiveToolChange, onWorkspaceFileClear]);
+  }, [activeCheckpointId, checkpoints, onActiveToolChange, onWorkspaceFileClear, systemDiffsExtensionSurface]);
 
   useEffect(() => {
     if (activeRunId) {
@@ -1622,7 +1632,7 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
-        {checkpoints.length > 0 || activeCheckpointId || uncommittedResult ? (
+        {!systemDiffsExtensionSurface && (checkpoints.length > 0 || activeCheckpointId || uncommittedResult) ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'diffs' && 'ui-sidebar-nav-item-active')}
@@ -1758,7 +1768,7 @@ function WorkbenchKnowledgeRail({
             onOpenArtifact={handleArtifactSelect}
           />
         </div>
-      ) : activeTool === 'diffs' ? (
+      ) : activeTool === 'diffs' && !systemDiffsExtensionSurface ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationDiffRailContent
             checkpoints={checkpoints}

@@ -79,6 +79,36 @@ const FALLBACK_SYSTEM_TELEMETRY_MANIFEST: ExtensionManifest = {
   permissions: ['telemetry:read'],
 };
 
+const FALLBACK_SYSTEM_DIFFS_MANIFEST: ExtensionManifest = {
+  schemaVersion: 2,
+  id: 'system-diffs',
+  name: 'Diffs',
+  packageType: 'system',
+  description: 'Inspect conversation checkpoint and workspace diffs.',
+  version: '0.2.0',
+  frontend: { entry: 'dist/frontend.js', styles: [] },
+  contributes: {
+    views: [
+      {
+        id: 'conversation-diffs',
+        title: 'Diffs',
+        location: 'rightRail',
+        scope: 'conversation',
+        component: 'ConversationDiffsPanel',
+        icon: 'diff',
+        detailView: 'conversation-diff-detail',
+      },
+      {
+        id: 'conversation-diff-detail',
+        title: 'Diff detail',
+        location: 'workbench',
+        component: 'ConversationDiffDetailPanel',
+      },
+    ],
+  },
+  permissions: ['conversations:read', 'storage:read'],
+};
+
 const FALLBACK_SYSTEM_RUNS_MANIFEST: ExtensionManifest = {
   schemaVersion: 2,
   id: 'system-runs',
@@ -131,6 +161,7 @@ export const SYSTEM_EXTENSION_ENTRIES: SystemExtensionEntry[] = [
   readBundledSystemExtension('system-automations', FALLBACK_SYSTEM_AUTOMATIONS_MANIFEST),
   readBundledSystemExtension('system-gateways', FALLBACK_SYSTEM_GATEWAYS_MANIFEST),
   readBundledSystemExtension('system-telemetry', FALLBACK_SYSTEM_TELEMETRY_MANIFEST),
+  readBundledSystemExtension('system-diffs', FALLBACK_SYSTEM_DIFFS_MANIFEST),
   readBundledSystemExtension('system-runs', FALLBACK_SYSTEM_RUNS_MANIFEST),
   readBundledSystemExtension('system-settings', FALLBACK_SYSTEM_SETTINGS_MANIFEST),
 ];

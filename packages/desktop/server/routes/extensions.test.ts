@@ -64,6 +64,7 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ id: 'system-automations', packageType: 'system' }),
         expect.objectContaining({ id: 'system-gateways', packageType: 'system' }),
         expect.objectContaining({ id: 'system-telemetry', packageType: 'system' }),
+        expect.objectContaining({ id: 'system-diffs', packageType: 'system' }),
         expect.objectContaining({ id: 'system-runs', packageType: 'system' }),
       ]),
     );
@@ -75,6 +76,7 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ id: 'system-automations', enabled: true }),
         expect.objectContaining({ id: 'system-gateways', enabled: true }),
         expect.objectContaining({ id: 'system-telemetry', enabled: true }),
+        expect.objectContaining({ id: 'system-diffs', enabled: true }),
         expect.objectContaining({ id: 'system-runs', enabled: true }),
       ]),
     );
@@ -96,6 +98,8 @@ describe('registerExtensionRoutes', () => {
         expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage' }),
         expect.objectContaining({ extensionId: 'system-gateways', location: 'main', component: 'GatewaysPage' }),
         expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage' }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'rightRail', component: 'ConversationDiffsPanel' }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'workbench', component: 'ConversationDiffDetailPanel' }),
         expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: 'ConversationRunsPanel' }),
         expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: 'ConversationRunDetailPanel' }),
       ]),

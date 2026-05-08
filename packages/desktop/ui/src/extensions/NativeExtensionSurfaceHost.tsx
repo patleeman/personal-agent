@@ -25,6 +25,7 @@ const systemComponents = new Map<string, () => Promise<Record<string, unknown>>>
   ['system-automations', () => import('./systemAutomations/SystemAutomationsExtension')],
   ['system-gateways', () => import('../pages/GatewaysPage')],
   ['system-telemetry', () => import('../pages/TracesPage').then((module) => ({ TelemetryPage: module.TracesPage }))],
+  ['system-diffs', () => import('./systemWorkbench/SystemDiffsExtension')],
   ['system-runs', () => import('./systemWorkbench/SystemRunsExtension')],
   ['system-settings', () => import('./systemSettings/SystemSettingsExtensions')],
 ]);
