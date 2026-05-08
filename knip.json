@@ -1,6 +1,21 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreDependencies": ["autoprefixer", "postcss", "esbuild", "qrcode"],
+  "ignoreDependencies": [
+    "autoprefixer",
+    "postcss",
+    "esbuild",
+    "qrcode",
+    "@tiptap/core",
+    "@tiptap/extension-image",
+    "@tiptap/extension-link",
+    "@tiptap/extension-placeholder",
+    "@tiptap/extension-task-item",
+    "@tiptap/extension-task-list",
+    "@tiptap/markdown",
+    "@tiptap/react",
+    "@tiptap/starter-kit",
+    "@tiptap/suggestion"
+  ],
   "ignoreIssues": {
     "packages/desktop/ui/src/components/chat/ArtifactCheckpointToolBlocks.tsx": ["exports"],
     "packages/desktop/ui/src/components/ui.tsx": ["exports", "types"],

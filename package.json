@@ -44,7 +44,7 @@
     "fmt": "prettier --check .",
     "fmt:fix": "prettier --write .",
     "check:types": "tsc --noEmit",
-    "check:dead": "knip",
+    "check:dead": "knip --no-config-hints",
     "check:coverage": "vitest run --coverage --reporter=verbose || echo '⚠ Coverage check complete — review numbers above'",
     "check": "npm run check:types && npm run lint && npm run fmt && npm run check:dead",
     "fix": "npm run fmt:fix && npm run lint:fix",
