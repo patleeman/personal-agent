@@ -7,8 +7,8 @@ import type { TraceToolHealth } from '@personal-agent/extensions/data';
 export function TracesToolHealth({ tools }: { tools: TraceToolHealth[] }) {
   if (!tools || tools.length === 0) {
     return (
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+      <div className="rounded-2xl bg-surface/35">
+        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
           <span className="text-[12px] font-semibold">🔧 Tool Telemetry</span>
           <span className="ml-auto text-[10px] text-dim">No tool data yet</span>
         </div>
@@ -21,10 +21,10 @@ export function TracesToolHealth({ tools }: { tools: TraceToolHealth[] }) {
   const totalErrors = tools.reduce((a, t) => a + t.errors, 0);
 
   return (
-    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+    <div className="rounded-2xl bg-surface/35">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className="text-[12px] font-semibold">🔧 Tool Telemetry</span>
-        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">
+        <span className="ml-auto text-[10px] text-dim">
           {totalCalls} calls · {totalErrors} errors ({((totalErrors / Math.max(totalCalls, 1)) * 100).toFixed(1)}%)
         </span>
       </div>
@@ -45,7 +45,7 @@ function BashBreakdown({ tools }: { tools: TraceToolHealth[] }) {
   if (!bash || (rows.length === 0 && !complexity)) return null;
 
   return (
-    <div className="border-t border-border-subtle px-4 pb-4 pt-3">
+    <div className="px-4 pb-4 pt-3">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">Bash breakdown</span>
         <span className="ml-auto text-[10px] text-dim">Top command families</span>
@@ -149,7 +149,7 @@ function ToolCard({ tool }: { tool: TraceToolHealth }) {
         <Stat label="P95 Latency" value={formatDuration(tool.p95LatencyMs)} />
         <Stat label="Max Latency" value={formatDuration(tool.maxLatencyMs)} />
       </div>
-      <div className="mt-2.5 pt-2 border-t border-border-subtle/50">
+      <div className="mt-2.5 pt-2">
         <div className="flex h-2 overflow-hidden rounded-full bg-surface">
           <div className="bg-success/70" style={{ width: `${tool.calls > 0 ? (okCalls / tool.calls) * 100 : 0}%` }} />
           {tool.errors > 0 && <div className="bg-danger" style={{ width: `${(tool.errors / tool.calls) * 100}%` }} />}

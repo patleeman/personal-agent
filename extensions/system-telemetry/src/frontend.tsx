@@ -74,7 +74,7 @@ export function TelemetryPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
+      <AppPageLayout shellClassName="max-w-none px-8 lg:px-12" contentClassName="mx-0 max-w-none space-y-8">
         <AppPageIntro
           title="Telemetry"
           summary="Monitoring, usage, and runtime instrumentation across recent agent activity."
@@ -88,10 +88,9 @@ export function TelemetryPage() {
           }
         />
 
-        {/* ── Pulse Row ── */}
         {summary && <PulseRow summary={summary} />}
 
-        <section className="space-y-4 border-t border-border-subtle pt-6">
+        <section className="space-y-4">
           {tokensDaily && <TracesHeatmap data={tokensDaily} />}
           {modelUsage && summary && (
             <TracesModelUsage
@@ -109,12 +108,12 @@ export function TelemetryPage() {
           {tokensDaily && summary && <TracesBraidChart data={tokensDaily} />}
         </section>
 
-        <section className="space-y-4 border-t border-border-subtle pt-6">
+        <section className="space-y-4">
           {toolHealth && <TracesToolHealth tools={toolHealth} />}
           <TracesToolFlow data={toolFlow} />
         </section>
 
-        <section className="space-y-4 border-t border-border-subtle pt-6">
+        <section className="space-y-4">
           <TracesContextPointers data={contextPointers} />
           <TracesAutoMode data={autoMode} />
           <TracesCacheAndSystemPrompt cacheEfficiency={cacheEfficiency} systemPrompt={systemPrompt} />
@@ -137,7 +136,7 @@ function TimeRangeSelector({ value, onChange }: { value: TraceRange; onChange: (
   ];
 
   return (
-    <div className="flex gap-1 border-r border-border-subtle pr-2">
+    <div className="flex gap-1 rounded-xl bg-surface/35 p-1">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -193,16 +192,15 @@ function PulseRow({ summary }: { summary: NonNullable<ReturnType<typeof useTrace
   ];
 
   return (
-    <section className="grid grid-cols-1 border-y border-border-subtle sm:grid-cols-2 lg:grid-cols-5">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
-        <div
-          key={card.label}
-          className="relative flex min-w-0 flex-col gap-2 border-border-subtle py-4 sm:px-4 sm:[&:not(:first-child)]:border-l max-sm:border-t max-sm:first:border-t-0"
-        >
+        <div key={card.label} className="relative min-w-0 rounded-2xl bg-surface/35 px-4 py-3.5">
           {card.dot && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-accent animate-pulse" />}
           <span className="text-[10px] uppercase tracking-[0.1em] text-dim">{card.label}</span>
-          <span className={`text-[24px] font-semibold leading-none tracking-tight ${card.cls}`}>{card.value}</span>
-          <span className="text-[11px] text-dim">{card.trend}</span>
+          <div className={`mt-2 text-[22px] font-semibold leading-none tracking-tight ${card.cls}`}>{card.value}</div>
+          <div className="mt-2 truncate text-[11px] text-dim" title={card.trend}>
+            {card.trend}
+          </div>
         </div>
       ))}
     </section>

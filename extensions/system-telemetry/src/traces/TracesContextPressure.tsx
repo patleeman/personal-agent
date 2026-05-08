@@ -15,8 +15,8 @@ export function TracesContextPressure({
 }) {
   if ((!sessions || sessions.length === 0) && (!compactions || compactions.length === 0)) {
     return (
-      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+      <div className="rounded-2xl bg-surface/35">
+        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
           <span className="text-[12px] font-semibold">🧠 Context Pressure</span>
           <span className="ml-auto text-[10px] text-dim">Waiting for data</span>
         </div>
@@ -30,14 +30,14 @@ export function TracesContextPressure({
   const lowCount = sessions.filter((s) => s.pct <= 70).length;
 
   return (
-    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+    <div className="rounded-2xl bg-surface/35">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className="text-[12px] font-semibold">🧠 Context Pressure &amp; Session Activity</span>
-        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">
+        <span className="ml-auto text-[10px] text-dim">
           {sessions.length} sessions · {highCount + medCount} above 70%
         </span>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-border-subtle">
+      <div className="grid grid-cols-2 gap-3">
         {/* Cell 1: Session gauges */}
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Context Fill by Session</div>
@@ -56,7 +56,7 @@ export function TracesContextPressure({
           ) : (
             <div className="text-[12px] text-dim py-4 text-center">No context snapshots yet</div>
           )}
-          <div className="flex gap-2 flex-wrap mt-2 pt-2 border-t border-border-subtle">
+          <div className="flex gap-2 flex-wrap mt-2 pt-2">
             <Legend color="bg-[#6c8aff]" label="System" />
             <Legend color="bg-[#4cd964]" label="User" />
             <Legend color="bg-[#ff9f0a]" label="Assistant" />
@@ -91,7 +91,7 @@ export function TracesContextPressure({
 
           {/* Compaction log */}
           {compactions && compactions.length > 0 && (
-            <div className="pt-3 border-t border-border-subtle">
+            <div className="pt-3">
               <div className="text-[11px] font-medium mb-2 flex items-center gap-2">
                 Compactions Today
                 <span className="text-[10px] text-dim font-normal">
@@ -103,10 +103,7 @@ export function TracesContextPressure({
               </div>
               <div className="max-h-[150px] overflow-y-auto space-y-0.5">
                 {compactions.slice(0, 10).map((c) => (
-                  <div
-                    key={c.ts + c.sessionId}
-                    className="flex items-center gap-2 py-1 text-[11px] text-secondary border-b border-border-subtle/30 border-0"
-                  >
+                  <div key={c.ts + c.sessionId} className="flex items-center gap-2 py-1 text-[11px] text-secondary/30 border-0">
                     <span className="font-mono text-[10px] text-dim w-[45px] shrink-0">{c.ts.slice(11, 16)}</span>
                     <span className="flex-1 truncate">{c.sessionId.length > 15 ? c.sessionId.slice(0, 15) + '…' : c.sessionId}</span>
                     <span className="text-[10px] text-dim">{c.reason}</span>
