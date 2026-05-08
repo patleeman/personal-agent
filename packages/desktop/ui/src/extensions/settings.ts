@@ -1,10 +1,3 @@
-export {
-  DesktopCompanionSettingsPanel,
-  DesktopConnectionsSettingsPanel,
-  DesktopKeyboardShortcutsSettingsSection,
-  formatCompanionTimestamp,
-  SettingsPage,
-} from '../../../../../extensions/system-settings/src/SettingsPage';
 export { api } from '../client/api';
 export { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, cx, Pill, ToolbarButton } from '../components/ui';
 export { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';

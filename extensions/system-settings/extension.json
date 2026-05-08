@@ -18,6 +18,13 @@
     ],
     "views": [
       {
+        "id": "settings",
+        "title": "Settings",
+        "location": "main",
+        "route": "/settings",
+        "component": "SettingsPage"
+      },
+      {
         "id": "providers",
         "title": "Provider settings",
         "location": "main",

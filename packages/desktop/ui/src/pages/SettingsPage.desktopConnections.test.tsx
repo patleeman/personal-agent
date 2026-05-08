@@ -3,8 +3,11 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  DesktopConnectionsSettingsPanel,
+  DesktopKeyboardShortcutsSettingsSection,
+} from '../../../../../extensions/system-settings/src/SettingsPage';
 import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
-import { DesktopConnectionsSettingsPanel, DesktopKeyboardShortcutsSettingsSection } from './SettingsPage';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 

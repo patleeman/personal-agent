@@ -3,8 +3,8 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DesktopCompanionSettingsPanel, formatCompanionTimestamp } from '../../../../../extensions/system-settings/src/SettingsPage';
 import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
-import { DesktopCompanionSettingsPanel, formatCompanionTimestamp } from './SettingsPage';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 

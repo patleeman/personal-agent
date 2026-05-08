@@ -4,11 +4,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SettingsPage } from '../../../../../extensions/system-settings/src/SettingsPage';
 import { useAppEvents, useSseConnection } from '../app/contexts';
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
 import { useTheme } from '../ui-state/theme';
-import { SettingsPage } from './SettingsPage';
 
 vi.mock('../hooks/useApi', () => ({
   useApi: vi.fn(),
