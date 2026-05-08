@@ -34,5 +34,5 @@ The desktop app starts and loads the conversation view. Create a new conversatio
 - [Views](views.md) — understand the three layout modes
 - [Conversations](conversations.md) — how to work with agent threads
 - [Desktop App](desktop-app.md) — Electron shell and shortcuts
-- [Knowledge System](knowledge-system.md) — vault, skills, and instruction files
+- [Knowledge](../extensions/system-knowledge/README.md) — vault, skills, instruction files, and sync
 - [Configuration](configuration.md) — config files and environment variables

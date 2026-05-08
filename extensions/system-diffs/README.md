@@ -172,7 +172,7 @@ The KB sync feature uses git to synchronize vault content across machines:
 
 This is a separate git workflow from checkpoints — it manages vault content, not project code.
 
-See [Knowledge Base Sync](../../docs/knowledge-base-sync.md).
+See [Knowledge](../system-knowledge/README.md).
 
 ## Diff Viewer
 

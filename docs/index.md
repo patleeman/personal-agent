@@ -17,7 +17,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Views](views.md) — Conversation, Workbench, Zen layouts
 - [Conversations](conversations.md) — live threads, branching, async follow-through
 - [Desktop App](desktop-app.md) — Electron shell, shortcuts, and app chrome
-- [Knowledge System](knowledge-system.md) — vault, docs, skills, instruction files
+- [Knowledge](../extensions/system-knowledge/README.md) — vault, docs, skills, instruction files, and managed sync
 - [Configuration](configuration.md) — file-based config, env vars
 - [Daemon](daemon.md) — background process and runtime lifecycle
 - [System extensions](../extensions) — feature-owned docs and implementation packages
@@ -48,7 +48,7 @@ Feature-specific documentation lives beside the owning extension package:
 
 **View Modes** — Conversation, Workbench, and Zen views, plus conversation context attachments.
 
-**Core Product Model** — conversations, projects, knowledge system, and KB sync. Feature packages own their own docs.
+**Core Product Model** — conversations and projects. Feature packages own their own docs.
 
 **Desktop App** — Electron shell and app-level behavior.
 

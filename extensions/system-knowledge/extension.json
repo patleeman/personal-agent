@@ -6,6 +6,14 @@
   "description": "Browse and edit knowledge base files beside the active conversation.",
   "version": "0.1.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      { "id": "readState", "handler": "readState", "title": "Read knowledge state" },
+      { "id": "updateState", "handler": "updateState", "title": "Update knowledge state" },
+      { "id": "sync", "handler": "sync", "title": "Sync knowledge base" }
+    ]
+  },
   "contributes": {
     "mentions": [
       {

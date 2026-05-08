@@ -23,14 +23,6 @@
         {
           "title": "Projects",
           "path": "projects.md"
-        },
-        {
-          "title": "Knowledge System",
-          "path": "knowledge-system.md"
-        },
-        {
-          "title": "Knowledge Base Sync",
-          "path": "knowledge-base-sync.md"
         }
       ]
     },

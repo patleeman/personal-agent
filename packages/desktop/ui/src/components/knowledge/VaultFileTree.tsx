@@ -97,6 +97,7 @@ const TREE_HOST_STYLE = {
 export interface FileTreeProps {
   activeFileId: string | null;
   onFileSelect: (id: string) => void;
+  onSyncKnowledgeBase?: () => Promise<unknown>;
 }
 
 interface ContextMenuProps {
@@ -685,7 +686,7 @@ function OpenFilesSection({
   );
 }
 
-export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
+export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase }: FileTreeProps) {
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [movePaths, setMovePaths] = useState<string[] | null>(null);
@@ -897,7 +898,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
     setSyncingKnowledgeBase(true);
     try {
-      await api.syncKnowledgeBase();
+      await (onSyncKnowledgeBase ? onSyncKnowledgeBase() : api.syncKnowledgeBase());
       await Promise.all([refetchKnowledgeBase({ resetLoading: false }), loadSnapshot({ keepLoadingState: false })]);
     } catch (error) {
       console.error('knowledge base sync failed', error);
@@ -905,7 +906,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     } finally {
       setSyncingKnowledgeBase(false);
     }
-  }, [knowledgeBaseState?.configured, loadSnapshot, refetchKnowledgeBase, syncingKnowledgeBase]);
+  }, [knowledgeBaseState?.configured, loadSnapshot, onSyncKnowledgeBase, refetchKnowledgeBase, syncingKnowledgeBase]);
 
   const openCreateEntryModal = useCallback((kind: CreateEntryState['kind'], directoryIdInput: string) => {
     const directoryId = normalizeVaultDir(directoryIdInput);

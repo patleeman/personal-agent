@@ -16,7 +16,7 @@ function getKnowledgeFileId(search: string): string | null {
   return new URLSearchParams(search).get('file');
 }
 
-export function KnowledgeTreePanel() {
+export function KnowledgeTreePanel({ pa }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = getKnowledgeFileId(searchParams.toString());
   const handleFileSelect = useCallback(
@@ -37,7 +37,11 @@ export function KnowledgeTreePanel() {
   return (
     <div className="min-h-0 flex-1 overflow-hidden">
       <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
-        <LazyVaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
+        <LazyVaultFileTree
+          activeFileId={activeFileId}
+          onFileSelect={handleFileSelect}
+          onSyncKnowledgeBase={() => pa.extension.invoke('sync', {})}
+        />
       </Suspense>
     </div>
   );

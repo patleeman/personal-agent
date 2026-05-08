@@ -17,7 +17,6 @@ const {
   createImageAgentExtensionMock,
   createImageProbeAgentExtensionMock,
   webToolsExtensionMock,
-  knowledgeBaseExtensionMock,
   createManifestAgentExtensionsMock,
   daemonRunOrchestrationPromptExtensionMock,
   authStorageMock,
@@ -43,7 +42,6 @@ const {
     createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
     createImageProbeAgentExtensionMock: vi.fn(() => 'image-probe-extension'),
     webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
-    knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
     createManifestAgentExtensionsMock: vi.fn(() => ['manifest-agent-extension']),
     daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
     authStorageMock,
@@ -105,10 +103,6 @@ vi.mock('../extensions/extensionAgentExtensions.js', () => ({
 
 vi.mock('../extensions/web-tools/index.js', () => ({
   default: webToolsExtensionMock,
-}));
-
-vi.mock('../extensions/knowledge-base/index.js', () => ({
-  default: knowledgeBaseExtensionMock,
 }));
 
 vi.mock('../extensions/daemon-run-orchestration-prompt/index.js', () => ({
