@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export function resolveVisualViewportKeyboardInset(input: {
-  innerHeight: number;
-  viewportHeight: number;
-  viewportOffsetTop: number;
-}): number {
+function resolveVisualViewportKeyboardInset(input: { innerHeight: number; viewportHeight: number; viewportOffsetTop: number }): number {
   const { innerHeight, viewportHeight, viewportOffsetTop } = input;
   if (![innerHeight, viewportHeight, viewportOffsetTop].every(Number.isSafeInteger)) {
     return 0;
