@@ -86,7 +86,7 @@ The prompt to execute when the automation fires. Supports the same content as a 
 
 ## Inspecting Runs
 
-From the activity history, click a run ID to view the run details and logs. See [Runs](../../docs/runs.md) for run reference.
+From the activity history, click a run ID to view the run details and logs. See [Runs](../system-runs/README.md) for run reference.
 
 ## Relationship to the Daemon
 
@@ -198,7 +198,7 @@ The `scheduled_task` tool manages tasks from within a conversation:
 
 ## Managing Tasks
 
-Tasks are managed through the `scheduled_task` agent tool or the Automations UI. See [Automations](../../docs/automations.md) for the desktop UI.
+Tasks are managed through the `scheduled_task` agent tool or the Automations UI. See [Automations](README.md) for the desktop UI.
 
 ---
 

@@ -16,32 +16,44 @@ See [Getting Started](getting-started.md) for the full setup.
 
 - [Views](views.md) — Conversation, Workbench, Zen layouts
 - [Conversations](conversations.md) — live threads, branching, async follow-through
-- [Desktop App](desktop-app.md) — Electron shell, shortcuts, settings
-- [Telemetry](telemetry.md) — local trace stats and monitoring views
-- [Gateways](gateways.md) — external app routing into conversations
-- [Extensions](extensions.md) — self-extensibility package model
+- [Desktop App](desktop-app.md) — Electron shell, shortcuts, and app chrome
 - [Knowledge System](knowledge-system.md) — vault, docs, skills, instruction files
 - [Configuration](configuration.md) — file-based config, env vars
-- [Daemon](daemon.md) — background process, runs, automations, companion
+- [Daemon](daemon.md) — background process and runtime lifecycle
+- [System extensions](../extensions) — feature-owned docs and implementation packages
+
+## System extension docs
+
+Feature-specific documentation lives beside the owning extension package:
+
+- [Artifacts](../extensions/system-artifacts/README.md)
+- [Auto Mode](../extensions/system-auto-mode/README.md)
+- [Automations](../extensions/system-automations/README.md)
+- [Browser](../extensions/system-browser/README.md)
+- [Conversation Tools](../extensions/system-conversation-tools/README.md)
+- [Diffs](../extensions/system-diffs/README.md)
+- [Extension Manager](../extensions/system-extension-manager/README.md)
+- [File Explorer](../extensions/system-files/README.md)
+- [Gateways](../extensions/system-gateways/README.md)
+- [Images](../extensions/system-images/README.md)
+- [Knowledge](../extensions/system-knowledge/README.md)
+- [MCP](../extensions/system-mcp/README.md)
+- [OpenAI Native Compaction](../extensions/system-openai-native-compaction/README.md)
+- [Runs](../extensions/system-runs/README.md)
+- [Settings](../extensions/system-settings/README.md)
+- [Telemetry](../extensions/system-telemetry/README.md)
+- [Web Tools](../extensions/system-web-tools/README.md)
 
 ## Sections
 
 **View Modes** — Conversation, Workbench, and Zen views, plus conversation context attachments.
 
-**Core Product Model** — conversations, checkpoints, diffs, artifacts, extensions, git integration, projects, knowledge system, and KB sync.
+**Core Product Model** — conversations, projects, knowledge system, and KB sync. Feature packages own their own docs.
 
-**Desktop App** — Electron shell, settings UI, file explorer, telemetry, gateways, and automations management.
+**Desktop App** — Electron shell and app-level behavior.
 
-**Browser** — embedded webview with CDP, snapshot, screenshot tools, and browser comments.
+**Background Runtime** — daemon lifecycle and runtime operations.
 
-**Background Runtime** — daemon, runs, scheduled tasks, reminders, and auto mode.
-
-**Agent Tools** — web search & fetch, image generation, ask user question, change working directory, and conversation inspect.
-
-**Voice** — local Whisper dictation.
-
-**Providers & Models** — API provider config, OAuth, keys, and model registry.
-
-**Connectivity** — iOS companion, MCP servers, and SSH remotes.
+**Connectivity** — iOS companion and runtime connectivity architecture.
 
 **Operations** — configuration file format and release cycle.

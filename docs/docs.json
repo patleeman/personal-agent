@@ -3,80 +3,75 @@
     {
       "title": "View Modes",
       "items": [
-        { "title": "Views", "path": "views.md" },
-        { "title": "Conversation Context", "path": "conversation-context.md" }
+        {
+          "title": "Views",
+          "path": "views.md"
+        },
+        {
+          "title": "Conversation Context",
+          "path": "conversation-context.md"
+        }
       ]
     },
     {
       "title": "Core Product Model",
       "items": [
-        { "title": "Conversations", "path": "conversations.md" },
-        { "title": "Checkpoints", "path": "checkpoints.md" },
-        { "title": "Diff Viewer", "path": "diff-viewer.md" },
-        { "title": "Artifacts", "path": "artifacts.md" },
-        { "title": "Extensions", "path": "extensions.md" },
-        { "title": "Git Integration", "path": "git-integration.md" },
-        { "title": "Projects", "path": "projects.md" },
-        { "title": "Knowledge System", "path": "knowledge-system.md" },
-        { "title": "Knowledge Base Sync", "path": "knowledge-base-sync.md" }
+        {
+          "title": "Conversations",
+          "path": "conversations.md"
+        },
+        {
+          "title": "Projects",
+          "path": "projects.md"
+        },
+        {
+          "title": "Knowledge System",
+          "path": "knowledge-system.md"
+        },
+        {
+          "title": "Knowledge Base Sync",
+          "path": "knowledge-base-sync.md"
+        }
       ]
     },
     {
       "title": "Desktop App",
       "items": [
-        { "title": "Desktop App", "path": "desktop-app.md" },
-        { "title": "Settings", "path": "settings.md" },
-        { "title": "File Explorer", "path": "file-explorer.md" },
-        { "title": "Telemetry", "path": "telemetry.md" },
-        { "title": "Gateways", "path": "gateways.md" },
-        { "title": "Automations", "path": "automations.md" }
+        {
+          "title": "Desktop App",
+          "path": "desktop-app.md"
+        }
       ]
-    },
-    {
-      "title": "Browser",
-      "items": [{ "title": "Browser", "path": "browser.md" }]
     },
     {
       "title": "Background Runtime",
       "items": [
-        { "title": "Daemon", "path": "daemon.md" },
-        { "title": "Runs", "path": "runs.md" },
-        { "title": "Scheduled Tasks", "path": "scheduled-tasks.md" },
-        { "title": "Reminders", "path": "reminders.md" },
-        { "title": "Auto Mode", "path": "auto-mode.md" }
+        {
+          "title": "Daemon",
+          "path": "daemon.md"
+        }
       ]
-    },
-    {
-      "title": "Agent Tools",
-      "items": [
-        { "title": "Conversation Inspect", "path": "conversation-inspect.md" },
-        { "title": "Web Search & Fetch", "path": "web-search-fetch.md" },
-        { "title": "Image Generation", "path": "image-generation.md" },
-        { "title": "Ask User Question", "path": "ask-user-question.md" },
-        { "title": "Change Working Directory", "path": "change-working-directory.md" }
-      ]
-    },
-    {
-      "title": "Voice",
-      "items": [{ "title": "Dictation", "path": "dictation.md" }]
-    },
-    {
-      "title": "Providers & Models",
-      "items": [{ "title": "Providers & Models", "path": "providers-models.md" }]
     },
     {
       "title": "Connectivity",
       "items": [
-        { "title": "iOS Companion", "path": "ios-companion.md" },
-        { "title": "MCP", "path": "mcp.md" },
-        { "title": "SSH Remotes", "path": "ssh-remotes.md" }
+        {
+          "title": "iOS Companion",
+          "path": "ios-companion.md"
+        }
       ]
     },
     {
       "title": "Operations",
       "items": [
-        { "title": "Configuration", "path": "configuration.md" },
-        { "title": "Release Cycle", "path": "release-cycle.md" }
+        {
+          "title": "Configuration",
+          "path": "configuration.md"
+        },
+        {
+          "title": "Release Cycle",
+          "path": "release-cycle.md"
+        }
       ]
     }
   ],

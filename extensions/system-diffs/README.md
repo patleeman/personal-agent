@@ -138,7 +138,7 @@ Each file entry shows:
 
 Checkpoints are created from conversations using the checkpoint tool. Each checkpoint produces a real git commit. The Diff Viewer reads those commits and renders the per-file diffs.
 
-See [Checkpoints](../../docs/checkpoints.md) for creating and managing checkpoints.
+See [Checkpoints](README.md) for creating and managing checkpoints.
 
 ---
 
@@ -159,7 +159,7 @@ Checkpoints create real git commits. When the agent or user saves a checkpoint:
 
 Checkpoints are real git operations. They can be pushed, pulled, branched, and reverted using standard git commands outside the app.
 
-See [Checkpoints](../../docs/checkpoints.md) and [Diff Viewer](../../docs/diff-viewer.md).
+See [Checkpoints](README.md) and [Diff Viewer](README.md).
 
 ## Knowledge Base Sync
 
@@ -184,7 +184,7 @@ The Diff Viewer reads git commits created by checkpoints and renders per-file di
 
 The diff viewer does not modify git state — it is read-only.
 
-See [Diff Viewer](../../docs/diff-viewer.md).
+See [Diff Viewer](README.md).
 
 ## Release Cycle
 

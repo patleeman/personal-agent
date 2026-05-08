@@ -166,11 +166,11 @@ Select any portion of text in a conversation message. A **Reply** action appears
 
 ## Conversation Inspect
 
-The agent can read other conversation transcripts using the `conversation_inspect` tool. This provides read-only access to message history, tool calls, and results across threads. See [Conversation Inspect](conversation-inspect.md).
+The agent can read other conversation transcripts using the `conversation_inspect` tool. This provides read-only access to message history, tool calls, and results across threads. See [Conversation Inspect](../extensions/system-conversation-tools/README.md).
 
 ## Auto Mode
 
-When enabled, each visible assistant turn is followed by a hidden review turn. The review runs in the background and can perform follow-up work. See [Auto Mode](auto-mode.md).
+When enabled, each visible assistant turn is followed by a hidden review turn. The review runs in the background and can perform follow-up work. See [Auto Mode](../extensions/system-auto-mode/README.md).
 
 ## Keyboard Shortcuts
 

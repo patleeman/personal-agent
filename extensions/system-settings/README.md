@@ -66,7 +66,7 @@ Models are discovered from configured providers and listed automatically.
 
 ## Dictation Settings
 
-See [Dictation](../../docs/dictation.md) for full details.
+See [Dictation](README.md) for full details.
 
 - Provider selection (currently only `local-whisper`)
 - Model selection
