@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@personal-agent/core': resolve(process.cwd(), 'packages/core/src/index.ts'),
       '@personal-agent/daemon': resolve(process.cwd(), 'packages/daemon/src/index.ts'),
+      '@personal-agent/extensions/host': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/host.ts'),
     },
   },
   test: {

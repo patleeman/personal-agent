@@ -1,3 +1,55 @@
+import {
+  api,
+  AppPageIntro,
+  AppPageLayout,
+  AppPageSection,
+  AppPageToc,
+  createDesktopAwareEventSource,
+  createModelEditorDraft,
+  createProviderEditorDraft,
+  cx,
+  type DesktopAppPreferencesState,
+  type DesktopConnectionsState,
+  type DesktopEnvironmentState,
+  type DesktopHostRecord,
+  type DesktopSshConnectionTestResult,
+  formatContextWindowLabel,
+  formatThinkingLevelLabel,
+  getDesktopBridge,
+  getKnowledgeBaseSyncPresentation,
+  getModelSelectableServiceTierOptions,
+  groupModelsByProvider,
+  isDesktopShell,
+  type McpServerConfig,
+  type ModelEditorDraft,
+  type ModelProviderApi,
+  type ModelProviderConfig,
+  type ModelProviderModelConfig,
+  type ModelProviderState,
+  type ModelState,
+  parseOptionalJsonObject,
+  parseOptionalNonNegativeNumber,
+  parseOptionalPositiveInteger,
+  parseOptionalStringRecord,
+  Pill,
+  type ProviderAuthSummary,
+  type ProviderEditorDraft,
+  type ProviderOAuthLoginState,
+  type ProviderOAuthLoginStreamEvent,
+  readDesktopConnections,
+  readDesktopEnvironment,
+  resetStoredConversationUiState,
+  resetStoredLayoutPreferences,
+  subscribeDesktopProviderOAuthLogin,
+  type ThemePreference,
+  THINKING_LEVEL_OPTIONS,
+  ToolbarButton,
+  type TranscriptionModelStatus,
+  type TranscriptionProviderId,
+  useApi,
+  useInvalidateOnTopics,
+  useTheme,
+} from '@personal-agent/extensions/host';
 import QRCode from 'qrcode';
 import {
   createContext,
@@ -10,64 +62,6 @@ import {
   useRef,
   useState,
 } from 'react';
-
-import { api } from '../../../packages/desktop/ui/src/client/api';
-import {
-  AppPageIntro,
-  AppPageLayout,
-  AppPageSection,
-  AppPageToc,
-  cx,
-  Pill,
-  ToolbarButton,
-} from '../../../packages/desktop/ui/src/components/ui';
-import { formatContextWindowLabel, formatThinkingLevelLabel } from '../../../packages/desktop/ui/src/conversation/conversationHeader';
-import {
-  getDesktopBridge,
-  isDesktopShell,
-  readDesktopConnections,
-  readDesktopEnvironment,
-} from '../../../packages/desktop/ui/src/desktop/desktopBridge';
-import { createDesktopAwareEventSource } from '../../../packages/desktop/ui/src/desktop/desktopEventSource';
-import { subscribeDesktopProviderOAuthLogin } from '../../../packages/desktop/ui/src/desktop/desktopProviderOAuth';
-import { useApi } from '../../../packages/desktop/ui/src/hooks/useApi';
-import { useInvalidateOnTopics } from '../../../packages/desktop/ui/src/hooks/useInvalidateOnTopics';
-import { getKnowledgeBaseSyncPresentation } from '../../../packages/desktop/ui/src/knowledge/knowledgeBaseSyncStatus';
-import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../../../packages/desktop/ui/src/local/localSettings';
-import {
-  getModelSelectableServiceTierOptions,
-  groupModelsByProvider,
-  THINKING_LEVEL_OPTIONS,
-} from '../../../packages/desktop/ui/src/model/modelPreferences';
-import {
-  createModelEditorDraft,
-  createProviderEditorDraft,
-  type ModelEditorDraft,
-  parseOptionalJsonObject,
-  parseOptionalNonNegativeNumber,
-  parseOptionalPositiveInteger,
-  parseOptionalStringRecord,
-  type ProviderEditorDraft,
-} from '../../../packages/desktop/ui/src/model/modelProviderEditorDrafts';
-import type {
-  DesktopAppPreferencesState,
-  DesktopConnectionsState,
-  DesktopEnvironmentState,
-  DesktopHostRecord,
-  DesktopSshConnectionTestResult,
-  McpServerConfig,
-  ModelProviderApi,
-  ModelProviderConfig,
-  ModelProviderModelConfig,
-  ModelProviderState,
-  ModelState,
-  ProviderAuthSummary,
-  ProviderOAuthLoginState,
-  ProviderOAuthLoginStreamEvent,
-  TranscriptionModelStatus,
-  TranscriptionProviderId,
-} from '../../../packages/desktop/ui/src/shared/types';
-import { type ThemePreference, useTheme } from '../../../packages/desktop/ui/src/ui-state/theme';
 
 const INPUT_CLASS =
   'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';

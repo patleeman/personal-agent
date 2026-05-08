@@ -16,7 +16,8 @@
     "paths": {
       "@personal-agent/core": ["./packages/core/src"],
       "@personal-agent/daemon": ["./packages/daemon/src"],
-      "@personal-agent/extensions": ["./packages/extensions/src"]
+      "@personal-agent/extensions": ["./packages/extensions/src"],
+      "@personal-agent/extensions/host": ["./packages/desktop/ui/src/extensions/host"]
     }
   },
   "references": [

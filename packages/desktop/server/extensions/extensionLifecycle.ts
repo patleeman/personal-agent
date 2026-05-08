@@ -264,7 +264,7 @@ export async function buildRuntimeExtension(extensionId: string) {
       target: 'es2022',
       jsx: 'automatic',
       sourcemap: true,
-      external: ['@personal-agent/extensions'],
+      external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
     });
     outputs.push(outfile);
   }

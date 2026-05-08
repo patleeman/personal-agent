@@ -1,8 +1,6 @@
+import { type ExtensionSurfaceProps, WorkspaceExplorer, WorkspaceFileDocument } from '@personal-agent/extensions/host';
 import { Suspense, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-
-import { WorkspaceExplorer, WorkspaceFileDocument } from '../../../packages/desktop/ui/src/components/workspace/WorkspaceExplorer';
-import type { ExtensionSurfaceProps } from '../../../packages/desktop/ui/src/extensions/types';
 
 const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
 const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';

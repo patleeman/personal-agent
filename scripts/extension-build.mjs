@@ -34,7 +34,7 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
     jsx: 'automatic',
     sourcemap: true,
     logLevel: 'info',
-    external: ['@personal-agent/extensions'],
+    external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
   });
 }
 

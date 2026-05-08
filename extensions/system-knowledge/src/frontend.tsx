@@ -1,16 +1,16 @@
+import {
+  lazyRouteWithRecovery,
+  type MemoryDocItem,
+  type MentionItem,
+  navigateKnowledgeFile,
+  VaultEditor,
+  type VaultFileSummary,
+  VaultFileTree,
+} from '@personal-agent/extensions/host';
 import { Suspense, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { VaultEditor } from '../../../packages/desktop/ui/src/components/knowledge/VaultEditor';
-import type { MentionItem } from '../../../packages/desktop/ui/src/conversation/conversationMentions';
-import type { ExtensionSurfaceProps } from '../../../packages/desktop/ui/src/extensions/types';
-import { navigateKnowledgeFile } from '../../../packages/desktop/ui/src/knowledge/knowledgeNavigation';
-import { lazyRouteWithRecovery } from '../../../packages/desktop/ui/src/navigation/lazyRouteRecovery';
-import type { MemoryDocItem, VaultFileSummary } from '../../../packages/desktop/ui/src/shared/types';
-
-const VaultFileTree = lazyRouteWithRecovery('system-knowledge-vault-file-tree', () =>
-  import('../../../packages/desktop/ui/src/components/knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
-);
+const LazyVaultFileTree = lazyRouteWithRecovery('system-knowledge-vault-file-tree', async () => ({ default: VaultFileTree }));
 
 function getKnowledgeFileId(search: string): string | null {
   return new URLSearchParams(search).get('file');
@@ -37,7 +37,7 @@ export function KnowledgeTreePanel() {
   return (
     <div className="min-h-0 flex-1 overflow-hidden">
       <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
-        <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
+        <LazyVaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
       </Suspense>
     </div>
   );

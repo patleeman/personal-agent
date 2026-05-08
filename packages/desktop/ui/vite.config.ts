@@ -6,6 +6,11 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   root: __dirname,
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@personal-agent/extensions/host': resolve(__dirname, 'src/extensions/host.ts'),
+    },
+  },
   build: {
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
