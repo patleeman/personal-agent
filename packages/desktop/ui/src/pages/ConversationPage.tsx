@@ -266,7 +266,6 @@ import type {
   PromptAttachmentRefInput,
   SessionMeta,
   type TaskState,
-  VaultFileListResult,
 } from '../shared/types';
 import type { ConversationSummaryRecord } from '../shared/types';
 import {
@@ -2164,11 +2163,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const prevStreamingRef = useRef(false);
   const autocompleteCatalogDemand = useMemo(() => resolveConversationAutocompleteCatalogDemand(input), [input]);
   const [shouldLoadMemoryData, setShouldLoadMemoryData] = useState(() => autocompleteCatalogDemand.needsMemoryData);
-  const [shouldLoadVaultFiles, setShouldLoadVaultFiles] = useState(() => autocompleteCatalogDemand.needsVaultFiles);
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
-  const [vaultFilesData, setVaultFilesData] = useState<VaultFileListResult | null>(null);
   const requestedMemoryDataRef = useRef(false);
-  const requestedVaultFilesRef = useRef(false);
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
@@ -2228,10 +2224,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (autocompleteCatalogDemand.needsMemoryData) {
       setShouldLoadMemoryData(true);
     }
-    if (autocompleteCatalogDemand.needsVaultFiles) {
-      setShouldLoadVaultFiles(true);
-    }
-  }, [autocompleteCatalogDemand.needsMemoryData, autocompleteCatalogDemand.needsVaultFiles]);
+  }, [autocompleteCatalogDemand.needsMemoryData]);
 
   useEffect(() => {
     if (!shouldLoadMemoryData || requestedMemoryDataRef.current) {
@@ -2254,28 +2247,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, [shouldLoadMemoryData]);
-
-  useEffect(() => {
-    if (!shouldLoadVaultFiles || requestedVaultFilesRef.current) {
-      return;
-    }
-
-    requestedVaultFilesRef.current = true;
-    let cancelled = false;
-
-    api
-      .vaultFiles()
-      .then((data) => {
-        if (!cancelled) {
-          setVaultFilesData(data);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldLoadVaultFiles]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerShellRef = useRef<HTMLDivElement | null>(null);
@@ -2480,7 +2451,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     let cancelled = false;
     void buildExtensionMentionItems(extensionMentionRegistrations, {
       memoryDocs: memoryData?.memoryDocs ?? [],
-      vaultFiles: vaultFilesData?.files ?? [],
     })
       .then((items) => {
         if (!cancelled) setExtensionMentionItems(items);
@@ -2491,7 +2461,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [extensionMentionRegistrations, memoryData?.memoryDocs, vaultFilesData?.files]);
+  }, [extensionMentionRegistrations, memoryData?.memoryDocs]);
 
   const mentionItems = useMemo(
     () =>

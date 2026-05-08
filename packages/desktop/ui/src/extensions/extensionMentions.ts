@@ -1,14 +1,13 @@
 import type { MentionItem } from '../conversation/conversationMentions';
-import type { MemoryDocItem, VaultFileSummary } from '../shared/types';
+import type { MemoryDocItem } from '../shared/types';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionMentionRegistration } from './types';
 
 interface MentionProviderInput {
   memoryDocs: MemoryDocItem[];
-  vaultFiles: VaultFileSummary[];
 }
 
-type MentionProvider = (input: MentionProviderInput) => MentionItem[];
+type MentionProvider = (input: MentionProviderInput) => Promise<MentionItem[]> | MentionItem[];
 
 export async function buildExtensionMentionItems(
   registrations: ExtensionMentionRegistration[],

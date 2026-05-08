@@ -16,6 +16,7 @@ export type {
   GatewayEvent,
   GatewayState,
   GatewayThreadBinding,
+  KnowledgeBaseState,
   MemoryDocItem,
   ScheduledTaskSchedulerHealth,
   ScheduledTaskSummary,
@@ -30,10 +31,15 @@ export type {
   TraceThroughput,
   TraceTokenDaily,
   TraceToolHealth,
+  VaultBacklink,
+  VaultBacklinksResult,
+  VaultEntry,
+  VaultFileContent,
+  VaultFileListResult,
   VaultFileSummary,
+  VaultImageUploadResult,
+  VaultSearchResponse,
+  VaultShareImportResult,
+  VaultTreeResult,
 } from '../shared/types';
 export { timeAgo, timeAgoCompact } from '../shared/utils';
-export { VaultEditor } from '@personal-agent/extensions/knowledge';
-export { VaultFileTree } from '@personal-agent/extensions/knowledge';
-export { getKnowledgeBaseSyncPresentation } from '@personal-agent/extensions/knowledge';
-export { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';

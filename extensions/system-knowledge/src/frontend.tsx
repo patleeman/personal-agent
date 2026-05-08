@@ -1,23 +1,19 @@
-import {
-  type MemoryDocItem,
-  type MentionItem,
-  navigateKnowledgeFile,
-  VaultEditor,
-  type VaultFileSummary,
-  VaultFileTree,
-} from '@personal-agent/extensions/data';
-import { knowledgeApi } from '@personal-agent/extensions/knowledge';
+import { type MemoryDocItem, type MentionItem } from '@personal-agent/extensions/data';
 import {
   AppPageEmptyState,
   AppPageIntro,
   AppPageLayout,
   type ExtensionSurfaceProps,
   lazyRouteWithRecovery,
+  useApi,
 } from '@personal-agent/extensions/ui';
 import { Suspense, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { useApi } from '../../../packages/desktop/ui/src/hooks/useApi';
+import { VaultEditor } from './components/VaultEditor';
+import { VaultFileTree } from './components/VaultFileTree';
+import { knowledgeApi } from './lib/knowledgeApi';
+import { navigateKnowledgeFile } from './lib/knowledgeNavigation';
 
 const LazyVaultFileTree = lazyRouteWithRecovery('system-knowledge-vault-file-tree', async () => ({ default: VaultFileTree }));
 
@@ -234,7 +230,8 @@ export const knowledgeQuickOpenProvider = {
   },
 };
 
-export function buildKnowledgeMentionItems(input: { memoryDocs: MemoryDocItem[]; vaultFiles: VaultFileSummary[] }): MentionItem[] {
+export async function buildKnowledgeMentionItems(input: { memoryDocs: MemoryDocItem[] }): Promise<MentionItem[]> {
+  const vaultFiles = await knowledgeApi.listFiles();
   return [
     ...input.memoryDocs.map((doc) => ({
       id: `@${doc.id}`,
@@ -244,7 +241,7 @@ export function buildKnowledgeMentionItems(input: { memoryDocs: MemoryDocItem[];
       summary: doc.summary,
       path: doc.path,
     })),
-    ...input.vaultFiles.map((file) => ({
+    ...vaultFiles.files.map((file) => ({
       id: `@${file.id}`,
       label: file.id,
       kind: (file.kind === 'folder' ? 'folder' : 'file') as const,
