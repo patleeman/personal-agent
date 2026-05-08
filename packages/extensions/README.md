@@ -35,6 +35,24 @@ import { createScheduledTask } from '@personal-agent/extensions/backend';
 
 If a system extension needs a host primitive that is not exported here, add it deliberately to this package. Do not import from `packages/desktop/ui/src/...` or `packages/desktop/server/...` directly.
 
+## Dependencies
+
+Extensions declare Node dependencies in their own `package.json`, not in `extension.json`. The manifest describes host contributions and capability intent; package installation and module resolution use normal npm metadata.
+
+Use `dependencies` for runtime libraries the frontend or backend imports:
+
+```json
+{
+  "type": "module",
+  "dependencies": {
+    "@personal-agent/extensions": "*",
+    "some-runtime-lib": "^1.2.3"
+  }
+}
+```
+
+The host SDK import, `@personal-agent/extensions`, is provided by Personal Agent and should remain the paved-road dependency for extension APIs. Third-party libraries should be regular package dependencies so local builds and imported extension bundles can resolve them before bundling.
+
 ## Frontend surfaces
 
 A frontend surface exports a React component referenced by `contributes.views[].component`:
