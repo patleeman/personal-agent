@@ -78,9 +78,21 @@ function scheduleText(task: ScheduledTaskSummary) {
   return 'Manual';
 }
 
+function taskKindText(task: ScheduledTaskSummary) {
+  return task.targetType === 'conversation' ? 'Thread' : 'Job';
+}
+
+function formatLastRun(task: ScheduledTaskSummary) {
+  if (!task.lastRunAt) return null;
+  const date = new Date(task.lastRunAt);
+  if (!Number.isFinite(date.getTime())) return task.lastRunAt;
+  return date.toLocaleString();
+}
+
 function compactPrompt(prompt: string) {
   const text = prompt.trim();
-  return text.length > 220 ? `${text.slice(0, 220)}…` : text;
+  if (!text) return 'No prompt configured.';
+  return text.length > 180 ? `${text.slice(0, 180)}…` : text;
 }
 
 function numberOrNull(value: string) {
@@ -126,15 +138,10 @@ function readFormInput(form: AutomationFormState) {
 }
 
 function HealthLine({ health }: { health: ScheduledTaskSchedulerHealth | null }) {
-  if (!health?.lastEvaluatedAt)
-    return <div className="border-t border-border-subtle py-4 text-[13px] text-secondary">Scheduler has not checked automations yet.</div>;
+  if (!health?.lastEvaluatedAt) return <span>Scheduler has not checked automations yet.</span>;
   const checked = new Date(health.lastEvaluatedAt);
   const label = Number.isFinite(checked.getTime()) ? checked.toLocaleString() : health.lastEvaluatedAt;
-  return (
-    <div className="border-t border-border-subtle py-4 text-[13px] text-secondary">
-      {health.status === 'stale' ? `Scheduler stale. Last checked ${label}.` : `Scheduler healthy. Last checked ${label}.`}
-    </div>
-  );
+  return <span>{health.status === 'stale' ? `Scheduler stale · ${label}` : `Scheduler healthy · ${label}`}</span>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -256,32 +263,68 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         const result = (await pa.automations.readLog(taskId)) as { log?: string };
         setLogById((prev) => ({ ...prev, [taskId]: result.log || 'No log yet.' }));
       } catch (err) {
-        setLogById((prev) => ({ ...prev, [taskId]: `No log available: ${err instanceof Error ? err.message : String(err)}` }));
+        const message = err instanceof Error ? err.message : String(err);
+        setLogById((prev) => ({
+          ...prev,
+          [taskId]: message.includes('No log available') ? 'No log yet.' : `Could not read log: ${message}`,
+        }));
       }
     },
     [logById, pa],
   );
 
+  const activeCount = useMemo(() => tasks.filter((task) => task.enabled !== false).length, [tasks]);
+  const runningCount = useMemo(() => tasks.filter((task) => task.running).length, [tasks]);
+  const attentionCount = useMemo(
+    () => tasks.filter((task) => task.lastStatus === 'failed' || task.lastStatus === 'failure').length,
+    [tasks],
+  );
   const countLabel = useMemo(() => (tasks.length === 1 ? '1 automation' : `${tasks.length} automations`), [tasks.length]);
 
   if (loading) return <LoadingState label="Loading automations…" className="h-full justify-center" />;
   if (error) return <ErrorState message={error} />;
 
   return (
-    <AppPageLayout shellClassName="max-w-[78rem]" contentClassName="space-y-7">
+    <AppPageLayout shellClassName="max-w-[76rem]" contentClassName="space-y-6">
       <AppPageIntro
         eyebrow="System extension"
         title="Automations"
-        summary="Manage scheduled and conversation-bound agent work."
+        summary="Scheduled jobs and conversation wakeups, with run state at a glance."
         actions={
           <div className="flex flex-wrap gap-2">
             <ToolbarButton onClick={() => void load()}>Refresh</ToolbarButton>
-            <ToolbarButton onClick={() => openEditor()}>New automation</ToolbarButton>
+            <ToolbarButton className="border-accent/40 text-primary" onClick={() => openEditor()}>
+              New automation
+            </ToolbarButton>
           </div>
         }
       />
-      {notice ? <div className="border-t border-border-subtle pt-4 text-[13px] text-secondary">{notice}</div> : null}
-      <HealthLine health={health} />
+
+      <div className="grid gap-3 border-y border-border-subtle py-4 text-[13px] text-secondary md:grid-cols-4">
+        <div>
+          <div className="text-[22px] font-semibold leading-none text-primary">{tasks.length}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Total</div>
+        </div>
+        <div>
+          <div className="text-[22px] font-semibold leading-none text-primary">{activeCount}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Enabled</div>
+        </div>
+        <div>
+          <div className="text-[22px] font-semibold leading-none text-primary">{runningCount}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Running</div>
+        </div>
+        <div>
+          <div className={cx('text-[22px] font-semibold leading-none', attentionCount > 0 ? 'text-danger' : 'text-primary')}>
+            {attentionCount}
+          </div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Needs attention</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-secondary">
+        <HealthLine health={health} />
+        {notice ? <span className="text-accent">{notice}</span> : null}
+      </div>
 
       {editorOpen && (
         <form className="space-y-4 border-t border-border-subtle pt-5" onSubmit={save}>
@@ -408,44 +451,52 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         </form>
       )}
 
-      <section className="border-t border-border-subtle pt-5">
-        <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle pb-3">
-          <h2 className="text-[20px] font-semibold tracking-tight text-primary">Current</h2>
-          <span className="text-[12px] text-dim">{countLabel}</span>
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
+            <p className="mt-1 text-[12px] text-secondary">{countLabel}</p>
+          </div>
         </div>
         {tasks.length === 0 ? (
           <EmptyState title="No automations yet" body="Create one to run scheduled or conversation-bound agent work." className="py-10" />
         ) : (
-          <div>
-            {tasks.map((task) => (
-              <article key={task.id} className="border-b border-border-subtle py-4">
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={cx('h-2.5 w-2.5 rounded-full border', statusClass(task))} />
-                      <h3 className="truncate text-[15px] font-semibold text-primary">{taskName(task)}</h3>
+          <div className="divide-y divide-border-subtle border-y border-border-subtle">
+            {tasks.map((task) => {
+              const lastRun = formatLastRun(task);
+              return (
+                <article key={task.id} className="py-4">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full border', statusClass(task))} />
+                        <h3 className="truncate text-[15px] font-semibold text-primary">{taskName(task)}</h3>
+                        <span className="text-[12px] text-secondary">{statusText(task)}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-secondary">
+                        <span>{scheduleText(task)}</span>
+                        <span>{taskKindText(task)}</span>
+                        {lastRun ? <span>Last run {lastRun}</span> : null}
+                        {task.cwd ? <span className="max-w-full truncate font-mono text-[11px] text-dim">{task.cwd}</span> : null}
+                      </div>
+                      <p className="max-w-4xl whitespace-pre-wrap text-[13px] leading-6 text-secondary">{compactPrompt(task.prompt)}</p>
                     </div>
-                    <p className="mt-1 text-[12px] text-secondary">
-                      {statusText(task)} · {scheduleText(task)} · {task.targetType === 'conversation' ? 'Thread' : 'Job'}
-                      {task.cwd ? ` · ${task.cwd}` : ''}
-                    </p>
-                    <p className="mt-2 max-w-3xl whitespace-pre-wrap text-[13px] leading-6 text-secondary">{compactPrompt(task.prompt)}</p>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <ToolbarButton disabled={busy === task.id} onClick={() => void runTask(task.id)}>
+                        Run
+                      </ToolbarButton>
+                      <ToolbarButton onClick={() => openEditor(task)}>Edit</ToolbarButton>
+                      <ToolbarButton onClick={() => void toggleLog(task.id)}>{logById[task.id] ? 'Hide log' : 'Log'}</ToolbarButton>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <ToolbarButton disabled={busy === task.id} onClick={() => void runTask(task.id)}>
-                      Run
-                    </ToolbarButton>
-                    <ToolbarButton onClick={() => openEditor(task)}>Edit</ToolbarButton>
-                    <ToolbarButton onClick={() => void toggleLog(task.id)}>{logById[task.id] ? 'Hide log' : 'Log'}</ToolbarButton>
-                  </div>
-                </div>
-                {logById[task.id] ? (
-                  <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[12px] leading-5 text-secondary">
-                    {logById[task.id]}
-                  </pre>
-                ) : null}
-              </article>
-            ))}
+                  {logById[task.id] ? (
+                    <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[11px] leading-5 text-dim">
+                      {logById[task.id]}
+                    </pre>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
