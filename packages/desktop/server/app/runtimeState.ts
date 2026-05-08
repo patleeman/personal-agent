@@ -7,24 +7,15 @@ import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@person
 import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 
 import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
-import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
-import { createCheckpointAgentExtension } from '../extensions/checkpointAgentExtension.js';
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
-import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
 import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
-import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
-import { createImageProbeAgentExtension } from '../extensions/imageProbeAgentExtension.js';
 import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import openaiNativeCompactionExtension from '../extensions/openai-native-compaction/index.js';
-import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
-import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
-import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
-import webToolsExtension from '../extensions/web-tools/index.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
@@ -145,9 +136,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
 
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
-      createScheduledTaskAgentExtension({
-        getCurrentProfile: getRuntimeScope,
-      }),
       createAskUserQuestionAgentExtension(),
       createChangeWorkingDirectoryAgentExtension({
         requestConversationWorkingDirectoryChange: (input) =>
@@ -156,33 +144,22 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
             extensionFactories: buildLiveSessionExtensionFactories(),
           }),
       }),
-      createRunAgentExtension({
-        getCurrentProfile: getRuntimeScope,
-        repoRoot,
-        profilesRoot: getProfilesRoot(),
-      }),
       createConversationInspectAgentExtension(),
       createConversationTitleAgentExtension({
         setConversationTitle: renameSession,
       }),
-      ...(getPreferredVisionModel() ? [createImageProbeAgentExtension({ getPreferredVisionModel })] : []),
-      ...(hasOpenAiImageProvider() ? [createImageAgentExtension()] : []),
-      createArtifactAgentExtension({
-        stateRoot: getStateRoot(),
-        repoRoot,
-        getCurrentProfile: getRuntimeScope,
-      }),
-      createCheckpointAgentExtension({
-        stateRoot: getStateRoot(),
-        getCurrentProfile: getRuntimeScope,
-      }),
       createMcpAgentExtension(),
       createWorkbenchBrowserAgentExtension(),
       createConversationAutoModeAgentExtension(),
-      createConversationQueueAgentExtension({ getCurrentProfile: getRuntimeScope }),
-      createReminderAgentExtension(),
-      ...createManifestToolAgentExtensions({ getCurrentProfile: getRuntimeScope }),
-      webToolsExtension,
+      ...createManifestToolAgentExtensions({
+        getCurrentProfile: getRuntimeScope,
+        getPreferredVisionModel,
+        hasOpenAiImageProvider,
+        repoRoot,
+        profilesRoot: getProfilesRoot(),
+        stateRoot: getStateRoot(),
+        serverContext: { getCurrentProfile: getRuntimeScope },
+      }),
 
       openaiNativeCompactionExtension,
     ].map(guardSystemPromptOverride);

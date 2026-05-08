@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "id": "system-web-tools",
+  "name": "Web tools",
+  "packageType": "system",
+  "description": "Fetch and search web content from agent conversations.",
+  "version": "0.1.0",
+  "contributes": {
+    "tools": [
+      {
+        "id": "web-fetch",
+        "name": "web_fetch",
+        "title": "Fetch URL",
+        "description": "Fetch a URL and extract its readable content as markdown.",
+        "systemFactory": "web-tools"
+      },
+      {
+        "id": "web-search",
+        "name": "web_search",
+        "title": "Search web",
+        "description": "Search the web and return titles, URLs, and snippets.",
+        "systemFactory": "web-tools"
+      }
+    ]
+  },
+  "permissions": ["network:read"]
+}

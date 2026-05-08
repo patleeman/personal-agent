@@ -49,6 +49,7 @@ export interface ExtensionToolRegistration {
   inputSchema: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
+  systemFactory?: string;
 }
 
 export interface ExtensionInstallSummary {
@@ -202,7 +203,8 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
     }
     const extensionPart = normalizeToolNamePart(entry.manifest.id);
     const toolPart = normalizeToolNamePart(id);
-    if (!extensionPart || !toolPart) {
+    const explicitName = typeof tool.name === 'string' ? tool.name.trim() : '';
+    if ((!extensionPart || !toolPart) && !explicitName) {
       return [];
     }
     return [
@@ -210,7 +212,7 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
         extensionId: entry.manifest.id,
         packageType: entry.manifest.packageType ?? 'user',
         id,
-        name: `extension_${extensionPart}_${toolPart}`,
+        name: explicitName || `extension_${extensionPart}_${toolPart}`,
         action: tool.action ?? tool.handler ?? id,
         ...(tool.title ? { title: tool.title } : {}),
         ...(tool.label ? { label: tool.label } : {}),
@@ -218,6 +220,7 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
         inputSchema: tool.inputSchema ?? { type: 'object', properties: {}, additionalProperties: false },
         ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
         ...(tool.promptGuidelines ? { promptGuidelines: tool.promptGuidelines } : {}),
+        ...(tool.systemFactory ? { systemFactory: tool.systemFactory } : {}),
       },
     ];
   });

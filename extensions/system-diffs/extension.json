@@ -7,6 +7,15 @@
   "version": "0.2.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
+    "tools": [
+      {
+        "id": "checkpoint",
+        "name": "checkpoint",
+        "title": "Checkpoint",
+        "description": "Create, retrieve, or list targeted git commit checkpoints for the current conversation.",
+        "systemFactory": "checkpoint"
+      }
+    ],
     "views": [
       {
         "id": "conversation-diffs",

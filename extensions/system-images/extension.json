@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "id": "system-images",
+  "name": "Images",
+  "packageType": "system",
+  "description": "Generate, edit, and inspect image attachments from agent conversations.",
+  "version": "0.1.0",
+  "contributes": {
+    "tools": [
+      {
+        "id": "image",
+        "name": "image",
+        "title": "Generate image",
+        "description": "Generate or edit a single image from a prompt, optionally using recent conversation images as references.",
+        "systemFactory": "image"
+      },
+      {
+        "id": "probe-image",
+        "name": "probe_image",
+        "title": "Probe image",
+        "description": "Ask the configured vision subagent about selected image attachments when the current model cannot see images.",
+        "systemFactory": "image-probe"
+      }
+    ]
+  },
+  "permissions": ["images:read", "images:write"]
+}

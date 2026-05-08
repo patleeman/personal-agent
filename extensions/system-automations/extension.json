@@ -10,6 +10,29 @@
     "styles": []
   },
   "contributes": {
+    "tools": [
+      {
+        "id": "scheduled-task",
+        "name": "scheduled_task",
+        "title": "Scheduled task",
+        "description": "Create, inspect, validate, run, and delete daemon-managed scheduled tasks.",
+        "systemFactory": "scheduled-tasks"
+      },
+      {
+        "id": "conversation-queue",
+        "name": "conversation_queue",
+        "title": "Conversation queue",
+        "description": "Queue future continuation work for the current conversation.",
+        "systemFactory": "conversation-queue"
+      },
+      {
+        "id": "reminder",
+        "name": "reminder",
+        "title": "Reminder",
+        "description": "Schedule a reminder for this same conversation and make sure it will visibly alert later.",
+        "systemFactory": "reminders"
+      }
+    ],
     "nav": [{ "id": "nav", "label": "Automations", "route": "/automations", "icon": "automation" }],
     "views": [
       {

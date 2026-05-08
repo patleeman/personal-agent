@@ -380,6 +380,17 @@ Rules:
 - Permissions are declared at the extension level and should match what the tool can do.
 - Keep tools coarse enough to be useful. Do not expose every button click as an agent tool.
 
+Bundled system extensions own these current tool families:
+
+- Web tools: `web_fetch`, `web_search`.
+- Artifacts: `artifact`.
+- Automations: `scheduled_task`, `conversation_queue`, `reminder`.
+- Runs: `run`.
+- Diffs/checkpoints: `checkpoint`.
+- Images: `image`, `probe_image`.
+
+Core still owns shell/file editing primitives, MCP until secret storage is improved, and a few conversation-control tools that are tightly coupled to live session lifecycle.
+
 ## Host APIs
 
 Native extensions use a stable `pa` client object. The exact implementation lives in the app, but the public shape should be documented and typed through `@personal-agent/extensions`.

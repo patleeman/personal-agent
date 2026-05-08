@@ -7,6 +7,15 @@
   "version": "0.1.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
+    "tools": [
+      {
+        "id": "artifact",
+        "name": "artifact",
+        "title": "Artifact",
+        "description": "Create, update, inspect, and delete rendered conversation artifacts for the desktop UI.",
+        "systemFactory": "artifacts"
+      }
+    ],
     "views": [
       {
         "id": "conversation-artifacts",

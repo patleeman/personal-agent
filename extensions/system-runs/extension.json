@@ -7,6 +7,15 @@
   "version": "0.2.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
+    "tools": [
+      {
+        "id": "run",
+        "name": "run",
+        "title": "Run",
+        "description": "Inspect and manage durable daemon-backed background runs.",
+        "systemFactory": "runs"
+      }
+    ],
     "views": [
       {
         "id": "conversation-runs",

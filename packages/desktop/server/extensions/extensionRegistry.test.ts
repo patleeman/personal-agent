@@ -155,18 +155,20 @@ describe('extension registry', () => {
         path: join(extensionRoot, 'skills', 'agent-board', 'SKILL.md'),
       }),
     ]);
-    expect(listExtensionToolRegistrations(stateRoot)).toEqual([
-      expect.objectContaining({
-        extensionId: 'agent-board',
-        id: 'create-task',
-        name: 'extension_agent_board_create_task',
-        action: 'createTask',
-      }),
-    ]);
+    expect(listExtensionToolRegistrations(stateRoot)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          extensionId: 'agent-board',
+          id: 'create-task',
+          name: 'extension_agent_board_create_task',
+          action: 'createTask',
+        }),
+      ]),
+    );
 
     setExtensionEnabled('agent-board', false, stateRoot);
     expect(listExtensionSkillRegistrations(stateRoot)).toEqual([]);
-    expect(listExtensionToolRegistrations(stateRoot)).toEqual([]);
+    expect(listExtensionToolRegistrations(stateRoot).some((tool) => tool.extensionId === 'agent-board')).toBe(false);
   });
 
   it('exposes schema values for agents and the extension manager', () => {
