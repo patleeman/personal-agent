@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "id": "system-browser",
+  "name": "Browser",
+  "packageType": "system",
+  "description": "Browse web pages beside the active conversation.",
+  "version": "0.1.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [
+      {
+        "id": "browser-tabs",
+        "title": "Browser",
+        "location": "rightRail",
+        "scope": "conversation",
+        "component": "BrowserTabsPanel",
+        "icon": "browser",
+        "detailView": "browser-workbench"
+      },
+      {
+        "id": "browser-workbench",
+        "title": "Browser",
+        "location": "workbench",
+        "component": "BrowserWorkbenchPanel"
+      }
+    ]
+  },
+  "permissions": ["browser:read", "browser:write"]
+}
