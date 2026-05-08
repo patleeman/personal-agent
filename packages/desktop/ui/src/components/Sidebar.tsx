@@ -1,10 +1,7 @@
 import { emitKBEvent } from '@personal-agent/extensions/knowledge';
-import { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';
 import {
   type DragEvent,
-  lazy,
   type MouseEvent as ReactMouseEvent,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
@@ -61,7 +58,6 @@ import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
 
-const VaultFileTree = lazy(() => import('@personal-agent/extensions/knowledge').then((module) => ({ default: module.VaultFileTree })));
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
@@ -294,45 +290,6 @@ function normalizeStoredStringList(values: Iterable<unknown>): string[] {
   }
 
   return normalized;
-}
-
-function getKnowledgeFallbackFileLabel(fileId: string): string {
-  const normalized = fileId.trim();
-  if (!normalized) {
-    return 'Untitled';
-  }
-
-  return normalized.split('/').filter(Boolean).pop() ?? normalized;
-}
-
-function VaultFileTreeFallback({ activeFileId, onFileSelect }: { activeFileId: string | null; onFileSelect: (id: string) => void }) {
-  const fileId = activeFileId?.trim() || null;
-  const fileLabel = fileId ? getKnowledgeFallbackFileLabel(fileId) : null;
-
-  return (
-    <div className="flex h-full min-h-0 flex-col border-t border-border-subtle/70">
-      <div className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">Open Files</div>
-      {fileId && fileLabel ? (
-        <div className="px-2 pb-3">
-          <div className="flex items-center gap-2 rounded-lg bg-surface/55 px-2.5 py-2 text-[12px] text-secondary">
-            <button
-              type="button"
-              onClick={() => onFileSelect(fileId)}
-              className="min-w-0 flex-1 truncate text-left text-primary"
-              aria-label={`Open file ${fileLabel}`}
-            >
-              {fileLabel}
-            </button>
-            <button type="button" className="text-dim/70" aria-label={`Close file ${fileLabel}`} disabled>
-              ×
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="px-4 py-2 text-[12px] text-dim">Loading files…</div>
-      )}
-    </div>
-  );
 }
 
 function WorkspaceQuickSelectModal({
