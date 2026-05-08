@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../client/api';
 import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { getDesktopBridge } from '../desktop/desktopBridge';
+import { notifyExtensionRegistryChanged } from './extensionRegistryEvents';
 import type { ExtensionInstallSummary } from './types';
 
 function formatSurfaceSummary(extension: ExtensionInstallSummary): string {
@@ -51,6 +52,8 @@ export function ExtensionManagerPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -77,6 +80,7 @@ export function ExtensionManagerPage() {
       .reloadExtensions()
       .then((result) => {
         setNotice(result.message);
+        notifyExtensionRegistryChanged();
         load();
       })
       .catch((err: Error) => setError(err.message));
@@ -93,6 +97,7 @@ export function ExtensionManagerPage() {
     try {
       const result = await api.createExtension({ id: id.trim(), name: name.trim() });
       setNotice(`Created ${result.packageRoot}`);
+      notifyExtensionRegistryChanged();
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -107,6 +112,7 @@ export function ExtensionManagerPage() {
     try {
       const result = await api.importExtension({ zipPath: zipPath.trim() });
       setNotice(`Imported ${result.packageRoot}`);
+      notifyExtensionRegistryChanged();
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -117,13 +123,23 @@ export function ExtensionManagerPage() {
     (extension: ExtensionInstallSummary) => {
       setBusyId(extension.id);
       setNotice(null);
+      const nextEnabled = !extension.enabled;
       api
-        .updateExtension(extension.id, { enabled: !extension.enabled })
-        .then(() => load())
+        .updateExtension(extension.id, { enabled: nextEnabled })
+        .then(() => {
+          notifyExtensionRegistryChanged();
+          if (
+            !nextEnabled &&
+            extension.routes.some((route) => location.pathname === route.route || location.pathname.startsWith(`${route.route}/`))
+          ) {
+            navigate('/extensions', { replace: true });
+          }
+          return load();
+        })
         .catch((err: Error) => setError(err.message))
         .finally(() => setBusyId(null));
     },
-    [load],
+    [load, location.pathname, navigate],
   );
 
   const openFolder = useCallback((extension: ExtensionInstallSummary) => {
@@ -190,19 +206,16 @@ export function ExtensionManagerPage() {
           }
         />
 
-        {notice ? <div className="border-t border-border-subtle pt-4 text-[13px] text-secondary">{notice}</div> : null}
+        {notice ? <div className="text-[13px] text-secondary">{notice}</div> : null}
 
         {extensions.length === 0 ? (
           <EmptyState title="No extensions installed" body="Ask an agent to create one under the runtime extensions directory." />
         ) : (
-          <section className="border-t border-border-subtle">
+          <section className="space-y-5">
             {extensions.map((extension) => {
               const route = firstRoute(extension);
               return (
-                <article
-                  key={extension.id}
-                  className="grid w-full gap-4 border-b border-border-subtle py-5 text-left sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
-                >
+                <article key={extension.id} className="grid w-full gap-4 py-2 text-left sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                   <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <p className="text-[15px] font-semibold tracking-tight text-primary">{extension.name}</p>
@@ -269,7 +282,7 @@ export function ExtensionManagerPage() {
                     ) : null}
                     <ToolbarButton
                       className="rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-                      disabled={extension.packageType === 'system' || busyId === extension.id}
+                      disabled={busyId === extension.id}
                       onClick={() => toggleExtension(extension)}
                     >
                       {extension.enabled ? 'Disable' : 'Enable'}

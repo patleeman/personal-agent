@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "id": "system-telemetry",
+  "name": "Telemetry",
+  "packageType": "system",
+  "description": "Inspect app traces, model usage, tool health, and runtime performance.",
+  "version": "0.1.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [{ "id": "page", "title": "Telemetry", "location": "main", "route": "/telemetry", "component": "TelemetryPage" }],
+    "nav": [{ "id": "nav", "label": "Telemetry", "route": "/telemetry", "icon": "graph" }]
+  },
+  "permissions": ["telemetry:read"]
+}

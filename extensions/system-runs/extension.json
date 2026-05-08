@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "id": "system-runs",
+  "name": "Runs",
+  "packageType": "system",
+  "description": "Inspect and manage background work linked to the active conversation.",
+  "version": "0.1.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [
+      {
+        "id": "conversation-runs",
+        "title": "Runs",
+        "location": "rightRail",
+        "scope": "conversation",
+        "component": "ConversationRunsPanel",
+        "icon": "terminal"
+      }
+    ]
+  },
+  "permissions": ["runs:read", "runs:write"]
+}

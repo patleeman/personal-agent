@@ -441,18 +441,17 @@ Hard-pivot migration target:
 
 Artifacts remain the sketchpad for generated reports, previews, and custom throwaway UI. Extensions are native product modules.
 
-## First target: Automations
+## Migrated system extensions
 
-Automations should be the first native system extension migration.
+The first native system extensions are:
 
-Why:
+- `system-automations` owns `/automations` and scheduled/conversation-bound automation UI.
+- `system-gateways` owns `/gateways` while the core app keeps gateway state and APIs.
+- `system-telemetry` owns `/telemetry` while telemetry collection remains core infrastructure.
+- `system-runs` owns the conversation right-rail Runs surface while durable run execution remains core infrastructure.
+- `system-diffs` owns the conversation right-rail Diffs surface while workspace/checkpoint diff APIs remain core infrastructure.
 
-- It is already extension-shaped.
-- It owns a real first-party route.
-- It exercises list/detail/create/update/delete/run/log behavior.
-- It proves native extensions can replace a product page, not just render a toy demo.
-
-The native Automations extension should own `/automations`, call `pa.automations` / `ctx.automations`, and render as a normal PA page inside the React tree.
+This is the preferred split: core records and serves cross-cutting state; native extensions own the product surfaces.
 
 ## Implementation checklist
 
@@ -464,7 +463,7 @@ Target order:
 4. Add scoped CSS loading with extension root, reset boundary, theme tokens, and cascade layer.
 5. Add typed `pa` surface props and optional PA UI components/hooks.
 6. Wire manifest `views`, `nav`, commands, and slash commands to native components/actions.
-7. Migrate system Automations to native extension.
+7. Migrate system product surfaces to native extensions.
 8. Remove iframe extension UI runtime and starter HTML templates.
 9. Update Extension Manager for native build/reload/status flows.
-10. Backfill tests around manifest parsing, lazy loading, action invocation, CSS scoping, and Automations migration.
+10. Backfill tests around manifest parsing, lazy loading, action invocation, CSS scoping, and system extension migrations.

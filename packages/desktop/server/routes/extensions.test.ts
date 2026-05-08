@@ -59,23 +59,49 @@ describe('registerExtensionRoutes', () => {
 
     const listRes = createResponse();
     harness.getHandler('/api/extensions')({}, listRes);
-    expect(listRes.json).toHaveBeenCalledWith([expect.objectContaining({ id: 'system-automations', packageType: 'system' })]);
+    expect(listRes.json).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'system-automations', packageType: 'system' }),
+        expect.objectContaining({ id: 'system-gateways', packageType: 'system' }),
+        expect.objectContaining({ id: 'system-telemetry', packageType: 'system' }),
+        expect.objectContaining({ id: 'system-runs', packageType: 'system' }),
+        expect.objectContaining({ id: 'system-diffs', packageType: 'system' }),
+      ]),
+    );
 
     const installedRes = createResponse();
     harness.getHandler('/api/extensions/installed')({}, installedRes);
-    expect(installedRes.json).toHaveBeenCalledWith([expect.objectContaining({ id: 'system-automations', enabled: true })]);
+    expect(installedRes.json).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'system-automations', enabled: true }),
+        expect.objectContaining({ id: 'system-gateways', enabled: true }),
+        expect.objectContaining({ id: 'system-telemetry', enabled: true }),
+        expect.objectContaining({ id: 'system-runs', enabled: true }),
+        expect.objectContaining({ id: 'system-diffs', enabled: true }),
+      ]),
+    );
 
     const routesRes = createResponse();
     harness.getHandler('/api/extensions/routes')({}, routesRes);
-    expect(routesRes.json).toHaveBeenCalledWith([
-      { route: '/automations', extensionId: 'system-automations', surfaceId: 'page', packageType: 'system' },
-    ]);
+    expect(routesRes.json).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { route: '/automations', extensionId: 'system-automations', surfaceId: 'page', packageType: 'system' },
+        { route: '/gateways', extensionId: 'system-gateways', surfaceId: 'page', packageType: 'system' },
+        { route: '/telemetry', extensionId: 'system-telemetry', surfaceId: 'page', packageType: 'system' },
+      ]),
+    );
 
     const surfacesRes = createResponse();
     harness.getHandler('/api/extensions/surfaces')({}, surfacesRes);
-    expect(surfacesRes.json).toHaveBeenCalledWith([
-      expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage' }),
-    ]);
+    expect(surfacesRes.json).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage' }),
+        expect.objectContaining({ extensionId: 'system-gateways', location: 'main', component: 'GatewaysPage' }),
+        expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage' }),
+        expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: 'ConversationRunsPanel' }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'rightRail', component: 'ConversationDiffsPanel' }),
+      ]),
+    );
   });
 
   it('serves per-extension manifest and surfaces', () => {
@@ -331,13 +357,14 @@ describe('registerExtensionRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ ok: true, extension: expect.objectContaining({ id: 'agent-board', enabled: false }) });
   });
 
-  it('rejects disabling system extensions', () => {
+  it('toggles system extensions', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const harness = createHarness();
     const res = createResponse();
     harness.patchHandler('/api/extensions/:id')({ params: { id: 'system-automations' }, body: { enabled: false } }, res);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'System extensions cannot be disabled.' });
+    expect(res.json).toHaveBeenCalledWith({ ok: true, extension: expect.objectContaining({ id: 'system-automations', enabled: false }) });
   });
 
   it('invokes runtime extension backend actions', async () => {

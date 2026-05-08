@@ -118,18 +118,11 @@ const SettingsPage = lazyRouteWithRecovery('settings-page', () =>
 const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () =>
   import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })),
 );
-const GatewaysPage = lazyRouteWithRecovery('gateways-page', () =>
-  import('../pages/GatewaysPage').then((module) => ({ default: module.GatewaysPage })),
-);
 const ExtensionManagerPage = lazyRouteWithRecovery('extension-manager-page', () =>
   import('../extensions/ExtensionManagerPage').then((module) => ({ default: module.ExtensionManagerPage })),
 );
 const ExtensionPage = lazyRouteWithRecovery('extension-page', () =>
   import('../extensions/ExtensionPage').then((module) => ({ default: module.ExtensionPage })),
-);
-
-const TracesPage = lazyRouteWithRecovery('telemetry-page', () =>
-  import('../pages/TracesPage').then((module) => ({ default: module.TracesPage })),
 );
 
 function suspendRoute(element: React.ReactNode) {
@@ -459,8 +452,8 @@ export function App() {
                         <Route path="ext/:extensionId" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="ext/:extensionId/*" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="extensions" element={suspendRoute(<ExtensionManagerPage />)} />
-                        <Route path="gateways" element={suspendRoute(<GatewaysPage />)} />
-                        <Route path="telemetry" element={suspendRoute(<TracesPage />)} />
+                        <Route path="gateways" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="telemetry" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                       </Route>
                     </Routes>

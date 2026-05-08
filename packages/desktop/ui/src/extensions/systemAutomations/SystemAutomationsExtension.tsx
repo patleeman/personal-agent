@@ -507,7 +507,18 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                         <p className="mt-1 text-[12px] text-secondary">
                           <span className={task.enabled ? 'text-success' : 'text-dim'}>{statusText(task)}</span>
                           <span className="opacity-40 mx-1.5">·</span>
-                          {task.targetType === 'conversation' ? 'Thread' : 'Job'}
+                          {task.targetType === 'conversation' && task.threadConversationId ? (
+                            <a
+                              className="text-accent hover:underline"
+                              href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}
+                            >
+                              Thread
+                            </a>
+                          ) : task.targetType === 'conversation' ? (
+                            'Thread'
+                          ) : (
+                            'Job'
+                          )}
                           <span className="opacity-40 mx-1.5">·</span>
                           {taskLastRunText(task)}
                         </p>
@@ -519,6 +530,11 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                       </div>
                       <p className="text-[13px] text-secondary lg:text-right">{taskScheduleSummary(task)}</p>
                       <div className="flex flex-wrap gap-2 opacity-100 lg:justify-end lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-within:opacity-100">
+                        {task.threadConversationId ? (
+                          <a className={cx('ui-toolbar-button')} href={`/conversations/${encodeURIComponent(task.threadConversationId)}`}>
+                            Open thread
+                          </a>
+                        ) : null}
                         <ToolbarButton disabled={busy === task.id} onClick={() => void runTask(task.id)}>
                           Run
                         </ToolbarButton>

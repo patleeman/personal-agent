@@ -1268,11 +1268,11 @@ function WorkbenchKnowledgeRail({
     const parsed = parseExtensionToolPanelMode(activeTool);
     if (!parsed) return null;
     return (
-      availableExtensionToolPanels.find(
-        (surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId && surface.entry,
-      ) ?? null
+      availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
+  const systemDiffsExtensionAvailable = availableExtensionToolPanels.some((surface) => surface.extensionId === 'system-diffs');
+  const systemRunsExtensionAvailable = availableExtensionToolPanels.some((surface) => surface.extensionId === 'system-runs');
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
     (id: string) => {
@@ -1606,7 +1606,7 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
-        {checkpoints.length > 0 || activeCheckpointId || uncommittedResult ? (
+        {!systemDiffsExtensionAvailable && (checkpoints.length > 0 || activeCheckpointId || uncommittedResult) ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'diffs' && 'ui-sidebar-nav-item-active')}
@@ -1662,7 +1662,7 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Artifacts</span>
           </button>
         ) : null}
-        {showRunsTab ? (
+        {!systemRunsExtensionAvailable && showRunsTab ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'runs' && 'ui-sidebar-nav-item-active')}
@@ -1742,7 +1742,7 @@ function WorkbenchKnowledgeRail({
             onOpenArtifact={handleArtifactSelect}
           />
         </div>
-      ) : activeTool === 'diffs' ? (
+      ) : activeTool === 'diffs' && !systemDiffsExtensionAvailable ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationDiffRailContent
             checkpoints={checkpoints}
@@ -1754,7 +1754,7 @@ function WorkbenchKnowledgeRail({
             workspaceCwd={workspaceCwd}
           />
         </div>
-      ) : activeTool === 'runs' ? (
+      ) : activeTool === 'runs' && !systemRunsExtensionAvailable ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationRunsRailContent
             conversationId={conversationId}

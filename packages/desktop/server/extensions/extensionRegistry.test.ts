@@ -17,18 +17,35 @@ describe('extension registry', () => {
   it('exposes the automations system extension route and surface', () => {
     const snapshot = readExtensionRegistrySnapshot();
 
-    expect(snapshot.extensions).toEqual([
-      expect.objectContaining({ id: 'system-automations', packageType: 'system', name: 'Automations' }),
-    ]);
+    expect(snapshot.extensions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'system-automations', packageType: 'system', name: 'Automations' }),
+        expect.objectContaining({ id: 'system-gateways', packageType: 'system', name: 'Gateways' }),
+        expect.objectContaining({ id: 'system-telemetry', packageType: 'system', name: 'Telemetry' }),
+        expect.objectContaining({ id: 'system-runs', packageType: 'system', name: 'Runs' }),
+        expect.objectContaining({ id: 'system-diffs', packageType: 'system', name: 'Diffs' }),
+      ]),
+    );
     expect(snapshot.routes).toContainEqual({
       route: '/automations',
       extensionId: 'system-automations',
       surfaceId: 'page',
       packageType: 'system',
     });
-    expect(snapshot.views).toEqual([
-      expect.objectContaining({ extensionId: 'system-automations', location: 'main', component: 'AutomationsPage', route: '/automations' }),
-    ]);
+    expect(snapshot.views).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          extensionId: 'system-automations',
+          location: 'main',
+          component: 'AutomationsPage',
+          route: '/automations',
+        }),
+        expect.objectContaining({ extensionId: 'system-gateways', location: 'main', component: 'GatewaysPage', route: '/gateways' }),
+        expect.objectContaining({ extensionId: 'system-telemetry', location: 'main', component: 'TelemetryPage', route: '/telemetry' }),
+        expect.objectContaining({ extensionId: 'system-runs', location: 'rightRail', component: 'ConversationRunsPanel' }),
+        expect.objectContaining({ extensionId: 'system-diffs', location: 'rightRail', component: 'ConversationDiffsPanel' }),
+      ]),
+    );
   });
 
   it('loads runtime extension manifests from the state root', () => {

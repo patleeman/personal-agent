@@ -168,7 +168,7 @@ export function listExtensionEntries(stateRoot: string = getStateRoot()): Extens
 }
 
 export function listEnabledExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {
-  return listExtensionEntries(stateRoot).filter((entry) => entry.source === 'system' || isExtensionEnabled(entry.manifest.id, stateRoot));
+  return listExtensionEntries(stateRoot).filter((entry) => isExtensionEnabled(entry.manifest.id, stateRoot));
 }
 
 export function listExtensions(): ExtensionManifest[] {
@@ -184,7 +184,7 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       id: manifest.id,
       name: manifest.name,
       packageType: manifest.packageType ?? 'user',
-      enabled: entry.source === 'system' || isExtensionEnabled(manifest.id, stateRoot),
+      enabled: isExtensionEnabled(manifest.id, stateRoot),
       ...(manifest.description ? { description: manifest.description } : {}),
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(entry.packageRoot ? { packageRoot: entry.packageRoot } : {}),

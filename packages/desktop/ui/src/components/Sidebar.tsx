@@ -3569,6 +3569,9 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
     );
     return [...legacy, ...native];
   }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
+  const automationsNavVisible =
+    extensionRegistry.loading ||
+    extensionRegistry.extensions.some((extension) => extension.id === 'system-automations' && extension.enabled !== false);
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
   const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
@@ -3598,13 +3601,14 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
               <span className="flex-1 text-left">Chat</span>
             </button>
           </div>
-          <TopNavItem
-            to="/automations"
-            icon={PATH.automations}
-            label="Automations"
-            forceActive={location.pathname.startsWith('/automations')}
-          />
-          <TopNavItem to="/extensions" icon={PATH.sparkles} label="Extensions" forceActive={location.pathname.startsWith('/extensions')} />
+          {automationsNavVisible ? (
+            <TopNavItem
+              to="/automations"
+              icon={PATH.automations}
+              label="Automations"
+              forceActive={location.pathname.startsWith('/automations')}
+            />
+          ) : null}
           {extensionNavItems.map((item) => (
             <TopNavItem
               key={`${item.extensionId}:${item.id}`}
@@ -3614,8 +3618,6 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
               forceActive={location.pathname.startsWith(item.route)}
             />
           ))}
-          <TopNavItem to="/gateways" icon={PATH.gateways} label="Gateways" forceActive={location.pathname.startsWith('/gateways')} />
-          <TopNavItem to="/telemetry" icon={PATH.list} label="Telemetry" forceActive={location.pathname.startsWith('/telemetry')} />
           {!hideKnowledgeNav ? (
             <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
           ) : null}
@@ -3775,6 +3777,12 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
             </div>
           ) : null}
           <div className="border-t border-border-subtle px-2 py-2 space-y-0.5">
+            <TopNavItem
+              to="/extensions"
+              icon={PATH.sparkles}
+              label="Extensions"
+              forceActive={location.pathname.startsWith('/extensions')}
+            />
             <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
           </div>
         </div>

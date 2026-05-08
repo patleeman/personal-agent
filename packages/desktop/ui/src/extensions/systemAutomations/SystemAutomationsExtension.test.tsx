@@ -91,4 +91,30 @@ describe('AutomationsPage', () => {
 
     expect(pa.automations.run).toHaveBeenCalledWith('daily-check');
   });
+
+  it('links conversation automations to their thread', async () => {
+    const { container } = await renderPage(
+      createPa({
+        list: vi.fn(async () => [
+          {
+            id: 'thread-check',
+            title: 'Thread check',
+            scheduleType: 'cron',
+            targetType: 'conversation',
+            running: false,
+            enabled: true,
+            cron: '0 9 * * 1-5',
+            prompt: 'Check the thread',
+            threadConversationId: 'conv-123',
+          },
+        ]),
+      }),
+    );
+
+    const threadLink = Array.from(container.querySelectorAll('a')).find((link) => link.textContent === 'Thread');
+    const openThreadLink = Array.from(container.querySelectorAll('a')).find((link) => link.textContent === 'Open thread');
+
+    expect(threadLink?.getAttribute('href')).toBe('/conversations/conv-123');
+    expect(openThreadLink?.getAttribute('href')).toBe('/conversations/conv-123');
+  });
 });

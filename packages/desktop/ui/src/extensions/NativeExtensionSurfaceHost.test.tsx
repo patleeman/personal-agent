@@ -60,7 +60,7 @@ describe('NativeExtensionSurfaceHost', () => {
     });
 
     await vi.waitFor(() => expect(container.textContent).toContain('Automations'));
-    expect(container.textContent).toContain('Manage scheduled and conversation-bound agent work.');
+    expect(container.textContent).toContain('scheduled or conversation-bound agent work');
     expect(apiMocks.automations.list).toHaveBeenCalled();
   });
 });

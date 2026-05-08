@@ -287,10 +287,6 @@ export function registerExtensionRoutes(
         res.status(404).json({ error: 'Extension not found.' });
         return;
       }
-      if (entry.source === 'system') {
-        res.status(400).json({ error: 'System extensions cannot be disabled.' });
-        return;
-      }
       const enabled = (req.body as { enabled?: unknown }).enabled;
       if (typeof enabled !== 'boolean') {
         res.status(400).json({ error: 'enabled must be a boolean.' });
