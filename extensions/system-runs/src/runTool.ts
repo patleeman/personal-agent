@@ -10,10 +10,10 @@ import {
   getDurableRunLog,
   listDurableRuns,
   rerunDurableRun,
-} from '../automation/durableRuns.js';
-import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
-import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
+} from '../../../packages/desktop/server/automation/durableRuns.js';
+import { applyScheduledTaskThreadBinding } from '../../../packages/desktop/server/automation/scheduledTaskThreads.js';
+import { invalidateAppTopics } from '../../../packages/desktop/server/shared/appEvents.js';
+import { persistAppTelemetryEvent } from '../../../packages/desktop/server/traces/appTelemetry.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
 

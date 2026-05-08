@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createRunAgentExtension } from './runAgentExtension.js';
+import { createRunAgentExtension } from '../../../../extensions/system-runs/src/runTool.js';
 
 const {
   listDurableRunsMock,

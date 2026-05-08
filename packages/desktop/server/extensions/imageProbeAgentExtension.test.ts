@@ -16,12 +16,12 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   },
 }));
 
-vi.mock('./imageProbeAttachmentStore.js', () => ({
+vi.mock('../../../../packages/desktop/server/extensions/imageProbeAttachmentStore.js', () => ({
   getImageProbeAttachments: getImageProbeAttachmentsMock,
   getImageProbeAttachmentsById: getImageProbeAttachmentsByIdMock,
 }));
 
-import { createImageProbeAgentExtension } from './imageProbeAgentExtension.js';
+import { createImageProbeAgentExtension } from '../../../../extensions/system-images/src/probeImageTool.js';
 
 type RegisteredTool = Parameters<Parameters<typeof createImageProbeAgentExtension>[0]>[0] extends never
   ? never

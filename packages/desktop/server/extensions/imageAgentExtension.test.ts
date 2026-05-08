@@ -3,7 +3,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createImageAgentExtension, parseImageGenerationSse } from './imageAgentExtension.js';
+import { createImageAgentExtension, parseImageGenerationSse } from '../../../../extensions/system-images/src/imageTool.js';
 
 function createJwtWithAccountId(accountId: string): string {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');

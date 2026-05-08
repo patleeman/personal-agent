@@ -11,21 +11,21 @@ import {
 } from '@personal-agent/daemon';
 import { Type } from '@sinclair/typebox';
 
-import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
+import { parseFutureHumanDateTime } from '../../../packages/desktop/server/automation/humanDateTime.js';
 import {
   type LoadedScheduledTasksForProfile,
   loadScheduledTasksForProfile,
   resolveScheduledTaskForProfile,
   type TaskRuntimeEntry,
-} from '../automation/scheduledTasks.js';
+} from '../../../packages/desktop/server/automation/scheduledTasks.js';
 import {
   applyScheduledTaskThreadBinding,
   buildScheduledTaskThreadDetail,
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
-} from '../automation/scheduledTaskThreads.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
-import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
+} from '../../../packages/desktop/server/automation/scheduledTaskThreads.js';
+import { invalidateAppTopics } from '../../../packages/desktop/server/shared/appEvents.js';
+import { persistAppTelemetryEvent } from '../../../packages/desktop/server/traces/appTelemetry.js';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
 const SCHEDULED_TASK_TARGET_VALUES = ['background-agent', 'conversation'] as const;

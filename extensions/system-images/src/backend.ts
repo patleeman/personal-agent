@@ -1,5 +1,5 @@
-import { createImageAgentExtension } from '../../../packages/desktop/server/extensions/imageAgentExtension.js';
-import { createImageProbeAgentExtension } from '../../../packages/desktop/server/extensions/imageProbeAgentExtension.js';
+import { createImageAgentExtension } from './imageTool.js';
+import { createImageProbeAgentExtension } from './probeImageTool.js';
 
 interface ImageBackendContext {
   agentToolContext?: unknown;

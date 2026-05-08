@@ -1,4 +1,4 @@
-import { createScheduledTaskAgentExtension } from '../../../packages/desktop/server/extensions/scheduledTaskAgentExtension.js';
+import { createScheduledTaskAgentExtension } from './scheduledTaskTool.js';
 
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };

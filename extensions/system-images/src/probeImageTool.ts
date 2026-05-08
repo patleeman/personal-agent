@@ -4,7 +4,10 @@ import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } fr
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 import { Type } from '@sinclair/typebox';
 
-import { getImageProbeAttachments, getImageProbeAttachmentsById } from './imageProbeAttachmentStore.js';
+import {
+  getImageProbeAttachments,
+  getImageProbeAttachmentsById,
+} from '../../../packages/desktop/server/extensions/imageProbeAttachmentStore.js';
 
 const ImageProbeParams = Type.Object({
   imageIds: Type.Array(Type.String({ pattern: '^img_[a-f0-9]{12}$' }), {

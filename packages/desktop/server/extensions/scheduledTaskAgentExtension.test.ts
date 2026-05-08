@@ -8,8 +8,8 @@ import * as daemon from '@personal-agent/daemon';
 import { closeAutomationDbs, saveAutomationRuntimeStateMap } from '@personal-agent/daemon';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createScheduledTaskAgentExtension } from '../../../../extensions/system-automations/src/scheduledTaskTool.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
-import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;

@@ -1,4 +1,4 @@
-import { createRunAgentExtension } from '../../../packages/desktop/server/extensions/runAgentExtension.js';
+import { createRunAgentExtension } from './runTool.js';
 
 interface NativeBackendContext {
   toolContext?: { conversationId?: string; cwd?: string; sessionFile?: string; sessionId?: string };
