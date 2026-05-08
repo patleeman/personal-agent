@@ -1,5 +1,15 @@
 import QRCode from 'qrcode';
-import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { api } from '../client/api';
 import { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, cx, Pill, ToolbarButton } from '../components/ui';
@@ -62,6 +72,7 @@ const SETTINGS_QUICK_LINKS = [
 
 type SettingsQuickLink = (typeof SETTINGS_QUICK_LINKS)[number];
 type SettingsQuickLinkId = SettingsQuickLink['id'];
+const VisibleSettingsSectionsContext = createContext<ReadonlySet<SettingsQuickLinkId> | null>(null);
 type ModelOption = ModelState['models'][number];
 
 type DesktopKeyboardShortcutId = keyof DesktopAppPreferencesState['keyboardShortcuts'];
@@ -312,12 +323,17 @@ function SettingsSection({
   children,
   className,
 }: {
-  id: string;
+  id: SettingsQuickLinkId;
   label: ReactNode;
   description?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
+  const visibleSections = useContext(VisibleSettingsSectionsContext);
+  if (visibleSections && !visibleSections.has(id)) {
+    return null;
+  }
+
   return (
     <AppPageSection id={id} title={label} description={description} className={className}>
       {children}
@@ -1745,7 +1761,7 @@ export function DesktopConnectionsSettingsPanel() {
   );
 }
 
-export function SettingsPage() {
+export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
   const { theme, themePreference, setThemePreference } = useTheme();
   const {
     data: skillFoldersState,
@@ -1844,13 +1860,14 @@ export function SettingsPage() {
   const settingsScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeQuickLinkId, setActiveQuickLinkId] = useState<SettingsQuickLinkId>(SETTINGS_QUICK_LINKS[0].id);
 
-  const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(
-    () =>
+  const visibleSectionIds = useMemo(() => (sectionIds ? new Set(sectionIds) : null), [sectionIds]);
+  const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(() => {
+    const shellFiltered =
       desktopEnvironment?.isElectron || isDesktopShell()
         ? SETTINGS_QUICK_LINKS
-        : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard'),
-    [desktopEnvironment?.isElectron],
-  );
+        : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard');
+    return visibleSectionIds ? shellFiltered.filter((item) => visibleSectionIds.has(item.id)) : shellFiltered;
+  }, [desktopEnvironment?.isElectron, visibleSectionIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3217,1149 +3234,1101 @@ export function SettingsPage() {
   }
 
   return (
-    <div ref={settingsScrollRef} className="h-full overflow-y-auto">
-      <AppPageLayout
-        asideLayout="centered"
-        contentClassName="max-w-[72rem] flex flex-col gap-12"
-        aside={<SettingsTableOfContents items={visibleQuickLinks} activeId={activeQuickLinkId} onNavigate={navigateToSection} />}
-      >
-        <AppPageIntro title="Settings" summary="Appearance, conversation defaults, workspace, skills, providers, and runtime behavior." />
+    <VisibleSettingsSectionsContext.Provider value={visibleSectionIds}>
+      <div ref={settingsScrollRef} className="h-full overflow-y-auto">
+        <AppPageLayout
+          asideLayout="centered"
+          contentClassName="max-w-[72rem] flex flex-col gap-12"
+          aside={
+            visibleQuickLinks.length > 1 ? (
+              <SettingsTableOfContents items={visibleQuickLinks} activeId={activeQuickLinkId} onNavigate={navigateToSection} />
+            ) : undefined
+          }
+        >
+          <AppPageIntro title="Settings" summary="Appearance, conversation defaults, workspace, skills, providers, and runtime behavior." />
 
-        <div className="flex flex-col gap-12">
-          <SettingsSection
-            id="settings-appearance"
-            label="Appearance"
-            description="Theme and other visual preferences for the desktop app."
-          >
-            <div className="space-y-0">
-              <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="ui-segmented-control" role="group" aria-label="Theme selection">
-                    <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
-                    <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
-                    <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
+          <div className="flex flex-col gap-12">
+            <SettingsSection
+              id="settings-appearance"
+              label="Appearance"
+              description="Theme and other visual preferences for the desktop app."
+            >
+              <div className="space-y-0">
+                <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="ui-segmented-control" role="group" aria-label="Theme selection">
+                      <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
+                      <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
+                      <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
+                    </div>
+                    <span className="ui-card-meta">
+                      Current theme: {theme}
+                      {themePreference === 'system' ? ' (auto)' : ''}
+                    </span>
                   </div>
-                  <span className="ui-card-meta">
-                    Current theme: {theme}
-                    {themePreference === 'system' ? ' (auto)' : ''}
-                  </span>
-                </div>
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-          <SettingsSection
-            id="settings-skills"
-            label="Skills"
-            description="Skill discovery folders and extra runtime AGENTS.md instructions."
-          >
-            <div className="space-y-0">
-              <SettingsPanel title="Skill folders" description="Load extra skill folders alongside the root skills directory.">
-                {skillFoldersLoading && !skillFoldersState ? (
-                  <p className="ui-card-meta">Loading skill folders…</p>
-                ) : skillFoldersError && !skillFoldersState ? (
-                  <p className="text-[12px] text-danger">Failed to load skill folders: {skillFoldersError}</p>
-                ) : skillFoldersState ? (
-                  <div className="space-y-3">
-                    <p className="ui-card-meta break-all">
-                      Configured in <span className="font-mono text-[11px]">{skillFoldersState.configFile}</span>.
-                    </p>
-                    {skillFoldersDraft.length === 0 ? (
-                      <p className="ui-card-meta">No extra skill folders configured.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {skillFoldersDraft.map((path, index) => (
-                          <div key={`${path}:${index}`} className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1 rounded-xl border border-border-subtle/70 bg-surface/50 px-3 py-2 font-mono text-[12px] text-primary break-all">
-                              {path}
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleMoveSkillFolder(index, -1);
-                                }}
-                                disabled={savingSkillFolders || index === 0}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleMoveSkillFolder(index, 1);
-                                }}
-                                disabled={savingSkillFolders || index === skillFoldersDraft.length - 1}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                ↓
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleRemoveSkillFolder(index);
-                                }}
-                                disabled={savingSkillFolders}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleAddSkillFolder();
-                        }}
-                        disabled={savingSkillFolders || pickingSkillFolders}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {pickingSkillFolders ? 'Picking…' : 'Add folder'}
-                      </button>
-                      <span className="ui-card-meta">
-                        {savingSkillFolders ? 'Saving…' : skillFoldersDirty ? 'Auto-save pending…' : 'Auto-saved'}
-                      </span>
-                    </div>
-                    <p className="ui-card-meta">Folders load in the saved order after the root skills directory.</p>
-                  </div>
-                ) : null}
-
-                {skillFoldersSaveError && <p className="text-[12px] text-danger">{skillFoldersSaveError}</p>}
-              </SettingsPanel>
-
-              <SettingsPanel title="AGENTS.md files" description="Append extra AGENTS.md-style files to the runtime prompt.">
-                {instructionFilesLoading && !instructionFilesState ? (
-                  <p className="ui-card-meta">Loading AGENTS.md files…</p>
-                ) : instructionFilesError && !instructionFilesState ? (
-                  <p className="text-[12px] text-danger">Failed to load AGENTS.md files: {instructionFilesError}</p>
-                ) : instructionFilesState ? (
-                  <div className="space-y-3">
-                    <p className="ui-card-meta break-all">
-                      Configured in <span className="font-mono text-[11px]">{instructionFilesState.configFile}</span>.
-                    </p>
-                    {instructionFilesDraft.length === 0 ? (
-                      <p className="ui-card-meta">No extra AGENTS.md files configured.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {instructionFilesDraft.map((path, index) => (
-                          <div key={`${path}:${index}`} className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1 rounded-xl border border-border-subtle/70 bg-surface/50 px-3 py-2 font-mono text-[12px] text-primary break-all">
-                              {path}
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleMoveInstructionFile(index, -1);
-                                }}
-                                disabled={savingInstructionFiles || index === 0}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleMoveInstructionFile(index, 1);
-                                }}
-                                disabled={savingInstructionFiles || index === instructionFilesDraft.length - 1}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                ↓
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleRemoveInstructionFile(index);
-                                }}
-                                disabled={savingInstructionFiles}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleAddInstructionFiles();
-                        }}
-                        disabled={savingInstructionFiles || pickingInstructionFiles}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {pickingInstructionFiles ? 'Picking…' : 'Add files'}
-                      </button>
-                      <span className="ui-card-meta">
-                        {savingInstructionFiles ? 'Saving…' : instructionFilesDirty ? 'Auto-save pending…' : 'Auto-saved'}
-                      </span>
-                    </div>
-                    <p className="ui-card-meta">Files append in the saved order after the root AGENTS.md.</p>
-                  </div>
-                ) : null}
-
-                {instructionFilesSaveError && <p className="text-[12px] text-danger">{instructionFilesSaveError}</p>}
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            id="settings-conversation"
-            label="Conversation"
-            description="Default model, vision model, thinking level, and fast mode for new conversations."
-          >
-            <div className="space-y-0">
-              <SettingsPanel title="Default model" description="Used for new chats and runs unless a model is picked explicitly.">
-                {modelsLoading && !modelState ? (
-                  <p className="ui-card-meta">Loading models…</p>
-                ) : modelsError && !modelState ? (
-                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                ) : modelState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-model">
-                      Model
-                    </label>
-                    <select
-                      id="settings-model"
-                      value={modelState.currentModel}
-                      onChange={(event) => {
-                        void handleModelPreferenceChange({ model: event.target.value }, 'model');
-                      }}
-                      disabled={savingPreference !== null || modelState.models.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      {groupedModels.map(([provider, models]) => (
-                        <optgroup key={provider} label={provider}>
-                          {models.map((model) => (
-                            <option key={model.id} value={model.id}>
-                              {model.name} · {formatContextWindowLabel(model.context)} ctx
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingPreference === 'model' ? 'Saving default model...' : formatModelSummary(selectedModel, 'No model selected.')}
-                    </p>
-
-                    <label className="ui-card-meta pt-1" htmlFor="settings-vision-model">
-                      Vision model for text-only chats
-                    </label>
-                    <select
-                      id="settings-vision-model"
-                      value={modelState.currentVisionModel}
-                      onChange={(event) => {
-                        void handleModelPreferenceChange({ visionModel: event.target.value }, 'visionModel');
-                      }}
-                      disabled={savingPreference !== null || imageCapableModels.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="">Not configured</option>
-                      {groupedImageCapableModels.map(([provider, models]) => (
-                        <optgroup key={provider} label={provider}>
-                          {models.map((model) => (
-                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                              {model.name} · {formatContextWindowLabel(model.context)} ctx
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingPreference === 'visionModel'
-                        ? 'Saving vision model…'
-                        : modelState.currentVisionModel
-                          ? `Text-only image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
-                          : 'Required before text-only models can inspect uploaded images.'}
-                    </p>
-
-                    <label className="ui-card-meta pt-1" htmlFor="settings-thinking">
-                      Thinking level
-                    </label>
-                    <select
-                      id="settings-thinking"
-                      value={modelState.currentThinkingLevel}
-                      onChange={(event) => {
-                        void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
-                      }}
-                      disabled={savingPreference !== null}
-                      className={INPUT_CLASS}
-                    >
-                      {THINKING_LEVEL_OPTIONS.map((option) => (
-                        <option key={option.value || 'unset'} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingPreference === 'thinking'
-                        ? 'Saving thinking level…'
-                        : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
-                    </p>
-
-                    {selectedModelSupportsFastMode && (
-                      <>
-                        <label className="inline-flex items-center gap-3 pt-1 text-[14px] text-primary" htmlFor="settings-fast-mode">
-                          <input
-                            id="settings-fast-mode"
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
-                            checked={modelState.currentServiceTier === 'priority'}
-                            onChange={(event) => {
-                              void handleModelPreferenceChange({ serviceTier: event.target.checked ? 'priority' : '' }, 'serviceTier');
-                            }}
-                            disabled={savingPreference !== null}
-                          />
-                          <span>Fast mode</span>
-                        </label>
-                        <p className="ui-card-meta">
-                          {savingPreference === 'serviceTier'
-                            ? 'Saving fast mode…'
-                            : modelState.currentServiceTier === 'priority'
-                              ? 'Fast mode is on (service tier: priority).'
-                              : 'Fast mode is off.'}
-                        </p>
-                      </>
-                    )}
-                  </>
-                ) : null}
-
-                {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            id="settings-workspace"
-            label="Workspace"
-            description="Working directory and knowledge base for project context."
-          >
-            <div className="space-y-0">
-              <SettingsPanel title="Knowledge base" description="Point PA at a git repo and let it manage the local mirror and sync loop.">
-                {knowledgeBaseLoading && !knowledgeBaseState ? (
-                  <p className="ui-card-meta">Loading knowledge base…</p>
-                ) : knowledgeBaseLoadError && !knowledgeBaseState ? (
-                  <p className="text-[12px] text-danger">Failed to load knowledge base: {knowledgeBaseLoadError}</p>
-                ) : knowledgeBaseState ? (
-                  <form
-                    className="space-y-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleKnowledgeBaseSave();
-                    }}
-                  >
-                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">
-                      Repo URL
-                    </label>
-                    <input
-                      id="settings-knowledge-base-repo"
-                      value={knowledgeBaseRepoUrlDraft}
-                      onChange={(event) => {
-                        setKnowledgeBaseRepoUrlDraft(event.target.value);
-                        if (knowledgeBaseSaveError) {
-                          setKnowledgeBaseSaveError(null);
-                        }
-                      }}
-                      className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                      placeholder="https://github.com/you/knowledge-base.git"
-                      autoComplete="off"
-                      spellCheck={false}
-                      disabled={knowledgeBaseAction !== null}
-                    />
-                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">
-                      Branch
-                    </label>
-                    <input
-                      id="settings-knowledge-base-branch"
-                      value={knowledgeBaseBranchDraft}
-                      onChange={(event) => {
-                        setKnowledgeBaseBranchDraft(event.target.value);
-                        if (knowledgeBaseSaveError) {
-                          setKnowledgeBaseSaveError(null);
-                        }
-                      }}
-                      className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                      placeholder="main"
-                      autoComplete="off"
-                      spellCheck={false}
-                      disabled={knowledgeBaseAction !== null}
-                    />
-                    <p className="ui-card-meta break-all">
-                      Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
-                    </p>
-                    <p className={cx('ui-card-meta break-all', knowledgeBaseAction === null && knowledgeBaseSyncPresentation.toneClass)}>
-                      {knowledgeBaseAction === 'save'
-                        ? 'Saving knowledge base…'
-                        : knowledgeBaseAction === 'sync'
-                          ? 'Syncing knowledge base…'
-                          : knowledgeBaseSyncPresentation.text}
-                    </p>
-                    <p className="ui-card-meta break-all">
-                      Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
-                      {knowledgeBaseState.recoveredEntryCount} saved
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="ui-card-meta">
-                        {knowledgeBaseAction === 'save' ? 'Saving…' : knowledgeBaseDirty ? 'Auto-save pending…' : 'Auto-saved'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleKnowledgeBaseSync();
-                        }}
-                        disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {knowledgeBaseAction === 'sync' ? 'Syncing…' : 'Sync now'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setKnowledgeBaseRepoUrlDraft('');
-                          setKnowledgeBaseBranchDraft('main');
-                          void handleKnowledgeBaseSave({ repoUrl: '', branch: 'main' });
-                        }}
-                        disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Disable managed sync
-                      </button>
-                    </div>
-                    <p className="ui-card-meta">
-                      PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder
-                      and file @ mentions read from that local mirror.
-                    </p>
-                  </form>
-                ) : null}
-
-                {knowledgeBaseSaveError && <p className="text-[12px] text-danger">{knowledgeBaseSaveError}</p>}
-              </SettingsPanel>
-
-              <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
-                {defaultCwdLoading && !defaultCwdState ? (
-                  <p className="ui-card-meta">Loading default working directory…</p>
-                ) : defaultCwdLoadError && !defaultCwdState ? (
-                  <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
-                ) : defaultCwdState ? (
-                  <form
-                    className="space-y-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleDefaultCwdSave();
-                    }}
-                  >
-                    <label className="ui-card-meta" htmlFor="settings-default-cwd">
-                      Path
-                    </label>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <input
-                        id="settings-default-cwd"
-                        value={defaultCwdDraft}
-                        onChange={(event) => {
-                          setDefaultCwdDraft(event.target.value);
-                          if (defaultCwdSaveError) {
-                            setDefaultCwdSaveError(null);
-                          }
-                        }}
-                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                        placeholder="~/workingdir/repo"
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={savingDefaultCwd || pickingDefaultCwd}
-                      />
-                      <ToolbarButton
-                        type="button"
-                        onClick={() => {
-                          void handleDefaultCwdPick();
-                        }}
-                        disabled={savingDefaultCwd || pickingDefaultCwd}
-                        className="shrink-0 text-accent"
-                        title="Choose default working directory"
-                        aria-label="Choose default working directory"
-                      >
-                        {pickingDefaultCwd ? 'Choosing…' : 'Choose…'}
-                      </ToolbarButton>
-                    </div>
-                    <p className="ui-card-meta break-all">
-                      {savingDefaultCwd
-                        ? 'Saving default working directory…'
-                        : defaultCwdState.currentCwd
-                          ? `Default cwd · ${defaultCwdState.effectiveCwd}`
-                          : `Process cwd · ${defaultCwdState.effectiveCwd}`}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="ui-card-meta">
-                        {savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleDefaultCwdSave('');
-                        }}
-                        disabled={savingDefaultCwd || pickingDefaultCwd || defaultCwdState.currentCwd.length === 0}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Use process cwd
-                      </button>
-                    </div>
-                    <p className="ui-card-meta">
-                      Absolute, <span className="font-mono text-[11px]">~/…</span>, or relative. Leave blank to use the runtime process cwd.
-                    </p>
-                  </form>
-                ) : null}
-
-                {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            id="settings-dictation"
-            label="Dictation"
-            description="Choose the transcription backend used by the composer mic button. No automatic fallback is applied."
-          >
-            <div className="space-y-0">
-              <SettingsPanel
-                title="Transcription provider"
-                description="The composer records browser audio and sends it to this provider when dictation stops."
-              >
-                {transcriptionLoading && !transcriptionState ? (
-                  <p className="ui-card-meta">Loading dictation settings…</p>
-                ) : transcriptionError && !transcriptionState ? (
-                  <p className="text-[12px] text-danger">Failed to load dictation settings: {transcriptionError}</p>
-                ) : transcriptionState ? (
-                  <div className="space-y-3">
-                    <label className="ui-card-meta" htmlFor="settings-transcription-provider">
-                      Provider
-                    </label>
-                    <select
-                      id="settings-transcription-provider"
-                      value={transcriptionProviderDraft}
-                      onChange={(event) => {
-                        const provider = event.target.value as TranscriptionProviderId | '';
-                        setTranscriptionProviderDraft(provider);
-                        setTranscriptionModelDraft((current) => normalizeTranscriptionModelDraft(provider, current));
-                        setTranscriptionSaveError(null);
-                        setTranscriptionInstallNotice(null);
-                        setTranscriptionInstallError(null);
-                        setTranscriptionModelStatus(null);
-                      }}
-                      disabled={installingTranscriptionModel}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="">Disabled</option>
-                      {transcriptionState.providers.map((provider) => (
-                        <option key={provider.id} value={provider.id}>
-                          {provider.label}
-                          {provider.status === 'planned' ? ' (planned)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {transcriptionProviderDraft
-                        ? transcriptionState.providers.find((provider) => provider.id === transcriptionProviderDraft)?.status === 'planned'
-                          ? 'This provider is documented but not implemented yet.'
-                          : 'Uses the selected provider only. If it fails, dictation fails visibly.'
-                        : 'Dictation is disabled until a provider is selected.'}
-                    </p>
-
-                    {transcriptionProviderDraft ? (
-                      <>
-                        <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
-                          Model
-                        </label>
-                        <input
-                          id="settings-transcription-model"
-                          list="settings-transcription-model-options"
-                          value={transcriptionModelDraft}
-                          onChange={(event) => {
-                            setTranscriptionModelDraft(event.target.value);
-                            setTranscriptionSaveError(null);
-                            setTranscriptionInstallNotice(null);
-                            setTranscriptionInstallError(null);
-                            setTranscriptionModelStatus(null);
-                          }}
-                          disabled={installingTranscriptionModel}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          placeholder="base.en"
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                        <datalist id="settings-transcription-model-options">
-                          {transcriptionModelOptions.map((model) => (
-                            <option key={model} value={model} />
-                          ))}
-                        </datalist>
-                        <p className="ui-card-meta">
-                          Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.
-                        </p>
-                        <p
-                          className={cx(
-                            'text-[12px]',
-                            transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'text-success' : 'text-dim',
-                          )}
-                        >
-                          {transcriptionModelStatusLabel}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={installingTranscriptionModel || savingTranscription || !transcriptionModelDraft.trim()}
-                            onClick={() => {
-                              void handleTranscriptionInstallModel();
-                            }}
-                            className={ACTION_BUTTON_CLASS}
-                          >
-                            {installingTranscriptionModel
-                              ? 'Installing…'
-                              : transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed
-                                ? 'Reinstall local model'
-                                : 'Install local model'}
-                          </button>
-                          {savingTranscription ? <span className="ui-card-meta">Saving…</span> : null}
-                        </div>
-                      </>
-                    ) : null}
-
-                    {transcriptionInstallNotice && <p className="text-[12px] text-accent">{transcriptionInstallNotice}</p>}
-                    {transcriptionInstallError && <p className="text-[12px] text-danger">{transcriptionInstallError}</p>}
-                  </div>
-                ) : null}
-
-                {transcriptionSaveError && <p className="text-[12px] text-danger">{transcriptionSaveError}</p>}
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            id="settings-providers"
-            label="Providers"
-            description="Provider definitions, model overrides, and credential management."
-          >
-            <div className="space-y-0">
-              <SettingsPanel title="Provider & model definitions">
-                <div className="space-y-5">
-                  <div className="space-y-3 min-w-0">
-                    <h3 className="text-[13px] font-medium text-primary">Providers</h3>
-
-                    {modelProviderLoading && !modelProviderState ? (
-                      <p className="ui-card-meta">Loading provider definitions…</p>
-                    ) : modelProviderError && !modelProviderState ? (
-                      <p className="text-[12px] text-danger">Failed to load provider definitions: {modelProviderError}</p>
-                    ) : modelProviderState ? (
-                      <>
-                        {providerAuthLoading && !providerAuthState && <p className="ui-card-meta">Loading provider credentials…</p>}
-                        {providerAuthError && !providerAuthState && (
-                          <p className="text-[12px] text-danger">Failed to load provider credentials: {providerAuthError}</p>
-                        )}
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <p className="ui-card-meta">Configured providers</p>
-                            {configuredProviderSummaries.length > 0 ? (
-                              <div className="space-y-px">
-                                {configuredProviderSummaries.map((provider) => {
-                                  const selected = provider.id === selectedModelProviderId || provider.id === selectedProviderId;
-                                  return (
-                                    <button
-                                      key={provider.id}
-                                      type="button"
-                                      onClick={() => {
-                                        if (provider.modelProvider) {
-                                          selectModelProvider(provider.id);
-                                        } else {
-                                          startNewModelProvider(provider.id, 'provider');
-                                        }
-                                      }}
-                                      className={cx(
-                                        'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-                                        selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
-                                      )}
-                                      aria-pressed={selected}
-                                    >
-                                      <span className="min-w-0">
-                                        <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
-                                        <span className="ui-card-meta block truncate">
-                                          {provider.modelProvider
-                                            ? formatModelProviderSummary(provider.modelProvider)
-                                            : formatProviderAuthStatus(provider.auth)}
-                                        </span>
-                                      </span>
-                                      {provider.modelProvider?.baseUrl && (
-                                        <span className="ui-card-meta hidden truncate text-right xl:block">
-                                          {provider.modelProvider.baseUrl}
-                                        </span>
-                                      )}
-                                    </button>
-                                  );
-                                })}
+                </SettingsPanel>
+              </div>
+            </SettingsSection>
+            <SettingsSection
+              id="settings-skills"
+              label="Skills"
+              description="Skill discovery folders and extra runtime AGENTS.md instructions."
+            >
+              <div className="space-y-0">
+                <SettingsPanel title="Skill folders" description="Load extra skill folders alongside the root skills directory.">
+                  {skillFoldersLoading && !skillFoldersState ? (
+                    <p className="ui-card-meta">Loading skill folders…</p>
+                  ) : skillFoldersError && !skillFoldersState ? (
+                    <p className="text-[12px] text-danger">Failed to load skill folders: {skillFoldersError}</p>
+                  ) : skillFoldersState ? (
+                    <div className="space-y-3">
+                      <p className="ui-card-meta break-all">
+                        Configured in <span className="font-mono text-[11px]">{skillFoldersState.configFile}</span>.
+                      </p>
+                      {skillFoldersDraft.length === 0 ? (
+                        <p className="ui-card-meta">No extra skill folders configured.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {skillFoldersDraft.map((path, index) => (
+                            <div key={`${path}:${index}`} className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1 rounded-xl border border-border-subtle/70 bg-surface/50 px-3 py-2 font-mono text-[12px] text-primary break-all">
+                                {path}
                               </div>
-                            ) : (
-                              <p className="ui-card-meta">No custom providers or overrides yet.</p>
-                            )}
-                          </div>
-
-                          <div className="space-y-3 border-t border-border-subtle pt-4">
-                            <div className="space-y-1">
-                              <h4 className="text-[13px] font-medium text-primary">Add provider</h4>
-                            </div>
-                            <div className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-center">
-                              <select
-                                id="settings-model-provider-picker"
-                                value={modelProviderPickerId}
-                                onChange={(event) => {
-                                  setModelProviderPickerId(event.target.value);
-                                }}
-                                className={`${INPUT_CLASS} h-9 py-1.5 text-[12px]`}
-                              >
-                                <option value="">Choose provider…</option>
-                                {unconfiguredModelProviderIds.map((providerId) => (
-                                  <option key={providerId} value={providerId}>
-                                    {providerId}
-                                  </option>
-                                ))}
-                                <option value={ADD_CUSTOM_PROVIDER_ID}>Add custom provider…</option>
-                              </select>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (modelProviderPickerId === ADD_CUSTOM_PROVIDER_ID) {
-                                    startNewModelProvider('', 'custom');
-                                  } else {
-                                    startNewModelProvider(modelProviderPickerId, 'provider');
-                                  }
-                                }}
-                                disabled={!modelProviderPickerId}
-                                className={`${ACTION_BUTTON_CLASS} h-9 shrink-0`}
-                              >
-                                Continue
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
-
-                  {selectedModelProviderId !== '' && (
-                    <div className="space-y-5 rounded-2xl border border-border-subtle bg-surface/50 p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <h3 className="text-[15px] font-medium text-primary">
-                            {providerEditorMode === 'custom'
-                              ? selectedModelProvider
-                                ? `Edit provider · ${selectedModelProvider.id}`
-                                : 'Add custom provider'
-                              : `Provider · ${editableModelProviderId}`}
-                          </h3>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={closeProviderEditor}
-                          disabled={
-                            modelProviderAction !== null ||
-                            modelDraftAction !== null ||
-                            providerCredentialAction !== null ||
-                            oauthAction !== null
-                          }
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Close
-                        </button>
-                      </div>
-                      <div className="space-y-6 min-w-0">
-                        {(providerEditorMode === 'custom' || selectedModelProvider) && (
-                          <div className="space-y-4 min-w-0">
-                            <div className="space-y-1">
-                              <h3 className="text-[15px] font-medium text-primary">
-                                {selectedModelProviderId === NEW_MODEL_PROVIDER_ID
-                                  ? modelProviderDraft.id.trim()
-                                    ? `New provider · ${modelProviderDraft.id.trim()}`
-                                    : 'New provider'
-                                  : (selectedModelProvider?.id ?? 'Provider')}
-                              </h3>
-                              <p className="ui-card-meta max-w-3xl">
-                                Use built-in ids like <span className="font-mono text-[11px]">anthropic</span>,{' '}
-                                <span className="font-mono text-[11px]">openai</span>,{' '}
-                                <span className="font-mono text-[11px]">openai-codex</span>, or{' '}
-                                <span className="font-mono text-[11px]">google</span> to override a built-in provider. Use any new id for a
-                                custom provider.
-                              </p>
-                            </div>
-
-                            <form
-                              className="space-y-4"
-                              onSubmit={(event) => {
-                                event.preventDefault();
-                                void handleSaveModelProvider();
-                              }}
-                            >
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2 min-w-0">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-id">
-                                    Provider id
-                                  </label>
-                                  <input
-                                    id="settings-model-provider-id"
-                                    value={modelProviderDraft.id}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, id: event.target.value }));
-                                    }}
-                                    className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                    placeholder="ollama"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    disabled={modelProviderAction !== null || selectedModelProviderId !== NEW_MODEL_PROVIDER_ID}
-                                  />
-                                </div>
-
-                                <div className="space-y-2 min-w-0">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-base-url">
-                                    Base URL
-                                  </label>
-                                  <input
-                                    id="settings-model-provider-base-url"
-                                    value={modelProviderDraft.baseUrl}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, baseUrl: event.target.value }));
-                                    }}
-                                    className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                    placeholder="http://localhost:11434/v1"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    disabled={modelProviderAction !== null}
-                                  />
-                                </div>
-
-                                <div className="space-y-2 min-w-0">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-api">
-                                    API
-                                  </label>
-                                  <select
-                                    id="settings-model-provider-api"
-                                    value={modelProviderDraft.api}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, api: event.target.value }));
-                                    }}
-                                    className={INPUT_CLASS}
-                                    disabled={modelProviderAction !== null}
-                                  >
-                                    <option value="">Use built-in or inherit</option>
-                                    {MODEL_PROVIDER_API_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <div className="space-y-2 min-w-0">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-api-key">
-                                    Provider API key
-                                  </label>
-                                  <input
-                                    id="settings-model-provider-api-key"
-                                    value={modelProviderDraft.apiKey}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, apiKey: event.target.value }));
-                                    }}
-                                    className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                    placeholder="ollama, ENV_VAR, or !command"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    disabled={modelProviderAction !== null}
-                                  />
-                                </div>
-                              </div>
-
-                              <label
-                                className="inline-flex items-center gap-3 text-[14px] text-primary"
-                                htmlFor="settings-model-provider-auth-header"
-                              >
-                                <input
-                                  id="settings-model-provider-auth-header"
-                                  type="checkbox"
-                                  checked={modelProviderDraft.authHeader}
-                                  onChange={(event) => {
-                                    setModelProviderDraft((current) => ({ ...current, authHeader: event.target.checked }));
-                                  }}
-                                  disabled={modelProviderAction !== null}
-                                  className={CHECKBOX_CLASS}
-                                />
-                                <span>
-                                  Add <span className="font-mono text-[11px]">Authorization: Bearer</span> from the provider API key
-                                </span>
-                              </label>
-
-                              <div className="grid gap-4 xl:grid-cols-2">
-                                <div className="space-y-2 min-w-0">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-headers">
-                                    Headers (JSON)
-                                  </label>
-                                  <textarea
-                                    id="settings-model-provider-headers"
-                                    value={modelProviderDraft.headersText}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, headersText: event.target.value }));
-                                    }}
-                                    className={JSON_TEXTAREA_CLASS}
-                                    placeholder={'{\n  "x-app": "personal-agent"\n}'}
-                                    spellCheck={false}
-                                    disabled={modelProviderAction !== null}
-                                  />
-                                </div>
-
-                                <div className="space-y-2 min-w-0">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-compat">
-                                    Compat (JSON)
-                                  </label>
-                                  <textarea
-                                    id="settings-model-provider-compat"
-                                    value={modelProviderDraft.compatText}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, compatText: event.target.value }));
-                                    }}
-                                    className={JSON_TEXTAREA_CLASS}
-                                    placeholder={'{\n  "supportsDeveloperRole": false\n}'}
-                                    spellCheck={false}
-                                    disabled={modelProviderAction !== null}
-                                  />
-                                </div>
-
-                                <div className="space-y-2 min-w-0 xl:col-span-2">
-                                  <label className="ui-card-meta" htmlFor="settings-model-provider-overrides">
-                                    Model overrides (JSON)
-                                  </label>
-                                  <textarea
-                                    id="settings-model-provider-overrides"
-                                    value={modelProviderDraft.modelOverridesText}
-                                    onChange={(event) => {
-                                      setModelProviderDraft((current) => ({ ...current, modelOverridesText: event.target.value }));
-                                    }}
-                                    className={JSON_TEXTAREA_CLASS}
-                                    placeholder={'{\n  "claude-sonnet-4-6": {\n    "name": "Claude Sonnet 4.6 (Proxy)"\n  }\n}'}
-                                    spellCheck={false}
-                                    disabled={modelProviderAction !== null}
-                                  />
-                                </div>
-                              </div>
-
-                              <p className="ui-card-meta max-w-3xl">
-                                Provider API keys here use <span className="font-mono text-[11px]">models.json</span> value resolution.
-                                Leave the field blank if you prefer <span className="font-mono text-[11px]">auth.json</span>, OAuth, or
-                                environment-only auth.
-                              </p>
-
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex shrink-0 items-center gap-2">
                                 <button
-                                  type="submit"
-                                  disabled={modelProviderAction !== null || modelProviderDraft.id.trim().length === 0}
+                                  type="button"
+                                  onClick={() => {
+                                    handleMoveSkillFolder(index, -1);
+                                  }}
+                                  disabled={savingSkillFolders || index === 0}
                                   className={ACTION_BUTTON_CLASS}
                                 >
-                                  {modelProviderAction === 'save'
-                                    ? 'Saving provider…'
-                                    : selectedModelProviderId === NEW_MODEL_PROVIDER_ID
-                                      ? 'Create provider'
-                                      : 'Save provider'}
+                                  ↑
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    void handleDeleteModelProvider();
+                                    handleMoveSkillFolder(index, 1);
                                   }}
-                                  disabled={
-                                    modelProviderAction !== null ||
-                                    selectedModelProviderId === NEW_MODEL_PROVIDER_ID ||
-                                    !selectedModelProvider
-                                  }
+                                  disabled={savingSkillFolders || index === skillFoldersDraft.length - 1}
                                   className={ACTION_BUTTON_CLASS}
                                 >
-                                  {modelProviderAction === 'delete' ? 'Removing…' : 'Remove provider'}
+                                  ↓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleRemoveSkillFolder(index);
+                                  }}
+                                  disabled={savingSkillFolders}
+                                  className={ACTION_BUTTON_CLASS}
+                                >
+                                  Remove
                                 </button>
                               </div>
-
-                              {modelProviderMessage && <p className="text-[12px] text-success">{modelProviderMessage}</p>}
-                              {modelProviderEditorError && <p className="text-[12px] text-danger">{modelProviderEditorError}</p>}
-                            </form>
-                          </div>
-                        )}
-
-                        <div className="space-y-2 border-t border-border-subtle pt-3 min-w-0">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <h3 className="text-[14px] font-medium text-primary">Models</h3>
                             </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleAddSkillFolder();
+                          }}
+                          disabled={savingSkillFolders || pickingSkillFolders}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          {pickingSkillFolders ? 'Picking…' : 'Add folder'}
+                        </button>
+                        <span className="ui-card-meta">
+                          {savingSkillFolders ? 'Saving…' : skillFoldersDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                        </span>
+                      </div>
+                      <p className="ui-card-meta">Folders load in the saved order after the root skills directory.</p>
+                    </div>
+                  ) : null}
+
+                  {skillFoldersSaveError && <p className="text-[12px] text-danger">{skillFoldersSaveError}</p>}
+                </SettingsPanel>
+
+                <SettingsPanel title="AGENTS.md files" description="Append extra AGENTS.md-style files to the runtime prompt.">
+                  {instructionFilesLoading && !instructionFilesState ? (
+                    <p className="ui-card-meta">Loading AGENTS.md files…</p>
+                  ) : instructionFilesError && !instructionFilesState ? (
+                    <p className="text-[12px] text-danger">Failed to load AGENTS.md files: {instructionFilesError}</p>
+                  ) : instructionFilesState ? (
+                    <div className="space-y-3">
+                      <p className="ui-card-meta break-all">
+                        Configured in <span className="font-mono text-[11px]">{instructionFilesState.configFile}</span>.
+                      </p>
+                      {instructionFilesDraft.length === 0 ? (
+                        <p className="ui-card-meta">No extra AGENTS.md files configured.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {instructionFilesDraft.map((path, index) => (
+                            <div key={`${path}:${index}`} className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1 rounded-xl border border-border-subtle/70 bg-surface/50 px-3 py-2 font-mono text-[12px] text-primary break-all">
+                                {path}
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleMoveInstructionFile(index, -1);
+                                  }}
+                                  disabled={savingInstructionFiles || index === 0}
+                                  className={ACTION_BUTTON_CLASS}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleMoveInstructionFile(index, 1);
+                                  }}
+                                  disabled={savingInstructionFiles || index === instructionFilesDraft.length - 1}
+                                  className={ACTION_BUTTON_CLASS}
+                                >
+                                  ↓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleRemoveInstructionFile(index);
+                                  }}
+                                  disabled={savingInstructionFiles}
+                                  className={ACTION_BUTTON_CLASS}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleAddInstructionFiles();
+                          }}
+                          disabled={savingInstructionFiles || pickingInstructionFiles}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          {pickingInstructionFiles ? 'Picking…' : 'Add files'}
+                        </button>
+                        <span className="ui-card-meta">
+                          {savingInstructionFiles ? 'Saving…' : instructionFilesDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                        </span>
+                      </div>
+                      <p className="ui-card-meta">Files append in the saved order after the root AGENTS.md.</p>
+                    </div>
+                  ) : null}
+
+                  {instructionFilesSaveError && <p className="text-[12px] text-danger">{instructionFilesSaveError}</p>}
+                </SettingsPanel>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-conversation"
+              label="Conversation"
+              description="Default model, vision model, thinking level, and fast mode for new conversations."
+            >
+              <div className="space-y-0">
+                <SettingsPanel title="Default model" description="Used for new chats and runs unless a model is picked explicitly.">
+                  {modelsLoading && !modelState ? (
+                    <p className="ui-card-meta">Loading models…</p>
+                  ) : modelsError && !modelState ? (
+                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                  ) : modelState ? (
+                    <>
+                      <label className="ui-card-meta" htmlFor="settings-model">
+                        Model
+                      </label>
+                      <select
+                        id="settings-model"
+                        value={modelState.currentModel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ model: event.target.value }, 'model');
+                        }}
+                        disabled={savingPreference !== null || modelState.models.length === 0}
+                        className={INPUT_CLASS}
+                      >
+                        {groupedModels.map(([provider, models]) => (
+                          <optgroup key={provider} label={provider}>
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.name} · {formatContextWindowLabel(model.context)} ctx
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'model' ? 'Saving default model...' : formatModelSummary(selectedModel, 'No model selected.')}
+                      </p>
+
+                      <label className="ui-card-meta pt-1" htmlFor="settings-vision-model">
+                        Vision model for text-only chats
+                      </label>
+                      <select
+                        id="settings-vision-model"
+                        value={modelState.currentVisionModel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ visionModel: event.target.value }, 'visionModel');
+                        }}
+                        disabled={savingPreference !== null || imageCapableModels.length === 0}
+                        className={INPUT_CLASS}
+                      >
+                        <option value="">Not configured</option>
+                        {groupedImageCapableModels.map(([provider, models]) => (
+                          <optgroup key={provider} label={provider}>
+                            {models.map((model) => (
+                              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                                {model.name} · {formatContextWindowLabel(model.context)} ctx
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'visionModel'
+                          ? 'Saving vision model…'
+                          : modelState.currentVisionModel
+                            ? `Text-only image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
+                            : 'Required before text-only models can inspect uploaded images.'}
+                      </p>
+
+                      <label className="ui-card-meta pt-1" htmlFor="settings-thinking">
+                        Thinking level
+                      </label>
+                      <select
+                        id="settings-thinking"
+                        value={modelState.currentThinkingLevel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
+                        }}
+                        disabled={savingPreference !== null}
+                        className={INPUT_CLASS}
+                      >
+                        {THINKING_LEVEL_OPTIONS.map((option) => (
+                          <option key={option.value || 'unset'} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'thinking'
+                          ? 'Saving thinking level…'
+                          : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
+                      </p>
+
+                      {selectedModelSupportsFastMode && (
+                        <>
+                          <label className="inline-flex items-center gap-3 pt-1 text-[14px] text-primary" htmlFor="settings-fast-mode">
+                            <input
+                              id="settings-fast-mode"
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
+                              checked={modelState.currentServiceTier === 'priority'}
+                              onChange={(event) => {
+                                void handleModelPreferenceChange({ serviceTier: event.target.checked ? 'priority' : '' }, 'serviceTier');
+                              }}
+                              disabled={savingPreference !== null}
+                            />
+                            <span>Fast mode</span>
+                          </label>
+                          <p className="ui-card-meta">
+                            {savingPreference === 'serviceTier'
+                              ? 'Saving fast mode…'
+                              : modelState.currentServiceTier === 'priority'
+                                ? 'Fast mode is on (service tier: priority).'
+                                : 'Fast mode is off.'}
+                          </p>
+                        </>
+                      )}
+                    </>
+                  ) : null}
+
+                  {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
+                </SettingsPanel>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-workspace"
+              label="Workspace"
+              description="Working directory and knowledge base for project context."
+            >
+              <div className="space-y-0">
+                <SettingsPanel
+                  title="Knowledge base"
+                  description="Point PA at a git repo and let it manage the local mirror and sync loop."
+                >
+                  {knowledgeBaseLoading && !knowledgeBaseState ? (
+                    <p className="ui-card-meta">Loading knowledge base…</p>
+                  ) : knowledgeBaseLoadError && !knowledgeBaseState ? (
+                    <p className="text-[12px] text-danger">Failed to load knowledge base: {knowledgeBaseLoadError}</p>
+                  ) : knowledgeBaseState ? (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleKnowledgeBaseSave();
+                      }}
+                    >
+                      <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">
+                        Repo URL
+                      </label>
+                      <input
+                        id="settings-knowledge-base-repo"
+                        value={knowledgeBaseRepoUrlDraft}
+                        onChange={(event) => {
+                          setKnowledgeBaseRepoUrlDraft(event.target.value);
+                          if (knowledgeBaseSaveError) {
+                            setKnowledgeBaseSaveError(null);
+                          }
+                        }}
+                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                        placeholder="https://github.com/you/knowledge-base.git"
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={knowledgeBaseAction !== null}
+                      />
+                      <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">
+                        Branch
+                      </label>
+                      <input
+                        id="settings-knowledge-base-branch"
+                        value={knowledgeBaseBranchDraft}
+                        onChange={(event) => {
+                          setKnowledgeBaseBranchDraft(event.target.value);
+                          if (knowledgeBaseSaveError) {
+                            setKnowledgeBaseSaveError(null);
+                          }
+                        }}
+                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                        placeholder="main"
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={knowledgeBaseAction !== null}
+                      />
+                      <p className="ui-card-meta break-all">
+                        Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
+                      </p>
+                      <p className={cx('ui-card-meta break-all', knowledgeBaseAction === null && knowledgeBaseSyncPresentation.toneClass)}>
+                        {knowledgeBaseAction === 'save'
+                          ? 'Saving knowledge base…'
+                          : knowledgeBaseAction === 'sync'
+                            ? 'Syncing knowledge base…'
+                            : knowledgeBaseSyncPresentation.text}
+                      </p>
+                      <p className="ui-card-meta break-all">
+                        Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
+                        {knowledgeBaseState.recoveredEntryCount} saved
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="ui-card-meta">
+                          {knowledgeBaseAction === 'save' ? 'Saving…' : knowledgeBaseDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleKnowledgeBaseSync();
+                          }}
+                          disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          {knowledgeBaseAction === 'sync' ? 'Syncing…' : 'Sync now'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setKnowledgeBaseRepoUrlDraft('');
+                            setKnowledgeBaseBranchDraft('main');
+                            void handleKnowledgeBaseSave({ repoUrl: '', branch: 'main' });
+                          }}
+                          disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          Disable managed sync
+                        </button>
+                      </div>
+                      <p className="ui-card-meta">
+                        PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder
+                        and file @ mentions read from that local mirror.
+                      </p>
+                    </form>
+                  ) : null}
+
+                  {knowledgeBaseSaveError && <p className="text-[12px] text-danger">{knowledgeBaseSaveError}</p>}
+                </SettingsPanel>
+
+                <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
+                  {defaultCwdLoading && !defaultCwdState ? (
+                    <p className="ui-card-meta">Loading default working directory…</p>
+                  ) : defaultCwdLoadError && !defaultCwdState ? (
+                    <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
+                  ) : defaultCwdState ? (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleDefaultCwdSave();
+                      }}
+                    >
+                      <label className="ui-card-meta" htmlFor="settings-default-cwd">
+                        Path
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          id="settings-default-cwd"
+                          value={defaultCwdDraft}
+                          onChange={(event) => {
+                            setDefaultCwdDraft(event.target.value);
+                            if (defaultCwdSaveError) {
+                              setDefaultCwdSaveError(null);
+                            }
+                          }}
+                          className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                          placeholder="~/workingdir/repo"
+                          autoComplete="off"
+                          spellCheck={false}
+                          disabled={savingDefaultCwd || pickingDefaultCwd}
+                        />
+                        <ToolbarButton
+                          type="button"
+                          onClick={() => {
+                            void handleDefaultCwdPick();
+                          }}
+                          disabled={savingDefaultCwd || pickingDefaultCwd}
+                          className="shrink-0 text-accent"
+                          title="Choose default working directory"
+                          aria-label="Choose default working directory"
+                        >
+                          {pickingDefaultCwd ? 'Choosing…' : 'Choose…'}
+                        </ToolbarButton>
+                      </div>
+                      <p className="ui-card-meta break-all">
+                        {savingDefaultCwd
+                          ? 'Saving default working directory…'
+                          : defaultCwdState.currentCwd
+                            ? `Default cwd · ${defaultCwdState.effectiveCwd}`
+                            : `Process cwd · ${defaultCwdState.effectiveCwd}`}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="ui-card-meta">
+                          {savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleDefaultCwdSave('');
+                          }}
+                          disabled={savingDefaultCwd || pickingDefaultCwd || defaultCwdState.currentCwd.length === 0}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          Use process cwd
+                        </button>
+                      </div>
+                      <p className="ui-card-meta">
+                        Absolute, <span className="font-mono text-[11px]">~/…</span>, or relative. Leave blank to use the runtime process
+                        cwd.
+                      </p>
+                    </form>
+                  ) : null}
+
+                  {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
+                </SettingsPanel>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-dictation"
+              label="Dictation"
+              description="Choose the transcription backend used by the composer mic button. No automatic fallback is applied."
+            >
+              <div className="space-y-0">
+                <SettingsPanel
+                  title="Transcription provider"
+                  description="The composer records browser audio and sends it to this provider when dictation stops."
+                >
+                  {transcriptionLoading && !transcriptionState ? (
+                    <p className="ui-card-meta">Loading dictation settings…</p>
+                  ) : transcriptionError && !transcriptionState ? (
+                    <p className="text-[12px] text-danger">Failed to load dictation settings: {transcriptionError}</p>
+                  ) : transcriptionState ? (
+                    <div className="space-y-3">
+                      <label className="ui-card-meta" htmlFor="settings-transcription-provider">
+                        Provider
+                      </label>
+                      <select
+                        id="settings-transcription-provider"
+                        value={transcriptionProviderDraft}
+                        onChange={(event) => {
+                          const provider = event.target.value as TranscriptionProviderId | '';
+                          setTranscriptionProviderDraft(provider);
+                          setTranscriptionModelDraft((current) => normalizeTranscriptionModelDraft(provider, current));
+                          setTranscriptionSaveError(null);
+                          setTranscriptionInstallNotice(null);
+                          setTranscriptionInstallError(null);
+                          setTranscriptionModelStatus(null);
+                        }}
+                        disabled={installingTranscriptionModel}
+                        className={INPUT_CLASS}
+                      >
+                        <option value="">Disabled</option>
+                        {transcriptionState.providers.map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.label}
+                            {provider.status === 'planned' ? ' (planned)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {transcriptionProviderDraft
+                          ? transcriptionState.providers.find((provider) => provider.id === transcriptionProviderDraft)?.status ===
+                            'planned'
+                            ? 'This provider is documented but not implemented yet.'
+                            : 'Uses the selected provider only. If it fails, dictation fails visibly.'
+                          : 'Dictation is disabled until a provider is selected.'}
+                      </p>
+
+                      {transcriptionProviderDraft ? (
+                        <>
+                          <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
+                            Model
+                          </label>
+                          <input
+                            id="settings-transcription-model"
+                            list="settings-transcription-model-options"
+                            value={transcriptionModelDraft}
+                            onChange={(event) => {
+                              setTranscriptionModelDraft(event.target.value);
+                              setTranscriptionSaveError(null);
+                              setTranscriptionInstallNotice(null);
+                              setTranscriptionInstallError(null);
+                              setTranscriptionModelStatus(null);
+                            }}
+                            disabled={installingTranscriptionModel}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            placeholder="base.en"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <datalist id="settings-transcription-model-options">
+                            {transcriptionModelOptions.map((model) => (
+                              <option key={model} value={model} />
+                            ))}
+                          </datalist>
+                          <p className="ui-card-meta">
+                            Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.
+                          </p>
+                          <p
+                            className={cx(
+                              'text-[12px]',
+                              transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'text-success' : 'text-dim',
+                            )}
+                          >
+                            {transcriptionModelStatusLabel}
+                          </p>
+
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
+                              disabled={installingTranscriptionModel || savingTranscription || !transcriptionModelDraft.trim()}
                               onClick={() => {
-                                startEditingProviderModel(NEW_MODEL_ID);
+                                void handleTranscriptionInstallModel();
                               }}
-                              disabled={!editableModelProviderId || modelDraftAction !== null}
                               className={ACTION_BUTTON_CLASS}
                             >
-                              Add model
+                              {installingTranscriptionModel
+                                ? 'Installing…'
+                                : transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed
+                                  ? 'Reinstall local model'
+                                  : 'Install local model'}
                             </button>
+                            {savingTranscription ? <span className="ui-card-meta">Saving…</span> : null}
                           </div>
+                        </>
+                      ) : null}
 
-                          {editableModelProviderId ? (
-                            <>
-                              {builtInProviderModels.length > 0 && (
-                                <div className="space-y-1.5">
-                                  <h4 className="text-[12px] font-medium text-secondary">Built-in models</h4>
-                                  <div className="space-y-px">
-                                    {builtInProviderModels.map((model) => {
-                                      const hasOverride = selectedModelProvider?.models.some((candidate) => candidate.id === model.id);
-                                      return (
-                                        <button
-                                          key={`${model.provider}/${model.id}`}
-                                          type="button"
-                                          onClick={() => {
-                                            startEditingBuiltInModel(model.id);
-                                          }}
-                                          disabled={modelDraftAction !== null}
-                                          className={cx(
-                                            'group ui-list-row w-full justify-between px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-                                            editingModelId === model.id && !editingProviderModel
-                                              ? 'ui-list-row-selected'
-                                              : 'ui-list-row-hover',
-                                          )}
-                                          aria-pressed={editingModelId === model.id && !editingProviderModel}
-                                        >
-                                          <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
-                                            <span className="truncate font-medium text-primary">{model.id}</span>
-                                            <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
-                                          </div>
-                                          <div className="flex shrink-0 items-center gap-2">
-                                            {hasOverride ? (
-                                              <span className="text-[11px] text-accent">Overridden</span>
-                                            ) : (
-                                              <span className="text-[11px] text-dim/70 opacity-0 transition-opacity group-hover:opacity-100">
-                                                Override
-                                              </span>
-                                            )}
-                                          </div>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
+                      {transcriptionInstallNotice && <p className="text-[12px] text-accent">{transcriptionInstallNotice}</p>}
+                      {transcriptionInstallError && <p className="text-[12px] text-danger">{transcriptionInstallError}</p>}
+                    </div>
+                  ) : null}
+
+                  {transcriptionSaveError && <p className="text-[12px] text-danger">{transcriptionSaveError}</p>}
+                </SettingsPanel>
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-providers"
+              label="Providers"
+              description="Provider definitions, model overrides, and credential management."
+            >
+              <div className="space-y-0">
+                <SettingsPanel title="Provider & model definitions">
+                  <div className="space-y-5">
+                    <div className="space-y-3 min-w-0">
+                      <h3 className="text-[13px] font-medium text-primary">Providers</h3>
+
+                      {modelProviderLoading && !modelProviderState ? (
+                        <p className="ui-card-meta">Loading provider definitions…</p>
+                      ) : modelProviderError && !modelProviderState ? (
+                        <p className="text-[12px] text-danger">Failed to load provider definitions: {modelProviderError}</p>
+                      ) : modelProviderState ? (
+                        <>
+                          {providerAuthLoading && !providerAuthState && <p className="ui-card-meta">Loading provider credentials…</p>}
+                          {providerAuthError && !providerAuthState && (
+                            <p className="text-[12px] text-danger">Failed to load provider credentials: {providerAuthError}</p>
+                          )}
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <p className="ui-card-meta">Configured providers</p>
+                              {configuredProviderSummaries.length > 0 ? (
+                                <div className="space-y-px">
+                                  {configuredProviderSummaries.map((provider) => {
+                                    const selected = provider.id === selectedModelProviderId || provider.id === selectedProviderId;
+                                    return (
+                                      <button
+                                        key={provider.id}
+                                        type="button"
+                                        onClick={() => {
+                                          if (provider.modelProvider) {
+                                            selectModelProvider(provider.id);
+                                          } else {
+                                            startNewModelProvider(provider.id, 'provider');
+                                          }
+                                        }}
+                                        className={cx(
+                                          'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                          selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                                        )}
+                                        aria-pressed={selected}
+                                      >
+                                        <span className="min-w-0">
+                                          <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
+                                          <span className="ui-card-meta block truncate">
+                                            {provider.modelProvider
+                                              ? formatModelProviderSummary(provider.modelProvider)
+                                              : formatProviderAuthStatus(provider.auth)}
+                                          </span>
+                                        </span>
+                                        {provider.modelProvider?.baseUrl && (
+                                          <span className="ui-card-meta hidden truncate text-right xl:block">
+                                            {provider.modelProvider.baseUrl}
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
+                              ) : (
+                                <p className="ui-card-meta">No custom providers or overrides yet.</p>
                               )}
+                            </div>
 
-                              <div className="space-y-1.5">
-                                <h4 className="text-[12px] font-medium text-secondary">Additional models</h4>
-                                {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
-                                  <div className="space-y-px">
-                                    {selectedModelProvider.models.map((model) => (
-                                      <div key={model.id} className="group ui-list-row ui-list-row-hover justify-between px-2 py-1">
-                                        <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
-                                          <span className="truncate font-medium text-primary">{model.id}</span>
-                                          <span className="truncate text-dim">{formatProviderModelSummary(model)}</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              startEditingProviderModel(model.id);
-                                            }}
-                                            className={ACTION_BUTTON_CLASS}
-                                          >
-                                            Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              void handleDeleteProviderModel(model.id);
-                                            }}
-                                            disabled={modelDraftAction !== null}
-                                            className={ACTION_BUTTON_CLASS}
-                                          >
-                                            {modelDraftAction === 'delete' && editingModelId === model.id ? 'Removing…' : 'Remove'}
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-[12px] text-dim">None yet.</p>
-                                )}
+                            <div className="space-y-3 border-t border-border-subtle pt-4">
+                              <div className="space-y-1">
+                                <h4 className="text-[13px] font-medium text-primary">Add provider</h4>
+                              </div>
+                              <div className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-center">
+                                <select
+                                  id="settings-model-provider-picker"
+                                  value={modelProviderPickerId}
+                                  onChange={(event) => {
+                                    setModelProviderPickerId(event.target.value);
+                                  }}
+                                  className={`${INPUT_CLASS} h-9 py-1.5 text-[12px]`}
+                                >
+                                  <option value="">Choose provider…</option>
+                                  {unconfiguredModelProviderIds.map((providerId) => (
+                                    <option key={providerId} value={providerId}>
+                                      {providerId}
+                                    </option>
+                                  ))}
+                                  <option value={ADD_CUSTOM_PROVIDER_ID}>Add custom provider…</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (modelProviderPickerId === ADD_CUSTOM_PROVIDER_ID) {
+                                      startNewModelProvider('', 'custom');
+                                    } else {
+                                      startNewModelProvider(modelProviderPickerId, 'provider');
+                                    }
+                                  }}
+                                  disabled={!modelProviderPickerId}
+                                  className={`${ACTION_BUTTON_CLASS} h-9 shrink-0`}
+                                >
+                                  Continue
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+
+                    {selectedModelProviderId !== '' && (
+                      <div className="space-y-5 rounded-2xl border border-border-subtle bg-surface/50 p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <h3 className="text-[15px] font-medium text-primary">
+                              {providerEditorMode === 'custom'
+                                ? selectedModelProvider
+                                  ? `Edit provider · ${selectedModelProvider.id}`
+                                  : 'Add custom provider'
+                                : `Provider · ${editableModelProviderId}`}
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={closeProviderEditor}
+                            disabled={
+                              modelProviderAction !== null ||
+                              modelDraftAction !== null ||
+                              providerCredentialAction !== null ||
+                              oauthAction !== null
+                            }
+                            className={ACTION_BUTTON_CLASS}
+                          >
+                            Close
+                          </button>
+                        </div>
+                        <div className="space-y-6 min-w-0">
+                          {(providerEditorMode === 'custom' || selectedModelProvider) && (
+                            <div className="space-y-4 min-w-0">
+                              <div className="space-y-1">
+                                <h3 className="text-[15px] font-medium text-primary">
+                                  {selectedModelProviderId === NEW_MODEL_PROVIDER_ID
+                                    ? modelProviderDraft.id.trim()
+                                      ? `New provider · ${modelProviderDraft.id.trim()}`
+                                      : 'New provider'
+                                    : (selectedModelProvider?.id ?? 'Provider')}
+                                </h3>
+                                <p className="ui-card-meta max-w-3xl">
+                                  Use built-in ids like <span className="font-mono text-[11px]">anthropic</span>,{' '}
+                                  <span className="font-mono text-[11px]">openai</span>,{' '}
+                                  <span className="font-mono text-[11px]">openai-codex</span>, or{' '}
+                                  <span className="font-mono text-[11px]">google</span> to override a built-in provider. Use any new id for
+                                  a custom provider.
+                                </p>
                               </div>
 
-                              {modelDraftMessage && <p className="text-[12px] text-success">{modelDraftMessage}</p>}
-                              {modelDraftError && <p className="text-[12px] text-danger">{modelDraftError}</p>}
-
-                              {editingModelId === NEW_MODEL_ID && (
-                                <form
-                                  className="flex flex-col gap-2 border-t border-border-subtle pt-3 sm:flex-row sm:items-end"
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    void handleSaveProviderModel();
-                                  }}
-                                >
-                                  <div className="min-w-0 flex-1 space-y-1.5">
-                                    <label className="ui-card-meta" htmlFor="settings-provider-model-id">
-                                      Model id
+                              <form
+                                className="space-y-4"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  void handleSaveModelProvider();
+                                }}
+                              >
+                                <div className="grid gap-4 md:grid-cols-2">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-id">
+                                      Provider id
                                     </label>
                                     <input
-                                      id="settings-provider-model-id"
-                                      value={modelDraft.id}
+                                      id="settings-model-provider-id"
+                                      value={modelProviderDraft.id}
                                       onChange={(event) => {
-                                        setModelDraft((current) => ({ ...current, id: event.target.value }));
+                                        setModelProviderDraft((current) => ({ ...current, id: event.target.value }));
                                       }}
                                       className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                      placeholder="gpt-5.6"
+                                      placeholder="ollama"
                                       autoComplete="off"
                                       spellCheck={false}
-                                      disabled={modelDraftAction !== null}
-                                      autoFocus
+                                      disabled={modelProviderAction !== null || selectedModelProviderId !== NEW_MODEL_PROVIDER_ID}
                                     />
                                   </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      type="submit"
-                                      disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
-                                      className={ACTION_BUTTON_CLASS}
-                                    >
-                                      {modelDraftAction === 'save' ? 'Adding…' : 'Add model'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingModelId(null);
-                                        setModelDraft(createModelEditorDraft(null));
-                                        setModelDraftError(null);
-                                        setModelDraftMessage(null);
+
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-base-url">
+                                      Base URL
+                                    </label>
+                                    <input
+                                      id="settings-model-provider-base-url"
+                                      value={modelProviderDraft.baseUrl}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, baseUrl: event.target.value }));
                                       }}
-                                      disabled={modelDraftAction !== null}
-                                      className={ACTION_BUTTON_CLASS}
+                                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                      placeholder="http://localhost:11434/v1"
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                      disabled={modelProviderAction !== null}
+                                    />
+                                  </div>
+
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-api">
+                                      API
+                                    </label>
+                                    <select
+                                      id="settings-model-provider-api"
+                                      value={modelProviderDraft.api}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, api: event.target.value }));
+                                      }}
+                                      className={INPUT_CLASS}
+                                      disabled={modelProviderAction !== null}
                                     >
-                                      Cancel
-                                    </button>
+                                      <option value="">Use built-in or inherit</option>
+                                      {MODEL_PROVIDER_API_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </div>
-                                </form>
-                              )}
 
-                              {(editingProviderModel || isEditingBuiltInOverride) && (
-                                <form
-                                  className="space-y-3 border-t border-border-subtle pt-4"
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    void handleSaveProviderModel();
-                                  }}
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-api-key">
+                                      Provider API key
+                                    </label>
+                                    <input
+                                      id="settings-model-provider-api-key"
+                                      value={modelProviderDraft.apiKey}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, apiKey: event.target.value }));
+                                      }}
+                                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                      placeholder="ollama, ENV_VAR, or !command"
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                      disabled={modelProviderAction !== null}
+                                    />
+                                  </div>
+                                </div>
+
+                                <label
+                                  className="inline-flex items-center gap-3 text-[14px] text-primary"
+                                  htmlFor="settings-model-provider-auth-header"
                                 >
-                                  <div className="space-y-1">
-                                    <h4 className="text-[13px] font-medium text-primary">
-                                      {editingProviderModel ? `Edit ${editingProviderModel.id}` : `Override ${modelDraft.id}`}
-                                    </h4>
+                                  <input
+                                    id="settings-model-provider-auth-header"
+                                    type="checkbox"
+                                    checked={modelProviderDraft.authHeader}
+                                    onChange={(event) => {
+                                      setModelProviderDraft((current) => ({ ...current, authHeader: event.target.checked }));
+                                    }}
+                                    disabled={modelProviderAction !== null}
+                                    className={CHECKBOX_CLASS}
+                                  />
+                                  <span>
+                                    Add <span className="font-mono text-[11px]">Authorization: Bearer</span> from the provider API key
+                                  </span>
+                                </label>
+
+                                <div className="grid gap-4 xl:grid-cols-2">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-headers">
+                                      Headers (JSON)
+                                    </label>
+                                    <textarea
+                                      id="settings-model-provider-headers"
+                                      value={modelProviderDraft.headersText}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, headersText: event.target.value }));
+                                      }}
+                                      className={JSON_TEXTAREA_CLASS}
+                                      placeholder={'{\n  "x-app": "personal-agent"\n}'}
+                                      spellCheck={false}
+                                      disabled={modelProviderAction !== null}
+                                    />
                                   </div>
 
-                                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                                    <div className="space-y-2 min-w-0">
+                                  <div className="space-y-2 min-w-0">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-compat">
+                                      Compat (JSON)
+                                    </label>
+                                    <textarea
+                                      id="settings-model-provider-compat"
+                                      value={modelProviderDraft.compatText}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, compatText: event.target.value }));
+                                      }}
+                                      className={JSON_TEXTAREA_CLASS}
+                                      placeholder={'{\n  "supportsDeveloperRole": false\n}'}
+                                      spellCheck={false}
+                                      disabled={modelProviderAction !== null}
+                                    />
+                                  </div>
+
+                                  <div className="space-y-2 min-w-0 xl:col-span-2">
+                                    <label className="ui-card-meta" htmlFor="settings-model-provider-overrides">
+                                      Model overrides (JSON)
+                                    </label>
+                                    <textarea
+                                      id="settings-model-provider-overrides"
+                                      value={modelProviderDraft.modelOverridesText}
+                                      onChange={(event) => {
+                                        setModelProviderDraft((current) => ({ ...current, modelOverridesText: event.target.value }));
+                                      }}
+                                      className={JSON_TEXTAREA_CLASS}
+                                      placeholder={'{\n  "claude-sonnet-4-6": {\n    "name": "Claude Sonnet 4.6 (Proxy)"\n  }\n}'}
+                                      spellCheck={false}
+                                      disabled={modelProviderAction !== null}
+                                    />
+                                  </div>
+                                </div>
+
+                                <p className="ui-card-meta max-w-3xl">
+                                  Provider API keys here use <span className="font-mono text-[11px]">models.json</span> value resolution.
+                                  Leave the field blank if you prefer <span className="font-mono text-[11px]">auth.json</span>, OAuth, or
+                                  environment-only auth.
+                                </p>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="submit"
+                                    disabled={modelProviderAction !== null || modelProviderDraft.id.trim().length === 0}
+                                    className={ACTION_BUTTON_CLASS}
+                                  >
+                                    {modelProviderAction === 'save'
+                                      ? 'Saving provider…'
+                                      : selectedModelProviderId === NEW_MODEL_PROVIDER_ID
+                                        ? 'Create provider'
+                                        : 'Save provider'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void handleDeleteModelProvider();
+                                    }}
+                                    disabled={
+                                      modelProviderAction !== null ||
+                                      selectedModelProviderId === NEW_MODEL_PROVIDER_ID ||
+                                      !selectedModelProvider
+                                    }
+                                    className={ACTION_BUTTON_CLASS}
+                                  >
+                                    {modelProviderAction === 'delete' ? 'Removing…' : 'Remove provider'}
+                                  </button>
+                                </div>
+
+                                {modelProviderMessage && <p className="text-[12px] text-success">{modelProviderMessage}</p>}
+                                {modelProviderEditorError && <p className="text-[12px] text-danger">{modelProviderEditorError}</p>}
+                              </form>
+                            </div>
+                          )}
+
+                          <div className="space-y-2 border-t border-border-subtle pt-3 min-w-0">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h3 className="text-[14px] font-medium text-primary">Models</h3>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  startEditingProviderModel(NEW_MODEL_ID);
+                                }}
+                                disabled={!editableModelProviderId || modelDraftAction !== null}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                Add model
+                              </button>
+                            </div>
+
+                            {editableModelProviderId ? (
+                              <>
+                                {builtInProviderModels.length > 0 && (
+                                  <div className="space-y-1.5">
+                                    <h4 className="text-[12px] font-medium text-secondary">Built-in models</h4>
+                                    <div className="space-y-px">
+                                      {builtInProviderModels.map((model) => {
+                                        const hasOverride = selectedModelProvider?.models.some((candidate) => candidate.id === model.id);
+                                        return (
+                                          <button
+                                            key={`${model.provider}/${model.id}`}
+                                            type="button"
+                                            onClick={() => {
+                                              startEditingBuiltInModel(model.id);
+                                            }}
+                                            disabled={modelDraftAction !== null}
+                                            className={cx(
+                                              'group ui-list-row w-full justify-between px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                              editingModelId === model.id && !editingProviderModel
+                                                ? 'ui-list-row-selected'
+                                                : 'ui-list-row-hover',
+                                            )}
+                                            aria-pressed={editingModelId === model.id && !editingProviderModel}
+                                          >
+                                            <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
+                                              <span className="truncate font-medium text-primary">{model.id}</span>
+                                              <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                              {hasOverride ? (
+                                                <span className="text-[11px] text-accent">Overridden</span>
+                                              ) : (
+                                                <span className="text-[11px] text-dim/70 opacity-0 transition-opacity group-hover:opacity-100">
+                                                  Override
+                                                </span>
+                                              )}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="space-y-1.5">
+                                  <h4 className="text-[12px] font-medium text-secondary">Additional models</h4>
+                                  {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
+                                    <div className="space-y-px">
+                                      {selectedModelProvider.models.map((model) => (
+                                        <div key={model.id} className="group ui-list-row ui-list-row-hover justify-between px-2 py-1">
+                                          <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
+                                            <span className="truncate font-medium text-primary">{model.id}</span>
+                                            <span className="truncate text-dim">{formatProviderModelSummary(model)}</span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                startEditingProviderModel(model.id);
+                                              }}
+                                              className={ACTION_BUTTON_CLASS}
+                                            >
+                                              Edit
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                void handleDeleteProviderModel(model.id);
+                                              }}
+                                              disabled={modelDraftAction !== null}
+                                              className={ACTION_BUTTON_CLASS}
+                                            >
+                                              {modelDraftAction === 'delete' && editingModelId === model.id ? 'Removing…' : 'Remove'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[12px] text-dim">None yet.</p>
+                                  )}
+                                </div>
+
+                                {modelDraftMessage && <p className="text-[12px] text-success">{modelDraftMessage}</p>}
+                                {modelDraftError && <p className="text-[12px] text-danger">{modelDraftError}</p>}
+
+                                {editingModelId === NEW_MODEL_ID && (
+                                  <form
+                                    className="flex flex-col gap-2 border-t border-border-subtle pt-3 sm:flex-row sm:items-end"
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      void handleSaveProviderModel();
+                                    }}
+                                  >
+                                    <div className="min-w-0 flex-1 space-y-1.5">
                                       <label className="ui-card-meta" htmlFor="settings-provider-model-id">
                                         Model id
                                       </label>
@@ -4370,632 +4339,694 @@ export function SettingsPage() {
                                           setModelDraft((current) => ({ ...current, id: event.target.value }));
                                         }}
                                         className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                        placeholder="llama3.1:8b"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null || editingModelId !== NEW_MODEL_ID}
-                                      />
-                                    </div>
-
-                                    <div className="space-y-2 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-name">
-                                        Name
-                                      </label>
-                                      <input
-                                        id="settings-provider-model-name"
-                                        value={modelDraft.name}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, name: event.target.value }));
-                                        }}
-                                        className={INPUT_CLASS}
-                                        placeholder="Llama 3.1 8B"
+                                        placeholder="gpt-5.6"
                                         autoComplete="off"
                                         spellCheck={false}
                                         disabled={modelDraftAction !== null}
+                                        autoFocus
                                       />
                                     </div>
-
-                                    <div className="space-y-2 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-api">
-                                        API
-                                      </label>
-                                      <select
-                                        id="settings-provider-model-api"
-                                        value={modelDraft.api}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, api: event.target.value }));
-                                        }}
-                                        className={INPUT_CLASS}
-                                        disabled={modelDraftAction !== null}
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="submit"
+                                        disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
+                                        className={ACTION_BUTTON_CLASS}
                                       >
-                                        <option value="">Inherit provider API</option>
-                                        {MODEL_PROVIDER_API_OPTIONS.map((option) => (
-                                          <option key={option.value} value={option.value}>
-                                            {option.label}
-                                          </option>
-                                        ))}
-                                      </select>
+                                        {modelDraftAction === 'save' ? 'Adding…' : 'Add model'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingModelId(null);
+                                          setModelDraft(createModelEditorDraft(null));
+                                          setModelDraftError(null);
+                                          setModelDraftMessage(null);
+                                        }}
+                                        disabled={modelDraftAction !== null}
+                                        className={ACTION_BUTTON_CLASS}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </form>
+                                )}
+
+                                {(editingProviderModel || isEditingBuiltInOverride) && (
+                                  <form
+                                    className="space-y-3 border-t border-border-subtle pt-4"
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      void handleSaveProviderModel();
+                                    }}
+                                  >
+                                    <div className="space-y-1">
+                                      <h4 className="text-[13px] font-medium text-primary">
+                                        {editingProviderModel ? `Edit ${editingProviderModel.id}` : `Override ${modelDraft.id}`}
+                                      </h4>
                                     </div>
 
-                                    <div className="space-y-2 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-base-url">
-                                        Base URL override
+                                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                                      <div className="space-y-2 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-id">
+                                          Model id
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-id"
+                                          value={modelDraft.id}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, id: event.target.value }));
+                                          }}
+                                          className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                          placeholder="llama3.1:8b"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null || editingModelId !== NEW_MODEL_ID}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-name">
+                                          Name
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-name"
+                                          value={modelDraft.name}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, name: event.target.value }));
+                                          }}
+                                          className={INPUT_CLASS}
+                                          placeholder="Llama 3.1 8B"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-api">
+                                          API
+                                        </label>
+                                        <select
+                                          id="settings-provider-model-api"
+                                          value={modelDraft.api}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, api: event.target.value }));
+                                          }}
+                                          className={INPUT_CLASS}
+                                          disabled={modelDraftAction !== null}
+                                        >
+                                          <option value="">Inherit provider API</option>
+                                          {MODEL_PROVIDER_API_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                              {option.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      <div className="space-y-2 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-base-url">
+                                          Base URL override
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-base-url"
+                                          value={modelDraft.baseUrl}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, baseUrl: event.target.value }));
+                                          }}
+                                          className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                          placeholder="https://proxy.example.com/v1"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1.5 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-context">
+                                          Context window
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-context"
+                                          value={modelDraft.contextWindow}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, contextWindow: event.target.value }));
+                                          }}
+                                          className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                          inputMode="numeric"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1.5 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-max-tokens">
+                                          Max tokens
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-max-tokens"
+                                          value={modelDraft.maxTokens}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, maxTokens: event.target.value }));
+                                          }}
+                                          className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                          inputMode="numeric"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-4">
+                                      <label
+                                        className="inline-flex items-center gap-3 text-[14px] text-primary"
+                                        htmlFor="settings-provider-model-reasoning"
+                                      >
+                                        <input
+                                          id="settings-provider-model-reasoning"
+                                          type="checkbox"
+                                          checked={modelDraft.reasoning}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, reasoning: event.target.checked }));
+                                          }}
+                                          disabled={modelDraftAction !== null}
+                                          className={CHECKBOX_CLASS}
+                                        />
+                                        <span>Reasoning capable</span>
                                       </label>
-                                      <input
-                                        id="settings-provider-model-base-url"
-                                        value={modelDraft.baseUrl}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, baseUrl: event.target.value }));
-                                        }}
-                                        className={`${INPUT_CLASS} font-mono text-[13px]`}
-                                        placeholder="https://proxy.example.com/v1"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
 
-                                    <div className="space-y-1.5 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-context">
-                                        Context window
+                                      <label
+                                        className="inline-flex items-center gap-3 text-[14px] text-primary"
+                                        htmlFor="settings-provider-model-images"
+                                      >
+                                        <input
+                                          id="settings-provider-model-images"
+                                          type="checkbox"
+                                          checked={modelDraft.acceptsImages}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, acceptsImages: event.target.checked }));
+                                          }}
+                                          disabled={modelDraftAction !== null}
+                                          className={CHECKBOX_CLASS}
+                                        />
+                                        <span>Accept images</span>
                                       </label>
-                                      <input
-                                        id="settings-provider-model-context"
-                                        value={modelDraft.contextWindow}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, contextWindow: event.target.value }));
-                                        }}
-                                        className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                        inputMode="numeric"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
                                     </div>
 
-                                    <div className="space-y-1.5 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-max-tokens">
-                                        Max tokens
-                                      </label>
-                                      <input
-                                        id="settings-provider-model-max-tokens"
-                                        value={modelDraft.maxTokens}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, maxTokens: event.target.value }));
-                                        }}
-                                        className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                        inputMode="numeric"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-                                  </div>
+                                    <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+                                      <div className="space-y-1.5 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-cost-input">
+                                          Input cost / 1M
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-cost-input"
+                                          value={modelDraft.costInput}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, costInput: event.target.value }));
+                                          }}
+                                          className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                          inputMode="decimal"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
 
-                                  <div className="flex flex-wrap gap-4">
-                                    <label
-                                      className="inline-flex items-center gap-3 text-[14px] text-primary"
-                                      htmlFor="settings-provider-model-reasoning"
-                                    >
-                                      <input
-                                        id="settings-provider-model-reasoning"
-                                        type="checkbox"
-                                        checked={modelDraft.reasoning}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, reasoning: event.target.checked }));
+                                      <div className="space-y-1.5 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-cost-output">
+                                          Output cost / 1M
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-cost-output"
+                                          value={modelDraft.costOutput}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, costOutput: event.target.value }));
+                                          }}
+                                          className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                          inputMode="decimal"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1.5 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-read">
+                                          Cache read / 1M
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-cost-cache-read"
+                                          value={modelDraft.costCacheRead}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, costCacheRead: event.target.value }));
+                                          }}
+                                          className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                          inputMode="decimal"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1.5 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-write">
+                                          Cache write / 1M
+                                        </label>
+                                        <input
+                                          id="settings-provider-model-cost-cache-write"
+                                          value={modelDraft.costCacheWrite}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, costCacheWrite: event.target.value }));
+                                          }}
+                                          className={`${COMPACT_META_INPUT_CLASS} font-mono`}
+                                          inputMode="decimal"
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="grid gap-4 lg:grid-cols-2">
+                                      <div className="space-y-2 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-headers">
+                                          Headers (JSON)
+                                        </label>
+                                        <textarea
+                                          id="settings-provider-model-headers"
+                                          value={modelDraft.headersText}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, headersText: event.target.value }));
+                                          }}
+                                          className={JSON_TEXTAREA_CLASS}
+                                          placeholder={'{\n  "x-provider-key": "HEADER_VALUE"\n}'}
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-2 min-w-0">
+                                        <label className="ui-card-meta" htmlFor="settings-provider-model-compat">
+                                          Compat (JSON)
+                                        </label>
+                                        <textarea
+                                          id="settings-provider-model-compat"
+                                          value={modelDraft.compatText}
+                                          onChange={(event) => {
+                                            setModelDraft((current) => ({ ...current, compatText: event.target.value }));
+                                          }}
+                                          className={JSON_TEXTAREA_CLASS}
+                                          placeholder={'{\n  "supportsReasoningEffort": false\n}'}
+                                          spellCheck={false}
+                                          disabled={modelDraftAction !== null}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="submit"
+                                        disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
+                                        className={ACTION_BUTTON_CLASS}
+                                      >
+                                        {modelDraftAction === 'save' ? 'Saving model…' : 'Save model'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingModelId(null);
+                                          setModelDraft(createModelEditorDraft(null));
+                                          setModelDraftError(null);
+                                          setModelDraftMessage(null);
                                         }}
                                         disabled={modelDraftAction !== null}
-                                        className={CHECKBOX_CLASS}
-                                      />
-                                      <span>Reasoning capable</span>
+                                        className={ACTION_BUTTON_CLASS}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </form>
+                                )}
+                              </>
+                            ) : (
+                              <p className="ui-card-meta">Select a provider, or type a provider id above, to edit its models.</p>
+                            )}
+                          </div>
+
+                          <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
+                            <div>
+                              <h3 className="text-[15px] font-medium text-primary">Credentials</h3>
+                            </div>
+
+                            {modalProviderAuth ? (
+                              <div className="space-y-2.5">
+                                <p className="text-[12px] text-secondary">{formatProviderAuthStatus(modalProviderAuth)}</p>
+
+                                {canProviderUseApiKey(modalProviderAuth) ? (
+                                  <div className="space-y-2">
+                                    <label className="ui-card-meta" htmlFor="settings-provider-api-key-modal">
+                                      API key
                                     </label>
-
-                                    <label
-                                      className="inline-flex items-center gap-3 text-[14px] text-primary"
-                                      htmlFor="settings-provider-model-images"
-                                    >
-                                      <input
-                                        id="settings-provider-model-images"
-                                        type="checkbox"
-                                        checked={modelDraft.acceptsImages}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, acceptsImages: event.target.checked }));
-                                        }}
-                                        disabled={modelDraftAction !== null}
-                                        className={CHECKBOX_CLASS}
-                                      />
-                                      <span>Accept images</span>
-                                    </label>
+                                    <input
+                                      id="settings-provider-api-key-modal"
+                                      type="password"
+                                      value={providerApiKey}
+                                      onChange={(event) => {
+                                        setProviderApiKey(event.target.value);
+                                      }}
+                                      className={INPUT_CLASS}
+                                      placeholder="sk-... or op://vault/item/field"
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                      disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running'}
+                                    />
                                   </div>
+                                ) : null}
 
-                                  <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-                                    <div className="space-y-1.5 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-cost-input">
-                                        Input cost / 1M
-                                      </label>
-                                      <input
-                                        id="settings-provider-model-cost-input"
-                                        value={modelDraft.costInput}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, costInput: event.target.value }));
-                                        }}
-                                        className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                        inputMode="decimal"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1.5 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-cost-output">
-                                        Output cost / 1M
-                                      </label>
-                                      <input
-                                        id="settings-provider-model-cost-output"
-                                        value={modelDraft.costOutput}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, costOutput: event.target.value }));
-                                        }}
-                                        className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                        inputMode="decimal"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1.5 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-read">
-                                        Cache read / 1M
-                                      </label>
-                                      <input
-                                        id="settings-provider-model-cost-cache-read"
-                                        value={modelDraft.costCacheRead}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, costCacheRead: event.target.value }));
-                                        }}
-                                        className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                        inputMode="decimal"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-
-                                    <div className="space-y-1.5 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-write">
-                                        Cache write / 1M
-                                      </label>
-                                      <input
-                                        id="settings-provider-model-cost-cache-write"
-                                        value={modelDraft.costCacheWrite}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, costCacheWrite: event.target.value }));
-                                        }}
-                                        className={`${COMPACT_META_INPUT_CLASS} font-mono`}
-                                        inputMode="decimal"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="grid gap-4 lg:grid-cols-2">
-                                    <div className="space-y-2 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-headers">
-                                        Headers (JSON)
-                                      </label>
-                                      <textarea
-                                        id="settings-provider-model-headers"
-                                        value={modelDraft.headersText}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, headersText: event.target.value }));
-                                        }}
-                                        className={JSON_TEXTAREA_CLASS}
-                                        placeholder={'{\n  "x-provider-key": "HEADER_VALUE"\n}'}
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-
-                                    <div className="space-y-2 min-w-0">
-                                      <label className="ui-card-meta" htmlFor="settings-provider-model-compat">
-                                        Compat (JSON)
-                                      </label>
-                                      <textarea
-                                        id="settings-provider-model-compat"
-                                        value={modelDraft.compatText}
-                                        onChange={(event) => {
-                                          setModelDraft((current) => ({ ...current, compatText: event.target.value }));
-                                        }}
-                                        className={JSON_TEXTAREA_CLASS}
-                                        placeholder={'{\n  "supportsReasoningEffort": false\n}'}
-                                        spellCheck={false}
-                                        disabled={modelDraftAction !== null}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="flex flex-wrap gap-2">
-                                    <button
-                                      type="submit"
-                                      disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
-                                      className={ACTION_BUTTON_CLASS}
-                                    >
-                                      {modelDraftAction === 'save' ? 'Saving model…' : 'Save model'}
-                                    </button>
+                                <div className="flex flex-wrap gap-2">
+                                  {canProviderUseApiKey(modalProviderAuth) && (
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setEditingModelId(null);
-                                        setModelDraft(createModelEditorDraft(null));
-                                        setModelDraftError(null);
-                                        setModelDraftMessage(null);
+                                        void handleSaveProviderApiKey();
                                       }}
-                                      disabled={modelDraftAction !== null}
+                                      disabled={
+                                        providerCredentialAction !== null ||
+                                        oauthLoginState?.status === 'running' ||
+                                        providerApiKey.trim().length === 0
+                                      }
                                       className={ACTION_BUTTON_CLASS}
                                     >
-                                      Cancel
+                                      {providerCredentialAction === 'saveKey' ? 'Saving key…' : 'Save API key'}
                                     </button>
-                                  </div>
-                                </form>
-                              )}
-                            </>
-                          ) : (
-                            <p className="ui-card-meta">Select a provider, or type a provider id above, to edit its models.</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
-                          <div>
-                            <h3 className="text-[15px] font-medium text-primary">Credentials</h3>
-                          </div>
-
-                          {modalProviderAuth ? (
-                            <div className="space-y-2.5">
-                              <p className="text-[12px] text-secondary">{formatProviderAuthStatus(modalProviderAuth)}</p>
-
-                              {canProviderUseApiKey(modalProviderAuth) ? (
-                                <div className="space-y-2">
-                                  <label className="ui-card-meta" htmlFor="settings-provider-api-key-modal">
-                                    API key
-                                  </label>
-                                  <input
-                                    id="settings-provider-api-key-modal"
-                                    type="password"
-                                    value={providerApiKey}
-                                    onChange={(event) => {
-                                      setProviderApiKey(event.target.value);
-                                    }}
-                                    className={INPUT_CLASS}
-                                    placeholder="sk-... or op://vault/item/field"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running'}
-                                  />
-                                </div>
-                              ) : null}
-
-                              <div className="flex flex-wrap gap-2">
-                                {canProviderUseApiKey(modalProviderAuth) && (
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      void handleSaveProviderApiKey();
+                                      void handleRemoveProviderCredential();
                                     }}
                                     disabled={
                                       providerCredentialAction !== null ||
                                       oauthLoginState?.status === 'running' ||
-                                      providerApiKey.trim().length === 0
+                                      !modalProviderAuth.hasStoredCredential
                                     }
                                     className={ACTION_BUTTON_CLASS}
                                   >
-                                    {providerCredentialAction === 'saveKey' ? 'Saving key…' : 'Save API key'}
+                                    {providerCredentialAction === 'remove' ? 'Removing…' : 'Remove stored credential'}
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void handleRemoveProviderCredential();
-                                  }}
-                                  disabled={
-                                    providerCredentialAction !== null ||
-                                    oauthLoginState?.status === 'running' ||
-                                    !modalProviderAuth.hasStoredCredential
-                                  }
-                                  className={ACTION_BUTTON_CLASS}
-                                >
-                                  {providerCredentialAction === 'remove' ? 'Removing…' : 'Remove stored credential'}
-                                </button>
-                                {modalProviderAuth.oauthSupported && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void handleStartProviderOAuthLogin();
-                                    }}
-                                    disabled={
-                                      providerCredentialAction !== null ||
-                                      oauthAction !== null ||
-                                      selectedProviderLogin?.status === 'running'
-                                    }
-                                    className={ACTION_BUTTON_CLASS}
-                                  >
-                                    {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${modalProviderAuth.id})`}
-                                  </button>
+                                  {modalProviderAuth.oauthSupported && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void handleStartProviderOAuthLogin();
+                                      }}
+                                      disabled={
+                                        providerCredentialAction !== null ||
+                                        oauthAction !== null ||
+                                        selectedProviderLogin?.status === 'running'
+                                      }
+                                      className={ACTION_BUTTON_CLASS}
+                                    >
+                                      {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${modalProviderAuth.id})`}
+                                    </button>
+                                  )}
+                                </div>
+
+                                {selectedProviderLogin?.status === 'running' && (
+                                  <div className="space-y-2 border-t border-border-subtle pt-3">
+                                    <p className="ui-card-meta">
+                                      OAuth login running for {selectedProviderLogin.providerName}.
+                                      {selectedProviderLogin.authUrl ? (
+                                        <>
+                                          {' Opened the '}
+                                          <a
+                                            href={selectedProviderLogin.authUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title={selectedProviderLogin.authUrl}
+                                            className="underline text-interactive hover:text-interactive-hover"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              window.open(selectedProviderLogin.authUrl, '_blank');
+                                            }}
+                                          >
+                                            authorization page
+                                          </a>
+                                          .
+                                        </>
+                                      ) : (
+                                        ''
+                                      )}
+                                    </p>
+                                    {selectedProviderLogin.progress.length > 0 && (
+                                      <p className="ui-card-meta">
+                                        {selectedProviderLogin.progress[selectedProviderLogin.progress.length - 1]}
+                                      </p>
+                                    )}
+                                    {selectedProviderLogin.prompt && (
+                                      <form
+                                        className="flex flex-col gap-2 sm:flex-row sm:items-end"
+                                        onSubmit={(event) => {
+                                          event.preventDefault();
+                                          void handleSubmitProviderOAuthInput();
+                                        }}
+                                      >
+                                        <div className="min-w-0 flex-1 space-y-1.5">
+                                          <label className="ui-card-meta" htmlFor="settings-provider-oauth-input">
+                                            {selectedProviderLogin.prompt.message}
+                                          </label>
+                                          <input
+                                            id="settings-provider-oauth-input"
+                                            value={oauthInputValue}
+                                            onChange={(event) => {
+                                              setOauthInputValue(event.target.value);
+                                            }}
+                                            className={INPUT_CLASS}
+                                            placeholder={selectedProviderLogin.prompt.placeholder}
+                                            autoComplete="off"
+                                            disabled={oauthAction !== null}
+                                          />
+                                        </div>
+                                        <button
+                                          type="submit"
+                                          disabled={
+                                            oauthAction !== null ||
+                                            (!selectedProviderLogin.prompt.allowEmpty && oauthInputValue.trim().length === 0)
+                                          }
+                                          className={ACTION_BUTTON_CLASS}
+                                        >
+                                          {oauthAction === 'submit' ? 'Submitting…' : 'Submit'}
+                                        </button>
+                                      </form>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void handleCancelProviderOAuthLogin();
+                                      }}
+                                      disabled={oauthAction !== null}
+                                      className={ACTION_BUTTON_CLASS}
+                                    >
+                                      {oauthAction === 'cancel' ? 'Cancelling…' : 'Cancel OAuth login'}
+                                    </button>
+                                  </div>
                                 )}
                               </div>
+                            ) : editableModelProviderId ? (
+                              <p className="ui-card-meta">Save or select the provider before managing stored credentials.</p>
+                            ) : (
+                              <p className="ui-card-meta">Choose or create a provider first.</p>
+                            )}
 
-                              {selectedProviderLogin?.status === 'running' && (
-                                <div className="space-y-2 border-t border-border-subtle pt-3">
-                                  <p className="ui-card-meta">
-                                    OAuth login running for {selectedProviderLogin.providerName}.
-                                    {selectedProviderLogin.authUrl ? (
-                                      <>
-                                        {' Opened the '}
-                                        <a
-                                          href={selectedProviderLogin.authUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          title={selectedProviderLogin.authUrl}
-                                          className="underline text-interactive hover:text-interactive-hover"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            window.open(selectedProviderLogin.authUrl, '_blank');
-                                          }}
-                                        >
-                                          authorization page
-                                        </a>
-                                        .
-                                      </>
-                                    ) : (
-                                      ''
-                                    )}
-                                  </p>
-                                  {selectedProviderLogin.progress.length > 0 && (
-                                    <p className="ui-card-meta">
-                                      {selectedProviderLogin.progress[selectedProviderLogin.progress.length - 1]}
-                                    </p>
-                                  )}
-                                  {selectedProviderLogin.prompt && (
-                                    <form
-                                      className="flex flex-col gap-2 sm:flex-row sm:items-end"
-                                      onSubmit={(event) => {
-                                        event.preventDefault();
-                                        void handleSubmitProviderOAuthInput();
-                                      }}
-                                    >
-                                      <div className="min-w-0 flex-1 space-y-1.5">
-                                        <label className="ui-card-meta" htmlFor="settings-provider-oauth-input">
-                                          {selectedProviderLogin.prompt.message}
-                                        </label>
-                                        <input
-                                          id="settings-provider-oauth-input"
-                                          value={oauthInputValue}
-                                          onChange={(event) => {
-                                            setOauthInputValue(event.target.value);
-                                          }}
-                                          className={INPUT_CLASS}
-                                          placeholder={selectedProviderLogin.prompt.placeholder}
-                                          autoComplete="off"
-                                          disabled={oauthAction !== null}
-                                        />
-                                      </div>
-                                      <button
-                                        type="submit"
-                                        disabled={
-                                          oauthAction !== null ||
-                                          (!selectedProviderLogin.prompt.allowEmpty && oauthInputValue.trim().length === 0)
-                                        }
-                                        className={ACTION_BUTTON_CLASS}
-                                      >
-                                        {oauthAction === 'submit' ? 'Submitting…' : 'Submit'}
-                                      </button>
-                                    </form>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void handleCancelProviderOAuthLogin();
-                                    }}
-                                    disabled={oauthAction !== null}
-                                    className={ACTION_BUTTON_CLASS}
-                                  >
-                                    {oauthAction === 'cancel' ? 'Cancelling…' : 'Cancel OAuth login'}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ) : editableModelProviderId ? (
-                            <p className="ui-card-meta">Save or select the provider before managing stored credentials.</p>
-                          ) : (
-                            <p className="ui-card-meta">Choose or create a provider first.</p>
-                          )}
-
-                          {providerCredentialNotice && <p className="text-[12px] text-success">{providerCredentialNotice}</p>}
-                          {providerCredentialError && <p className="text-[12px] text-danger">{providerCredentialError}</p>}
-                          {oauthError && <p className="text-[12px] text-danger">{oauthError}</p>}
-                          {selectedProviderLogin?.status === 'failed' && selectedProviderLogin.error && (
-                            <p className="text-[12px] text-danger">OAuth login failed: {selectedProviderLogin.error}</p>
-                          )}
+                            {providerCredentialNotice && <p className="text-[12px] text-success">{providerCredentialNotice}</p>}
+                            {providerCredentialError && <p className="text-[12px] text-danger">{providerCredentialError}</p>}
+                            {oauthError && <p className="text-[12px] text-danger">{oauthError}</p>}
+                            {selectedProviderLogin?.status === 'failed' && selectedProviderLogin.error && (
+                              <p className="text-[12px] text-danger">OAuth login failed: {selectedProviderLogin.error}</p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-            id="settings-tools"
-            label="Tools"
-            description="MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration."
-          >
-            <div className="space-y-0">
-              <SettingsPanel
-                title="Bundled MCP wrappers"
-                description="Skills can keep their MCP CLI wrapper config in mcp.json next to SKILL.md. Explicit config still wins when server names collide."
-              >
-                {toolsLoading && !toolsState ? (
-                  <p className="ui-card-meta">Loading MCP wrappers…</p>
-                ) : toolsError && !toolsState ? (
-                  <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
-                ) : toolsState ? (
-                  <div className="space-y-5">
-                    <p className="ui-card-meta break-all">
-                      {toolsState.mcp.configExists ? (
-                        <>
-                          Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
-                        </>
-                      ) : (
-                        'No explicit MCP config file found. Using bundled skill manifests only.'
-                      )}
-                    </p>
-
-                    {toolsState.mcp.bundledSkills.length > 0 ? (
-                      <div className="space-y-3">
-                        <p className="ui-card-meta">
-                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'}{' '}
-                          active.
-                        </p>
-                        {toolsState.mcp.bundledSkills.map((bundle) => (
-                          <div
-                            key={bundle.manifestPath}
-                            className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0"
-                          >
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
-                              <span className="ui-card-meta">
-                                {bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}
-                              </span>
-                            </div>
-                            <p className="ui-card-meta break-all">
-                              <span className="font-mono text-[11px]">{bundle.manifestPath}</span>
-                            </p>
-                            <p className="ui-card-meta break-all">
-                              <span className="font-mono text-[11px]">{bundle.serverNames.join(', ')}</span>
-                            </p>
-                            {bundle.overriddenServerNames.length > 0 ? (
-                              <p className="text-[12px] text-secondary">
-                                Overridden by explicit config:{' '}
-                                <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
-                              </p>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="ui-card-meta">No skill-local mcp.json wrappers found in the active skill set.</p>
-                    )}
-
-                    {toolsState.mcp.servers.length > 0 ? (
-                      <div className="space-y-3">
-                        <p className="ui-card-meta">Effective MCP servers</p>
-                        {toolsState.mcp.servers.map((server) => (
-                          <div key={server.name} className="space-y-2 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-[12px] text-primary">{server.name}</span>
-                              <Pill tone={server.transport === 'remote' ? 'teal' : 'muted'}>{server.transport}</Pill>
-                              {server.hasOAuth ? <Pill tone="accent">oauth</Pill> : null}
-                              <span className="ui-card-meta">{formatMcpServerSource(server)}</span>
-                            </div>
-                            <p className="ui-card-meta break-all">
-                              <span className="font-mono text-[11px]">{formatMcpServerCommand(server)}</span>
-                            </p>
-                            <div className="grid gap-y-1 text-[11px] leading-5 text-dim sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-x-3">
-                              {server.sourcePath ? (
-                                <>
-                                  <span className="text-secondary">{formatMcpServerSourcePathLabel(server)}</span>
-                                  <span className="break-all font-mono">{server.sourcePath}</span>
-                                </>
-                              ) : null}
-                              {server.callbackUrl ? (
-                                <>
-                                  <span className="text-secondary">Callback</span>
-                                  <span className="break-all font-mono">{server.callbackUrl}</span>
-                                </>
-                              ) : null}
-                              {server.authorizeResource ? (
-                                <>
-                                  <span className="text-secondary">Resource</span>
-                                  <span className="break-all font-mono">{server.authorizeResource}</span>
-                                </>
-                              ) : null}
-                              {server.cwd ? (
-                                <>
-                                  <span className="text-secondary">Working dir</span>
-                                  <span className="break-all font-mono">{server.cwd}</span>
-                                </>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="ui-card-meta">No MCP servers are currently available.</p>
                     )}
                   </div>
-                ) : null}
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-
-          <DaemonSettingsSection />
-          <DesktopConnectionsSettingsPanel />
-
-          {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
-
-          <SettingsSection
-            id="settings-interface"
-            label="Interface"
-            description="Browser-local UI state, saved layout preferences, and reset tools."
-          >
-            <SettingsPanel title="Reset saved UI preferences" description="Clears saved UI state only. Conversations and data stay intact.">
-              {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
-
-              <div className="space-y-6">
-                <div className="space-y-2 min-w-0">
-                  <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
-                  <p className="ui-card-meta">
-                    Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files), and per-doc context rail
-                    widths, then reloads the page.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleReset('layout');
-                    }}
-                    disabled={resetting !== null}
-                    className={ACTION_BUTTON_CLASS}
-                  >
-                    {resetting === 'layout' ? 'Resetting…' : 'Reset layout + reload'}
-                  </button>
-                </div>
-
-                <div className="space-y-2 border-t border-border-subtle pt-6 min-w-0">
-                  <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
-                  <p className="ui-card-meta">
-                    Clears stored open-tab state, seen message counts, and composer history in this app, plus the durable open-tab snapshot
-                    stored by the desktop UI, then reloads the page.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleReset('conversation');
-                    }}
-                    disabled={resetting !== null}
-                    className={ACTION_BUTTON_CLASS}
-                  >
-                    {resetting === 'conversation' ? 'Resetting…' : 'Reset conversation UI + reload'}
-                  </button>
-                </div>
+                </SettingsPanel>
               </div>
-            </SettingsPanel>
-          </SettingsSection>
-        </div>
-      </AppPageLayout>
-    </div>
+            </SettingsSection>
+
+            <SettingsSection
+              id="settings-tools"
+              label="Tools"
+              description="MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration."
+            >
+              <div className="space-y-0">
+                <SettingsPanel
+                  title="Bundled MCP wrappers"
+                  description="Skills can keep their MCP CLI wrapper config in mcp.json next to SKILL.md. Explicit config still wins when server names collide."
+                >
+                  {toolsLoading && !toolsState ? (
+                    <p className="ui-card-meta">Loading MCP wrappers…</p>
+                  ) : toolsError && !toolsState ? (
+                    <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
+                  ) : toolsState ? (
+                    <div className="space-y-5">
+                      <p className="ui-card-meta break-all">
+                        {toolsState.mcp.configExists ? (
+                          <>
+                            Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
+                          </>
+                        ) : (
+                          'No explicit MCP config file found. Using bundled skill manifests only.'
+                        )}
+                      </p>
+
+                      {toolsState.mcp.bundledSkills.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="ui-card-meta">
+                            {toolsState.mcp.bundledSkills.length} bundled skill wrapper
+                            {toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active.
+                          </p>
+                          {toolsState.mcp.bundledSkills.map((bundle) => (
+                            <div
+                              key={bundle.manifestPath}
+                              className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0"
+                            >
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
+                                <span className="ui-card-meta">
+                                  {bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}
+                                </span>
+                              </div>
+                              <p className="ui-card-meta break-all">
+                                <span className="font-mono text-[11px]">{bundle.manifestPath}</span>
+                              </p>
+                              <p className="ui-card-meta break-all">
+                                <span className="font-mono text-[11px]">{bundle.serverNames.join(', ')}</span>
+                              </p>
+                              {bundle.overriddenServerNames.length > 0 ? (
+                                <p className="text-[12px] text-secondary">
+                                  Overridden by explicit config:{' '}
+                                  <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
+                                </p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="ui-card-meta">No skill-local mcp.json wrappers found in the active skill set.</p>
+                      )}
+
+                      {toolsState.mcp.servers.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="ui-card-meta">Effective MCP servers</p>
+                          {toolsState.mcp.servers.map((server) => (
+                            <div key={server.name} className="space-y-2 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-[12px] text-primary">{server.name}</span>
+                                <Pill tone={server.transport === 'remote' ? 'teal' : 'muted'}>{server.transport}</Pill>
+                                {server.hasOAuth ? <Pill tone="accent">oauth</Pill> : null}
+                                <span className="ui-card-meta">{formatMcpServerSource(server)}</span>
+                              </div>
+                              <p className="ui-card-meta break-all">
+                                <span className="font-mono text-[11px]">{formatMcpServerCommand(server)}</span>
+                              </p>
+                              <div className="grid gap-y-1 text-[11px] leading-5 text-dim sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-x-3">
+                                {server.sourcePath ? (
+                                  <>
+                                    <span className="text-secondary">{formatMcpServerSourcePathLabel(server)}</span>
+                                    <span className="break-all font-mono">{server.sourcePath}</span>
+                                  </>
+                                ) : null}
+                                {server.callbackUrl ? (
+                                  <>
+                                    <span className="text-secondary">Callback</span>
+                                    <span className="break-all font-mono">{server.callbackUrl}</span>
+                                  </>
+                                ) : null}
+                                {server.authorizeResource ? (
+                                  <>
+                                    <span className="text-secondary">Resource</span>
+                                    <span className="break-all font-mono">{server.authorizeResource}</span>
+                                  </>
+                                ) : null}
+                                {server.cwd ? (
+                                  <>
+                                    <span className="text-secondary">Working dir</span>
+                                    <span className="break-all font-mono">{server.cwd}</span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="ui-card-meta">No MCP servers are currently available.</p>
+                      )}
+                    </div>
+                  ) : null}
+                </SettingsPanel>
+              </div>
+            </SettingsSection>
+
+            <DaemonSettingsSection />
+            <DesktopConnectionsSettingsPanel />
+
+            {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
+
+            <SettingsSection
+              id="settings-interface"
+              label="Interface"
+              description="Browser-local UI state, saved layout preferences, and reset tools."
+            >
+              <SettingsPanel
+                title="Reset saved UI preferences"
+                description="Clears saved UI state only. Conversations and data stay intact."
+              >
+                {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
+
+                <div className="space-y-6">
+                  <div className="space-y-2 min-w-0">
+                    <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
+                    <p className="ui-card-meta">
+                      Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files), and per-doc context rail
+                      widths, then reloads the page.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleReset('layout');
+                      }}
+                      disabled={resetting !== null}
+                      className={ACTION_BUTTON_CLASS}
+                    >
+                      {resetting === 'layout' ? 'Resetting…' : 'Reset layout + reload'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 border-t border-border-subtle pt-6 min-w-0">
+                    <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
+                    <p className="ui-card-meta">
+                      Clears stored open-tab state, seen message counts, and composer history in this app, plus the durable open-tab
+                      snapshot stored by the desktop UI, then reloads the page.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleReset('conversation');
+                      }}
+                      disabled={resetting !== null}
+                      className={ACTION_BUTTON_CLASS}
+                    >
+                      {resetting === 'conversation' ? 'Resetting…' : 'Reset conversation UI + reload'}
+                    </button>
+                  </div>
+                </div>
+              </SettingsPanel>
+            </SettingsSection>
+          </div>
+        </AppPageLayout>
+      </div>
+    </VisibleSettingsSectionsContext.Provider>
   );
 }
