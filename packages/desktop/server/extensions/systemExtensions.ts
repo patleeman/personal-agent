@@ -79,6 +79,36 @@ const FALLBACK_SYSTEM_TELEMETRY_MANIFEST: ExtensionManifest = {
   permissions: ['telemetry:read'],
 };
 
+const FALLBACK_SYSTEM_RUNS_MANIFEST: ExtensionManifest = {
+  schemaVersion: 2,
+  id: 'system-runs',
+  name: 'Runs',
+  packageType: 'system',
+  description: 'Inspect and manage background work linked to the active conversation.',
+  version: '0.2.0',
+  frontend: { entry: 'dist/frontend.js', styles: [] },
+  contributes: {
+    views: [
+      {
+        id: 'conversation-runs',
+        title: 'Runs',
+        location: 'rightRail',
+        scope: 'conversation',
+        component: 'ConversationRunsPanel',
+        icon: 'terminal',
+        detailView: 'conversation-run-detail',
+      },
+      {
+        id: 'conversation-run-detail',
+        title: 'Run detail',
+        location: 'workbench',
+        component: 'ConversationRunDetailPanel',
+      },
+    ],
+  },
+  permissions: ['runs:read', 'runs:write'],
+};
+
 const FALLBACK_SYSTEM_SETTINGS_MANIFEST: ExtensionManifest = {
   schemaVersion: 2,
   id: 'system-settings',
@@ -101,6 +131,7 @@ export const SYSTEM_EXTENSION_ENTRIES: SystemExtensionEntry[] = [
   readBundledSystemExtension('system-automations', FALLBACK_SYSTEM_AUTOMATIONS_MANIFEST),
   readBundledSystemExtension('system-gateways', FALLBACK_SYSTEM_GATEWAYS_MANIFEST),
   readBundledSystemExtension('system-telemetry', FALLBACK_SYSTEM_TELEMETRY_MANIFEST),
+  readBundledSystemExtension('system-runs', FALLBACK_SYSTEM_RUNS_MANIFEST),
   readBundledSystemExtension('system-settings', FALLBACK_SYSTEM_SETTINGS_MANIFEST),
 ];
 

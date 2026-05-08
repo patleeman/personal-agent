@@ -1288,6 +1288,7 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
+  const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
     (id: string) => {
@@ -1475,10 +1476,10 @@ function WorkbenchKnowledgeRail({
 
   useEffect(() => {
     if (activeRunId) {
-      onActiveToolChange('runs');
+      onActiveToolChange(systemRunsExtensionSurface ? extensionToolPanelMode(systemRunsExtensionSurface) : 'runs');
       onWorkspaceFileClear();
     }
-  }, [activeRunId, onActiveToolChange, onWorkspaceFileClear]);
+  }, [activeRunId, onActiveToolChange, onWorkspaceFileClear, systemRunsExtensionSurface]);
 
   useEffect(() => {
     if (activeTool !== 'runs' || showRunsTab) {
@@ -1677,7 +1678,7 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Artifacts</span>
           </button>
         ) : null}
-        {showRunsTab ? (
+        {!systemRunsExtensionSurface && showRunsTab ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'runs' && 'ui-sidebar-nav-item-active')}
@@ -1769,7 +1770,7 @@ function WorkbenchKnowledgeRail({
             workspaceCwd={workspaceCwd}
           />
         </div>
-      ) : activeTool === 'runs' ? (
+      ) : activeTool === 'runs' && !systemRunsExtensionSurface ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationRunsRailContent
             conversationId={conversationId}
