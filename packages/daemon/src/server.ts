@@ -761,6 +761,19 @@ export class PersonalAgentDaemon {
     };
   }
 
+  private async waitForScheduledRunRecord(runId: string): Promise<boolean> {
+    const deadlineMs = Date.now() + 1500;
+
+    while (Date.now() < deadlineMs) {
+      if (scanDurableRun(this.runsRoot, runId)) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    return Boolean(scanDurableRun(this.runsRoot, runId));
+  }
+
   async startScheduledTaskRun(taskId: string): Promise<StartScheduledTaskRunResult> {
     const runId = `task-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
     const accepted = this.bus.publish(
@@ -783,15 +796,16 @@ export class PersonalAgentDaemon {
       };
     }
 
-    // Fire-and-forget: do not block the IPC handler on event processing.
+    // Fire-and-forget: do not block the IPC handler on full event processing.
     // `waitForIdle` would hold the socket open until every queued event
     // handler finishes — easily exceeding the client-side 5 s socket
-    // timeout when handlers are slow or the queue is deep.  Instead,
-    // give the event bus a short grace period to pick up the request
-    // and then check whether the task module created the durable run.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // timeout when handlers are slow or the queue is deep. Instead, wait only
+    // for the durable run record to appear. The task runner creates that record
+    // before doing the expensive work, but a fixed 50ms grace period was too
+    // racy on normal desktop launches.
+    const runStarted = await this.waitForScheduledRunRecord(runId);
 
-    if (!scanDurableRun(this.runsRoot, runId)) {
+    if (!runStarted) {
       return {
         accepted: false,
         runId,
