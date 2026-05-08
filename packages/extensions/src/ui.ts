@@ -6,6 +6,8 @@ export declare const AppPageIntro: HostComponent;
 export declare const AppPageLayout: HostComponent;
 export declare const AppPageSection: HostComponent;
 export declare const AppPageToc: HostComponent;
+export declare const ErrorState: HostComponent;
+export declare const LoadingState: HostComponent;
 export declare const Pill: HostComponent;
 export declare const ToolbarButton: HostComponent;
 export declare function cx(...values: Array<unknown>): string;
