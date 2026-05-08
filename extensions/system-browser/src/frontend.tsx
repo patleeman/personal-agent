@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { cx } from '../../components/ui';
-import { WorkbenchBrowserTab } from '../../components/workbench/WorkbenchBrowserTab';
-import { getDesktopBridge } from '../../desktop/desktopBridge';
+import { cx } from '../../../packages/desktop/ui/src/components/ui';
+import { WorkbenchBrowserTab } from '../../../packages/desktop/ui/src/components/workbench/WorkbenchBrowserTab';
+import { getDesktopBridge } from '../../../packages/desktop/ui/src/desktop/desktopBridge';
 import {
   type BrowserTabsState,
   createNewTab,
@@ -10,7 +10,7 @@ import {
   getTabSessionKey,
   readBrowserTabsState,
   writeBrowserTabsState,
-} from '../../local/workbenchBrowserTabs';
+} from '../../../packages/desktop/ui/src/local/workbenchBrowserTabs';
 
 const BROWSER_TABS_CHANGED_EVENT = 'pa:system-browser-tabs-changed';
 

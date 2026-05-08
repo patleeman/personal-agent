@@ -1,6 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignoreDependencies": ["autoprefixer", "postcss", "esbuild"],
+  "ignoreIssues": {
+    "packages/desktop/ui/src/components/workbench/WorkbenchBrowserTab.tsx": ["exports"],
+    "packages/desktop/ui/src/local/workbenchBrowserTabs.ts": ["exports"]
+  },
   "workspaces": {
     ".": {
       "entry": ["scripts/*.mjs", "*.config.mjs"],

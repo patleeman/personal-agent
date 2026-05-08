@@ -23,7 +23,6 @@ type ExtensionToolBlockComponent = ComponentType<{
 
 const systemComponents = new Map<string, () => Promise<Record<string, unknown>>>([
   ['system-artifacts', () => import('./systemWorkbench/SystemArtifactsExtension')],
-  ['system-browser', () => import('./systemWorkbench/SystemBrowserExtension')],
   ['system-diffs', () => import('./systemWorkbench/SystemDiffsExtension')],
 ]);
 
