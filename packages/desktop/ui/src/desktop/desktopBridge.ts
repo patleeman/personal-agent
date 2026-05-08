@@ -46,7 +46,6 @@ import type {
   SessionDetailResult,
   SessionMeta,
   ToolsState,
-  TranscriptionResult,
   VaultFileListResult,
 } from '../shared/types';
 
@@ -208,13 +207,6 @@ export interface PersonalAgentDesktopBridge {
   readSessionMeta(sessionId: string): Promise<SessionMeta>;
   readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;
   readModels(): Promise<ModelState>;
-  transcribeFile(input: {
-    dataBase64: string;
-    mimeType?: string;
-    fileName?: string;
-    language?: string;
-    model?: string;
-  }): Promise<TranscriptionResult>;
   updateModelPreferences(input: {
     model?: string | null;
     visionModel?: string | null;

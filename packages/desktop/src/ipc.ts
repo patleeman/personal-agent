@@ -8,7 +8,6 @@ import { showKnowledgeEntryContextMenu } from './knowledge-entry-context-menu.js
 import { subscribeDesktopRemoteOperationStatus } from './remote-operation-events.js';
 import { captureDesktopScreenshot } from './screenshot.js';
 import { showSelectionContextMenu } from './selection-context-menu.js';
-import { transcribeWithCodexDesktopNet } from './transcription.js';
 import type { DesktopWindowController } from './window.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
@@ -300,10 +299,6 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readModels();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:transcribe-file`, async (_event, input) => {
-    return transcribeWithCodexDesktopNet(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:update-model-preferences`, async (event, input) => {

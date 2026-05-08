@@ -95,8 +95,6 @@ const desktopBridge = {
   readSessionMeta: (sessionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-meta`, sessionId),
   readSessionSearchIndex: (sessionIds: string[]) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-search-index`, sessionIds),
   readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
-  transcribeFile: (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string; model?: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:transcribe-file`, input),
   updateModelPreferences: (input: {
     model?: string | null;
     visionModel?: string | null;
