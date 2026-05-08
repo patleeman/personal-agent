@@ -38,3 +38,4 @@ export type {
   TranscriptionProviderId,
 } from '../shared/types';
 export { type ThemePreference, useTheme } from '../ui-state/theme';
+export type { ExtensionKeybindingRegistration } from './types';

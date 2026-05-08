@@ -13,6 +13,7 @@ import {
   type DesktopEnvironmentState,
   type DesktopHostRecord,
   type DesktopSshConnectionTestResult,
+  type ExtensionKeybindingRegistration,
   formatContextWindowLabel,
   formatThinkingLevelLabel,
   getDesktopBridge,
@@ -133,6 +134,23 @@ const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopAppPreferencesState['keyboardSh
 };
 
 const DESKTOP_KEYBOARD_SHORTCUT_IDS = Object.keys(DESKTOP_KEYBOARD_SHORTCUT_LABELS) as DesktopKeyboardShortcutId[];
+
+type ShortcutListItem = {
+  id: string;
+  owner: string;
+  label: string;
+  description?: string;
+  shortcuts: string[];
+  editable: boolean;
+};
+
+function normalizeShortcutForConflict(shortcut: string): string {
+  return shortcut
+    .trim()
+    .toLowerCase()
+    .replace(/commandorcontrol|cmdorctrl|cmd|command/g, 'mod')
+    .replace(/control/g, 'ctrl');
+}
 
 const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string }> = [
   { value: 'openai-completions', label: 'OpenAI Completions' },
@@ -766,6 +784,7 @@ function KeyboardShortcutCaptureInput({
 export function DesktopKeyboardShortcutsSettingsSection() {
   const [preferencesState, setPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
   const [draft, setDraft] = useState<DesktopAppPreferencesState['keyboardShortcuts']>(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
+  const [extensionKeybindings, setExtensionKeybindings] = useState<ExtensionKeybindingRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -776,16 +795,38 @@ export function DesktopKeyboardShortcutsSettingsSection() {
     return DESKTOP_KEYBOARD_SHORTCUT_IDS.some((id) => draft[id] !== preferencesState.keyboardShortcuts[id]);
   }, [draft, preferencesState]);
 
+  const shortcutItems = useMemo<ShortcutListItem[]>(() => {
+    const coreItems = DESKTOP_KEYBOARD_SHORTCUT_IDS.map((id) => ({
+      id,
+      owner: 'Core',
+      label: DESKTOP_KEYBOARD_SHORTCUT_LABELS[id].label,
+      description: DESKTOP_KEYBOARD_SHORTCUT_LABELS[id].description,
+      shortcuts: [draft[id]],
+      editable: true,
+    }));
+    const extensionItems = extensionKeybindings.map((keybinding) => ({
+      id: `${keybinding.extensionId}:${keybinding.surfaceId}`,
+      owner: keybinding.extensionId.replace(/^system-/, ''),
+      label: keybinding.title,
+      description: keybinding.scope === 'surface' ? 'Surface shortcut' : 'Extension shortcut',
+      shortcuts: keybinding.keys,
+      editable: false,
+    }));
+    return [...coreItems, ...extensionItems];
+  }, [draft, extensionKeybindings]);
+
   const duplicateShortcut = useMemo(() => {
-    const seen = new Map<string, DesktopKeyboardShortcutId>();
-    for (const id of DESKTOP_KEYBOARD_SHORTCUT_IDS) {
-      const shortcut = draft[id].toLowerCase();
-      const previous = seen.get(shortcut);
-      if (previous) return { shortcut: draft[id], first: previous, second: id };
-      seen.set(shortcut, id);
+    const seen = new Map<string, ShortcutListItem>();
+    for (const item of shortcutItems) {
+      for (const shortcut of item.shortcuts) {
+        const normalized = normalizeShortcutForConflict(shortcut);
+        const previous = seen.get(normalized);
+        if (previous) return { shortcut, first: previous, second: item };
+        seen.set(normalized, item);
+      }
     }
     return null;
-  }, [draft]);
+  }, [shortcutItems]);
 
   const loadPreferences = useCallback(async () => {
     const bridge = getDesktopBridge();
@@ -796,9 +837,10 @@ export function DesktopKeyboardShortcutsSettingsSection() {
     }
 
     try {
-      const state = await bridge.readDesktopAppPreferences();
+      const [state, keybindings] = await Promise.all([bridge.readDesktopAppPreferences(), api.extensionKeybindings()]);
       setPreferencesState(state);
       setDraft(state.keyboardShortcuts);
+      setExtensionKeybindings(keybindings);
       setError(null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -841,40 +883,51 @@ export function DesktopKeyboardShortcutsSettingsSection() {
         {preferencesState ? (
           <div className="space-y-4">
             <div className="divide-y divide-border-subtle/70">
-              {DESKTOP_KEYBOARD_SHORTCUT_IDS.map((id) => {
-                const metadata = DESKTOP_KEYBOARD_SHORTCUT_LABELS[id];
+              {shortcutItems.map((item) => {
+                const editableId = item.editable ? (item.id as DesktopKeyboardShortcutId) : null;
                 return (
-                  <label
-                    key={id}
-                    htmlFor={`settings-keyboard-${id}`}
-                    className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center"
-                  >
+                  <div key={item.id} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center">
                     <span className="min-w-0 space-y-1">
-                      <span className="block text-[13px] font-medium text-primary">{metadata.label}</span>
-                      <span className="block text-[12px] leading-5 text-secondary">{metadata.description}</span>
+                      <span className="block text-[13px] font-medium text-primary">{item.label}</span>
+                      <span className="block text-[12px] leading-5 text-secondary">
+                        {item.owner}
+                        {item.description ? ` · ${item.description}` : ''}
+                      </span>
                     </span>
-                    <KeyboardShortcutCaptureInput
-                      id={`settings-keyboard-${id}`}
-                      value={draft[id]}
-                      onChange={(shortcut) => {
-                        const nextDraft = { ...draft, [id]: shortcut };
-                        setDraft(nextDraft);
-                        setError(null);
-                        setNotice(null);
-                        void saveKeyboardShortcuts(nextDraft);
-                      }}
-                      disabled={saving}
-                    />
-                  </label>
+                    {editableId ? (
+                      <KeyboardShortcutCaptureInput
+                        id={`settings-keyboard-${editableId}`}
+                        value={draft[editableId]}
+                        onChange={(shortcut) => {
+                          const nextDraft = { ...draft, [editableId]: shortcut };
+                          setDraft(nextDraft);
+                          setError(null);
+                          setNotice(null);
+                          void saveKeyboardShortcuts(nextDraft);
+                        }}
+                        disabled={saving}
+                      />
+                    ) : (
+                      <div className="flex flex-wrap justify-start gap-1 sm:justify-end">
+                        {item.shortcuts.map((shortcut) => (
+                          <span
+                            key={shortcut}
+                            className="rounded-md border border-border-subtle bg-surface/60 px-2 py-1 font-mono text-[12px] text-secondary"
+                          >
+                            {formatKeyboardShortcutLabel(shortcut)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
 
             {duplicateShortcut ? (
               <p className="text-[12px] text-danger">
-                {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both{' '}
-                {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.first].label} and{' '}
-                {DESKTOP_KEYBOARD_SHORTCUT_LABELS[duplicateShortcut.second].label}.
+                {formatKeyboardShortcutLabel(duplicateShortcut.shortcut)} is assigned to both {duplicateShortcut.first.label} and{' '}
+                {duplicateShortcut.second.label}.
               </p>
             ) : null}
             {error ? <p className="text-[12px] text-danger">{error}</p> : null}
