@@ -94,6 +94,7 @@ function contributionCounts(extension: ExtensionInstallSummary) {
     tools: extension.tools?.length ?? 0,
     backend: extension.backendActions?.length ?? 0,
     skills: extension.skills?.length ?? 0,
+    agentHooks: extension.manifest?.backend?.agentExtension ? 1 : 0,
   };
 }
 
@@ -210,6 +211,16 @@ function SkillIcon() {
   );
 }
 
+function AgentHookIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2.5v2M8 11.5v2M2.5 8h2M11.5 8h2" />
+      <circle cx="8" cy="8" r="3.2" />
+      <path d="M6.8 7.2h.1M9.1 7.2h.1M6.7 9.2c.8.6 1.8.6 2.6 0" />
+    </svg>
+  );
+}
+
 function firstRoute(extension: ExtensionInstallSummary): string | null {
   return extension.routes[0]?.route ?? extension.manifest?.contributes?.views?.find((view) => view.location === 'main')?.route ?? null;
 }
@@ -222,6 +233,10 @@ function formatBackendActionSummary(extension: ExtensionInstallSummary): string 
   return extension.backendActions?.length
     ? extension.backendActions.map((action) => `${action.id} → ${action.handler}`).join(', ')
     : 'None';
+}
+
+function formatAgentHookSummary(extension: ExtensionInstallSummary): string {
+  return extension.manifest?.backend?.agentExtension ?? 'None';
 }
 
 function formatToolSummary(extension: ExtensionInstallSummary): string {
@@ -557,7 +572,8 @@ export function ExtensionManagerPage() {
                                 <CompactCount icon={<PageIcon />} count={counts.pages} title="Pages" />
                                 <CompactCount icon={<RailIcon />} count={counts.rails} title="Right rail panels" />
                                 <CompactCount icon={<WorkbenchIcon />} count={counts.workbench} title="Workbench details" />
-                                <CompactCount icon={<ToolIcon />} count={counts.tools} title="Tools" />
+                                <CompactCount icon={<ToolIcon />} count={counts.tools} title="Agent tools" />
+                                <CompactCount icon={<AgentHookIcon />} count={counts.agentHooks} title="Agent lifecycle hooks" />
                                 <CompactCount icon={<BackendIcon />} count={counts.backend} title="Backend actions" />
                                 <CompactCount icon={<SkillIcon />} count={counts.skills} title="Skills" />
                                 {Object.values(counts).every((count) => count === 0) ? <span className="text-dim">—</span> : null}
@@ -673,12 +689,14 @@ export function ExtensionManagerPage() {
                       </DetailBlock>
 
                       <DetailBlock title="Capabilities">
-                        <dl className="space-y-2 text-[12px]">
+                        <dl className="space-y-3 text-[12px]">
+                          <DetailRow label="UI" value={`Frontend: ${formatFrontendSummary(selectedExtension)}`} />
+                          <DetailRow
+                            label="Agent"
+                            value={`Tools: ${formatToolSummary(selectedExtension)} · Hook: ${formatAgentHookSummary(selectedExtension)} · Skills: ${formatSkillSummary(selectedExtension)}`}
+                          />
+                          <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(selectedExtension)}`} />
                           <DetailRow label="Permissions" value={formatPermissionSummary(selectedExtension)} />
-                          <DetailRow label="Frontend" value={formatFrontendSummary(selectedExtension)} />
-                          <DetailRow label="Backend" value={formatBackendActionSummary(selectedExtension)} />
-                          <DetailRow label="Tools" value={formatToolSummary(selectedExtension)} />
-                          <DetailRow label="Skills" value={formatSkillSummary(selectedExtension)} />
                         </dl>
                       </DetailBlock>
 
