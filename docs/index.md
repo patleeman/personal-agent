@@ -20,6 +20,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Knowledge](../extensions/system-knowledge/README.md) — vault, docs, skills, instruction files, and managed sync
 - [Configuration](configuration.md) — file-based config, env vars
 - [Daemon](daemon.md) — background process and runtime lifecycle
+- [Extension authoring](../packages/extensions/README.md) — build native extensions with manifests, frontend/backend entries, tools, skills, and stable SDK imports
 - [System extensions](../extensions) — feature-owned docs and implementation packages
 
 ## System extension docs
