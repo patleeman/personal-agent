@@ -8,6 +8,7 @@ import { getStateRoot } from '@personal-agent/core';
 import { build } from 'esbuild';
 
 import type { ServerRouteContext } from '../routes/context.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { findExtensionEntry } from './extensionRegistry.js';
@@ -19,6 +20,10 @@ import { createExtensionWorkspaceCapability } from './extensionWorkspace.js';
 
 export interface ExtensionBackendContext {
   extensionId: string;
+  profile: string;
+  toolContext?: {
+    conversationId?: string;
+  };
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
     put(key: string, value: unknown): Promise<{ ok: true }>;
@@ -32,6 +37,9 @@ export interface ExtensionBackendContext {
   workspace: ReturnType<typeof createExtensionWorkspaceCapability>;
   git: ReturnType<typeof createExtensionGitCapability>;
   shell: ReturnType<typeof createExtensionShellCapability>;
+  ui: {
+    invalidate(topics: string | string[]): void;
+  };
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
@@ -82,9 +90,15 @@ function createStorage(extensionId: string): ExtensionBackendContext['storage'] 
   };
 }
 
-function createBackendContext(extensionId: string, serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>): ExtensionBackendContext {
+function createBackendContext(
+  extensionId: string,
+  serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+  toolContext?: ExtensionBackendContext['toolContext'],
+): ExtensionBackendContext {
   return {
     extensionId,
+    profile: serverContext?.getCurrentProfile() ?? 'shared',
+    ...(toolContext ? { toolContext } : {}),
     storage: createStorage(extensionId),
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
@@ -93,6 +107,9 @@ function createBackendContext(extensionId: string, serverContext?: Pick<ServerRo
     workspace: createExtensionWorkspaceCapability(),
     git: createExtensionGitCapability(),
     shell: createExtensionShellCapability(),
+    ui: {
+      invalidate: (topics) => invalidateAppTopics(...(Array.isArray(topics) ? topics : [topics])),
+    },
     log: {
       info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
       warn: (message, fields) => console.warn(`[extension:${extensionId}] ${message}`, fields ?? {}),
@@ -217,6 +234,7 @@ export async function invokeExtensionAction(
   actionId: string,
   input: unknown,
   serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+  toolContext?: ExtensionBackendContext['toolContext'],
 ): Promise<ExtensionActionInvokeResult> {
   const entry = findExtensionEntry(extensionId);
   if (!entry) {
@@ -232,7 +250,7 @@ export async function invokeExtensionAction(
 
   const result = await (handler as (input: unknown, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
     input,
-    createBackendContext(extensionId, serverContext),
+    createBackendContext(extensionId, serverContext, toolContext),
   );
   return { ok: true, result };
 }

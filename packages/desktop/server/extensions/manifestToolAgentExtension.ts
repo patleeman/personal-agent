@@ -1,7 +1,6 @@
 import type { ExtensionAPI, ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
 import type { ServerRouteContext } from '../routes/context.js';
-import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createCheckpointAgentExtension } from './checkpointAgentExtension.js';
 import { createConversationQueueAgentExtension } from './conversationQueueAgentExtension.js';
 import { invokeExtensionAction } from './extensionBackend.js';
@@ -24,12 +23,6 @@ export interface ManifestToolFactoryOptions {
 
 function createSystemFactory(factoryId: string, options: ManifestToolFactoryOptions): ExtensionFactory | null {
   switch (factoryId) {
-    case 'artifacts':
-      return createArtifactAgentExtension({
-        stateRoot: options.stateRoot,
-        repoRoot: options.repoRoot,
-        getCurrentProfile: options.getCurrentProfile,
-      });
     case 'scheduled-tasks':
       return createScheduledTaskAgentExtension({ getCurrentProfile: options.getCurrentProfile });
     case 'runs':
@@ -97,8 +90,10 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
         promptSnippet: tool.promptSnippet ?? tool.description,
         promptGuidelines: tool.promptGuidelines ?? [`Use this extension-provided tool when the task needs ${tool.extensionId}/${tool.id}.`],
         parameters: tool.inputSchema,
-        async execute(_toolCallId, params) {
-          const result = await invokeExtensionAction(tool.extensionId, tool.action, params, options.serverContext);
+        async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+          const result = await invokeExtensionAction(tool.extensionId, tool.action, params, options.serverContext, {
+            conversationId: ctx.sessionManager.getSessionId(),
+          });
           const text =
             result.result && typeof result.result === 'object' && 'text' in result.result && typeof result.result.text === 'string'
               ? result.result.text
