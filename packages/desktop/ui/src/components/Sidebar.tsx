@@ -53,6 +53,7 @@ import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover }
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
+import { routeIsKnowledge, routeMatchesPrefix } from '../navigation/routeRegistry';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { type ConversationShelf, type OpenConversationDropPosition, replaceConversationLayout } from '../session/sessionTabs';
 import type { GatewayState, SessionMeta } from '../shared/types';
@@ -3435,7 +3436,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
         return;
       }
 
-      const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
+      const isKnowledgeRoute = routeIsKnowledge(location.pathname);
 
       if (action === 'close-conversation') {
         if (isFocusWithinWorkbenchOpenFile()) {
@@ -3571,7 +3572,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
   }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
-  const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
+  const isKnowledgeRoute = routeIsKnowledge(location.pathname);
   const [knowledgeSearchParams, setKnowledgeSearchParams] = useSearchParams();
   const knowledgeActiveFileId = isKnowledgeRoute ? (knowledgeSearchParams.get('file') ?? null) : null;
   const handleKnowledgeFileSelect = useCallback(
@@ -3604,11 +3605,11 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
               to={item.route}
               icon={getExtensionNavIcon(item.icon)}
               label={item.label}
-              forceActive={location.pathname.startsWith(item.route)}
+              forceActive={routeMatchesPrefix(location.pathname, item.route)}
             />
           ))}
           {!hideKnowledgeNav ? (
-            <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
+            <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={routeIsKnowledge(location.pathname)} />
           ) : null}
           {!hideBrowserNav ? (
             <button
@@ -3640,7 +3641,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
           ) : null}
         </div>
 
-        <div className="px-4 pt-1 pb-0.5" style={{ display: location.pathname.startsWith('/knowledge') ? 'none' : '' }}>
+        <div className="px-4 pt-1 pb-0.5" style={{ display: routeIsKnowledge(location.pathname) ? 'none' : '' }}>
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">Threads</p>
             <ThreadsFilterButton

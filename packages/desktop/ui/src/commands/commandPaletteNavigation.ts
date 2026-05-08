@@ -1,12 +1,8 @@
+import { routeSupportsWorkbenchFilePane } from '../navigation/routeRegistry';
 import type { AppLayoutMode } from '../ui-state/appLayoutMode';
 
 export function supportsWorkbenchFilePane(pathname: string): boolean {
-  return (
-    pathname === '/conversations' ||
-    pathname.startsWith('/conversations/') ||
-    pathname === '/automations' ||
-    pathname.startsWith('/automations/')
-  );
+  return routeSupportsWorkbenchFilePane(pathname);
 }
 
 export function buildCommandPaletteFileOpenRoute(input: {

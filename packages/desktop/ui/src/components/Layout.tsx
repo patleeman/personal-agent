@@ -23,6 +23,7 @@ import { useSessionStream } from '../hooks/useSessionStream';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
+import { routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { useRouteTelemetry } from '../telemetry/appTelemetry';
@@ -416,7 +417,7 @@ class RouteContentBoundary extends Component<
       return this.props.children;
     }
 
-    const isConversationRoute = this.props.pathname.startsWith('/conversations/');
+    const isConversationRoute = routeMatchesPrefix(this.props.pathname, '/conversations');
     const title = isConversationRoute ? 'Conversation unavailable' : 'This page hit an unexpected error';
     const body = isConversationRoute
       ? 'This conversation may be stale, missing, or temporarily broken. Open another conversation or start a new one.'
@@ -1426,17 +1427,7 @@ export function Layout() {
   const pageSearchRootRef = useRef<HTMLDivElement | null>(null);
   const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
-  const canShowContextRail = !(
-    location.pathname.startsWith('/conversations') ||
-    location.pathname.startsWith('/nodes') ||
-    location.pathname.startsWith('/settings') ||
-    location.pathname.startsWith('/system') ||
-    location.pathname.startsWith('/automations') ||
-    location.pathname.startsWith('/extensions') ||
-    location.pathname.startsWith('/gateways') ||
-    location.pathname.startsWith('/knowledge') ||
-    location.pathname.startsWith('/telemetry')
-  );
+  const canShowContextRail = !routeSupportsContextRail(location.pathname);
 
   useEffect(() => {
     let cancelled = false;
@@ -1474,10 +1465,7 @@ export function Layout() {
   const zenMode = searchParams.get('view') === 'zen';
   const effectiveSidebarOpen = !zenMode && sidebarOpen;
   const showContextRail = !zenMode && canShowContextRail && railOpen;
-  const showWorkbench =
-    !zenMode &&
-    appLayoutMode === 'workbench' &&
-    (location.pathname.startsWith('/conversations') || location.pathname.startsWith('/automations'));
+  const showWorkbench = !zenMode && appLayoutMode === 'workbench' && routeSupportsWorkbench(location.pathname);
   const activeConversationId = getActiveConversationId(location.pathname);
   const activeWorkbenchKnowledgeFileId = showWorkbench
     ? (searchParams.get('file') ?? (activeConversationId ? selectedFileByConversation[activeConversationId] : null) ?? null)
