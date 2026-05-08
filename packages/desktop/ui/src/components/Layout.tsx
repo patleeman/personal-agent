@@ -1271,7 +1271,6 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
-  const systemDiffsExtensionAvailable = availableExtensionToolPanels.some((surface) => surface.extensionId === 'system-diffs');
   const systemRunsExtensionAvailable = availableExtensionToolPanels.some((surface) => surface.extensionId === 'system-runs');
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
@@ -1606,7 +1605,7 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
-        {!systemDiffsExtensionAvailable && (checkpoints.length > 0 || activeCheckpointId || uncommittedResult) ? (
+        {checkpoints.length > 0 || activeCheckpointId || uncommittedResult ? (
           <button
             type="button"
             className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'diffs' && 'ui-sidebar-nav-item-active')}
@@ -1742,7 +1741,7 @@ function WorkbenchKnowledgeRail({
             onOpenArtifact={handleArtifactSelect}
           />
         </div>
-      ) : activeTool === 'diffs' && !systemDiffsExtensionAvailable ? (
+      ) : activeTool === 'diffs' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationDiffRailContent
             checkpoints={checkpoints}
