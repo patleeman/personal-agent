@@ -268,6 +268,33 @@ describe('registerExtensionRoutes', () => {
     });
   });
 
+  it('creates paired workbench starter runtime extensions', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const harness = createHarness();
+
+    const res = createResponse();
+    harness.postHandler('/api/extensions')({ body: { id: 'agent-board', name: 'Agent Board', template: 'workbench-detail' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      packageRoot: join(stateRoot, 'extensions', 'agent-board'),
+      extension: expect.objectContaining({
+        id: 'agent-board',
+        routes: [],
+        manifest: expect.objectContaining({
+          contributes: expect.objectContaining({
+            views: expect.arrayContaining([
+              expect.objectContaining({ id: 'rail', location: 'rightRail', detailView: 'detail' }),
+              expect.objectContaining({ id: 'detail', location: 'workbench' }),
+            ]),
+          }),
+        }),
+      }),
+    });
+  });
+
   it('exports and imports runtime extension bundles', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

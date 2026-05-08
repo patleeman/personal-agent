@@ -16,7 +16,10 @@ export interface CreateRuntimeExtensionInput {
   id?: unknown;
   name?: unknown;
   description?: unknown;
+  template?: unknown;
 }
+
+type RuntimeExtensionTemplate = 'main-page' | 'right-rail' | 'workbench-detail';
 
 function normalizeExtensionId(value: unknown): string {
   if (typeof value !== 'string') {
@@ -43,6 +46,12 @@ function normalizeOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function normalizeExtensionTemplate(value: unknown): RuntimeExtensionTemplate {
+  if (value === undefined || value === null || value === '') return 'main-page';
+  if (value === 'main-page' || value === 'right-rail' || value === 'workbench-detail') return value;
+  throw new Error('Extension template must be main-page, right-rail, or workbench-detail.');
+}
+
 function getExtensionSnapshotsRoot(stateRoot: string = getStateRoot()): string {
   return join(stateRoot, 'extension-snapshots');
 }
@@ -63,7 +72,62 @@ function createSafeTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
-function createStarterFrontend(name: string): string {
+function starterHelpText(): string {
+  return 'Edit <code>src/frontend.tsx</code>, run <code>npm run extension:build -- &lt;extension-dir&gt;</code> from the personal-agent repo, then reload extensions.';
+}
+
+function createStarterFrontend(name: string, template: RuntimeExtensionTemplate): string {
+  if (template === 'right-rail') {
+    return `import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
+
+export function ExtensionPanel({ pa }: ExtensionSurfaceProps) {
+  return (
+    <aside className="h-full overflow-auto px-4 py-5 text-[13px] text-secondary">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Right rail</p>
+      <h2 className="mt-2 text-lg font-semibold text-primary">${name}</h2>
+      <p className="mt-2 leading-6">${starterHelpText()}</p>
+      <button className="ui-toolbar-button mt-4" type="button" onClick={() => pa.ui.toast('${name} is wired up.')}>
+        Test toast
+      </button>
+    </aside>
+  );
+}
+`;
+  }
+
+  if (template === 'workbench-detail') {
+    return `import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
+
+export function ExtensionRail({ pa }: ExtensionSurfaceProps) {
+  return (
+    <aside className="h-full overflow-auto px-4 py-5 text-[13px] text-secondary">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Right rail</p>
+      <h2 className="mt-2 text-lg font-semibold text-primary">${name}</h2>
+      <p className="mt-2 leading-6">Select something here; render the large view in the paired workbench detail surface.</p>
+      <button className="ui-toolbar-button mt-4" type="button" onClick={() => pa.ui.toast('${name} rail action')}>
+        Test toast
+      </button>
+    </aside>
+  );
+}
+
+export function ExtensionWorkbench({ pa }: ExtensionSurfaceProps) {
+  return (
+    <main className="flex h-full items-center justify-center px-8 text-center">
+      <div className="max-w-md">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Workbench detail</p>
+        <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.03em] text-primary">${name}</h1>
+        <p className="mt-2 text-[13px] leading-6 text-secondary">${starterHelpText()}</p>
+        <button className="ui-toolbar-button mt-6" type="button" onClick={() => pa.ui.toast('${name} detail action')}>
+          Test toast
+        </button>
+      </div>
+    </main>
+  );
+}
+`;
+  }
+
   return `import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 
 export function ExtensionPage({ pa }: ExtensionSurfaceProps) {
@@ -71,9 +135,7 @@ export function ExtensionPage({ pa }: ExtensionSurfaceProps) {
     <main className="mx-auto max-w-5xl px-8 py-14">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Extension</p>
       <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.04em] text-primary">${name}</h1>
-      <p className="mt-2 max-w-2xl text-[13px] leading-6 text-secondary">
-        Edit <code>src/frontend.tsx</code>, run <code>npm run extension:build -- &lt;extension-dir&gt;</code> from the personal-agent repo, then reload extensions.
-      </p>
+      <p className="mt-2 max-w-2xl text-[13px] leading-6 text-secondary">${starterHelpText()}</p>
       <button className="ui-toolbar-button mt-6" type="button" onClick={() => pa.ui.toast('${name} is wired up.')}>
         Test toast
       </button>
@@ -97,6 +159,7 @@ export function createRuntimeExtension(input: CreateRuntimeExtensionInput, state
   const id = normalizeExtensionId(input.id);
   const name = normalizeExtensionName(input.name);
   const description = normalizeOptionalString(input.description);
+  const template = normalizeExtensionTemplate(input.template);
   if (findExtensionEntry(id)) {
     throw new Error('Extension id already exists.');
   }
@@ -116,14 +179,34 @@ export function createRuntimeExtension(input: CreateRuntimeExtensionInput, state
     ...(description ? { description } : {}),
     frontend: { entry: 'dist/frontend.js', styles: [] },
     backend: { entry: 'dist/backend.mjs', actions: [{ id: 'ping', handler: 'ping', title: 'Ping' }] },
-    contributes: {
-      views: [{ id: 'page', title: name, location: 'main', route: `/ext/${id}`, component: 'ExtensionPage' }],
-      nav: [{ id: 'nav', label: name, route: `/ext/${id}`, icon: 'app' }],
-    },
+    contributes:
+      template === 'right-rail'
+        ? {
+            views: [{ id: 'panel', title: name, location: 'rightRail', scope: 'conversation', component: 'ExtensionPanel', icon: 'app' }],
+          }
+        : template === 'workbench-detail'
+          ? {
+              views: [
+                {
+                  id: 'rail',
+                  title: name,
+                  location: 'rightRail',
+                  scope: 'conversation',
+                  component: 'ExtensionRail',
+                  icon: 'app',
+                  detailView: 'detail',
+                },
+                { id: 'detail', title: `${name} detail`, location: 'workbench', component: 'ExtensionWorkbench' },
+              ],
+            }
+          : {
+              views: [{ id: 'page', title: name, location: 'main', route: `/ext/${id}`, component: 'ExtensionPage' }],
+              nav: [{ id: 'nav', label: name, route: `/ext/${id}`, icon: 'app' }],
+            },
     permissions: [],
   });
   writeFileSync(join(extensionRoot, 'extension.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  writeFileSync(join(extensionRoot, 'src', 'frontend.tsx'), createStarterFrontend(name));
+  writeFileSync(join(extensionRoot, 'src', 'frontend.tsx'), createStarterFrontend(name, template));
   writeFileSync(join(extensionRoot, 'src', 'backend.ts'), createStarterBackend());
   writeFileSync(
     join(extensionRoot, 'package.json'),

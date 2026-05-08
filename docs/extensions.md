@@ -494,7 +494,7 @@ The first native system extensions are:
 
 This is the preferred split: core records and serves cross-cutting state; native extensions own the product surfaces.
 
-Extension Manager can build runtime extensions in-app. Use the per-extension **Build** action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** to refresh backend modules and registry surfaces.
+Extension Manager can build runtime extensions in-app. Use the per-extension **Build** action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** to refresh backend modules and registry surfaces. Starter creation supports three templates: `main-page`, `right-rail`, and `workbench-detail`.
 
 ## Implementation checklist
 

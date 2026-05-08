@@ -309,8 +309,12 @@ export const api = {
   updateDaemonPower: async (input: { keepAwake: boolean }) => patch<DaemonState>('/daemon/power', input),
   extensions: async () => get<ExtensionManifest[]>('/extensions'),
   extensionInstallations: async () => get<ExtensionInstallSummary[]>('/extensions/installed'),
-  createExtension: async (input: { id: string; name: string; description?: string }) =>
-    post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions', input),
+  createExtension: async (input: {
+    id: string;
+    name: string;
+    description?: string;
+    template?: 'main-page' | 'right-rail' | 'workbench-detail';
+  }) => post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions', input),
   importExtension: async (input: { zipPath: string }) =>
     post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions/import', input),
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),

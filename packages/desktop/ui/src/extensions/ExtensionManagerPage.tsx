@@ -139,9 +139,16 @@ export function ExtensionManagerPage() {
     const id = window.prompt('Extension id', defaultId);
     if (!id?.trim()) return;
 
+    const template = window.prompt('Template: main-page, right-rail, or workbench-detail', 'main-page');
+    if (!template?.trim()) return;
+
     setNotice(null);
     try {
-      const result = await api.createExtension({ id: id.trim(), name: name.trim() });
+      const result = await api.createExtension({
+        id: id.trim(),
+        name: name.trim(),
+        template: template.trim() as 'main-page' | 'right-rail' | 'workbench-detail',
+      });
       setNotice(`Created ${result.packageRoot}`);
       notifyExtensionRegistryChanged();
       load();
