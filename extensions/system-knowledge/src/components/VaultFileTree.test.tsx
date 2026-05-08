@@ -29,9 +29,33 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@personal-agent/extensions/knowledge', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@personal-agent/extensions/knowledge')>()),
   api: {
-    knowledgeBase: apiMocks.knowledgeBase,
-    syncKnowledgeBase: apiMocks.syncKnowledgeBase,
-    vaultFiles: apiMocks.vaultFiles,
+    invokeExtensionAction: async (_extensionId: string, actionId: string, input: Record<string, unknown> = {}) => {
+      const result = await (async () => {
+        switch (actionId) {
+          case 'readState':
+            return apiMocks.knowledgeBase();
+          case 'sync':
+            return apiMocks.syncKnowledgeBase();
+          case 'vaultListFiles':
+            return apiMocks.vaultFiles();
+          case 'vaultCreateFolder':
+            return apiMocks.createFolder(input.id);
+          case 'vaultDeleteFile':
+            return apiMocks.deleteFile(input.id);
+          case 'vaultMove':
+            return apiMocks.move(input.id, input.targetDir);
+          case 'vaultRename':
+            return apiMocks.rename(input.id, input.newName);
+          case 'vaultSearch':
+            return apiMocks.search(input.q, input.limit);
+          case 'vaultWriteFile':
+            return apiMocks.writeFile(input.id, input.content);
+          default:
+            throw new Error(`Unhandled knowledge action ${actionId}`);
+        }
+      })();
+      return { result };
+    },
   },
   vaultApi: {
     createFolder: apiMocks.createFolder,
