@@ -12,6 +12,7 @@
   "backend": {
     "entry": "src/backend.ts",
     "actions": [
+      { "id": "scheduledTask", "handler": "scheduledTask", "title": "Scheduled task" },
       { "id": "reminder", "handler": "reminder", "title": "Reminder" },
       { "id": "conversationQueue", "handler": "conversationQueue", "title": "Conversation queue" }
     ]
@@ -23,7 +24,35 @@
         "name": "scheduled_task",
         "title": "Scheduled task",
         "description": "Create, inspect, validate, run, and delete daemon-managed scheduled tasks.",
-        "systemFactory": "scheduled-tasks"
+        "action": "scheduledTask",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["list", "get", "save", "delete", "validate", "run"] },
+            "profile": { "type": "string" },
+            "taskId": { "type": "string" },
+            "title": { "type": "string" },
+            "enabled": { "type": "boolean" },
+            "cron": { "type": "string" },
+            "at": { "type": "string" },
+            "targetType": { "type": "string", "enum": ["background-agent", "conversation"] },
+            "threadMode": { "type": "string", "enum": ["dedicated", "existing", "none"] },
+            "threadConversationId": { "type": "string" },
+            "deliverAs": { "type": "string", "enum": ["steer", "followUp"] },
+            "model": { "type": "string" },
+            "cwd": { "type": "string" },
+            "timeoutSeconds": { "type": "number", "minimum": 1 },
+            "catchUpWindowSeconds": { "type": "number", "minimum": 1 },
+            "prompt": { "type": "string" },
+            "deliverResultToConversation": { "type": "boolean" },
+            "notifyOnSuccess": { "type": "boolean" },
+            "notifyOnFailure": { "type": "boolean" },
+            "requireAck": { "type": "boolean" },
+            "autoResumeIfOpen": { "type": "boolean" }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
       },
       {
         "id": "conversation-queue",

@@ -5,8 +5,6 @@ import { invokeExtensionAction } from './extensionBackend.js';
 import { type ExtensionToolRegistration, listExtensionToolRegistrations } from './extensionRegistry.js';
 import { createImageAgentExtension } from './imageAgentExtension.js';
 import { createImageProbeAgentExtension } from './imageProbeAgentExtension.js';
-import { createRunAgentExtension } from './runAgentExtension.js';
-import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 
 export interface ManifestToolFactoryOptions {
   getCurrentProfile: () => string;
@@ -20,14 +18,6 @@ export interface ManifestToolFactoryOptions {
 
 function createSystemFactory(factoryId: string, options: ManifestToolFactoryOptions): ExtensionFactory | null {
   switch (factoryId) {
-    case 'scheduled-tasks':
-      return createScheduledTaskAgentExtension({ getCurrentProfile: options.getCurrentProfile });
-    case 'runs':
-      return createRunAgentExtension({
-        getCurrentProfile: options.getCurrentProfile,
-        repoRoot: options.repoRoot,
-        profilesRoot: options.profilesRoot,
-      });
     case 'image':
       return options.hasOpenAiImageProvider?.() ? createImageAgentExtension() : null;
     case 'image-probe': {
