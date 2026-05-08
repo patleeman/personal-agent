@@ -830,11 +830,13 @@ describe('Sidebar', () => {
     expect(html).not.toContain('>Conversations<');
   });
 
-  it('treats settings routes as part of Settings in the main sidebar', () => {
-    const html = renderSidebar('/system');
+  it('only highlights Settings on settings routes', () => {
+    const settingsHtml = renderSidebar('/settings');
+    const automationHtml = renderSidebar('/automations');
 
-    expect(html).toContain('href="/settings"');
-    expect(html).toContain('ui-sidebar-nav-item-active');
-    expect(html).not.toContain('>Runs<');
+    expect(settingsHtml).toContain('href="/settings"');
+    expect(settingsHtml).toContain('ui-sidebar-nav-item-active');
+    expect(automationHtml).toContain('href="/settings"');
+    expect(automationHtml).not.toContain('href="/settings" class="ui-sidebar-nav-item ui-sidebar-nav-item-active"');
   });
 });

@@ -1233,6 +1233,11 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
   useEffect(() => {
     if (!knowledgeBaseState) {
+      if (!knowledgeBaseLoading && knowledgeBaseError) {
+        setEntries([]);
+        resetTree([]);
+        setLoading(false);
+      }
       return;
     }
 
@@ -1244,7 +1249,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
     }
 
     void loadSnapshot();
-  }, [knowledgeBaseDisabled, knowledgeBaseState, loadSnapshot, resetTree]);
+  }, [knowledgeBaseDisabled, knowledgeBaseError, knowledgeBaseLoading, knowledgeBaseState, loadSnapshot, resetTree]);
 
   // Delete/Backspace keyboard shortcut — scoped to the tree wrapper so it
   // doesn't process keystrokes from other parts of the app.
@@ -1569,7 +1574,9 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
           </div>
 
           <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
-            {loading ? (
+            {knowledgeBaseError && !knowledgeBaseState && !loading ? (
+              <p className="px-3 py-2 text-[12px] leading-5 text-danger">Knowledge unavailable · {knowledgeBaseError}</p>
+            ) : loading ? (
               <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading...</p>
             ) : (
               <TreesFileTree
