@@ -3,10 +3,13 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
-import type { NodeMentionSurface } from '../../extensions/knowledge';
-import { stripMarkdownFrontmatter } from '../../extensions/knowledge';
-import { buildMentionLookup, renderChildrenWithMentionLinks } from '../../extensions/knowledge';
 import { useNodeMentionItems } from '../../hooks/useNodeMentionItems';
+import {
+  buildMentionLookup,
+  type NodeMentionSurface,
+  renderChildrenWithMentionLinks,
+  stripMarkdownFrontmatter,
+} from '../../markdown/markdownExtensions';
 import { InlineMarkdownCode } from '../MarkdownInlineCode';
 import { cx } from '../ui';
 

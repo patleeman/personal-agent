@@ -1,5 +1,7 @@
-import { cx, getKnowledgeBaseSyncPresentation, useApi, useInvalidateOnTopics } from '@personal-agent/extensions/settings';
+import { cx, useApi, useInvalidateOnTopics } from '@personal-agent/extensions/settings';
 import { useEffect, useMemo, useState } from 'react';
+
+import { getKnowledgeBaseSyncPresentation } from '../lib/knowledgeBaseSyncStatus';
 
 const INPUT_CLASS =
   'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';

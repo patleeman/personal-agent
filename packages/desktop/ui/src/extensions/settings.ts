@@ -44,5 +44,4 @@ export type {
   TranscriptionProviderId,
 } from '../shared/types';
 export { type ColorTheme, type ThemePreference, useTheme } from '../ui-state/theme';
-export { getKnowledgeBaseSyncPresentation } from './knowledge';
 export type { ExtensionKeybindingRegistration } from './types';

@@ -46,7 +46,6 @@ export declare function formatCompanionTimestamp(...args: never[]): unknown;
 export declare function formatContextWindowLabel(...args: never[]): unknown;
 export declare function formatThinkingLevelLabel(...args: never[]): unknown;
 export declare function getDesktopBridge(...args: never[]): unknown;
-export declare function getKnowledgeBaseSyncPresentation(...args: never[]): unknown;
 export declare function getModelSelectableServiceTierOptions(...args: never[]): unknown;
 export declare function groupModelsByProvider(...args: never[]): unknown;
 export declare function isDesktopShell(...args: never[]): unknown;

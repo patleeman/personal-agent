@@ -17,7 +17,6 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
-import { onKBEvent } from '../extensions/knowledge';
 import { systemExtensionModules } from '../extensions/systemExtensionModules';
 import type { ExtensionCommandRegistration, ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
@@ -397,29 +396,6 @@ export function CommandPalette() {
 
     void loadQuickOpenItems();
   }, [loadQuickOpenItems, open, quickOpenItems.length, quickOpenLoading, scope]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const offHandlers = [
-      onKBEvent('kb:entries-changed', () => {
-        void loadQuickOpenItems();
-      }),
-      onKBEvent('kb:file-created', () => {
-        void loadQuickOpenItems();
-      }),
-      onKBEvent('kb:file-renamed', () => {
-        void loadQuickOpenItems();
-      }),
-      onKBEvent('kb:file-deleted', () => {
-        void loadQuickOpenItems();
-      }),
-    ];
-
-    return () => offHandlers.forEach((off) => off());
-  }, [loadQuickOpenItems, open]);
 
   const archivedGroup = useMemo(() => groups.find((group) => group.section === 'archived') ?? null, [groups]);
   const canLoadMoreArchivedThreads = Boolean(

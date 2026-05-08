@@ -22,7 +22,6 @@
       "@personal-agent/extensions/workbench": ["./packages/desktop/ui/src/extensions/workbench"],
       "@personal-agent/extensions/data": ["./packages/desktop/ui/src/extensions/data"],
       "@personal-agent/extensions/settings": ["./packages/desktop/ui/src/extensions/settings"],
-      "@personal-agent/extensions/knowledge": ["./packages/desktop/ui/src/extensions/knowledge"],
       "@personal-agent/extensions/backend": ["./packages/desktop/server/extensions/backendApi"]
     }
   },

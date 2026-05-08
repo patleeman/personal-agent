@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
-import { parseSkillBlock } from '../extensions/knowledge';
+import { parseSkillBlock } from '../markdown/markdownExtensions';
 import type {
   ConversationAutoModeState,
   LiveSessionPresenceState,
