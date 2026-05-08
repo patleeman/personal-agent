@@ -1,25 +1,13 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { getWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
-
-export interface WorkbenchBrowserToolHost {
-  isActive(conversationId: string): Promise<boolean>;
-  listTabs(): Promise<Array<{ sessionKey: string; url: string; title: string }>>;
-  snapshot(conversationId: string, tabId?: string): Promise<unknown>;
-  screenshot(conversationId: string, tabId?: string): Promise<unknown>;
-  cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean; tabId?: string }): Promise<unknown>;
-}
 
 const BrowserToolNames = ['browser_snapshot', 'browser_cdp', 'browser_screenshot'] as const;
 
 const BrowserToolNameSet = new Set<string>(BrowserToolNames);
 
-let host: WorkbenchBrowserToolHost | null = null;
-
-export function setWorkbenchBrowserToolHost(nextHost: WorkbenchBrowserToolHost | null): void {
-  host = nextHost;
-}
-
 function requireHost(): WorkbenchBrowserToolHost {
+  const host = getWorkbenchBrowserToolHost();
   if (!host) {
     throw new Error('Workbench Browser tools are only available in the desktop app.');
   }
@@ -35,6 +23,7 @@ async function requireActiveWorkbenchBrowser(conversationId: string): Promise<Wo
 }
 
 async function isWorkbenchBrowserActive(conversationId: string): Promise<boolean> {
+  const host = getWorkbenchBrowserToolHost();
   if (!host) {
     return false;
   }

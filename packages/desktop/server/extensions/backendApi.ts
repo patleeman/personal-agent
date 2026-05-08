@@ -1,6 +1,7 @@
 export * from './backendApi/artifacts.js';
 export * from './backendApi/automations.js';
 export * from './backendApi/autoMode.js';
+export * from './backendApi/browser.js';
 export * from './backendApi/checkpoints.js';
 export * from './backendApi/conversations.js';
 export * from './backendApi/events.js';

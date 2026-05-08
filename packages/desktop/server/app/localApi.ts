@@ -20,7 +20,6 @@ import {
 import { ensureAutomationThread } from '@personal-agent/daemon';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 
-import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../../../../extensions/system-browser/src/backend.js';
 import { readDaemonState } from '../automation/daemon.js';
 import {
   cancelDurableRunCapability,
@@ -135,6 +134,7 @@ import {
   readSessionMeta,
   renameStoredSession,
 } from '../conversations/sessions.js';
+import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserToolHost.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import { readModelState } from '../models/modelState.js';
