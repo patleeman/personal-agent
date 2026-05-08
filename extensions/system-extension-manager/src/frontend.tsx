@@ -362,6 +362,10 @@ export function ExtensionManagerPage() {
     (extension: ExtensionInstallSummary) => {
       setBusyId(extension.id);
       setNotice(null);
+      if (extension.status === 'invalid') {
+        setError(extension.errors?.[0] ?? 'Extension manifest is invalid.');
+        return;
+      }
       const nextEnabled = !extension.enabled;
       api
         .updateExtension(extension.id, { enabled: nextEnabled })
@@ -407,7 +411,9 @@ export function ExtensionManagerPage() {
             : 'Nothing to build.',
         );
         notifyExtensionRegistryChanged();
-        await api.reloadExtension(extension.id).catch(() => null);
+        await api.reloadExtension(extension.id).catch((reloadError: Error) => {
+          setNotice(`Build finished, but reload failed: ${reloadError.message}`);
+        });
         await load();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -423,8 +429,8 @@ export function ExtensionManagerPage() {
       setBusyId(extension.id);
       setNotice(null);
       try {
-        await api.reloadExtension(extension.id);
-        setNotice(`Reloaded ${extension.name}.`);
+        const result = await api.reloadExtension(extension.id);
+        setNotice(result.message ?? `Reloaded ${extension.name}.`);
         notifyExtensionRegistryChanged();
         await load();
       } catch (err) {
@@ -470,7 +476,8 @@ export function ExtensionManagerPage() {
         (filter === 'system' && extension.packageType === 'system') ||
         (filter === 'user' && extension.packageType !== 'system') ||
         (filter === 'enabled' && extension.enabled) ||
-        (filter === 'disabled' && !extension.enabled);
+        (filter === 'disabled' && !extension.enabled && extension.status !== 'invalid') ||
+        (filter === 'disabled' && extension.status === 'invalid');
       if (!matchesFilter) return false;
       if (!normalizedQuery) return true;
       return `${extension.name} ${extension.id} ${extension.description ?? ''}`.toLowerCase().includes(normalizedQuery);
@@ -596,7 +603,11 @@ export function ExtensionManagerPage() {
                               </div>
                             </td>
                             <td className="whitespace-nowrap px-3 py-3 align-middle">
-                              <StatusToggle extension={extension} busy={busy} onToggle={() => toggleExtension(extension)} />
+                              {extension.status === 'invalid' ? (
+                                <span className="text-[12px] text-danger">Invalid</span>
+                              ) : (
+                                <StatusToggle extension={extension} busy={busy} onToggle={() => toggleExtension(extension)} />
+                              )}
                             </td>
                             <td className="py-3 pl-3 align-middle">
                               <div className="flex items-center justify-end gap-1.5">
@@ -630,14 +641,14 @@ export function ExtensionManagerPage() {
                                         </button>
                                         <button
                                           className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy}
+                                          disabled={busy || extension.status === 'invalid'}
                                           onClick={() => void buildExtension(extension)}
                                         >
                                           Build
                                         </button>
                                         <button
                                           className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy}
+                                          disabled={busy || extension.status === 'invalid'}
                                           onClick={() => void reloadExtension(extension)}
                                         >
                                           Reload
@@ -651,7 +662,7 @@ export function ExtensionManagerPage() {
                                         </button>
                                         <button
                                           className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy}
+                                          disabled={busy || extension.status === 'invalid'}
                                           onClick={() => void exportExtension(extension)}
                                         >
                                           Export
@@ -677,13 +688,33 @@ export function ExtensionManagerPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <h2 className="truncate text-[18px] font-semibold tracking-tight text-primary">{selectedExtension.name}</h2>
-                          <span className={cx('h-1.5 w-1.5 rounded-full', selectedExtension.enabled ? 'bg-success' : 'bg-dim')} />
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full',
+                              selectedExtension.status === 'invalid' ? 'bg-danger' : selectedExtension.enabled ? 'bg-success' : 'bg-dim',
+                            )}
+                          />
                         </div>
                         <p className="mt-1 font-mono text-[11px] text-dim">{selectedExtension.id}</p>
                         {selectedExtension.description ? (
                           <p className="mt-3 text-[13px] leading-6 text-secondary">{selectedExtension.description}</p>
                         ) : null}
                       </div>
+
+                      {selectedExtension.status === 'invalid' ? (
+                        <DetailBlock title="Validation errors">
+                          <div className="space-y-2">
+                            {(selectedExtension.errors ?? ['Extension manifest is invalid.']).map((message) => (
+                              <p
+                                key={message}
+                                className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-5 text-danger"
+                              >
+                                {message}
+                              </p>
+                            ))}
+                          </div>
+                        </DetailBlock>
+                      ) : null}
 
                       <DetailBlock title="Surfaces">
                         {getLogicalSurfaces(selectedExtension).length ? (

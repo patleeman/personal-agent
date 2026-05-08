@@ -358,7 +358,7 @@ export const api = {
   buildExtension: async (extensionId: string) =>
     post<{ ok: true; extensionId: string; outputs: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/build`),
   reloadExtension: async (extensionId: string) =>
-    post<{ ok: true; extensionId: string; rebuilt: boolean }>(`/extensions/${encodeURIComponent(extensionId)}/reload`),
+    post<{ ok: true; id: string; reloaded: boolean; message: string }>(`/extensions/${encodeURIComponent(extensionId)}/reload`),
   snapshotExtension: async (extensionId: string) =>
     post<{ ok: true; extensionId: string; snapshotPath: string }>(`/extensions/${encodeURIComponent(extensionId)}/snapshot`),
   exportExtension: async (extensionId: string) =>

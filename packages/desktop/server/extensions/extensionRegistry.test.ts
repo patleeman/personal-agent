@@ -121,6 +121,36 @@ describe('extension registry', () => {
     ]);
   });
 
+  it('exposes invalid runtime extension manifests in installation summaries', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-registry-'));
+    const extensionRoot = join(stateRoot, 'extensions', 'bad-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'bad-board',
+        name: 'Bad Board',
+        contributes: {
+          views: [{ id: 'page', title: 'Bad Board', location: 'somewhere', component: 'BadBoardPage' }],
+        },
+      }),
+    );
+
+    expect(readRuntimeExtensionEntries(stateRoot)).toEqual([]);
+    expect(listExtensionInstallSummaries(stateRoot)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'bad-board',
+          name: 'Bad Board',
+          enabled: false,
+          status: 'invalid',
+          errors: [expect.stringContaining('contributes.views[0].location')],
+        }),
+      ]),
+    );
+  });
+
   it('tracks disabled runtime extensions and hides them from active surfaces', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-registry-'));
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');

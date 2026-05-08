@@ -218,6 +218,8 @@ export interface ExtensionInstallSummary {
   name: string;
   packageType?: ExtensionPackageType;
   enabled: boolean;
+  status?: 'enabled' | 'disabled' | 'invalid';
+  errors?: string[];
   description?: string;
   version?: string;
   packageRoot?: string;

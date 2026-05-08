@@ -318,6 +318,11 @@ export function registerExtensionRoutes(
   router.patch('/api/extensions/:id', (req, res) => {
     try {
       const entry = findExtensionEntry(req.params.id);
+      const summary = listExtensionInstallSummaries().find((extension) => extension.id === req.params.id);
+      if (!entry && summary?.status === 'invalid') {
+        res.status(400).json({ error: summary.errors?.[0] ?? 'Extension manifest is invalid.' });
+        return;
+      }
       if (!entry) {
         res.status(404).json({ error: 'Extension not found.' });
         return;
@@ -343,7 +348,11 @@ export function registerExtensionRoutes(
       res.json(await buildRuntimeExtension(req.params.id));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const status = /not found/i.test(message) ? 404 : /package root|schemaVersion/i.test(message) ? 400 : 500;
+      const status = /not found/i.test(message)
+        ? 404
+        : /package root|schemaVersion|manifest|contributes|frontend|backend|surfaces|permissions/i.test(message)
+          ? 400
+          : 500;
       logError('extension build error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
     }
@@ -351,6 +360,11 @@ export function registerExtensionRoutes(
 
   router.post('/api/extensions/:id/reload', async (req, res) => {
     try {
+      const summary = listExtensionInstallSummaries().find((extension) => extension.id === req.params.id);
+      if (summary?.status === 'invalid') {
+        res.status(400).json({ error: summary.errors?.[0] ?? 'Extension manifest is invalid.' });
+        return;
+      }
       const entry = findExtensionEntry(req.params.id);
       if (!entry?.manifest.backend?.entry) {
         res.json({ ok: true, id: req.params.id, reloaded: false, message: 'Runtime manifests are read on demand.' });

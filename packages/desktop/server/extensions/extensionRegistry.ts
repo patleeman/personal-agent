@@ -22,6 +22,15 @@ import {
 import { listExtensionPackagePaths } from './extensionPackagePaths.js';
 import { SYSTEM_EXTENSION_ENTRIES } from './systemExtensions.js';
 
+export interface InvalidExtensionEntry {
+  id: string;
+  name: string;
+  packageType: ExtensionManifest['packageType'];
+  packageRoot: string;
+  source: 'runtime';
+  errors: string[];
+}
+
 export interface ExtensionRegistryEntry {
   manifest: ExtensionManifest;
   packageRoot?: string;
@@ -75,6 +84,8 @@ export interface ExtensionInstallSummary {
   name: string;
   packageType: ExtensionManifest['packageType'];
   enabled: boolean;
+  status: 'enabled' | 'disabled' | 'invalid';
+  errors?: string[];
   description?: string;
   version?: string;
   packageRoot?: string;
@@ -574,6 +585,44 @@ export function parseExtensionManifest(value: unknown): ExtensionManifest {
   return value as unknown as ExtensionManifest;
 }
 
+function fallbackInvalidExtensionId(packageRoot: string): string {
+  return packageRoot.split(/[\\/]/).filter(Boolean).at(-1) ?? 'invalid-extension';
+}
+
+export function readInvalidRuntimeExtensionEntries(stateRoot: string = getStateRoot()): InvalidExtensionEntry[] {
+  return listExtensionPackagePaths({ runtimeRoot: getRuntimeExtensionsRoot(stateRoot) })
+    .filter((entry) => entry.source === 'external')
+    .flatMap((entry): InvalidExtensionEntry[] => {
+      const manifestPath = join(entry.packageRoot, 'extension.json');
+      try {
+        parseExtensionManifest(JSON.parse(readFileSync(manifestPath, 'utf-8')));
+        return [];
+      } catch (error) {
+        let id = fallbackInvalidExtensionId(entry.packageRoot);
+        let name = id;
+        try {
+          const raw = JSON.parse(readFileSync(manifestPath, 'utf-8')) as unknown;
+          if (isRecord(raw)) {
+            if (typeof raw.id === 'string' && raw.id.trim()) id = raw.id.trim();
+            if (typeof raw.name === 'string' && raw.name.trim()) name = raw.name.trim();
+          }
+        } catch {
+          // Keep path-derived fallback metadata.
+        }
+        return [
+          {
+            id,
+            name,
+            packageType: 'user',
+            packageRoot: entry.packageRoot,
+            source: 'runtime',
+            errors: [error instanceof Error ? error.message : String(error)],
+          },
+        ];
+      }
+    });
+}
+
 export function readRuntimeExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {
   return listExtensionPackagePaths({ runtimeRoot: getRuntimeExtensionsRoot(stateRoot) })
     .filter((entry) => entry.source === 'external')
@@ -612,15 +661,17 @@ export function listExtensions(): ExtensionManifest[] {
 }
 
 export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()): ExtensionInstallSummary[] {
-  return listExtensionEntries(stateRoot).map((entry) => {
+  const valid = listExtensionEntries(stateRoot).map((entry) => {
     const manifest = entry.manifest;
     const surfaces = manifest.surfaces ?? [];
     const views = manifest.contributes?.views ?? [];
+    const enabled = isExtensionEnabled(manifest.id, stateRoot);
     return {
       id: manifest.id,
       name: manifest.name,
       packageType: manifest.packageType ?? 'user',
-      enabled: isExtensionEnabled(manifest.id, stateRoot),
+      enabled,
+      status: enabled ? ('enabled' as const) : ('disabled' as const),
       ...(manifest.description ? { description: manifest.description } : {}),
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(entry.packageRoot ? { packageRoot: entry.packageRoot } : {}),
@@ -639,6 +690,29 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       ],
     };
   });
+  const validIds = new Set(valid.map((extension) => extension.id));
+  const invalid = readInvalidRuntimeExtensionEntries(stateRoot)
+    .filter((entry) => !validIds.has(entry.id))
+    .map(
+      (entry): ExtensionInstallSummary => ({
+        id: entry.id,
+        name: entry.name,
+        packageType: entry.packageType,
+        enabled: false,
+        status: 'invalid',
+        errors: entry.errors,
+        packageRoot: entry.packageRoot,
+        manifest: { schemaVersion: 2, id: entry.id, name: entry.name, packageType: entry.packageType },
+        permissions: [],
+        surfaces: [],
+        backendActions: [],
+        skills: [],
+        mentions: [],
+        tools: [],
+        routes: [],
+      }),
+    );
+  return [...valid, ...invalid];
 }
 
 export function readExtensionSchema() {
