@@ -1969,7 +1969,7 @@ export function Layout() {
             {effectiveSidebarOpen ? (
               <div
                 style={{ width: sidebar.width }}
-                className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle"
+                className="flex-shrink-0 flex flex-col overflow-hidden bg-base border-r border-border-subtle"
               >
                 <Sidebar hideKnowledgeNav={showWorkbench} hideBrowserNav={showWorkbench} />
               </div>
@@ -2027,7 +2027,7 @@ export function Layout() {
                         <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
                         <aside
                           style={{ width: workbenchExplorer.width }}
-                          className="flex-shrink-0 overflow-hidden bg-surface select-text"
+                          className="flex-shrink-0 overflow-hidden bg-base select-text"
                           aria-label="Workbench sidebar"
                         >
                           <WorkbenchKnowledgeRail
