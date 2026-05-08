@@ -1,4 +1,3 @@
-import { emitKBEvent } from '@personal-agent/extensions/knowledge';
 import {
   type DragEvent,
   type MouseEvent as ReactMouseEvent,
@@ -1928,7 +1927,7 @@ function OpenConversationRow({
   );
 }
 
-export function Sidebar({ hideBrowserNav = false }: { hideKnowledgeNav?: boolean; hideBrowserNav?: boolean }) {
+export function Sidebar({ hideBrowserNav = false }: { hideBrowserNav?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
@@ -3402,7 +3401,7 @@ export function Sidebar({ hideBrowserNav = false }: { hideKnowledgeNav?: boolean
         }
 
         if (isKnowledgeRoute) {
-          emitKBEvent('kb:close-active-file');
+          window.dispatchEvent(new CustomEvent('kb:close-active-file'));
           return;
         }
 
@@ -3412,7 +3411,7 @@ export function Sidebar({ hideBrowserNav = false }: { hideKnowledgeNav?: boolean
 
       if (action === 'reopen-closed-conversation') {
         if (isKnowledgeRoute) {
-          emitKBEvent('kb:reopen-closed-file');
+          window.dispatchEvent(new CustomEvent('kb:reopen-closed-file'));
           return;
         }
 

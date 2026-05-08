@@ -48,7 +48,6 @@ import type {
   GatewayStatus,
   InjectedPromptMessage,
   InstructionFilesState,
-  KnowledgeBaseState,
   LiveSessionContext,
   LiveSessionCreateResult,
   LiveSessionExportResult,
@@ -86,14 +85,6 @@ import type {
   TranscriptionResult,
   TranscriptionSettingsState,
   UncommittedDiffResult,
-  VaultBacklinksResult,
-  VaultEntry,
-  VaultFileContent,
-  VaultFileListResult,
-  VaultImageUploadResult,
-  VaultSearchResponse,
-  VaultShareImportResult,
-  VaultTreeResult,
   WorkspaceDiffOverlay,
   WorkspaceDirectoryListing,
   WorkspaceFileContent,
@@ -203,10 +194,6 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
-const KNOWLEDGE_BASE_CACHE_TTL_MS = 3_000;
-let pendingKnowledgeBaseRequest: Promise<KnowledgeBaseState> | null = null;
-let cachedKnowledgeBaseState: KnowledgeBaseState | null = null;
-let cachedKnowledgeBaseReadAtMs = 0;
 let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
 
 async function getMemoryData(): Promise<MemoryData> {
@@ -220,30 +207,6 @@ async function getMemoryData(): Promise<MemoryData> {
     pendingMemoryRequests.delete(cacheKey);
   });
   pendingMemoryRequests.set(cacheKey, request);
-  return request;
-}
-
-async function getKnowledgeBaseState(): Promise<KnowledgeBaseState> {
-  if (pendingKnowledgeBaseRequest) {
-    return pendingKnowledgeBaseRequest;
-  }
-
-  if (cachedKnowledgeBaseState && Date.now() - cachedKnowledgeBaseReadAtMs < KNOWLEDGE_BASE_CACHE_TTL_MS) {
-    return cachedKnowledgeBaseState;
-  }
-
-  const request = get<KnowledgeBaseState>('/knowledge-base')
-    .then((state) => {
-      cachedKnowledgeBaseState = state;
-      cachedKnowledgeBaseReadAtMs = Date.now();
-      return state;
-    })
-    .finally(() => {
-      if (pendingKnowledgeBaseRequest === request) {
-        pendingKnowledgeBaseRequest = null;
-      }
-    });
-  pendingKnowledgeBaseRequest = request;
   return request;
 }
 
@@ -287,10 +250,6 @@ export function normalizeDurableRunLogTailParam(value: unknown): number | undefi
 
 export function normalizeConversationContentSearchLimit(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(100, value) : 80;
-}
-
-export function normalizeVaultSearchLimit(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(50, value) : 20;
 }
 
 export const api = {
@@ -534,12 +493,6 @@ export const api = {
 
     return get<DefaultCwdState>('/default-cwd');
   },
-  knowledgeBase: async () => {
-    return getKnowledgeBaseState();
-  },
-  vaultFiles: async () => {
-    return get<VaultFileListResult>('/vault-files');
-  },
   tools: async () => get<ToolsState>('/tools'),
   setModel: async (model: string) => {
     const desktopBridge = getDesktopBridge();
@@ -565,12 +518,6 @@ export const api = {
 
     return patch<DefaultCwdState>('/default-cwd', { cwd });
   },
-  updateKnowledgeBase: async (input: { repoUrl?: string | null; branch?: string | null }) => {
-    pendingKnowledgeBaseRequest = null;
-    cachedKnowledgeBaseState = null;
-    cachedKnowledgeBaseReadAtMs = 0;
-    return patch<KnowledgeBaseState>('/knowledge-base', input);
-  },
   transcriptionSettings: async () => get<TranscriptionSettingsState>('/transcription/settings'),
   updateTranscriptionSettings: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
     return patch<TranscriptionSettingsState>('/transcription/settings', input);
@@ -583,12 +530,6 @@ export const api = {
   },
   transcribeFile: async (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string }) => {
     return post<TranscriptionResult>('/transcription/transcribe-file', input);
-  },
-  syncKnowledgeBase: async () => {
-    pendingKnowledgeBaseRequest = null;
-    cachedKnowledgeBaseState = null;
-    cachedKnowledgeBaseReadAtMs = 0;
-    return post<KnowledgeBaseState>('/knowledge-base/sync', {});
   },
   providerAuth: async () => {
     const desktopBridge = getDesktopBridge();
@@ -1582,40 +1523,4 @@ export const api = {
   tracesSystemPrompt: (range?: string) =>
     get<{ series: SystemPromptPoint[]; aggregate: SystemPromptAggregate }>(`/traces/system-prompt${range ? `?range=${range}` : ''}`),
   tracesContextPointers: (range?: string) => get<ContextPointerUsageResult>(`/traces/context-pointers${range ? `?range=${range}` : ''}`),
-};
-
-// ── Vault editor ─────────────────────────────────────────────────────────────
-
-export const vaultApi = {
-  tree: (dir?: string) => get<VaultTreeResult>(`/vault/tree${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`),
-
-  readFile: (id: string) => get<VaultFileContent>(`/vault/file?id=${encodeURIComponent(id)}`),
-
-  writeFile: (id: string, content: string) => put<VaultEntry>('/vault/file', { id, content }),
-
-  deleteFile: (id: string) => del<{ ok: boolean }>(`/vault/file?id=${encodeURIComponent(id)}`),
-
-  rename: (id: string, newName: string) => post<VaultEntry>('/vault/rename', { id, newName }),
-
-  createFolder: (id: string) => post<VaultEntry>('/vault/folder', { id }),
-
-  backlinks: (id: string) => get<VaultBacklinksResult>(`/vault/backlinks?id=${encodeURIComponent(id)}`),
-
-  search: (q: string, limit = 20) =>
-    get<VaultSearchResponse>(`/vault/search?q=${encodeURIComponent(q)}&limit=${normalizeVaultSearchLimit(limit)}`),
-
-  move: (id: string, targetDir: string) => post<VaultEntry>('/vault/move', { id, targetDir }),
-
-  uploadImage: (filename: string, dataUrl: string) => post<VaultImageUploadResult>('/vault/image', { filename, dataUrl }),
-
-  importUrl: (input: { url: string; title?: string; directoryId?: string; sourceApp?: string }) =>
-    post<VaultShareImportResult>('/vault/share-import', {
-      kind: 'url',
-      url: input.url,
-      ...(input.title ? { title: input.title } : {}),
-      ...(input.directoryId ? { directoryId: input.directoryId } : {}),
-      ...(input.sourceApp ? { sourceApp: input.sourceApp } : {}),
-    }),
-
-  assetUrl: (id: string) => `/api/vault/asset?id=${encodeURIComponent(id)}`,
 };

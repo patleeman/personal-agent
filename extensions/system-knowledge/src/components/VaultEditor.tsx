@@ -1,3 +1,4 @@
+import type { VaultBacklink, VaultEntry } from '@personal-agent/extensions/data';
 import { Image } from '@tiptap/extension-image';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -9,7 +10,6 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import type { VaultBacklink, VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
 import { knowledgeApi } from '../lib/knowledgeApi';
 import { type MarkdownFrontmatter, parseMarkdownDocument, stringifyMarkdownFrontmatter } from '../lib/markdownDocument';
 import { FrontmatterDisclosure } from './FrontmatterDisclosure';

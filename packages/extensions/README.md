@@ -73,7 +73,7 @@ Supported top-level fields:
 - `id`, `name`, `description`, `version`, `packageType`.
 - `frontend`: native React bundle entry and optional styles.
 - `backend`: backend module entry, backend actions, and optional agent lifecycle factory.
-- `contributes`: views, nav, commands, keybindings, slash commands, mentions, skills, tools, transcript renderers, and settings metadata.
+- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, and settings metadata.
 - `permissions`: declared capability intent.
 
 Minimal example:
@@ -278,6 +278,55 @@ export default function agentLifecycleExtension(pi: ExtensionAPI): void {
 ```
 
 Enabled extension agent factories are discovered from manifests and appended to live session startup. Do not wire a system extension directly into runtime files when `backend.agentExtension` is the right seam.
+
+## Mentions, quick open, and prompt references
+
+Extensions can add items to composer `@` mentions, command-palette quick open, and hidden prompt-context resolution. Keep these three pieces aligned when they represent the same domain object.
+
+Mention providers run in the frontend and return selectable `@` menu items:
+
+```json
+{
+  "contributes": {
+    "mentions": [
+      {
+        "id": "agent-board-cards",
+        "title": "Agent Board cards",
+        "kinds": ["card"],
+        "provider": "buildAgentBoardMentionItems"
+      }
+    ]
+  }
+}
+```
+
+Quick-open providers also run in the frontend and feed command palette scopes such as `files`:
+
+```json
+{
+  "contributes": {
+    "quickOpen": [{ "id": "agent-board-cards", "provider": "agentBoardQuickOpenProvider", "section": "files" }]
+  }
+}
+```
+
+The provider export can implement `list()` for empty-query browsing and `search(query, limit)` for content search. Returned items include `title`, optional `subtitle`/`meta`/`keywords`, and an action such as `{ "kind": "navigate", "to": "/ext/agent-board" }` or `{ "kind": "openFile", "fileId": "notes/example.md" }`.
+
+Prompt reference resolvers run in the backend during prompt submission. Use them when an `@` mention should inject hidden context into the agent turn:
+
+```json
+{
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "actions": [{ "id": "resolvePromptReferences", "handler": "resolvePromptReferences" }]
+  },
+  "contributes": {
+    "promptReferences": [{ "id": "agent-board-cards", "handler": "resolvePromptReferences" }]
+  }
+}
+```
+
+The handler receives `{ text, mentionIds }` and returns `{ contextBlocks, references }`. Context blocks are appended to hidden prompt context; references are echoed in prompt submission metadata when relevant.
 
 ## Agent skills and tools
 

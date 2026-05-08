@@ -1,4 +1,4 @@
-import type { MentionItem } from '../../../../packages/desktop/ui/src/conversation/conversationMentions';
+import type { MentionItem } from '@personal-agent/extensions/data';
 
 export type NodeMentionSurface = 'main' | 'compact';
 

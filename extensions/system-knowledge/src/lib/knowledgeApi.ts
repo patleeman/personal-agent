@@ -1,15 +1,15 @@
-import { api } from '../../../../packages/desktop/ui/src/client/api';
-import type {
-  KnowledgeBaseState,
-  VaultBacklinksResult,
-  VaultEntry,
-  VaultFileContent,
-  VaultFileListResult,
-  VaultImageUploadResult,
-  VaultSearchResponse,
-  VaultShareImportResult,
-  VaultTreeResult,
-} from '../../../../packages/desktop/ui/src/shared/types';
+import {
+  api,
+  type KnowledgeBaseState,
+  type VaultBacklinksResult,
+  type VaultEntry,
+  type VaultFileContent,
+  type VaultFileListResult,
+  type VaultImageUploadResult,
+  type VaultSearchResponse,
+  type VaultShareImportResult,
+  type VaultTreeResult,
+} from '@personal-agent/extensions/data';
 
 const EXTENSION_ID = 'system-knowledge';
 

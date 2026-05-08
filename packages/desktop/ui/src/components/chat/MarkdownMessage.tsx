@@ -1,9 +1,9 @@
-import { type ParsedSkillBlock, parseSkillBlock } from '@personal-agent/extensions/knowledge';
 import React, { Children, cloneElement, isValidElement, memo, type ReactElement, type ReactNode, useId } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
+import { type ParsedSkillBlock, parseSkillBlock } from '../../extensions/knowledge';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { cx } from '../ui';
 

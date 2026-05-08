@@ -46,9 +46,8 @@ export function onKBEvent<T = unknown>(type: KBEventType, handler: (detail: T) =
 
 // ── Vault file system watcher ─────────────────────────────────────────────
 
+import { buildApiPath } from '@personal-agent/extensions/ui';
 import { useEffect, useRef } from 'react';
-
-import { buildApiPath } from '../../../../packages/desktop/ui/src/client/apiBase';
 
 const VAULT_WATCH_DEBOUNCE_MS = 180;
 

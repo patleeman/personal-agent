@@ -64,7 +64,6 @@ const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
 const WORKBENCH_EXPLORER_OPEN_STORAGE_KEY = 'pa:workbench-explorer-open';
-const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z';
 
 type DesktopLayoutShortcutAction =
   | 'toggle-sidebar'
@@ -75,7 +74,7 @@ type DesktopLayoutShortcutAction =
   | 'show-workbench-mode'
   | 'show-zen-mode';
 
-type BuiltInWorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs';
+type BuiltInWorkbenchRailMode = 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs';
 type ExtensionWorkbenchRailMode = `extension:${string}:${string}`;
 type WorkbenchRailMode = BuiltInWorkbenchRailMode | ExtensionWorkbenchRailMode;
 
@@ -754,24 +753,9 @@ function WorkbenchKnowledgeRail({
   }, [activeTool, availableExtensionToolPanels]);
   const systemArtifactsExtensionSurface =
     availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-artifacts') ?? null;
-  const systemBrowserExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-browser') ?? null;
-  const systemKnowledgeExtensionSurface =
-    availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null;
   const systemFilesExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null;
   const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
   const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
-  const handleKnowledgeModeSelect = useCallback(() => {
-    onActiveToolChange(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge');
-    onWorkspaceFileClear();
-    onCheckpointSelect(null);
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete('artifact');
-      next.delete('checkpoint');
-      next.delete('run');
-      return next;
-    });
-  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemKnowledgeExtensionSurface]);
   const handleFileExplorerModeSelect = useCallback(() => {
     onActiveToolChange(systemFilesExtensionSurface ? extensionToolPanelMode(systemFilesExtensionSurface) : 'files');
     onWorkspaceFileClear();
@@ -836,10 +820,6 @@ function WorkbenchKnowledgeRail({
     setSearchParams,
     systemArtifactsExtensionSurface,
   ]);
-  const handleBrowserModeSelect = useCallback(() => {
-    onActiveToolChange(systemBrowserExtensionSurface ? extensionToolPanelMode(systemBrowserExtensionSurface) : 'browser');
-    onWorkspaceFileClear();
-  }, [onActiveToolChange, onWorkspaceFileClear, systemBrowserExtensionSurface]);
   const handleRunsModeSelect = useCallback(() => {
     onActiveToolChange('runs');
     onWorkspaceFileClear();
@@ -942,7 +922,7 @@ function WorkbenchKnowledgeRail({
       return;
     }
 
-    onActiveToolChange('knowledge');
+    onActiveToolChange('files');
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -957,12 +937,12 @@ function WorkbenchKnowledgeRail({
     const parsed = parseExtensionToolPanelMode(activeTool);
     if (!parsed) return;
     if (activeExtensionToolPanel) return;
-    onActiveToolChange('knowledge');
+    onActiveToolChange('files');
   }, [activeExtensionToolPanel, activeTool, onActiveToolChange]);
 
   useEffect(() => {
     if (activeTool === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
-      onActiveToolChange('knowledge');
+      onActiveToolChange('files');
       setSearchParams(
         (current) => {
           const next = new URLSearchParams(current);
@@ -983,7 +963,7 @@ function WorkbenchKnowledgeRail({
       checkpoints.length === 0 &&
       !uncommittedResult
     ) {
-      onActiveToolChange('knowledge');
+      onActiveToolChange('files');
       onCheckpointSelect(null);
       setSearchParams(
         (current) => {
@@ -1009,63 +989,6 @@ function WorkbenchKnowledgeRail({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 flex-col gap-1 px-1.5 py-1.5">
-        <button
-          type="button"
-          className={cx(
-            'ui-sidebar-nav-item w-full text-left',
-            (activeTool === 'knowledge' ||
-              (systemKnowledgeExtensionSurface && activeTool === extensionToolPanelMode(systemKnowledgeExtensionSurface))) &&
-              'ui-sidebar-nav-item-active',
-          )}
-          title="Knowledge"
-          onClick={handleKnowledgeModeSelect}
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="shrink-0 opacity-70"
-            aria-hidden="true"
-          >
-            <path d={KNOWLEDGE_ICON_PATH} />
-          </svg>
-          <span className="flex-1 text-left">Knowledge</span>
-        </button>
-        <button
-          type="button"
-          className={cx(
-            'ui-sidebar-nav-item w-full text-left',
-            (activeTool === 'browser' ||
-              (systemBrowserExtensionSurface && activeTool === extensionToolPanelMode(systemBrowserExtensionSurface))) &&
-              'ui-sidebar-nav-item-active',
-          )}
-          title="Browser"
-          onClick={handleBrowserModeSelect}
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="shrink-0 opacity-70"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="8.25" />
-            <path d="M3.75 12h16.5" />
-            <path d="M12 3.75c2.1 2.25 3.15 5 3.15 8.25S14.1 18 12 20.25" />
-            <path d="M12 3.75C9.9 6 8.85 8.75 8.85 12S9.9 18 12 20.25" />
-          </svg>
-          <span className="flex-1 text-left">Browser</span>
-        </button>
         <button
           type="button"
           className={cx(
@@ -1180,8 +1103,7 @@ function WorkbenchKnowledgeRail({
             (surface) =>
               surface.extensionId !== 'system-artifacts' &&
               surface.extensionId !== 'system-browser' &&
-              surface.extensionId !== 'system-files' &&
-              surface.extensionId !== 'system-knowledge',
+              surface.extensionId !== 'system-files',
           )
           .map((surface) => (
             <button
@@ -1259,7 +1181,7 @@ export function Layout() {
   const { sessions } = useAppData();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
-  const [activeWorkbenchTool, setActiveWorkbenchTool] = useState<WorkbenchRailMode>('knowledge');
+  const [activeWorkbenchTool, setActiveWorkbenchTool] = useState<WorkbenchRailMode>('files');
   const [selectedCheckpointByConversation, setSelectedCheckpointByConversation] = useState<Record<string, string | null>>({});
   const [selectedToolByConversation, setSelectedToolByConversation] = useState<Record<string, WorkbenchRailMode>>({});
   const [selectedFileByConversation, setSelectedFileByConversation] = useState<Record<string, string | null>>({});
@@ -1576,7 +1498,7 @@ export function Layout() {
           activeRunId: activeWorkbenchRunFromSearch,
         })
       ) {
-        setActiveWorkbenchTool('knowledge');
+        setActiveWorkbenchTool('files');
         setSearchParams(
           (current) => {
             const next = new URLSearchParams(current);
@@ -1586,7 +1508,7 @@ export function Layout() {
           { replace: true },
         );
       } else {
-        setActiveWorkbenchTool('knowledge');
+        setActiveWorkbenchTool('files');
       }
     }
   }, [
@@ -1624,7 +1546,7 @@ export function Layout() {
       return;
     }
 
-    setActiveConversationTool('knowledge');
+    setActiveConversationTool('files');
   }, [activeWorkbenchKnowledgeFileId]);
 
   useEffect(() => {
@@ -1736,9 +1658,7 @@ export function Layout() {
           } else {
             nextSearch.delete('file');
           }
-          setActiveConversationTool(
-            systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge',
-          );
+          setActiveConversationTool(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'files');
           navigate({
             pathname: lastWorkbenchRouteRef.current.pathname,
             search: nextSearch.toString(),
@@ -1862,7 +1782,7 @@ export function Layout() {
         navigate('/conversations/new');
       }
       handleAppLayoutModeChange('workbench');
-      setActiveConversationTool(systemBrowserExtensionSurface ? extensionToolPanelMode(systemBrowserExtensionSurface) : 'knowledge');
+      setActiveConversationTool(systemBrowserExtensionSurface ? extensionToolPanelMode(systemBrowserExtensionSurface) : 'files');
     }
 
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
@@ -1909,10 +1829,7 @@ export function Layout() {
                 style={{ width: sidebar.width }}
                 className="flex-shrink-0 flex flex-col overflow-hidden bg-base border-r border-border-subtle"
               >
-                <Sidebar
-                  hideKnowledgeNav={showWorkbench && activeConversationId !== null}
-                  hideBrowserNav={showWorkbench && activeConversationId !== null}
-                />
+                <Sidebar hideBrowserNav={showWorkbench && activeConversationId !== null} />
               </div>
             ) : null}
 

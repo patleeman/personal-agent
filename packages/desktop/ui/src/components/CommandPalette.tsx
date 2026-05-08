@@ -1,4 +1,3 @@
-import { onKBEvent } from '@personal-agent/extensions/knowledge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -18,6 +17,7 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
+import { onKBEvent } from '../extensions/knowledge';
 import { systemExtensionModules } from '../extensions/systemExtensionModules';
 import type { ExtensionCommandRegistration, ExtensionQuickOpenRegistration, ExtensionSurfaceSummary } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';

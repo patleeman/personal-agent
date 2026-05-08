@@ -1,11 +1,11 @@
-import type { NodeMentionSurface } from '@personal-agent/extensions/knowledge';
-import { stripMarkdownFrontmatter } from '@personal-agent/extensions/knowledge';
-import { buildMentionLookup, renderChildrenWithMentionLinks } from '@personal-agent/extensions/knowledge';
 import { type ReactNode, useId, useMemo } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
+import type { NodeMentionSurface } from '../../extensions/knowledge';
+import { stripMarkdownFrontmatter } from '../../extensions/knowledge';
+import { buildMentionLookup, renderChildrenWithMentionLinks } from '../../extensions/knowledge';
 import { useNodeMentionItems } from '../../hooks/useNodeMentionItems';
 import { InlineMarkdownCode } from '../MarkdownInlineCode';
 import { cx } from '../ui';

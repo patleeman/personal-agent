@@ -9,7 +9,6 @@ interface AppRoutePattern {
 const CORE_ROUTE_PATTERNS: AppRoutePattern[] = [
   { id: 'conversations', prefix: '/conversations', capabilities: ['contextRail', 'workbench', 'workbenchFilePane'] },
   { id: 'extensions', prefix: '/extensions', capabilities: ['contextRail'] },
-  { id: 'knowledge', prefix: '/knowledge', capabilities: ['contextRail', 'knowledgeFiles'] },
   { id: 'settings', prefix: '/settings', capabilities: ['settingsSection'] },
 ];
 

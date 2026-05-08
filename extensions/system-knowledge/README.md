@@ -4,24 +4,30 @@ This extension owns the Knowledge workbench surfaces and knowledge-file mention 
 
 ## What it contributes
 
+- A left-nav **Knowledge** destination backed by the native `knowledge-page` extension view.
 - A right-rail **Knowledge** tree for browsing the local knowledge base.
 - A paired workbench detail view for opening and editing knowledge files beside a conversation.
 - A `knowledge-files` mention provider that adds notes, folders, and files to the conversation `@` menu.
+- A quick-open provider for command-palette file open/search.
+- A prompt-reference resolver that turns `@knowledge-file.md` mentions into hidden prompt context.
 
 ## Runtime behavior
 
 The extension renders native React surfaces declared in `extension.json`:
 
+- `knowledge-page` renders the main `/knowledge` page with its own file tree and editor.
 - `knowledge-tree` renders the right-rail browser.
 - `knowledge-file` renders the workbench detail panel for the selected file.
 
-The extension also owns backend actions for knowledge state and managed sync:
+The extension also owns backend actions for knowledge state, managed sync, vault file operations, and prompt-reference resolution:
 
 - `readState` reads configured repository/sync status.
 - `updateState` updates the managed knowledge repository configuration.
 - `sync` runs a git-backed knowledge-base sync and invalidates knowledge UI state.
+- `vault*` actions list, read, write, search, move, rename, delete, import, and upload knowledge files.
+- `resolvePromptReferences` resolves knowledge file mentions during prompt submission.
 
-The host still exposes shared file/editor primitives through public extension imports. Keep knowledge UI and knowledge-specific backend behavior here rather than adding new shell-specific knowledge panels.
+Knowledge UI should stay in this extension. Host code may render contributed surfaces, but it should not add shell-specific Knowledge pages or file-search paths.
 
 ## Vault resolution
 

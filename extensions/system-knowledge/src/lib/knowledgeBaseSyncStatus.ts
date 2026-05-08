@@ -1,4 +1,4 @@
-import type { KnowledgeBaseState } from '../../../../packages/desktop/ui/src/shared/types';
+import type { KnowledgeBaseState } from '@personal-agent/extensions/data';
 
 export interface KnowledgeBaseSyncPresentation {
   text: string;
