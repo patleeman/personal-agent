@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { SettingsPage } from '../../../packages/desktop/ui/src/pages/SettingsPage';
+import { SettingsPage } from './SettingsPage';
 
 type SettingsSectionId = 'settings-providers' | 'settings-dictation' | 'settings-desktop' | 'settings-keyboard';
 

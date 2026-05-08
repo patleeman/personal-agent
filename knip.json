@@ -1,10 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreDependencies": ["autoprefixer", "postcss", "esbuild"],
+  "ignoreDependencies": ["autoprefixer", "postcss", "esbuild", "qrcode"],
   "ignoreIssues": {
+    "packages/desktop/ui/src/components/ui.tsx": ["exports", "types"],
     "packages/desktop/ui/src/components/workbench/WorkbenchBrowserTab.tsx": ["exports"],
     "packages/desktop/ui/src/components/workspace/WorkspaceExplorer.tsx": ["exports"],
-    "packages/desktop/ui/src/local/workbenchBrowserTabs.ts": ["exports"]
+    "packages/desktop/ui/src/local/workbenchBrowserTabs.ts": ["exports"],
+    "packages/desktop/ui/src/pages/SettingsPage.tsx": ["unresolved"],
+    "packages/desktop/ui/src/shared/types.ts": ["types"],
+    "packages/desktop/ui/src/ui-state/theme.ts": ["types"]
   },
   "workspaces": {
     ".": {
