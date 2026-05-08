@@ -32,6 +32,10 @@ export function vaultCreateFolder(input: { id: string }) {
   return knowledgeVault.createFolder(input);
 }
 
+export function vaultDeleteFile(input: { id: string }) {
+  return knowledgeVault.deleteFile(input);
+}
+
 export function vaultRename(input: { id: string; newName: string }) {
   return knowledgeVault.rename(input);
 }

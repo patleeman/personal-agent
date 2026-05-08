@@ -2,15 +2,15 @@ import { useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
+import { knowledgeApi } from '../../../../../extensions/system-knowledge/src/lib/knowledgeApi';
 import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
-import { api } from '../client/api';
 import { AppPageEmptyState, AppPageIntro, AppPageLayout } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 
 export function KnowledgePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
-  const { data: knowledgeBaseState, loading: knowledgeBaseLoading } = useApi(api.knowledgeBase, 'knowledge-page-knowledge-base');
+  const { data: knowledgeBaseState, loading: knowledgeBaseLoading } = useApi(knowledgeApi.state, 'knowledge-page-knowledge-base');
   const handleFileNavigate = useCallback(
     (id: string) => {
       navigateKnowledgeFile(setSearchParams, id);

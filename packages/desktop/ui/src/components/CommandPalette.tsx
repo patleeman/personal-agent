@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { onKBEvent } from '../../../../../extensions/system-knowledge/src/components/knowledgeEvents';
+import { knowledgeApi } from '../../../../../extensions/system-knowledge/src/lib/knowledgeApi';
 import { useAppData } from '../app/contexts';
-import { api, vaultApi } from '../client/api';
+import { api } from '../client/api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
   COMMAND_PALETTE_SCOPE_SECTIONS,
@@ -295,7 +296,7 @@ export function CommandPalette() {
     setVaultFilesLoading(true);
     setVaultFilesError(null);
     try {
-      const result = await api.vaultFiles();
+      const result = await knowledgeApi.listFiles();
       setVaultFiles(result.files);
     } catch (error) {
       setVaultFilesError(error instanceof Error ? error.message : String(error));
@@ -484,7 +485,7 @@ export function CommandPalette() {
     setVaultSearchError(null);
 
     const handle = window.setTimeout(() => {
-      void vaultApi
+      void knowledgeApi
         .search(query.trim(), FILE_SEARCH_LIMIT)
         .then((result) => {
           if (cancelled) {

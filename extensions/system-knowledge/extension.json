@@ -17,6 +17,7 @@
       { "id": "vaultReadFile", "handler": "vaultReadFile", "title": "Read knowledge file" },
       { "id": "vaultWriteFile", "handler": "vaultWriteFile", "title": "Write knowledge file" },
       { "id": "vaultCreateFolder", "handler": "vaultCreateFolder", "title": "Create knowledge folder" },
+      { "id": "vaultDeleteFile", "handler": "vaultDeleteFile", "title": "Delete knowledge entry" },
       { "id": "vaultRename", "handler": "vaultRename", "title": "Rename knowledge entry" },
       { "id": "vaultMove", "handler": "vaultMove", "title": "Move knowledge entry" },
       { "id": "vaultBacklinks", "handler": "vaultBacklinks", "title": "Read knowledge backlinks" },

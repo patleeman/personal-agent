@@ -152,7 +152,7 @@ export function vaultEntryFromStat(root: string, abs: string, stats: Stats): Vau
   };
 }
 
-function deleteVaultPath(abs: string): void {
+export function deleteVaultPath(abs: string): void {
   rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 
   // macOS can occasionally leave an empty directory behind after recursive

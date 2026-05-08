@@ -27,6 +27,7 @@ export const knowledgeApi = {
   readFile: (id: string) => invoke<VaultFileContent>('vaultReadFile', { id }),
   writeFile: (id: string, content: string) => invoke<VaultEntry>('vaultWriteFile', { id, content }),
   createFolder: (id: string) => invoke<VaultEntry>('vaultCreateFolder', { id }),
+  deleteFile: (id: string) => invoke<{ ok: boolean }>('vaultDeleteFile', { id }),
   rename: (id: string, newName: string) => invoke<VaultEntry>('vaultRename', { id, newName }),
   move: (id: string, targetDir: string) => invoke<VaultEntry>('vaultMove', { id, targetDir }),
   backlinks: (id: string) => invoke<VaultBacklinksResult>('vaultBacklinks', { id }),

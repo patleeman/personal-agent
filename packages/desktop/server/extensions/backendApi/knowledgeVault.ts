@@ -7,6 +7,7 @@ import { listVaultFiles } from '../../knowledge/vaultFiles.js';
 import {
   buildVaultImageUploadFileName,
   decodeVaultImageDataUrl,
+  deleteVaultPath,
   findVaultBacklinks,
   parseVaultSearchLimit,
   readVaultDirEntries,
@@ -59,6 +60,12 @@ export const knowledgeVault = {
     mkdirSync(abs, { recursive: true });
     emitChanged();
     return vaultEntryFromStat(root(), abs, statSync(abs));
+  },
+  deleteFile(input: { id: string }) {
+    const abs = requireVaultPath(input.id);
+    deleteVaultPath(abs);
+    emitChanged();
+    return { ok: true };
   },
   rename(input: { id: string; newName: string }) {
     const abs = requireVaultPath(input.id);
