@@ -1,8 +1,11 @@
 ---
-id: async-attention
-kind: extension-skill
-title: Async Attention and Wakeups
-summary: Built-in routing guide for conversation queueing, reminders, owning surfaces, and later attention.
+name: async-attention
+description: Use when deciding between conversation queues, reminders, scheduled callbacks, automation-owned attention, wakeups, and async follow-up surfaces.
+metadata:
+  id: async-attention
+  title: Async Attention and Wakeups
+  summary: Built-in routing guide for conversation queueing, reminders, owning surfaces, and later attention.
+  status: active
 tools:
   - conversation_queue
   - reminder

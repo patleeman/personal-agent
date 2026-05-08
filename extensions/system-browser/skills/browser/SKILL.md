@@ -1,9 +1,11 @@
 ---
-id: browser
-kind: extension-skill
-title: Built-in Workbench Browser
-summary: Guidance for the desktop workbench Browser tab, browser comments, and how it differs from the agent-browser CLI.
-tools: []
+name: browser
+description: Use when working with the built-in desktop Workbench Browser, browser comments, browser snapshots, CDP actions, screenshots, or the browser versus agent-browser boundary.
+metadata:
+  id: browser
+  title: Built-in Workbench Browser
+  summary: Guidance for the desktop workbench Browser tab, browser comments, and how it differs from the agent-browser CLI.
+  status: active
 ---
 
 # Built-in Workbench Browser

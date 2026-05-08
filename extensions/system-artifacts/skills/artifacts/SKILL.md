@@ -1,8 +1,11 @@
 ---
-id: artifacts
-kind: extension-skill
-title: Artifacts and Rendered Outputs
-summary: Built-in guidance for conversation artifacts, project artifacts, and rendered output behavior.
+name: artifacts
+description: Use when creating, updating, inspecting, or rendering conversation artifacts, HTML reports, Mermaid diagrams, LaTeX outputs, or project deliverables.
+metadata:
+  id: artifacts
+  title: Artifacts and Rendered Outputs
+  summary: Built-in guidance for conversation artifacts, project artifacts, and rendered output behavior.
+  status: active
 tools:
   - artifact
 ---

@@ -1,8 +1,11 @@
 ---
-id: skills-and-capabilities
-kind: extension-skill
-title: Skills and Runtime Capabilities
-summary: Built-in guidance for distinguishing reusable workflow skills from runtime features and extensions.
+name: skills-and-capabilities
+description: Use when deciding whether behavior belongs in an instruction file, durable doc, reusable skill, tool, or extension.
+metadata:
+  id: skills-and-capabilities
+  title: Skills and Runtime Capabilities
+  summary: Built-in guidance for distinguishing reusable workflow skills from runtime features and extensions.
+  status: active
 ---
 
 # Skills and Runtime Capabilities

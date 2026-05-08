@@ -1,8 +1,11 @@
 ---
-id: auto-mode
-kind: extension-skill
-title: Auto Mode
-summary: Built-in guide for autonomous conversation continuation, validation, durable runs, and disciplined follow-through.
+name: auto-mode
+description: Use when auto mode is enabled or the user asks the agent to own work autonomously across turns, durable runs, wakeups, validation, or checkpoints.
+metadata:
+  id: auto-mode
+  title: Auto Mode
+  summary: Built-in guide for autonomous conversation continuation, validation, durable runs, and disciplined follow-through.
+  status: active
 tools:
   - conversation_auto_control
   - conversation_queue

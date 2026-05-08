@@ -1,8 +1,11 @@
 ---
-id: runs
-kind: extension-skill
-title: Runs
-summary: Built-in guidance for detached durable background runs, inspection, and follow-up behavior.
+name: runs
+description: Use when starting, inspecting, rerunning, following up, or cancelling durable daemon-backed background runs.
+metadata:
+  id: runs
+  title: Runs
+  summary: Built-in guidance for detached durable background runs, inspection, and follow-up behavior.
+  status: active
 tools:
   - run
 ---

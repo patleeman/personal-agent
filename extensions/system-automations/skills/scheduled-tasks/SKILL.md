@@ -1,8 +1,11 @@
 ---
-id: scheduled-tasks
-kind: extension-skill
-title: Scheduled Tasks
-summary: Built-in guidance for daemon-backed scheduled automations and conversation callbacks.
+name: scheduled-tasks
+description: Use when creating, inspecting, validating, running, or troubleshooting daemon-backed scheduled automations and conversation callbacks.
+metadata:
+  id: scheduled-tasks
+  title: Scheduled Tasks
+  summary: Built-in guidance for daemon-backed scheduled automations and conversation callbacks.
+  status: active
 tools:
   - scheduled_task
 ---
