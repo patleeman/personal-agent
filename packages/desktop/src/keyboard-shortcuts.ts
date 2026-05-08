@@ -21,49 +21,177 @@ export type DesktopKeyboardShortcutId =
 
 export type DesktopKeyboardShortcuts = Record<DesktopKeyboardShortcutId, string>;
 
-export const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopKeyboardShortcuts = {
-  showApp: 'CommandOrControl+Shift+A',
-  newConversation: 'CommandOrControl+N',
-  closeTab: 'CommandOrControl+W',
-  reopenClosedTab: 'Command+Shift+N',
-  previousConversation: 'CommandOrControl+[',
-  nextConversation: 'CommandOrControl+]',
-  togglePinned: 'CommandOrControl+Alt+P',
-  archiveRestoreConversation: 'CommandOrControl+Alt+A',
-  renameConversation: 'CommandOrControl+Alt+R',
-  focusComposer: 'CommandOrControl+L',
-  editWorkingDirectory: 'CommandOrControl+Shift+L',
-  findOnPage: 'CommandOrControl+F',
-  settings: 'CommandOrControl+,',
-  quit: 'CommandOrControl+Q',
-  conversationMode: 'F1',
-  workbenchMode: 'F2',
-  zenMode: 'F3',
-  toggleSidebar: 'CommandOrControl+/',
-  toggleRightRail: 'CommandOrControl+\\',
-};
+export interface CoreKeyboardShortcutRegistration {
+  id: DesktopKeyboardShortcutId;
+  title: string;
+  description: string;
+  command: string;
+  defaultKeys: string[];
+  menu: 'file' | 'edit' | 'view' | 'app';
+}
 
-const DESKTOP_KEYBOARD_SHORTCUT_IDS: DesktopKeyboardShortcutId[] = [
-  'showApp',
-  'newConversation',
-  'closeTab',
-  'reopenClosedTab',
-  'previousConversation',
-  'nextConversation',
-  'togglePinned',
-  'archiveRestoreConversation',
-  'renameConversation',
-  'focusComposer',
-  'editWorkingDirectory',
-  'findOnPage',
-  'settings',
-  'quit',
-  'conversationMode',
-  'workbenchMode',
-  'zenMode',
-  'toggleSidebar',
-  'toggleRightRail',
+export const CORE_KEYBOARD_SHORTCUT_REGISTRATIONS: CoreKeyboardShortcutRegistration[] = [
+  {
+    id: 'showApp',
+    title: 'Show Personal Agent',
+    description: 'Bring the desktop window forward.',
+    command: 'core.showApp',
+    defaultKeys: ['CommandOrControl+Shift+A'],
+    menu: 'file',
+  },
+  {
+    id: 'newConversation',
+    title: 'New conversation',
+    description: 'Start a fresh chat.',
+    command: 'core.newConversation',
+    defaultKeys: ['CommandOrControl+N'],
+    menu: 'file',
+  },
+  {
+    id: 'closeTab',
+    title: 'Close tab',
+    description: 'Close the active conversation tab.',
+    command: 'core.closeTab',
+    defaultKeys: ['CommandOrControl+W'],
+    menu: 'file',
+  },
+  {
+    id: 'reopenClosedTab',
+    title: 'Reopen closed tab',
+    description: 'Restore the most recently closed conversation tab.',
+    command: 'core.reopenClosedTab',
+    defaultKeys: ['Command+Shift+N'],
+    menu: 'file',
+  },
+  {
+    id: 'previousConversation',
+    title: 'Previous conversation',
+    description: 'Move to the previous open conversation.',
+    command: 'core.previousConversation',
+    defaultKeys: ['CommandOrControl+['],
+    menu: 'file',
+  },
+  {
+    id: 'nextConversation',
+    title: 'Next conversation',
+    description: 'Move to the next open conversation.',
+    command: 'core.nextConversation',
+    defaultKeys: ['CommandOrControl+]'],
+    menu: 'file',
+  },
+  {
+    id: 'togglePinned',
+    title: 'Toggle pinned',
+    description: 'Pin or unpin the active conversation.',
+    command: 'core.togglePinned',
+    defaultKeys: ['CommandOrControl+Alt+P'],
+    menu: 'file',
+  },
+  {
+    id: 'archiveRestoreConversation',
+    title: 'Archive / restore',
+    description: 'Archive or restore the active conversation.',
+    command: 'core.archiveRestoreConversation',
+    defaultKeys: ['CommandOrControl+Alt+A'],
+    menu: 'file',
+  },
+  {
+    id: 'renameConversation',
+    title: 'Rename conversation',
+    description: 'Rename the active conversation.',
+    command: 'core.renameConversation',
+    defaultKeys: ['CommandOrControl+Alt+R'],
+    menu: 'file',
+  },
+  {
+    id: 'focusComposer',
+    title: 'Focus composer',
+    description: 'Move focus to the message composer.',
+    command: 'core.focusComposer',
+    defaultKeys: ['CommandOrControl+L'],
+    menu: 'file',
+  },
+  {
+    id: 'editWorkingDirectory',
+    title: 'Edit working directory',
+    description: 'Open the working-directory editor.',
+    command: 'core.editWorkingDirectory',
+    defaultKeys: ['CommandOrControl+Shift+L'],
+    menu: 'file',
+  },
+  {
+    id: 'findOnPage',
+    title: 'Find on page',
+    description: 'Search text in the current page.',
+    command: 'core.findOnPage',
+    defaultKeys: ['CommandOrControl+F'],
+    menu: 'edit',
+  },
+  {
+    id: 'settings',
+    title: 'Settings',
+    description: 'Open this settings page.',
+    command: 'core.settings',
+    defaultKeys: ['CommandOrControl+,'],
+    menu: 'app',
+  },
+  {
+    id: 'quit',
+    title: 'Quit',
+    description: 'Quit the desktop app.',
+    command: 'core.quit',
+    defaultKeys: ['CommandOrControl+Q'],
+    menu: 'app',
+  },
+  {
+    id: 'conversationMode',
+    title: 'Conversation mode',
+    description: 'Show the normal chat layout.',
+    command: 'layout:conversation',
+    defaultKeys: ['F1'],
+    menu: 'view',
+  },
+  {
+    id: 'workbenchMode',
+    title: 'Workbench mode',
+    description: 'Show the chat and workbench layout.',
+    command: 'layout:workbench',
+    defaultKeys: ['F2'],
+    menu: 'view',
+  },
+  {
+    id: 'zenMode',
+    title: 'Zen mode',
+    description: 'Hide side panels for focused chat.',
+    command: 'layout:zen',
+    defaultKeys: ['F3'],
+    menu: 'view',
+  },
+  {
+    id: 'toggleSidebar',
+    title: 'Toggle left sidebar',
+    description: 'Collapse or restore the conversation sidebar.',
+    command: 'core.toggleSidebar',
+    defaultKeys: ['CommandOrControl+/'],
+    menu: 'view',
+  },
+  {
+    id: 'toggleRightRail',
+    title: 'Toggle right rail',
+    description: 'Collapse or restore the active workbench rail.',
+    command: 'core.toggleRightRail',
+    defaultKeys: ['CommandOrControl+\\'],
+    menu: 'view',
+  },
 ];
+
+export const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopKeyboardShortcuts = Object.fromEntries(
+  CORE_KEYBOARD_SHORTCUT_REGISTRATIONS.map((registration) => [registration.id, registration.defaultKeys[0]]),
+) as DesktopKeyboardShortcuts;
+
+const DESKTOP_KEYBOARD_SHORTCUT_IDS: DesktopKeyboardShortcutId[] = CORE_KEYBOARD_SHORTCUT_REGISTRATIONS.map(
+  (registration) => registration.id,
+);
 
 const MODIFIER_ALIASES: Record<string, string> = {
   commandorcontrol: 'CommandOrControl',

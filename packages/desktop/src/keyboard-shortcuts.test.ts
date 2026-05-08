@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS } from './keyboard-shortcuts.js';
+import { CORE_KEYBOARD_SHORTCUT_REGISTRATIONS, DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS } from './keyboard-shortcuts.js';
 
 // ── keyboard-shortcuts — default shortcut definitions ─────────────────────
 
 describe('DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS', () => {
-  it('defines all 19 expected shortcuts', () => {
+  it('defines all 19 expected shortcuts from the core registry', () => {
     const keys = Object.keys(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
     expect(keys.length).toBe(19);
+    expect(CORE_KEYBOARD_SHORTCUT_REGISTRATIONS.map((registration) => registration.id)).toEqual(keys);
   });
 
   it('includes the essential conversation shortcuts', () => {
