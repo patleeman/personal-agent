@@ -4,16 +4,16 @@ import { createStoredAutomation, pingDaemon, startBackgroundRun } from '@persona
 import { Type } from '@sinclair/typebox';
 
 import {
+  applyScheduledTaskThreadBinding,
   cancelDurableRun,
   followUpDurableRun,
   getDurableRun,
   getDurableRunLog,
+  invalidateAppTopics,
   listDurableRuns,
+  persistAppTelemetryEvent,
   rerunDurableRun,
-} from '../../../packages/desktop/server/automation/durableRuns.js';
-import { applyScheduledTaskThreadBinding } from '../../../packages/desktop/server/automation/scheduledTaskThreads.js';
-import { invalidateAppTopics } from '../../../packages/desktop/server/shared/appEvents.js';
-import { persistAppTelemetryEvent } from '../../../packages/desktop/server/traces/appTelemetry.js';
+} from '../../../packages/desktop/server/extensions/backendApi.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
 

@@ -7,18 +7,16 @@ import {
 } from '@personal-agent/daemon';
 
 import {
+  applyScheduledTaskThreadBinding,
   cancelDeferredResumeForSessionFile,
+  cancelQueuedPrompt,
   DEFAULT_DEFERRED_RESUME_PROMPT,
   type DeferredResumeSummary,
-} from '../../../packages/desktop/server/automation/deferredResumes.js';
-import { parseFutureHumanDateTime } from '../../../packages/desktop/server/automation/humanDateTime.js';
-import { applyScheduledTaskThreadBinding } from '../../../packages/desktop/server/automation/scheduledTaskThreads.js';
-import {
-  cancelQueuedPrompt,
   listQueuedPromptPreviews,
+  parseFutureHumanDateTime,
   promptSession,
   type QueuedPromptPreview,
-} from '../../../packages/desktop/server/conversations/liveSessions.js';
+} from '../../../packages/desktop/server/extensions/backendApi.js';
 
 const DELIVER_AS_VALUES = ['steer', 'followUp'] as const;
 type DeliverAs = (typeof DELIVER_AS_VALUES)[number];

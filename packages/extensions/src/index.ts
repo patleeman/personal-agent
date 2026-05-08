@@ -128,13 +128,40 @@ export interface PersonalAgentClient {
     getManifest(): Promise<unknown>;
     listSurfaces(): Promise<unknown>;
   };
-  automations: Record<string, (...args: never[]) => Promise<unknown>>;
-  runs: Record<string, (...args: never[]) => Promise<unknown>>;
+  automations: {
+    list(): Promise<unknown>;
+    readSchedulerHealth(): Promise<unknown>;
+    get(taskId: string): Promise<unknown>;
+    create(input: unknown): Promise<unknown>;
+    update(taskId: string, input: unknown): Promise<unknown>;
+    delete(taskId: string): Promise<unknown>;
+    run(taskId: string): Promise<unknown>;
+    readLog(taskId: string): Promise<unknown>;
+  };
+  runs: {
+    start(input: unknown): Promise<unknown>;
+    get(runId: string): Promise<unknown>;
+    list(): Promise<unknown>;
+    readLog(runId: string, tail?: number): Promise<unknown>;
+    cancel(runId: string): Promise<unknown>;
+  };
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
     put(key: string, value: unknown, opts?: { expectedVersion?: number }): Promise<unknown>;
     delete(key: string): Promise<unknown>;
     list<T = unknown>(prefix?: string): Promise<Array<{ key: string; value: T }>>;
+  };
+  workspace: {
+    tree(cwd: string, path?: string): Promise<unknown>;
+    readFile(cwd: string, path: string, opts?: { force?: boolean }): Promise<unknown>;
+    writeFile(cwd: string, path: string, content: string): Promise<unknown>;
+    createFile(cwd: string, path: string, content?: string): Promise<unknown>;
+    createFolder(cwd: string, path: string): Promise<unknown>;
+    deletePath(cwd: string, path: string): Promise<unknown>;
+    renamePath(cwd: string, path: string, newName: string): Promise<unknown>;
+    movePath(cwd: string, path: string, targetDir: string): Promise<unknown>;
+    diff(cwd: string, path: string): Promise<unknown>;
+    uncommittedDiff(cwd: string): Promise<unknown>;
   };
   workbench: {
     getDetailState<T = unknown>(surfaceId: string): T | null;
@@ -151,7 +178,7 @@ export interface PersonalAgentClient {
     snapshot(input?: { tabId?: string | null }): Promise<unknown>;
   };
   ui: {
-    toast(message: string, options?: Record<string, unknown>): void;
+    toast(message: string): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
   };
 }
@@ -168,6 +195,10 @@ export interface ExtensionBackendContext {
   automations: Record<string, (...args: never[]) => Promise<unknown>>;
   vault: Record<string, (...args: never[]) => Promise<unknown>>;
   conversations: Record<string, (...args: never[]) => Promise<unknown>>;
+  workspace: Record<string, (...args: never[]) => Promise<unknown>>;
+  git: Record<string, (...args: never[]) => Promise<unknown>>;
+  shell: Record<string, (...args: never[]) => Promise<unknown>>;
+  ui: { invalidate(topics: string | string[]): void };
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
