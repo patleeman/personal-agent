@@ -144,6 +144,14 @@ export interface ExtensionSlashCommandRegistration {
   action: string;
 }
 
+export interface ExtensionPromptReferenceRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  handler: string;
+  title?: string;
+}
+
 interface ExtensionRegistryConfig {
   disabledIds?: string[];
   disabledKeybindings?: string[];
@@ -529,6 +537,14 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.promptReferences !== undefined) {
+    for (const [index, resolver] of assertRecordArray(contributes.promptReferences, 'contributes.promptReferences').entries()) {
+      requireString(resolver.id, `contributes.promptReferences[${index}].id`);
+      requireString(resolver.handler, `contributes.promptReferences[${index}].handler`);
+      validateOptionalString(resolver.title, `contributes.promptReferences[${index}].title`);
+    }
+  }
+
   if (contributes.skills !== undefined) {
     for (const [index, skill] of assertArray(contributes.skills, 'contributes.skills').entries()) {
       if (typeof skill === 'string') {
@@ -766,7 +782,18 @@ export function readExtensionSchema() {
     rightSurfaceScopes: EXTENSION_RIGHT_SURFACE_SCOPES,
     routeCapabilities: EXTENSION_ROUTE_CAPABILITIES,
     iconNames: EXTENSION_ICON_NAMES,
-    contributions: ['views', 'nav', 'commands', 'keybindings', 'slashCommands', 'mentions', 'settings', 'skills', 'tools'],
+    contributions: [
+      'views',
+      'nav',
+      'commands',
+      'keybindings',
+      'slashCommands',
+      'mentions',
+      'settings',
+      'skills',
+      'tools',
+      'promptReferences',
+    ],
   };
 }
 
@@ -892,6 +919,25 @@ export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandR
     })),
   );
   return [...legacy, ...native];
+}
+
+export function listExtensionPromptReferenceRegistrations(stateRoot: string = getStateRoot()): ExtensionPromptReferenceRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.promptReferences ?? []).flatMap((resolver): ExtensionPromptReferenceRegistration[] => {
+      const id = resolver.id.trim();
+      const handler = resolver.handler.trim();
+      if (!id || !handler) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          handler,
+          ...(resolver.title ? { title: resolver.title } : {}),
+        },
+      ];
+    }),
+  );
 }
 
 export function listExtensionSkillRegistrations(stateRoot: string = getStateRoot()): ExtensionSkillRegistration[] {

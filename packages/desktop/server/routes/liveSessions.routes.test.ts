@@ -37,6 +37,7 @@ const {
   resolveConversationCwdMock,
   resolveDaemonPathsMock,
   resolveDurableRunsRootMock,
+  resolveExtensionPromptReferencesMock,
   resolveMentionedVaultFilesMock,
   resolvePromptReferencesMock,
   restoreQueuedMessageMock,
@@ -92,6 +93,7 @@ const {
   resolveConversationCwdMock: vi.fn(),
   resolveDaemonPathsMock: vi.fn(),
   resolveDurableRunsRootMock: vi.fn(),
+  resolveExtensionPromptReferencesMock: vi.fn(),
   resolveMentionedVaultFilesMock: vi.fn(),
   resolvePromptReferencesMock: vi.fn(),
   restoreQueuedMessageMock: vi.fn(),
@@ -194,6 +196,10 @@ vi.mock('../knowledge/promptReferences.js', () => ({
 vi.mock('../knowledge/vaultFiles.js', () => ({
   buildReferencedVaultFilesContext: buildReferencedVaultFilesContextMock,
   resolveMentionedVaultFiles: resolveMentionedVaultFilesMock,
+}));
+
+vi.mock('../extensions/promptReferenceResolvers.js', () => ({
+  resolveExtensionPromptReferences: resolveExtensionPromptReferencesMock,
 }));
 
 vi.mock('../conversations/conversationRuns.js', () => ({
@@ -341,6 +347,7 @@ describe('live session routes', () => {
     resolveConversationCwdMock.mockReset();
     resolveDaemonPathsMock.mockReset();
     resolveDurableRunsRootMock.mockReset();
+    resolveExtensionPromptReferencesMock.mockReset();
     resolveMentionedVaultFilesMock.mockReset();
     resolvePromptReferencesMock.mockReset();
     restoreQueuedMessageMock.mockReset();
@@ -400,6 +407,7 @@ describe('live session routes', () => {
     resolveConversationCwdMock.mockReturnValue('/repo/worktree');
     resolveDaemonPathsMock.mockReturnValue({ root: '/daemon' });
     resolveDurableRunsRootMock.mockReturnValue('/daemon/runs');
+    resolveExtensionPromptReferencesMock.mockResolvedValue({ contextBlocks: [], references: [] });
     resolveMentionedVaultFilesMock.mockReturnValue([]);
     resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: [], memoryDocIds: [], skillNames: [] });
     restoreQueuedMessageMock.mockResolvedValue({ restoredIndex: 0 });
@@ -636,7 +644,10 @@ describe('live session routes', () => {
     extractMentionIdsMock.mockReturnValue(['task-1', 'note-1', 'vault-1']);
     resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: ['task-1'], memoryDocIds: ['note-1'], skillNames: [] });
     expandPromptReferencesWithNodeGraphMock.mockReturnValue({ projectIds: [], memoryDocIds: ['note-1'], skillNames: [] });
-    resolveMentionedVaultFilesMock.mockReturnValue([{ id: 'vault-1', title: 'Vault file' }]);
+    resolveExtensionPromptReferencesMock.mockResolvedValue({
+      contextBlocks: ['Vault files context'],
+      references: [{ kind: 'knowledgeFile', id: 'vault-1', path: '/vault/vault-1.md' }],
+    });
     resolveConversationAttachmentPromptFilesMock.mockReturnValue([
       {
         attachmentId: 'att-1',

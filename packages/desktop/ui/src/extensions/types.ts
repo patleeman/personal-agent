@@ -27,6 +27,12 @@ interface ExtensionFrontendManifest {
   styles?: string[];
 }
 
+interface ExtensionPromptReferenceContribution {
+  id: string;
+  handler: string;
+  title?: string;
+}
+
 interface ExtensionViewContribution {
   id: string;
   title: string;
@@ -115,6 +121,7 @@ interface ExtensionContributions {
   skills?: Array<string | ExtensionSkillContribution>;
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
+  promptReferences?: ExtensionPromptReferenceContribution[];
   settings?: Record<string, unknown>;
 }
 

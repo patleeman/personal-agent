@@ -10,6 +10,7 @@ import {
   resolveDurableRunsRoot,
 } from '@personal-agent/daemon';
 
+import { resolveExtensionPromptReferences } from '../extensions/promptReferenceResolvers.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedTasksContext,
@@ -18,7 +19,6 @@ import {
   pickPromptReferencesInOrder,
   resolvePromptReferences,
 } from '../knowledge/promptReferences.js';
-import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import type { MemoryDocSummary } from '../routes/context.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
@@ -691,7 +691,13 @@ async function prepareLiveSessionPrompt(
         };
   const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
   const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
-  const referencedVaultFiles = hasPromptMentions ? resolveMentionedVaultFiles(text) : [];
+  const extensionPromptReferences = hasPromptMentions
+    ? await resolveExtensionPromptReferences({ text })
+    : { contextBlocks: [], references: [] };
+  const referencedVaultFiles = extensionPromptReferences.references.filter(
+    (reference): reference is { kind: string; id: string; path: string } =>
+      reference.kind === 'knowledgeFile' && typeof reference.path === 'string',
+  );
 
   let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
   if (normalizedAttachmentRefs.length > 0) {
@@ -728,7 +734,7 @@ async function prepareLiveSessionPrompt(
     referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
     referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, context.getRepoRoot()) : '',
     referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, context.getRepoRoot()) : '',
-    referencedVaultFiles.length > 0 ? buildReferencedVaultFilesContext(referencedVaultFiles) : '',
+    ...extensionPromptReferences.contextBlocks,
     backgroundRunHiddenContext,
   ].filter(Boolean);
 

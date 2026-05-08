@@ -23,10 +23,12 @@
       { "id": "vaultBacklinks", "handler": "vaultBacklinks", "title": "Read knowledge backlinks" },
       { "id": "vaultSearch", "handler": "vaultSearch", "title": "Search knowledge" },
       { "id": "vaultUploadImage", "handler": "vaultUploadImage", "title": "Upload knowledge image" },
-      { "id": "vaultImportUrl", "handler": "vaultImportUrl", "title": "Import URL into knowledge" }
+      { "id": "vaultImportUrl", "handler": "vaultImportUrl", "title": "Import URL into knowledge" },
+      { "id": "resolvePromptReferences", "handler": "resolvePromptReferences", "title": "Resolve knowledge prompt references" }
     ]
   },
   "contributes": {
+    "promptReferences": [{ "id": "knowledge-files", "handler": "resolvePromptReferences", "title": "Knowledge files" }],
     "mentions": [
       {
         "id": "knowledge-files",
