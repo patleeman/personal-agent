@@ -1,6 +1,6 @@
+import { parseSkillBlock } from '@personal-agent/extensions/knowledge';
 import { memo, useCallback, useMemo, useState } from 'react';
 
-import { parseSkillBlock } from '../../../../../../extensions/system-knowledge/src/lib/skillBlock';
 import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
 import { cx, SurfacePanel } from '../ui';
