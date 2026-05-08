@@ -2,6 +2,7 @@ export type { ExtensionSurfaceProps } from './index.js';
 
 export type HostComponent = (...args: never[]) => unknown;
 
+export declare const AppPageEmptyState: HostComponent;
 export declare const AppPageIntro: HostComponent;
 export declare const AppPageLayout: HostComponent;
 export declare const AppPageSection: HostComponent;
