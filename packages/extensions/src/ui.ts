@@ -8,6 +8,7 @@ export declare const AppPageSection: HostComponent;
 export declare const AppPageToc: HostComponent;
 export declare const EmptyState: HostComponent;
 export declare const ErrorState: HostComponent;
+export declare const IconButton: HostComponent;
 export declare const LoadingState: HostComponent;
 export declare const Pill: HostComponent;
 export declare const ToolbarButton: HostComponent;

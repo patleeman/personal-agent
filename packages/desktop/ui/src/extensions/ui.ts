@@ -6,6 +6,7 @@ export {
   cx,
   EmptyState,
   ErrorState,
+  IconButton,
   LoadingState,
   Pill,
   ToolbarButton,
