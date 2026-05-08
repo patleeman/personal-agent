@@ -1960,7 +1960,10 @@ export function Layout() {
                 style={{ width: sidebar.width }}
                 className="flex-shrink-0 flex flex-col overflow-hidden bg-base border-r border-border-subtle"
               >
-                <Sidebar hideKnowledgeNav={showWorkbench} hideBrowserNav={showWorkbench} />
+                <Sidebar
+                  hideKnowledgeNav={showWorkbench && activeConversationId !== null}
+                  hideBrowserNav={showWorkbench && activeConversationId !== null}
+                />
               </div>
             ) : null}
 
