@@ -7,16 +7,19 @@ import { getDesktopBridge } from '../desktop/desktopBridge';
 import type { ExtensionInstallSummary } from './types';
 
 function formatSurfaceSummary(extension: ExtensionInstallSummary): string {
-  if (extension.surfaces.length === 0) return 'No surfaces';
   const counts = new Map<string, number>();
   for (const surface of extension.surfaces) {
     counts.set(surface.placement, (counts.get(surface.placement) ?? 0) + 1);
   }
+  for (const view of extension.manifest.contributes?.views ?? []) {
+    counts.set(view.location, (counts.get(view.location) ?? 0) + 1);
+  }
+  if (counts.size === 0) return 'No surfaces';
   return [...counts.entries()].map(([placement, count]) => `${count} ${placement}`).join(', ');
 }
 
 function firstRoute(extension: ExtensionInstallSummary): string | null {
-  return extension.routes[0]?.route ?? null;
+  return extension.routes[0]?.route ?? extension.manifest.contributes?.views?.find((view) => view.location === 'main')?.route ?? null;
 }
 
 function formatPermissionSummary(extension: ExtensionInstallSummary): string {
@@ -27,6 +30,10 @@ function formatBackendActionSummary(extension: ExtensionInstallSummary): string 
   return extension.backendActions?.length
     ? extension.backendActions.map((action) => `${action.id} → ${action.handler}`).join(', ')
     : 'None';
+}
+
+function formatFrontendSummary(extension: ExtensionInstallSummary): string {
+  return extension.manifest.frontend?.entry ?? 'None';
 }
 
 function slugifyExtensionId(value: string): string {
@@ -212,6 +219,9 @@ export function ExtensionManagerPage() {
                       <p>{formatSurfaceSummary(extension)}</p>
                       <p>
                         <span className="text-dim">Permissions:</span> {formatPermissionSummary(extension)}
+                      </p>
+                      <p>
+                        <span className="text-dim">Frontend:</span> {formatFrontendSummary(extension)}
                       </p>
                       <p>
                         <span className="text-dim">Backend:</span> {formatBackendActionSummary(extension)}

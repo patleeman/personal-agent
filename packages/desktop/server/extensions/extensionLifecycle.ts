@@ -72,7 +72,7 @@ export function ExtensionPage({ pa }: ExtensionSurfaceProps) {
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">Extension</p>
       <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.04em] text-primary">${name}</h1>
       <p className="mt-2 max-w-2xl text-[13px] leading-6 text-secondary">
-        Edit <code>src/frontend.tsx</code>, run <code>pa extension build</code>, then reload extensions.
+        Edit <code>src/frontend.tsx</code>, run <code>npm run extension:build -- &lt;extension-dir&gt;</code> from the personal-agent repo, then reload extensions.
       </p>
       <button className="ui-toolbar-button mt-6" type="button" onClick={() => pa.ui.toast('${name} is wired up.')}>
         Test toast
@@ -127,7 +127,7 @@ export function createRuntimeExtension(input: CreateRuntimeExtensionInput, state
   writeFileSync(join(extensionRoot, 'src', 'backend.ts'), createStarterBackend());
   writeFileSync(
     join(extensionRoot, 'package.json'),
-    `${JSON.stringify({ type: 'module', scripts: { build: 'pa extension build' }, dependencies: { '@personal-agent/extensions': '*' } }, null, 2)}\n`,
+    `${JSON.stringify({ type: 'module', dependencies: { '@personal-agent/extensions': '*' } }, null, 2)}\n`,
   );
 
   const summary = listExtensionInstallSummaries(stateRoot).find((extension) => extension.id === id);

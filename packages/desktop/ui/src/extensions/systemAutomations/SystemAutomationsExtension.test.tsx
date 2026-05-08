@@ -1,0 +1,94 @@
+// @vitest-environment jsdom
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { NativeExtensionClient } from '../nativePaClient';
+import { AutomationsPage } from './SystemAutomationsExtension';
+
+Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
+
+const mountedRoots: Root[] = [];
+
+afterEach(() => {
+  for (const root of mountedRoots) {
+    act(() => root.unmount());
+  }
+  mountedRoots.length = 0;
+});
+
+function createPa(overrides: Partial<NativeExtensionClient['automations']> = {}): NativeExtensionClient {
+  return {
+    extension: { invoke: vi.fn(), getManifest: vi.fn(), listSurfaces: vi.fn() },
+    runs: { start: vi.fn(), get: vi.fn(), list: vi.fn(), readLog: vi.fn(), cancel: vi.fn() },
+    storage: { get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn() },
+    ui: { toast: vi.fn(), confirm: vi.fn() },
+    automations: {
+      list: vi.fn(async () => [
+        {
+          id: 'daily-check',
+          title: 'Daily check',
+          scheduleType: 'cron',
+          targetType: 'background-agent',
+          running: false,
+          enabled: true,
+          cron: '0 9 * * 1-5',
+          prompt: 'Check the repo',
+        },
+      ]),
+      readSchedulerHealth: vi.fn(async () => ({
+        status: 'healthy',
+        lastEvaluatedAt: '2026-05-08T00:00:00.000Z',
+        staleAfterSeconds: 60,
+        checkedAt: '2026-05-08T00:00:01.000Z',
+      })),
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      run: vi.fn(),
+      readLog: vi.fn(),
+      ...overrides,
+    },
+  } as unknown as NativeExtensionClient;
+}
+
+async function renderPage(pa = createPa()) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  mountedRoots.push(root);
+
+  await act(async () => {
+    root.render(<AutomationsPage pa={pa} />);
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  return { container, pa };
+}
+
+describe('AutomationsPage', () => {
+  it('renders scheduler health and automation rows', async () => {
+    const { container } = await renderPage();
+
+    expect(container.textContent).toContain('Automations');
+    expect(container.textContent).toContain('Scheduler healthy');
+    expect(container.textContent).toContain('Daily check');
+    expect(container.textContent).toContain('Cron 0 9 * * 1-5');
+  });
+
+  it('starts an automation run from the row action', async () => {
+    const pa = createPa();
+    const { container } = await renderPage(pa);
+    const runButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Run');
+    if (!runButton) throw new Error('Run button not found');
+
+    await act(async () => {
+      runButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(pa.automations.run).toHaveBeenCalledWith('daily-check');
+  });
+});

@@ -66,22 +66,24 @@ describe('desktop local API extension routes', () => {
     rmSync(tempStateRoot, { recursive: true, force: true });
   });
 
-  it('dispatches wildcard extension file routes in the desktop local API', async () => {
+  it('dispatches wildcard extension bundle routes in the desktop local API', async () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = tempStateRoot;
     const extensionRoot = join(tempStateRoot, 'extensions', 'agent-board');
-    mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
-    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
-    writeFileSync(join(extensionRoot, 'frontend', 'rail.html'), '<h1>Agent Board Rail</h1>');
+    mkdirSync(join(extensionRoot, 'dist'), { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({ schemaVersion: 2, id: 'agent-board', name: 'Agent Board', frontend: { entry: 'dist/frontend.js' } }),
+    );
+    writeFileSync(join(extensionRoot, 'dist', 'frontend.js'), 'export function AgentBoardPage() {}');
 
     const response = await dispatchDesktopLocalApiRequest({
       method: 'GET',
-      path: '/api/extensions/agent-board/files/frontend/rail.html?surfaceId=rail',
+      path: '/api/extensions/agent-board/files/dist/frontend.js?surfaceId=page',
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('html');
-    expect(Buffer.from(response.body).toString('utf-8')).toContain('Agent Board Rail');
-    expect(Buffer.from(response.body).toString('utf-8')).toContain('/pa/client.js');
+    expect(response.headers['content-type']).toMatch(/javascript|\bjs\b/);
+    expect(Buffer.from(response.body).toString('utf-8')).toContain('AgentBoardPage');
   });
 });
 

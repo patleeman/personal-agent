@@ -38,10 +38,13 @@ describe('extension registry', () => {
     writeFileSync(
       join(extensionRoot, 'extension.json'),
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'agent-board',
         name: 'Agent Board',
-        surfaces: [{ id: 'page', placement: 'main', kind: 'page', route: '/ext/agent-board', entry: 'frontend/page.html' }],
+        frontend: { entry: 'dist/frontend.js' },
+        contributes: {
+          views: [{ id: 'page', title: 'Agent Board', location: 'main', route: '/ext/agent-board', component: 'AgentBoardPage' }],
+        },
       }),
     );
 
@@ -61,10 +64,13 @@ describe('extension registry', () => {
     writeFileSync(
       join(extensionRoot, 'extension.json'),
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'agent-board',
         name: 'Agent Board',
-        surfaces: [{ id: 'page', placement: 'main', kind: 'page', route: '/ext/agent-board', entry: 'frontend/page.html' }],
+        frontend: { entry: 'dist/frontend.js' },
+        contributes: {
+          views: [{ id: 'page', title: 'Agent Board', location: 'main', route: '/ext/agent-board', component: 'AgentBoardPage' }],
+        },
       }),
     );
 

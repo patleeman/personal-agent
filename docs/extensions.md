@@ -212,11 +212,13 @@ These are the paved road, not a prison. If an extension needs a custom timeline,
 
 Personal Agent owns the extension build command. Extension authors should not need custom Vite configs for normal packages.
 
-Target command:
+Target command from the repo:
 
 ```bash
-pa extension build ~/.local/state/personal-agent/extensions/agent-board
+npm run extension:build -- ~/.local/state/personal-agent/extensions/agent-board
 ```
+
+A future packaged desktop UI can expose this through the Extension Manager, but there is no standalone `pa` CLI anymore.
 
 The builder should:
 
@@ -415,7 +417,7 @@ When asked to create or modify an extension, agents should:
 3. Create or edit source files under the runtime extension package.
 4. Prefer PA components for common UI, custom CSS for genuinely custom layout.
 5. Declare permissions and contributions explicitly in `extension.json`.
-6. Run the PA extension build.
+6. Run `npm run extension:build -- <extension-dir>` from the repo, or use the Extension Manager build action once it exists.
 7. Reload extensions.
 8. Visually inspect the native surface.
 9. Snapshot/checkpoint only the files touched.
@@ -457,7 +459,7 @@ The native Automations extension should own `/automations`, call `pa.automations
 Target order:
 
 1. Add manifest schema v2 and public types in `@personal-agent/extensions`.
-2. Build `pa extension build` for frontend/backend bundles.
+2. Build `npm run extension:build -- <extension-dir>` for frontend/backend bundles.
 3. Add native `ExtensionSurfaceHost` with lazy dynamic import.
 4. Add scoped CSS loading with extension root, reset boundary, theme tokens, and cascade layer.
 5. Add typed `pa` surface props and optional PA UI components/hooks.

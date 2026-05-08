@@ -19,7 +19,6 @@ import {
   listDurableRuns,
   readDurableRunLogDelta,
 } from '../automation/durableRuns.js';
-import { PA_CLIENT_JS } from '../extensions/pa-client.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 import type { ServerRouteContext } from './context.js';
 
@@ -97,19 +96,6 @@ export function registerRunAppRoutes(
 ): void {
   initializeRunsAppRoutesContext(context);
 
-  function sendPaClient(_req: unknown, res: Response) {
-    try {
-      res.setHeader('Content-Type', 'application/javascript');
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      res.send(PA_CLIENT_JS);
-    } catch (err) {
-      logError('PA client serve error', {
-        message: err instanceof Error ? err.message : String(err),
-      });
-      res.status(500).json({ error: 'Failed to serve PA client' });
-    }
-  }
-
   function sendPaComponents(_req: unknown, res: Response) {
     try {
       res.setHeader('Content-Type', 'text/css');
@@ -123,10 +109,7 @@ export function registerRunAppRoutes(
     }
   }
 
-  // Serve PA client assets for extension iframes. The /api aliases
-  // avoid renderer-dev-server history fallback when iframe srcdoc fetches them.
-  router.get('/pa/client.js', sendPaClient);
-  router.get('/api/pa/client.js', sendPaClient);
+  // Serve shared component CSS for native extension bundles and generated previews.
   router.get('/pa/components.css', sendPaComponents);
   router.get('/api/pa/components.css', sendPaComponents);
 

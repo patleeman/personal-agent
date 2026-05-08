@@ -1,32 +1,42 @@
 import { describe, expect, it } from 'vitest';
 
-import { type ExtensionSurfaceSummary, isExtensionRightToolPanelSurface } from './types';
+import { isNativeExtensionPageSurface, isNativeExtensionRightRailSurface, type NativeExtensionViewSummary } from './types';
 
 describe('extension surface type guards', () => {
-  it('recognizes right rail tool panels with iframe entries', () => {
-    const surface: ExtensionSurfaceSummary = {
+  it('recognizes native main page surfaces', () => {
+    const surface: NativeExtensionViewSummary = {
       extensionId: 'agent-board',
-      id: 'rail',
-      placement: 'right',
-      kind: 'toolPanel',
-      label: 'Board',
-      entry: 'frontend/rail.html',
-      scope: 'conversation',
+      id: 'page',
+      title: 'Agent Board',
+      location: 'main',
+      route: '/ext/agent-board',
+      component: 'AgentBoardPage',
+      frontend: { entry: 'dist/frontend.js' },
     };
 
-    expect(isExtensionRightToolPanelSurface(surface)).toBe(true);
+    expect(isNativeExtensionPageSurface(surface)).toBe(true);
   });
 
-  it('rejects incomplete right rail surfaces', () => {
+  it('recognizes native right rail surfaces', () => {
+    const surface: NativeExtensionViewSummary = {
+      extensionId: 'agent-board',
+      id: 'rail',
+      title: 'Board',
+      location: 'rightRail',
+      scope: 'conversation',
+      component: 'AgentBoardRail',
+      frontend: { entry: 'dist/frontend.js' },
+    };
+
+    expect(isNativeExtensionRightRailSurface(surface)).toBe(true);
+  });
+
+  it('rejects incomplete native surfaces', () => {
+    expect(isNativeExtensionPageSurface({ extensionId: 'agent-board', id: 'page', location: 'main', component: 'AgentBoardPage' })).toBe(
+      false,
+    );
     expect(
-      isExtensionRightToolPanelSurface({
-        extensionId: 'agent-board',
-        id: 'rail',
-        placement: 'right',
-        kind: 'toolPanel',
-        label: 'Board',
-        scope: 'conversation',
-      } as ExtensionSurfaceSummary),
+      isNativeExtensionRightRailSurface({ extensionId: 'agent-board', id: 'rail', location: 'rightRail', component: 'AgentBoardRail' }),
     ).toBe(false);
   });
 });

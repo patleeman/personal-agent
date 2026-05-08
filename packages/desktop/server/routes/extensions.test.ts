@@ -83,37 +83,42 @@ describe('registerExtensionRoutes', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
     mkdirSync(extensionRoot, { recursive: true });
-    const surface = { id: 'page', placement: 'main', kind: 'page', route: '/ext/agent-board', entry: 'frontend/page.html' };
+    const view = { id: 'page', title: 'Agent Board', location: 'main', route: '/ext/agent-board', component: 'AgentBoardPage' };
     writeFileSync(
       join(extensionRoot, 'extension.json'),
-      JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board', surfaces: [surface] }),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'agent-board',
+        name: 'Agent Board',
+        frontend: { entry: 'dist/frontend.js' },
+        contributes: { views: [view] },
+      }),
     );
 
     const harness = createHarness();
     const manifestRes = createResponse();
     harness.getHandler('/api/extensions/:id/manifest')({ params: { id: 'agent-board' } }, manifestRes);
-    expect(manifestRes.json).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent-board', surfaces: [surface] }));
+    expect(manifestRes.json).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent-board', contributes: { views: [view] } }));
 
     const surfacesRes = createResponse();
     harness.getHandler('/api/extensions/:id/surfaces')({ params: { id: 'agent-board' } }, surfacesRes);
-    expect(surfacesRes.json).toHaveBeenCalledWith([surface]);
+    expect(surfacesRes.json).toHaveBeenCalledWith([view]);
   });
 
-  it('serves runtime extension files inside the package root', () => {
+  it('serves runtime extension bundles inside the package root', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
-    mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
-    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 1, id: 'agent-board', name: 'Agent Board' }));
-    writeFileSync(join(extensionRoot, 'frontend', 'page.html'), '<h1>Agent Board</h1>');
+    mkdirSync(join(extensionRoot, 'dist'), { recursive: true });
+    writeFileSync(join(extensionRoot, 'extension.json'), JSON.stringify({ schemaVersion: 2, id: 'agent-board', name: 'Agent Board' }));
+    writeFileSync(join(extensionRoot, 'dist', 'frontend.js'), 'export function AgentBoardPage() {}');
 
     const harness = createHarness();
     const res = createResponse();
-    harness.getHandler('/api/extensions/:id/files/*')({ params: { id: 'agent-board', 0: 'frontend/page.html' } }, res);
+    harness.getHandler('/api/extensions/:id/files/*')({ params: { id: 'agent-board', 0: 'dist/frontend.js' } }, res);
 
-    expect(res.type).toHaveBeenCalledWith('html');
-    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('<h1>Agent Board</h1>'));
-    expect(res.send).not.toHaveBeenCalledWith(expect.stringContaining('/pa/client.js'));
+    expect(res.type).toHaveBeenCalledWith('js');
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('AgentBoardPage'));
   });
 
   it('rejects extension file traversal', () => {
@@ -139,13 +144,13 @@ describe('registerExtensionRoutes', () => {
     writeFileSync(
       join(extensionRoot, 'extension.json'),
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'agent-board',
         name: 'Agent Board',
-        surfaces: [
-          { id: 'plan', placement: 'command', kind: 'command', title: 'Plan board sprint', action: 'planSprint', icon: 'kanban' },
-          { id: 'task', placement: 'slash', kind: 'slashCommand', name: 'task', description: 'Create a board task', action: 'createTask' },
-        ],
+        contributes: {
+          commands: [{ id: 'plan', title: 'Plan board sprint', action: 'planSprint', icon: 'kanban' }],
+          slashCommands: [{ name: 'task', description: 'Create a board task', action: 'createTask' }],
+        },
       }),
     );
 
@@ -235,17 +240,20 @@ describe('registerExtensionRoutes', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
-    mkdirSync(join(extensionRoot, 'frontend'), { recursive: true });
+    mkdirSync(join(extensionRoot, 'dist'), { recursive: true });
     writeFileSync(
       join(extensionRoot, 'extension.json'),
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'agent-board',
         name: 'Agent Board',
-        surfaces: [{ id: 'page', placement: 'main', kind: 'page', route: '/ext/agent-board', entry: 'frontend/index.html' }],
+        frontend: { entry: 'dist/frontend.js' },
+        contributes: {
+          views: [{ id: 'page', title: 'Agent Board', location: 'main', route: '/ext/agent-board', component: 'AgentBoardPage' }],
+        },
       }),
     );
-    writeFileSync(join(extensionRoot, 'frontend', 'index.html'), '<h1>Agent Board</h1>');
+    writeFileSync(join(extensionRoot, 'dist', 'frontend.js'), 'export function AgentBoardPage() {}');
 
     const harness = createHarness();
     const exportRes = createResponse();
