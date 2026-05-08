@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "id": "system-knowledge",
+  "name": "Knowledge",
+  "packageType": "system",
+  "description": "Browse and edit knowledge base files beside the active conversation.",
+  "version": "0.1.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [
+      {
+        "id": "knowledge-tree",
+        "title": "Knowledge",
+        "location": "rightRail",
+        "scope": "global",
+        "component": "KnowledgeTreePanel",
+        "icon": "file",
+        "detailView": "knowledge-file"
+      },
+      {
+        "id": "knowledge-file",
+        "title": "Knowledge file",
+        "location": "workbench",
+        "component": "KnowledgeFilePanel"
+      }
+    ]
+  },
+  "permissions": ["knowledge:read", "knowledge:write"]
+}

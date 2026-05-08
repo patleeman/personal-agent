@@ -805,13 +805,15 @@ function WorkbenchKnowledgeRail({
   const systemArtifactsExtensionSurface =
     availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-artifacts') ?? null;
   const systemBrowserExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-browser') ?? null;
+  const systemKnowledgeExtensionSurface =
+    availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null;
   const systemFilesExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null;
   const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
   const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback(
     (id: string) => {
-      onActiveToolChange('knowledge');
+      onActiveToolChange(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge');
       onWorkspaceFileClear();
       onCheckpointSelect(null);
       setSearchParams((current) => {
@@ -823,7 +825,7 @@ function WorkbenchKnowledgeRail({
         return next;
       });
     },
-    [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams],
+    [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemKnowledgeExtensionSurface],
   );
   const handleWorkspaceFileSelect = useCallback(
     (file: { cwd: string; path: string }) => {
@@ -841,7 +843,7 @@ function WorkbenchKnowledgeRail({
     [onCheckpointSelect, onWorkspaceFileSelect, setSearchParams],
   );
   const handleKnowledgeModeSelect = useCallback(() => {
-    onActiveToolChange('knowledge');
+    onActiveToolChange(systemKnowledgeExtensionSurface ? extensionToolPanelMode(systemKnowledgeExtensionSurface) : 'knowledge');
     onWorkspaceFileClear();
     onCheckpointSelect(null);
     setSearchParams((current) => {
@@ -851,7 +853,7 @@ function WorkbenchKnowledgeRail({
       next.delete('run');
       return next;
     });
-  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemKnowledgeExtensionSurface]);
   const handleFileExplorerModeSelect = useCallback(() => {
     onActiveToolChange(systemFilesExtensionSurface ? extensionToolPanelMode(systemFilesExtensionSurface) : 'files');
     onWorkspaceFileClear();
@@ -1091,7 +1093,12 @@ function WorkbenchKnowledgeRail({
       <div className="flex shrink-0 flex-col gap-1 px-1.5 py-1.5">
         <button
           type="button"
-          className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'knowledge' && 'ui-sidebar-nav-item-active')}
+          className={cx(
+            'ui-sidebar-nav-item w-full text-left',
+            (activeTool === 'knowledge' ||
+              (systemKnowledgeExtensionSurface && activeTool === extensionToolPanelMode(systemKnowledgeExtensionSurface))) &&
+              'ui-sidebar-nav-item-active',
+          )}
           title="Knowledge"
           onClick={handleKnowledgeModeSelect}
         >
@@ -1255,7 +1262,8 @@ function WorkbenchKnowledgeRail({
             (surface) =>
               surface.extensionId !== 'system-artifacts' &&
               surface.extensionId !== 'system-browser' &&
-              surface.extensionId !== 'system-files',
+              surface.extensionId !== 'system-files' &&
+              surface.extensionId !== 'system-knowledge',
           )
           .map((surface) => (
             <button
@@ -1275,7 +1283,7 @@ function WorkbenchKnowledgeRail({
             </button>
           ))}
       </div>
-      {activeTool === 'knowledge' ? (
+      {activeTool === 'knowledge' && !systemKnowledgeExtensionSurface ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
             <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
