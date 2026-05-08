@@ -292,6 +292,35 @@ await pa.extension.invoke('startTaskRun', { taskId });
 
 Do not import backend handlers directly into frontend components. Browser/Node boundary lies are expensive and stupid.
 
+### Agent lifecycle hooks
+
+Backend-only extensions can also contribute a pi agent extension factory. Use this for lifecycle-level behavior such as provider request rewriting, session compaction hooks, or other `pi.on(...)` event work that has no UI surface.
+
+Declare the exported factory in the backend manifest:
+
+```json
+{
+  "backend": {
+    "entry": "src/backend.ts",
+    "agentExtension": "default"
+  }
+}
+```
+
+The backend module exports a normal pi extension factory:
+
+```ts
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+export default function agentLifecycleExtension(pi: ExtensionAPI): void {
+  pi.on('session_before_compact', async (event, ctx) => {
+    // Return pi-compatible lifecycle results here.
+  });
+}
+```
+
+Enabled extension agent factories are discovered from manifests and appended to live session factories generically. Do not import a system extension directly from `runtimeState.ts`; if it needs agent hooks, declare `backend.agentExtension`.
+
 ## Agent skills and tools
 
 Extensions can contribute agent skills and agent tools. These are runtime-mounted from the enabled extension package; they are not copied into the knowledge vault.

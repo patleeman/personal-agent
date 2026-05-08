@@ -63,6 +63,12 @@ export interface ExtensionToolRegistration {
   systemFactory?: string;
 }
 
+export interface ExtensionAgentRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  exportName: string;
+}
+
 export interface ExtensionInstallSummary {
   id: string;
   name: string;
@@ -472,6 +478,20 @@ export function listExtensionSkillRegistrations(stateRoot: string = getStateRoot
 
 export function listExtensionToolRegistrations(stateRoot: string = getStateRoot()): ExtensionToolRegistration[] {
   return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionToolRegistrations);
+}
+
+export function listExtensionAgentRegistrations(stateRoot: string = getStateRoot()): ExtensionAgentRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry): ExtensionAgentRegistration[] => {
+    const exportName = entry.manifest.backend?.agentExtension;
+    if (!exportName) return [];
+    return [
+      {
+        extensionId: entry.manifest.id,
+        packageType: entry.manifest.packageType ?? 'user',
+        exportName,
+      },
+    ];
+  });
 }
 
 export function findExtensionEntry(extensionId: string): ExtensionRegistryEntry | null {

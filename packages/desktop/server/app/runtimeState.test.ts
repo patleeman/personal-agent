@@ -25,7 +25,7 @@ const {
   createMcpAgentExtensionMock,
   webToolsExtensionMock,
   knowledgeBaseExtensionMock,
-  openaiNativeCompactionExtensionMock,
+  createManifestAgentExtensionsMock,
   daemonRunOrchestrationPromptExtensionMock,
   renameSessionMock,
   requestConversationWorkingDirectoryChangeMock,
@@ -60,7 +60,7 @@ const {
     createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
     webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
     knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
-    openaiNativeCompactionExtensionMock: vi.fn(() => 'openai-native-compaction-extension'),
+    createManifestAgentExtensionsMock: vi.fn(() => ['manifest-agent-extension']),
     daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
     renameSessionMock: vi.fn(),
     requestConversationWorkingDirectoryChangeMock: vi.fn(),
@@ -138,12 +138,15 @@ vi.mock('../extensions/mcpAgentExtension.js', () => ({
 }));
 
 vi.mock('../extensions/extensionRegistry.js', () => ({
-  isExtensionEnabled: vi.fn(() => true),
   listExtensionSkillRegistrations: vi.fn(() => []),
 }));
 
 vi.mock('../extensions/manifestToolAgentExtension.js', () => ({
   createManifestToolAgentExtensions: vi.fn(() => []),
+}));
+
+vi.mock('../extensions/extensionAgentExtensions.js', () => ({
+  createManifestAgentExtensions: createManifestAgentExtensionsMock,
 }));
 
 vi.mock('../extensions/web-tools/index.js', () => ({
@@ -152,10 +155,6 @@ vi.mock('../extensions/web-tools/index.js', () => ({
 
 vi.mock('../extensions/knowledge-base/index.js', () => ({
   default: knowledgeBaseExtensionMock,
-}));
-
-vi.mock('../../../../extensions/system-openai-native-compaction/src/backend.js', () => ({
-  default: openaiNativeCompactionExtensionMock,
 }));
 
 vi.mock('../extensions/daemon-run-orchestration-prompt/index.js', () => ({
@@ -212,6 +211,7 @@ describe('createRuntimeState', () => {
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
     createWorkbenchBrowserAgentExtensionMock.mockClear();
+    createManifestAgentExtensionsMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
     requestConversationWorkingDirectoryChangeMock.mockReset();
     readSavedModelPreferencesMock.mockClear();

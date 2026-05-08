@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getStateRoot } from '@personal-agent/core';
 import { build } from 'esbuild';
 
@@ -234,6 +235,15 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
     console.warn(`[extension:${extensionId}] backend build failed; using previous compiled backend`);
   }
   return import(`${pathToFileURL(compiled.path).href}?t=${Date.now()}`) as Promise<ExtensionBackendModule>;
+}
+
+export async function loadExtensionAgentFactory(extensionId: string, exportName = 'default'): Promise<ExtensionFactory> {
+  const backend = await loadExtensionBackend(extensionId);
+  const candidate = exportName === 'default' ? backend.default : backend[exportName];
+  if (typeof candidate !== 'function') {
+    throw new Error(`Extension agent factory export not found: ${exportName}`);
+  }
+  return candidate as ExtensionFactory;
 }
 
 export async function invokeExtensionAction(

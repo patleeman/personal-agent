@@ -6,14 +6,14 @@ import { AuthStorage, type ExtensionFactory } from '@earendil-works/pi-coding-ag
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 
-import openaiNativeCompactionExtension from '../../../../extensions/system-openai-native-compaction/src/backend.js';
 import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
-import { isExtensionEnabled, listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
+import { createManifestAgentExtensions } from '../extensions/extensionAgentExtensions.js';
+import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
 import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
 import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
 import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
@@ -161,7 +161,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
         serverContext: { getCurrentProfile: getRuntimeScope },
       }),
 
-      ...(isExtensionEnabled('system-openai-native-compaction', getStateRoot()) ? [openaiNativeCompactionExtension] : []),
+      ...createManifestAgentExtensions({ onError: logger.warn }),
     ].map(guardSystemPromptOverride);
   }
 
