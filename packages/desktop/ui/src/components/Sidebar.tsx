@@ -1928,7 +1928,7 @@ function OpenConversationRow({
   );
 }
 
-export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { hideKnowledgeNav?: boolean; hideBrowserNav?: boolean }) {
+export function Sidebar({ hideBrowserNav = false }: { hideKnowledgeNav?: boolean; hideBrowserNav?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
@@ -3532,16 +3532,6 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
     (extensionRegistry.loading || extensionRegistry.surfaces.some((surface) => surface.extensionId === 'system-browser'));
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
-  const isKnowledgeRoute = routeIsKnowledge(location.pathname, extensionRegistry.surfaces);
-  const [knowledgeSearchParams, setKnowledgeSearchParams] = useSearchParams();
-  const knowledgeActiveFileId = isKnowledgeRoute ? (knowledgeSearchParams.get('file') ?? null) : null;
-  const handleKnowledgeFileSelect = useCallback(
-    (id: string) => {
-      navigateKnowledgeFile(setKnowledgeSearchParams, id);
-    },
-    [setKnowledgeSearchParams],
-  );
-
   return (
     <>
       <aside className="flex-1 flex flex-col overflow-hidden">
@@ -3568,14 +3558,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
               forceActive={routeMatchesPrefix(location.pathname, item.route)}
             />
           ))}
-          {!hideKnowledgeNav ? (
-            <TopNavItem
-              to="/knowledge"
-              icon={PATH.notes}
-              label="Knowledge"
-              forceActive={routeIsKnowledge(location.pathname, extensionRegistry.surfaces)}
-            />
-          ) : null}
+
           {browserNavVisible ? (
             <button
               type="button"
@@ -3606,10 +3589,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
           ) : null}
         </div>
 
-        <div
-          className="px-4 pt-1 pb-0.5"
-          style={{ display: routeIsKnowledge(location.pathname, extensionRegistry.surfaces) ? 'none' : '' }}
-        >
+        <div className="px-4 pt-1 pb-0.5">
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">Threads</p>
             <ThreadsFilterButton
@@ -3633,15 +3613,7 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
           </div>
         </div>
 
-        {isKnowledgeRoute ? (
-          <div className="flex-1 overflow-hidden min-h-0">
-            <Suspense fallback={<VaultFileTreeFallback activeFileId={knowledgeActiveFileId} onFileSelect={handleKnowledgeFileSelect} />}>
-              <VaultFileTree activeFileId={knowledgeActiveFileId} onFileSelect={handleKnowledgeFileSelect} />
-            </Suspense>
-          </div>
-        ) : null}
-
-        <div className="flex-1 overflow-y-auto min-h-0 pb-3" style={{ display: isKnowledgeRoute ? 'none' : '' }}>
+        <div className="flex-1 overflow-y-auto min-h-0 pb-3">
           <div className="py-0.5 space-y-0.5">
             {!loading &&
             renderedConversationItems.length === 0 &&
