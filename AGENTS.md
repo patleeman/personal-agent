@@ -21,7 +21,9 @@ pipeline.
 ## Always validate your work!
 
 - After you complete a feature, make sure you actually inspect your work.
-- If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `npm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/agent-browser.md` and the agent-browser skill for more information.
+- If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `npm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/browser.md` and the agent-browser skill for more information.
+- When launching the test desktop app for QA, pass `--no-quit-confirmation` (or `--skip-quit-confirmation`) so cleanup is non-interactive, e.g. `npm run desktop:dev -- --remote-debugging-port=9222 --no-quit-confirmation`.
+- After QA, close the test app and browser session before reporting done: quit `Personal Agent Testing.app` and run `npm run ab:cleanup -- --session <name>` if you used the wrapper.
 - Make sure the work is complete, to spec, works without bugs, and looks good.
 
 ## UI Design Bans

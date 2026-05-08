@@ -75,6 +75,14 @@ The `browser_cdp` tool accepts any valid CDP command:
 
 The older `agent-browser` CLI tool is a separate development/validation tool that uses Playwright. It is not integrated with the desktop app and is not a supported feature for end users. The wrapper scripts `npm run ab:run` and `npm run ab:cleanup` exist in this repo for development use only.
 
+For desktop QA, launch the testing app with a remote debugging port and quit-confirmation bypass so automated cleanup cannot get stuck behind the quit dialog:
+
+```bash
+npm run desktop:dev -- --remote-debugging-port=9222 --no-quit-confirmation
+```
+
+After QA, close `Personal Agent Testing.app` and run `npm run ab:cleanup -- --session <name>` for any named wrapper session used during the check.
+
 | Feature       | Built-in Browser           | agent-browser CLI   |
 | ------------- | -------------------------- | ------------------- |
 | UI            | Workbench rail in Electron | Terminal/Playwright |
