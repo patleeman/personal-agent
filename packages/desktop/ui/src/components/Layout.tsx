@@ -5,7 +5,7 @@ import { useAppData, useAppEvents } from '../app/contexts';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
-import { DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, getDesktopBridge, isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
+import { DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { NativeExtensionSurfaceHost } from '../extensions/NativeExtensionSurfaceHost';
 import {
@@ -22,15 +22,6 @@ import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
-import {
-  type BrowserTabItem,
-  type BrowserTabsState,
-  createNewTab,
-  getAdjacentTabId,
-  getTabSessionKey,
-  readBrowserTabsState,
-  writeBrowserTabsState,
-} from '../local/workbenchBrowserTabs';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
@@ -58,7 +49,6 @@ import { VaultEditor } from './knowledge/VaultEditor';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
-import { WorkbenchBrowserTab } from './workbench/WorkbenchBrowserTab';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
@@ -651,16 +641,9 @@ function WorkbenchDocumentPane({
   runId,
   workspaceFile,
   activeTool,
-  onActiveToolChange,
   onMissingCheckpoint,
   scrollToCheckpointFile,
   workspaceCwd,
-  browserTabsState,
-  activeBrowserTab,
-  onSetBrowserTabsState,
-  onBrowserTabAdd,
-  onBrowserTabClose,
-  onBrowserTabReopen,
   extensionWorkbenchSurface,
 }: {
   conversationId: string | null;
@@ -669,16 +652,9 @@ function WorkbenchDocumentPane({
   runId: string | null;
   workspaceFile: { cwd: string; path: string } | null;
   activeTool: WorkbenchRailMode;
-  onActiveToolChange: (mode: WorkbenchRailMode) => void;
   onMissingCheckpoint: () => void;
   scrollToCheckpointFile?: string | null;
   workspaceCwd?: string | null;
-  browserTabsState: BrowserTabsState;
-  activeBrowserTab: BrowserTabItem;
-  onSetBrowserTabsState: React.Dispatch<React.SetStateAction<BrowserTabsState>>;
-  onBrowserTabAdd: () => void;
-  onBrowserTabClose: (tabId: string) => void;
-  onBrowserTabReopen: () => void;
   extensionWorkbenchSurface: NativeExtensionViewSummary | null;
 }) {
   const location = useLocation();
@@ -737,17 +713,7 @@ function WorkbenchDocumentPane({
   }
 
   if (activeTool === 'browser') {
-    return (
-      <WorkbenchBrowserTab
-        tabsState={browserTabsState}
-        activeTab={activeBrowserTab}
-        onSetTabsState={onSetBrowserTabsState}
-        onClose={() => onActiveToolChange('knowledge')}
-        onNewTab={onBrowserTabAdd}
-        onReopenTab={onBrowserTabReopen}
-        onCloseCurrentTab={() => onBrowserTabClose(activeBrowserTab.id)}
-      />
-    );
+    return null;
   }
 
   if (!activeFileId && workspaceFile) {
@@ -793,10 +759,6 @@ function WorkbenchKnowledgeRail({
   onWorkspaceFileSelect,
   onWorkspaceFileClear,
   onScrollToCheckpointFile,
-  browserTabsState,
-  onBrowserTabSwitch,
-  onBrowserTabAdd,
-  onBrowserTabClose,
   extensionToolPanels,
 }: {
   conversationId: string | null;
@@ -812,10 +774,6 @@ function WorkbenchKnowledgeRail({
   onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
   onWorkspaceFileClear: () => void;
   onScrollToCheckpointFile?: (filePath: string) => void;
-  browserTabsState: BrowserTabsState;
-  onBrowserTabSwitch: (tabId: string) => void;
-  onBrowserTabAdd: () => void;
-  onBrowserTabClose: (tabId: string) => void;
   extensionToolPanels: Array<(ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary>;
 }) {
   const location = useLocation();
@@ -1373,47 +1331,6 @@ function WorkbenchKnowledgeRail({
             />
           ) : null}
         </div>
-      ) : activeTool === 'browser' && !systemBrowserExtensionSurface ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 py-1.5 gap-px">
-          {browserTabsState.tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={cx(
-                'group flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] transition-colors',
-                tab.id === browserTabsState.activeTabId
-                  ? 'bg-elevated text-primary'
-                  : 'text-secondary hover:bg-elevated/70 hover:text-primary',
-              )}
-              onClick={() => onBrowserTabSwitch(tab.id)}
-              title={tab.title}
-            >
-              <span className="min-w-0 flex-1 truncate">{tab.title}</span>
-              <span
-                className="ml-auto rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-border-subtle transition-opacity cursor-pointer shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBrowserTabClose(tab.id);
-                }}
-                role="button"
-                aria-label={`Close ${tab.title}`}
-                tabIndex={-1}
-              >
-                ×
-              </span>
-            </button>
-          ))}
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] text-secondary hover:bg-elevated/70 hover:text-primary transition-colors"
-            onClick={onBrowserTabAdd}
-            title="New tab"
-            aria-label="New tab"
-          >
-            <span className="text-[14px] leading-none">+</span>
-            <span className="text-left">New tab</span>
-          </button>
-        </div>
       ) : null}
     </div>
   );
@@ -1437,11 +1354,6 @@ export function Layout() {
   const [selectedWorkspaceFileByConversation, setSelectedWorkspaceFileByConversation] = useState<
     Record<string, { cwd: string; path: string } | null>
   >({});
-  const [browserTabsState, setBrowserTabsState] = useState<BrowserTabsState>(() => readBrowserTabsState());
-  const activeBrowserTab = useMemo(
-    () => browserTabsState.tabs.find((t) => t.id === browserTabsState.activeTabId) ?? browserTabsState.tabs[0]!,
-    [browserTabsState],
-  );
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left' });
@@ -1502,68 +1414,6 @@ export function Layout() {
     location.pathname.startsWith('/knowledge') ||
     location.pathname.startsWith('/telemetry')
   );
-
-  // Persist browser tabs
-  useEffect(() => {
-    writeBrowserTabsState(browserTabsState);
-  }, [browserTabsState]);
-
-  const handleBrowserTabSwitch = useCallback((tabId: string) => {
-    setBrowserTabsState((prev) => ({ ...prev, activeTabId: tabId }));
-  }, []);
-
-  const handleBrowserTabAdd = useCallback(() => {
-    const newTab = createNewTab();
-    setBrowserTabsState((prev) => ({
-      ...prev,
-      tabs: [...prev.tabs, newTab],
-      activeTabId: newTab.id,
-    }));
-  }, []);
-
-  const handleBrowserTabClose = useCallback((tabId: string) => {
-    setBrowserTabsState((prev) => {
-      const closedTab = prev.tabs.find((t) => t.id === tabId);
-      if (prev.tabs.length <= 1) {
-        const newTab = createNewTab();
-        return {
-          ...prev,
-          tabs: [newTab],
-          activeTabId: newTab.id,
-          closedTabs: closedTab ? [closedTab, ...prev.closedTabs].slice(0, 10) : prev.closedTabs,
-        };
-      }
-      const newTabId = getAdjacentTabId(prev, tabId) ?? prev.tabs[0]!.id;
-      return {
-        ...prev,
-        tabs: prev.tabs.filter((t) => t.id !== tabId),
-        activeTabId: newTabId,
-        closedTabs: closedTab ? [closedTab, ...prev.closedTabs].slice(0, 10) : prev.closedTabs,
-      };
-    });
-    const bridge = getDesktopBridge();
-    void bridge
-      ?.setWorkbenchBrowserBounds({ visible: false, sessionKey: getTabSessionKey(tabId), deactivate: true })
-      .catch(() => undefined);
-  }, []);
-
-  const handleBrowserTabReopen = useCallback(() => {
-    setBrowserTabsState((prev) => {
-      if (prev.closedTabs.length === 0) return prev;
-      const [restored, ...remaining] = prev.closedTabs;
-      const newTab = {
-        ...restored,
-        id: crypto.randomUUID(),
-        urlDraft: '',
-      };
-      return {
-        ...prev,
-        tabs: [...prev.tabs, newTab],
-        activeTabId: newTab.id,
-        closedTabs: remaining,
-      };
-    });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1637,6 +1487,10 @@ export function Layout() {
   const extensionWorkbenchSurfaces = useMemo(
     () => extensionRegistry.surfaces.filter(isNativeExtensionWorkbenchSurface),
     [extensionRegistry.surfaces],
+  );
+  const systemBrowserExtensionSurface = useMemo(
+    () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-browser') ?? null,
+    [extensionRightToolPanels],
   );
   const activeExtensionWorkbenchSurface = useMemo(() => {
     const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
@@ -2002,7 +1856,7 @@ export function Layout() {
         handleZenModeChange(false);
       }
       handleAppLayoutModeChange('workbench');
-      setActiveConversationTool('browser');
+      setActiveConversationTool(systemBrowserExtensionSurface ? extensionToolPanelMode(systemBrowserExtensionSurface) : 'knowledge');
     }
 
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
@@ -2022,6 +1876,7 @@ export function Layout() {
     location.pathname,
     location.search,
     navigate,
+    systemBrowserExtensionSurface,
     zenMode,
   ]);
 
@@ -2092,16 +1947,9 @@ export function Layout() {
                         runId={activeWorkbenchRunId}
                         workspaceFile={activeWorkspaceFile}
                         activeTool={activeWorkbenchTool}
-                        onActiveToolChange={setActiveConversationTool}
                         onMissingCheckpoint={clearActiveConversationCheckpoint}
                         scrollToCheckpointFile={scrollToCheckpointFile}
                         workspaceCwd={activeWorkspaceCwd}
-                        browserTabsState={browserTabsState}
-                        activeBrowserTab={activeBrowserTab}
-                        onSetBrowserTabsState={setBrowserTabsState}
-                        onBrowserTabAdd={handleBrowserTabAdd}
-                        onBrowserTabClose={handleBrowserTabClose}
-                        onBrowserTabReopen={handleBrowserTabReopen}
                         extensionWorkbenchSurface={activeExtensionWorkbenchSurface}
                       />
                     </section>
@@ -2127,10 +1975,6 @@ export function Layout() {
                             onWorkspaceFileSelect={setActiveWorkspaceFile}
                             onWorkspaceFileClear={clearActiveWorkspaceFile}
                             onScrollToCheckpointFile={handleCheckpointFileScroll}
-                            browserTabsState={browserTabsState}
-                            onBrowserTabSwitch={handleBrowserTabSwitch}
-                            onBrowserTabAdd={handleBrowserTabAdd}
-                            onBrowserTabClose={handleBrowserTabClose}
                             extensionToolPanels={extensionRightToolPanels}
                           />
                         </aside>
