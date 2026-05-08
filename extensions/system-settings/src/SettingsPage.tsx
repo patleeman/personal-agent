@@ -142,6 +142,10 @@ type ShortcutListItem = {
   description?: string;
   shortcuts: string[];
   editable: boolean;
+  extensionId?: string;
+  keybindingId?: string;
+  enabled?: boolean;
+  defaultShortcuts?: string[];
 };
 
 function normalizeShortcutForConflict(shortcut: string): string {
@@ -809,8 +813,12 @@ export function DesktopKeyboardShortcutsSettingsSection() {
       owner: keybinding.extensionId.replace(/^system-/, ''),
       label: keybinding.title,
       description: keybinding.scope === 'surface' ? 'Surface shortcut' : 'Extension shortcut',
-      shortcuts: keybinding.keys,
-      editable: false,
+      shortcuts: keybinding.enabled ? keybinding.keys : [],
+      editable: true,
+      extensionId: keybinding.extensionId,
+      keybindingId: keybinding.surfaceId,
+      enabled: keybinding.enabled,
+      defaultShortcuts: keybinding.defaultKeys,
     }));
     return [...coreItems, ...extensionItems];
   }, [draft, extensionKeybindings]);
@@ -853,6 +861,22 @@ export function DesktopKeyboardShortcutsSettingsSection() {
     void loadPreferences();
   }, [loadPreferences]);
 
+  async function saveExtensionKeybinding(item: ShortcutListItem, input: { keys?: string[]; enabled?: boolean; reset?: boolean }) {
+    if (!item.extensionId || !item.keybindingId) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.updateExtensionKeybinding(item.extensionId, item.keybindingId, input);
+      setExtensionKeybindings(await api.extensionKeybindings());
+      setNotice('Saved extension shortcut.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveKeyboardShortcuts(nextShortcuts = draft) {
     const bridge = getDesktopBridge();
     if (!bridge) {
@@ -884,9 +908,14 @@ export function DesktopKeyboardShortcutsSettingsSection() {
           <div className="space-y-4">
             <div className="divide-y divide-border-subtle/70">
               {shortcutItems.map((item) => {
-                const editableId = item.editable ? (item.id as DesktopKeyboardShortcutId) : null;
+                const editableId = item.extensionId ? null : item.editable ? (item.id as DesktopKeyboardShortcutId) : null;
+                const shortcutValue = item.extensionId
+                  ? (item.shortcuts[0] ?? item.defaultShortcuts?.[0] ?? '')
+                  : editableId
+                    ? draft[editableId]
+                    : '';
                 return (
-                  <div key={item.id} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center">
+                  <div key={item.id} className="grid gap-3 py-3 first:pt-0 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center">
                     <span className="min-w-0 space-y-1">
                       <span className="block text-[13px] font-medium text-primary">{item.label}</span>
                       <span className="block text-[12px] leading-5 text-secondary">
@@ -894,31 +923,46 @@ export function DesktopKeyboardShortcutsSettingsSection() {
                         {item.description ? ` · ${item.description}` : ''}
                       </span>
                     </span>
-                    {editableId ? (
-                      <KeyboardShortcutCaptureInput
-                        id={`settings-keyboard-${editableId}`}
-                        value={draft[editableId]}
-                        onChange={(shortcut) => {
-                          const nextDraft = { ...draft, [editableId]: shortcut };
-                          setDraft(nextDraft);
-                          setError(null);
-                          setNotice(null);
-                          void saveKeyboardShortcuts(nextDraft);
-                        }}
-                        disabled={saving}
-                      />
-                    ) : (
-                      <div className="flex flex-wrap justify-start gap-1 sm:justify-end">
-                        {item.shortcuts.map((shortcut) => (
-                          <span
-                            key={shortcut}
-                            className="rounded-md border border-border-subtle bg-surface/60 px-2 py-1 font-mono text-[12px] text-secondary"
-                          >
-                            {formatKeyboardShortcutLabel(shortcut)}
-                          </span>
-                        ))}
+                    {editableId || item.extensionId ? (
+                      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                        <KeyboardShortcutCaptureInput
+                          id={`settings-keyboard-${item.id}`}
+                          value={item.enabled === false ? 'Disabled' : shortcutValue}
+                          onChange={(shortcut) => {
+                            if (editableId) {
+                              const nextDraft = { ...draft, [editableId]: shortcut };
+                              setDraft(nextDraft);
+                              setError(null);
+                              setNotice(null);
+                              void saveKeyboardShortcuts(nextDraft);
+                              return;
+                            }
+                            void saveExtensionKeybinding(item, { keys: [shortcut], enabled: true });
+                          }}
+                          disabled={saving || item.enabled === false}
+                        />
+                        {item.extensionId ? (
+                          <>
+                            <button
+                              type="button"
+                              className={ACTION_BUTTON_CLASS}
+                              disabled={saving}
+                              onClick={() => void saveExtensionKeybinding(item, { enabled: item.enabled === false })}
+                            >
+                              {item.enabled === false ? 'Enable' : 'Disable'}
+                            </button>
+                            <button
+                              type="button"
+                              className={ACTION_BUTTON_CLASS}
+                              disabled={saving}
+                              onClick={() => void saveExtensionKeybinding(item, { reset: true })}
+                            >
+                              Reset
+                            </button>
+                          </>
+                        ) : null}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}

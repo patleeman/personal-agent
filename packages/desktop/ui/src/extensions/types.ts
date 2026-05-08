@@ -256,6 +256,8 @@ export interface ExtensionKeybindingRegistration {
   command: string;
   when?: string;
   scope: 'global' | 'surface';
+  defaultKeys: string[];
+  enabled: boolean;
 }
 
 export interface ExtensionSlashCommandRegistration {

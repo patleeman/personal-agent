@@ -323,6 +323,11 @@ export const api = {
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
   extensionKeybindings: async () => get<ExtensionKeybindingRegistration[]>('/extensions/keybindings'),
+  updateExtensionKeybinding: async (
+    extensionId: string,
+    keybindingId: string,
+    input: { keys?: string[]; enabled?: boolean; reset?: boolean },
+  ) => patch<{ ok: true }>(`/extensions/keybindings/${encodeURIComponent(extensionId)}/${encodeURIComponent(keybindingId)}`, input),
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
   extensionMentions: async () => get<ExtensionMentionRegistration[]>('/extensions/mentions'),
   extensionManifest: async (extensionId: string) => get<ExtensionManifest>(`/extensions/${encodeURIComponent(extensionId)}/manifest`),

@@ -21,6 +21,7 @@ import {
   readExtensionRegistrySnapshot,
   readExtensionSchema,
   setExtensionEnabled,
+  setExtensionKeybinding,
 } from '../extensions/extensionRegistry.js';
 import { createExtensionRunsCapability } from '../extensions/extensionRuns.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from '../extensions/extensionStorage.js';
@@ -192,6 +193,21 @@ export function registerExtensionRoutes(
       res.json(listExtensionKeybindingRegistrations());
     } catch (err) {
       sendRouteError(res, 'extensions keybindings error', err);
+    }
+  });
+
+  router.patch('/api/extensions/keybindings/:extensionId/:keybindingId', (req, res) => {
+    try {
+      setExtensionKeybinding({
+        extensionId: req.params.extensionId,
+        keybindingId: req.params.keybindingId,
+        ...(Array.isArray(req.body?.keys) ? { keys: req.body.keys } : {}),
+        ...(typeof req.body?.enabled === 'boolean' ? { enabled: req.body.enabled } : {}),
+        ...(typeof req.body?.reset === 'boolean' ? { reset: req.body.reset } : {}),
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      sendRouteError(res, 'extension keybinding update error', err);
     }
   });
 

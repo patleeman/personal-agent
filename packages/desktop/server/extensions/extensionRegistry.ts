@@ -118,6 +118,8 @@ export interface ExtensionKeybindingRegistration {
   command: string;
   when?: string;
   scope: 'global' | 'surface';
+  defaultKeys: string[];
+  enabled: boolean;
 }
 
 export interface ExtensionSlashCommandRegistration {
@@ -131,6 +133,8 @@ export interface ExtensionSlashCommandRegistration {
 
 interface ExtensionRegistryConfig {
   disabledIds?: string[];
+  disabledKeybindings?: string[];
+  keybindingOverrides?: Record<string, string[]>;
 }
 
 export function getRuntimeExtensionsRoot(stateRoot: string = getStateRoot()): string {
@@ -157,7 +161,17 @@ function readExtensionRegistryConfig(stateRoot: string = getStateRoot()): Extens
       return {};
     }
     const disabledIds = Array.isArray(parsed.disabledIds) ? parsed.disabledIds.filter((id): id is string => typeof id === 'string') : [];
-    return { disabledIds };
+    const disabledKeybindings = Array.isArray(parsed.disabledKeybindings)
+      ? parsed.disabledKeybindings.filter((id): id is string => typeof id === 'string')
+      : [];
+    const keybindingOverrides = isRecord(parsed.keybindingOverrides)
+      ? Object.fromEntries(
+          Object.entries(parsed.keybindingOverrides).flatMap(([id, keys]) =>
+            Array.isArray(keys) ? [[id, keys.filter((key): key is string => typeof key === 'string')]] : [],
+          ),
+        )
+      : {};
+    return { disabledIds, disabledKeybindings, keybindingOverrides };
   } catch {
     return {};
   }
@@ -279,7 +293,18 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
 function writeExtensionRegistryConfig(config: ExtensionRegistryConfig, stateRoot: string = getStateRoot()): void {
   const extensionsRoot = getRuntimeExtensionsRoot(stateRoot);
   mkdirSync(extensionsRoot, { recursive: true });
-  writeFileSync(getExtensionRegistryConfigPath(stateRoot), `${JSON.stringify({ disabledIds: config.disabledIds ?? [] }, null, 2)}\n`);
+  writeFileSync(
+    getExtensionRegistryConfigPath(stateRoot),
+    `${JSON.stringify(
+      {
+        disabledIds: config.disabledIds ?? [],
+        disabledKeybindings: config.disabledKeybindings ?? [],
+        keybindingOverrides: config.keybindingOverrides ?? {},
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 export function isExtensionEnabled(extensionId: string, stateRoot: string = getStateRoot()): boolean {
@@ -294,7 +319,49 @@ export function setExtensionEnabled(extensionId: string, enabled: boolean, state
   } else {
     disabledIds.add(extensionId);
   }
-  writeExtensionRegistryConfig({ disabledIds: [...disabledIds].sort((left, right) => left.localeCompare(right)) }, stateRoot);
+  writeExtensionRegistryConfig({ ...config, disabledIds: [...disabledIds].sort((left, right) => left.localeCompare(right)) }, stateRoot);
+}
+
+export function setExtensionKeybinding(input: {
+  extensionId: string;
+  keybindingId: string;
+  keys?: string[];
+  enabled?: boolean;
+  reset?: boolean;
+  stateRoot?: string;
+}): void {
+  const stateRoot = input.stateRoot ?? getStateRoot();
+  const config = readExtensionRegistryConfig(stateRoot);
+  const key = `${input.extensionId}:${input.keybindingId}`;
+  const disabledKeybindings = new Set(config.disabledKeybindings ?? []);
+  const keybindingOverrides = { ...(config.keybindingOverrides ?? {}) };
+
+  if (input.reset) {
+    delete keybindingOverrides[key];
+    disabledKeybindings.delete(key);
+  }
+  if (input.keys) {
+    const keys = input.keys.map((candidate) => candidate.trim()).filter(Boolean);
+    if (keys.length > 0) {
+      keybindingOverrides[key] = keys;
+    }
+  }
+  if (input.enabled !== undefined) {
+    if (input.enabled) {
+      disabledKeybindings.delete(key);
+    } else {
+      disabledKeybindings.add(key);
+    }
+  }
+
+  writeExtensionRegistryConfig(
+    {
+      ...config,
+      disabledKeybindings: [...disabledKeybindings].sort((left, right) => left.localeCompare(right)),
+      keybindingOverrides,
+    },
+    stateRoot,
+  );
 }
 
 export function parseExtensionManifest(value: unknown): ExtensionManifest {
@@ -454,14 +521,19 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
   return [...legacy, ...native];
 }
 
-export function listExtensionKeybindingRegistrations(): ExtensionKeybindingRegistration[] {
+export function listExtensionKeybindingRegistrations(stateRoot: string = getStateRoot()): ExtensionKeybindingRegistration[] {
   const snapshot = readExtensionRegistrySnapshot();
+  const config = readExtensionRegistryConfig(stateRoot);
+  const disabledKeybindings = new Set(config.disabledKeybindings ?? []);
+  const keybindingOverrides = config.keybindingOverrides ?? {};
   return snapshot.extensions.flatMap((extension) =>
     (extension.contributes?.keybindings ?? []).flatMap((keybinding) => {
       const id = keybinding.id.trim();
       const title = keybinding.title.trim();
       const command = keybinding.command.trim();
-      const keys = keybinding.keys.map((key) => key.trim()).filter(Boolean);
+      const registryKey = `${extension.id}:${id}`;
+      const defaultKeys = keybinding.keys.map((key) => key.trim()).filter(Boolean);
+      const keys = keybindingOverrides[registryKey] ?? defaultKeys;
       if (!id || !title || !command || keys.length === 0) {
         return [];
       }
@@ -475,6 +547,8 @@ export function listExtensionKeybindingRegistrations(): ExtensionKeybindingRegis
           command,
           ...(keybinding.when ? { when: keybinding.when } : {}),
           scope: keybinding.scope ?? 'global',
+          defaultKeys,
+          enabled: !disabledKeybindings.has(registryKey),
         },
       ];
     }),

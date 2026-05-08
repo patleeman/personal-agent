@@ -1532,7 +1532,7 @@ export function Layout() {
       if (event.defaultPrevented) return;
       const match = findMatchingExtensionKeybinding(
         event,
-        extensionKeybindings.filter((keybinding) => keybinding.scope === 'global'),
+        extensionKeybindings.filter((keybinding) => keybinding.enabled && keybinding.scope === 'global'),
       );
       if (!match) return;
       if (runExtensionKeybindingCommand(match.command)) {
