@@ -129,24 +129,27 @@ export function KnowledgePageSurface() {
     );
   }
 
-  if (!activeFileId) {
-    return (
-      <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-          <AppPageIntro title="Knowledge" />
-          <AppPageEmptyState
-            align="start"
-            title="Select a file to start editing"
-            body="Pick a note from the sidebar, or import a URL into the knowledge base."
-          />
-        </AppPageLayout>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-full flex-1 min-w-0">
-      <VaultEditor fileId={activeFileId} fileName={fileName} onFileNavigate={handleFileNavigate} onFileRenamed={handleFileRenamed} />
+    <div className="flex h-full min-w-0 flex-1 overflow-hidden">
+      <div className="w-[19rem] shrink-0 border-r border-border-subtle bg-surface/30">
+        <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileNavigate} />
+      </div>
+      <div className="min-w-0 flex-1">
+        {activeFileId ? (
+          <VaultEditor fileId={activeFileId} fileName={fileName} onFileNavigate={handleFileNavigate} onFileRenamed={handleFileRenamed} />
+        ) : (
+          <div className="h-full overflow-y-auto">
+            <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
+              <AppPageIntro title="Knowledge" />
+              <AppPageEmptyState
+                align="start"
+                title="Select a file to start editing"
+                body="Pick a note from the knowledge file list, or import a URL into the knowledge base."
+              />
+            </AppPageLayout>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
