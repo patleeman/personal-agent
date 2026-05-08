@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createMcpAgentExtension } from './mcpAgentExtension.js';
+import { createMcpAgentExtension } from './backend.js';
 
 type ExtensionAPI = ReturnType<typeof createMcpAgentExtension> extends (api: infer A) => unknown ? A : never;
 

@@ -11,15 +11,15 @@ import {
   readConversationAutoModeStateFromSessionManager,
   type RunMode,
   writeConversationAutoModeState,
-} from '../conversations/conversationAutoMode.js';
+} from '../../../packages/desktop/server/conversations/conversationAutoMode.js';
 import {
   markConversationAutoModeContinueRequested,
   registerLiveSessionLifecycleHandler,
   requestConversationAutoModeContinuationTurn,
   requestConversationAutoModeTurn,
   setLiveSessionAutoModeState,
-} from '../conversations/liveSessions.js';
-import { logWarn } from '../middleware/index.js';
+} from '../../../packages/desktop/server/conversations/liveSessions.js';
+import { logWarn } from '../../../packages/desktop/server/middleware/index.js';
 
 export const RUN_STATE_TOOL = 'run_state' as const;
 

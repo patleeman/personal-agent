@@ -5,7 +5,10 @@
   "packageType": "system",
   "description": "Browse web pages beside the active conversation.",
   "version": "0.1.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "contributes": {
     "views": [
       {
@@ -25,5 +28,9 @@
       }
     ]
   },
-  "permissions": ["browser:read", "browser:write"]
+  "permissions": ["browser:read", "browser:write"],
+  "backend": {
+    "entry": "src/backend.ts",
+    "agentExtension": "createWorkbenchBrowserAgentExtension"
+  }
 }

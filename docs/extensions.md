@@ -26,7 +26,7 @@ User extensions live in runtime state by default:
 
 The extension loader also accepts arbitrary package roots or directories of packages through `PERSONAL_AGENT_EXTENSION_PATHS` (comma-separated or colon-separated). Each entry can point directly at a folder with `extension.json`, or at a parent folder containing many extension packages.
 
-Bundled first-party extensions live in the repo/app bundle under `extensions/` and use the same extension contract. They are discovered by the same package-path scanner as user extensions; there is no hard-coded system extension allowlist. First-party product areas should live there too: automations, artifacts, browser, diffs, file explorer, gateways, images, knowledge, runs, settings panels, telemetry, web tools, and the extension manager itself.
+Bundled first-party extensions live in the repo/app bundle under `extensions/` and use the same extension contract. They are discovered by the same package-path scanner as user extensions; there is no hard-coded system extension allowlist. First-party product areas should live there too: auto mode, automations, artifacts, browser, diffs, file explorer, gateways, images, knowledge, MCP, runs, settings panels, telemetry, web tools, and the extension manager itself.
 
 A native extension package looks like this:
 

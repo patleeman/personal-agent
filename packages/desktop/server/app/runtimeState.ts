@@ -9,14 +9,11 @@ import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '
 import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
-import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
 import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
 import { createManifestAgentExtensions } from '../extensions/extensionAgentExtensions.js';
 import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
 import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
-import { createMcpAgentExtension } from '../extensions/mcpAgentExtension.js';
-import { createWorkbenchBrowserAgentExtension } from '../extensions/workbenchBrowserAgentExtension.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
@@ -148,9 +145,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
       createConversationTitleAgentExtension({
         setConversationTitle: renameSession,
       }),
-      createMcpAgentExtension(),
-      createWorkbenchBrowserAgentExtension(),
-      createConversationAutoModeAgentExtension(),
       ...createManifestToolAgentExtensions({
         getCurrentProfile: getRuntimeScope,
         getPreferredVisionModel,

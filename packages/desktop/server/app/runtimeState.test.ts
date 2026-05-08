@@ -12,17 +12,14 @@ const {
   createCheckpointAgentExtensionMock,
   createAskUserQuestionAgentExtensionMock,
   createChangeWorkingDirectoryAgentExtensionMock,
-  createConversationAutoModeAgentExtensionMock,
   createConversationInspectAgentExtensionMock,
   createConversationQueueAgentExtensionMock,
   createConversationTitleAgentExtensionMock,
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
   createScheduledTaskAgentExtensionMock,
-  createWorkbenchBrowserAgentExtensionMock,
   createImageAgentExtensionMock,
   createImageProbeAgentExtensionMock,
-  createMcpAgentExtensionMock,
   webToolsExtensionMock,
   knowledgeBaseExtensionMock,
   createManifestAgentExtensionsMock,
@@ -47,17 +44,14 @@ const {
     createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
     createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
     createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
-    createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
     createConversationInspectAgentExtensionMock: vi.fn(() => 'conversation-inspect-extension'),
     createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
     createConversationTitleAgentExtensionMock: vi.fn(() => 'conversation-title-extension'),
     createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
     createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
     createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
-    createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
     createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
     createImageProbeAgentExtensionMock: vi.fn(() => 'image-probe-extension'),
-    createMcpAgentExtensionMock: vi.fn(() => 'mcp-extension'),
     webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
     knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
     createManifestAgentExtensionsMock: vi.fn(() => ['manifest-agent-extension']),
@@ -93,10 +87,6 @@ vi.mock('../extensions/changeWorkingDirectoryAgentExtension.js', () => ({
   createChangeWorkingDirectoryAgentExtension: createChangeWorkingDirectoryAgentExtensionMock,
 }));
 
-vi.mock('../extensions/conversationAutoModeAgentExtension.js', () => ({
-  createConversationAutoModeAgentExtension: createConversationAutoModeAgentExtensionMock,
-}));
-
 vi.mock('../extensions/conversationQueueAgentExtension.js', () => ({
   createConversationQueueAgentExtension: createConversationQueueAgentExtensionMock,
 }));
@@ -121,20 +111,12 @@ vi.mock('../extensions/scheduledTaskAgentExtension.js', () => ({
   createScheduledTaskAgentExtension: createScheduledTaskAgentExtensionMock,
 }));
 
-vi.mock('../extensions/workbenchBrowserAgentExtension.js', () => ({
-  createWorkbenchBrowserAgentExtension: createWorkbenchBrowserAgentExtensionMock,
-}));
-
 vi.mock('../extensions/imageAgentExtension.js', () => ({
   createImageAgentExtension: createImageAgentExtensionMock,
 }));
 
 vi.mock('../extensions/imageProbeAgentExtension.js', () => ({
   createImageProbeAgentExtension: createImageProbeAgentExtensionMock,
-}));
-
-vi.mock('../extensions/mcpAgentExtension.js', () => ({
-  createMcpAgentExtension: createMcpAgentExtensionMock,
 }));
 
 vi.mock('../extensions/extensionRegistry.js', () => ({
@@ -203,14 +185,12 @@ describe('createRuntimeState', () => {
     createArtifactAgentExtensionMock.mockClear();
     createAskUserQuestionAgentExtensionMock.mockClear();
     createChangeWorkingDirectoryAgentExtensionMock.mockClear();
-    createConversationAutoModeAgentExtensionMock.mockClear();
     createConversationInspectAgentExtensionMock.mockClear();
     createConversationQueueAgentExtensionMock.mockClear();
     createConversationTitleAgentExtensionMock.mockClear();
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
-    createWorkbenchBrowserAgentExtensionMock.mockClear();
     createManifestAgentExtensionsMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
     requestConversationWorkingDirectoryChangeMock.mockReset();
@@ -248,7 +228,7 @@ describe('createRuntimeState', () => {
     const factories = state.buildLiveSessionExtensionFactories();
     // All factories are wrapped by guardSystemPromptOverride so each
     // element is a function. Verify count and that each delegates correctly.
-    expect(factories).toHaveLength(8);
+    expect(factories).toHaveLength(5);
     factories.forEach((factory) => {
       expect(typeof factory).toBe('function');
     });
@@ -301,7 +281,7 @@ describe('createRuntimeState', () => {
       logger: createLogger(),
     });
 
-    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(8);
+    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(5);
     expect(createImageProbeAgentExtensionMock).not.toHaveBeenCalled();
   });
 

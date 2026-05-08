@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createConversationAutoModeAgentExtension } from './conversationAutoModeAgentExtension.js';
+import { createConversationAutoModeAgentExtension } from './backend.js';
 
 const {
   markConversationAutoModeContinueRequestedMock,
@@ -17,7 +17,7 @@ const {
   setLiveSessionAutoModeStateMock: vi.fn(),
 }));
 
-vi.mock('../conversations/liveSessions.js', () => ({
+vi.mock('../../../packages/desktop/server/conversations/liveSessions.js', () => ({
   markConversationAutoModeContinueRequested: markConversationAutoModeContinueRequestedMock,
   registerLiveSessionLifecycleHandler: registerLiveSessionLifecycleHandlerMock,
   requestConversationAutoModeContinuationTurn: requestConversationAutoModeContinuationTurnMock,

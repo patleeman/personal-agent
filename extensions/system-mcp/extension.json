@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "system-mcp",
+  "name": "MCP",
+  "packageType": "system",
+  "description": "Inspect, authenticate, and call configured MCP servers from the agent.",
+  "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "agentExtension": "createMcpAgentExtension"
+  },
+  "permissions": ["mcp:read", "mcp:write"]
+}
