@@ -1,4 +1,4 @@
-import { api, cx, getKnowledgeBaseSyncPresentation, useApi, useInvalidateOnTopics } from '@personal-agent/extensions/settings';
+import { cx, getKnowledgeBaseSyncPresentation, useApi, useInvalidateOnTopics } from '@personal-agent/extensions/settings';
 import { useEffect, useMemo, useState } from 'react';
 
 const INPUT_CLASS =
@@ -11,7 +11,7 @@ export function KnowledgeSettingsPanel() {
     loading: knowledgeBaseLoading,
     error: knowledgeBaseLoadError,
     refetch: refetchKnowledgeBase,
-  } = useApi(api.knowledgeBase);
+  } = useApi(knowledgeApi.state);
   const [repoUrlDraft, setRepoUrlDraft] = useState('');
   const [branchDraft, setBranchDraft] = useState('main');
   const [action, setAction] = useState<'save' | 'sync' | null>(null);
@@ -49,7 +49,7 @@ export function KnowledgeSettingsPanel() {
     setAction('save');
 
     try {
-      const saved = await api.updateKnowledgeBase({ repoUrl: repoUrl || null, branch: branch || null });
+      const saved = await knowledgeApi.updateState({ repoUrl: repoUrl || null, branch: branch || null });
       setRepoUrlDraft(saved.repoUrl);
       setBranchDraft(saved.branch);
       await refetchKnowledgeBase({ resetLoading: false });
@@ -69,7 +69,7 @@ export function KnowledgeSettingsPanel() {
     setAction('sync');
 
     try {
-      const synced = await api.syncKnowledgeBase();
+      const synced = await knowledgeApi.sync();
       setRepoUrlDraft(synced.repoUrl);
       setBranchDraft(synced.branch);
       await refetchKnowledgeBase({ resetLoading: false });

@@ -11,7 +11,18 @@
     "actions": [
       { "id": "readState", "handler": "readState", "title": "Read knowledge state" },
       { "id": "updateState", "handler": "updateState", "title": "Update knowledge state" },
-      { "id": "sync", "handler": "sync", "title": "Sync knowledge base" }
+      { "id": "sync", "handler": "sync", "title": "Sync knowledge base" },
+      { "id": "vaultListFiles", "handler": "vaultListFiles", "title": "List knowledge files" },
+      { "id": "vaultTree", "handler": "vaultTree", "title": "Read knowledge tree" },
+      { "id": "vaultReadFile", "handler": "vaultReadFile", "title": "Read knowledge file" },
+      { "id": "vaultWriteFile", "handler": "vaultWriteFile", "title": "Write knowledge file" },
+      { "id": "vaultCreateFolder", "handler": "vaultCreateFolder", "title": "Create knowledge folder" },
+      { "id": "vaultRename", "handler": "vaultRename", "title": "Rename knowledge entry" },
+      { "id": "vaultMove", "handler": "vaultMove", "title": "Move knowledge entry" },
+      { "id": "vaultBacklinks", "handler": "vaultBacklinks", "title": "Read knowledge backlinks" },
+      { "id": "vaultSearch", "handler": "vaultSearch", "title": "Search knowledge" },
+      { "id": "vaultUploadImage", "handler": "vaultUploadImage", "title": "Upload knowledge image" },
+      { "id": "vaultImportUrl", "handler": "vaultImportUrl", "title": "Import URL into knowledge" }
     ]
   },
   "contributes": {

@@ -9,9 +9,9 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { api, vaultApi } from '../../../../packages/desktop/ui/src/client/api';
-import { type MarkdownFrontmatter, parseMarkdownDocument, stringifyMarkdownFrontmatter } from '../lib/markdownDocument';
 import type { VaultBacklink, VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
+import { knowledgeApi } from '../lib/knowledgeApi';
+import { type MarkdownFrontmatter, parseMarkdownDocument, stringifyMarkdownFrontmatter } from '../lib/markdownDocument';
 import { FrontmatterDisclosure } from './FrontmatterDisclosure';
 import { emitKBEvent, type KBFileChangedExternallyDetail, onKBEvent } from './knowledgeEvents';
 import { readMarkdownFromEditor } from './markdownEditorContent';
@@ -99,7 +99,7 @@ function useAutosave(
       if (saving.current) return;
       saving.current = true;
       try {
-        await vaultApi.writeFile(fileId, getContent());
+        await knowledgeApi.writeFile(fileId, getContent());
         onSaved();
       } catch (error) {
         console.error('vault autosave failed', error);
@@ -167,7 +167,7 @@ async function loadVaultDocument(fileId: string): Promise<CachedVaultDocument> {
     return pending;
   }
 
-  const request = vaultApi
+  const request = knowledgeApi
     .readFile(fileId)
     .then(({ content }) => {
       const { frontmatter, rawFrontmatter, frontmatterError, body } = parseMarkdownDocument(content);
@@ -215,7 +215,7 @@ async function loadVaultBacklinks(fileId: string): Promise<VaultBacklink[]> {
     return pending;
   }
 
-  const request = vaultApi
+  const request = knowledgeApi
     .backlinks(fileId)
     .then(({ backlinks }) => {
       cacheBacklinks(fileId, backlinks);
@@ -267,7 +267,7 @@ function EditableTitle({ fileName, fileId, onRenamed }: { fileName: string; file
     }
     const newName = trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
     try {
-      const updated = await vaultApi.rename(fileId, newName);
+      const updated = await knowledgeApi.rename(fileId, newName);
       moveCachedVaultDocument(fileId, updated.id);
       emitKBEvent('kb:file-renamed', { oldId: fileId, newId: updated.id });
       onRenamed(updated.id);
@@ -443,7 +443,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   const entriesRef = useRef<VaultEntry[]>([]);
   const loadEntries = useCallback(async () => {
     try {
-      const { files } = await api.vaultFiles();
+      const { files } = await knowledgeApi.listFiles();
       const markdownFiles = files.filter((entry) => entry.kind === 'file' && entry.name.endsWith('.md')).map((entry) => ({ ...entry }));
       setAllEntries(markdownFiles);
       entriesRef.current = markdownFiles;
@@ -515,7 +515,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
         const reader = new FileReader();
         reader.onload = async () => {
           try {
-            const result = await vaultApi.uploadImage(filename, reader.result as string);
+            const result = await knowledgeApi.uploadImage(filename, reader.result as string);
             editor?.commands.setImage({ src: result.url });
           } catch (err) {
             console.error('image upload failed', err);
@@ -535,7 +535,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
           const reader = new FileReader();
           reader.onload = async () => {
             try {
-              const result = await vaultApi.uploadImage(filename, reader.result as string);
+              const result = await knowledgeApi.uploadImage(filename, reader.result as string);
               editor?.commands.setImage({ src: result.url });
             } catch (err) {
               console.error('image upload failed', err);

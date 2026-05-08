@@ -8,7 +8,13 @@ import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { api, vaultApi } from '../../../../packages/desktop/ui/src/client/api';
+import { ContextMenuWrapper } from '../../../../packages/desktop/ui/src/components/shared/ContextMenuWrapper';
+import {
+  canDropAllPaths,
+  getTopLevelDraggedPaths,
+  useFileTreeModel,
+} from '../../../../packages/desktop/ui/src/components/shared/useFileTreeModel';
+import { cx } from '../../../../packages/desktop/ui/src/components/ui';
 import {
   type DesktopKnowledgeEntryContextMenuAction,
   getDesktopBridge,
@@ -16,7 +22,6 @@ import {
 } from '../../../../packages/desktop/ui/src/desktop/desktopBridge';
 import { useApi } from '../../../../packages/desktop/ui/src/hooks/useApi';
 import { useInvalidateOnTopics } from '../../../../packages/desktop/ui/src/hooks/useInvalidateOnTopics';
-import { getKnowledgeBaseSyncPresentation } from '../lib/knowledgeBaseSyncStatus';
 import {
   addOpenFileId,
   normalizeOpenFileIds,
@@ -37,13 +42,8 @@ import {
   writeStoredExpandedFolderIds,
 } from '../../../../packages/desktop/ui/src/local/knowledgeTreeState';
 import type { VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
-import { ContextMenuWrapper } from '../../../../packages/desktop/ui/src/components/shared/ContextMenuWrapper';
-import {
-  canDropAllPaths,
-  getTopLevelDraggedPaths,
-  useFileTreeModel,
-} from '../../../../packages/desktop/ui/src/components/shared/useFileTreeModel';
-import { cx } from '../../../../packages/desktop/ui/src/components/ui';
+import { knowledgeApi } from '../lib/knowledgeApi';
+import { getKnowledgeBaseSyncPresentation } from '../lib/knowledgeBaseSyncStatus';
 import { emitKBEvent, onKBEvent, useVaultWatcher } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 
@@ -720,7 +720,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
     loading: knowledgeBaseLoading,
     error: knowledgeBaseError,
     refetch: refetchKnowledgeBase,
-  } = useApi(api.knowledgeBase, 'knowledge-base-tree-status');
+  } = useApi(knowledgeApi.state, 'knowledge-base-tree-status');
   const { model, resetTree, nativeContextMenuOpenRef, canDropRef, dropCompleteRef } = useFileTreeModel({
     useNativeContextMenu: useNativeKnowledgeContextMenu,
     onSelectionChange: (paths) => {
@@ -816,7 +816,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
       }
 
       try {
-        const result = await api.vaultFiles();
+        const result = await knowledgeApi.listFiles();
         setEntries(result.files);
         resetTree(
           result.files.map((entry) => entry.id),
@@ -839,7 +839,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
     async ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
       try {
         const newName = destinationPath.split('/').filter(Boolean).pop() ?? '';
-        const updated = await vaultApi.rename(sourcePath, newName);
+        const updated = await knowledgeApi.rename(sourcePath, newName);
         emitKBEvent('kb:file-renamed', { oldId: sourcePath, newId: updated.id });
       } catch (error) {
         console.error('rename failed', error);
@@ -856,7 +856,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
       try {
         for (const path of getTopLevelDraggedPaths(paths)) {
-          const updated = await vaultApi.move(path, targetDir);
+          const updated = await knowledgeApi.move(path, targetDir);
           movedPairs.push({ oldId: path, newId: updated.id });
         }
       } catch (error) {
@@ -887,7 +887,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
   const handleImportUrl = useCallback(
     async (input: { url: string; title: string; directoryId: string }) => {
-      const imported = await vaultApi.importUrl({
+      const imported = await knowledgeApi.importUrl({
         url: input.url,
         ...(input.title ? { title: input.title } : {}),
         ...(input.directoryId ? { directoryId: input.directoryId } : {}),
@@ -906,7 +906,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
     setSyncingKnowledgeBase(true);
     try {
-      await (onSyncKnowledgeBase ? onSyncKnowledgeBase() : api.syncKnowledgeBase());
+      await (onSyncKnowledgeBase ? onSyncKnowledgeBase() : knowledgeApi.sync());
       await Promise.all([refetchKnowledgeBase({ resetLoading: false }), loadSnapshot({ keepLoadingState: false })]);
     } catch (error) {
       console.error('knowledge base sync failed', error);
@@ -937,14 +937,14 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
       if (createEntryState.kind === 'file') {
         const fileId = childPath.endsWith('.md') ? childPath : `${childPath}.md`;
-        await vaultApi.writeFile(fileId, '');
+        await knowledgeApi.writeFile(fileId, '');
         emitKBEvent('kb:file-created', { id: fileId });
         onFileSelect(fileId);
         return;
       }
 
       const folderId = childPath.endsWith('/') ? childPath : `${childPath}/`;
-      const created = await vaultApi.createFolder(folderId);
+      const created = await knowledgeApi.createFolder(folderId);
       emitKBEvent('kb:file-created', { id: created.id });
     },
     [createEntryState, onFileSelect],
@@ -971,7 +971,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
       for (const id of deduped) {
         try {
-          await vaultApi.deleteFile(id);
+          await knowledgeApi.deleteFile(id);
           applyDeleteEffects(id);
           setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, id)));
           try {

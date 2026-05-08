@@ -36,7 +36,7 @@ function isInsideRoot(root: string, target: string): boolean {
   return !rel.startsWith('..') && rel !== '..';
 }
 
-function safePath(id: string): string | null {
+export function safeVaultPath(id: string): string | null {
   if (!id || id.includes('\u0000')) return null;
   // Normalise slashes and strip leading/trailing separators
   const clean = id.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').trim();
@@ -139,7 +139,7 @@ interface VaultEntry {
   updatedAt: string;
 }
 
-function entryFromStat(root: string, abs: string, stats: Stats): VaultEntry {
+export function vaultEntryFromStat(root: string, abs: string, stats: Stats): VaultEntry {
   const rel = relative(root, abs).replace(/\\/g, '/');
   const kind: VaultEntry['kind'] = stats.isDirectory() ? 'folder' : 'file';
   return {
@@ -167,7 +167,7 @@ function deleteVaultPath(abs: string): void {
   }
 }
 
-function readDirEntries(root: string, abs: string): VaultEntry[] {
+export function readVaultDirEntries(root: string, abs: string): VaultEntry[] {
   let dirents: Dirent[];
   try {
     dirents = readdirSync(abs, { withFileTypes: true });
@@ -187,7 +187,7 @@ function readDirEntries(root: string, abs: string): VaultEntry[] {
         return [];
       }
       if (!stats.isFile() && !stats.isDirectory()) return [];
-      return [entryFromStat(root, childAbs, stats)];
+      return [vaultEntryFromStat(root, childAbs, stats)];
     })
     .sort((a, b) => {
       // folders first, then alpha
@@ -247,7 +247,7 @@ function buildSearchExcerpt(content: string, index: number, matchLength: number)
   return excerpt;
 }
 
-function parseVaultSearchLimit(value: unknown): number {
+export function parseVaultSearchLimit(value: unknown): number {
   const candidate = Array.isArray(value) ? value[0] : value;
   if (typeof candidate !== 'string' && typeof candidate !== 'number') {
     return 20;
@@ -260,7 +260,7 @@ function parseVaultSearchLimit(value: unknown): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(50, parsed) : 20;
 }
 
-function searchVaultNotes(root: string, query: string, limit: number): Array<Omit<VaultNoteSearchResult, 'score'>> {
+export function searchVaultNotes(root: string, query: string, limit: number): Array<Omit<VaultNoteSearchResult, 'score'>> {
   const normalized = query.trim().toLowerCase();
   const results: VaultNoteSearchResult[] = [];
 
@@ -305,7 +305,7 @@ function searchVaultNotes(root: string, query: string, limit: number): Array<Omi
     .map(({ score: _score, ...result }) => result);
 }
 
-function findBacklinks(targetId: string, root: string): BacklinkResult[] {
+export function findVaultBacklinks(targetId: string, root: string): BacklinkResult[] {
   // targetId may be "notes/foo.md" — derive the note name without extension
   const targetName = basename(targetId).replace(/\.md$/i, '');
   const escapedName = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -354,7 +354,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       if (!dirParam) {
         abs = root;
       } else {
-        const resolved = safePath(dirParam);
+        const resolved = safeVaultPath(dirParam);
         if (!resolved) {
           res.status(400).json({ error: 'Invalid path' });
           return;
@@ -365,7 +365,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(404).json({ error: 'Directory not found' });
         return;
       }
-      res.json({ root, entries: readDirEntries(root, abs) });
+      res.json({ root, entries: readVaultDirEntries(root, abs) });
     } catch (err) {
       logError('vault/tree error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -376,7 +376,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/file', (req, res) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safePath(id) : null;
+      const abs = id ? safeVaultPath(id) : null;
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -407,7 +407,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'content must be a string' });
         return;
       }
-      const abs = safePath(id.trim());
+      const abs = safeVaultPath(id.trim());
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -416,7 +416,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       writeFileSync(abs, content, 'utf-8');
       const stats = statSync(abs);
       const root = getRoot();
-      res.json(entryFromStat(root, abs, stats));
+      res.json(vaultEntryFromStat(root, abs, stats));
     } catch (err) {
       logError('vault/file PUT error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -427,7 +427,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.delete('/api/vault/file', (req, res) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safePath(id) : null;
+      const abs = id ? safeVaultPath(id) : null;
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -457,7 +457,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'newName must be a plain file/folder name' });
         return;
       }
-      const abs = safePath(id.trim());
+      const abs = safeVaultPath(id.trim());
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -472,7 +472,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
           ? root
           : typeof parentId === 'string'
             ? parentId.trim()
-              ? safePath(parentId.trim().replace(/^\/+|\/+$/g, ''))
+              ? safeVaultPath(parentId.trim().replace(/^\/+|\/+$/g, ''))
               : root
             : dirname(abs);
       if (!parentAbs || !existsSync(parentAbs) || !statSync(parentAbs).isDirectory()) {
@@ -494,7 +494,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       }
       renameSync(abs, newAbs);
       const stats = statSync(newAbs);
-      res.json(entryFromStat(root, newAbs, stats));
+      res.json(vaultEntryFromStat(root, newAbs, stats));
     } catch (err) {
       logError('vault/rename error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -510,7 +510,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(400).json({ error: 'id is required' });
         return;
       }
-      const abs = safePath(id.trim());
+      const abs = safeVaultPath(id.trim());
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
@@ -518,7 +518,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       mkdirSync(abs, { recursive: true });
       const stats = statSync(abs);
       const root = getRoot();
-      res.json(entryFromStat(root, abs, stats));
+      res.json(vaultEntryFromStat(root, abs, stats));
     } catch (err) {
       logError('vault/folder error', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -535,7 +535,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       }
       const root = getRoot();
       const targetName = basename(id).replace(/\.md$/i, '');
-      res.json({ id, targetName, backlinks: findBacklinks(id, root) });
+      res.json({ id, targetName, backlinks: findVaultBacklinks(id, root) });
     } catch (err) {
       logError('vault/backlinks', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -624,7 +624,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         return;
       }
       const root = getRoot();
-      const srcAbs = safePath(id.trim());
+      const srcAbs = safeVaultPath(id.trim());
       if (!srcAbs) {
         res.status(400).json({ error: 'Invalid source id' });
         return;
@@ -633,7 +633,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(404).json({ error: 'Source not found' });
         return;
       }
-      const destDir = targetDir.trim() ? safePath(targetDir.trim().replace(/\/+$/, '')) : root;
+      const destDir = targetDir.trim() ? safeVaultPath(targetDir.trim().replace(/\/+$/, '')) : root;
       if (!destDir) {
         res.status(400).json({ error: 'Invalid target directory' });
         return;
@@ -652,7 +652,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         return;
       }
       renameSync(srcAbs, destAbs);
-      res.json(entryFromStat(root, destAbs, statSync(destAbs)));
+      res.json(vaultEntryFromStat(root, destAbs, statSync(destAbs)));
     } catch (err) {
       logError('vault/move', { message: String(err) });
       res.status(500).json({ error: String(err) });
@@ -682,7 +682,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
       const root = getRoot();
       const directoryId = typeof payload.directoryId === 'string' ? payload.directoryId.trim().replace(/^\/+|\/+$/g, '') : '';
-      const targetDirAbs = directoryId ? safePath(directoryId) : root;
+      const targetDirAbs = directoryId ? safeVaultPath(directoryId) : root;
       if (!targetDirAbs) {
         res.status(400).json({ error: 'Invalid target directory' });
         return;
@@ -704,7 +704,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
 
       const noteStats = statSync(imported.notePath);
       res.status(201).json({
-        note: entryFromStat(root, imported.notePath, noteStats),
+        note: vaultEntryFromStat(root, imported.notePath, noteStats),
         sourceKind: imported.sourceKind,
         title: imported.title,
         ...(imported.asset ? { asset: imported.asset } : {}),
@@ -755,7 +755,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/asset', (req, res: Response) => {
     try {
       const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-      const abs = id ? safePath(id) : null;
+      const abs = id ? safeVaultPath(id) : null;
       if (!abs) {
         res.status(400).json({ error: 'Invalid id' });
         return;
