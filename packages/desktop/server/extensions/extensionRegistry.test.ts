@@ -159,6 +159,30 @@ describe('extension registry', () => {
     );
   });
 
+  it('surfaces invalid extension skill diagnostics without registering the skill', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-registry-'));
+    const extensionRoot = join(stateRoot, 'extensions', 'bad-skills');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'bad-skills',
+        name: 'Bad Skills',
+        contributes: {
+          skills: [{ id: 'missing', path: 'skills/missing/SKILL.md' }],
+        },
+      }),
+    );
+
+    expect(listExtensionSkillRegistrations(stateRoot).some((skill) => skill.extensionId === 'bad-skills')).toBe(false);
+    expect(listExtensionInstallSummaries(stateRoot).find((extension) => extension.id === 'bad-skills')).toEqual(
+      expect.objectContaining({
+        diagnostics: [expect.stringContaining('path does not exist')],
+      }),
+    );
+  });
+
   it('tracks disabled runtime extensions and hides them from active surfaces', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-registry-'));
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');

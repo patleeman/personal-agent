@@ -284,6 +284,8 @@ function formatExtensionDiagnostics(extension: ExtensionInstallSummary): string 
       packageType: extension.packageType ?? 'user',
       packageRoot: extension.packageRoot ?? null,
       errors: extension.errors ?? [],
+      diagnostics: extension.diagnostics ?? [],
+      skills: extension.skills ?? [],
       manifest: extension.manifest,
     },
     null,
@@ -417,6 +419,19 @@ export function ExtensionManagerPage() {
     });
   }, []);
 
+  const openPath = useCallback((path: string) => {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setNotice(path);
+      return;
+    }
+    void bridge.openPath(path).then((result) => {
+      if (!result.opened) {
+        setNotice(result.error ?? path);
+      }
+    });
+  }, []);
+
   const buildExtension = useCallback(
     async (extension: ExtensionInstallSummary) => {
       setBusyId(extension.id);
@@ -508,7 +523,11 @@ export function ExtensionManagerPage() {
         (filter === 'disabled' && extension.status === 'invalid');
       if (!matchesFilter) return false;
       if (!normalizedQuery) return true;
-      return `${extension.name} ${extension.id} ${extension.description ?? ''}`.toLowerCase().includes(normalizedQuery);
+      return `${extension.name} ${extension.id} ${extension.description ?? ''} ${(extension.skills ?? [])
+        .map((skill) => `${skill.name} ${skill.description ?? ''}`)
+        .join(' ')}`
+        .toLowerCase()
+        .includes(normalizedQuery);
     });
   }, [extensions, filter, query]);
 
@@ -627,7 +646,10 @@ export function ExtensionManagerPage() {
                                 <CompactCount icon={<AgentHookIcon />} count={counts.agentHooks} title="Agent lifecycle hooks" />
                                 <CompactCount icon={<BackendIcon />} count={counts.backend} title="Backend actions" />
                                 <CompactCount icon={<SkillIcon />} count={counts.skills} title="Skills" />
-                                {Object.values(counts).every((count) => count === 0) ? <span className="text-dim">—</span> : null}
+                                {extension.diagnostics?.length ? <span className="text-[12px] text-danger">!</span> : null}
+                                {Object.values(counts).every((count) => count === 0) && !extension.diagnostics?.length ? (
+                                  <span className="text-dim">—</span>
+                                ) : null}
                               </div>
                             </td>
                             <td className="whitespace-nowrap px-3 py-3 align-middle">
@@ -761,6 +783,32 @@ export function ExtensionManagerPage() {
                         </DetailBlock>
                       ) : null}
 
+                      {selectedExtension.diagnostics?.length ? (
+                        <DetailBlock
+                          title="Diagnostics"
+                          action={
+                            <button
+                              type="button"
+                              className="text-[11px] text-secondary transition-colors hover:text-primary"
+                              onClick={() => void copyExtensionDiagnostics(selectedExtension)}
+                            >
+                              Copy diagnostics
+                            </button>
+                          }
+                        >
+                          <div className="space-y-2">
+                            {selectedExtension.diagnostics.map((message) => (
+                              <p
+                                key={message}
+                                className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-5 text-danger"
+                              >
+                                {message}
+                              </p>
+                            ))}
+                          </div>
+                        </DetailBlock>
+                      ) : null}
+
                       <DetailBlock title="Surfaces">
                         {getLogicalSurfaces(selectedExtension).length ? (
                           <div className="space-y-2">
@@ -791,6 +839,31 @@ export function ExtensionManagerPage() {
                           <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(selectedExtension)}`} />
                           <DetailRow label="Permissions" value={formatPermissionSummary(selectedExtension)} />
                         </dl>
+                      </DetailBlock>
+
+                      <DetailBlock title="Skills">
+                        {selectedExtension.skills?.length ? (
+                          <div className="space-y-3">
+                            {selectedExtension.skills.map((skill) => (
+                              <div key={skill.name} className="group/skill">
+                                <button
+                                  type="button"
+                                  className="text-left text-[13px] font-medium text-primary transition-colors hover:text-accent"
+                                  onClick={() => openPath(skill.path)}
+                                >
+                                  {skill.title ?? skill.name}
+                                </button>
+                                <div className="font-mono text-[11px] text-dim">{skill.name}</div>
+                                {skill.description ? (
+                                  <p className="mt-1 text-[12px] leading-5 text-secondary">{skill.description}</p>
+                                ) : null}
+                                <p className="mt-1 break-all font-mono text-[11px] leading-5 text-dim">{skill.path}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[13px] text-dim">No skills.</p>
+                        )}
                       </DetailBlock>
 
                       {selectedExtension.packageRoot ? (

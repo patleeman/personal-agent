@@ -86,6 +86,7 @@ export interface ExtensionInstallSummary {
   enabled: boolean;
   status: 'enabled' | 'disabled' | 'invalid';
   errors?: string[];
+  diagnostics?: string[];
   description?: string;
   version?: string;
   packageRoot?: string;
@@ -215,24 +216,64 @@ function normalizeExtensionSkillContribution(skill: string | ExtensionSkillContr
   return skill;
 }
 
+function readSkillFrontmatterFields(skillPath: string): { name?: string; description?: string } | null {
+  const raw = readFileSync(skillPath, 'utf-8').replace(/\r\n/g, '\n');
+  if (!raw.startsWith('---\n')) return null;
+  const endIndex = raw.indexOf('\n---', 4);
+  if (endIndex === -1) return null;
+  const frontmatter = raw.slice(4, endIndex);
+  const name = frontmatter.match(/^name:\s*(.+)$/m)?.[1]?.trim();
+  const description = frontmatter.match(/^description:\s*(.+)$/m)?.[1]?.trim();
+  return { ...(name ? { name } : {}), ...(description ? { description } : {}) };
+}
+
+function validateExtensionSkillContribution(entry: ExtensionRegistryEntry, skill: string | ExtensionSkillContribution): string | null {
+  if (!entry.packageRoot) {
+    return 'Extension skill contributions require a package root.';
+  }
+  const normalized = normalizeExtensionSkillContribution(skill);
+  if (!normalized.id?.trim()) {
+    return 'Extension skill contribution is missing an id.';
+  }
+  if (!normalized.path?.trim()) {
+    return `Extension skill ${normalized.id} is missing a path.`;
+  }
+  const skillPath = resolve(entry.packageRoot, normalized.path);
+  try {
+    assertInside(entry.packageRoot, skillPath);
+  } catch {
+    return `Extension skill ${normalized.id} path must stay inside the extension package.`;
+  }
+  if (!existsSync(skillPath)) {
+    return `Extension skill ${normalized.id} path does not exist: ${normalized.path}`;
+  }
+  if (!normalized.path.endsWith('/SKILL.md') && normalized.path !== 'SKILL.md') {
+    return `Extension skill ${normalized.id} should use the Agent Skills file name SKILL.md.`;
+  }
+  const frontmatter = readSkillFrontmatterFields(skillPath);
+  if (!frontmatter?.name || !frontmatter.description) {
+    return `Extension skill ${normalized.id} must use Agent Skills frontmatter with name and description.`;
+  }
+  return null;
+}
+
+function listExtensionContributionDiagnostics(entry: ExtensionRegistryEntry): string[] {
+  return (entry.manifest.contributes?.skills ?? [])
+    .map((skill) => validateExtensionSkillContribution(entry, skill))
+    .filter((diagnostic): diagnostic is string => diagnostic !== null);
+}
+
 function buildExtensionSkillRegistrations(entry: ExtensionRegistryEntry): ExtensionSkillRegistration[] {
   if (!entry.packageRoot) {
     return [];
   }
   return (entry.manifest.contributes?.skills ?? []).flatMap((skill): ExtensionSkillRegistration[] => {
     const normalized = normalizeExtensionSkillContribution(skill);
-    if (!normalized.id || !normalized.path) {
+    if (validateExtensionSkillContribution(entry, normalized)) {
       return [];
     }
     const skillPath = resolve(entry.packageRoot!, normalized.path);
-    try {
-      assertInside(entry.packageRoot!, skillPath);
-    } catch {
-      return [];
-    }
-    if (!existsSync(skillPath)) {
-      return [];
-    }
+    const frontmatter = readSkillFrontmatterFields(skillPath);
     const id = normalized.id.trim();
     const name = `${entry.manifest.id}/${id}`;
     return [
@@ -241,8 +282,8 @@ function buildExtensionSkillRegistrations(entry: ExtensionRegistryEntry): Extens
         packageType: entry.manifest.packageType ?? 'user',
         id,
         name,
-        ...(normalized.title ? { title: normalized.title } : {}),
-        ...(normalized.description ? { description: normalized.description } : {}),
+        title: normalized.title ?? frontmatter?.name,
+        description: normalized.description ?? frontmatter?.description,
         path: skillPath,
         packageRoot: entry.packageRoot!,
       },
@@ -666,12 +707,14 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
     const surfaces = manifest.surfaces ?? [];
     const views = manifest.contributes?.views ?? [];
     const enabled = isExtensionEnabled(manifest.id, stateRoot);
+    const diagnostics = listExtensionContributionDiagnostics(entry);
     return {
       id: manifest.id,
       name: manifest.name,
       packageType: manifest.packageType ?? 'user',
       enabled,
       status: enabled ? ('enabled' as const) : ('disabled' as const),
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
       ...(manifest.description ? { description: manifest.description } : {}),
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(entry.packageRoot ? { packageRoot: entry.packageRoot } : {}),

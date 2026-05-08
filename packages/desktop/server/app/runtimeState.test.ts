@@ -21,6 +21,7 @@ const {
   daemonRunOrchestrationPromptExtensionMock,
   authStorageMock,
   readSavedModelPreferencesMock,
+  listExtensionSkillRegistrationsMock,
 } = vi.hoisted(() => {
   const authStorageMock = {
     hasAuth: vi.fn(() => false),
@@ -46,6 +47,7 @@ const {
     daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
     authStorageMock,
     readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
+    listExtensionSkillRegistrationsMock: vi.fn(() => []),
   };
 });
 
@@ -90,7 +92,7 @@ vi.mock('../extensions/imageProbeAgentExtension.js', () => ({
 }));
 
 vi.mock('../extensions/extensionRegistry.js', () => ({
-  listExtensionSkillRegistrations: vi.fn(() => []),
+  listExtensionSkillRegistrations: listExtensionSkillRegistrationsMock,
 }));
 
 vi.mock('../extensions/manifestToolAgentExtension.js', () => ({
@@ -150,6 +152,8 @@ describe('createRuntimeState', () => {
     createScheduledTaskAgentExtensionMock.mockClear();
     createManifestAgentExtensionsMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
+    listExtensionSkillRegistrationsMock.mockReset();
+    listExtensionSkillRegistrationsMock.mockReturnValue([]);
     readSavedModelPreferencesMock.mockClear();
     readSavedModelPreferencesMock.mockReturnValue({ currentVisionModel: 'openai/gpt-4o' });
     authStorageMock.hasAuth.mockReset();
@@ -199,6 +203,26 @@ describe('createRuntimeState', () => {
     expect(materializeRuntimeResourcesToAgentDirMock).toHaveBeenCalledWith(resolvedShared, temporaryAgentDir);
     expect(existsSync(temporaryAgentDir)).toBe(false);
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('adds extension skill directories to live session resources', () => {
+    listExtensionSkillRegistrationsMock.mockReturnValue([
+      { path: '/repo-root/extensions/system-runs/skills/runs/SKILL.md' },
+      { path: '/repo-root/extensions/system-runs/skills/runs/SKILL.md' },
+      { path: '/repo-root/extensions/system-artifacts/skills/artifacts/SKILL.md' },
+    ]);
+
+    const state = createRuntimeState({
+      repoRoot: '/repo-root',
+      agentDir: '/agent-dir',
+      logger: createLogger(),
+    });
+
+    expect(state.buildLiveSessionResourceOptions().additionalSkillPaths).toEqual([
+      '/skills/shared',
+      '/repo-root/extensions/system-runs/skills/runs',
+      '/repo-root/extensions/system-artifacts/skills/artifacts',
+    ]);
   });
 
   it('does not register image probing until a preferred vision model is configured', () => {

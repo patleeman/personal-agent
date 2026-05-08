@@ -220,6 +220,7 @@ export interface ExtensionInstallSummary {
   enabled: boolean;
   status?: 'enabled' | 'disabled' | 'invalid';
   errors?: string[];
+  diagnostics?: string[];
   description?: string;
   version?: string;
   packageRoot?: string;
