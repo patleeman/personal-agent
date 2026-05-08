@@ -5,6 +5,13 @@
   "packageType": "system",
   "description": "Generate, edit, and inspect image attachments from agent conversations.",
   "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      { "id": "image", "handler": "image", "title": "Image" },
+      { "id": "probeImage", "handler": "probeImage", "title": "Probe image" }
+    ]
+  },
   "contributes": {
     "tools": [
       {
@@ -12,14 +19,42 @@
         "name": "image",
         "title": "Generate image",
         "description": "Generate or edit a single image from a prompt, optionally using recent conversation images as references.",
-        "systemFactory": "image"
+        "action": "image",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "prompt": { "type": "string" },
+            "size": { "type": "string" },
+            "quality": { "type": "string", "enum": ["auto", "low", "medium", "high"] },
+            "background": { "type": "string", "enum": ["auto", "opaque", "transparent"] },
+            "action": { "type": "string", "enum": ["auto", "generate", "edit"] },
+            "source": { "type": "string", "enum": ["none", "latest", "latest-user", "latest-generated", "recent"] },
+            "sourceCount": { "type": "number", "minimum": 1, "maximum": 4 }
+          },
+          "required": ["prompt"],
+          "additionalProperties": false
+        }
       },
       {
         "id": "probe-image",
         "name": "probe_image",
         "title": "Probe image",
         "description": "Ask the configured vision subagent about selected image attachments when the current model cannot see images.",
-        "systemFactory": "image-probe"
+        "action": "probeImage",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "imageIds": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^img_[a-f0-9]{12}$" },
+              "minItems": 1,
+              "maxItems": 8
+            },
+            "question": { "type": "string", "minLength": 1, "maxLength": 8000 }
+          },
+          "required": ["imageIds", "question"],
+          "additionalProperties": false
+        }
       }
     ]
   },

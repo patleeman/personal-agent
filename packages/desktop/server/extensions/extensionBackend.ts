@@ -26,7 +26,9 @@ export interface ExtensionBackendContext {
     cwd?: string;
     sessionFile?: string;
     sessionId?: string;
+    preferredVisionModel?: string;
   };
+  agentToolContext?: unknown;
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
     put(key: string, value: unknown): Promise<{ ok: true }>;
@@ -97,11 +99,13 @@ function createBackendContext(
   extensionId: string,
   serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
   toolContext?: ExtensionBackendContext['toolContext'],
+  agentToolContext?: unknown,
 ): ExtensionBackendContext {
   return {
     extensionId,
     profile: serverContext?.getCurrentProfile() ?? 'shared',
     ...(toolContext ? { toolContext } : {}),
+    ...(agentToolContext ? { agentToolContext } : {}),
     storage: createStorage(extensionId),
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
@@ -238,6 +242,7 @@ export async function invokeExtensionAction(
   input: unknown,
   serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
   toolContext?: ExtensionBackendContext['toolContext'],
+  agentToolContext?: unknown,
 ): Promise<ExtensionActionInvokeResult> {
   const entry = findExtensionEntry(extensionId);
   if (!entry) {
@@ -253,7 +258,7 @@ export async function invokeExtensionAction(
 
   const result = await (handler as (input: unknown, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
     input,
-    createBackendContext(extensionId, serverContext, toolContext),
+    createBackendContext(extensionId, serverContext, toolContext, agentToolContext),
   );
   return { ok: true, result };
 }
