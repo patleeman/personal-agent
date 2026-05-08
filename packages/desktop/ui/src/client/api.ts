@@ -3,6 +3,7 @@ import type {
   ExtensionCommandRegistration,
   ExtensionInstallSummary,
   ExtensionManifest,
+  ExtensionMentionRegistration,
   ExtensionRouteSummary,
   ExtensionSlashCommandRegistration,
   ExtensionSurfaceSummary,
@@ -321,6 +322,7 @@ export const api = {
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
+  extensionMentions: async () => get<ExtensionMentionRegistration[]>('/extensions/mentions'),
   extensionManifest: async (extensionId: string) => get<ExtensionManifest>(`/extensions/${encodeURIComponent(extensionId)}/manifest`),
   extensionSurfacesForExtension: async (extensionId: string) =>
     get<ExtensionSurfaceSummary[]>(`/extensions/${encodeURIComponent(extensionId)}/surfaces`),

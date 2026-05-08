@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { buildKnowledgeMentionItems } from '../../../../../extensions/system-knowledge/src/frontend';
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import type { RunPresentationLookups } from '../automation/runPresentation';
 import { api } from '../client/api';
@@ -223,7 +222,8 @@ import {
   resolveSelectedConversationExecutionTargetId,
 } from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
-import type { ExtensionSlashCommandRegistration } from '../extensions/types';
+import { buildExtensionMentionItems } from '../extensions/extensionMentions';
+import type { ExtensionMentionRegistration, ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -1731,19 +1731,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     shouldPersist: (value) => value.length > 0,
   });
   const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
+  const [extensionMentionRegistrations, setExtensionMentionRegistrations] = useState<ExtensionMentionRegistration[]>([]);
+  const [extensionMentionItems, setExtensionMentionItems] = useState<MentionItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .extensionSlashCommands()
-      .then((commands) => {
+    Promise.all([api.extensionSlashCommands(), api.extensionMentions()])
+      .then(([commands, mentions]) => {
         if (!cancelled) {
           setExtensionSlashCommands(commands);
+          setExtensionMentionRegistrations(mentions);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setExtensionSlashCommands([]);
+          setExtensionMentionRegistrations([]);
         }
       });
 
@@ -2466,16 +2469,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [extensionSlashCommands, input, memoryData],
   );
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void buildExtensionMentionItems(extensionMentionRegistrations, {
+      memoryDocs: memoryData?.memoryDocs ?? [],
+      vaultFiles: vaultFilesData?.files ?? [],
+    })
+      .then((items) => {
+        if (!cancelled) setExtensionMentionItems(items);
+      })
+      .catch(() => {
+        if (!cancelled) setExtensionMentionItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [extensionMentionRegistrations, memoryData?.memoryDocs, vaultFilesData?.files]);
+
   const mentionItems = useMemo(
     () =>
       buildMentionItems({
         tasks: tasks ?? [],
-        extensionItems: buildKnowledgeMentionItems({
-          memoryDocs: memoryData?.memoryDocs ?? [],
-          vaultFiles: vaultFilesData?.files ?? [],
-        }),
+        extensionItems: extensionMentionItems,
       }),
-    [tasks, memoryData, vaultFilesData],
+    [tasks, extensionMentionItems],
   );
   const currentSessionMeta = useMemo(
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),

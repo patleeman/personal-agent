@@ -178,6 +178,16 @@ interface ExtensionSkillRegistration {
   packageRoot: string;
 }
 
+export interface ExtensionMentionRegistration {
+  extensionId: string;
+  packageType?: ExtensionPackageType;
+  id: string;
+  title: string;
+  description?: string;
+  kinds: string[];
+  provider: string;
+}
+
 interface ExtensionToolRegistration {
   extensionId: string;
   packageType?: ExtensionPackageType;
@@ -206,6 +216,7 @@ export interface ExtensionInstallSummary {
   surfaces: ExtensionSurface[];
   backendActions?: ExtensionBackendActionSummary[];
   skills?: ExtensionSkillRegistration[];
+  mentions?: ExtensionMentionRegistration[];
   tools?: ExtensionToolRegistration[];
   routes: Array<{ route: string; surfaceId: string }>;
 }

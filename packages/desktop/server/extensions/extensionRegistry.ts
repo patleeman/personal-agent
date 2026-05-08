@@ -5,6 +5,7 @@ import { getStateRoot } from '@personal-agent/core';
 
 import type {
   ExtensionManifest,
+  ExtensionMentionContribution,
   ExtensionSkillContribution,
   ExtensionSurface,
   ExtensionToolContribution,
@@ -37,6 +38,16 @@ export interface ExtensionSkillRegistration {
   packageRoot: string;
 }
 
+export interface ExtensionMentionRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  id: string;
+  title: string;
+  description?: string;
+  kinds: string[];
+  provider: string;
+}
+
 export interface ExtensionToolRegistration {
   extensionId: string;
   packageType: ExtensionManifest['packageType'];
@@ -65,6 +76,7 @@ export interface ExtensionInstallSummary {
   surfaces: ExtensionSurface[];
   backendActions: NonNullable<ExtensionManifest['backend']>['actions'];
   skills: ExtensionSkillRegistration[];
+  mentions: ExtensionMentionRegistration[];
   tools: ExtensionToolRegistration[];
   routes: Array<{ route: string; surfaceId: string }>;
 }
@@ -195,6 +207,27 @@ function buildExtensionSkillRegistrations(entry: ExtensionRegistryEntry): Extens
   });
 }
 
+function buildExtensionMentionRegistrations(entry: ExtensionRegistryEntry): ExtensionMentionRegistration[] {
+  return (entry.manifest.contributes?.mentions ?? []).flatMap((mention: ExtensionMentionContribution): ExtensionMentionRegistration[] => {
+    const id = mention.id.trim();
+    const provider = mention.provider.trim();
+    if (!id || !mention.title.trim() || !provider) {
+      return [];
+    }
+    return [
+      {
+        extensionId: entry.manifest.id,
+        packageType: entry.manifest.packageType ?? 'user',
+        id,
+        title: mention.title,
+        ...(mention.description ? { description: mention.description } : {}),
+        kinds: mention.kinds,
+        provider,
+      },
+    ];
+  });
+}
+
 function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): ExtensionToolRegistration[] {
   return (entry.manifest.contributes?.tools ?? []).flatMap((tool: ExtensionToolContribution): ExtensionToolRegistration[] => {
     const id = tool.id.trim();
@@ -319,6 +352,7 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       surfaces,
       backendActions: manifest.backend?.actions ?? [],
       skills: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionSkillRegistrations(entry) : [],
+      mentions: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionMentionRegistrations(entry) : [],
       tools: isExtensionEnabled(manifest.id, stateRoot) ? buildExtensionToolRegistrations(entry) : [],
       routes: [
         ...surfaces.flatMap((surface) =>
@@ -368,6 +402,10 @@ export function readExtensionRegistrySnapshot(): ExtensionRegistrySnapshot {
     ),
   ];
   return { extensions, routes, surfaces, views };
+}
+
+export function listExtensionMentionRegistrations(): ExtensionMentionRegistration[] {
+  return listEnabledExtensionEntries().flatMap(buildExtensionMentionRegistrations);
 }
 
 export function listExtensionCommandRegistrations(): ExtensionCommandRegistration[] {

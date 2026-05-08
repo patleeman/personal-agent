@@ -15,6 +15,7 @@ import {
   findExtensionEntry,
   listExtensionCommandRegistrations,
   listExtensionInstallSummaries,
+  listExtensionMentionRegistrations,
   listExtensionSlashCommandRegistrations,
   readExtensionRegistrySnapshot,
   readExtensionSchema,
@@ -190,6 +191,14 @@ export function registerExtensionRoutes(
       res.json(listExtensionSlashCommandRegistrations());
     } catch (err) {
       sendRouteError(res, 'extensions slash commands error', err);
+    }
+  });
+
+  router.get('/api/extensions/mentions', (_req, res) => {
+    try {
+      res.json(listExtensionMentionRegistrations());
+    } catch (err) {
+      sendRouteError(res, 'extensions mentions error', err);
     }
   });
 
