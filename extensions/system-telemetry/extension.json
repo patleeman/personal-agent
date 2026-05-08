@@ -7,7 +7,16 @@
   "version": "0.1.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
-    "views": [{ "id": "page", "title": "Telemetry", "location": "main", "route": "/telemetry", "component": "TelemetryPage" }],
+    "views": [
+      {
+        "id": "page",
+        "title": "Telemetry",
+        "location": "main",
+        "route": "/telemetry",
+        "component": "TelemetryPage",
+        "routeCapabilities": ["contextRail"]
+      }
+    ],
     "nav": [{ "id": "nav", "label": "Telemetry", "route": "/telemetry", "icon": "graph" }]
   },
   "permissions": ["telemetry:read"]

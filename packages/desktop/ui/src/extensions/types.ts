@@ -13,6 +13,7 @@ type ExtensionIconName =
   | 'sparkle'
   | 'terminal';
 type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
+export type ExtensionRouteCapability = 'contextRail' | 'workbench' | 'workbenchFilePane' | 'knowledgeFiles' | 'settingsSection';
 
 interface ExtensionBackendActionSummary {
   id: string;
@@ -36,6 +37,7 @@ interface ExtensionViewContribution {
   icon?: ExtensionIconName;
   defaultOpen?: boolean;
   detailView?: string;
+  routeCapabilities?: ExtensionRouteCapability[];
 }
 
 interface ExtensionNavContribution {

@@ -22,6 +22,18 @@ describe('command palette navigation', () => {
         search: '?file=old.md&task=daily',
         layoutMode: 'workbench',
         fileId: 'notes/new.md',
+        extensionSurfaces: [
+          {
+            extensionId: 'test-automation',
+            packageType: 'user',
+            id: 'page',
+            title: 'Automation',
+            location: 'main',
+            route: '/automations',
+            component: 'AutomationPage',
+            routeCapabilities: ['workbenchFilePane'],
+          },
+        ],
       }),
     ).toBe('/automations?file=notes%2Fnew.md&task=daily');
   });
@@ -49,7 +61,20 @@ describe('command palette navigation', () => {
   it('only treats routes with a workbench document pane as workbench file routes', () => {
     expect(supportsWorkbenchFilePane('/conversations/new')).toBe(true);
     expect(supportsWorkbenchFilePane('/conversations-old')).toBe(false);
-    expect(supportsWorkbenchFilePane('/automations')).toBe(true);
+    expect(
+      supportsWorkbenchFilePane('/automations', [
+        {
+          extensionId: 'test-automation',
+          packageType: 'user',
+          id: 'page',
+          title: 'Automation',
+          location: 'main',
+          route: '/automations',
+          component: 'AutomationPage',
+          routeCapabilities: ['workbenchFilePane'],
+        },
+      ]),
+    ).toBe(true);
     expect(supportsWorkbenchFilePane('/automations-history')).toBe(false);
     expect(supportsWorkbenchFilePane('/knowledge')).toBe(false);
   });

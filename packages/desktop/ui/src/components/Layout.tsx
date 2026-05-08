@@ -1427,7 +1427,8 @@ export function Layout() {
   const pageSearchRootRef = useRef<HTMLDivElement | null>(null);
   const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
-  const canShowContextRail = !routeSupportsContextRail(location.pathname);
+  const extensionRegistry = useExtensionRegistry();
+  const canShowContextRail = !routeSupportsContextRail(location.pathname, extensionRegistry.surfaces);
 
   useEffect(() => {
     let cancelled = false;
@@ -1465,7 +1466,7 @@ export function Layout() {
   const zenMode = searchParams.get('view') === 'zen';
   const effectiveSidebarOpen = !zenMode && sidebarOpen;
   const showContextRail = !zenMode && canShowContextRail && railOpen;
-  const showWorkbench = !zenMode && appLayoutMode === 'workbench' && routeSupportsWorkbench(location.pathname);
+  const showWorkbench = !zenMode && appLayoutMode === 'workbench' && routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces);
   const activeConversationId = getActiveConversationId(location.pathname);
   const activeWorkbenchKnowledgeFileId = showWorkbench
     ? (searchParams.get('file') ?? (activeConversationId ? selectedFileByConversation[activeConversationId] : null) ?? null)
@@ -1487,7 +1488,6 @@ export function Layout() {
   const previousActiveConversationIdRef = useRef<string | null>(activeConversationId);
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
-  const extensionRegistry = useExtensionRegistry();
   const extensionRightToolPanels = useMemo(
     () =>
       extensionRegistry.surfaces.filter(

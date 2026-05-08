@@ -17,7 +17,8 @@
         "title": "Automations",
         "location": "main",
         "route": "/automations",
-        "component": "AutomationsPage"
+        "component": "AutomationsPage",
+        "routeCapabilities": ["contextRail", "workbench", "workbenchFilePane"]
       }
     ]
   },

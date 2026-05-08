@@ -12,6 +12,9 @@ export type ExtensionSurfaceKind = (typeof EXTENSION_SURFACE_KINDS)[number];
 export const EXTENSION_RIGHT_SURFACE_SCOPES = ['global', 'conversation', 'workspace', 'selection'] as const;
 export type ExtensionRightSurfaceScope = (typeof EXTENSION_RIGHT_SURFACE_SCOPES)[number];
 
+export const EXTENSION_ROUTE_CAPABILITIES = ['contextRail', 'workbench', 'workbenchFilePane', 'knowledgeFiles', 'settingsSection'] as const;
+export type ExtensionRouteCapability = (typeof EXTENSION_ROUTE_CAPABILITIES)[number];
+
 export const EXTENSION_ICON_NAMES = [
   'app',
   'automation',
@@ -84,6 +87,8 @@ export interface ExtensionViewContribution {
   defaultOpen?: boolean;
   /** For rightRail views, optional paired workbench view id rendered in the center pane while this rail tool is active. */
   detailView?: string;
+  /** Optional host layout behaviors enabled when this main view's route is active. */
+  routeCapabilities?: ExtensionRouteCapability[];
 }
 
 export interface ExtensionNavContribution {

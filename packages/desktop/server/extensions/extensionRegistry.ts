@@ -8,6 +8,7 @@ import {
   EXTENSION_ICON_NAMES,
   EXTENSION_PLACEMENTS,
   EXTENSION_RIGHT_SURFACE_SCOPES,
+  EXTENSION_ROUTE_CAPABILITIES,
   EXTENSION_SURFACE_KINDS,
 } from './extensionManifest.js';
 import { listExtensionPackagePaths } from './extensionPackagePaths.js';
@@ -207,6 +208,7 @@ export function readExtensionSchema() {
     placements: EXTENSION_PLACEMENTS,
     surfaceKinds: EXTENSION_SURFACE_KINDS,
     rightSurfaceScopes: EXTENSION_RIGHT_SURFACE_SCOPES,
+    routeCapabilities: EXTENSION_ROUTE_CAPABILITIES,
     iconNames: EXTENSION_ICON_NAMES,
   };
 }

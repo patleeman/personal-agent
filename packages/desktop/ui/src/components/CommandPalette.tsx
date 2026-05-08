@@ -18,7 +18,7 @@ import {
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
-import type { ExtensionCommandRegistration } from '../extensions/types';
+import type { ExtensionCommandRegistration, ExtensionSurfaceSummary } from '../extensions/types';
 import { useConversations } from '../hooks/useConversations';
 import type { ConversationContentSearchMatch, SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
 import { timeAgo } from '../shared/utils';
@@ -29,7 +29,7 @@ import { cx } from './ui';
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
-  | { kind: 'openFile'; fileId: string }
+  | { kind: 'openFile'; fileId: string; extensionSurfaces?: ExtensionSurfaceSummary[] }
   | { kind: 'extensionCommand'; extensionId: string; action: string; title: string };
 
 interface ScopedSessionMeta extends SessionMeta {
@@ -545,6 +545,7 @@ export function CommandPalette() {
                 hash: location.hash,
                 layoutMode: readAppLayoutMode(),
                 fileId: item.action.fileId,
+                extensionSurfaces: item.action.extensionSurfaces,
               }),
             );
             closePalette();
