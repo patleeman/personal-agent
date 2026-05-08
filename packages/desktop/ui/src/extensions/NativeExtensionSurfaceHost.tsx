@@ -24,7 +24,7 @@ type ExtensionComponent = ComponentType<{
 const systemComponents = new Map<string, () => Promise<Record<string, unknown>>>([
   ['system-automations', () => import('./systemAutomations/SystemAutomationsExtension')],
   ['system-gateways', () => import('../pages/GatewaysPage')],
-  ['system-knowledge', () => import('./systemWorkbench/SystemKnowledgeExtension')],
+  ['system-knowledge', () => import('./systemKnowledge/SystemKnowledgeExtension')],
   ['system-telemetry', () => import('../pages/TracesPage').then((module) => ({ TelemetryPage: module.TracesPage }))],
   ['system-files', () => import('./systemWorkbench/SystemFilesExtension')],
   ['system-artifacts', () => import('./systemWorkbench/SystemArtifactsExtension')],

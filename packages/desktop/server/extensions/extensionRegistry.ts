@@ -338,7 +338,7 @@ export function readExtensionSchema() {
     rightSurfaceScopes: EXTENSION_RIGHT_SURFACE_SCOPES,
     routeCapabilities: EXTENSION_ROUTE_CAPABILITIES,
     iconNames: EXTENSION_ICON_NAMES,
-    contributions: ['views', 'nav', 'commands', 'slashCommands', 'settings', 'skills', 'tools'],
+    contributions: ['views', 'nav', 'commands', 'slashCommands', 'mentions', 'settings', 'skills', 'tools'],
   };
 }
 

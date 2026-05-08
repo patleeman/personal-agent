@@ -1,13 +1,15 @@
 import { Suspense, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { VaultEditor } from '../../components/knowledge/VaultEditor';
-import { navigateKnowledgeFile } from '../../knowledge/knowledgeNavigation';
-import { lazyRouteWithRecovery } from '../../navigation/lazyRouteRecovery';
-import type { ExtensionSurfaceProps } from '../types';
+import { VaultEditor } from '../../../packages/desktop/ui/src/components/knowledge/VaultEditor';
+import type { MentionItem } from '../../../packages/desktop/ui/src/conversation/conversationMentions';
+import type { ExtensionSurfaceProps } from '../../../packages/desktop/ui/src/extensions/types';
+import { navigateKnowledgeFile } from '../../../packages/desktop/ui/src/knowledge/knowledgeNavigation';
+import { lazyRouteWithRecovery } from '../../../packages/desktop/ui/src/navigation/lazyRouteRecovery';
+import type { MemoryDocItem, VaultFileSummary } from '../../../packages/desktop/ui/src/shared/types';
 
 const VaultFileTree = lazyRouteWithRecovery('system-knowledge-vault-file-tree', () =>
-  import('../../components/knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
+  import('../../../packages/desktop/ui/src/components/knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
 );
 
 function getKnowledgeFileId(search: string): string | null {
@@ -73,4 +75,25 @@ export function KnowledgeFilePanel({ context }: ExtensionSurfaceProps) {
   }
 
   return <VaultEditor fileId={activeFileId} fileName={fileName} onFileNavigate={handleFileNavigate} onFileRenamed={handleFileRenamed} />;
+}
+
+export function buildKnowledgeMentionItems(input: { memoryDocs: MemoryDocItem[]; vaultFiles: VaultFileSummary[] }): MentionItem[] {
+  return [
+    ...input.memoryDocs.map((doc) => ({
+      id: `@${doc.id}`,
+      label: doc.id,
+      kind: 'note' as const,
+      title: doc.title,
+      summary: doc.summary,
+      path: doc.path,
+    })),
+    ...input.vaultFiles.map((file) => ({
+      id: `@${file.id}`,
+      label: file.id,
+      kind: (file.kind === 'folder' ? 'folder' : 'file') as const,
+      title: file.name,
+      summary: file.path,
+      path: file.path,
+    })),
+  ];
 }

@@ -7,6 +7,15 @@
   "version": "0.1.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
+    "mentions": [
+      {
+        "id": "knowledge-files",
+        "title": "Knowledge files",
+        "description": "Adds knowledge notes, folders, and files to the conversation @ menu.",
+        "kinds": ["note", "folder", "file"],
+        "provider": "buildKnowledgeMentionItems"
+      }
+    ],
     "views": [
       {
         "id": "knowledge-tree",

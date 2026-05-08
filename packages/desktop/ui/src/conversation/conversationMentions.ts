@@ -59,9 +59,12 @@ function extractMentionIds(text: string): string[] {
 
 export function buildMentionItems(input: {
   tasks: ScheduledTaskSummary[];
-  memoryDocs: MemoryDocItem[];
-  vaultFiles: VaultFileSummary[];
+  memoryDocs?: MemoryDocItem[];
+  vaultFiles?: VaultFileSummary[];
+  extensionItems?: MentionItem[];
 }): MentionItem[] {
+  const memoryDocs = input.memoryDocs ?? [];
+  const vaultFiles = input.vaultFiles ?? [];
   const items: MentionItem[] = [
     ...input.tasks.map((task) => ({
       id: `@${task.id}`,
@@ -70,7 +73,7 @@ export function buildMentionItems(input: {
       title: task.id,
       summary: task.prompt,
     })),
-    ...input.memoryDocs.map((doc) => ({
+    ...memoryDocs.map((doc) => ({
       id: `@${doc.id}`,
       label: doc.id,
       kind: 'note' as const,
@@ -78,7 +81,7 @@ export function buildMentionItems(input: {
       summary: doc.summary,
       path: doc.path,
     })),
-    ...input.vaultFiles.map((file) => ({
+    ...vaultFiles.map((file) => ({
       id: `@${file.id}`,
       label: file.id,
       kind: (file.kind === 'folder' ? 'folder' : 'file') as const,
@@ -86,6 +89,7 @@ export function buildMentionItems(input: {
       summary: file.path,
       path: file.path,
     })),
+    ...(input.extensionItems ?? []),
   ];
 
   return items.sort(compareMentionItems);

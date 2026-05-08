@@ -72,6 +72,7 @@ export interface ExtensionContributions {
   nav?: ExtensionNavContribution[];
   commands?: ExtensionCommandContribution[];
   slashCommands?: ExtensionSlashCommandContribution[];
+  mentions?: ExtensionMentionContribution[];
   skills?: Array<string | ExtensionSkillContribution>;
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
@@ -112,6 +113,14 @@ export interface ExtensionSlashCommandContribution {
   name: string;
   description: string;
   action: string;
+}
+
+export interface ExtensionMentionContribution {
+  id: string;
+  title: string;
+  description?: string;
+  kinds: Array<'task' | 'note' | 'folder' | 'file' | 'skill' | 'profile' | string>;
+  provider: string;
 }
 
 export interface ExtensionSkillContribution {

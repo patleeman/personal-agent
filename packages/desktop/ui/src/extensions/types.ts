@@ -88,11 +88,20 @@ interface ExtensionToolContribution {
   name?: string;
 }
 
+interface ExtensionMentionContribution {
+  id: string;
+  title: string;
+  description?: string;
+  kinds: string[];
+  provider: string;
+}
+
 interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
   commands?: ExtensionCommandContribution[];
   slashCommands?: ExtensionSlashCommandContribution[];
+  mentions?: ExtensionMentionContribution[];
   skills?: Array<string | ExtensionSkillContribution>;
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];

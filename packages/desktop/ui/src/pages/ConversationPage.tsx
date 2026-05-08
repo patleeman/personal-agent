@@ -222,6 +222,7 @@ import {
   resolveSelectedConversationExecutionTargetId,
 } from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
+import { buildKnowledgeMentionItems } from '../extensions/systemKnowledge/SystemKnowledgeExtension';
 import type { ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -2469,8 +2470,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () =>
       buildMentionItems({
         tasks: tasks ?? [],
-        memoryDocs: memoryData?.memoryDocs ?? [],
-        vaultFiles: vaultFilesData?.files ?? [],
+        extensionItems: buildKnowledgeMentionItems({
+          memoryDocs: memoryData?.memoryDocs ?? [],
+          vaultFiles: vaultFilesData?.files ?? [],
+        }),
       }),
     [tasks, memoryData, vaultFilesData],
   );
