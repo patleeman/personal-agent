@@ -423,6 +423,16 @@ pa.vault.write(path, content)
 pa.vault.list(path?)
 pa.vault.search(query)
 
+pa.workspace.readText({ cwd, path })
+pa.workspace.writeText({ cwd, path, content })
+pa.workspace.list({ cwd, path?, depth? })
+
+pa.git.status({ cwd })
+pa.git.diff({ cwd, path?, staged? })
+pa.git.log({ cwd, maxCount? })
+
+pa.shell.exec({ command, args?, cwd?, timeoutMs?, env? })
+
 pa.automations.list()
 pa.automations.get(taskId)
 pa.automations.create(input)
@@ -439,7 +449,7 @@ pa.ui.closeSurface(surfaceId?)
 pa.ui.setBadge(surfaceId, value)
 ```
 
-Backend actions receive equivalent capability namespaces through `ctx`.
+Backend actions receive equivalent capability namespaces through `ctx`. Backend-only capabilities currently include `ctx.workspace`, `ctx.git`, and `ctx.shell`; frontend should call backend actions rather than shelling out directly.
 
 Do not expose raw SQLite handles, Express routers, Electron main process objects, arbitrary app internals, or the full process environment as the extension API.
 

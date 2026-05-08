@@ -12,8 +12,10 @@ import { createExtensionAutomationsCapability } from './extensionAutomations.js'
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { findExtensionEntry } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
+import { createExtensionGitCapability, createExtensionShellCapability } from './extensionShell.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
 import { createExtensionVaultCapability } from './extensionVault.js';
+import { createExtensionWorkspaceCapability } from './extensionWorkspace.js';
 
 export interface ExtensionBackendContext {
   extensionId: string;
@@ -27,6 +29,9 @@ export interface ExtensionBackendContext {
   runs: ReturnType<typeof createExtensionRunsCapability>;
   vault: ReturnType<typeof createExtensionVaultCapability>;
   conversations: ReturnType<typeof createExtensionConversationsCapability>;
+  workspace: ReturnType<typeof createExtensionWorkspaceCapability>;
+  git: ReturnType<typeof createExtensionGitCapability>;
+  shell: ReturnType<typeof createExtensionShellCapability>;
   log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
@@ -85,6 +90,9 @@ function createBackendContext(extensionId: string, serverContext?: Pick<ServerRo
     runs: createExtensionRunsCapability(extensionId),
     vault: createExtensionVaultCapability(),
     conversations: createExtensionConversationsCapability(serverContext),
+    workspace: createExtensionWorkspaceCapability(),
+    git: createExtensionGitCapability(),
+    shell: createExtensionShellCapability(),
     log: {
       info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
       warn: (message, fields) => console.warn(`[extension:${extensionId}] ${message}`, fields ?? {}),

@@ -98,6 +98,14 @@ function formatBackendActionSummary(extension: ExtensionInstallSummary): string 
     : 'None';
 }
 
+function formatToolSummary(extension: ExtensionInstallSummary): string {
+  return extension.tools?.length ? extension.tools.map((tool) => tool.name).join(', ') : 'None';
+}
+
+function formatSkillSummary(extension: ExtensionInstallSummary): string {
+  return extension.skills?.length ? extension.skills.map((skill) => skill.name).join(', ') : 'None';
+}
+
 function formatFrontendSummary(extension: ExtensionInstallSummary): string {
   return extension.manifest.frontend?.entry ?? 'None';
 }
@@ -364,6 +372,12 @@ export function ExtensionManagerPage() {
                       </p>
                       <p>
                         <span className="text-dim">Backend:</span> {formatBackendActionSummary(extension)}
+                      </p>
+                      <p>
+                        <span className="text-dim">Tools:</span> {formatToolSummary(extension)}
+                      </p>
+                      <p>
+                        <span className="text-dim">Skills:</span> {formatSkillSummary(extension)}
                       </p>
                     </div>
                     <details className="group max-w-3xl">
