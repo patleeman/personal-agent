@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 
-import { readArtifactPresentation } from '../../conversation/conversationArtifacts';
 import { readCheckpointPresentation } from '../../conversation/conversationCheckpoints';
+import { NativeExtensionToolBlockHost } from '../../extensions/NativeExtensionToolBlockHost';
+import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
 import {
   type AskUserQuestionAnswers,
@@ -10,7 +11,7 @@ import {
 } from '../../transcript/askUserQuestions';
 import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
-import { ArtifactToolBlock, BrowserToolBlock, CheckpointToolBlock } from './ArtifactCheckpointToolBlocks.js';
+import { BrowserToolBlock, CheckpointToolBlock } from './ArtifactCheckpointToolBlocks.js';
 import { AskUserQuestionToolBlock, describeAskUserQuestionState } from './AskUserQuestionToolBlock.js';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
 import { TerminalToolBlock } from './TerminalToolBlock.js';
@@ -52,15 +53,29 @@ export function ToolBlock({
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const [showAllRuns, setShowAllRuns] = useState(false);
   const open = resolveDisclosureOpen(autoOpen, preference);
+  const extensionRegistry = useExtensionRegistry();
+  const extensionRenderer = useMemo(() => {
+    for (const extension of extensionRegistry.extensions) {
+      const renderer = extension.manifest.contributes?.transcriptRenderers?.find((candidate) => candidate.tool === block.tool);
+      if (renderer && extension.enabled) return { extension, renderer };
+    }
+    return null;
+  }, [block.tool, extensionRegistry.extensions]);
   const meta = toolMeta(block.tool);
-  const artifact = readArtifactPresentation(block);
   const checkpoint = readCheckpointPresentation(block);
   const askUserQuestion = readAskUserQuestionPresentation(block);
   const askUserQuestionState = useMemo(() => describeAskUserQuestionState(messages, messageIndex), [messageIndex, messages]);
   const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
 
-  if (artifact) {
-    return <ArtifactToolBlock block={block} artifact={artifact} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
+  if (extensionRenderer) {
+    return (
+      <NativeExtensionToolBlockHost
+        extension={extensionRenderer.extension}
+        renderer={extensionRenderer.renderer}
+        block={block}
+        context={{ onOpenArtifact, activeArtifactId, onOpenCheckpoint, activeCheckpointId, onOpenBrowser }}
+      />
+    );
   }
 
   if (checkpoint) {

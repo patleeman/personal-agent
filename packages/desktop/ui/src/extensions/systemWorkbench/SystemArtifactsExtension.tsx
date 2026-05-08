@@ -1,13 +1,33 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { ArtifactToolBlock } from '../../components/chat/ArtifactCheckpointToolBlocks';
 import {
   ConversationArtifactRailContent,
   ConversationArtifactWorkbenchPane,
   useConversationArtifactSummaries,
 } from '../../components/ConversationArtifactWorkbench';
-import { setConversationArtifactIdInSearch } from '../../conversation/conversationArtifacts';
+import { readArtifactPresentation, setConversationArtifactIdInSearch } from '../../conversation/conversationArtifacts';
 import type { ExtensionSurfaceProps } from '../types';
+
+export function ArtifactTranscriptRenderer({
+  block,
+  context,
+}: {
+  block: Parameters<typeof readArtifactPresentation>[0];
+  context: { onOpenArtifact?: (artifactId: string) => void; activeArtifactId?: string | null };
+}) {
+  const artifact = readArtifactPresentation(block);
+  if (!artifact) return null;
+  return (
+    <ArtifactToolBlock
+      block={block}
+      artifact={artifact}
+      onOpenArtifact={context.onOpenArtifact}
+      activeArtifactId={context.activeArtifactId}
+    />
+  );
+}
 
 export function ArtifactsPanel({ context }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();

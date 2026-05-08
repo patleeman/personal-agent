@@ -7,7 +7,7 @@ import { timeAgo } from '../../shared/utils';
 import { cx, Pill, SurfacePanel } from '../ui';
 import { CheckpointInlineDiff } from './CheckpointInlineDiff';
 
-const ArtifactToolBlock = memo(function ArtifactToolBlock({
+export const ArtifactToolBlock = memo(function ArtifactToolBlock({
   block,
   artifact,
   onOpenArtifact,
@@ -228,4 +228,4 @@ const BrowserToolBlock = memo(function BrowserToolBlock({
   );
 });
 
-export { ArtifactToolBlock, BrowserToolBlock, CheckpointToolBlock };
+export { BrowserToolBlock, CheckpointToolBlock };

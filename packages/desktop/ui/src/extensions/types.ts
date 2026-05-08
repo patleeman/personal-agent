@@ -68,6 +68,12 @@ interface ExtensionSkillContribution {
   path: string;
 }
 
+export interface ExtensionTranscriptRendererContribution {
+  id: string;
+  tool: string;
+  component: string;
+}
+
 interface ExtensionToolContribution {
   id: string;
   title?: string;
@@ -89,6 +95,7 @@ interface ExtensionContributions {
   slashCommands?: ExtensionSlashCommandContribution[];
   skills?: Array<string | ExtensionSkillContribution>;
   tools?: ExtensionToolContribution[];
+  transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   settings?: Record<string, unknown>;
 }
 

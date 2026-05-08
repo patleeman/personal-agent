@@ -74,6 +74,7 @@ export interface ExtensionContributions {
   slashCommands?: ExtensionSlashCommandContribution[];
   skills?: Array<string | ExtensionSkillContribution>;
   tools?: ExtensionToolContribution[];
+  transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -118,6 +119,12 @@ export interface ExtensionSkillContribution {
   title?: string;
   description?: string;
   path: string;
+}
+
+export interface ExtensionTranscriptRendererContribution {
+  id: string;
+  tool: string;
+  component: string;
 }
 
 export interface ExtensionToolContribution {

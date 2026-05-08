@@ -16,6 +16,7 @@
         "systemFactory": "artifacts"
       }
     ],
+    "transcriptRenderers": [{ "id": "artifact-tool-block", "tool": "artifact", "component": "ArtifactTranscriptRenderer" }],
     "views": [
       {
         "id": "conversation-artifacts",
