@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "system-openai-native-compaction",
+  "name": "OpenAI Native Compaction",
+  "packageType": "system",
+  "description": "Uses OpenAI and Codex native Responses compaction when available.",
+  "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "agentExtension": "default"
+  },
+  "permissions": []
+}

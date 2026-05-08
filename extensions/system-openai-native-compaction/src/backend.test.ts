@@ -14,7 +14,7 @@ import openaiNativeCompactionExtension, {
   extractCodexAccountId,
   modelKey,
   reconstructNativeState,
-} from './index';
+} from './backend';
 
 const OPENAI_MODEL = {
   provider: 'openai',

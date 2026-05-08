@@ -233,6 +233,8 @@ export interface ExtensionSlashCommandSurface extends ExtensionSurfaceBase {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  /** Optional export for backend-only agent lifecycle extensions. */
+  agentExtension?: string;
 }
 
 export interface ExtensionBackendAction {

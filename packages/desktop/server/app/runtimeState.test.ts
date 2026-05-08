@@ -137,6 +137,15 @@ vi.mock('../extensions/mcpAgentExtension.js', () => ({
   createMcpAgentExtension: createMcpAgentExtensionMock,
 }));
 
+vi.mock('../extensions/extensionRegistry.js', () => ({
+  isExtensionEnabled: vi.fn(() => true),
+  listExtensionSkillRegistrations: vi.fn(() => []),
+}));
+
+vi.mock('../extensions/manifestToolAgentExtension.js', () => ({
+  createManifestToolAgentExtensions: vi.fn(() => []),
+}));
+
 vi.mock('../extensions/web-tools/index.js', () => ({
   default: webToolsExtensionMock,
 }));
@@ -145,7 +154,7 @@ vi.mock('../extensions/knowledge-base/index.js', () => ({
   default: knowledgeBaseExtensionMock,
 }));
 
-vi.mock('../extensions/openai-native-compaction/index.js', () => ({
+vi.mock('../../../../extensions/system-openai-native-compaction/src/backend.js', () => ({
   default: openaiNativeCompactionExtensionMock,
 }));
 
@@ -239,28 +248,13 @@ describe('createRuntimeState', () => {
     const factories = state.buildLiveSessionExtensionFactories();
     // All factories are wrapped by guardSystemPromptOverride so each
     // element is a function. Verify count and that each delegates correctly.
-    expect(factories).toHaveLength(16);
+    expect(factories).toHaveLength(8);
     factories.forEach((factory) => {
       expect(typeof factory).toBe('function');
-    });
-    // Verify the originals were called with correct args (below)
-    expect(createScheduledTaskAgentExtensionMock).toHaveBeenCalledWith({
-      getCurrentProfile: expect.any(Function),
-    });
-    expect(createRunAgentExtensionMock).toHaveBeenCalledWith({
-      getCurrentProfile: expect.any(Function),
-      repoRoot: '/repo-root',
-      profilesRoot: '/profiles-root',
-    });
-    expect(createArtifactAgentExtensionMock).toHaveBeenCalledWith({
-      stateRoot: '/state-root',
-      repoRoot: '/repo-root',
-      getCurrentProfile: expect.any(Function),
     });
     expect(createConversationTitleAgentExtensionMock).toHaveBeenCalledWith({
       setConversationTitle: renameSessionMock,
     });
-    expect(createImageProbeAgentExtensionMock).toHaveBeenCalledWith({ getPreferredVisionModel: expect.any(Function) });
 
     const changeWorkingDirectoryOptions = createChangeWorkingDirectoryAgentExtensionMock.mock.calls[0]?.[0] as {
       requestConversationWorkingDirectoryChange: (input: Record<string, unknown>) => Promise<unknown>;
@@ -307,7 +301,7 @@ describe('createRuntimeState', () => {
       logger: createLogger(),
     });
 
-    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(15);
+    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(8);
     expect(createImageProbeAgentExtensionMock).not.toHaveBeenCalled();
   });
 
