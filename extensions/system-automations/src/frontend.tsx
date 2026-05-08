@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '../../components/ui';
-import type { ScheduledTaskSchedulerHealth, ScheduledTaskSummary } from '../../shared/types';
-import { timeAgo } from '../../shared/utils';
-import type { NativeExtensionClient } from '../nativePaClient';
+import type { NativeExtensionClient } from '@personal-agent/extensions';
+import type { ScheduledTaskSchedulerHealth, ScheduledTaskSummary } from '@personal-agent/extensions/data';
+import { timeAgo } from '@personal-agent/extensions/data';
+import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '@personal-agent/extensions/ui';
 
 interface AutomationFormState {
   title: string;

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { api } from '../client/api';
-import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
-import { getDesktopBridge } from '../desktop/desktopBridge';
-import { notifyExtensionRegistryChanged } from './extensionRegistryEvents';
-import type { ExtensionInstallSummary } from './types';
+import type { ExtensionInstallSummary } from '@personal-agent/extensions/data';
+import { api, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
+import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '@personal-agent/extensions/ui';
+import { getDesktopBridge } from '@personal-agent/extensions/workbench';
 
 type NativeViewContribution = NonNullable<NonNullable<ExtensionInstallSummary['manifest']['contributes']>['views']>[number];
 

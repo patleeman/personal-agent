@@ -3,6 +3,8 @@ export { api } from '../client/api';
 export { VaultEditor } from '../components/knowledge/VaultEditor';
 export { VaultFileTree } from '../components/knowledge/VaultFileTree';
 export type { MentionItem } from '../conversation/conversationMentions';
+export { notifyExtensionRegistryChanged } from '../extensions/extensionRegistryEvents';
+export type { ExtensionInstallSummary } from '../extensions/types';
 export { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSyncStatus';
 export { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 export { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
@@ -15,6 +17,8 @@ export type {
   GatewayState,
   GatewayThreadBinding,
   MemoryDocItem,
+  ScheduledTaskSchedulerHealth,
+  ScheduledTaskSummary,
   SessionMeta,
   SystemPromptAggregate,
   ToolFlowResult,
@@ -28,4 +32,4 @@ export type {
   TraceToolHealth,
   VaultFileSummary,
 } from '../shared/types';
-export { timeAgoCompact } from '../shared/utils';
+export { timeAgo, timeAgoCompact } from '../shared/utils';

@@ -26,7 +26,7 @@ User extensions live in runtime state by default:
 
 The extension loader also accepts arbitrary package roots or directories of packages through `PERSONAL_AGENT_EXTENSION_PATHS` (comma-separated or colon-separated). Each entry can point directly at a folder with `extension.json`, or at a parent folder containing many extension packages.
 
-Bundled first-party extensions live in the repo/app bundle under `extensions/` and use the same extension contract. They are discovered by the same package-path scanner as user extensions; there is no hard-coded system extension allowlist.
+Bundled first-party extensions live in the repo/app bundle under `extensions/` and use the same extension contract. They are discovered by the same package-path scanner as user extensions; there is no hard-coded system extension allowlist. First-party product areas should live there too: automations, artifacts, browser, diffs, file explorer, gateways, images, knowledge, runs, settings panels, telemetry, web tools, and the extension manager itself.
 
 A native extension package looks like this:
 
@@ -206,30 +206,17 @@ That freedom comes with host-level guardrails:
 
 Recommended path: use PA components for common UI and custom CSS for product-specific layout.
 
-`@personal-agent/extensions` should export optional primitives and hooks, for example:
+`@personal-agent/extensions` exports stable public types such as `ExtensionSurfaceProps` and the native `pa` client shape. Host-provided frontend primitives are split into namespaces so extension code does not import from app internals:
 
 ```ts
-Page;
-Toolbar;
-Button;
-IconButton;
-Form;
-TextField;
-Select;
-List;
-ListItem;
-Detail;
-EmptyState;
-LoadingState;
-ErrorState;
-RunCard;
-RunList;
-useExtensionStorage;
-useRuns;
-useConversation;
+import type { ExtensionSurfaceProps, NativeExtensionClient } from '@personal-agent/extensions';
+import { AppPageLayout, EmptyState, ToolbarButton } from '@personal-agent/extensions/ui';
+import { api, useAppData, timeAgo } from '@personal-agent/extensions/data';
+import { WorkbenchBrowserTab, WorkspaceExplorer } from '@personal-agent/extensions/workbench';
+import { SettingsPage } from '@personal-agent/extensions/settings';
 ```
 
-These are the paved road, not a prison. If an extension needs a custom timeline, board, graph, or editor, it can build one with React and scoped CSS.
+These namespaces are the paved road, not a prison. If an extension needs a custom timeline, board, graph, or editor, it can build one with React and scoped CSS. If a first-party extension needs a new primitive, add it deliberately to one of these namespaces instead of importing from `packages/desktop/ui/src/...`.
 
 ## Build and loading
 
@@ -393,7 +380,18 @@ Core still owns shell/file editing primitives, MCP until secret storage is impro
 
 ## Host APIs
 
-Native extensions use a stable `pa` client object. The exact implementation lives in the app, but the public shape should be documented and typed through `@personal-agent/extensions`.
+Native extensions use a stable `pa` client object. The exact implementation lives in the app, but the public shape is typed through `@personal-agent/extensions`.
+
+Implemented frontend namespaces today:
+
+- `pa.extension`: invoke backend actions and inspect the current extension.
+- `pa.automations`: list, save, delete, run, and inspect scheduled tasks.
+- `pa.runs`: start, list, inspect, read logs, and cancel durable runs.
+- `pa.storage`: per-extension document storage.
+- `pa.workspace`: tree, file read/write, create/delete/rename/move, and diffs for arbitrary user-selected paths.
+- `pa.workbench`: store lightweight detail state for paired right-rail/workbench surfaces.
+- `pa.browser`: control the desktop workbench browser.
+- `pa.ui`: toast and confirm helpers.
 
 Target namespaces:
 

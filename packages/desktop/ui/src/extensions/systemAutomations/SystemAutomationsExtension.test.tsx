@@ -3,8 +3,8 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AutomationsPage } from '../../../../../../extensions/system-automations/src/frontend';
 import type { NativeExtensionClient } from '../nativePaClient';
-import { AutomationsPage } from './SystemAutomationsExtension';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 

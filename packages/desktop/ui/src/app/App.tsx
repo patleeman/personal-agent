@@ -118,9 +118,6 @@ const SettingsPage = lazyRouteWithRecovery('settings-page', () =>
 const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () =>
   import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })),
 );
-const ExtensionManagerPage = lazyRouteWithRecovery('extension-manager-page', () =>
-  import('../extensions/ExtensionManagerPage').then((module) => ({ default: module.ExtensionManagerPage })),
-);
 const ExtensionPage = lazyRouteWithRecovery('extension-page', () =>
   import('../extensions/ExtensionPage').then((module) => ({ default: module.ExtensionPage })),
 );
@@ -447,7 +444,6 @@ export function App() {
                         <Route path="conversations/:id" element={<SavedConversationRoute />} />
                         <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
                         <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
-                        <Route path="extensions" element={suspendRoute(<ExtensionManagerPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                         <Route path="*" element={suspendRoute(<ExtensionPage />)} />
                       </Route>

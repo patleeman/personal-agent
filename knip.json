@@ -5,6 +5,7 @@
     "packages/desktop/ui/src/components/chat/ArtifactCheckpointToolBlocks.tsx": ["exports"],
     "packages/desktop/ui/src/components/ui.tsx": ["exports", "types"],
     "packages/desktop/ui/src/extensions/data.ts": ["exports", "types"],
+    "packages/desktop/ui/src/extensions/extensionRegistryEvents.ts": ["exports"],
     "packages/desktop/ui/src/extensions/host.ts": ["files", "exports", "types"],
     "packages/desktop/ui/src/extensions/settings.ts": ["exports", "types"],
     "packages/desktop/ui/src/extensions/ui.ts": ["exports", "types"],

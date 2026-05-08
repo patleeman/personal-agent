@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "id": "system-extension-manager",
+  "name": "Extension Manager",
+  "packageType": "system",
+  "description": "Inspect, build, reload, enable, disable, snapshot, import, and export extensions.",
+  "version": "0.1.0",
+  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "contributes": {
+    "views": [
+      {
+        "id": "page",
+        "title": "Extensions",
+        "location": "main",
+        "route": "/extensions",
+        "component": "ExtensionManagerPage",
+        "routeCapabilities": ["contextRail"]
+      }
+    ]
+  },
+  "permissions": ["extensions:read", "extensions:write"]
+}
