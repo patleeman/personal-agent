@@ -17,7 +17,6 @@ import {
   formatContextWindowLabel,
   formatThinkingLevelLabel,
   getDesktopBridge,
-  getKnowledgeBaseSyncPresentation,
   getModelSelectableServiceTierOptions,
   groupModelsByProvider,
   isDesktopShell,
@@ -48,7 +47,6 @@ import {
   type TranscriptionModelStatus,
   type TranscriptionProviderId,
   useApi,
-  useInvalidateOnTopics,
   useTheme,
 } from '@personal-agent/extensions/settings';
 import QRCode from 'qrcode';
@@ -63,6 +61,8 @@ import {
   useRef,
   useState,
 } from 'react';
+
+import { KnowledgeSettingsPanel } from '../../system-knowledge/src/components/KnowledgeSettingsPanel';
 
 const INPUT_CLASS =
   'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
@@ -1892,12 +1892,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
     replaceData: replaceModelProviderState,
   } = useApi(api.modelProviders);
   const {
-    data: knowledgeBaseState,
-    loading: knowledgeBaseLoading,
-    error: knowledgeBaseLoadError,
-    refetch: refetchKnowledgeBase,
-  } = useApi(api.knowledgeBase);
-  const {
     data: defaultCwdState,
     loading: defaultCwdLoading,
     error: defaultCwdLoadError,
@@ -1923,10 +1917,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
   const [instructionFilesSaveError, setInstructionFilesSaveError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'visionModel' | 'thinking' | 'serviceTier' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [knowledgeBaseRepoUrlDraft, setKnowledgeBaseRepoUrlDraft] = useState('');
-  const [knowledgeBaseBranchDraft, setKnowledgeBaseBranchDraft] = useState('main');
-  const [knowledgeBaseAction, setKnowledgeBaseAction] = useState<'save' | 'sync' | null>(null);
-  const [knowledgeBaseSaveError, setKnowledgeBaseSaveError] = useState<string | null>(null);
   const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
@@ -2220,13 +2210,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
     return providerAuthState.providers.find((provider) => provider.id === editableModelProviderId) ?? null;
   }, [editableModelProviderId, providerAuthState]);
 
-  const knowledgeBaseDirty = knowledgeBaseState
-    ? knowledgeBaseRepoUrlDraft.trim() !== knowledgeBaseState.repoUrl || knowledgeBaseBranchDraft.trim() !== knowledgeBaseState.branch
-    : false;
-  const knowledgeBaseSyncPresentation = useMemo(
-    () => getKnowledgeBaseSyncPresentation(knowledgeBaseState, { includeLastSyncAt: true }),
-    [knowledgeBaseState],
-  );
   const defaultCwdDirty = defaultCwdState ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd : false;
   const transcriptionDirty = transcriptionState
     ? transcriptionProviderDraft !== (transcriptionState.settings.provider ?? '') ||
@@ -2258,15 +2241,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
   const pickingDefaultCwd = pathPickerTarget === 'default-cwd';
   const pickingSkillFolders = pathPickerTarget === 'skill-folders';
   const pickingInstructionFiles = pathPickerTarget === 'instruction-files';
-
-  useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
-
-  useEffect(() => {
-    if (knowledgeBaseState) {
-      setKnowledgeBaseRepoUrlDraft(knowledgeBaseState.repoUrl);
-      setKnowledgeBaseBranchDraft(knowledgeBaseState.branch);
-    }
-  }, [knowledgeBaseState?.repoUrl, knowledgeBaseState?.branch]);
 
   useEffect(() => {
     if (defaultCwdState) {
@@ -2705,55 +2679,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
     }
   }
 
-  async function handleKnowledgeBaseSave(nextInput?: { repoUrl?: string | null; branch?: string | null }) {
-    if (!knowledgeBaseState || knowledgeBaseAction !== null) {
-      return;
-    }
-
-    const repoUrl = typeof nextInput?.repoUrl === 'string' ? nextInput.repoUrl.trim() : knowledgeBaseRepoUrlDraft.trim();
-    const branch = typeof nextInput?.branch === 'string' ? nextInput.branch.trim() : knowledgeBaseBranchDraft.trim();
-    if (!nextInput && !knowledgeBaseDirty) {
-      return;
-    }
-
-    setKnowledgeBaseSaveError(null);
-    setKnowledgeBaseAction('save');
-
-    try {
-      const saved = await api.updateKnowledgeBase({
-        repoUrl: repoUrl || null,
-        branch: branch || null,
-      });
-      setKnowledgeBaseRepoUrlDraft(saved.repoUrl);
-      setKnowledgeBaseBranchDraft(saved.branch);
-      await refetchKnowledgeBase({ resetLoading: false });
-    } catch (error) {
-      setKnowledgeBaseSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setKnowledgeBaseAction(null);
-    }
-  }
-
-  async function handleKnowledgeBaseSync() {
-    if (!knowledgeBaseState || !knowledgeBaseState.configured || knowledgeBaseAction !== null) {
-      return;
-    }
-
-    setKnowledgeBaseSaveError(null);
-    setKnowledgeBaseAction('sync');
-
-    try {
-      const synced = await api.syncKnowledgeBase();
-      setKnowledgeBaseRepoUrlDraft(synced.repoUrl);
-      setKnowledgeBaseBranchDraft(synced.branch);
-      await refetchKnowledgeBase({ resetLoading: false });
-    } catch (error) {
-      setKnowledgeBaseSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setKnowledgeBaseAction(null);
-    }
-  }
-
   async function handleDefaultCwdSave(nextCwd: string | null = defaultCwdDraft) {
     if (!defaultCwdState || savingDefaultCwd) {
       return;
@@ -2831,20 +2756,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
       window.clearTimeout(timeout);
     };
   }, [instructionFilesDirty, instructionFilesDraft, instructionFilesState, pickingInstructionFiles, savingInstructionFiles]);
-
-  useEffect(() => {
-    if (!knowledgeBaseState || !knowledgeBaseDirty || knowledgeBaseAction !== null) {
-      return undefined;
-    }
-
-    const timeout = window.setTimeout(() => {
-      void handleKnowledgeBaseSave();
-    }, 700);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [knowledgeBaseAction, knowledgeBaseBranchDraft, knowledgeBaseDirty, knowledgeBaseRepoUrlDraft, knowledgeBaseState]);
 
   useEffect(() => {
     if (!defaultCwdState || !defaultCwdDirty || savingDefaultCwd || pickingDefaultCwd) {
@@ -3675,103 +3586,7 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                   title="Knowledge base"
                   description="Point PA at a git repo and let it manage the local mirror and sync loop."
                 >
-                  {knowledgeBaseLoading && !knowledgeBaseState ? (
-                    <p className="ui-card-meta">Loading knowledge base…</p>
-                  ) : knowledgeBaseLoadError && !knowledgeBaseState ? (
-                    <p className="text-[12px] text-danger">Failed to load knowledge base: {knowledgeBaseLoadError}</p>
-                  ) : knowledgeBaseState ? (
-                    <form
-                      className="space-y-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleKnowledgeBaseSave();
-                      }}
-                    >
-                      <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">
-                        Repo URL
-                      </label>
-                      <input
-                        id="settings-knowledge-base-repo"
-                        value={knowledgeBaseRepoUrlDraft}
-                        onChange={(event) => {
-                          setKnowledgeBaseRepoUrlDraft(event.target.value);
-                          if (knowledgeBaseSaveError) {
-                            setKnowledgeBaseSaveError(null);
-                          }
-                        }}
-                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                        placeholder="https://github.com/you/knowledge-base.git"
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={knowledgeBaseAction !== null}
-                      />
-                      <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">
-                        Branch
-                      </label>
-                      <input
-                        id="settings-knowledge-base-branch"
-                        value={knowledgeBaseBranchDraft}
-                        onChange={(event) => {
-                          setKnowledgeBaseBranchDraft(event.target.value);
-                          if (knowledgeBaseSaveError) {
-                            setKnowledgeBaseSaveError(null);
-                          }
-                        }}
-                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                        placeholder="main"
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={knowledgeBaseAction !== null}
-                      />
-                      <p className="ui-card-meta break-all">
-                        Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
-                      </p>
-                      <p className={cx('ui-card-meta break-all', knowledgeBaseAction === null && knowledgeBaseSyncPresentation.toneClass)}>
-                        {knowledgeBaseAction === 'save'
-                          ? 'Saving knowledge base…'
-                          : knowledgeBaseAction === 'sync'
-                            ? 'Syncing knowledge base…'
-                            : knowledgeBaseSyncPresentation.text}
-                      </p>
-                      <p className="ui-card-meta break-all">
-                        Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
-                        {knowledgeBaseState.recoveredEntryCount} saved
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="ui-card-meta">
-                          {knowledgeBaseAction === 'save' ? 'Saving…' : knowledgeBaseDirty ? 'Auto-save pending…' : 'Auto-saved'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleKnowledgeBaseSync();
-                          }}
-                          disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          {knowledgeBaseAction === 'sync' ? 'Syncing…' : 'Sync now'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setKnowledgeBaseRepoUrlDraft('');
-                            setKnowledgeBaseBranchDraft('main');
-                            void handleKnowledgeBaseSave({ repoUrl: '', branch: 'main' });
-                          }}
-                          disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Disable managed sync
-                        </button>
-                      </div>
-                      <p className="ui-card-meta">
-                        PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder
-                        and file @ mentions read from that local mirror.
-                      </p>
-                    </form>
-                  ) : null}
-
-                  {knowledgeBaseSaveError && <p className="text-[12px] text-danger">{knowledgeBaseSaveError}</p>}
+                  <KnowledgeSettingsPanel />
                 </SettingsPanel>
 
                 <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
