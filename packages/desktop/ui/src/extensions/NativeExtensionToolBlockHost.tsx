@@ -3,6 +3,7 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 import { buildApiPath } from '../client/apiBase';
 import { ErrorState, LoadingState } from '../components/ui';
 import type { MessageBlock } from '../shared/types';
+import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionInstallSummary, ExtensionTranscriptRendererContribution } from './types';
 
 type ToolBlock = Extract<MessageBlock, { type: 'tool_use' }>;
@@ -21,13 +22,8 @@ type ExtensionToolBlockComponent = ComponentType<{
   context: ExtensionToolBlockContext;
 }>;
 
-const systemComponents = new Map<string, () => Promise<Record<string, unknown>>>([
-  ['system-artifacts', () => import('./systemWorkbench/SystemArtifactsExtension')],
-  ['system-diffs', () => import('./systemWorkbench/SystemDiffsExtension')],
-]);
-
 function loadExtensionModule(extension: ExtensionInstallSummary): Promise<Record<string, unknown>> {
-  const systemLoader = systemComponents.get(extension.id);
+  const systemLoader = systemExtensionModules.get(extension.id);
   if (systemLoader) return systemLoader();
   const entry = extension.manifest.frontend?.entry;
   if (!entry) throw new Error(`Extension ${extension.id} has no frontend entry.`);

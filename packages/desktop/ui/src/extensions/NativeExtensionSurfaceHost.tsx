@@ -3,6 +3,7 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 import { buildApiPath } from '../client/apiBase';
 import { ErrorState, LoadingState } from '../components/ui';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
+import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
 
 type ExtensionComponent = ComponentType<{
@@ -21,21 +22,8 @@ type ExtensionComponent = ComponentType<{
   params: Record<string, string>;
 }>;
 
-const systemComponents = new Map<string, () => Promise<Record<string, unknown>>>([
-  ['system-automations', () => import('./systemAutomations/SystemAutomationsExtension')],
-  ['system-gateways', () => import('../pages/GatewaysPage')],
-  ['system-knowledge', () => import('./systemKnowledge/SystemKnowledgeExtension')],
-  ['system-telemetry', () => import('../pages/TracesPage').then((module) => ({ TelemetryPage: module.TracesPage }))],
-  ['system-files', () => import('./systemFiles/SystemFilesExtension')],
-  ['system-artifacts', () => import('./systemWorkbench/SystemArtifactsExtension')],
-  ['system-browser', () => import('./systemBrowser/SystemBrowserExtension')],
-  ['system-diffs', () => import('./systemWorkbench/SystemDiffsExtension')],
-  ['system-runs', () => import('./systemWorkbench/SystemRunsExtension')],
-  ['system-settings', () => import('./systemSettings/SystemSettingsExtensions')],
-]);
-
 function loadExtensionModule(surface: NativeExtensionViewSummary): Promise<Record<string, unknown>> {
-  const systemLoader = systemComponents.get(surface.extensionId);
+  const systemLoader = systemExtensionModules.get(surface.extensionId);
   if (systemLoader) return systemLoader();
   const entry = surface.frontend?.entry;
   if (!entry) throw new Error(`Extension ${surface.extensionId} has no frontend entry.`);

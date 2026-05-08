@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
+import { buildKnowledgeMentionItems } from '../../../../../extensions/system-knowledge/src/frontend';
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import type { RunPresentationLookups } from '../automation/runPresentation';
 import { api } from '../client/api';
@@ -222,7 +223,6 @@ import {
   resolveSelectedConversationExecutionTargetId,
 } from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
-import { buildKnowledgeMentionItems } from '../extensions/systemKnowledge/SystemKnowledgeExtension';
 import type { ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
