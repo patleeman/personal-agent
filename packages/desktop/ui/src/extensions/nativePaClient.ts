@@ -1,4 +1,5 @@
 import { api } from '../client/api';
+import { type DesktopWorkbenchBrowserState, getDesktopBridge } from '../desktop/desktopBridge';
 
 export interface NativeExtensionClient {
   extension: {
@@ -32,10 +33,40 @@ export interface NativeExtensionClient {
     diff(cwd: string, path: string): Promise<unknown>;
     uncommittedDiff(cwd: string): Promise<unknown>;
   };
+  workbench: {
+    getDetailState<T = unknown>(surfaceId: string): T | null;
+    setDetailState(surfaceId: string, state: unknown): void;
+  };
+  browser: {
+    isAvailable(): boolean;
+    getState(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState | null>;
+    open(input: { url: string; tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+    goBack(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+    goForward(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+    reload(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+    stop(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+    snapshot(input?: { tabId?: string | null }): Promise<unknown>;
+  };
   ui: {
     toast(message: string): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
   };
+}
+
+function browserSessionKey(tabId?: string | null): string | null {
+  return tabId ? `workbench-browser:${tabId}` : null;
+}
+
+function requireDesktopBridge() {
+  const bridge = getDesktopBridge();
+  if (!bridge) throw new Error('Browser primitives are only available in the Electron desktop app.');
+  return bridge;
+}
+
+const detailStateByExtensionSurface = new Map<string, unknown>();
+
+function detailStateKey(extensionId: string, surfaceId: string): string {
+  return `${extensionId}:${surfaceId}`;
 }
 
 export function createNativeExtensionClient(extensionId: string): NativeExtensionClient {
@@ -120,6 +151,41 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
       uncommittedDiff(cwd) {
         return api.workspaceUncommittedDiff(cwd);
+      },
+    },
+    workbench: {
+      getDetailState<T = unknown>(surfaceId: string): T | null {
+        return (detailStateByExtensionSurface.get(detailStateKey(extensionId, surfaceId)) as T | undefined) ?? null;
+      },
+      setDetailState(surfaceId, state) {
+        detailStateByExtensionSurface.set(detailStateKey(extensionId, surfaceId), state);
+        window.dispatchEvent(new CustomEvent('pa-extension-workbench-detail-state', { detail: { extensionId, surfaceId, state } }));
+      },
+    },
+    browser: {
+      isAvailable() {
+        return getDesktopBridge() !== null;
+      },
+      getState(input) {
+        return requireDesktopBridge().getWorkbenchBrowserState({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+      open(input) {
+        return requireDesktopBridge().navigateWorkbenchBrowser({ url: input.url, sessionKey: browserSessionKey(input.tabId) });
+      },
+      goBack(input) {
+        return requireDesktopBridge().goBackWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+      goForward(input) {
+        return requireDesktopBridge().goForwardWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+      reload(input) {
+        return requireDesktopBridge().reloadWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+      stop(input) {
+        return requireDesktopBridge().stopWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+      snapshot(input) {
+        return requireDesktopBridge().snapshotWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
       },
     },
     ui: {

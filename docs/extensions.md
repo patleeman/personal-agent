@@ -409,6 +409,23 @@ Conversation-scoped panels receive `conversationId`. Workspace-scoped panels rec
 
 If a feature needs a selector/list plus a large detail renderer, use a right-rail view with `detailView` pointing at a paired `location: "workbench"` view. The rail chooses the target; the workbench view renders the large detail pane. Runs, Diffs, and File Explorer are the model shape: rail selection on the right, logs/diffs/file contents in the center.
 
+The frontend client exposes host-owned primitives for richer workbench surfaces:
+
+```ts
+pa.workbench.getDetailState(surfaceId)
+pa.workbench.setDetailState(surfaceId, state)
+pa.browser.isAvailable()
+pa.browser.open({ url, tabId? })
+pa.browser.getState({ tabId? })
+pa.browser.goBack({ tabId? })
+pa.browser.goForward({ tabId? })
+pa.browser.reload({ tabId? })
+pa.browser.stop({ tabId? })
+pa.browser.snapshot({ tabId? })
+```
+
+Browser primitives intentionally hide Electron bounds and desktop bridge details. Extensions request browser actions; the host owns the embedded browser lifecycle and layout.
+
 ```json
 {
   "contributes": {

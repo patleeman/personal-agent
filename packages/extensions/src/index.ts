@@ -136,6 +136,20 @@ export interface PersonalAgentClient {
     delete(key: string): Promise<unknown>;
     list<T = unknown>(prefix?: string): Promise<Array<{ key: string; value: T }>>;
   };
+  workbench: {
+    getDetailState<T = unknown>(surfaceId: string): T | null;
+    setDetailState(surfaceId: string, state: unknown): void;
+  };
+  browser: {
+    isAvailable(): boolean;
+    getState(input?: { tabId?: string | null }): Promise<unknown>;
+    open(input: { url: string; tabId?: string | null }): Promise<unknown>;
+    goBack(input?: { tabId?: string | null }): Promise<unknown>;
+    goForward(input?: { tabId?: string | null }): Promise<unknown>;
+    reload(input?: { tabId?: string | null }): Promise<unknown>;
+    stop(input?: { tabId?: string | null }): Promise<unknown>;
+    snapshot(input?: { tabId?: string | null }): Promise<unknown>;
+  };
   ui: {
     toast(message: string, options?: Record<string, unknown>): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
