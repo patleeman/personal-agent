@@ -21,6 +21,7 @@ import {
   type ExtensionSurfaceSummary,
   isExtensionRightToolPanelSurface,
   isNativeExtensionRightRailSurface,
+  isNativeExtensionWorkbenchSurface,
   type NativeExtensionViewSummary,
 } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
@@ -668,6 +669,7 @@ function WorkbenchDocumentPane({
   onBrowserTabAdd,
   onBrowserTabClose,
   onBrowserTabReopen,
+  extensionWorkbenchSurface,
 }: {
   conversationId: string | null;
   artifactId: string | null;
@@ -685,7 +687,9 @@ function WorkbenchDocumentPane({
   onBrowserTabAdd: () => void;
   onBrowserTabClose: (tabId: string) => void;
   onBrowserTabReopen: () => void;
+  extensionWorkbenchSurface: NativeExtensionViewSummary | null;
 }) {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { sessions, tasks } = useAppData();
   const activeFileId = searchParams.get('file') ?? null;
@@ -725,6 +729,19 @@ function WorkbenchDocumentPane({
 
   if (activeTool === 'runs') {
     return <ConversationRunWorkbenchPane conversationId={conversationId} runId={runId} lookups={{ sessions, tasks }} />;
+  }
+
+  if (extensionWorkbenchSurface) {
+    return (
+      <NativeExtensionSurfaceHost
+        surface={extensionWorkbenchSurface}
+        pathname={location.pathname}
+        search={location.search}
+        hash={location.hash}
+        conversationId={conversationId}
+        cwd={workspaceCwd}
+      />
+    );
   }
 
   if (activeTool === 'browser') {
@@ -2036,6 +2053,23 @@ export function Layout() {
       ),
     [extensionRegistry.surfaces],
   );
+  const extensionWorkbenchSurfaces = useMemo(
+    () => extensionRegistry.surfaces.filter(isNativeExtensionWorkbenchSurface),
+    [extensionRegistry.surfaces],
+  );
+  const activeExtensionWorkbenchSurface = useMemo(() => {
+    const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
+    if (!parsed) return null;
+    const activeRailSurface = extensionRightToolPanels.find(
+      (surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId,
+    );
+    if (!activeRailSurface || !('detailView' in activeRailSurface) || typeof activeRailSurface.detailView !== 'string') return null;
+    return (
+      extensionWorkbenchSurfaces.find(
+        (surface) => surface.extensionId === parsed.extensionId && surface.id === activeRailSurface.detailView,
+      ) ?? null
+    );
+  }, [activeWorkbenchTool, extensionRightToolPanels, extensionWorkbenchSurfaces]);
   const setActiveConversationTool = useCallback(
     (tool: WorkbenchRailMode) => {
       if (activeConversationId && tool !== 'browser') {
@@ -2464,7 +2498,8 @@ export function Layout() {
                         activeWorkbenchCheckpointId ||
                         activeWorkbenchRunId ||
                         activeWorkspaceFile ||
-                        activeWorkbenchTool === 'browser'
+                        activeWorkbenchTool === 'browser' ||
+                        activeExtensionWorkbenchSurface
                           ? 'true'
                           : 'false'
                       }
@@ -2486,6 +2521,7 @@ export function Layout() {
                         onBrowserTabAdd={handleBrowserTabAdd}
                         onBrowserTabClose={handleBrowserTabClose}
                         onBrowserTabReopen={handleBrowserTabReopen}
+                        extensionWorkbenchSurface={activeExtensionWorkbenchSurface}
                       />
                     </section>
                     {workbenchExplorerOpen ? (

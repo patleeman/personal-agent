@@ -29,12 +29,13 @@ interface ExtensionFrontendManifest {
 interface ExtensionViewContribution {
   id: string;
   title: string;
-  location: 'main' | 'rightRail';
+  location: 'main' | 'rightRail' | 'workbench';
   component: string;
   route?: string;
   scope?: ExtensionRightSurfaceScope;
   icon?: ExtensionIconName;
   defaultOpen?: boolean;
+  detailView?: string;
 }
 
 interface ExtensionNavContribution {
@@ -213,4 +214,8 @@ export function isNativeExtensionRightRailSurface(
   surface: unknown,
 ): surface is NativeExtensionViewSummary & { location: 'rightRail'; scope: ExtensionRightSurfaceScope } {
   return isNativeExtensionViewSurface(surface) && surface.location === 'rightRail' && typeof surface.scope === 'string';
+}
+
+export function isNativeExtensionWorkbenchSurface(surface: unknown): surface is NativeExtensionViewSummary & { location: 'workbench' } {
+  return isNativeExtensionViewSurface(surface) && surface.location === 'workbench';
 }

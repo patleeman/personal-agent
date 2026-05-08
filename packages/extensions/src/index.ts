@@ -39,12 +39,14 @@ export interface ExtensionFrontend {
 export interface ExtensionViewContribution {
   id: string;
   title: string;
-  location: 'main' | 'rightRail';
+  location: 'main' | 'rightRail' | 'workbench';
   component: string;
   route?: string;
   scope?: ExtensionRightSurfaceScope;
   icon?: ExtensionIconName;
   defaultOpen?: boolean;
+  /** For rightRail views, optional paired workbench view id rendered in the center pane while this rail tool is active. */
+  detailView?: string;
 }
 
 export interface ExtensionNavContribution {

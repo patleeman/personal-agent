@@ -387,14 +387,15 @@ Extensions contribute native surfaces through the manifest.
 
 Pick the smallest surface that matches the product shape. Do not use the right rail as a junk drawer. That path gets ugly fast.
 
-| Surface               | Use for                                                                            | Do not use for                                                                             | Examples                                    |
-| --------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| Main page view        | Durable app-level workflows with their own route and enough room to work           | Tiny contextual helpers or per-conversation detail panes                                   | Automations, Gateways, Telemetry            |
-| Left nav item         | Primary destinations users should see every day                                    | Settings subpanels, secondary tools, or disabled/hidden extensions                         | Automations, Gateways, Telemetry            |
-| Right-rail panel      | Compact contextual companions for the active conversation, workspace, or selection | Workflows needing a wide detail pane, editor, diff, log viewer, or multi-pane coordination | Knowledge browser, file tree, artifact list |
-| Settings contribution | Configuration and preferences under `/settings/*`                                  | Product workflows or top-level navigation                                                  | Provider, dictation, desktop settings       |
-| Command               | Fast one-shot actions or ways to open a surface                                    | Long-running UI that needs persistent screen space                                         | Build extension, reload extensions          |
-| Slash command         | Conversation-authored actions that produce or alter prompt context                 | Global app navigation or settings                                                          | Insert prompt, attach context               |
+| Surface               | Use for                                                                            | Do not use for                                                     | Examples                              |
+| --------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------- |
+| Main page view        | Durable app-level workflows with their own route and enough room to work           | Tiny contextual helpers or per-conversation detail panes           | Automations, Gateways, Telemetry      |
+| Left nav item         | Primary destinations users should see every day                                    | Settings subpanels, secondary tools, or disabled/hidden extensions | Automations, Gateways, Telemetry      |
+| Right-rail panel      | Compact contextual companions for the active conversation, workspace, or selection | Wide editors, diff/log viewers, or large previews                  | Knowledge browser, artifact list      |
+| Workbench detail view | Large detail rendering paired to a right-rail selector                             | Standalone app-level workflows                                     | Run logs, diff viewers, file previews |
+| Settings contribution | Configuration and preferences under `/settings/*`                                  | Product workflows or top-level navigation                          | Provider, dictation, desktop settings |
+| Command               | Fast one-shot actions or ways to open a surface                                    | Long-running UI that needs persistent screen space                 | Build extension, reload extensions    |
+| Slash command         | Conversation-authored actions that produce or alter prompt context                 | Global app navigation or settings                                  | Insert prompt, attach context         |
 
 Main pages are durable workflows. User extensions should use `/ext/{extensionId}` routes. System extensions may own first-party routes such as `/automations`.
 
@@ -406,7 +407,30 @@ type RightRailScope = 'global' | 'conversation' | 'workspace' | 'selection';
 
 Conversation-scoped panels receive `conversationId`. Workspace-scoped panels receive cwd/workspace context. Selection-scoped panels receive selection context when opened.
 
-If a feature needs a selector/list plus a large detail renderer, keep it in core for now or add a real multi-surface extension contract first. Runs, Diffs, and File Explorer are the current examples: the rail chooses a target, while the center workbench renders logs, diffs, or file contents. A single right-rail extension cannot model that cleanly yet.
+If a feature needs a selector/list plus a large detail renderer, use a right-rail view with `detailView` pointing at a paired `location: "workbench"` view. The rail chooses the target; the workbench view renders the large detail pane. Runs, Diffs, and File Explorer are the model shape: rail selection on the right, logs/diffs/file contents in the center.
+
+```json
+{
+  "contributes": {
+    "views": [
+      {
+        "id": "runs-rail",
+        "title": "Runs",
+        "location": "rightRail",
+        "scope": "conversation",
+        "component": "RunsRail",
+        "detailView": "runs-detail"
+      },
+      {
+        "id": "runs-detail",
+        "title": "Run detail",
+        "location": "workbench",
+        "component": "RunsWorkbench"
+      }
+    ]
+  }
+}
+```
 
 ## Extension Manager
 

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isNativeExtensionPageSurface, isNativeExtensionRightRailSurface, type NativeExtensionViewSummary } from './types';
+import {
+  isNativeExtensionPageSurface,
+  isNativeExtensionRightRailSurface,
+  isNativeExtensionWorkbenchSurface,
+  type NativeExtensionViewSummary,
+} from './types';
 
 describe('extension surface type guards', () => {
   it('recognizes native main page surfaces', () => {
@@ -29,6 +34,19 @@ describe('extension surface type guards', () => {
     };
 
     expect(isNativeExtensionRightRailSurface(surface)).toBe(true);
+  });
+
+  it('recognizes native workbench surfaces', () => {
+    const surface: NativeExtensionViewSummary = {
+      extensionId: 'agent-board',
+      id: 'detail',
+      title: 'Board detail',
+      location: 'workbench',
+      component: 'AgentBoardDetail',
+      frontend: { entry: 'dist/frontend.js' },
+    };
+
+    expect(isNativeExtensionWorkbenchSurface(surface)).toBe(true);
   });
 
   it('rejects incomplete native surfaces', () => {
