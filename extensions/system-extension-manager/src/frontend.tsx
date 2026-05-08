@@ -275,6 +275,22 @@ function slugifyExtensionId(value: string): string {
     .slice(0, 63);
 }
 
+function formatExtensionDiagnostics(extension: ExtensionInstallSummary): string {
+  return JSON.stringify(
+    {
+      id: extension.id,
+      name: extension.name,
+      status: extension.status ?? (extension.enabled ? 'enabled' : 'disabled'),
+      packageType: extension.packageType ?? 'user',
+      packageRoot: extension.packageRoot ?? null,
+      errors: extension.errors ?? [],
+      manifest: extension.manifest,
+    },
+    null,
+    2,
+  );
+}
+
 export function ExtensionManagerPage() {
   const [extensions, setExtensions] = useState<ExtensionInstallSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -467,6 +483,16 @@ export function ExtensionManagerPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyId(null);
+    }
+  }, []);
+
+  const copyExtensionDiagnostics = useCallback(async (extension: ExtensionInstallSummary) => {
+    const diagnostics = formatExtensionDiagnostics(extension);
+    try {
+      await navigator.clipboard.writeText(diagnostics);
+      setNotice(`Copied diagnostics for ${extension.name}.`);
+    } catch {
+      setNotice(diagnostics);
     }
   }, []);
 
@@ -669,6 +695,12 @@ export function ExtensionManagerPage() {
                                         >
                                           Export
                                         </button>
+                                        <button
+                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+                                          onClick={() => void copyExtensionDiagnostics(extension)}
+                                        >
+                                          Copy diagnostics
+                                        </button>
                                       </>
                                     ) : (
                                       <span className="block px-2.5 py-1.5 text-[12px] text-dim">No package actions</span>
@@ -704,7 +736,18 @@ export function ExtensionManagerPage() {
                       </div>
 
                       {selectedExtension.status === 'invalid' ? (
-                        <DetailBlock title="Validation errors">
+                        <DetailBlock
+                          title="Validation errors"
+                          action={
+                            <button
+                              type="button"
+                              className="text-[11px] text-secondary transition-colors hover:text-primary"
+                              onClick={() => void copyExtensionDiagnostics(selectedExtension)}
+                            >
+                              Copy diagnostics
+                            </button>
+                          }
+                        >
                           <div className="space-y-2">
                             {(selectedExtension.errors ?? ['Extension manifest is invalid.']).map((message) => (
                               <p
@@ -776,10 +819,13 @@ export function ExtensionManagerPage() {
   );
 }
 
-function DetailBlock({ title, children }: { title: string; children: ReactNode }) {
+function DetailBlock({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{title}</h3>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{title}</h3>
+        {action}
+      </div>
       {children}
     </section>
   );
