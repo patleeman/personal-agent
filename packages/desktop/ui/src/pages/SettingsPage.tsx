@@ -4,4 +4,4 @@ export {
   DesktopKeyboardShortcutsSettingsSection,
   formatCompanionTimestamp,
   SettingsPage,
-} from '../../../../../extensions/system-settings/src/SettingsPage';
+} from '@personal-agent/extensions/settings';

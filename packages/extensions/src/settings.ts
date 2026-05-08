@@ -19,6 +19,10 @@ export type ThemePreference = unknown;
 export type TranscriptionModelStatus = unknown;
 export type TranscriptionProviderId = unknown;
 
+export declare const DesktopCompanionSettingsPanel: HostComponent;
+export declare const DesktopConnectionsSettingsPanel: HostComponent;
+export declare const DesktopKeyboardShortcutsSettingsSection: HostComponent;
+export declare const SettingsPage: HostComponent;
 export declare const AppPageIntro: HostComponent;
 export declare const AppPageLayout: HostComponent;
 export declare const AppPageSection: HostComponent;
@@ -31,6 +35,7 @@ export declare function cx(...values: Array<unknown>): string;
 export declare function createDesktopAwareEventSource(...args: never[]): unknown;
 export declare function createModelEditorDraft(...args: never[]): unknown;
 export declare function createProviderEditorDraft(...args: never[]): unknown;
+export declare function formatCompanionTimestamp(...args: never[]): unknown;
 export declare function formatContextWindowLabel(...args: never[]): unknown;
 export declare function formatThinkingLevelLabel(...args: never[]): unknown;
 export declare function getDesktopBridge(...args: never[]): unknown;
