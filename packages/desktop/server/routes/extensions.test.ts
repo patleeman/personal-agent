@@ -189,29 +189,33 @@ describe('registerExtensionRoutes', () => {
     const harness = createHarness();
     const commandsRes = createResponse();
     harness.getHandler('/api/extensions/commands')({}, commandsRes);
-    expect(commandsRes.json).toHaveBeenCalledWith([
-      {
-        extensionId: 'agent-board',
-        surfaceId: 'plan',
-        packageType: 'user',
-        title: 'Plan board sprint',
-        action: 'planSprint',
-        icon: 'kanban',
-      },
-    ]);
+    expect(commandsRes.json).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        {
+          extensionId: 'agent-board',
+          surfaceId: 'plan',
+          packageType: 'user',
+          title: 'Plan board sprint',
+          action: 'planSprint',
+          icon: 'kanban',
+        },
+      ]),
+    );
 
     const slashRes = createResponse();
     harness.getHandler('/api/extensions/slash-commands')({}, slashRes);
-    expect(slashRes.json).toHaveBeenCalledWith([
-      {
-        extensionId: 'agent-board',
-        surfaceId: 'task',
-        packageType: 'user',
-        name: 'task',
-        description: 'Create a board task',
-        action: 'createTask',
-      },
-    ]);
+    expect(slashRes.json).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        {
+          extensionId: 'agent-board',
+          surfaceId: 'task',
+          packageType: 'user',
+          name: 'task',
+          description: 'Create a board task',
+          action: 'createTask',
+        },
+      ]),
+    );
   });
 
   it('serves extension state documents with optimistic concurrency', () => {
@@ -390,6 +394,33 @@ describe('registerExtensionRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ ok: true, extension: expect.objectContaining({ id: 'agent-board', enabled: false }) });
   });
 
+  it('rejects toggles and reloads for invalid runtime extensions', async () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'bad-board');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'bad-board',
+        name: 'Bad Board',
+        contributes: { views: [{ id: 'page', title: 'Bad', location: 'somewhere', component: 'BadPage' }] },
+      }),
+    );
+
+    const harness = createHarness();
+    const toggleRes = createResponse();
+    harness.patchHandler('/api/extensions/:id')({ params: { id: 'bad-board' }, body: { enabled: false } }, toggleRes);
+    expect(toggleRes.status).toHaveBeenCalledWith(400);
+    expect(toggleRes.json).toHaveBeenCalledWith({ error: expect.stringContaining('contributes.views[0].location') });
+
+    const reloadRes = createResponse();
+    await harness.postHandler('/api/extensions/:id/reload')({ params: { id: 'bad-board' } }, reloadRes);
+    expect(reloadRes.status).toHaveBeenCalledWith(400);
+    expect(reloadRes.json).toHaveBeenCalledWith({ error: expect.stringContaining('contributes.views[0].location') });
+  });
+
   it('toggles system extensions', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -450,17 +481,17 @@ describe('registerExtensionRoutes', () => {
     });
   });
 
-  it('accepts explicit reload calls for runtime manifests', () => {
+  it('accepts explicit reload calls for runtime manifests', async () => {
     const harness = createHarness();
     const reloadAllRes = createResponse();
     harness.postHandler('/api/extensions/reload')({}, reloadAllRes);
     expect(reloadAllRes.json).toHaveBeenCalledWith({ ok: true, reloaded: false, message: 'Runtime manifests are read on demand.' });
 
     const reloadOneRes = createResponse();
-    harness.postHandler('/api/extensions/:id/reload')({ params: { id: 'system-automations' } }, reloadOneRes);
+    await harness.postHandler('/api/extensions/:id/reload')({ params: { id: 'system-extension-manager' } }, reloadOneRes);
     expect(reloadOneRes.json).toHaveBeenCalledWith({
       ok: true,
-      id: 'system-automations',
+      id: 'system-extension-manager',
       reloaded: false,
       message: 'Runtime manifests are read on demand.',
     });

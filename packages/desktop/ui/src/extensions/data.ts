@@ -3,7 +3,11 @@ export { api } from '../client/api';
 export { VaultEditor } from '../components/knowledge/VaultEditor';
 export { VaultFileTree } from '../components/knowledge/VaultFileTree';
 export type { MentionItem } from '../conversation/conversationMentions';
-export { notifyExtensionRegistryChanged } from '../extensions/extensionRegistryEvents';
+export {
+  EXTENSION_REGISTRY_CHANGED_EVENT,
+  getExtensionRegistryRevision,
+  notifyExtensionRegistryChanged,
+} from '../extensions/extensionRegistryEvents';
 export type { ExtensionInstallSummary } from '../extensions/types';
 export { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSyncStatus';
 export { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';

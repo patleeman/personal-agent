@@ -2,6 +2,7 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
 import { ErrorState, LoadingState } from '../components/ui';
+import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
@@ -22,20 +23,24 @@ type ExtensionComponent = ComponentType<{
   params: Record<string, string>;
 }>;
 
-function loadExtensionModule(surface: NativeExtensionViewSummary): Promise<Record<string, unknown>> {
+function loadExtensionModule(surface: NativeExtensionViewSummary, revision: number): Promise<Record<string, unknown>> {
   const systemLoader = systemExtensionModules.get(surface.extensionId);
   if (systemLoader) return systemLoader();
   const entry = surface.frontend?.entry;
   if (!entry) throw new Error(`Extension ${surface.extensionId} has no frontend entry.`);
   const source = buildApiPath(
-    `/extensions/${encodeURIComponent(surface.extensionId)}/files/${entry.split('/').map(encodeURIComponent).join('/')}`,
+    `/extensions/${encodeURIComponent(surface.extensionId)}/files/${entry.split('/').map(encodeURIComponent).join('/')}?v=${revision}`,
   );
   return import(/* @vite-ignore */ source) as Promise<Record<string, unknown>>;
 }
 
-function lazyExtensionComponent(surface: NativeExtensionViewSummary) {
+function extensionModuleKey(surface: NativeExtensionViewSummary): string {
+  return `${surface.extensionId}:${surface.id}:${surface.frontend?.entry ?? ''}:${getExtensionRegistryRevision()}`;
+}
+
+function lazyExtensionComponent(surface: NativeExtensionViewSummary, revision: number) {
   return lazy(async () => {
-    const module = await loadExtensionModule(surface);
+    const module = await loadExtensionModule(surface, revision);
     const component = module[surface.component];
     if (typeof component !== 'function') {
       throw new Error(`Extension component not found: ${surface.component}`);
@@ -64,7 +69,8 @@ export function NativeExtensionSurfaceHost({
   cwd?: string | null;
 }) {
   const pa = useMemo(() => createNativeExtensionClient(surface.extensionId), [surface.extensionId]);
-  const Component = useMemo(() => lazyExtensionComponent(surface), [surface]);
+  const moduleKey = extensionModuleKey(surface);
+  const Component = useMemo(() => lazyExtensionComponent(surface, getExtensionRegistryRevision()), [surface, moduleKey]);
   const context = useMemo(
     () => ({ extensionId: surface.extensionId, surfaceId: surface.id, route: surface.route, pathname, search, hash, conversationId, cwd }),
     [conversationId, cwd, hash, pathname, search, surface.extensionId, surface.id, surface.route],

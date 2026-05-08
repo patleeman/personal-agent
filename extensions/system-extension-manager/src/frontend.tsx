@@ -1,5 +1,5 @@
 import type { ExtensionInstallSummary } from '@personal-agent/extensions/data';
-import { api, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
+import { api, EXTENSION_REGISTRY_CHANGED_EVENT, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
 import {
   AppPageIntro,
   AppPageLayout,
@@ -304,6 +304,8 @@ export function ExtensionManagerPage() {
 
   useEffect(() => {
     load();
+    window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
+    return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
   }, [load]);
 
   const reload = useCallback(() => {
@@ -360,12 +362,12 @@ export function ExtensionManagerPage() {
 
   const toggleExtension = useCallback(
     (extension: ExtensionInstallSummary) => {
-      setBusyId(extension.id);
       setNotice(null);
       if (extension.status === 'invalid') {
         setError(extension.errors?.[0] ?? 'Extension manifest is invalid.');
         return;
       }
+      setBusyId(extension.id);
       const nextEnabled = !extension.enabled;
       api
         .updateExtension(extension.id, { enabled: nextEnabled })
@@ -410,10 +412,10 @@ export function ExtensionManagerPage() {
             ? `Built ${result.outputs.length} bundle output${result.outputs.length === 1 ? '' : 's'}.`
             : 'Nothing to build.',
         );
-        notifyExtensionRegistryChanged();
         await api.reloadExtension(extension.id).catch((reloadError: Error) => {
           setNotice(`Build finished, but reload failed: ${reloadError.message}`);
         });
+        notifyExtensionRegistryChanged();
         await load();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
