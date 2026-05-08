@@ -6,6 +6,10 @@
   "description": "Inspect conversation checkpoint and workspace diffs.",
   "version": "0.2.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [{ "id": "checkpoint", "handler": "checkpoint", "title": "Checkpoint" }]
+  },
   "contributes": {
     "tools": [
       {
@@ -13,7 +17,18 @@
         "name": "checkpoint",
         "title": "Checkpoint",
         "description": "Create, retrieve, or list targeted git commit checkpoints for the current conversation.",
-        "systemFactory": "checkpoint"
+        "action": "checkpoint",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["save", "get", "list"] },
+            "checkpointId": { "type": "string", "description": "Stable checkpoint id. Defaults to the created commit SHA." },
+            "message": { "type": "string", "description": "Commit message for the checkpoint. Required when action=save." },
+            "paths": { "type": "array", "items": { "type": "string" }, "description": "Targeted file or directory paths to include." }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        }
       }
     ],
     "views": [

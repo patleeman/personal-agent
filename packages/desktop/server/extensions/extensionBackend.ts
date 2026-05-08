@@ -23,6 +23,7 @@ export interface ExtensionBackendContext {
   profile: string;
   toolContext?: {
     conversationId?: string;
+    cwd?: string;
   };
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;

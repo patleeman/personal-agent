@@ -1,7 +1,6 @@
 import type { ExtensionAPI, ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
 import type { ServerRouteContext } from '../routes/context.js';
-import { createCheckpointAgentExtension } from './checkpointAgentExtension.js';
 import { createConversationQueueAgentExtension } from './conversationQueueAgentExtension.js';
 import { invokeExtensionAction } from './extensionBackend.js';
 import { type ExtensionToolRegistration, listExtensionToolRegistrations } from './extensionRegistry.js';
@@ -35,8 +34,6 @@ function createSystemFactory(factoryId: string, options: ManifestToolFactoryOpti
       return createConversationQueueAgentExtension({ getCurrentProfile: options.getCurrentProfile });
     case 'reminders':
       return createReminderAgentExtension();
-    case 'checkpoint':
-      return createCheckpointAgentExtension({ stateRoot: options.stateRoot, getCurrentProfile: options.getCurrentProfile });
     case 'image':
       return options.hasOpenAiImageProvider?.() ? createImageAgentExtension() : null;
     case 'image-probe': {
@@ -93,6 +90,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
           const result = await invokeExtensionAction(tool.extensionId, tool.action, params, options.serverContext, {
             conversationId: ctx.sessionManager.getSessionId(),
+            cwd: ctx.sessionManager.getCwd?.(),
           });
           const text =
             result.result && typeof result.result === 'object' && 'text' in result.result && typeof result.result.text === 'string'
