@@ -8,7 +8,7 @@ import {
   readBrowserTabsState,
   WorkbenchBrowserTab,
   writeBrowserTabsState,
-} from '@personal-agent/extensions/host';
+} from '@personal-agent/extensions/workbench';
 import { useCallback, useEffect, useState } from 'react';
 
 const BROWSER_TABS_CHANGED_EVENT = 'pa:system-browser-tabs-changed';

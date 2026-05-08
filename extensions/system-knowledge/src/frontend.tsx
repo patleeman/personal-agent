@@ -1,12 +1,12 @@
 import {
-  lazyRouteWithRecovery,
   type MemoryDocItem,
   type MentionItem,
   navigateKnowledgeFile,
   VaultEditor,
   type VaultFileSummary,
   VaultFileTree,
-} from '@personal-agent/extensions/host';
+} from '@personal-agent/extensions/data';
+import { type ExtensionSurfaceProps, lazyRouteWithRecovery } from '@personal-agent/extensions/ui';
 import { Suspense, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 

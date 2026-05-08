@@ -49,7 +49,7 @@ import {
   useApi,
   useInvalidateOnTopics,
   useTheme,
-} from '@personal-agent/extensions/host';
+} from '@personal-agent/extensions/settings';
 import QRCode from 'qrcode';
 import {
   createContext,

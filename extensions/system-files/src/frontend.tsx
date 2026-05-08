@@ -1,4 +1,4 @@
-import { type ExtensionSurfaceProps, WorkspaceExplorer, WorkspaceFileDocument } from '@personal-agent/extensions/host';
+import { type ExtensionSurfaceProps, WorkspaceExplorer, WorkspaceFileDocument } from '@personal-agent/extensions/workbench';
 import { Suspense, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 

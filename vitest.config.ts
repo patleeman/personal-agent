@@ -7,6 +7,10 @@ export default defineConfig({
       '@personal-agent/core': resolve(process.cwd(), 'packages/core/src/index.ts'),
       '@personal-agent/daemon': resolve(process.cwd(), 'packages/daemon/src/index.ts'),
       '@personal-agent/extensions/host': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/host.ts'),
+      '@personal-agent/extensions/ui': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/ui.ts'),
+      '@personal-agent/extensions/workbench': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/workbench.ts'),
+      '@personal-agent/extensions/data': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/data.ts'),
+      '@personal-agent/extensions/settings': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/settings.ts'),
     },
   },
   test: {

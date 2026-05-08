@@ -1,5 +1,6 @@
-import { SettingsPage } from '@personal-agent/extensions/host';
 import { useEffect } from 'react';
+
+import { SettingsPage } from './SettingsPage';
 
 type SettingsSectionId = 'settings-providers' | 'settings-dictation' | 'settings-desktop' | 'settings-keyboard';
 
