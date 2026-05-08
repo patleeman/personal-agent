@@ -11,7 +11,6 @@ import { createImageProbeAgentExtension } from './imageProbeAgentExtension.js';
 import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
-import webToolsExtension from './web-tools/index.js';
 
 export interface ManifestToolFactoryOptions {
   getCurrentProfile: () => string;
@@ -25,8 +24,6 @@ export interface ManifestToolFactoryOptions {
 
 function createSystemFactory(factoryId: string, options: ManifestToolFactoryOptions): ExtensionFactory | null {
   switch (factoryId) {
-    case 'web-tools':
-      return webToolsExtension;
     case 'artifacts':
       return createArtifactAgentExtension({
         stateRoot: options.stateRoot,
@@ -102,8 +99,12 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
         parameters: tool.inputSchema,
         async execute(_toolCallId, params) {
           const result = await invokeExtensionAction(tool.extensionId, tool.action, params, options.serverContext);
+          const text =
+            result.result && typeof result.result === 'object' && 'text' in result.result && typeof result.result.text === 'string'
+              ? result.result.text
+              : JSON.stringify(result.result, null, 2);
           return {
-            content: [{ type: 'text' as const, text: JSON.stringify(result.result, null, 2) }],
+            content: [{ type: 'text' as const, text }],
             details: {
               extensionId: tool.extensionId,
               toolId: tool.id,

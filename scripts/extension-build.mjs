@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+/* eslint-env node */
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+
 import { build } from 'esbuild';
 
 const packageRoot = resolve(process.argv[2] || process.cwd());
@@ -38,7 +40,8 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
 
 const backendSource = join(packageRoot, 'src', 'backend.ts');
 if (manifest.backend?.entry && existsSync(backendSource)) {
-  const outfile = join(packageRoot, manifest.backend.entry);
+  const backendEntry = String(manifest.backend.entry);
+  const outfile = backendEntry.startsWith('src/') ? join(packageRoot, 'dist', 'backend.mjs') : join(packageRoot, backendEntry);
   mkdirSync(dirname(outfile), { recursive: true });
   await build({
     entryPoints: [backendSource],
