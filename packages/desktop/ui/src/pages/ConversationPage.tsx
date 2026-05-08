@@ -3524,7 +3524,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEscapeAbortStream({
     isStreaming: stream.isStreaming,
-    abort: streamAbort,
+    abort: stopStreamAndRestoreQueuedPrompts,
     hasBlockingOverlay: hasBlockingOverlayOpen,
   });
 
@@ -5884,7 +5884,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function restoreQueuedPromptToComposer(behavior: 'steer' | 'followUp', queueIndex: number, previewId?: string) {
+  async function stopStreamAndRestoreQueuedPrompts() {
+    const queuedPromptSnapshot = pendingQueue.filter((item) => item.restorable);
+    await streamAbort();
+
+    if (queuedPromptSnapshot.length === 0) {
+      return;
+    }
+
+    for (const queuedPrompt of queuedPromptSnapshot) {
+      await restoreQueuedPromptToComposer(queuedPrompt.type, queuedPrompt.queueIndex, queuedPrompt.id, { showSuccessNotice: false });
+    }
+
+    showNotice(
+      'accent',
+      queuedPromptSnapshot.length === 1
+        ? 'Stopped agent and restored queued prompt to the composer.'
+        : `Stopped agent and restored ${queuedPromptSnapshot.length} queued prompts to the composer.`,
+    );
+  }
+
+  async function restoreQueuedPromptToComposer(
+    behavior: 'steer' | 'followUp',
+    queueIndex: number,
+    previewId?: string,
+    options: { showSuccessNotice?: boolean } = {},
+  ) {
     if (!id || !isLiveSession) {
       showNotice('danger', 'Queued prompts can only be restored from a live session.', 4000);
       return;
@@ -5925,7 +5950,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       moveComposerCaretToEnd();
-      showNotice('accent', restoredUpdate.noticeText);
+      if (options.showSuccessNotice !== false) {
+        showNotice('accent', restoredUpdate.noticeText);
+      }
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
@@ -6921,7 +6948,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   void submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);
                 }}
                 onAbortStream={() => {
-                  void stream.abort();
+                  void stopStreamAndRestoreQueuedPrompts();
                 }}
               />
             </div>
