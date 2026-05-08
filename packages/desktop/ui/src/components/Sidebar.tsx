@@ -1,3 +1,5 @@
+import { emitKBEvent } from '@personal-agent/extensions/knowledge';
+import { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';
 import {
   type DragEvent,
   lazy,
@@ -12,8 +14,6 @@ import {
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { emitKBEvent } from '../../../../../extensions/system-knowledge/src/components/knowledgeEvents';
-import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import {
@@ -61,9 +61,7 @@ import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
 
-const VaultFileTree = lazy(() =>
-  import('../../../../../extensions/system-knowledge/src/components/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
-);
+const VaultFileTree = lazy(() => import('@personal-agent/extensions/knowledge').then((module) => ({ default: module.VaultFileTree })));
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {

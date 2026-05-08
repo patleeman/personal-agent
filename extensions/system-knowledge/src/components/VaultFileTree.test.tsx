@@ -1,15 +1,12 @@
 // @vitest-environment jsdom
-import {
-  KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY,
-  KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY,
-  type VaultEntry,
-  type VaultFileListResult,
-} from '@personal-agent/extensions/knowledge';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../../../packages/desktop/ui/src/local/knowledgeOpenFiles';
+import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../../../packages/desktop/ui/src/local/knowledgeTreeState';
+import type { VaultEntry, VaultFileListResult } from '../../../../packages/desktop/ui/src/shared/types';
 import { emitKBEvent } from './knowledgeEvents';
 import { VaultFileTree } from './VaultFileTree';
 
@@ -26,8 +23,7 @@ const apiMocks = vi.hoisted(() => ({
   writeFile: vi.fn(),
 }));
 
-vi.mock('@personal-agent/extensions/knowledge', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@personal-agent/extensions/knowledge')>()),
+vi.mock('../../../../packages/desktop/ui/src/client/api', () => ({
   api: {
     invokeExtensionAction: async (_extensionId: string, actionId: string, input: Record<string, unknown> = {}) => {
       const result = await (async () => {
@@ -58,13 +54,7 @@ vi.mock('@personal-agent/extensions/knowledge', async (importOriginal) => ({
     },
   },
   vaultApi: {
-    createFolder: apiMocks.createFolder,
-    deleteFile: apiMocks.deleteFile,
-    move: apiMocks.move,
-    rename: apiMocks.rename,
-    search: apiMocks.search,
-    tree: apiMocks.tree,
-    writeFile: apiMocks.writeFile,
+    assetUrl: (id: string) => `/api/vault/asset?id=${encodeURIComponent(id)}`,
   },
 }));
 

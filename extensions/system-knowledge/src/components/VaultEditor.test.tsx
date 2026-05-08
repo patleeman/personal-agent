@@ -87,8 +87,7 @@ vi.mock('./markdownEditorContent', () => ({
   readMarkdownFromEditor: () => 'saved body',
 }));
 
-vi.mock('@personal-agent/extensions/knowledge', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@personal-agent/extensions/knowledge')>()),
+vi.mock('../../../../packages/desktop/ui/src/client/api', () => ({
   api: {
     invokeExtensionAction: async (_extensionId: string, actionId: string, input: Record<string, unknown> = {}) => {
       const result = await (async () => {
@@ -113,11 +112,7 @@ vi.mock('@personal-agent/extensions/knowledge', async (importOriginal) => ({
     },
   },
   vaultApi: {
-    readFile: (...args: unknown[]) => readFileMock(...args),
-    backlinks: (...args: unknown[]) => backlinksMock(...args),
-    writeFile: (...args: unknown[]) => writeFileMock(...args),
-    rename: (...args: unknown[]) => renameMock(...args),
-    uploadImage: (...args: unknown[]) => uploadImageMock(...args),
+    assetUrl: (id: string) => `/api/vault/asset?id=${encodeURIComponent(id)}`,
   },
 }));
 

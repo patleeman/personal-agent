@@ -1,4 +1,10 @@
-export { getKnowledgeBaseSyncPresentation } from '../../../../../extensions/system-knowledge/src/lib/knowledgeBaseSyncStatus';
+export {
+  DesktopCompanionSettingsPanel,
+  DesktopConnectionsSettingsPanel,
+  DesktopKeyboardShortcutsSettingsSection,
+  formatCompanionTimestamp,
+  SettingsPage,
+} from '../../../../../extensions/system-settings/src/SettingsPage';
 export { api } from '../client/api';
 export { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, cx, Pill, ToolbarButton } from '../components/ui';
 export { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
@@ -39,3 +45,4 @@ export type {
 } from '../shared/types';
 export { type ThemePreference, useTheme } from '../ui-state/theme';
 export type { ExtensionKeybindingRegistration } from './types';
+export { getKnowledgeBaseSyncPresentation } from '@personal-agent/extensions/knowledge';

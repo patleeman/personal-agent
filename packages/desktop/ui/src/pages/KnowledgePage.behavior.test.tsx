@@ -17,7 +17,7 @@ vi.mock('../hooks/useApi', () => ({
   useApi: vi.fn(),
 }));
 
-vi.mock('../../../../../extensions/system-knowledge/src/components/VaultEditor', async () => {
+vi.mock('@personal-agent/extensions/knowledge', async () => {
   const React = await import('react');
 
   return {

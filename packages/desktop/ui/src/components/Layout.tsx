@@ -1,8 +1,8 @@
+import { VaultEditor } from '@personal-agent/extensions/knowledge';
+import { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';
 import { Component, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
-import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
@@ -63,7 +63,7 @@ const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
   import('./ContextRail').then((module) => ({ default: module.ContextRail })),
 );
 const VaultFileTree = lazyRouteWithRecovery('layout-vault-file-tree', () =>
-  import('../../../../../extensions/system-knowledge/src/components/VaultFileTree').then((module) => ({ default: module.VaultFileTree })),
+  import('@personal-agent/extensions/knowledge').then((module) => ({ default: module.VaultFileTree })),
 );
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';

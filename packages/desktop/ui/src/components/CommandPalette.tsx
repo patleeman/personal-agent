@@ -1,8 +1,8 @@
+import { onKBEvent } from '@personal-agent/extensions/knowledge';
+import { knowledgeApi } from '@personal-agent/extensions/knowledge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { onKBEvent } from '../../../../../extensions/system-knowledge/src/components/knowledgeEvents';
-import { knowledgeApi } from '../../../../../extensions/system-knowledge/src/lib/knowledgeApi';
 import { useAppData } from '../app/contexts';
 import { api } from '../client/api';
 import {

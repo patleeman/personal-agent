@@ -1,7 +1,3 @@
-export { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
-export { VaultFileTree } from '../../../../../extensions/system-knowledge/src/components/VaultFileTree';
-export { getKnowledgeBaseSyncPresentation } from '../../../../../extensions/system-knowledge/src/lib/knowledgeBaseSyncStatus';
-export { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 export { useAppData } from '../app/contexts';
 export { api } from '../client/api';
 export type { MentionItem } from '../conversation/conversationMentions';
@@ -37,3 +33,7 @@ export type {
   VaultFileSummary,
 } from '../shared/types';
 export { timeAgo, timeAgoCompact } from '../shared/utils';
+export { VaultEditor } from '@personal-agent/extensions/knowledge';
+export { VaultFileTree } from '@personal-agent/extensions/knowledge';
+export { getKnowledgeBaseSyncPresentation } from '@personal-agent/extensions/knowledge';
+export { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';

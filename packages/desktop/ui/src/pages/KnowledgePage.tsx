@@ -1,9 +1,9 @@
+import { VaultEditor } from '@personal-agent/extensions/knowledge';
+import { knowledgeApi } from '@personal-agent/extensions/knowledge';
+import { navigateKnowledgeFile } from '@personal-agent/extensions/knowledge';
 import { useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { VaultEditor } from '../../../../../extensions/system-knowledge/src/components/VaultEditor';
-import { knowledgeApi } from '../../../../../extensions/system-knowledge/src/lib/knowledgeApi';
-import { navigateKnowledgeFile } from '../../../../../extensions/system-knowledge/src/lib/knowledgeNavigation';
 import { AppPageEmptyState, AppPageIntro, AppPageLayout } from '../components/ui';
 import { useApi } from '../hooks/useApi';
 

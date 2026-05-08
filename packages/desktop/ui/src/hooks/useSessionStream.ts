@@ -2,9 +2,9 @@
  * useSessionStream — subscribes to a live Pi session SSE endpoint and builds
  * a growing MessageBlock list in real time.
  */
+import { parseSkillBlock } from '@personal-agent/extensions/knowledge';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { parseSkillBlock } from '../../../../../extensions/system-knowledge/src/lib/skillBlock';
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import type {

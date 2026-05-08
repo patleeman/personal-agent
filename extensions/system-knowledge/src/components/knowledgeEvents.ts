@@ -46,8 +46,9 @@ export function onKBEvent<T = unknown>(type: KBEventType, handler: (detail: T) =
 
 // ── Vault file system watcher ─────────────────────────────────────────────
 
-import { buildApiPath } from '@personal-agent/extensions/knowledge';
 import { useEffect, useRef } from 'react';
+
+import { buildApiPath } from '../../../../packages/desktop/ui/src/client/apiBase';
 
 const VAULT_WATCH_DEBOUNCE_MS = 180;
 
@@ -63,7 +64,7 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
   onReadyRef.current = onReady;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
     let timer: number | null = null;
     let source: EventSource | null = null;
 

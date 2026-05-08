@@ -1,3 +1,4 @@
+import { api, vaultApi } from '../../../../packages/desktop/ui/src/client/api';
 import type {
   KnowledgeBaseState,
   VaultBacklinksResult,
@@ -8,8 +9,7 @@ import type {
   VaultSearchResponse,
   VaultShareImportResult,
   VaultTreeResult,
-} from '@personal-agent/extensions/knowledge';
-import { api, vaultApi } from '@personal-agent/extensions/knowledge';
+} from '../../../../packages/desktop/ui/src/shared/types';
 
 const EXTENSION_ID = 'system-knowledge';
 
