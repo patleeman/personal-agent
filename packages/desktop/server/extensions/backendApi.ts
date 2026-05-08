@@ -1,8 +1,11 @@
+export * from './backendApi/artifacts.js';
 export * from './backendApi/automations.js';
 export * from './backendApi/autoMode.js';
+export * from './backendApi/checkpoints.js';
 export * from './backendApi/conversations.js';
 export * from './backendApi/events.js';
 export * from './backendApi/images.js';
 export * from './backendApi/knowledge.js';
 export * from './backendApi/runs.js';
 export * from './backendApi/runtime.js';
+export type { ExtensionBackendContext } from './extensionBackend.js';

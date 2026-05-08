@@ -1,10 +1,11 @@
 import {
   type ConversationArtifactKind,
   deleteConversationArtifact,
+  type ExtensionBackendContext,
   getConversationArtifact,
   listConversationArtifacts,
   saveConversationArtifact,
-} from '@personal-agent/core';
+} from '@personal-agent/extensions/backend';
 
 const ARTIFACT_KIND_VALUES = ['html', 'mermaid', 'latex'] as const;
 type ArtifactAction = 'save' | 'get' | 'list' | 'delete';
@@ -18,11 +19,10 @@ interface ArtifactInput {
   open?: boolean;
 }
 
-interface ArtifactBackendContext {
+type ArtifactBackendContext = ExtensionBackendContext & {
   profile: string;
   toolContext?: { conversationId?: string };
-  ui: { invalidate(topics: string | string[]): void };
-}
+};
 
 function readRequiredString(value: string | undefined, label: string): string {
   const normalized = value?.trim();

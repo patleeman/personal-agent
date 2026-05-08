@@ -4,16 +4,16 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import {
   type ConversationCommitCheckpointFile,
   type ConversationCommitCheckpointFileStatus,
+  type ExtensionBackendContext,
   getConversationCommitCheckpoint,
   listConversationCommitCheckpoints,
   saveConversationCommitCheckpoint,
-} from '@personal-agent/core';
+} from '@personal-agent/extensions/backend';
 
-interface CheckpointBackendContext {
+type CheckpointBackendContext = ExtensionBackendContext & {
   profile: string;
   toolContext?: { conversationId?: string; cwd?: string };
-  ui: { invalidate(topics: string | string[]): void };
-}
+};
 
 type CheckpointAction = 'save' | 'get' | 'list';
 interface CheckpointInput {
