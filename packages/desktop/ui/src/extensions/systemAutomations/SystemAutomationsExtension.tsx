@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '../../components/ui';
 import type { ScheduledTaskSchedulerHealth, ScheduledTaskSummary } from '../../shared/types';
+import { timeAgo } from '../../shared/utils';
 import type { NativeExtensionClient } from '../nativePaClient';
 
 interface AutomationFormState {
@@ -61,7 +62,7 @@ function statusText(task: ScheduledTaskSummary) {
   if (!task.enabled) return 'Disabled';
   if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return 'Needs attention';
   if (task.lastStatus === 'success') return 'Active';
-  return task.cron || task.at ? 'Scheduled' : 'Manual';
+  return task.cron || task.at ? 'Active' : 'Manual';
 }
 
 function statusClass(task: ScheduledTaskSummary) {
@@ -78,21 +79,22 @@ function scheduleText(task: ScheduledTaskSummary) {
   return 'Manual';
 }
 
-function taskKindText(task: ScheduledTaskSummary) {
-  return task.targetType === 'conversation' ? 'Thread' : 'Job';
+function taskScopeText(task: ScheduledTaskSummary) {
+  return task.cwd?.split('/').filter(Boolean).at(-1) ?? task.threadTitle ?? task.threadConversationId ?? '';
 }
 
-function formatLastRun(task: ScheduledTaskSummary) {
-  if (!task.lastRunAt) return null;
-  const date = new Date(task.lastRunAt);
-  if (!Number.isFinite(date.getTime())) return task.lastRunAt;
-  return date.toLocaleString();
+function taskScheduleSummary(task: ScheduledTaskSummary) {
+  if (task.cron === '0 2 * * *') return 'Daily at 02:00';
+  if (task.cron === '0 * * * *') return 'Every hour';
+  if (task.cron?.startsWith('0 */')) {
+    const hours = task.cron.match(/^0 \*\/(\d+) \* \* \*$/)?.[1];
+    if (hours) return `Every ${hours}h on the hour`;
+  }
+  return scheduleText(task);
 }
 
-function compactPrompt(prompt: string) {
-  const text = prompt.trim();
-  if (!text) return 'No prompt configured.';
-  return text.length > 180 ? `${text.slice(0, 180)}…` : text;
+function taskLastRunText(task: ScheduledTaskSummary) {
+  return task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Not run yet';
 }
 
 function numberOrNull(value: string) {
@@ -139,9 +141,13 @@ function readFormInput(form: AutomationFormState) {
 
 function HealthLine({ health }: { health: ScheduledTaskSchedulerHealth | null }) {
   if (!health?.lastEvaluatedAt) return <span>Scheduler has not checked automations yet.</span>;
-  const checked = new Date(health.lastEvaluatedAt);
-  const label = Number.isFinite(checked.getTime()) ? checked.toLocaleString() : health.lastEvaluatedAt;
-  return <span>{health.status === 'stale' ? `Scheduler stale · ${label}` : `Scheduler healthy · ${label}`}</span>;
+  return (
+    <span>
+      {health.status === 'stale'
+        ? `Scheduler stale. Last checked ${timeAgo(health.lastEvaluatedAt)}.`
+        : `Scheduler healthy. Last checked ${timeAgo(health.lastEvaluatedAt)}.`}
+    </span>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -273,58 +279,27 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
     [logById, pa],
   );
 
-  const activeCount = useMemo(() => tasks.filter((task) => task.enabled !== false).length, [tasks]);
-  const runningCount = useMemo(() => tasks.filter((task) => task.running).length, [tasks]);
-  const attentionCount = useMemo(
-    () => tasks.filter((task) => task.lastStatus === 'failed' || task.lastStatus === 'failure').length,
-    [tasks],
-  );
+  const enabledCount = useMemo(() => tasks.filter((task) => task.enabled !== false).length, [tasks]);
+  const enabledLabel = useMemo(() => (enabledCount === 1 ? '1 enabled' : `${enabledCount} enabled`), [enabledCount]);
   const countLabel = useMemo(() => (tasks.length === 1 ? '1 automation' : `${tasks.length} automations`), [tasks.length]);
 
   if (loading) return <LoadingState label="Loading automations…" className="h-full justify-center" />;
   if (error) return <ErrorState message={error} />;
 
   return (
-    <AppPageLayout shellClassName="max-w-[76rem]" contentClassName="space-y-6">
+    <AppPageLayout shellClassName="max-w-[64rem]" contentClassName="mx-auto w-full space-y-10 py-10">
       <AppPageIntro
-        eyebrow="System extension"
         title="Automations"
-        summary="Scheduled jobs and conversation wakeups, with run state at a glance."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <ToolbarButton onClick={() => void load()}>Refresh</ToolbarButton>
-            <ToolbarButton className="border-accent/40 text-primary" onClick={() => openEditor()}>
-              New automation
-            </ToolbarButton>
-          </div>
-        }
+        summary={enabledLabel}
+        actions={<ToolbarButton onClick={() => openEditor()}>+ New automation</ToolbarButton>}
+        className="items-start"
       />
 
-      <div className="grid gap-3 border-y border-border-subtle py-4 text-[13px] text-secondary md:grid-cols-4">
-        <div>
-          <div className="text-[22px] font-semibold leading-none text-primary">{tasks.length}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Total</div>
-        </div>
-        <div>
-          <div className="text-[22px] font-semibold leading-none text-primary">{activeCount}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Enabled</div>
-        </div>
-        <div>
-          <div className="text-[22px] font-semibold leading-none text-primary">{runningCount}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Running</div>
-        </div>
-        <div>
-          <div className={cx('text-[22px] font-semibold leading-none', attentionCount > 0 ? 'text-danger' : 'text-primary')}>
-            {attentionCount}
-          </div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-dim">Needs attention</div>
-        </div>
+      <div className="border border-border-subtle px-4 py-4 text-[13px] text-secondary">
+        <HealthLine health={health} />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-secondary">
-        <HealthLine health={health} />
-        {notice ? <span className="text-accent">{notice}</span> : null}
-      </div>
+      {notice ? <div className="text-[13px] text-accent">{notice}</div> : null}
 
       {editorOpen && (
         <form className="space-y-4 border-t border-border-subtle pt-5" onSubmit={save}>
@@ -451,37 +426,41 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         </form>
       )}
 
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
-            <p className="mt-1 text-[12px] text-secondary">{countLabel}</p>
-          </div>
+      <section>
+        <div className="flex items-baseline justify-between gap-4 border-b border-border-subtle pb-4">
+          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
+          <span className="text-[12px] text-dim">{countLabel}</span>
         </div>
         {tasks.length === 0 ? (
           <EmptyState title="No automations yet" body="Create one to run scheduled or conversation-bound agent work." className="py-10" />
         ) : (
-          <div className="divide-y divide-border-subtle border-y border-border-subtle">
+          <div>
             {tasks.map((task) => {
-              const lastRun = formatLastRun(task);
+              const scope = taskScopeText(task);
               return (
-                <article key={task.id} className="py-4">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full border', statusClass(task))} />
+                <article key={task.id} className="group border-b border-border-subtle py-5">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_12rem_auto] lg:items-start">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={cx('h-2.5 w-2.5 rounded-full border', statusClass(task))} />
                         <h3 className="truncate text-[15px] font-semibold text-primary">{taskName(task)}</h3>
-                        <span className="text-[12px] text-secondary">{statusText(task)}</span>
+                        {scope ? <span className="truncate text-[13px] text-dim">{scope}</span> : null}
                       </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-secondary">
-                        <span>{scheduleText(task)}</span>
-                        <span>{taskKindText(task)}</span>
-                        {lastRun ? <span>Last run {lastRun}</span> : null}
-                        {task.cwd ? <span className="max-w-full truncate font-mono text-[11px] text-dim">{task.cwd}</span> : null}
-                      </div>
-                      <p className="max-w-4xl whitespace-pre-wrap text-[13px] leading-6 text-secondary">{compactPrompt(task.prompt)}</p>
+                      <p className="mt-1 text-[12px] text-secondary">
+                        <span className={task.enabled ? 'text-success' : 'text-dim'}>{statusText(task)}</span>
+                        <span className="opacity-40 mx-1.5">·</span>
+                        {task.targetType === 'conversation' ? 'Thread' : 'Job'}
+                        <span className="opacity-40 mx-1.5">·</span>
+                        {taskLastRunText(task)}
+                      </p>
+                      {logById[task.id] ? (
+                        <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[12px] leading-5 text-secondary">
+                          {logById[task.id]}
+                        </pre>
+                      ) : null}
                     </div>
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <p className="text-[13px] text-secondary lg:text-right">{taskScheduleSummary(task)}</p>
+                    <div className="flex flex-wrap gap-2 opacity-100 lg:justify-end lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-within:opacity-100">
                       <ToolbarButton disabled={busy === task.id} onClick={() => void runTask(task.id)}>
                         Run
                       </ToolbarButton>
@@ -489,11 +468,6 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
                       <ToolbarButton onClick={() => void toggleLog(task.id)}>{logById[task.id] ? 'Hide log' : 'Log'}</ToolbarButton>
                     </div>
                   </div>
-                  {logById[task.id] ? (
-                    <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap border-l-2 border-border-subtle pl-3 text-[11px] leading-5 text-dim">
-                      {logById[task.id]}
-                    </pre>
-                  ) : null}
                 </article>
               );
             })}
