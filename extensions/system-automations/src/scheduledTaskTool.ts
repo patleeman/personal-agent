@@ -23,7 +23,7 @@ import {
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
   type TaskRuntimeEntry,
-} from '../../../packages/desktop/server/extensions/backendApi.js';
+} from '../../../packages/desktop/server/extensions/backendApi/automations.js';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
 const SCHEDULED_TASK_TARGET_VALUES = ['background-agent', 'conversation'] as const;

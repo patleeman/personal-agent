@@ -16,7 +16,7 @@ import {
   parseFutureHumanDateTime,
   promptSession,
   type QueuedPromptPreview,
-} from '../../../packages/desktop/server/extensions/backendApi.js';
+} from '../../../packages/desktop/server/extensions/backendApi/automations.js';
 
 const DELIVER_AS_VALUES = ['steer', 'followUp'] as const;
 type DeliverAs = (typeof DELIVER_AS_VALUES)[number];

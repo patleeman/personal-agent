@@ -13,7 +13,7 @@ import {
   listDurableRuns,
   persistAppTelemetryEvent,
   rerunDurableRun,
-} from '../../../packages/desktop/server/extensions/backendApi.js';
+} from '../../../packages/desktop/server/extensions/backendApi/runs.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
 

@@ -1,4 +1,7 @@
-import { parseFutureHumanDateTime, scheduleDeferredResumeForSessionFile } from '../../../packages/desktop/server/extensions/backendApi.js';
+import {
+  parseFutureHumanDateTime,
+  scheduleDeferredResumeForSessionFile,
+} from '../../../packages/desktop/server/extensions/backendApi/automations.js';
 export { conversationQueue } from './conversationQueueBackend.js';
 export { scheduledTask } from './scheduledTaskBackend.js';
 

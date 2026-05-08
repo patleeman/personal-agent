@@ -5,7 +5,7 @@ import {
   buildLiveSessionResourceOptionsForRuntime,
   renameSession,
   requestConversationWorkingDirectoryChange,
-} from '../../../packages/desktop/server/extensions/backendApi.js';
+} from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from './changeWorkingDirectoryAgentExtension.js';
 import { createConversationInspectAgentExtension } from './conversationInspectAgentExtension.js';

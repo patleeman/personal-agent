@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from '@sinclair/typebox';
 
-import { resolveRequestedCwd } from '../../../packages/desktop/server/extensions/backendApi.js';
+import { resolveRequestedCwd } from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
 
 const ChangeWorkingDirectoryToolParams = Type.Object({
   cwd: Type.String({
