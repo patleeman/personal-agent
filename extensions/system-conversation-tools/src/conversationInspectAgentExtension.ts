@@ -9,9 +9,9 @@ import {
   CONVERSATION_INSPECT_ROLE_VALUES,
   CONVERSATION_INSPECT_SCOPE_VALUES,
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
-} from '../../../packages/desktop/server/conversations/conversationInspectCapability.js';
-import { executeConversationInspect } from '../../../packages/desktop/server/conversations/conversationInspectWorkerClient.js';
-import { persistTraceContextPointerInspect } from '../../../packages/desktop/server/traces/tracePersistence.js';
+} from '../../../packages/desktop/server/extensions/backendApi.js';
+import { executeConversationInspect } from '../../../packages/desktop/server/extensions/backendApi.js';
+import { persistTraceContextPointerInspect } from '../../../packages/desktop/server/extensions/backendApi.js';
 
 const ConversationInspectToolParams = Type.Object({
   action: Type.String({ description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` }),
