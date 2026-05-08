@@ -383,6 +383,19 @@ Extensions contribute native surfaces through the manifest.
 | `skills`          | Agent skills bundled with the extension      |
 | `backend.actions` | Trusted local handlers callable by surfaces  |
 
+### Surface selection
+
+Pick the smallest surface that matches the product shape. Do not use the right rail as a junk drawer. That path gets ugly fast.
+
+| Surface               | Use for                                                                            | Do not use for                                                                             | Examples                                    |
+| --------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| Main page view        | Durable app-level workflows with their own route and enough room to work           | Tiny contextual helpers or per-conversation detail panes                                   | Automations, Gateways, Telemetry            |
+| Left nav item         | Primary destinations users should see every day                                    | Settings subpanels, secondary tools, or disabled/hidden extensions                         | Automations, Gateways, Telemetry            |
+| Right-rail panel      | Compact contextual companions for the active conversation, workspace, or selection | Workflows needing a wide detail pane, editor, diff, log viewer, or multi-pane coordination | Knowledge browser, file tree, artifact list |
+| Settings contribution | Configuration and preferences under `/settings/*`                                  | Product workflows or top-level navigation                                                  | Provider, dictation, desktop settings       |
+| Command               | Fast one-shot actions or ways to open a surface                                    | Long-running UI that needs persistent screen space                                         | Build extension, reload extensions          |
+| Slash command         | Conversation-authored actions that produce or alter prompt context                 | Global app navigation or settings                                                          | Insert prompt, attach context               |
+
 Main pages are durable workflows. User extensions should use `/ext/{extensionId}` routes. System extensions may own first-party routes such as `/automations`.
 
 Right-rail panels are contextual tools. They need scope:
@@ -392,6 +405,8 @@ type RightRailScope = 'global' | 'conversation' | 'workspace' | 'selection';
 ```
 
 Conversation-scoped panels receive `conversationId`. Workspace-scoped panels receive cwd/workspace context. Selection-scoped panels receive selection context when opened.
+
+If a feature needs a selector/list plus a large detail renderer, keep it in core for now or add a real multi-surface extension contract first. Runs, Diffs, and File Explorer are the current examples: the rail chooses a target, while the center workbench renders logs, diffs, or file contents. A single right-rail extension cannot model that cleanly yet.
 
 ## Extension Manager
 

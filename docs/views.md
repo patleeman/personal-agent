@@ -51,10 +51,13 @@ The right rail shows configurable tabs:
 | Knowledge     | Always — browse and edit vault files |
 | File Explorer | Always — project file tree           |
 | Diffs         | Conversation has checkpoints         |
+| Runs          | Conversation has linked runs         |
 | Artifacts     | Conversation has rendered artifacts  |
 | Browser       | Opened by user                       |
 
 Toggle the right rail with `Cmd+Shift+\`. Switch between Conversation and Workbench with `Cmd+Option+\`.
+
+For extension authors, the right rail is for compact contextual tools. If a feature needs the rail to select something and the center pane to render the large detail view, it is a coordinated workbench surface, not a simple right-rail extension. See [Extensions](extensions.md#surface-selection) for the surface decision guide.
 
 ### Rail pane behavior
 
