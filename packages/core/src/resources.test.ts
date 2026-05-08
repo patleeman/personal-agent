@@ -244,6 +244,9 @@ description: Commit and push the agent's current work.
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
     expect(runtimePrompt).toContain('# Identity & Goal');
     expect(runtimePrompt).toContain('shared append');
+    expect(runtimePrompt).toContain('<available_skills>');
+    expect(runtimePrompt).toContain(`  <skill id="checkpoint" location="${join(syncRoot, 'skills', 'checkpoint', 'SKILL.md')}">`);
+    expect(runtimePrompt).toContain("Commit and push the agent's current work.");
     expect(runtimePrompt).toContain(`The canonical durable knowledge vault root is: ${syncRoot}`);
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Durable shared');
     expect(runtimeSettings.defaultModel).toBe('gpt-5.4');
