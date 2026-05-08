@@ -292,6 +292,21 @@ describe('SettingsPage', () => {
         return buildUseApiResult({ configured: false });
       }
 
+      if (key === 'knowledge-settings-knowledge-base') {
+        return buildUseApiResult({
+          repoUrl: 'https://github.com/user/knowledge-base.git',
+          branch: 'main',
+          configured: true,
+          effectiveRoot: '/Users/patrick/Documents/personal-agent',
+          managedRoot: '/Users/patrick/.local/state/personal-agent/knowledge-base/repo',
+          usesManagedRoot: true,
+          syncStatus: 'idle',
+          lastSyncAt: '2026-04-16T12:00:00.000Z',
+          recoveredEntryCount: 1,
+          recoveryDir: '/Users/patrick/.local/state/personal-agent/knowledge-base/recovered',
+        });
+      }
+
       throw new Error(`Unexpected SettingsPage useApi call for key ${key ?? '<none>'}`);
     });
   });

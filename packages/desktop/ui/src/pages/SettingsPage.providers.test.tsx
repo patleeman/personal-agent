@@ -363,6 +363,10 @@ describe('SettingsPage provider model editor', () => {
         return remoteAuthResult;
       }
 
+      if (key === 'knowledge-settings-knowledge-base') {
+        return buildUseApiResult({ configured: false, repoUrl: '', branch: 'main', status: 'idle' });
+      }
+
       throw new Error(`Unexpected SettingsPage useApi call for key ${key ?? '<none>'}`);
     });
 

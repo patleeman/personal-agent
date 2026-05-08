@@ -1,6 +1,7 @@
 import { cx, useApi, useInvalidateOnTopics } from '@personal-agent/extensions/settings';
 import { useEffect, useMemo, useState } from 'react';
 
+import { knowledgeApi } from '../lib/knowledgeApi';
 import { getKnowledgeBaseSyncPresentation } from '../lib/knowledgeBaseSyncStatus';
 
 const INPUT_CLASS =
@@ -13,7 +14,7 @@ export function KnowledgeSettingsPanel() {
     loading: knowledgeBaseLoading,
     error: knowledgeBaseLoadError,
     refetch: refetchKnowledgeBase,
-  } = useApi(knowledgeApi.state);
+  } = useApi(knowledgeApi.state, 'knowledge-settings-knowledge-base');
   const [repoUrlDraft, setRepoUrlDraft] = useState('');
   const [branchDraft, setBranchDraft] = useState('main');
   const [action, setAction] = useState<'save' | 'sync' | null>(null);

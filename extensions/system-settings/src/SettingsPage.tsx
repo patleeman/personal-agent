@@ -845,11 +845,16 @@ export function DesktopKeyboardShortcutsSettingsSection() {
     }
 
     try {
-      const [state, keybindings] = await Promise.all([bridge.readDesktopAppPreferences(), api.extensionKeybindings()]);
+      const state = await bridge.readDesktopAppPreferences();
       setPreferencesState(state);
       setDraft(state.keyboardShortcuts);
-      setExtensionKeybindings(keybindings);
       setError(null);
+
+      try {
+        setExtensionKeybindings(await api.extensionKeybindings());
+      } catch {
+        setExtensionKeybindings([]);
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {

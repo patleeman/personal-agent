@@ -12,6 +12,8 @@ function SettingsSectionPage({ sectionIds }: { sectionIds: SettingsSectionId[] }
   return <SettingsPage sectionIds={sectionIds} />;
 }
 
+export { SettingsPage };
+
 export function ProviderSettingsPage() {
   return <SettingsSectionPage sectionIds={['settings-providers']} />;
 }
