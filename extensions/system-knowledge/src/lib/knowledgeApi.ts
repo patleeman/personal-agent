@@ -1,4 +1,4 @@
-import { api, vaultApi } from '../../../../packages/desktop/ui/src/client/api';
+import { api } from '../../../../packages/desktop/ui/src/client/api';
 import type {
   KnowledgeBaseState,
   VaultBacklinksResult,
@@ -35,5 +35,5 @@ export const knowledgeApi = {
   uploadImage: (filename: string, dataUrl: string) => invoke<VaultImageUploadResult>('vaultUploadImage', { filename, dataUrl }),
   importUrl: (input: { url: string; title?: string; directoryId?: string; sourceApp?: string }) =>
     invoke<VaultShareImportResult>('vaultImportUrl', input),
-  assetUrl: vaultApi.assetUrl,
+  assetUrl: (id: string) => `/api/vault/asset?id=${encodeURIComponent(id)}`,
 };
