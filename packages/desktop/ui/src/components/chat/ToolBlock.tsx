@@ -56,7 +56,7 @@ export function ToolBlock({
   const extensionRegistry = useExtensionRegistry();
   const extensionRenderer = useMemo(() => {
     for (const extension of extensionRegistry.extensions) {
-      const renderer = extension.manifest.contributes?.transcriptRenderers?.find((candidate) => candidate.tool === block.tool);
+      const renderer = extension.manifest?.contributes?.transcriptRenderers?.find((candidate) => candidate.tool === block.tool);
       if (renderer && extension.enabled) return { extension, renderer };
     }
     return null;
