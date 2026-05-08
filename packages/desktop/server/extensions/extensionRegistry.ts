@@ -109,6 +109,17 @@ export interface ExtensionCommandRegistration {
   icon?: string;
 }
 
+export interface ExtensionKeybindingRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType: ExtensionManifest['packageType'];
+  title: string;
+  keys: string[];
+  command: string;
+  when?: string;
+  scope: 'global' | 'surface';
+}
+
 export interface ExtensionSlashCommandRegistration {
   extensionId: string;
   surfaceId: string;
@@ -378,7 +389,7 @@ export function readExtensionSchema() {
     rightSurfaceScopes: EXTENSION_RIGHT_SURFACE_SCOPES,
     routeCapabilities: EXTENSION_ROUTE_CAPABILITIES,
     iconNames: EXTENSION_ICON_NAMES,
-    contributions: ['views', 'nav', 'commands', 'slashCommands', 'mentions', 'settings', 'skills', 'tools'],
+    contributions: ['views', 'nav', 'commands', 'keybindings', 'slashCommands', 'mentions', 'settings', 'skills', 'tools'],
   };
 }
 
@@ -441,6 +452,33 @@ export function listExtensionCommandRegistrations(): ExtensionCommandRegistratio
     })),
   );
   return [...legacy, ...native];
+}
+
+export function listExtensionKeybindingRegistrations(): ExtensionKeybindingRegistration[] {
+  const snapshot = readExtensionRegistrySnapshot();
+  return snapshot.extensions.flatMap((extension) =>
+    (extension.contributes?.keybindings ?? []).flatMap((keybinding) => {
+      const id = keybinding.id.trim();
+      const title = keybinding.title.trim();
+      const command = keybinding.command.trim();
+      const keys = keybinding.keys.map((key) => key.trim()).filter(Boolean);
+      if (!id || !title || !command || keys.length === 0) {
+        return [];
+      }
+      return [
+        {
+          extensionId: extension.id,
+          surfaceId: id,
+          packageType: extension.packageType ?? 'user',
+          title,
+          keys,
+          command,
+          ...(keybinding.when ? { when: keybinding.when } : {}),
+          scope: keybinding.scope ?? 'global',
+        },
+      ];
+    }),
+  );
 }
 
 export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandRegistration[] {

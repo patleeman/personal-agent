@@ -10,6 +10,43 @@
     "styles": []
   },
   "contributes": {
+    "commands": [{ "id": "open-browser", "title": "Open browser", "action": "rightRail:system-browser/browser-tabs", "icon": "browser" }],
+    "keybindings": [
+      {
+        "id": "open-browser",
+        "title": "Open browser",
+        "keys": ["mod+shift+b"],
+        "command": "rightRail:system-browser/browser-tabs"
+      },
+      {
+        "id": "new-browser-tab",
+        "title": "New browser tab",
+        "keys": ["mod+t"],
+        "command": "browser.newTab",
+        "scope": "surface"
+      },
+      {
+        "id": "reopen-browser-tab",
+        "title": "Reopen browser tab",
+        "keys": ["mod+shift+t"],
+        "command": "browser.reopenTab",
+        "scope": "surface"
+      },
+      {
+        "id": "close-browser-tab",
+        "title": "Close browser tab",
+        "keys": ["mod+w"],
+        "command": "browser.closeTab",
+        "scope": "surface"
+      },
+      {
+        "id": "focus-browser-location",
+        "title": "Focus browser location",
+        "keys": ["mod+l"],
+        "command": "browser.focusLocation",
+        "scope": "surface"
+      }
+    ],
     "views": [
       {
         "id": "browser-tabs",

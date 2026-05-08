@@ -2,13 +2,18 @@ import { Component, type ReactNode, Suspense, useCallback, useEffect, useMemo, u
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAppData, useAppEvents } from '../app/contexts';
+import { api } from '../client/api';
+import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
 import { DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
+import { EXTENSION_REGISTRY_CHANGED_EVENT } from '../extensions/extensionRegistryEvents';
+import { findMatchingExtensionKeybinding } from '../extensions/keybindings';
 import { NativeExtensionSurfaceHost } from '../extensions/NativeExtensionSurfaceHost';
 import {
+  type ExtensionKeybindingRegistration,
   type ExtensionRightToolPanelSurface,
   type ExtensionSurfaceSummary,
   isExtensionRightToolPanelSurface,
@@ -1361,6 +1366,7 @@ export function Layout() {
   const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
   const extensionRegistry = useExtensionRegistry();
+  const [extensionKeybindings, setExtensionKeybindings] = useState<ExtensionKeybindingRegistration[]>([]);
   const canShowContextRail = !routeSupportsContextRail(location.pathname, extensionRegistry.surfaces);
 
   useEffect(() => {
@@ -1465,7 +1471,79 @@ export function Layout() {
     },
     [activeConversationId],
   );
+
+  const runExtensionKeybindingCommand = useCallback(
+    (command: string) => {
+      if (command.startsWith('navigate:')) {
+        navigate(command.slice('navigate:'.length));
+        return true;
+      }
+      if (command.startsWith('commandPalette:')) {
+        const scope = command.slice('commandPalette:'.length);
+        window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { scope } }));
+        return true;
+      }
+      if (command.startsWith('layout:')) {
+        const mode = command.slice('layout:'.length);
+        if (mode === 'conversation' || mode === 'workbench' || mode === 'zen') {
+          writeAppLayoutMode(mode);
+          setAppLayoutMode(mode);
+          return true;
+        }
+      }
+      if (command.startsWith('rightRail:')) {
+        const target = command.slice('rightRail:'.length);
+        const surface = extensionRightToolPanels.find((candidate) => `${candidate.extensionId}/${candidate.id}` === target);
+        if (surface) {
+          setActiveConversationTool(extensionToolPanelMode(surface));
+          setRailOpen(true);
+          return true;
+        }
+      }
+      return false;
+    },
+    [extensionRightToolPanels, navigate, setActiveConversationTool],
+  );
+
   const lastWorkbenchRouteRef = useRef<{ pathname: string; search: string }>({ pathname: '/conversations/new', search: '' });
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      api
+        .extensionKeybindings()
+        .then((items) => {
+          if (!cancelled) setExtensionKeybindings(items);
+        })
+        .catch(() => {
+          if (!cancelled) setExtensionKeybindings([]);
+        });
+    };
+    load();
+    window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleExtensionKeybinding(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      const match = findMatchingExtensionKeybinding(
+        event,
+        extensionKeybindings.filter((keybinding) => keybinding.scope === 'global'),
+      );
+      if (!match) return;
+      if (runExtensionKeybindingCommand(match.command)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    window.addEventListener('keydown', handleExtensionKeybinding, true);
+    return () => window.removeEventListener('keydown', handleExtensionKeybinding, true);
+  }, [extensionKeybindings, runExtensionKeybindingCommand]);
 
   useEffect(() => {
     if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {

@@ -7,6 +7,15 @@
   "version": "0.1.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
+    "commands": [{ "id": "open-settings", "title": "Open Settings", "action": "navigate:/settings", "icon": "gear" }],
+    "keybindings": [
+      {
+        "id": "open-settings",
+        "title": "Open Settings",
+        "keys": ["mod+,"],
+        "command": "navigate:/settings"
+      }
+    ],
     "views": [
       {
         "id": "providers",

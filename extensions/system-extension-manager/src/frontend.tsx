@@ -92,6 +92,7 @@ function contributionCounts(extension: ExtensionInstallSummary) {
     rails: views.filter((view) => view.location === 'rightRail').length,
     workbench: views.filter((view) => view.location === 'workbench').length,
     tools: extension.tools?.length ?? 0,
+    keybindings: extension.manifest?.contributes?.keybindings?.length ?? 0,
     backend: extension.backendActions?.length ?? 0,
     skills: extension.skills?.length ?? 0,
     agentHooks: extension.manifest?.backend?.agentExtension ? 1 : 0,
@@ -211,6 +212,15 @@ function SkillIcon() {
   );
 }
 
+function KeybindingIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2.5" y="4" width="11" height="8" rx="1.5" />
+      <path d="M4.5 6.5h1M7.5 6.5h1M10.5 6.5h1M4.5 9.5h7" />
+    </svg>
+  );
+}
+
 function AgentHookIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -241,6 +251,11 @@ function formatAgentHookSummary(extension: ExtensionInstallSummary): string {
 
 function formatToolSummary(extension: ExtensionInstallSummary): string {
   return extension.tools?.length ? extension.tools.map((tool) => tool.name).join(', ') : 'None';
+}
+
+function formatKeybindingSummary(extension: ExtensionInstallSummary): string {
+  const keybindings = extension.manifest?.contributes?.keybindings ?? [];
+  return keybindings.length ? keybindings.map((keybinding) => `${keybinding.title}: ${keybinding.keys.join(' / ')}`).join(', ') : 'None';
 }
 
 function formatSkillSummary(extension: ExtensionInstallSummary): string {
@@ -573,6 +588,7 @@ export function ExtensionManagerPage() {
                                 <CompactCount icon={<RailIcon />} count={counts.rails} title="Right rail panels" />
                                 <CompactCount icon={<WorkbenchIcon />} count={counts.workbench} title="Workbench details" />
                                 <CompactCount icon={<ToolIcon />} count={counts.tools} title="Agent tools" />
+                                <CompactCount icon={<KeybindingIcon />} count={counts.keybindings} title="Keyboard shortcuts" />
                                 <CompactCount icon={<AgentHookIcon />} count={counts.agentHooks} title="Agent lifecycle hooks" />
                                 <CompactCount icon={<BackendIcon />} count={counts.backend} title="Backend actions" />
                                 <CompactCount icon={<SkillIcon />} count={counts.skills} title="Skills" />
@@ -695,6 +711,7 @@ export function ExtensionManagerPage() {
                             label="Agent"
                             value={`Tools: ${formatToolSummary(selectedExtension)} · Hook: ${formatAgentHookSummary(selectedExtension)} · Skills: ${formatSkillSummary(selectedExtension)}`}
                           />
+                          <DetailRow label="Shortcuts" value={formatKeybindingSummary(selectedExtension)} />
                           <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(selectedExtension)}`} />
                           <DetailRow label="Permissions" value={formatPermissionSummary(selectedExtension)} />
                         </dl>

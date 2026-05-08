@@ -128,6 +128,14 @@ Example:
         "action": "createTask"
       }
     ],
+    "keybindings": [
+      {
+        "id": "agentBoard.open",
+        "title": "Open Agent Board",
+        "keys": ["mod+shift+a"],
+        "command": "navigate:/ext/agent-board"
+      }
+    ],
     "slashCommands": [
       {
         "name": "task",
@@ -147,6 +155,19 @@ Manifest rules:
 - Renderable views declare the frontend bundle and exported component name explicitly.
 - Backend actions declare stable action IDs and exported handler names.
 - Permissions are required as intent declarations even before strict enforcement exists.
+
+## Keyboard shortcuts
+
+Extensions register shortcuts with `contributes.keybindings`. The manifest owns the default binding; the host owns listening, conflict handling, and dispatch. Do not install global `window` listeners from extension code for app-level shortcuts.
+
+A keybinding targets a command string. Supported host commands today:
+
+- `navigate:/path` — navigate to a route.
+- `commandPalette:threads|files|commands|search` — open the command palette in a scope.
+- `rightRail:{extensionId}/{surfaceId}` — open a right-rail extension surface.
+- `layout:conversation|workbench|zen` — switch layout mode.
+
+Use `scope: "surface"` for shortcuts that are documented with a surface but handled locally by that surface, like browser tab shortcuts. Use global scope only when the shortcut should work anywhere in the app.
 
 ## Frontend runtime
 

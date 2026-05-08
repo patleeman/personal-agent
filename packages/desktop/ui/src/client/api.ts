@@ -2,6 +2,7 @@ import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBrid
 import type {
   ExtensionCommandRegistration,
   ExtensionInstallSummary,
+  ExtensionKeybindingRegistration,
   ExtensionManifest,
   ExtensionMentionRegistration,
   ExtensionRouteSummary,
@@ -321,6 +322,7 @@ export const api = {
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),
+  extensionKeybindings: async () => get<ExtensionKeybindingRegistration[]>('/extensions/keybindings'),
   extensionSlashCommands: async () => get<ExtensionSlashCommandRegistration[]>('/extensions/slash-commands'),
   extensionMentions: async () => get<ExtensionMentionRegistration[]>('/extensions/mentions'),
   extensionManifest: async (extensionId: string) => get<ExtensionManifest>(`/extensions/${encodeURIComponent(extensionId)}/manifest`),

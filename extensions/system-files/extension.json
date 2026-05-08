@@ -7,6 +7,15 @@
   "version": "0.2.0",
   "frontend": { "entry": "dist/frontend.js", "styles": [] },
   "contributes": {
+    "commands": [{ "id": "open-files-palette", "title": "Open file palette", "action": "commandPalette:files", "icon": "file" }],
+    "keybindings": [
+      {
+        "id": "open-files-palette",
+        "title": "Open file palette",
+        "keys": ["mod+p"],
+        "command": "commandPalette:files"
+      }
+    ],
     "views": [
       {
         "id": "workspace-files",

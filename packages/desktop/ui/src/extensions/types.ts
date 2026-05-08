@@ -55,6 +55,15 @@ interface ExtensionCommandContribution {
   icon?: ExtensionIconName;
 }
 
+interface ExtensionKeybindingContribution {
+  id: string;
+  title: string;
+  keys: string[];
+  command: string;
+  when?: string;
+  scope?: 'global' | 'surface';
+}
+
 interface ExtensionSlashCommandContribution {
   name: string;
   description: string;
@@ -100,6 +109,7 @@ interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
   commands?: ExtensionCommandContribution[];
+  keybindings?: ExtensionKeybindingContribution[];
   slashCommands?: ExtensionSlashCommandContribution[];
   mentions?: ExtensionMentionContribution[];
   skills?: Array<string | ExtensionSkillContribution>;
@@ -235,6 +245,17 @@ export interface ExtensionCommandRegistration {
   title: string;
   action: string;
   icon?: string;
+}
+
+export interface ExtensionKeybindingRegistration {
+  extensionId: string;
+  surfaceId: string;
+  packageType?: ExtensionPackageType;
+  title: string;
+  keys: string[];
+  command: string;
+  when?: string;
+  scope: 'global' | 'surface';
 }
 
 export interface ExtensionSlashCommandRegistration {

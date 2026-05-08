@@ -15,6 +15,7 @@ import {
   findExtensionEntry,
   listExtensionCommandRegistrations,
   listExtensionInstallSummaries,
+  listExtensionKeybindingRegistrations,
   listExtensionMentionRegistrations,
   listExtensionSlashCommandRegistrations,
   readExtensionRegistrySnapshot,
@@ -183,6 +184,14 @@ export function registerExtensionRoutes(
       res.json(listExtensionCommandRegistrations());
     } catch (err) {
       sendRouteError(res, 'extensions commands error', err);
+    }
+  });
+
+  router.get('/api/extensions/keybindings', (_req, res) => {
+    try {
+      res.json(listExtensionKeybindingRegistrations());
+    } catch (err) {
+      sendRouteError(res, 'extensions keybindings error', err);
     }
   });
 
