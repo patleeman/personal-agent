@@ -1,17 +1,15 @@
 import {
-  createStoredAutomation,
-  deleteStoredAutomation,
-  listStoredAutomations,
-  loadAutomationRuntimeStateMap,
-} from '@personal-agent/daemon';
-import {
   applyScheduledTaskThreadBinding,
   cancelDeferredResumeForSessionFile,
   cancelQueuedPrompt,
+  createStoredAutomation,
   DEFAULT_DEFERRED_RESUME_PROMPT,
   type DeferredResumeSummary,
+  deleteStoredAutomation,
   getSessionDeferredResumeEntries,
   listQueuedPromptPreviews,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
   loadDeferredResumeState,
   parseDeferredResumeDelayMs,
   parseFutureHumanDateTime,

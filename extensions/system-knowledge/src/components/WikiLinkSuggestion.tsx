@@ -1,7 +1,6 @@
+import type { VaultEntry } from '@personal-agent/extensions/knowledge';
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-
-import type { VaultEntry } from '../../../../packages/desktop/ui/src/shared/types';
 
 // ── List component ────────────────────────────────────────────────────────────
 

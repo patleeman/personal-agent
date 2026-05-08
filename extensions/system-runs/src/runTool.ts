@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { createStoredAutomation, pingDaemon, startBackgroundRun } from '@personal-agent/daemon';
 import {
   applyScheduledTaskThreadBinding,
   cancelDurableRun,
+  createStoredAutomation,
   followUpDurableRun,
   getDurableRun,
   getDurableRunLog,
@@ -10,8 +10,10 @@ import {
   listDurableRuns,
   parseDeferredResumeDelayMs,
   persistAppTelemetryEvent,
+  pingDaemon,
   rerunDurableRun,
   setTaskCallbackBinding,
+  startBackgroundRun,
 } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 

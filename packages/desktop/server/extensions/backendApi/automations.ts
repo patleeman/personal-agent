@@ -39,3 +39,14 @@ export {
   readSessionConversationId,
   setTaskCallbackBinding,
 } from '@personal-agent/core';
+export {
+  createStoredAutomation,
+  deleteStoredAutomation,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
+  normalizeAutomationTargetTypeForSelection,
+  pingDaemon,
+  startScheduledTaskRun,
+  type StoredAutomation,
+  updateStoredAutomation,
+} from '@personal-agent/daemon';

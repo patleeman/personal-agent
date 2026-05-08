@@ -1,29 +1,27 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import {
-  createStoredAutomation,
-  deleteStoredAutomation,
-  normalizeAutomationTargetTypeForSelection,
-  pingDaemon,
-  startScheduledTaskRun,
-  type StoredAutomation,
-  updateStoredAutomation,
-} from '@personal-agent/daemon';
-import {
   applyScheduledTaskThreadBinding,
   buildScheduledTaskThreadDetail,
   clearTaskCallbackBinding,
+  createStoredAutomation,
+  deleteStoredAutomation,
   getTaskCallbackBinding,
   invalidateAppTopics,
   type LoadedScheduledTasksForProfile,
   loadScheduledTasksForProfile,
+  normalizeAutomationTargetTypeForSelection,
   parseFutureHumanDateTime,
   persistAppTelemetryEvent,
+  pingDaemon,
   readSessionConversationId,
   resolveScheduledTaskForProfile,
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
   setTaskCallbackBinding,
+  startScheduledTaskRun,
+  type StoredAutomation,
   type TaskRuntimeEntry,
+  updateStoredAutomation,
 } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 

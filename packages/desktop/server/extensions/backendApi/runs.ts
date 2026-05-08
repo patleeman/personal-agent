@@ -10,3 +10,4 @@ export { applyScheduledTaskThreadBinding } from '../../automation/scheduledTaskT
 export { invalidateAppTopics } from '../../shared/appEvents.js';
 export { persistAppTelemetryEvent } from '../../traces/appTelemetry.js';
 export { parseDeferredResumeDelayMs, setTaskCallbackBinding } from '@personal-agent/core';
+export { createStoredAutomation, pingDaemon, startBackgroundRun } from '@personal-agent/daemon';

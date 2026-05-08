@@ -46,6 +46,7 @@ export function onKBEvent<T = unknown>(type: KBEventType, handler: (detail: T) =
 
 // ── Vault file system watcher ─────────────────────────────────────────────
 
+import { buildApiPath } from '@personal-agent/extensions/knowledge';
 import { useEffect, useRef } from 'react';
 
 const VAULT_WATCH_DEBOUNCE_MS = 180;
@@ -65,42 +66,33 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
     if (typeof window === 'undefined') return;
     let timer: number | null = null;
     let source: EventSource | null = null;
-    let closed = false;
 
-    import('../../../../packages/desktop/ui/src/client/apiBase')
-      .then(({ buildApiPath }) => {
-        if (closed) return;
-        source = new EventSource(buildApiPath('/vault/events'));
+    source = new EventSource(buildApiPath('/vault/events'));
 
-        const schedule = () => {
-          if (timer !== null) window.clearTimeout(timer);
-          timer = window.setTimeout(() => onEventRef.current(), VAULT_WATCH_DEBOUNCE_MS);
-        };
+    const schedule = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => onEventRef.current(), VAULT_WATCH_DEBOUNCE_MS);
+    };
 
-        source.addEventListener('message', (event: MessageEvent<string>) => {
-          try {
-            const payload = JSON.parse(event.data) as Record<string, unknown>;
-            if (payload.type === 'ready' && typeof payload.root === 'string') {
-              onReadyRef.current?.(payload.root);
-              return;
-            }
-          } catch {
-            // ignore parse errors
-          }
-          schedule();
-        });
+    source.addEventListener('message', (event: MessageEvent<string>) => {
+      try {
+        const payload = JSON.parse(event.data) as Record<string, unknown>;
+        if (payload.type === 'ready' && typeof payload.root === 'string') {
+          onReadyRef.current?.(payload.root);
+          return;
+        }
+      } catch {
+        // ignore parse errors
+      }
+      schedule();
+    });
 
-        source.onerror = () => {
-          source?.close();
-          schedule();
-        };
-      })
-      .catch(() => {
-        // module load failed, ignore
-      });
+    source.onerror = () => {
+      source?.close();
+      schedule();
+    };
 
     return () => {
-      closed = true;
       if (timer !== null) window.clearTimeout(timer);
       source?.close();
     };
