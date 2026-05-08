@@ -747,46 +747,6 @@ export interface MaterializeRuntimeResourcesResult {
   writtenFiles: string[];
 }
 
-function parseFrontmatterValue(contents: string, key: string): string | undefined {
-  const match = contents.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-  return match?.[1]?.trim();
-}
-
-function listAvailableInternalSkills(repoRoot: string): Array<{ name: string; title?: string; description: string; path: string }> {
-  const featureDocsDir = join(repoRoot, 'internal-skills');
-  if (!existsSync(featureDocsDir)) {
-    return [];
-  }
-
-  return readdirSync(featureDocsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      const path = join(featureDocsDir, entry.name, 'INDEX.md');
-      if (!existsSync(path)) {
-        return null;
-      }
-
-      const contents = readFileSync(path, 'utf-8');
-      const title = parseFrontmatterValue(contents, 'title') ?? contents.match(/^#\\s+(.+)$/m)?.[1]?.trim() ?? entry.name;
-      const description =
-        parseFrontmatterValue(contents, 'summary') ??
-        contents
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .find((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('---') && !line.includes(': ')) ??
-        '';
-
-      return {
-        name: parseFrontmatterValue(contents, 'id') ?? entry.name,
-        title,
-        description,
-        path,
-      };
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
 function readSkillPromptSummary(skillDir: string): { name: string; description: string; path: string } | null {
   const skillPath = join(skillDir, 'SKILL.md');
   if (!existsSync(skillPath)) return null;
@@ -891,14 +851,7 @@ export function materializeRuntimeResourcesToAgentDir(
     tasks_dir: getDurableTasksDir(getSyncRoot(getStateRoot())),
     docs_dir: join(resources.repoRoot, 'docs'),
     docs_index: join(resources.repoRoot, 'docs', 'README.md'),
-    feature_docs_dir: join(resources.repoRoot, 'internal-skills'),
-    feature_docs_index: join(resources.repoRoot, 'internal-skills', 'README.md'),
   };
-
-  const internalSkills = listAvailableInternalSkills(resources.repoRoot);
-  if (internalSkills.length > 0) {
-    templateVariables.available_internal_skills = internalSkills;
-  }
 
   try {
     const { nodes } = loadUnifiedNodes({ vaultRoot: resources.vaultRoot });

@@ -1,6 +1,6 @@
 ---
 id: async-attention
-kind: internal-skill
+kind: extension-skill
 title: Async Attention and Wakeups
 summary: Built-in routing guide for conversation queueing, reminders, owning surfaces, and later attention.
 tools:
@@ -167,7 +167,7 @@ Do not:
 
 ## Related docs
 
-- [Decision Guide](../../docs/decision-guide.md)
+- [Decision Guide](../../../../docs/decision-guide.md)
 - [Async Attention and Wakeups](#async-attention-and-wakeups)
-- [Scheduled Tasks](../scheduled-tasks/INDEX.md)
-- [Conversations](../../docs/conversations.md)
+- [Scheduled Tasks](../scheduled-tasks/SKILL.md)
+- [Conversations](../../../../docs/conversations.md)

@@ -62,22 +62,7 @@ Prefer durable runs for multi-step or long-running work — one run per task. Us
 ## Documentation
 - Docs folder: {{ docs_dir }}
 - Docs index: {{ docs_index }}
-- Internal skills folder: {{ feature_docs_dir }}
-- Internal skills index: {{ feature_docs_index }}
-- When the task is about a built-in personal-agent feature or tool behavior, check the matching internal skill first.
-
-{% if available_internal_skills %}
-## Internal personal-agent feature skills
-Built-in runtime guides for personal-agent features. Read the matching one when the task touches artifacts, runs, tasks, reminders, runtime capabilities, or similar built-in features.
-
-<available_internal_skills>
-{% for skill in available_internal_skills %}
-  <internal_skill id="{{ skill.name }}" title="{{ skill.title or skill.name }}" location="{{ skill.path }}">
-    {{ skill.description }}
-  </internal_skill>
-{% endfor %}
-</available_internal_skills>
-{% endif %}
+- Extension skills are registered by extension manifests and appear in Available Skills.
 
 {% if available_skills %}
 ## Available Skills

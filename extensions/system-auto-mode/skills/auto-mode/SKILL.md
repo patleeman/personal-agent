@@ -1,6 +1,6 @@
 ---
 id: auto-mode
-kind: internal-skill
+kind: extension-skill
 title: Auto Mode
 summary: Built-in guide for autonomous conversation continuation, validation, durable runs, and disciplined follow-through.
 tools:
@@ -12,7 +12,7 @@ tools:
 
 # Auto Mode
 
-Use this internal skill when the user enables auto mode or asks the agent to take ownership of a task and keep moving without frequent check-ins.
+Use this extension skill when the user enables auto mode or asks the agent to take ownership of a task and keep moving without frequent check-ins.
 
 Auto mode is for work that may span:
 
@@ -232,6 +232,6 @@ Useful additions:
 
 ## Related docs
 
-- [Async Attention and Wakeups](../async-attention/INDEX.md)
-- [Runs](../runs/INDEX.md)
-- [Conversations](../../docs/conversations.md)
+- [Async Attention and Wakeups](../../../system-automations/skills/async-attention/SKILL.md)
+- [Runs](../../../system-runs/skills/runs/SKILL.md)
+- [Conversations](../../../../docs/conversations.md)

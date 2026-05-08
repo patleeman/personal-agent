@@ -78,10 +78,6 @@ const electronBuilderConfig = {
       to: 'extensions',
     },
     {
-      from: 'internal-skills',
-      to: 'internal-skills',
-    },
-    {
       from: 'prompt-catalog',
       to: 'prompt-catalog',
     },

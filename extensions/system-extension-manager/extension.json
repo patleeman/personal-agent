@@ -5,7 +5,10 @@
   "packageType": "system",
   "description": "Inspect, build, reload, enable, disable, snapshot, import, and export extensions.",
   "version": "0.1.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "contributes": {
     "views": [
       {
@@ -15,6 +18,14 @@
         "route": "/extensions",
         "component": "ExtensionManagerPage",
         "routeCapabilities": ["contextRail"]
+      }
+    ],
+    "skills": [
+      {
+        "id": "skills-and-capabilities",
+        "title": "Skills and Runtime Capabilities",
+        "description": "Guidance for distinguishing reusable workflow skills from runtime features and extensions.",
+        "path": "skills/skills-and-capabilities/SKILL.md"
       }
     ]
   },

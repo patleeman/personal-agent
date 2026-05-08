@@ -1,6 +1,6 @@
 ---
 id: runs
-kind: internal-skill
+kind: extension-skill
 title: Runs
 summary: Built-in guidance for detached durable background runs, inspection, and follow-up behavior.
 tools:
@@ -33,7 +33,7 @@ Good fits:
 
 Do not use runs for:
 
-- task-file-based automation — use [Scheduled Tasks](../scheduled-tasks/INDEX.md)
+- task-file-based automation — use [Scheduled Tasks](../../../system-automations/skills/scheduled-tasks/SKILL.md)
 - direct human reminders — use reminders/alerts
 - pure "continue this conversation later" wakeups with no background job — use `conversation_queue`
 
@@ -198,7 +198,7 @@ For "persistent automation from a file," use `scheduled_task`.
 
 ## Related docs
 
-- [Decision Guide](../../docs/decision-guide.md)
-- [Scheduled Tasks](../scheduled-tasks/INDEX.md)
-- [Daemon and Background Automation](../../docs/daemon.md)
-- [Command-Line Guide (`pa`)](../../docs/command-line.md)
+- [Decision Guide](../../../../docs/decision-guide.md)
+- [Scheduled Tasks](../../../system-automations/skills/scheduled-tasks/SKILL.md)
+- [Daemon and Background Automation](../../../../docs/daemon.md)
+- [Command-Line Guide (`pa`)](../../../../docs/command-line.md)

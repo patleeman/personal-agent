@@ -28,7 +28,6 @@ function seedPackagedApp(appRoot: string, resourcesPath: string): void {
   mkdirSync(join(appRoot, 'assets'), { recursive: true });
   mkdirSync(join(resourcesPath, 'defaults'), { recursive: true });
   mkdirSync(join(resourcesPath, 'extensions'), { recursive: true });
-  mkdirSync(join(resourcesPath, 'internal-skills'), { recursive: true });
   mkdirSync(join(resourcesPath, 'prompt-catalog'), { recursive: true });
   writeFileSync(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
   writeFileSync(join(appRoot, 'server', 'dist', 'index.js'), 'console.log("web");\n');

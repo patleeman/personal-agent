@@ -10,7 +10,14 @@
     "styles": []
   },
   "contributes": {
-    "commands": [{ "id": "open-browser", "title": "Open browser", "action": "rightRail:system-browser/browser-tabs", "icon": "browser" }],
+    "commands": [
+      {
+        "id": "open-browser",
+        "title": "Open browser",
+        "action": "rightRail:system-browser/browser-tabs",
+        "icon": "browser"
+      }
+    ],
     "keybindings": [
       {
         "id": "open-browser",
@@ -62,6 +69,14 @@
         "title": "Browser",
         "location": "workbench",
         "component": "BrowserWorkbenchPanel"
+      }
+    ],
+    "skills": [
+      {
+        "id": "browser",
+        "title": "Built-in Workbench Browser",
+        "description": "Guidance for the desktop workbench Browser tab, browser comments, and how it differs from the agent-browser CLI.",
+        "path": "skills/browser/SKILL.md"
       }
     ]
   },

@@ -12,9 +12,21 @@
   "backend": {
     "entry": "src/backend.ts",
     "actions": [
-      { "id": "scheduledTask", "handler": "scheduledTask", "title": "Scheduled task" },
-      { "id": "reminder", "handler": "reminder", "title": "Reminder" },
-      { "id": "conversationQueue", "handler": "conversationQueue", "title": "Conversation queue" }
+      {
+        "id": "scheduledTask",
+        "handler": "scheduledTask",
+        "title": "Scheduled task"
+      },
+      {
+        "id": "reminder",
+        "handler": "reminder",
+        "title": "Reminder"
+      },
+      {
+        "id": "conversationQueue",
+        "handler": "conversationQueue",
+        "title": "Conversation queue"
+      }
     ]
   },
   "contributes": {
@@ -28,27 +40,75 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "action": { "type": "string", "enum": ["list", "get", "save", "delete", "validate", "run"] },
-            "profile": { "type": "string" },
-            "taskId": { "type": "string" },
-            "title": { "type": "string" },
-            "enabled": { "type": "boolean" },
-            "cron": { "type": "string" },
-            "at": { "type": "string" },
-            "targetType": { "type": "string", "enum": ["background-agent", "conversation"] },
-            "threadMode": { "type": "string", "enum": ["dedicated", "existing", "none"] },
-            "threadConversationId": { "type": "string" },
-            "deliverAs": { "type": "string", "enum": ["steer", "followUp"] },
-            "model": { "type": "string" },
-            "cwd": { "type": "string" },
-            "timeoutSeconds": { "type": "number", "minimum": 1 },
-            "catchUpWindowSeconds": { "type": "number", "minimum": 1 },
-            "prompt": { "type": "string" },
-            "deliverResultToConversation": { "type": "boolean" },
-            "notifyOnSuccess": { "type": "boolean" },
-            "notifyOnFailure": { "type": "boolean" },
-            "requireAck": { "type": "boolean" },
-            "autoResumeIfOpen": { "type": "boolean" }
+            "action": {
+              "type": "string",
+              "enum": ["list", "get", "save", "delete", "validate", "run"]
+            },
+            "profile": {
+              "type": "string"
+            },
+            "taskId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "cron": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "targetType": {
+              "type": "string",
+              "enum": ["background-agent", "conversation"]
+            },
+            "threadMode": {
+              "type": "string",
+              "enum": ["dedicated", "existing", "none"]
+            },
+            "threadConversationId": {
+              "type": "string"
+            },
+            "deliverAs": {
+              "type": "string",
+              "enum": ["steer", "followUp"]
+            },
+            "model": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "timeoutSeconds": {
+              "type": "number",
+              "minimum": 1
+            },
+            "catchUpWindowSeconds": {
+              "type": "number",
+              "minimum": 1
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "deliverResultToConversation": {
+              "type": "boolean"
+            },
+            "notifyOnSuccess": {
+              "type": "boolean"
+            },
+            "notifyOnFailure": {
+              "type": "boolean"
+            },
+            "requireAck": {
+              "type": "boolean"
+            },
+            "autoResumeIfOpen": {
+              "type": "boolean"
+            }
           },
           "required": ["action"],
           "additionalProperties": false
@@ -63,14 +123,33 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "action": { "type": "string", "enum": ["add", "list", "cancel"] },
-            "id": { "type": "string" },
-            "prompt": { "type": "string" },
-            "trigger": { "type": "string", "enum": ["after_turn", "delay", "at"] },
-            "delay": { "type": "string" },
-            "at": { "type": "string" },
-            "deliverAs": { "type": "string", "enum": ["steer", "followUp"] },
-            "title": { "type": "string" }
+            "action": {
+              "type": "string",
+              "enum": ["add", "list", "cancel"]
+            },
+            "id": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": ["after_turn", "delay", "at"]
+            },
+            "delay": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "deliverAs": {
+              "type": "string",
+              "enum": ["steer", "followUp"]
+            },
+            "title": {
+              "type": "string"
+            }
           },
           "required": ["action"],
           "additionalProperties": false
@@ -85,20 +164,42 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "delay": { "type": "string" },
-            "at": { "type": "string" },
-            "prompt": { "type": "string" },
-            "title": { "type": "string" },
-            "notify": { "type": "string", "enum": ["passive", "disruptive"] },
-            "requireAck": { "type": "boolean" },
-            "autoResumeIfOpen": { "type": "boolean" }
+            "delay": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "notify": {
+              "type": "string",
+              "enum": ["passive", "disruptive"]
+            },
+            "requireAck": {
+              "type": "boolean"
+            },
+            "autoResumeIfOpen": {
+              "type": "boolean"
+            }
           },
           "required": ["prompt"],
           "additionalProperties": false
         }
       }
     ],
-    "nav": [{ "id": "nav", "label": "Automations", "route": "/automations", "icon": "automation" }],
+    "nav": [
+      {
+        "id": "nav",
+        "label": "Automations",
+        "route": "/automations",
+        "icon": "automation"
+      }
+    ],
     "views": [
       {
         "id": "page",
@@ -107,6 +208,20 @@
         "route": "/automations",
         "component": "AutomationsPage",
         "routeCapabilities": ["contextRail", "workbench", "workbenchFilePane"]
+      }
+    ],
+    "skills": [
+      {
+        "id": "async-attention",
+        "title": "Async Attention and Wakeups",
+        "description": "Built-in routing guide for conversation queueing, reminders, owning surfaces, and later attention.",
+        "path": "skills/async-attention/SKILL.md"
+      },
+      {
+        "id": "scheduled-tasks",
+        "title": "Scheduled Tasks",
+        "description": "Built-in guidance for daemon-backed scheduled automations and conversation callbacks.",
+        "path": "skills/scheduled-tasks/SKILL.md"
       }
     ]
   },

@@ -5,10 +5,19 @@
   "packageType": "system",
   "description": "Inspect and manage background work linked to the active conversation.",
   "version": "0.2.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "backend": {
     "entry": "src/backend.ts",
-    "actions": [{ "id": "run", "handler": "run", "title": "Run" }]
+    "actions": [
+      {
+        "id": "run",
+        "handler": "run",
+        "title": "Run"
+      }
+    ]
   },
   "contributes": {
     "tools": [
@@ -21,22 +30,57 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "action": { "type": "string", "enum": ["list", "get", "logs", "start", "start_agent", "rerun", "follow_up", "cancel"] },
-            "runId": { "type": "string" },
-            "taskSlug": { "type": "string" },
-            "command": { "type": "string" },
-            "prompt": { "type": "string" },
-            "model": { "type": "string" },
-            "profile": { "type": "string" },
-            "cwd": { "type": "string" },
-            "tail": { "type": "number", "minimum": 1, "maximum": 1000 },
-            "deliverResultToConversation": { "type": "boolean" },
-            "defer": { "type": "string" },
-            "cron": { "type": "string" },
-            "at": { "type": "string" },
-            "loop": { "type": "boolean" },
-            "loopDelay": { "type": "string" },
-            "loopMaxIterations": { "type": "number" }
+            "action": {
+              "type": "string",
+              "enum": ["list", "get", "logs", "start", "start_agent", "rerun", "follow_up", "cancel"]
+            },
+            "runId": {
+              "type": "string"
+            },
+            "taskSlug": {
+              "type": "string"
+            },
+            "command": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "profile": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "tail": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "deliverResultToConversation": {
+              "type": "boolean"
+            },
+            "defer": {
+              "type": "string"
+            },
+            "cron": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "loop": {
+              "type": "boolean"
+            },
+            "loopDelay": {
+              "type": "string"
+            },
+            "loopMaxIterations": {
+              "type": "number"
+            }
           },
           "required": ["action"],
           "additionalProperties": false
@@ -58,6 +102,14 @@
         "title": "Run detail",
         "location": "workbench",
         "component": "ConversationRunDetailPanel"
+      }
+    ],
+    "skills": [
+      {
+        "id": "runs",
+        "title": "Runs",
+        "description": "Built-in guidance for detached durable background runs, inspection, and follow-up behavior.",
+        "path": "skills/runs/SKILL.md"
       }
     ]
   },

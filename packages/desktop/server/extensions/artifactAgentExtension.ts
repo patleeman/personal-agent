@@ -14,12 +14,12 @@ import { invalidateAppTopics } from '../shared/appEvents.js';
 
 const ARTIFACT_ACTION_VALUES = ['save', 'get', 'list', 'delete'] as const;
 const ARTIFACT_KIND_VALUES = ['html', 'mermaid', 'latex'] as const;
-function resolveArtifactInternalSkillPath(repoRoot: string): string {
-  return join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md');
+function resolveArtifactSkillPath(repoRoot: string): string {
+  return join(repoRoot, 'extensions', 'system-artifacts', 'skills', 'artifacts', 'SKILL.md');
 }
 
 function resolveArtifactWhitePaperReferencePath(repoRoot: string): string {
-  return join(repoRoot, 'internal-skills', 'artifacts', 'references', 'white-paper.md');
+  return join(repoRoot, 'extensions', 'system-artifacts', 'skills', 'artifacts', 'references', 'white-paper.md');
 }
 
 type ArtifactAction = (typeof ARTIFACT_ACTION_VALUES)[number];
@@ -95,7 +95,7 @@ export function createArtifactAgentExtension(options: {
       promptGuidelines: [
         'Use this tool when the user asks for a rendered artifact in the desktop UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
         'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
-        `For report-style HTML artifacts, read the built-in artifacts internal skill at ${resolveArtifactInternalSkillPath(
+        `For report-style HTML artifacts, read the Artifacts extension skill at ${resolveArtifactSkillPath(
           options.repoRoot,
         )} and adapt the white-paper reference at ${resolveArtifactWhitePaperReferencePath(options.repoRoot)}.`,
         'Default white-paper/report HTML to a self-contained single-column reading layout with calm typography; think internal memo or technical report, not dashboard or landing page chrome.',

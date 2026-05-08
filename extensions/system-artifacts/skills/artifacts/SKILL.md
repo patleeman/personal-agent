@@ -1,6 +1,6 @@
 ---
 id: artifacts
-kind: internal-skill
+kind: extension-skill
 title: Artifacts and Rendered Outputs
 summary: Built-in guidance for conversation artifacts, project artifacts, and rendered output behavior.
 tools:
@@ -159,7 +159,7 @@ Then choose the right home:
 
 ## Related docs
 
-- [Decision Guide](../../docs/decision-guide.md)
-- [Projects](../../docs/projects.md)
-- [Conversations](../../docs/conversations.md)
-- [Web UI Guide](../../docs/web-ui.md)
+- [Decision Guide](../../../../docs/decision-guide.md)
+- [Projects](../../../../docs/projects.md)
+- [Conversations](../../../../docs/conversations.md)
+- [Web UI Guide](../../../../docs/web-ui.md)

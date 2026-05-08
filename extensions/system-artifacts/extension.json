@@ -5,10 +5,19 @@
   "packageType": "system",
   "description": "Review rendered artifacts beside the active conversation.",
   "version": "0.1.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "backend": {
     "entry": "src/backend.ts",
-    "actions": [{ "id": "artifact", "handler": "artifact", "title": "Artifact" }]
+    "actions": [
+      {
+        "id": "artifact",
+        "handler": "artifact",
+        "title": "Artifact"
+      }
+    ]
   },
   "contributes": {
     "tools": [
@@ -21,19 +30,43 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "action": { "type": "string", "enum": ["save", "get", "list", "delete"] },
-            "artifactId": { "type": "string", "description": "Stable artifact id. Reuse this when updating an existing artifact." },
-            "kind": { "type": "string", "enum": ["html", "mermaid", "latex"] },
-            "title": { "type": "string", "description": "Artifact title shown in the chat stub and artifact panel." },
-            "content": { "type": "string", "description": "Artifact source content." },
-            "open": { "type": "boolean", "description": "Whether the artifact panel should open after saving. Defaults to true." }
+            "action": {
+              "type": "string",
+              "enum": ["save", "get", "list", "delete"]
+            },
+            "artifactId": {
+              "type": "string",
+              "description": "Stable artifact id. Reuse this when updating an existing artifact."
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["html", "mermaid", "latex"]
+            },
+            "title": {
+              "type": "string",
+              "description": "Artifact title shown in the chat stub and artifact panel."
+            },
+            "content": {
+              "type": "string",
+              "description": "Artifact source content."
+            },
+            "open": {
+              "type": "boolean",
+              "description": "Whether the artifact panel should open after saving. Defaults to true."
+            }
           },
           "required": ["action"],
           "additionalProperties": false
         }
       }
     ],
-    "transcriptRenderers": [{ "id": "artifact-tool-block", "tool": "artifact", "component": "ArtifactTranscriptRenderer" }],
+    "transcriptRenderers": [
+      {
+        "id": "artifact-tool-block",
+        "tool": "artifact",
+        "component": "ArtifactTranscriptRenderer"
+      }
+    ],
     "views": [
       {
         "id": "conversation-artifacts",
@@ -49,6 +82,14 @@
         "title": "Artifact",
         "location": "workbench",
         "component": "ArtifactDetailPanel"
+      }
+    ],
+    "skills": [
+      {
+        "id": "artifacts",
+        "title": "Artifacts and Rendered Outputs",
+        "description": "Built-in guidance for conversation artifacts, project artifacts, and rendered output behavior.",
+        "path": "skills/artifacts/SKILL.md"
       }
     ]
   },

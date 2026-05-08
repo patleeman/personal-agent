@@ -9,5 +9,15 @@
     "entry": "src/backend.ts",
     "agentExtension": "createConversationAutoModeAgentExtension"
   },
-  "permissions": ["conversations:readwrite"]
+  "permissions": ["conversations:readwrite"],
+  "contributes": {
+    "skills": [
+      {
+        "id": "auto-mode",
+        "title": "Auto Mode",
+        "description": "Built-in guide for autonomous conversation continuation, validation, durable runs, and disciplined follow-through.",
+        "path": "skills/auto-mode/SKILL.md"
+      }
+    ]
+  }
 }

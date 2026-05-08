@@ -78,14 +78,7 @@ All docs are in the [`docs/`](docs/) folder — written for agents first, humans
 - [Repo Layout](docs/repo-layout.md) — where code lives
 - [Release Cycle](docs/release-cycle.md)
 
-Built-in runtime behavior is documented in [`internal-skills/`](internal-skills/):
-
-- [Runs](internal-skills/runs/INDEX.md)
-- [Scheduled Tasks](internal-skills/scheduled-tasks/INDEX.md)
-- [Auto Mode](internal-skills/auto-mode/INDEX.md)
-- [Artifacts](internal-skills/artifacts/INDEX.md)
-- [Reminders and Alerts](internal-skills/alerts/INDEX.md)
-- [Skills and Capabilities](internal-skills/skills-and-capabilities/INDEX.md)
+Built-in runtime behavior is packaged as system extensions under [`extensions/`](extensions/). Agent-facing workflow guidance lives in each extension's `skills/<skill>/SKILL.md` and is registered through `contributes.skills`.
 
 ---
 

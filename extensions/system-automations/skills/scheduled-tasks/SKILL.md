@@ -1,6 +1,6 @@
 ---
 id: scheduled-tasks
-kind: internal-skill
+kind: extension-skill
 title: Scheduled Tasks
 summary: Built-in guidance for daemon-backed scheduled automations and conversation callbacks.
 tools:
@@ -66,7 +66,7 @@ The Markdown body is the prompt sent to Pi.
 
 New automations created from the web UI are stored directly in SQLite instead of writing `*.task.md` files.
 
-See the full example at [docs/examples/scheduled-task.task.md](../../docs/examples/scheduled-task.task.md).
+See the full example at [docs/examples/scheduled-task.task.md](../../../../docs/examples/scheduled-task.task.md).
 
 ## Required schedule fields
 
@@ -177,7 +177,7 @@ The Automations page lets you:
 - open the automation-owned thread directly from the detail view
 - inspect automation status visually
 
-See [Web UI Guide](../../docs/web-ui.md).
+See [Web UI Guide](../../../../docs/web-ui.md).
 
 ## Managing tasks with tools
 
@@ -240,9 +240,8 @@ Use the `scheduled_task` tool with `action: "validate"`.
 
 ## Related docs
 
-- [Decision Guide](../../docs/decision-guide.md)
-- [Async Attention and Wakeups](../async-attention/INDEX.md)
-- [Daemon and Background Automation](../../docs/daemon.md)
-- [Shared Inbox Removal](../inbox/INDEX.md)
-- [Projects](../../docs/projects.md)
-- [Runs](../runs/INDEX.md)
+- [Decision Guide](../../../../docs/decision-guide.md)
+- [Async Attention and Wakeups](../async-attention/SKILL.md)
+- [Daemon and Background Automation](../../../../docs/daemon.md)
+- [Projects](../../../../docs/projects.md)
+- [Runs](../../../system-runs/skills/runs/SKILL.md)

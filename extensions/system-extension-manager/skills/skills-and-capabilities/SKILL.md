@@ -1,6 +1,6 @@
 ---
 id: skills-and-capabilities
-kind: internal-skill
+kind: extension-skill
 title: Skills and Runtime Capabilities
 summary: Built-in guidance for distinguishing reusable workflow skills from runtime features and extensions.
 ---
@@ -61,7 +61,7 @@ Reach for an extension only when you need new tools, UI, event handling, runtime
 
 ## Related docs
 
-- [Knowledge System](../../docs/knowledge-system.md)
-- [Decision Guide](../../docs/decision-guide.md)
-- [Command-Line Guide (`pa`)](../../docs/command-line.md)
-- [Web UI Guide](../../docs/web-ui.md)
+- [Knowledge](../../../system-knowledge/README.md)
+- [Decision Guide](../../../../docs/decision-guide.md)
+- [Command-Line Guide (`pa`)](../../../../docs/command-line.md)
+- [Web UI Guide](../../../../docs/web-ui.md)

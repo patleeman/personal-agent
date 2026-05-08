@@ -1,6 +1,6 @@
 ---
 id: browser
-kind: internal-skill
+kind: extension-skill
 title: Built-in Workbench Browser
 summary: Guidance for the desktop workbench Browser tab, browser comments, and how it differs from the agent-browser CLI.
 tools: []
@@ -10,7 +10,7 @@ tools: []
 
 The built-in Browser is the user-facing browser surface inside the Electron desktop app's Workbench layout.
 
-Use this internal skill when work touches:
+Use this extension skill when work touches:
 
 - the right-side Workbench **Browser** tab
 - browser comments attached to composer prompts
@@ -216,7 +216,7 @@ Do not show raw script/debug panels in the user Browser tab. The transcript is w
 
 ## Relationship to `agent-browser`
 
-`agent-browser` is still useful as a CLI/dev validation tool. In this repo, use it through `npm run ab:run` as documented in [Agent Browser](../../docs/agent-browser.md).
+`agent-browser` is still useful as a CLI/dev validation tool. In this repo, use it through `npm run ab:run` as documented in [Agent Browser](../../../../docs/agent-browser.md).
 
 Do not confuse that with the built-in Workbench Browser:
 

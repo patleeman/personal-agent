@@ -73,15 +73,15 @@ function createToolContext(conversationId = 'conv-123') {
 }
 
 describe('artifact agent extension', () => {
-  it('advertises the built-in artifacts internal skill and white-paper reference for html artifacts', () => {
+  it('advertises the Artifacts extension skill and white-paper reference for html artifacts', () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
     const artifactTool = registerArtifactTool(repoRoot, stateRoot);
     const guidelines = artifactTool.promptGuidelines?.join('\n') ?? '';
 
-    expect(guidelines).toContain('built-in artifacts internal skill');
-    expect(guidelines).toContain('internal-skills/artifacts/INDEX.md');
-    expect(guidelines).toContain('internal-skills/artifacts/references/white-paper.md');
+    expect(guidelines).toContain('Artifacts extension skill');
+    expect(guidelines).toContain('extensions/system-artifacts/skills/artifacts/SKILL.md');
+    expect(guidelines).toContain('extensions/system-artifacts/skills/artifacts/references/white-paper.md');
     expect(guidelines).toContain('single-column reading layout');
   });
 

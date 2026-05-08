@@ -69,6 +69,14 @@ describe('extension registry', () => {
         expect.objectContaining({ extensionId: 'system-runs', location: 'workbench', component: 'ConversationRunDetailPanel' }),
       ]),
     );
+    expect(listExtensionSkillRegistrations()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ extensionId: 'system-artifacts', id: 'artifacts' }),
+        expect.objectContaining({ extensionId: 'system-automations', id: 'scheduled-tasks' }),
+        expect.objectContaining({ extensionId: 'system-browser', id: 'browser' }),
+        expect.objectContaining({ extensionId: 'system-runs', id: 'runs' }),
+      ]),
+    );
   });
 
   it('validates manifest contributions before accepting runtime extensions', () => {
@@ -203,13 +211,15 @@ describe('extension registry', () => {
       }),
     );
 
-    expect(listExtensionSkillRegistrations(stateRoot)).toEqual([
-      expect.objectContaining({
-        extensionId: 'agent-board',
-        name: 'agent-board/agent-board',
-        path: join(extensionRoot, 'skills', 'agent-board', 'SKILL.md'),
-      }),
-    ]);
+    expect(listExtensionSkillRegistrations(stateRoot)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          extensionId: 'agent-board',
+          name: 'agent-board/agent-board',
+          path: join(extensionRoot, 'skills', 'agent-board', 'SKILL.md'),
+        }),
+      ]),
+    );
     expect(listExtensionToolRegistrations(stateRoot)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -222,7 +232,7 @@ describe('extension registry', () => {
     );
 
     setExtensionEnabled('agent-board', false, stateRoot);
-    expect(listExtensionSkillRegistrations(stateRoot)).toEqual([]);
+    expect(listExtensionSkillRegistrations(stateRoot).some((skill) => skill.extensionId === 'agent-board')).toBe(false);
     expect(listExtensionToolRegistrations(stateRoot).some((tool) => tool.extensionId === 'agent-board')).toBe(false);
   });
 
