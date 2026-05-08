@@ -22,7 +22,7 @@ export interface ColorTheme {
   tokens?: Record<string, string>;
   extensionId?: string;
 }
-export type ThemePreference = string;
+export type ThemePreference = 'light' | 'dark' | 'system';
 export type TranscriptionModelStatus = unknown;
 export type TranscriptionProviderId = unknown;
 
@@ -64,7 +64,11 @@ export declare function useInvalidateOnTopics(...args: never[]): unknown;
 export declare function useTheme(): {
   theme: string;
   themePreference: ThemePreference;
+  lightTheme: string;
+  darkTheme: string;
   availableThemes: ColorTheme[];
   setThemePreference: (theme: ThemePreference) => void;
+  setLightTheme: (theme: string) => void;
+  setDarkTheme: (theme: string) => void;
   toggle: () => void;
 };

@@ -66,7 +66,7 @@ describe('theme preferences', () => {
     });
   });
 
-  it('reads an explicit stored legacy theme preference', () => {
+  it('reads an explicit stored legacy theme preference as a mode', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
 
     expect(renderThemeProbe()).toEqual({
@@ -75,12 +75,12 @@ describe('theme preferences', () => {
     });
   });
 
-  it('keeps unknown stored theme ids but falls back to the built-in light theme', () => {
+  it('falls back to system for unknown stored mode values', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'sepia');
 
     expect(renderThemeProbe()).toEqual({
       theme: 'tokyo-night-light',
-      themePreference: 'sepia',
+      themePreference: 'system',
     });
   });
 

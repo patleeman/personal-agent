@@ -135,9 +135,17 @@ describe('SettingsPage provider model editor', () => {
     vi.clearAllMocks();
 
     vi.mocked(useTheme).mockReturnValue({
-      theme: 'dark',
+      theme: 'tokyo-night-dark',
       themePreference: 'system',
+      lightTheme: 'tokyo-night-light',
+      darkTheme: 'tokyo-night-dark',
+      availableThemes: [
+        { id: 'tokyo-night-light', label: 'Tokyo Night Light', appearance: 'light' },
+        { id: 'tokyo-night-dark', label: 'Tokyo Night Dark', appearance: 'dark' },
+      ],
       setThemePreference: vi.fn(),
+      setLightTheme: vi.fn(),
+      setDarkTheme: vi.fn(),
       toggle: vi.fn(),
     });
 

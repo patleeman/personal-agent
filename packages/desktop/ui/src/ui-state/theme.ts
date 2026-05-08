@@ -2,11 +2,11 @@ import { createContext, createElement, type ReactNode, useCallback, useContext, 
 
 import { api } from '../client/api';
 import type { ExtensionManifest } from '../extensions/types';
-import { THEME_STORAGE_KEY } from '../local/localSettings';
+import { DARK_THEME_STORAGE_KEY, LIGHT_THEME_STORAGE_KEY, THEME_STORAGE_KEY } from '../local/localSettings';
 
 type ThemeAppearance = 'light' | 'dark';
 type Theme = 'tokyo-night-light' | 'tokyo-night-dark' | 'light' | 'dark' | string;
-export type ThemePreference = Theme | 'system';
+export type ThemePreference = 'light' | 'dark' | 'system';
 
 export interface ColorTheme {
   id: Theme;
@@ -22,13 +22,19 @@ const BUILT_IN_THEMES: ColorTheme[] = [
 ];
 
 const DEFAULT_THEME_PREFERENCE: ThemePreference = 'system';
+const DEFAULT_LIGHT_THEME: Theme = 'tokyo-night-light';
+const DEFAULT_DARK_THEME: Theme = 'tokyo-night-dark';
 const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
 
 interface ThemeContextValue {
   theme: Theme;
   themePreference: ThemePreference;
+  lightTheme: Theme;
+  darkTheme: Theme;
   availableThemes: ColorTheme[];
   setThemePreference: (theme: ThemePreference) => void;
+  setLightTheme: (theme: Theme) => void;
+  setDarkTheme: (theme: Theme) => void;
   toggle: () => void;
 }
 
@@ -87,9 +93,9 @@ function readSystemTheme(): ThemeAppearance {
   return window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
 }
 
-function resolveThemePreference(preference: ThemePreference, systemTheme: ThemeAppearance = 'light'): Theme {
-  if (preference !== 'system') return normalizeThemeId(preference);
-  return systemTheme === 'dark' ? 'tokyo-night-dark' : 'tokyo-night-light';
+function resolveThemePreference(preference: ThemePreference, systemTheme: ThemeAppearance, lightTheme: Theme, darkTheme: Theme): Theme {
+  const appearance = preference === 'system' ? systemTheme : preference;
+  return appearance === 'dark' ? darkTheme : lightTheme;
 }
 
 function isColorThemeContribution(value: unknown): value is ColorTheme {
@@ -118,9 +124,9 @@ function readExtensionThemes(extensions: ExtensionManifest[]): ColorTheme[] {
 function readStoredThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'system' || stored.trim().length > 0) {
-      return stored;
-    }
+    if (stored === 'system') return 'system';
+    if (stored === 'light' || stored === 'tokyo-night-light') return 'light';
+    if (stored === 'dark' || stored === 'tokyo-night-dark') return 'dark';
   } catch {
     // ignore
   }
@@ -128,20 +134,35 @@ function readStoredThemePreference(): ThemePreference {
   return DEFAULT_THEME_PREFERENCE;
 }
 
+function readStoredThemeId(storageKey: string, fallback: Theme): Theme {
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (stored && stored.trim().length > 0) return normalizeThemeId(stored);
+  } catch {
+    // ignore
+  }
+
+  return fallback;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => {
     const currentPreference = readStoredThemePreference();
-    applyTheme(findTheme(BUILT_IN_THEMES, resolveThemePreference(currentPreference, readSystemTheme())));
+    const lightTheme = readStoredThemeId(LIGHT_THEME_STORAGE_KEY, DEFAULT_LIGHT_THEME);
+    const darkTheme = readStoredThemeId(DARK_THEME_STORAGE_KEY, DEFAULT_DARK_THEME);
+    applyTheme(findTheme(BUILT_IN_THEMES, resolveThemePreference(currentPreference, readSystemTheme(), lightTheme, darkTheme)));
     return currentPreference;
   });
   const [systemTheme, setSystemTheme] = useState<ThemeAppearance>(() => readSystemTheme());
+  const [lightTheme, setLightThemeState] = useState<Theme>(() => readStoredThemeId(LIGHT_THEME_STORAGE_KEY, DEFAULT_LIGHT_THEME));
+  const [darkTheme, setDarkThemeState] = useState<Theme>(() => readStoredThemeId(DARK_THEME_STORAGE_KEY, DEFAULT_DARK_THEME));
   const [extensionThemes, setExtensionThemes] = useState<ColorTheme[]>([]);
   const availableThemes = useMemo(() => [...BUILT_IN_THEMES, ...extensionThemes], [extensionThemes]);
 
   const theme = useMemo(() => {
-    const resolvedTheme = resolveThemePreference(themePreference, systemTheme);
+    const resolvedTheme = resolveThemePreference(themePreference, systemTheme, lightTheme, darkTheme);
     return findTheme(availableThemes, resolvedTheme).id;
-  }, [availableThemes, systemTheme, themePreference]);
+  }, [availableThemes, darkTheme, lightTheme, systemTheme, themePreference]);
 
   useEffect(() => {
     applyTheme(findTheme(availableThemes, theme));
@@ -196,7 +217,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setThemePreference = useCallback(
     (nextThemePreference: ThemePreference) => {
       const nextSystemTheme = nextThemePreference === 'system' ? readSystemTheme() : systemTheme;
-      const nextTheme = findTheme(availableThemes, resolveThemePreference(nextThemePreference, nextSystemTheme));
+      const nextTheme = findTheme(availableThemes, resolveThemePreference(nextThemePreference, nextSystemTheme, lightTheme, darkTheme));
 
       setThemePreferenceState(nextThemePreference);
       if (nextThemePreference === 'system') {
@@ -210,16 +231,36 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         // Ignore storage failures.
       }
     },
-    [availableThemes, systemTheme],
+    [availableThemes, darkTheme, lightTheme, systemTheme],
   );
 
+  const setLightTheme = useCallback((nextTheme: Theme) => {
+    const normalizedTheme = normalizeThemeId(nextTheme);
+    setLightThemeState(normalizedTheme);
+    try {
+      localStorage.setItem(LIGHT_THEME_STORAGE_KEY, normalizedTheme);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, []);
+
+  const setDarkTheme = useCallback((nextTheme: Theme) => {
+    const normalizedTheme = normalizeThemeId(nextTheme);
+    setDarkThemeState(normalizedTheme);
+    try {
+      localStorage.setItem(DARK_THEME_STORAGE_KEY, normalizedTheme);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, []);
+
   const toggle = useCallback(() => {
-    setThemePreference(findTheme(availableThemes, theme).appearance === 'light' ? 'tokyo-night-dark' : 'tokyo-night-light');
+    setThemePreference(findTheme(availableThemes, theme).appearance === 'light' ? 'dark' : 'light');
   }, [availableThemes, setThemePreference, theme]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, themePreference, availableThemes, setThemePreference, toggle }),
-    [availableThemes, setThemePreference, theme, themePreference, toggle],
+    () => ({ theme, themePreference, lightTheme, darkTheme, availableThemes, setThemePreference, setLightTheme, setDarkTheme, toggle }),
+    [availableThemes, darkTheme, lightTheme, setDarkTheme, setLightTheme, setThemePreference, theme, themePreference, toggle],
   );
 
   return createElement(ThemeContext.Provider, { value }, children);

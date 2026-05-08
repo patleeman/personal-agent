@@ -6,6 +6,8 @@ import { KNOWLEDGE_RECENTLY_CLOSED_FILE_IDS_STORAGE_KEY } from './knowledgeRecen
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
 
 export const THEME_STORAGE_KEY = 'pa-theme';
+export const LIGHT_THEME_STORAGE_KEY = 'pa-theme-light-default';
+export const DARK_THEME_STORAGE_KEY = 'pa-theme-dark-default';
 export const OPEN_SESSION_IDS_STORAGE_KEY = 'pa:open-session-ids';
 export const PINNED_SESSION_IDS_STORAGE_KEY = 'pa:pinned-session-ids';
 export const ARCHIVED_SESSION_IDS_STORAGE_KEY = 'pa:archived-session-ids';
