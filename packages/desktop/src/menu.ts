@@ -1,6 +1,10 @@
 import { app, Menu, type MenuItemConstructorOptions } from 'electron';
 
-import { DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS, type DesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
+import {
+  CORE_KEYBOARD_SHORTCUT_REGISTRATIONS,
+  DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS,
+  type DesktopKeyboardShortcuts,
+} from './keyboard-shortcuts.js';
 
 export interface DesktopApplicationMenuActions {
   onOpen: () => void;
@@ -34,6 +38,51 @@ interface DesktopApplicationMenuTemplateOptions {
   keyboardShortcuts?: DesktopKeyboardShortcuts;
 }
 
+type DesktopMenuShortcutId = keyof DesktopKeyboardShortcuts;
+
+const DESKTOP_MENU_SHORTCUT_ACTIONS: Record<DesktopMenuShortcutId, keyof DesktopApplicationMenuActions> = {
+  showApp: 'onOpen',
+  newConversation: 'onNewConversation',
+  closeTab: 'onCloseConversation',
+  reopenClosedTab: 'onReopenClosedConversation',
+  previousConversation: 'onPreviousConversation',
+  nextConversation: 'onNextConversation',
+  togglePinned: 'onToggleConversationPin',
+  archiveRestoreConversation: 'onToggleConversationArchive',
+  renameConversation: 'onRenameConversation',
+  focusComposer: 'onFocusComposer',
+  editWorkingDirectory: 'onEditWorkingDirectory',
+  findOnPage: 'onFindInPage',
+  settings: 'onSettings',
+  quit: 'onQuit',
+  conversationMode: 'onShowConversationMode',
+  workbenchMode: 'onShowWorkbenchMode',
+  zenMode: 'onShowZenMode',
+  toggleSidebar: 'onToggleSidebar',
+  toggleRightRail: 'onToggleRightRail',
+};
+
+function menuShortcut(
+  id: DesktopMenuShortcutId,
+  label: string,
+  actions: DesktopApplicationMenuActions,
+  keyboardShortcuts: DesktopKeyboardShortcuts,
+): MenuItemConstructorOptions {
+  return {
+    label,
+    accelerator: keyboardShortcuts[id],
+    click: actions[DESKTOP_MENU_SHORTCUT_ACTIONS[id]],
+  };
+}
+
+function assertMenuShortcutsMatchCoreRegistry(): void {
+  for (const registration of CORE_KEYBOARD_SHORTCUT_REGISTRATIONS) {
+    if (!(registration.id in DESKTOP_MENU_SHORTCUT_ACTIONS)) {
+      throw new Error(`Missing desktop menu action for ${registration.id}.`);
+    }
+  }
+}
+
 export function buildDesktopApplicationMenuTemplate(
   actions: DesktopApplicationMenuActions,
   options: DesktopApplicationMenuTemplateOptions = {},
@@ -42,69 +91,26 @@ export function buildDesktopApplicationMenuTemplate(
   const appName = options.appName ?? 'Personal Agent';
   const isMac = platform === 'darwin';
   const keyboardShortcuts = options.keyboardShortcuts ?? DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS;
+  assertMenuShortcutsMatchCoreRegistry();
 
   const fileMenu: MenuItemConstructorOptions = {
     label: 'File',
     submenu: [
-      {
-        label: `Show ${appName}`,
-        accelerator: keyboardShortcuts.showApp,
-        click: actions.onOpen,
-      },
+      menuShortcut('showApp', `Show ${appName}`, actions, keyboardShortcuts),
       {
         label: 'New Window',
         click: actions.onNewWindow,
       },
-      {
-        label: 'New Conversation',
-        accelerator: keyboardShortcuts.newConversation,
-        click: actions.onNewConversation,
-      },
-      {
-        label: 'Close Tab',
-        accelerator: keyboardShortcuts.closeTab,
-        click: actions.onCloseConversation,
-      },
-      {
-        label: 'Reopen Closed Tab',
-        accelerator: keyboardShortcuts.reopenClosedTab,
-        click: actions.onReopenClosedConversation,
-      },
-      {
-        label: 'Previous Conversation',
-        accelerator: keyboardShortcuts.previousConversation,
-        click: actions.onPreviousConversation,
-      },
-      {
-        label: 'Next Conversation',
-        accelerator: keyboardShortcuts.nextConversation,
-        click: actions.onNextConversation,
-      },
-      {
-        label: 'Toggle Pinned',
-        accelerator: keyboardShortcuts.togglePinned,
-        click: actions.onToggleConversationPin,
-      },
-      {
-        label: 'Archive / Restore Conversation',
-        accelerator: keyboardShortcuts.archiveRestoreConversation,
-        click: actions.onToggleConversationArchive,
-      },
-      {
-        label: 'Rename Conversation',
-        accelerator: keyboardShortcuts.renameConversation,
-        click: actions.onRenameConversation,
-      },
-      {
-        label: 'Focus Composer',
-        accelerator: keyboardShortcuts.focusComposer,
-        click: actions.onFocusComposer,
-      },
-      {
-        label: 'Edit Working Directory',
-        accelerator: keyboardShortcuts.editWorkingDirectory,
-        click: actions.onEditWorkingDirectory,
-      },
+      menuShortcut('newConversation', 'New Conversation', actions, keyboardShortcuts),
+      menuShortcut('closeTab', 'Close Tab', actions, keyboardShortcuts),
+      menuShortcut('reopenClosedTab', 'Reopen Closed Tab', actions, keyboardShortcuts),
+      menuShortcut('previousConversation', 'Previous Conversation', actions, keyboardShortcuts),
+      menuShortcut('nextConversation', 'Next Conversation', actions, keyboardShortcuts),
+      menuShortcut('togglePinned', 'Toggle Pinned', actions, keyboardShortcuts),
+      menuShortcut('archiveRestoreConversation', 'Archive / Restore Conversation', actions, keyboardShortcuts),
+      menuShortcut('renameConversation', 'Rename Conversation', actions, keyboardShortcuts),
+      menuShortcut('focusComposer', 'Focus Composer', actions, keyboardShortcuts),
+      menuShortcut('editWorkingDirectory', 'Edit Working Directory', actions, keyboardShortcuts),
       ...(isMac
         ? [
             {
@@ -115,11 +121,7 @@ export function buildDesktopApplicationMenuTemplate(
             {
               type: 'separator' as const,
             },
-            {
-              label: 'Settings…',
-              accelerator: keyboardShortcuts.settings,
-              click: actions.onSettings,
-            },
+            menuShortcut('settings', 'Settings…', actions, keyboardShortcuts),
             {
               label: 'Check for Updates…',
               click: actions.onCheckForUpdates,
@@ -137,11 +139,7 @@ export function buildDesktopApplicationMenuTemplate(
             {
               type: 'separator' as const,
             },
-            {
-              label: `Quit ${appName}`,
-              accelerator: keyboardShortcuts.quit,
-              click: actions.onQuit,
-            },
+            menuShortcut('quit', `Quit ${appName}`, actions, keyboardShortcuts),
           ]
         : []),
     ],
@@ -157,11 +155,7 @@ export function buildDesktopApplicationMenuTemplate(
       { role: 'copy' },
       { role: 'paste' },
       { type: 'separator' },
-      {
-        label: 'Find on Page',
-        accelerator: keyboardShortcuts.findOnPage,
-        click: actions.onFindInPage,
-      },
+      menuShortcut('findOnPage', 'Find on Page', actions, keyboardShortcuts),
       { role: 'selectAll' },
     ],
   };
@@ -177,31 +171,11 @@ export function buildDesktopApplicationMenuTemplate(
       { role: 'zoomIn' },
       { role: 'zoomOut' },
       { type: 'separator' },
-      {
-        label: 'Toggle Sidebar',
-        accelerator: keyboardShortcuts.toggleSidebar,
-        click: actions.onToggleSidebar,
-      },
-      {
-        label: 'Toggle Right Rail',
-        accelerator: keyboardShortcuts.toggleRightRail,
-        click: actions.onToggleRightRail,
-      },
-      {
-        label: 'Conversation Mode',
-        accelerator: keyboardShortcuts.conversationMode,
-        click: actions.onShowConversationMode,
-      },
-      {
-        label: 'Workbench Mode',
-        accelerator: keyboardShortcuts.workbenchMode,
-        click: actions.onShowWorkbenchMode,
-      },
-      {
-        label: 'Zen Mode',
-        accelerator: keyboardShortcuts.zenMode,
-        click: actions.onShowZenMode,
-      },
+      menuShortcut('toggleSidebar', 'Toggle Sidebar', actions, keyboardShortcuts),
+      menuShortcut('toggleRightRail', 'Toggle Right Rail', actions, keyboardShortcuts),
+      menuShortcut('conversationMode', 'Conversation Mode', actions, keyboardShortcuts),
+      menuShortcut('workbenchMode', 'Workbench Mode', actions, keyboardShortcuts),
+      menuShortcut('zenMode', 'Zen Mode', actions, keyboardShortcuts),
       { type: 'separator' },
       { role: 'togglefullscreen' },
     ],
@@ -243,11 +217,7 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Check for Updates…',
         click: actions.onCheckForUpdates,
       },
-      {
-        label: 'Settings…',
-        accelerator: keyboardShortcuts.settings,
-        click: actions.onSettings,
-      },
+      menuShortcut('settings', 'Settings…', actions, keyboardShortcuts),
       { type: 'separator' },
       { role: 'services' },
       { type: 'separator' },
@@ -255,11 +225,7 @@ export function buildDesktopApplicationMenuTemplate(
       { role: 'hideOthers' },
       { role: 'unhide' },
       { type: 'separator' },
-      {
-        label: `Quit ${appName}`,
-        accelerator: keyboardShortcuts.quit,
-        click: actions.onQuit,
-      },
+      menuShortcut('quit', `Quit ${appName}`, actions, keyboardShortcuts),
     ],
   };
 
