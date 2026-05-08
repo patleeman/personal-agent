@@ -5,7 +5,6 @@ import {
   listStoredAutomations,
   loadAutomationRuntimeStateMap,
 } from '@personal-agent/daemon';
-
 import {
   applyScheduledTaskThreadBinding,
   cancelDeferredResumeForSessionFile,
@@ -16,7 +15,7 @@ import {
   parseFutureHumanDateTime,
   promptSession,
   type QueuedPromptPreview,
-} from '../../../packages/desktop/server/extensions/backendApi/automations.js';
+} from '@personal-agent/extensions/backend';
 
 const DELIVER_AS_VALUES = ['steer', 'followUp'] as const;
 type DeliverAs = (typeof DELIVER_AS_VALUES)[number];

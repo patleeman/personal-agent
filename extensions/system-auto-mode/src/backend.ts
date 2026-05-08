@@ -1,6 +1,4 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Type } from '@sinclair/typebox';
-
 import {
   areAllTasksDone,
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
@@ -11,15 +9,16 @@ import {
   readConversationAutoModeStateFromSessionManager,
   type RunMode,
   writeConversationAutoModeState,
-} from '../../../packages/desktop/server/extensions/backendApi/autoMode.js';
+} from '@personal-agent/extensions/backend';
 import {
   markConversationAutoModeContinueRequested,
   registerLiveSessionLifecycleHandler,
   requestConversationAutoModeContinuationTurn,
   requestConversationAutoModeTurn,
   setLiveSessionAutoModeState,
-} from '../../../packages/desktop/server/extensions/backendApi/autoMode.js';
-import { logWarn } from '../../../packages/desktop/server/extensions/backendApi/autoMode.js';
+} from '@personal-agent/extensions/backend';
+import { logWarn } from '@personal-agent/extensions/backend';
+import { Type } from '@sinclair/typebox';
 
 export const RUN_STATE_TOOL = 'run_state' as const;
 

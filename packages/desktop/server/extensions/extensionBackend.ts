@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getStateRoot } from '@personal-agent/core';
-import { build } from 'esbuild';
+import { build, type Plugin } from 'esbuild';
 
 import type { ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
@@ -172,6 +172,16 @@ function readdirSafeStat(entryPath: string) {
   }
 }
 
+function createExtensionBackendApiPlugin(): Plugin {
+  const backendApiPath = new URL('./backendApi.ts', import.meta.url).pathname;
+  return {
+    name: 'personal-agent-extension-backend-api',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend$/ }, () => ({ path: backendApiPath }));
+    },
+  };
+}
+
 async function buildExtensionBackend(
   extensionId: string,
   packageRoot: string,
@@ -201,6 +211,7 @@ async function buildExtensionBackend(
       sourcemap: 'inline',
       logLevel: 'silent',
       external: ['@personal-agent/*', 'electron'],
+      plugins: [createExtensionBackendApiPlugin()],
     });
     renameSync(candidate, outfile);
     writeFileSync(hashFile, `${packageHash}\n`);

@@ -1,7 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { normalizeGeneratedConversationTitle } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
-
-import { normalizeGeneratedConversationTitle } from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
 
 const ConversationTitleToolParams = Type.Object({
   title: Type.String({ description: 'Short, specific conversation title. Aim for 3-7 words and keep it under 80 characters.' }),

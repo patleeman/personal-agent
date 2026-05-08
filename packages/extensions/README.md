@@ -27,7 +27,13 @@ import { WorkbenchBrowserTab, WorkspaceExplorer } from '@personal-agent/extensio
 import { SettingsPage } from '@personal-agent/extensions/settings';
 ```
 
-If a system extension needs a host primitive that is not exported here, add it deliberately to this package. Do not import from `packages/desktop/ui/src/...` directly.
+System backend extensions can also import internal backend primitives through the deliberate backend seam:
+
+```ts
+import { createScheduledTask } from '@personal-agent/extensions/backend';
+```
+
+If a system extension needs a host primitive that is not exported here, add it deliberately to this package. Do not import from `packages/desktop/ui/src/...` or `packages/desktop/server/...` directly.
 
 ## Frontend surfaces
 

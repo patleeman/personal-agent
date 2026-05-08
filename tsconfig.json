@@ -21,7 +21,8 @@
       "@personal-agent/extensions/ui": ["./packages/desktop/ui/src/extensions/ui"],
       "@personal-agent/extensions/workbench": ["./packages/desktop/ui/src/extensions/workbench"],
       "@personal-agent/extensions/data": ["./packages/desktop/ui/src/extensions/data"],
-      "@personal-agent/extensions/settings": ["./packages/desktop/ui/src/extensions/settings"]
+      "@personal-agent/extensions/settings": ["./packages/desktop/ui/src/extensions/settings"],
+      "@personal-agent/extensions/backend": ["./packages/desktop/server/extensions/backendApi"]
     }
   },
   "references": [

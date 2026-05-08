@@ -2,9 +2,8 @@ import { join } from 'node:path';
 
 import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } from '@earendil-works/pi-coding-agent';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
+import { getImageProbeAttachments, getImageProbeAttachmentsById } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
-
-import { getImageProbeAttachments, getImageProbeAttachmentsById } from '../../../packages/desktop/server/extensions/backendApi/images.js';
 
 const ImageProbeParams = Type.Object({
   imageIds: Type.Array(Type.String({ pattern: '^img_[a-f0-9]{12}$' }), {

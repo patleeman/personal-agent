@@ -1,11 +1,11 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-
 import {
   buildLiveSessionExtensionFactoriesForRuntime,
   buildLiveSessionResourceOptionsForRuntime,
   renameSession,
   requestConversationWorkingDirectoryChange,
-} from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
+} from '@personal-agent/extensions/backend';
+
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from './changeWorkingDirectoryAgentExtension.js';
 import { createConversationInspectAgentExtension } from './conversationInspectAgentExtension.js';

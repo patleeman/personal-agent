@@ -1,7 +1,4 @@
-import {
-  parseFutureHumanDateTime,
-  scheduleDeferredResumeForSessionFile,
-} from '../../../packages/desktop/server/extensions/backendApi/automations.js';
+import { parseFutureHumanDateTime, scheduleDeferredResumeForSessionFile } from '@personal-agent/extensions/backend';
 export { conversationQueue } from './conversationQueueBackend.js';
 export { scheduledTask } from './scheduledTaskBackend.js';
 

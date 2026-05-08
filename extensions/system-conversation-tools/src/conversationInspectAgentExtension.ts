@@ -1,7 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { querySessionSuggestedPointerIds } from '@personal-agent/core';
-import { Type } from '@sinclair/typebox';
-
 import {
   CONVERSATION_INSPECT_ACTION_VALUES,
   CONVERSATION_INSPECT_BLOCK_TYPE_VALUES,
@@ -9,9 +7,10 @@ import {
   CONVERSATION_INSPECT_ROLE_VALUES,
   CONVERSATION_INSPECT_SCOPE_VALUES,
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
-} from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
-import { executeConversationInspect } from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
-import { persistTraceContextPointerInspect } from '../../../packages/desktop/server/extensions/backendApi/conversations.js';
+} from '@personal-agent/extensions/backend';
+import { executeConversationInspect } from '@personal-agent/extensions/backend';
+import { persistTraceContextPointerInspect } from '@personal-agent/extensions/backend';
+import { Type } from '@sinclair/typebox';
 
 const ConversationInspectToolParams = Type.Object({
   action: Type.String({ description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` }),
