@@ -1,4 +1,3 @@
-import { getSessionDeferredResumeEntries, loadDeferredResumeState, parseDeferredResumeDelayMs } from '@personal-agent/core';
 import {
   createStoredAutomation,
   deleteStoredAutomation,
@@ -11,7 +10,10 @@ import {
   cancelQueuedPrompt,
   DEFAULT_DEFERRED_RESUME_PROMPT,
   type DeferredResumeSummary,
+  getSessionDeferredResumeEntries,
   listQueuedPromptPreviews,
+  loadDeferredResumeState,
+  parseDeferredResumeDelayMs,
   parseFutureHumanDateTime,
   promptSession,
   type QueuedPromptPreview,

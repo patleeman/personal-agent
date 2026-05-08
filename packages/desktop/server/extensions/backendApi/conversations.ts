@@ -12,3 +12,4 @@ export { executeConversationInspect } from '../../conversations/conversationInsp
 export { renameSession, requestConversationWorkingDirectoryChange } from '../../conversations/liveSessions.js';
 export { persistTraceContextPointerInspect } from '../../traces/tracePersistence.js';
 export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from '../runtimeAgentHooks.js';
+export { querySessionSuggestedPointerIds } from '@personal-agent/core';

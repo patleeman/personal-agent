@@ -7,7 +7,7 @@ import {
   inspectMcpServer,
   inspectMcpTool,
   listMcpCatalog,
-} from '@personal-agent/core';
+} from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 
 const MCP_ACTION_VALUES = ['list', 'info', 'grep', 'call', 'auth', 'logout'] as const;

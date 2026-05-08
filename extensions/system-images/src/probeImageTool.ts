@@ -1,8 +1,7 @@
 import { join } from 'node:path';
 
 import { AuthStorage, createAgentSession, type ExtensionAPI, SessionManager } from '@earendil-works/pi-coding-agent';
-import { getPiAgentRuntimeDir } from '@personal-agent/core';
-import { getImageProbeAttachments, getImageProbeAttachmentsById } from '@personal-agent/extensions/backend';
+import { getImageProbeAttachments, getImageProbeAttachmentsById, getPiAgentRuntimeDir } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 
 const ImageProbeParams = Type.Object({

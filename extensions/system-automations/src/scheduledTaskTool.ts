@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { clearTaskCallbackBinding, getTaskCallbackBinding, readSessionConversationId, setTaskCallbackBinding } from '@personal-agent/core';
 import {
   createStoredAutomation,
   deleteStoredAutomation,
@@ -12,14 +11,18 @@ import {
 import {
   applyScheduledTaskThreadBinding,
   buildScheduledTaskThreadDetail,
+  clearTaskCallbackBinding,
+  getTaskCallbackBinding,
   invalidateAppTopics,
   type LoadedScheduledTasksForProfile,
   loadScheduledTasksForProfile,
   parseFutureHumanDateTime,
   persistAppTelemetryEvent,
+  readSessionConversationId,
   resolveScheduledTaskForProfile,
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
+  setTaskCallbackBinding,
   type TaskRuntimeEntry,
 } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';

@@ -1,5 +1,4 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { querySessionSuggestedPointerIds } from '@personal-agent/core';
 import {
   CONVERSATION_INSPECT_ACTION_VALUES,
   CONVERSATION_INSPECT_BLOCK_TYPE_VALUES,
@@ -7,9 +6,10 @@ import {
   CONVERSATION_INSPECT_ROLE_VALUES,
   CONVERSATION_INSPECT_SCOPE_VALUES,
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
+  executeConversationInspect,
+  persistTraceContextPointerInspect,
+  querySessionSuggestedPointerIds,
 } from '@personal-agent/extensions/backend';
-import { executeConversationInspect } from '@personal-agent/extensions/backend';
-import { persistTraceContextPointerInspect } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 
 const ConversationInspectToolParams = Type.Object({
