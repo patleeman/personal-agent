@@ -35,7 +35,14 @@ export {
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
 } from '../automation/scheduledTaskThreads.js';
-export { cancelQueuedPrompt, listQueuedPromptPreviews, promptSession, type QueuedPromptPreview } from '../conversations/liveSessions.js';
+export {
+  cancelQueuedPrompt,
+  listQueuedPromptPreviews,
+  promptSession,
+  type QueuedPromptPreview,
+  renameSession,
+  requestConversationWorkingDirectoryChange,
+} from '../conversations/liveSessions.js';
 export { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 export { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 export {
@@ -45,3 +52,4 @@ export {
   rememberImageProbeAttachments,
   type StoredImageProbeAttachment,
 } from './imageProbeAttachmentStore.js';
+export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from './runtimeAgentHooks.js';

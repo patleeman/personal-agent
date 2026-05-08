@@ -10,11 +10,7 @@ const {
   resolveRuntimeResourcesMock,
   createArtifactAgentExtensionMock,
   createCheckpointAgentExtensionMock,
-  createAskUserQuestionAgentExtensionMock,
-  createChangeWorkingDirectoryAgentExtensionMock,
-  createConversationInspectAgentExtensionMock,
   createConversationQueueAgentExtensionMock,
-  createConversationTitleAgentExtensionMock,
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
   createScheduledTaskAgentExtensionMock,
@@ -24,8 +20,6 @@ const {
   knowledgeBaseExtensionMock,
   createManifestAgentExtensionsMock,
   daemonRunOrchestrationPromptExtensionMock,
-  renameSessionMock,
-  requestConversationWorkingDirectoryChangeMock,
   authStorageMock,
   readSavedModelPreferencesMock,
 } = vi.hoisted(() => {
@@ -42,11 +36,7 @@ const {
     writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
     createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
     createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
-    createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
-    createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
-    createConversationInspectAgentExtensionMock: vi.fn(() => 'conversation-inspect-extension'),
     createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
-    createConversationTitleAgentExtensionMock: vi.fn(() => 'conversation-title-extension'),
     createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
     createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
     createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
@@ -56,8 +46,6 @@ const {
     knowledgeBaseExtensionMock: vi.fn(() => 'knowledge-base-extension'),
     createManifestAgentExtensionsMock: vi.fn(() => ['manifest-agent-extension']),
     daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
-    renameSessionMock: vi.fn(),
-    requestConversationWorkingDirectoryChangeMock: vi.fn(),
     authStorageMock,
     readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
   };
@@ -79,24 +67,8 @@ vi.mock('../extensions/checkpointAgentExtension.js', () => ({
   createCheckpointAgentExtension: createCheckpointAgentExtensionMock,
 }));
 
-vi.mock('../extensions/askUserQuestionAgentExtension.js', () => ({
-  createAskUserQuestionAgentExtension: createAskUserQuestionAgentExtensionMock,
-}));
-
-vi.mock('../extensions/changeWorkingDirectoryAgentExtension.js', () => ({
-  createChangeWorkingDirectoryAgentExtension: createChangeWorkingDirectoryAgentExtensionMock,
-}));
-
 vi.mock('../extensions/conversationQueueAgentExtension.js', () => ({
   createConversationQueueAgentExtension: createConversationQueueAgentExtensionMock,
-}));
-
-vi.mock('../extensions/conversationInspectAgentExtension.js', () => ({
-  createConversationInspectAgentExtension: createConversationInspectAgentExtensionMock,
-}));
-
-vi.mock('../extensions/conversationTitleAgentExtension.js', () => ({
-  createConversationTitleAgentExtension: createConversationTitleAgentExtensionMock,
 }));
 
 vi.mock('../extensions/reminderAgentExtension.js', () => ({
@@ -143,11 +115,6 @@ vi.mock('../extensions/daemon-run-orchestration-prompt/index.js', () => ({
   default: daemonRunOrchestrationPromptExtensionMock,
 }));
 
-vi.mock('../conversations/liveSessions.js', () => ({
-  renameSession: renameSessionMock,
-  requestConversationWorkingDirectoryChange: requestConversationWorkingDirectoryChangeMock,
-}));
-
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   AuthStorage: authStorageMock,
 }));
@@ -183,17 +150,12 @@ describe('createRuntimeState', () => {
     resolveRuntimeResourcesMock.mockReset();
     resolveRuntimeResourcesMock.mockReturnValue(resolvedShared);
     createArtifactAgentExtensionMock.mockClear();
-    createAskUserQuestionAgentExtensionMock.mockClear();
-    createChangeWorkingDirectoryAgentExtensionMock.mockClear();
-    createConversationInspectAgentExtensionMock.mockClear();
     createConversationQueueAgentExtensionMock.mockClear();
-    createConversationTitleAgentExtensionMock.mockClear();
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
     createManifestAgentExtensionsMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
-    requestConversationWorkingDirectoryChangeMock.mockReset();
     readSavedModelPreferencesMock.mockClear();
     readSavedModelPreferencesMock.mockReturnValue({ currentVisionModel: 'openai/gpt-4o' });
     authStorageMock.hasAuth.mockReset();
@@ -228,38 +190,10 @@ describe('createRuntimeState', () => {
     const factories = state.buildLiveSessionExtensionFactories();
     // All factories are wrapped by guardSystemPromptOverride so each
     // element is a function. Verify count and that each delegates correctly.
-    expect(factories).toHaveLength(5);
+    expect(factories).toHaveLength(1);
     factories.forEach((factory) => {
       expect(typeof factory).toBe('function');
     });
-    expect(createConversationTitleAgentExtensionMock).toHaveBeenCalledWith({
-      setConversationTitle: renameSessionMock,
-    });
-
-    const changeWorkingDirectoryOptions = createChangeWorkingDirectoryAgentExtensionMock.mock.calls[0]?.[0] as {
-      requestConversationWorkingDirectoryChange: (input: Record<string, unknown>) => Promise<unknown>;
-    };
-    requestConversationWorkingDirectoryChangeMock.mockResolvedValueOnce({ ok: true });
-    await expect(
-      changeWorkingDirectoryOptions.requestConversationWorkingDirectoryChange({
-        conversationId: 'conv-1',
-        cwd: '/next-cwd',
-      }),
-    ).resolves.toEqual({ ok: true });
-    expect(requestConversationWorkingDirectoryChangeMock).toHaveBeenCalledWith(
-      {
-        conversationId: 'conv-1',
-        cwd: '/next-cwd',
-      },
-      {
-        additionalExtensionPaths: ['/ext/shared'],
-        additionalSkillPaths: ['/skills/shared'],
-        additionalPromptTemplatePaths: ['/prompts/shared.md'],
-        additionalThemePaths: ['/themes/shared.json'],
-        extensionFactories: expect.any(Array),
-      },
-    );
-
     let temporaryAgentDir = '';
     await expect(
       state.withTemporaryRuntimeAgentDir(async (runtimeAgentDir) => {
@@ -281,7 +215,7 @@ describe('createRuntimeState', () => {
       logger: createLogger(),
     });
 
-    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(5);
+    expect(state.buildLiveSessionExtensionFactories()).toHaveLength(1);
     expect(createImageProbeAgentExtensionMock).not.toHaveBeenCalled();
   });
 

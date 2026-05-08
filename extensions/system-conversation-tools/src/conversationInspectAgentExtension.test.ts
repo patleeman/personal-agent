@@ -6,7 +6,7 @@ const { executeConversationInspectMock } = vi.hoisted(() => ({
   executeConversationInspectMock: vi.fn(),
 }));
 
-vi.mock('../conversations/conversationInspectWorkerClient.js', () => ({
+vi.mock('../../../packages/desktop/server/conversations/conversationInspectWorkerClient.js', () => ({
   executeConversationInspect: executeConversationInspectMock,
 }));
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "system-conversation-tools",
+  "name": "Conversation Tools",
+  "packageType": "system",
+  "description": "Agent tools for conversation questions, inspection, titles, and working directory changes.",
+  "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "agentExtension": "createConversationToolsAgentExtension"
+  },
+  "permissions": ["conversations:readwrite", "ui:notify"]
+}

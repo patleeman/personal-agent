@@ -42,10 +42,13 @@
         "ui/vite.config.ts",
         "ui/postcss.config.js",
         "ui/tailwind.config.js",
-        "server/**/*.test.ts"
+        "server/**/*.test.ts",
+        "../../extensions/**/src/backend.ts",
+        "../../extensions/**/src/frontend.tsx",
+        "../../extensions/**/*.test.ts"
       ],
-      "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts"]
+      "project": ["src/**/*.{ts,cts}", "ui/src/**/*.{ts,tsx}", "server/**/*.ts", "../../extensions/**/*.ts", "../../extensions/**/*.tsx"]
     }
   },
-  "ignore": ["packages/desktop/server/**/*.ts"]
+  "ignore": ["packages/desktop/server/**/*.ts", "extensions/**/*.ts", "extensions/**/*.tsx"]
 }

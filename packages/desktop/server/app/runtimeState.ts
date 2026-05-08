@@ -6,14 +6,10 @@ import { AuthStorage, type ExtensionFactory } from '@earendil-works/pi-coding-ag
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 
-import { renameSession, requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
-import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
-import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
-import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
-import { createConversationTitleAgentExtension } from '../extensions/conversationTitleAgentExtension.js';
 import { createManifestAgentExtensions } from '../extensions/extensionAgentExtensions.js';
 import { listExtensionSkillRegistrations } from '../extensions/extensionRegistry.js';
 import { createManifestToolAgentExtensions } from '../extensions/manifestToolAgentExtension.js';
+import { setRuntimeAgentHookBuilders } from '../extensions/runtimeAgentHooks.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
@@ -70,6 +66,11 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
     });
     applyRuntimeEnvironment(mergedMcpConfig.bundledServerCount > 0 ? materializedMcpConfigPath : null);
   }
+
+  setRuntimeAgentHookBuilders({
+    buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories,
+  });
 
   try {
     materializeRuntimeResources();
@@ -133,18 +134,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
 
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
-      createAskUserQuestionAgentExtension(),
-      createChangeWorkingDirectoryAgentExtension({
-        requestConversationWorkingDirectoryChange: (input) =>
-          requestConversationWorkingDirectoryChange(input, {
-            ...buildLiveSessionResourceOptions(),
-            extensionFactories: buildLiveSessionExtensionFactories(),
-          }),
-      }),
-      createConversationInspectAgentExtension(),
-      createConversationTitleAgentExtension({
-        setConversationTitle: renameSession,
-      }),
       ...createManifestToolAgentExtensions({
         getCurrentProfile: getRuntimeScope,
         getPreferredVisionModel,
