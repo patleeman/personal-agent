@@ -447,15 +447,9 @@ export function App() {
                         <Route path="conversations/:id" element={<SavedConversationRoute />} />
                         <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
                         <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
-                        <Route path="automations" element={suspendRoute(<ExtensionPage />)} />
-                        <Route path="automations/:id" element={suspendRoute(<ExtensionPage />)} />
-                        <Route path="ext/:extensionId" element={suspendRoute(<ExtensionPage />)} />
-                        <Route path="ext/:extensionId/*" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="extensions" element={suspendRoute(<ExtensionManagerPage />)} />
-                        <Route path="gateways" element={suspendRoute(<ExtensionPage />)} />
-                        <Route path="telemetry" element={suspendRoute(<ExtensionPage />)} />
                         <Route path="settings" element={suspendRoute(<SettingsPage />)} />
-                        <Route path="settings/*" element={suspendRoute(<ExtensionPage />)} />
+                        <Route path="*" element={suspendRoute(<ExtensionPage />)} />
                       </Route>
                     </Routes>
                   </BrowserRouter>

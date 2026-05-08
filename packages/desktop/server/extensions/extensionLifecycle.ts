@@ -223,7 +223,7 @@ export function snapshotRuntimeExtension(extensionId: string, stateRoot: string 
     throw new Error('Extension not found.');
   }
   if (!entry.packageRoot) {
-    throw new Error('Only runtime extensions can be snapshotted.');
+    throw new Error('Extension package root is unavailable.');
   }
 
   const timestamp = createSafeTimestamp();
@@ -241,7 +241,7 @@ export async function buildRuntimeExtension(extensionId: string) {
     throw new Error('Extension not found.');
   }
   if (!entry.packageRoot) {
-    throw new Error('Only runtime extensions can be built.');
+    throw new Error('Extension package root is unavailable.');
   }
   if (entry.manifest.schemaVersion !== 2) {
     throw new Error('Only native extension manifest schemaVersion 2 can be built.');
@@ -296,7 +296,7 @@ export function exportRuntimeExtension(extensionId: string, stateRoot: string = 
     throw new Error('Extension not found.');
   }
   if (!entry.packageRoot) {
-    throw new Error('Only runtime extensions can be exported.');
+    throw new Error('Extension package root is unavailable.');
   }
 
   const exportsRoot = getExtensionExportsRoot(stateRoot);
@@ -304,7 +304,6 @@ export function exportRuntimeExtension(extensionId: string, stateRoot: string = 
   const exportPath = join(exportsRoot, `${extensionId}-${createSafeTimestamp()}.zip`);
   const packageRoot = resolve(entry.packageRoot);
   const parent = resolve(packageRoot, '..');
-  assertInside(getRuntimeExtensionsRoot(stateRoot), packageRoot);
   execFileSync('zip', ['-qry', exportPath, basename(packageRoot)], { cwd: parent });
 
   return { ok: true as const, extensionId, exportPath };

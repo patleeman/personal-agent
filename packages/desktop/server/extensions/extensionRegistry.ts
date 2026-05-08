@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { getStateRoot } from '@personal-agent/core';
@@ -10,6 +10,7 @@ import {
   EXTENSION_RIGHT_SURFACE_SCOPES,
   EXTENSION_SURFACE_KINDS,
 } from './extensionManifest.js';
+import { listExtensionPackagePaths } from './extensionPackagePaths.js';
 import { SYSTEM_EXTENSION_ENTRIES } from './systemExtensions.js';
 
 export interface ExtensionRegistryEntry {
@@ -137,34 +138,32 @@ export function parseExtensionManifest(value: unknown): ExtensionManifest {
 }
 
 export function readRuntimeExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {
-  const extensionsRoot = getRuntimeExtensionsRoot(stateRoot);
-  if (!existsSync(extensionsRoot)) {
-    return [];
-  }
-
-  return readdirSync(extensionsRoot)
-    .sort((left, right) => left.localeCompare(right))
-    .flatMap((entryName): ExtensionRegistryEntry[] => {
-      const packageRoot = join(extensionsRoot, entryName);
-      if (!statSync(packageRoot).isDirectory()) {
+  return listExtensionPackagePaths({ runtimeRoot: getRuntimeExtensionsRoot(stateRoot) })
+    .filter((entry) => entry.source === 'external')
+    .flatMap((entry): ExtensionRegistryEntry[] => {
+      const manifestPath = join(entry.packageRoot, 'extension.json');
+      try {
+        const manifest = parseExtensionManifest(JSON.parse(readFileSync(manifestPath, 'utf-8')));
+        return [
+          { manifest: { ...manifest, packageType: manifest.packageType ?? 'user' }, packageRoot: entry.packageRoot, source: 'runtime' },
+        ];
+      } catch {
         return [];
       }
-
-      const manifestPath = join(packageRoot, 'extension.json');
-      if (!existsSync(manifestPath)) {
-        return [];
-      }
-
-      const manifest = parseExtensionManifest(JSON.parse(readFileSync(manifestPath, 'utf-8')));
-      return [{ manifest: { ...manifest, packageType: manifest.packageType ?? 'user' }, packageRoot, source: 'runtime' }];
     });
 }
 
 export function listExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {
-  return [
+  const entries = [
     ...SYSTEM_EXTENSION_ENTRIES.map((entry) => ({ manifest: entry.manifest, packageRoot: entry.packageRoot, source: 'system' as const })),
     ...readRuntimeExtensionEntries(stateRoot),
   ];
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.manifest.id)) return false;
+    seen.add(entry.manifest.id);
+    return true;
+  });
 }
 
 export function listEnabledExtensionEntries(stateRoot: string = getStateRoot()): ExtensionRegistryEntry[] {

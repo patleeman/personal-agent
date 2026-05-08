@@ -3569,9 +3569,6 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
     );
     return [...legacy, ...native];
   }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
-  const automationsNavVisible =
-    extensionRegistry.loading ||
-    extensionRegistry.extensions.some((extension) => extension.id === 'system-automations' && extension.enabled !== false);
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
   const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
@@ -3601,14 +3598,6 @@ export function Sidebar({ hideKnowledgeNav = false, hideBrowserNav = false }: { 
               <span className="flex-1 text-left">Chat</span>
             </button>
           </div>
-          {automationsNavVisible ? (
-            <TopNavItem
-              to="/automations"
-              icon={PATH.automations}
-              label="Automations"
-              forceActive={location.pathname.startsWith('/automations')}
-            />
-          ) : null}
           {extensionNavItems.map((item) => (
             <TopNavItem
               key={`${item.extensionId}:${item.id}`}

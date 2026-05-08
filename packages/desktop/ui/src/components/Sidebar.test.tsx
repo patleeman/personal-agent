@@ -136,8 +136,7 @@ describe('Sidebar', () => {
   it('renders a flat primary nav for core workspaces', () => {
     const html = renderSidebar('/conversations/new');
 
-    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Automations'));
-    expect(html.indexOf('Automations')).toBeLessThan(html.indexOf('Threads'));
+    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Threads'));
     expect(html.indexOf('Threads')).toBeLessThan(html.indexOf('Settings'));
     expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
@@ -146,7 +145,6 @@ describe('Sidebar', () => {
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
     expect(html).not.toContain('Vault');
-    expect(html).toContain('Automations');
     expect(html).toContain('Threads');
     expect(html).toContain('aria-label="Organize and sort threads"');
     expect(html).toContain('aria-label="Add workspace"');
@@ -161,7 +159,6 @@ describe('Sidebar', () => {
     const html = renderSidebar('/conversations/new', { hideKnowledgeNav: true });
 
     expect(html).toContain('Chat');
-    expect(html).toContain('Automations');
     expect(html).not.toContain('href="/knowledge"');
   });
 

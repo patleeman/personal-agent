@@ -10,6 +10,7 @@
     "styles": []
   },
   "contributes": {
+    "nav": [{ "id": "nav", "label": "Automations", "route": "/automations", "icon": "automation" }],
     "views": [
       {
         "id": "page",

@@ -264,7 +264,7 @@ export function registerExtensionRoutes(
       res.status(201).json(snapshotRuntimeExtension(req.params.id));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const status = /not found/i.test(message) ? 404 : /runtime/i.test(message) ? 400 : 500;
+      const status = /not found/i.test(message) ? 404 : /package root/i.test(message) ? 400 : 500;
       logError('extension snapshot error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
     }
@@ -275,7 +275,7 @@ export function registerExtensionRoutes(
       res.status(201).json(exportRuntimeExtension(req.params.id));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const status = /not found/i.test(message) ? 404 : /runtime/i.test(message) ? 400 : 500;
+      const status = /not found/i.test(message) ? 404 : /package root/i.test(message) ? 400 : 500;
       logError('extension export error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
     }
@@ -309,7 +309,7 @@ export function registerExtensionRoutes(
       res.json(await buildRuntimeExtension(req.params.id));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const status = /not found/i.test(message) ? 404 : /runtime|schemaVersion/i.test(message) ? 400 : 500;
+      const status = /not found/i.test(message) ? 404 : /package root|schemaVersion/i.test(message) ? 400 : 500;
       logError('extension build error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
     }

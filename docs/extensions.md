@@ -24,7 +24,9 @@ User extensions live in runtime state by default:
 ~/.local/state/personal-agent/extensions/{extension-id}/
 ```
 
-Bundled system extensions live in the repo/app bundle and use the same extension contract. System pages can move out of the core shell once the native runtime is stable.
+The extension loader also accepts arbitrary package roots or directories of packages through `PERSONAL_AGENT_EXTENSION_PATHS` (comma-separated or colon-separated). Each entry can point directly at a folder with `extension.json`, or at a parent folder containing many extension packages.
+
+Bundled first-party extensions live in the repo/app bundle under `extensions/` and use the same extension contract. They are discovered by the same package-path scanner as user extensions; there is no hard-coded system extension allowlist.
 
 A native extension package looks like this:
 
@@ -119,7 +121,7 @@ Example:
 
 Manifest rules:
 
-- `id` is stable kebab-case and owns `/ext/{id}` routes.
+- `id` is stable kebab-case. Routes are explicit manifest contributions; use `/ext/{id}` by convention for user extensions, but the runtime can host extension pages at any route not already claimed by the core shell.
 - The manifest declares what exists; code implements behavior.
 - Renderable views declare the frontend bundle and exported component name explicitly.
 - Backend actions declare stable action IDs and exported handler names.
@@ -397,7 +399,7 @@ Pick the smallest surface that matches the product shape. Do not use the right r
 | Command               | Fast one-shot actions or ways to open a surface                                    | Long-running UI that needs persistent screen space                 | Build extension, reload extensions    |
 | Slash command         | Conversation-authored actions that produce or alter prompt context                 | Global app navigation or settings                                  | Insert prompt, attach context         |
 
-Main pages are durable workflows. User extensions should use `/ext/{extensionId}` routes. System extensions may own first-party routes such as `/automations`.
+Main pages are durable workflows. `/ext/{extensionId}` is the recommended user-extension convention, but it is not a sandbox. Extension page routes are manifest-owned and may use any unclaimed app path.
 
 Right-rail panels are contextual tools. They need scope:
 
