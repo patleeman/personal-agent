@@ -1288,6 +1288,7 @@ function WorkbenchKnowledgeRail({
       availableExtensionToolPanels.find((surface) => surface.extensionId === parsed.extensionId && surface.id === parsed.surfaceId) ?? null
     );
   }, [activeTool, availableExtensionToolPanels]);
+  const systemFilesExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-files') ?? null;
   const systemDiffsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null;
   const systemRunsExtensionSurface = availableExtensionToolPanels.find((surface) => surface.extensionId === 'system-runs') ?? null;
   const activeFileId = searchParams.get('file') ?? null;
@@ -1335,7 +1336,7 @@ function WorkbenchKnowledgeRail({
     });
   }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleFileExplorerModeSelect = useCallback(() => {
-    onActiveToolChange('files');
+    onActiveToolChange(systemFilesExtensionSurface ? extensionToolPanelMode(systemFilesExtensionSurface) : 'files');
     onWorkspaceFileClear();
     onCheckpointSelect(null);
     setSearchParams((current) => {
@@ -1346,7 +1347,7 @@ function WorkbenchKnowledgeRail({
       next.delete('run');
       return next;
     });
-  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemFilesExtensionSurface]);
   const handleDiffsModeSelect = useCallback(() => {
     const nextCheckpointId = activeCheckpointId ?? checkpoints[0]?.id ?? (uncommittedResult ? UNCOMMITTED_SENTINEL : null);
     onActiveToolChange(systemDiffsExtensionSurface ? extensionToolPanelMode(systemDiffsExtensionSurface) : 'diffs');
@@ -1612,7 +1613,12 @@ function WorkbenchKnowledgeRail({
         </button>
         <button
           type="button"
-          className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'files' && 'ui-sidebar-nav-item-active')}
+          className={cx(
+            'ui-sidebar-nav-item w-full text-left',
+            (activeTool === 'files' ||
+              (systemFilesExtensionSurface && activeTool === extensionToolPanelMode(systemFilesExtensionSurface))) &&
+              'ui-sidebar-nav-item-active',
+          )}
           title="File explorer"
           onClick={handleFileExplorerModeSelect}
         >
@@ -1714,23 +1720,25 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Runs</span>
           </button>
         ) : null}
-        {availableExtensionToolPanels.map((surface) => (
-          <button
-            key={`${surface.extensionId}:${surface.id}`}
-            type="button"
-            className={cx(
-              'ui-sidebar-nav-item w-full text-left',
-              activeTool === extensionToolPanelMode(surface) && 'ui-sidebar-nav-item-active',
-            )}
-            title={labelForExtensionToolPanel(surface)}
-            onClick={() => handleExtensionToolPanelSelect(surface)}
-          >
-            <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
-              {iconGlyphForExtensionSurface(surface.icon)}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-left">{labelForExtensionToolPanel(surface)}</span>
-          </button>
-        ))}
+        {availableExtensionToolPanels
+          .filter((surface) => surface.extensionId !== 'system-files')
+          .map((surface) => (
+            <button
+              key={`${surface.extensionId}:${surface.id}`}
+              type="button"
+              className={cx(
+                'ui-sidebar-nav-item w-full text-left',
+                activeTool === extensionToolPanelMode(surface) && 'ui-sidebar-nav-item-active',
+              )}
+              title={labelForExtensionToolPanel(surface)}
+              onClick={() => handleExtensionToolPanelSelect(surface)}
+            >
+              <span className="w-[15px] shrink-0 text-center text-[12px] opacity-70" aria-hidden="true">
+                {iconGlyphForExtensionSurface(surface.icon)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-left">{labelForExtensionToolPanel(surface)}</span>
+            </button>
+          ))}
       </div>
       {activeTool === 'knowledge' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -1738,7 +1746,7 @@ function WorkbenchKnowledgeRail({
             <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
           </Suspense>
         </div>
-      ) : activeTool === 'files' ? (
+      ) : activeTool === 'files' && !systemFilesExtensionSurface ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           {workspaceCwd ? (
             <Suspense

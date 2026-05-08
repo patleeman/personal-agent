@@ -487,6 +487,7 @@ The first native system extensions are:
 - `system-automations` owns `/automations` and scheduled/conversation-bound automation UI.
 - `system-gateways` owns `/gateways` while the core app keeps gateway state and APIs.
 - `system-telemetry` owns `/telemetry` while telemetry collection remains core infrastructure.
+- `system-files` owns the workspace File Explorer rail and paired workbench file detail view while workspace filesystem APIs remain core infrastructure.
 - `system-diffs` owns the conversation Diffs rail and paired workbench detail view while checkpoint persistence remains core infrastructure.
 - `system-runs` owns the conversation Runs rail and paired workbench detail view while durable run execution remains core infrastructure.
 - `system-settings` owns deep links for first-party settings subpanels while settings persistence remains core infrastructure.

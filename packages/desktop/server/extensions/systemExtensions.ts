@@ -79,6 +79,36 @@ const FALLBACK_SYSTEM_TELEMETRY_MANIFEST: ExtensionManifest = {
   permissions: ['telemetry:read'],
 };
 
+const FALLBACK_SYSTEM_FILES_MANIFEST: ExtensionManifest = {
+  schemaVersion: 2,
+  id: 'system-files',
+  name: 'File Explorer',
+  packageType: 'system',
+  description: 'Browse workspace files beside the active conversation.',
+  version: '0.2.0',
+  frontend: { entry: 'dist/frontend.js', styles: [] },
+  contributes: {
+    views: [
+      {
+        id: 'workspace-files',
+        title: 'File Explorer',
+        location: 'rightRail',
+        scope: 'workspace',
+        component: 'WorkspaceFilesPanel',
+        icon: 'file',
+        detailView: 'workspace-file-detail',
+      },
+      {
+        id: 'workspace-file-detail',
+        title: 'Workspace file',
+        location: 'workbench',
+        component: 'WorkspaceFileDetailPanel',
+      },
+    ],
+  },
+  permissions: ['workspace:read', 'workspace:write'],
+};
+
 const FALLBACK_SYSTEM_DIFFS_MANIFEST: ExtensionManifest = {
   schemaVersion: 2,
   id: 'system-diffs',
@@ -161,6 +191,7 @@ export const SYSTEM_EXTENSION_ENTRIES: SystemExtensionEntry[] = [
   readBundledSystemExtension('system-automations', FALLBACK_SYSTEM_AUTOMATIONS_MANIFEST),
   readBundledSystemExtension('system-gateways', FALLBACK_SYSTEM_GATEWAYS_MANIFEST),
   readBundledSystemExtension('system-telemetry', FALLBACK_SYSTEM_TELEMETRY_MANIFEST),
+  readBundledSystemExtension('system-files', FALLBACK_SYSTEM_FILES_MANIFEST),
   readBundledSystemExtension('system-diffs', FALLBACK_SYSTEM_DIFFS_MANIFEST),
   readBundledSystemExtension('system-runs', FALLBACK_SYSTEM_RUNS_MANIFEST),
   readBundledSystemExtension('system-settings', FALLBACK_SYSTEM_SETTINGS_MANIFEST),
