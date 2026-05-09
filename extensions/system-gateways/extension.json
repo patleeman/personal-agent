@@ -10,6 +10,13 @@
     "styles": []
   },
   "contributes": {
+    "statusBarItems": [
+      {
+        "id": "gateway-status",
+        "label": "Gateway",
+        "alignment": "right"
+      }
+    ],
     "views": [
       {
         "id": "page",

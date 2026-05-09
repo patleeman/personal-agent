@@ -24,6 +24,9 @@ vi.mock('@personal-agent/core', () => ({
   callMcpTool: vi.fn(),
   authenticateMcpServer: vi.fn(),
   clearMcpServerAuth: vi.fn(),
+  getDurableSessionsDir: vi.fn(() => '/tmp/durable-sessions'),
+  getPiAgentRuntimeDir: vi.fn(() => '/tmp/pi-agent-runtime'),
+  getConfigRoot: vi.fn(() => '/tmp/pi-agent-config'),
 }));
 
 const core = await import('@personal-agent/core');
