@@ -1,6 +1,6 @@
-# Mcp Extension
+# MCP Extension
 
-This extension owns the product behavior documented below. Keep extension-specific user and agent docs here so the implementation and documentation move together.
+This extension owns the agent MCP tool and the Settings → Tools MCP panel. Keep extension-specific user and agent docs here so the implementation and documentation move together.
 
 ---
 

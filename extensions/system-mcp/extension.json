@@ -5,9 +5,25 @@
   "packageType": "system",
   "description": "Inspect, authenticate, and call configured MCP servers from the agent.",
   "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "backend": {
     "entry": "src/backend.ts",
     "agentExtension": "createMcpAgentExtension"
+  },
+  "contributes": {
+    "settingsPanels": [
+      {
+        "id": "mcp-tools",
+        "component": "McpSettingsPanel",
+        "sectionId": "settings-tools",
+        "label": "Tools",
+        "description": "MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration.",
+        "order": 40
+      }
+    ]
   },
   "permissions": ["mcp:read", "mcp:write"]
 }

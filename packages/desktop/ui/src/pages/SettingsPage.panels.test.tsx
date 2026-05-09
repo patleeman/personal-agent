@@ -107,10 +107,10 @@ describe('SettingsPage — untested panel rendering', () => {
     expect(html).toContain('Skill folders');
   });
 
-  it('renders the tools/MCP section heading', () => {
+  it('renders the tools/MCP quick link', () => {
     const html = renderPage('/settings');
     expect(html).toContain('Tools');
-    expect(html).toContain('Bundled MCP wrappers');
+    expect(html).toContain('MCP wrappers and runtime tool config');
   });
 
   it('renders the interface reset section', () => {

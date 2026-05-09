@@ -342,11 +342,6 @@ describe('SettingsPage', () => {
     expect(html).toContain('Sample manifest setting');
     expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
     expect(html).toContain('In sync · Last synced');
-    expect(html).toContain('Bundled MCP wrappers');
-    expect(html).toContain('Bundled with dd-atlassian-mcp');
-    expect(html).toContain('Callback');
-    expect(html).toContain('http://localhost:3118/callback');
-    expect(html).toContain('Manifest');
     expect(html).toContain('AGENTS.md files');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');
