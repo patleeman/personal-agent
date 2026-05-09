@@ -316,6 +316,14 @@ export const api = {
     post<unknown>(`/extensions/${encodeURIComponent(extensionId)}/runs`, input),
   invokeExtensionAction: async (extensionId: string, actionId: string, input: unknown) =>
     post<{ ok: true; result: unknown }>(`/extensions/${encodeURIComponent(extensionId)}/actions/${encodeURIComponent(actionId)}`, input),
+  listExtensionActions: async () =>
+    get<
+      Array<{
+        extensionId: string;
+        extensionName: string;
+        actions: Array<{ id: string; title?: string; description?: string }>;
+      }>
+    >('/extensions/actions'),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),

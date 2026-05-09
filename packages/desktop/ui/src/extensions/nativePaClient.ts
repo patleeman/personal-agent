@@ -1,6 +1,15 @@
 import { api } from '../client/api';
 import { type DesktopWorkbenchBrowserState, getDesktopBridge } from '../desktop/desktopBridge';
 
+function matchExtensionEventPattern(pattern: string, eventName: string): boolean {
+  if (pattern === '*') return true;
+  if (pattern.endsWith(':*')) {
+    const prefix = pattern.slice(0, -2);
+    return eventName === prefix || eventName.startsWith(`${prefix}:`);
+  }
+  return pattern === eventName;
+}
+
 export interface NativeExtensionClient {
   extension: {
     invoke(actionId: string, input?: unknown): Promise<unknown>;
@@ -46,6 +55,14 @@ export interface NativeExtensionClient {
     reload(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
     stop(input?: { tabId?: string | null }): Promise<DesktopWorkbenchBrowserState>;
     snapshot(input?: { tabId?: string | null }): Promise<unknown>;
+  };
+  events: {
+    publish(event: string, payload: unknown): void;
+    subscribe(pattern: string, handler: (event: { event: string; payload: unknown }) => void): { unsubscribe: () => void };
+  };
+  extensions: {
+    callAction(extensionId: string, actionId: string, input?: unknown): Promise<unknown>;
+    listActions(): Promise<Array<{ extensionId: string; extensionName: string; actions: Array<{ id: string; title?: string; description?: string }> }>>;
   };
   ui: {
     toast(message: string): void;
@@ -187,6 +204,28 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
       snapshot(input) {
         return requireDesktopBridge().snapshotWorkbenchBrowser({ sessionKey: browserSessionKey(input?.tabId) });
+      },
+    },
+    events: {
+      publish(event, payload) {
+        window.dispatchEvent(new CustomEvent('pa-ext-event', { detail: { sourceExtensionId: extensionId, event, payload, publishedAt: new Date().toISOString() } }));
+      },
+      subscribe(pattern, handler) {
+        function listener(raw: CustomEvent) {
+          const detail = raw.detail as { event: string; payload: unknown };
+          if (!matchExtensionEventPattern(pattern, detail.event)) return;
+          handler(detail);
+        }
+        window.addEventListener('pa-ext-event', listener as EventListener);
+        return { unsubscribe: () => window.removeEventListener('pa-ext-event', listener as EventListener) };
+      },
+    },
+    extensions: {
+      async callAction(targetExtensionId, actionId, input) {
+        return (await api.invokeExtensionAction(targetExtensionId, actionId, input ?? {})).result;
+      },
+      async listActions() {
+        return api.listExtensionActions();
       },
     },
     ui: {

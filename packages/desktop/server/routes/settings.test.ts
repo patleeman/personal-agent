@@ -51,12 +51,12 @@ describe('registerSettingsRoutes', () => {
 
   describe('GET /api/settings', () => {
     it('returns settings values', () => {
-      mockRead.mockReturnValue({ 'knowledge.vaultPath': '/vault', 'knowledge.autoSync': true });
+      mockRead.mockReturnValue({ 'app.timeout': 60, 'app.featureX': true });
       const handler = routes.get('get:/api/settings')!;
       const res = mockRes();
       handler({} as never, res as never);
       expect(mockRead).toHaveBeenCalledOnce();
-      expect(res.json).toHaveBeenCalledWith({ 'knowledge.vaultPath': '/vault', 'knowledge.autoSync': true });
+      expect(res.json).toHaveBeenCalledWith({ 'app.timeout': 60, 'app.featureX': true });
     });
 
     it('returns 500 on error', () => {
@@ -93,12 +93,12 @@ describe('registerSettingsRoutes', () => {
 
   describe('PATCH /api/settings', () => {
     it('updates and returns merged result', () => {
-      mockUpdate.mockReturnValue({ 'knowledge.vaultPath': '/new' });
+      mockUpdate.mockReturnValue({ 'app.timeout': 120 });
       const handler = routes.get('patch:/api/settings')!;
       const res = mockRes();
-      handler({ body: { 'knowledge.vaultPath': '/new' } } as never, res as never);
-      expect(mockUpdate).toHaveBeenCalledWith({ 'knowledge.vaultPath': '/new' });
-      expect(res.json).toHaveBeenCalledWith({ 'knowledge.vaultPath': '/new' });
+      handler({ body: { 'app.timeout': 120 } } as never, res as never);
+      expect(mockUpdate).toHaveBeenCalledWith({ 'app.timeout': 120 });
+      expect(res.json).toHaveBeenCalledWith({ 'app.timeout': 120 });
     });
 
     it('returns 400 for non-object body', () => {

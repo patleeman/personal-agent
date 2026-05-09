@@ -1,47 +1,14 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mock extension registry ───────────────────────────────────────────
 
 const mockRegistrations = [
-  {
-    extensionId: 'system-knowledge',
-    packageType: 'system',
-    key: 'knowledge.vaultPath',
-    type: 'string',
-    default: '',
-    group: 'Knowledge',
-    description: 'Path to vault',
-    order: 1,
-    enum: undefined,
-    placeholder: undefined,
-  },
-  {
-    extensionId: 'system-knowledge',
-    packageType: 'system',
-    key: 'knowledge.autoSync',
-    type: 'boolean',
-    default: true,
-    group: 'Knowledge',
-    description: 'Auto sync',
-    order: 2,
-    enum: undefined,
-    placeholder: undefined,
-  },
-  {
-    extensionId: 'system-caffinate',
-    packageType: 'system',
-    key: 'daemon.keepAwake',
-    type: 'boolean',
-    default: false,
-    group: 'Daemon',
-    description: 'Keep awake',
-    order: 1,
-    enum: undefined,
-    placeholder: undefined,
-  },
+  { extensionId: 'ext-a', packageType: 'system', key: 'app.timeout', type: 'number', default: 30, group: 'App', description: 'Timeout', order: 1, enum: undefined, placeholder: undefined },
+  { extensionId: 'ext-b', packageType: 'system', key: 'app.featureX', type: 'boolean', default: false, group: 'App', description: 'Enable feature', order: 2, enum: undefined, placeholder: undefined },
+  { extensionId: 'ext-c', packageType: 'system', key: 'app.mode', type: 'string', default: 'auto', group: 'App', description: 'Mode', order: 3, enum: undefined, placeholder: undefined },
 ];
 
 vi.mock('../extensions/extensionRegistry.js', () => ({
@@ -82,55 +49,51 @@ describe('SettingsStore', () => {
       const store = createSettingsStore(stateRoot);
       const result = store.read();
       expect(result).toEqual({
-        'knowledge.vaultPath': '',
-        'knowledge.autoSync': true,
-        'daemon.keepAwake': false,
+        'app.timeout': 30,
+        'app.featureX': false,
+        'app.mode': 'auto',
       });
     });
 
     it('merges overrides on top of defaults', () => {
-      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'knowledge.vaultPath': '/my/vault' }));
+      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'app.timeout': 60 }));
       const store = createSettingsStore(stateRoot);
       const result = store.read();
       expect(result).toEqual({
-        'knowledge.vaultPath': '/my/vault',
-        'knowledge.autoSync': true,
-        'daemon.keepAwake': false,
+        'app.timeout': 60,
+        'app.featureX': false,
+        'app.mode': 'auto',
       });
     });
 
     it('passes through unknown overrides not in schema', () => {
-      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'unknown.key': 'value', 'knowledge.autoSync': false }));
+      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'unknown.key': 'value', 'app.featureX': true }));
       const store = createSettingsStore(stateRoot);
       const result = store.read();
-      expect(result).toEqual({
-        'knowledge.vaultPath': '',
-        'knowledge.autoSync': false,
-        'daemon.keepAwake': false,
-        'unknown.key': 'value',
-      });
+      expect(result['app.featureX']).toBe(true);
+      expect(result['unknown.key']).toBe('value');
     });
 
     it('handles empty overrides file', () => {
       writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({}));
       const store = createSettingsStore(stateRoot);
       const result = store.read();
-      expect(result['knowledge.autoSync']).toBe(true);
+      expect(result['app.timeout']).toBe(30);
     });
 
     it('handles corrupted overrides file', () => {
       writeFileSync(join(stateRoot, 'settings.json'), '{bad json');
       const store = createSettingsStore(stateRoot);
       const result = store.read();
-      expect(result['knowledge.autoSync']).toBe(true);
+      expect(result['app.timeout']).toBe(30);
     });
   });
 
   describe('readOverrides()', () => {
     it('returns only stored values', () => {
-      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'knowledge.vaultPath': '/vault' }));
+      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'app.timeout': 60 }));
       const store = createSettingsStore(stateRoot);
-      expect(store.readOverrides()).toEqual({ 'knowledge.vaultPath': '/vault' });
+      expect(store.readOverrides()).toEqual({ 'app.timeout': 60 });
     });
 
     it('returns empty object when no file exists', () => {
@@ -142,30 +105,29 @@ describe('SettingsStore', () => {
   describe('update()', () => {
     it('persists updates and returns merged result', () => {
       const store = createSettingsStore(stateRoot);
-      const result = store.update({ 'knowledge.vaultPath': '/new/vault', 'daemon.keepAwake': true });
+      const result = store.update({ 'app.timeout': 60, 'app.featureX': true });
       expect(result).toEqual({
-        'knowledge.vaultPath': '/new/vault',
-        'knowledge.autoSync': true,
-        'daemon.keepAwake': true,
+        'app.timeout': 60,
+        'app.featureX': true,
+        'app.mode': 'auto',
       });
-      // Verify persisted
       const raw = JSON.parse(readFileSync(join(stateRoot, 'settings.json'), 'utf-8')) as Record<string, unknown>;
-      expect(raw).toEqual({ 'knowledge.vaultPath': '/new/vault', 'daemon.keepAwake': true });
+      expect(raw).toEqual({ 'app.timeout': 60, 'app.featureX': true });
     });
 
     it('updates existing overrides', () => {
-      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'knowledge.vaultPath': '/old' }));
+      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'app.timeout': 30 }));
       const store = createSettingsStore(stateRoot);
-      store.update({ 'knowledge.vaultPath': '/updated' });
+      store.update({ 'app.timeout': 120 });
       const raw = JSON.parse(readFileSync(join(stateRoot, 'settings.json'), 'utf-8')) as Record<string, unknown>;
-      expect(raw).toEqual({ 'knowledge.vaultPath': '/updated' });
+      expect(raw).toEqual({ 'app.timeout': 120 });
     });
 
     it('type-coerces boolean values', () => {
       const store = createSettingsStore(stateRoot);
-      store.update({ 'knowledge.autoSync': false });
+      store.update({ 'app.featureX': true });
       const raw = JSON.parse(readFileSync(join(stateRoot, 'settings.json'), 'utf-8')) as Record<string, unknown>;
-      expect(raw['knowledge.autoSync']).toBe(false);
+      expect(raw['app.featureX']).toBe(true);
     });
   });
 
@@ -174,7 +136,7 @@ describe('SettingsStore', () => {
       const store = createSettingsStore(stateRoot);
       const schema = store.readSchema();
       expect(schema).toHaveLength(3);
-      expect(schema.map((s) => s.key)).toEqual(['knowledge.vaultPath', 'knowledge.autoSync', 'daemon.keepAwake']);
+      expect(schema.map((s) => s.key)).toEqual(['app.timeout', 'app.featureX', 'app.mode']);
     });
   });
 });

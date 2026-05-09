@@ -369,6 +369,8 @@ export interface PersonalAgentClient {
   events: {
     /** Publish an event that other extensions can receive. */
     publish(event: string, payload: unknown): Promise<void>;
+    /** Subscribe to events matching a pattern. Supports '*' (all) and 'namespace:*' (prefix). */
+    subscribe(pattern: string, handler: (event: { event: string; payload: unknown }) => void): { unsubscribe: () => void };
   };
   /** List and call actions on other extensions. */
   extensions: {
