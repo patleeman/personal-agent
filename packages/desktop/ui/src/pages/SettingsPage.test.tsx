@@ -88,6 +88,19 @@ describe('SettingsPage', () => {
       },
     });
 
+    const settingsResult = buildUseApiResult({ 'sample.enabled': true });
+    const settingsSchemaResult = buildUseApiResult([
+      {
+        extensionId: 'sample-extension',
+        key: 'sample.enabled',
+        type: 'boolean',
+        default: true,
+        description: 'Sample manifest setting',
+        group: 'Sample',
+        order: 1,
+      },
+    ]);
+
     vi.mocked(useApi).mockImplementation((fetcher, key) => {
       if (fetcher === api.skillFolders) {
         return buildUseApiResult({
@@ -239,6 +252,14 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.settings) {
+        return settingsResult;
+      }
+
+      if (fetcher === api.settingsSchema) {
+        return settingsSchemaResult;
+      }
+
       if (fetcher === api.status) {
         return buildUseApiResult({
           profile: 'assistant',
@@ -317,6 +338,9 @@ describe('SettingsPage', () => {
     expect(html).toContain('Skills');
     expect(html).toContain('Skill folders');
     expect(html).toContain('Knowledge base');
+    expect(html).toContain('Extensions');
+    expect(html).toContain('Sample');
+    expect(html).toContain('Sample manifest setting');
     expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
     expect(html).toContain('In sync · Last synced');
     expect(html).toContain('Bundled MCP wrappers');

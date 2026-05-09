@@ -12,13 +12,8 @@ import type { ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
-import { publishExtensionEvent, subscribeExtensionEvents, unsubscribeExtensionEvents } from './extensionEventBus.js';
-import {
-  getAggregatedBadgeCount,
-  isSystemNotificationAvailable,
-  sendNotifyAsSystemNotification,
-  setExtensionBadge,
-} from './extensionNotifications.js';
+import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
+import { isSystemNotificationAvailable, sendNotifyAsSystemNotification, setExtensionBadge } from './extensionNotifications.js';
 import { findExtensionEntry, listExtensionInstallSummaries } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
 import { createExtensionGitCapability, createExtensionShellCapability } from './extensionShell.js';
@@ -228,9 +223,7 @@ function createBackendContext(
             })),
           })),
       getStatus: (targetExtensionId) => {
-        const summary = listExtensionInstallSummaries().find(
-          (e) => e.id === targetExtensionId,
-        );
+        const summary = listExtensionInstallSummaries().find((e) => e.id === targetExtensionId);
         if (!summary) return { enabled: false, healthy: false };
         const enabled = summary.status === 'enabled';
         return {

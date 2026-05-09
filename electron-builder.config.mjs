@@ -37,7 +37,6 @@ const electronBuilderConfig = {
     '!dist/mac{,/**/*}',
     'ui/dist/**/*',
     'server/dist/**/*',
-    'server/extensions/backendApi.ts',
     'server/extensions/backendApi/*.ts',
     'assets/**/*',
     '!ui/src{,/**/*}',

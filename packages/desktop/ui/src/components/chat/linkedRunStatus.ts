@@ -1,5 +1,5 @@
 export function inferStatusFromLinkedRunDetail(detail: string | null | undefined): string | undefined {
-  if (!detail) {
+  if (typeof detail !== 'string' || !detail) {
     return undefined;
   }
 
@@ -12,31 +12,32 @@ export function inferStatusFromLinkedRunDetail(detail: string | null | undefined
   return knownStatus.includes(firstSegment) ? firstSegment : undefined;
 }
 
-export function describeInlineRunStatus(status: string | undefined): {
+export function describeInlineRunStatus(status: unknown): {
   text: string;
   tone: 'accent' | 'success' | 'warning' | 'danger' | 'muted';
 } {
-  if (status === 'running') {
+  const statusText = typeof status === 'string' ? status : undefined;
+  if (statusText === 'running') {
     return { text: 'running', tone: 'accent' };
   }
-  if (status === 'recovering') {
+  if (statusText === 'recovering') {
     return { text: 'recovering', tone: 'warning' };
   }
-  if (status === 'queued' || status === 'waiting') {
-    return { text: status, tone: 'muted' };
+  if (statusText === 'queued' || statusText === 'waiting') {
+    return { text: statusText, tone: 'muted' };
   }
-  if (status === 'completed') {
+  if (statusText === 'completed') {
     return { text: 'completed', tone: 'success' };
   }
-  if (status === 'failed' || status === 'interrupted') {
-    return { text: status, tone: 'danger' };
+  if (statusText === 'failed' || statusText === 'interrupted') {
+    return { text: statusText, tone: 'danger' };
   }
-  if (status === 'cancelled') {
+  if (statusText === 'cancelled') {
     return { text: 'cancelled', tone: 'muted' };
   }
 
   return {
-    text: status?.trim().length ? status : 'linked',
+    text: statusText?.trim().length ? statusText : 'linked',
     tone: 'muted',
   };
 }

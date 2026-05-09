@@ -433,8 +433,7 @@ export function registerExtensionRoutes(
         res.json({ enabled: false, healthy: false, error: 'Extension not found.' });
         return;
       }
-      const enabled =
-        summary?.status === 'enabled' || (summary?.enabled === true && summary?.status !== 'disabled');
+      const enabled = summary?.status === 'enabled' || (summary?.enabled === true && summary?.status !== 'disabled');
       res.json({
         enabled,
         healthy: enabled && (!summary?.errors || summary.errors.length === 0),

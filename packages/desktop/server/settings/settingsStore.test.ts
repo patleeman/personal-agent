@@ -1,14 +1,47 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mock extension registry ───────────────────────────────────────────
 
 const mockRegistrations = [
-  { extensionId: 'ext-a', packageType: 'system', key: 'app.timeout', type: 'number', default: 30, group: 'App', description: 'Timeout', order: 1, enum: undefined, placeholder: undefined },
-  { extensionId: 'ext-b', packageType: 'system', key: 'app.featureX', type: 'boolean', default: false, group: 'App', description: 'Enable feature', order: 2, enum: undefined, placeholder: undefined },
-  { extensionId: 'ext-c', packageType: 'system', key: 'app.mode', type: 'string', default: 'auto', group: 'App', description: 'Mode', order: 3, enum: undefined, placeholder: undefined },
+  {
+    extensionId: 'ext-a',
+    packageType: 'system',
+    key: 'app.timeout',
+    type: 'number',
+    default: 30,
+    group: 'App',
+    description: 'Timeout',
+    order: 1,
+    enum: undefined,
+    placeholder: undefined,
+  },
+  {
+    extensionId: 'ext-b',
+    packageType: 'system',
+    key: 'app.featureX',
+    type: 'boolean',
+    default: false,
+    group: 'App',
+    description: 'Enable feature',
+    order: 2,
+    enum: undefined,
+    placeholder: undefined,
+  },
+  {
+    extensionId: 'ext-c',
+    packageType: 'system',
+    key: 'app.mode',
+    type: 'string',
+    default: 'auto',
+    group: 'App',
+    description: 'Mode',
+    order: 3,
+    enum: undefined,
+    placeholder: undefined,
+  },
 ];
 
 vi.mock('../extensions/extensionRegistry.js', () => ({

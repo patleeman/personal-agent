@@ -1,8 +1,8 @@
 import { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
-import { createNativeExtensionClient } from './nativePaClient';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
+import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionConversationHeaderElementRegistration } from './useExtensionRegistry';
 
@@ -10,7 +10,10 @@ type HeaderComponent = ComponentType<{
   pa: ReturnType<typeof createNativeExtensionClient>;
 }>;
 
-function loadHeaderModule(registration: ExtensionConversationHeaderElementRegistration, revision: number): Promise<Record<string, unknown>> {
+function loadHeaderModule(
+  registration: ExtensionConversationHeaderElementRegistration,
+  revision: number,
+): Promise<Record<string, unknown>> {
   const systemLoader = systemExtensionModules.get(registration.extensionId);
   if (systemLoader) return systemLoader();
   const entry = registration.frontendEntry;

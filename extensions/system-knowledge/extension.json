@@ -127,30 +127,6 @@
         "icon": "file"
       }
     ],
-    "settings": {
-      "knowledge.vaultPath": {
-        "type": "string",
-        "default": "",
-        "description": "Path to the knowledge base vault root directory",
-        "group": "Knowledge",
-        "placeholder": "~/notes",
-        "order": 1
-      },
-      "knowledge.autoSync": {
-        "type": "boolean",
-        "default": true,
-        "description": "Automatically sync when file changes are detected",
-        "group": "Knowledge",
-        "order": 2
-      },
-      "knowledge.branch": {
-        "type": "string",
-        "default": "main",
-        "description": "Git branch for the knowledge base repository",
-        "group": "Knowledge",
-        "order": 3
-      }
-    },
     "views": [
       {
         "id": "knowledge-page",

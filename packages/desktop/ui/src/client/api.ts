@@ -325,9 +325,7 @@ export const api = {
       }>
     >('/extensions/actions'),
   extensionStatus: async (extensionId: string) =>
-    get<{ enabled: boolean; healthy: boolean; errors?: string[] }>(
-      `/extensions/${encodeURIComponent(extensionId)}/status`,
-    ),
+    get<{ enabled: boolean; healthy: boolean; errors?: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/status`),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
     patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),

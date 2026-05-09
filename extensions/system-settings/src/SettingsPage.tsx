@@ -1898,7 +1898,7 @@ function UnifiedSettingsSection() {
       setDraft((prev) => {
         const merged = { ...values };
         // Keep any local edits that haven't been saved yet
-        for (const [key, value] of Object.entries(prev)) {
+        for (const key of Object.keys(prev)) {
           if (prev[key] !== values[key]) {
             merged[key] = prev[key];
           }
@@ -1959,103 +1959,97 @@ function UnifiedSettingsSection() {
   if (grouped.size === 0) return null;
 
   return (
-    <>
-      {[...grouped.entries()].map(([group, entries]) => {
-        const sectionId = `settings-extension-${group
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '')}`;
-        return (
-          <SettingsSection key={group} id={sectionId} label={group} description={`Settings registered by extensions under ${group}.`}>
-            <div className="space-y-0">
-              <SettingsPanel title={group}>
-                {entries.map((entry) => {
-                  const currentValue = draft[entry.key] ?? entry.default;
-                  const displayValue = currentValue === undefined ? '' : currentValue;
+    <SettingsSection
+      id="settings-extensions"
+      label="Extensions"
+      description="Settings registered by extension manifests, grouped by their declared group name."
+    >
+      <div className="space-y-0">
+        {[...grouped.entries()].map(([group, entries]) => (
+          <SettingsPanel key={group} title={group}>
+            {entries.map((entry) => {
+              const currentValue = draft[entry.key] ?? entry.default;
+              const displayValue = currentValue === undefined ? '' : currentValue;
 
-                  return (
-                    <div key={entry.key} className="space-y-2 py-3 first:pt-0">
-                      <label htmlFor={`unified-settings-${entry.key}`} className="block text-[13px] font-medium text-primary">
-                        {entry.key.split('.').pop() ?? entry.key}
-                        {entry.description ? (
-                          <span className="ml-2 text-[12px] font-normal text-secondary">{entry.description}</span>
-                        ) : null}
-                      </label>
+              return (
+                <div key={entry.key} className="space-y-2 py-3 first:pt-0">
+                  <label htmlFor={`unified-settings-${entry.key}`} className="block text-[13px] font-medium text-primary">
+                    {entry.key.split('.').pop() ?? entry.key}
+                    {entry.description ? <span className="ml-2 text-[12px] font-normal text-secondary">{entry.description}</span> : null}
+                  </label>
 
-                      {entry.type === 'boolean' ? (
-                        <label className="inline-flex items-center gap-3 text-[14px] text-primary">
-                          <input
-                            id={`unified-settings-${entry.key}`}
-                            type="checkbox"
-                            checked={Boolean(displayValue)}
-                            onChange={(e) => {
-                              setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
-                              setSaveNotice(null);
-                              setSaveError(null);
-                            }}
-                            className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
-                          />
-                          <span>Enabled</span>
-                        </label>
-                      ) : entry.type === 'select' && entry.enum ? (
-                        <select
-                          id={`unified-settings-${entry.key}`}
-                          value={String(displayValue)}
-                          onChange={(e) => {
-                            setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                            setSaveNotice(null);
-                            setSaveError(null);
-                          }}
-                          className={INPUT_CLASS}
-                        >
-                          {entry.enum.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : entry.type === 'number' ? (
-                        <input
-                          id={`unified-settings-${entry.key}`}
-                          type="number"
-                          value={displayValue as number}
-                          placeholder={entry.placeholder}
-                          onChange={(e) => {
-                            setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
-                            setSaveNotice(null);
-                            setSaveError(null);
-                          }}
-                          className={INPUT_CLASS}
-                        />
-                      ) : (
-                        <input
-                          id={`unified-settings-${entry.key}`}
-                          type="text"
-                          value={String(displayValue)}
-                          placeholder={entry.placeholder}
-                          onChange={(e) => {
-                            setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                            setSaveNotice(null);
-                            setSaveError(null);
-                          }}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+                  {entry.type === 'boolean' ? (
+                    <label className="inline-flex items-center gap-3 text-[14px] text-primary">
+                      <input
+                        id={`unified-settings-${entry.key}`}
+                        type="checkbox"
+                        checked={Boolean(displayValue)}
+                        onChange={(e) => {
+                          setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
+                          setSaveNotice(null);
+                          setSaveError(null);
+                        }}
+                        className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
+                      />
+                      <span>Enabled</span>
+                    </label>
+                  ) : entry.type === 'select' && entry.enum ? (
+                    <select
+                      id={`unified-settings-${entry.key}`}
+                      value={String(displayValue)}
+                      onChange={(e) => {
+                        setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
+                        setSaveNotice(null);
+                        setSaveError(null);
+                      }}
+                      className={INPUT_CLASS}
+                    >
+                      {entry.enum.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : entry.type === 'number' ? (
+                    <input
+                      id={`unified-settings-${entry.key}`}
+                      type="number"
+                      value={displayValue as number}
+                      placeholder={entry.placeholder}
+                      onChange={(e) => {
+                        setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
+                        setSaveNotice(null);
+                        setSaveError(null);
+                      }}
+                      className={INPUT_CLASS}
+                    />
+                  ) : (
+                    <input
+                      id={`unified-settings-${entry.key}`}
+                      type="text"
+                      value={String(displayValue)}
+                      placeholder={entry.placeholder}
+                      onChange={(e) => {
+                        setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
+                        setSaveNotice(null);
+                        setSaveError(null);
+                      }}
+                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  )}
+                </div>
+              );
+            })}
 
-                {saving ? <p className="ui-card-meta">{saving}</p> : null}
-                {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
-                {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
-              </SettingsPanel>
-            </div>
-          </SettingsSection>
-        );
-      })}
-    </>
+            {saving ? <p className="ui-card-meta">{saving}</p> : null}
+            {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
+            {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
+          </SettingsPanel>
+        ))}
+      </div>
+    </SettingsSection>
   );
 }
 

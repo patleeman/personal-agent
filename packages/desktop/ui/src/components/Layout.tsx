@@ -9,6 +9,7 @@ import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSea
 import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
 import { DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
+import { ExtensionModalHost } from '../extensions/ExtensionModalHost';
 import { EXTENSION_REGISTRY_CHANGED_EVENT } from '../extensions/extensionRegistryEvents';
 import { findMatchingExtensionKeybinding } from '../extensions/keybindings';
 import { NativeExtensionSurfaceHost } from '../extensions/NativeExtensionSurfaceHost';

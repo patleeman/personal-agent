@@ -16,4 +16,9 @@ describe('linkedRunStatus', () => {
     expect(describeInlineRunStatus('failed')).toEqual({ text: 'failed', tone: 'danger' });
     expect(describeInlineRunStatus(undefined)).toEqual({ text: 'linked', tone: 'muted' });
   });
+
+  it('falls back to linked for malformed runtime statuses', () => {
+    expect(describeInlineRunStatus({ status: 'completed' })).toEqual({ text: 'linked', tone: 'muted' });
+    expect(inferStatusFromLinkedRunDetail({ detail: 'running' } as never)).toBeUndefined();
+  });
 });

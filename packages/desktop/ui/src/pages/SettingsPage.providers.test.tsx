@@ -297,6 +297,8 @@ describe('SettingsPage provider model editor', () => {
       sessions: [],
       pendingPairings: [],
     });
+    const settingsResult = buildUseApiResult({});
+    const settingsSchemaResult = buildUseApiResult([]);
 
     vi.mocked(useApi).mockImplementation((fetcher, key) => {
       if (fetcher === api.skillFolders) {
@@ -329,6 +331,14 @@ describe('SettingsPage provider model editor', () => {
 
       if (fetcher === api.transcriptionSettings) {
         return transcriptionSettingsResult;
+      }
+
+      if (fetcher === api.settings) {
+        return settingsResult;
+      }
+
+      if (fetcher === api.settingsSchema) {
+        return settingsSchemaResult;
       }
 
       if (fetcher === api.status) {

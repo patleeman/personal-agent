@@ -9,8 +9,6 @@
  * run concurrently.  A failing handler never blocks other subscribers.
  */
 
-import { invalidateAppTopics } from '../shared/appEvents.js';
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ExtensionEvent {

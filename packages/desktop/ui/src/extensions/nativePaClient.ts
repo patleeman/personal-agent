@@ -62,7 +62,9 @@ export interface NativeExtensionClient {
   };
   extensions: {
     callAction(extensionId: string, actionId: string, input?: unknown): Promise<unknown>;
-    listActions(): Promise<Array<{ extensionId: string; extensionName: string; actions: Array<{ id: string; title?: string; description?: string }> }>>;
+    listActions(): Promise<
+      Array<{ extensionId: string; extensionName: string; actions: Array<{ id: string; title?: string; description?: string }> }>
+    >;
     getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
   ui: {
@@ -209,7 +211,11 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
     },
     events: {
       publish(event, payload) {
-        window.dispatchEvent(new CustomEvent('pa-ext-event', { detail: { sourceExtensionId: extensionId, event, payload, publishedAt: new Date().toISOString() } }));
+        window.dispatchEvent(
+          new CustomEvent('pa-ext-event', {
+            detail: { sourceExtensionId: extensionId, event, payload, publishedAt: new Date().toISOString() },
+          }),
+        );
       },
       subscribe(pattern, handler) {
         function listener(raw: CustomEvent) {

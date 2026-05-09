@@ -45,6 +45,15 @@
       ]
     },
     {
+      "title": "Extensions",
+      "items": [
+        {
+          "title": "Extension Authoring",
+          "path": "extensions.md"
+        }
+      ]
+    },
+    {
       "title": "Connectivity",
       "items": [
         {

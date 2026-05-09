@@ -823,7 +823,10 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
   }
 
   if (contributes.conversationHeaderElements !== undefined) {
-    for (const [index, element] of assertRecordArray(contributes.conversationHeaderElements, 'contributes.conversationHeaderElements').entries()) {
+    for (const [index, element] of assertRecordArray(
+      contributes.conversationHeaderElements,
+      'contributes.conversationHeaderElements',
+    ).entries()) {
       requireString(element.id, `contributes.conversationHeaderElements[${index}].id`);
       requireString(element.component, `contributes.conversationHeaderElements[${index}].component`);
       validateOptionalString(element.label, `contributes.conversationHeaderElements[${index}].label`);

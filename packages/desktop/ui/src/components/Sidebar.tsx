@@ -137,7 +137,6 @@ const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
 const WORKBENCH_DOCUMENT_WITH_OPEN_FILE_SELECTOR = '[data-workbench-document-pane="true"][data-has-open-file="true"]';
-const SETTINGS_ROUTE_PREFIXES = ['/settings'] as const;
 
 function getExtensionNavIcon(icon: string | undefined): string {
   switch (icon) {
@@ -635,10 +634,6 @@ function compareConversationItems(left: SidebarConversationItem, right: SidebarC
   }
 
   return left.originalIndex - right.originalIndex;
-}
-
-function matchesSettingsRoute(pathname: string): boolean {
-  return SETTINGS_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 function normalizeHotkeyKey(key: string): string {
