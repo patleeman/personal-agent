@@ -865,7 +865,7 @@ See the system extensions in `extensions/` for practical examples:
 
 - **`system-artifacts`** — Tools + views + transcript renderer + skills
 - **`system-browser`** — Browser automation tool + views
-- **`system-automations`** — Scheduled tasks + composer shelf (TaskShelf)
+- **`system-automations`** — Scheduled tasks, reminders, conversation queues, and the Automations page
 - **`system-images`** — Image generation and probing tools
 - **`system-conversation-tools`** — Agent lifecycle hooks + messageActions + contextMenus
 - **`system-extension-manager`** — Extension management UI + nav

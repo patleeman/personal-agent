@@ -4,8 +4,6 @@ import { timeAgo } from '@personal-agent/extensions/data';
 import { AppPageIntro, AppPageLayout, cx, EmptyState, ErrorState, LoadingState, ToolbarButton } from '@personal-agent/extensions/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export { TaskShelf } from './TaskShelf.js';
-
 interface AutomationFormState {
   title: string;
   prompt: string;

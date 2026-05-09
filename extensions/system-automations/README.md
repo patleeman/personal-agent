@@ -8,7 +8,7 @@ This extension owns the product behavior documented below. Keep extension-specif
 
 # Automations
 
-Automations is the desktop UI for managing scheduled background tasks. Navigate to `/automations` to view, create, edit, and manage automations.
+Automations is the desktop UI for managing scheduled background tasks. Navigate to `/automations` to view, create, edit, and manage automations. Scheduled tasks are managed in this page and attention surfaces, not in every conversation composer.
 
 ## List View
 
