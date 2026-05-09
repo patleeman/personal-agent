@@ -12,7 +12,7 @@ export interface ExtensionTopBarElementRegistration {
   frontendEntry?: string;
 }
 
-export interface ExtensionToolbarActionRegistration {
+interface ExtensionToolbarActionRegistration {
   extensionId: string;
   id: string;
   title: string;
@@ -30,7 +30,7 @@ export interface ExtensionConversationHeaderElementRegistration {
   frontendEntry?: string;
 }
 
-export interface ExtensionStatusBarItemRegistration {
+interface ExtensionStatusBarItemRegistration {
   extensionId: string;
   id: string;
   label: string;
@@ -39,7 +39,7 @@ export interface ExtensionStatusBarItemRegistration {
   priority?: number;
 }
 
-export interface ExtensionContextMenuRegistration {
+interface ExtensionContextMenuRegistration {
   extensionId: string;
   id: string;
   title: string;
@@ -170,6 +170,24 @@ function normalizeToolbarActions(extensions: ExtensionManifest[]): ExtensionTool
   return result;
 }
 
+function normalizeConversationHeaderElements(extensions: ExtensionManifest[]): ExtensionConversationHeaderElementRegistration[] {
+  const result: ExtensionConversationHeaderElementRegistration[] = [];
+  for (const extension of extensions) {
+    const elements = extension.contributes?.conversationHeaderElements;
+    if (!elements?.length) continue;
+    for (const element of elements) {
+      result.push({
+        extensionId: extension.id,
+        id: element.id,
+        component: element.component,
+        label: element.label,
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  return result;
+}
+
 function normalizeConversationDecorators(extensions: ExtensionManifest[]): ExtensionConversationDecoratorRegistration[] {
   const result: ExtensionConversationDecoratorRegistration[] = [];
   for (const extension of extensions) {
@@ -269,6 +287,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           toolbarActions: [],
           contextMenus: [],
           statusBarItems: [],
+          conversationHeaderElements: [],
           conversationDecorators: [],
           loading: false,
           error: null,
@@ -289,6 +308,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             toolbarActions: normalizeToolbarActions(extensions),
             contextMenus: normalizeContextMenus(extensions),
             statusBarItems: normalizeStatusBarItems(extensions),
+            conversationHeaderElements: normalizeConversationHeaderElements(extensions),
             conversationDecorators: normalizeConversationDecorators(extensions),
             loading: false,
             error: null,
