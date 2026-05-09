@@ -650,7 +650,7 @@ export class SshHostController implements HostController {
       return existing;
     }
 
-    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label);
+    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.label);
     this.runtimes.set(conversationId, runtime);
     return runtime;
   }

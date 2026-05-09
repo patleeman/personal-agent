@@ -11,7 +11,7 @@ import { SshRemoteConversationRuntime } from './ssh-remote-runtime.js';
 
 describe('SshRemoteConversationRuntime', () => {
   it('ignores helper greeting responses without ids and continues parsing later responses', () => {
-    const runtime = new SshRemoteConversationRuntime('user@bender', 'bender', 'Bender');
+    const runtime = new SshRemoteConversationRuntime('user@bender', 'Bender');
     const resolve = vi.fn();
     const reject = vi.fn();
 

@@ -85,7 +85,6 @@ export type {
   CompanionConversationCreateInput,
   CompanionConversationCwdChangeInput,
   CompanionConversationDuplicateInput,
-  CompanionConversationExecutionTargetChangeInput,
   CompanionConversationModelPreferencesUpdateInput,
   CompanionConversationParallelJobInput,
   CompanionConversationPromptInput,

@@ -144,7 +144,7 @@ export class SshRemoteConversationRuntime {
 
   constructor(
     private readonly sshTarget: string,
-    private readonly hostId: string,
+
     private readonly hostLabel: string,
   ) {}
 
