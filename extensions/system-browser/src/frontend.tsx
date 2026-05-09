@@ -5,12 +5,12 @@ import {
   getAdjacentTabId,
   getDesktopBridge,
   getTabSessionKey,
-  readBrowserTabsState,
-  BrowserToolBlock,
   WorkbenchBrowserTab,
   writeBrowserTabsState,
 } from '@personal-agent/extensions/workbench';
 import { useCallback, useEffect, useState } from 'react';
+
+import { BrowserToolBlock } from './BrowserToolBlock.js';
 
 const BROWSER_TABS_CHANGED_EVENT = 'pa:system-browser-tabs-changed';
 
