@@ -1,3 +1,5 @@
+export { TaskShelf } from './TaskShelf.js';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { NativeExtensionClient } from '@personal-agent/extensions';

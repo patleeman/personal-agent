@@ -6,8 +6,15 @@ import { createNativeExtensionClient } from './nativePaClient';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { systemExtensionModules } from './systemExtensionModules';
 
+export interface ComposerShelfContext {
+  conversationId: string;
+  isStreaming: boolean;
+  isLive: boolean;
+}
+
 type ComposerShelfComponent = ComponentType<{
   pa: ReturnType<typeof createNativeExtensionClient>;
+  shelfContext: ComposerShelfContext;
 }>;
 
 function loadShelfModule(registration: ExtensionComposerShelfRegistration, revision: number): Promise<Record<string, unknown>> {
@@ -21,7 +28,13 @@ function loadShelfModule(registration: ExtensionComposerShelfRegistration, revis
   return import(/* @vite-ignore */ source) as Promise<Record<string, unknown>>;
 }
 
-export function ComposerShelfHost({ registration }: { registration: ExtensionComposerShelfRegistration }) {
+export function ComposerShelfHost({
+  registration,
+  shelfContext,
+}: {
+  registration: ExtensionComposerShelfRegistration;
+  shelfContext: ComposerShelfContext;
+}) {
   const moduleKey = `${registration.extensionId}:${registration.frontendEntry ?? ''}:${getExtensionRegistryRevision()}`;
   const pa = useMemo(() => createNativeExtensionClient(registration.extensionId), [registration.extensionId]);
   const Component = useMemo(
@@ -32,14 +45,19 @@ export function ComposerShelfHost({ registration }: { registration: ExtensionCom
         if (typeof component !== 'function') {
           return { default: () => null as unknown as React.ReactElement };
         }
-        return { default: component as React.ComponentType<{ pa: ReturnType<typeof createNativeExtensionClient> }> };
+        return {
+          default: component as React.ComponentType<{
+            pa: ReturnType<typeof createNativeExtensionClient>;
+            shelfContext: ComposerShelfContext;
+          }>,
+        };
       }),
     [moduleKey],
   );
 
   return (
     <Suspense fallback={null}>
-      <Component pa={pa} />
+      <Component pa={pa} shelfContext={shelfContext} />
     </Suspense>
   );
 }

@@ -109,6 +109,14 @@
         "activation": "on-open"
       }
     ],
+    "composerShelves": [
+      {
+        "id": "activity-shelf",
+        "component": "ActivityShelf",
+        "title": "Active runs",
+        "placement": "bottom"
+      }
+    ],
     "skills": [
       {
         "id": "runs",

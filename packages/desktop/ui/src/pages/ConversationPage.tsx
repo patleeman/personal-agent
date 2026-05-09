@@ -6733,7 +6733,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
                   {composerShelvesTop.map((shelf) => (
-                    <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} />
+                    <ComposerShelfHost
+                      key={`${shelf.extensionId}:${shelf.id}`}
+                      registration={shelf}
+                      shelfContext={{ conversationId: id ?? '', isStreaming: stream.isStreaming, isLive: isLiveSession }}
+                    />
                   ))}
                   {stream.isStreaming &&
                     !pendingBrowserComments.length &&
@@ -6861,7 +6865,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     />
                   )}
                   {composerShelvesBottom.map((shelf) => (
-                    <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} />
+                    <ComposerShelfHost
+                      key={`${shelf.extensionId}:${shelf.id}`}
+                      registration={shelf}
+                      shelfContext={{ conversationId: id ?? '', isStreaming: stream.isStreaming, isLive: isLiveSession }}
+                    />
                   ))}
                 </div>
               )}

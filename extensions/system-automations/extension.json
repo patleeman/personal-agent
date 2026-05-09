@@ -225,6 +225,14 @@
         "description": "Built-in guidance for daemon-backed scheduled automations and conversation callbacks.",
         "path": "skills/scheduled-tasks/SKILL.md"
       }
+    ],
+    "composerShelves": [
+      {
+        "id": "task-shelf",
+        "component": "TaskShelf",
+        "title": "Scheduled tasks",
+        "placement": "bottom"
+      }
     ]
   },
   "permissions": ["runs:read", "runs:start", "conversations:readwrite", "ui:notify"]

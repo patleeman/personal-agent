@@ -1,3 +1,5 @@
+export { ActivityShelf } from './ActivityShelf.js';
+
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
