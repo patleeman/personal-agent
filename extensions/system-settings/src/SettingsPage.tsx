@@ -106,7 +106,6 @@ const DESKTOP_KEYBOARD_SHORTCUT_LABELS: Record<DesktopKeyboardShortcutId, { labe
   quit: { label: 'Quit', description: 'Quit the desktop app.' },
   conversationMode: { label: 'Conversation mode', description: 'Show the normal chat layout.' },
   workbenchMode: { label: 'Workbench mode', description: 'Show the chat and workbench layout.' },
-  zenMode: { label: 'Zen mode', description: 'Hide side panels for focused chat.' },
   toggleSidebar: { label: 'Toggle left sidebar', description: 'Collapse or restore the conversation sidebar.' },
   toggleRightRail: { label: 'Toggle right rail', description: 'Collapse or restore the active workbench rail.' },
 };
@@ -128,7 +127,6 @@ const DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS: DesktopAppPreferencesState['keyboardSh
   quit: 'CommandOrControl+Q',
   conversationMode: 'F1',
   workbenchMode: 'F2',
-  zenMode: 'F3',
   toggleSidebar: 'CommandOrControl+/',
   toggleRightRail: 'CommandOrControl+\\',
 };

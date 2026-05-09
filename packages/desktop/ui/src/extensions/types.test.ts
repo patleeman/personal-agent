@@ -63,11 +63,11 @@ describe('extension surface type guards', () => {
 
   it('normalizes placement, scope, and activation defaults', () => {
     expect(getExtensionViewPlacement({ location: 'main' })).toBe('primary');
-    expect(getExtensionViewPlacement({ location: 'rightRail' })).toBe('conversation-rail');
-    expect(getExtensionViewPlacement({ location: 'main', placement: 'adaptive-primary' })).toBe('adaptive-primary');
-    expect(getExtensionViewScope({ location: 'rightRail', placement: 'conversation-rail' })).toBe('conversation');
-    expect(getExtensionViewScope({ location: 'rightRail', placement: 'adaptive-primary', scope: 'global' })).toBe('global');
+    expect(getExtensionViewPlacement({ location: 'rightRail' })).toBe('workbench-tool');
+    expect(getExtensionViewPlacement({ location: 'main', placement: 'workbench-tool' })).toBe('workbench-tool');
+    expect(getExtensionViewScope({ location: 'rightRail', placement: 'workbench-tool' })).toBe('conversation');
+    expect(getExtensionViewScope({ location: 'rightRail', placement: 'workbench-tool', scope: 'global' })).toBe('global');
     expect(getExtensionViewActivation({ location: 'main', placement: 'primary' })).toBe('on-route');
-    expect(getExtensionViewActivation({ location: 'rightRail', placement: 'conversation-rail' })).toBe('on-open');
+    expect(getExtensionViewActivation({ location: 'rightRail', placement: 'workbench-tool' })).toBe('on-open');
   });
 });

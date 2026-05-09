@@ -423,7 +423,7 @@ Supported host command targets include:
 - `navigate:/path` — navigate to a route.
 - `commandPalette:threads|files|commands|search` — open the command palette in a scope.
 - `rightRail:{extensionId}/{surfaceId}` — open a right-rail extension surface.
-- `layout:conversation|workbench|zen` — switch layout mode.
+- `layout:compact|workbench` — switch layout mode.
 
 Do not install global `window` listeners for app-level shortcuts.
 

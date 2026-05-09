@@ -466,7 +466,6 @@ describe('SettingsPage provider model editor', () => {
             quit: 'CommandOrControl+Q',
             conversationMode: 'F1',
             workbenchMode: 'F2',
-            zenMode: 'F3',
             toggleSidebar: 'CommandOrControl+/',
             toggleRightRail: 'CommandOrControl+\\',
           },

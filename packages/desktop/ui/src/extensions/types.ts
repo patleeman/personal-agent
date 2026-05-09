@@ -13,7 +13,7 @@ type ExtensionIconName =
   | 'sparkle'
   | 'terminal';
 type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
-export type ExtensionViewPlacement = 'primary' | 'adaptive-primary' | 'conversation-rail';
+export type ExtensionViewPlacement = 'primary' | 'workbench-tool';
 export type ExtensionViewScope = 'global' | 'workspace' | 'conversation';
 export type ExtensionViewActivation = 'always' | 'on-route' | 'on-open' | 'on-demand';
 export type ExtensionRouteCapability = 'contextRail' | 'workbench' | 'workbenchFilePane' | 'knowledgeFiles' | 'settingsSection';
@@ -361,12 +361,12 @@ export function isNativeExtensionRightRailSurface(
 
 export function getExtensionViewPlacement(surface: Pick<NativeExtensionViewSummary, 'location' | 'placement'>): ExtensionViewPlacement {
   if (surface.placement) return surface.placement;
-  return surface.location === 'rightRail' || surface.location === 'workbench' ? 'conversation-rail' : 'primary';
+  return surface.location === 'rightRail' || surface.location === 'workbench' ? 'workbench-tool' : 'primary';
 }
 
 export function getExtensionViewScope(surface: Pick<NativeExtensionViewSummary, 'scope' | 'placement' | 'location'>): ExtensionViewScope {
   if (surface.scope === 'conversation' || surface.scope === 'workspace' || surface.scope === 'global') return surface.scope;
-  return getExtensionViewPlacement(surface) === 'conversation-rail' ? 'conversation' : 'global';
+  return getExtensionViewPlacement(surface) === 'workbench-tool' ? 'conversation' : 'global';
 }
 
 export function getExtensionViewActivation(

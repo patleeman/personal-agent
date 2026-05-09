@@ -2,7 +2,7 @@ export const EXTENSION_MANIFEST_VERSION = 2;
 
 export type ExtensionPackageType = 'user' | 'system';
 export type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
-export type ExtensionViewPlacement = 'primary' | 'adaptive-primary' | 'conversation-rail';
+export type ExtensionViewPlacement = 'primary' | 'workbench-tool';
 export type ExtensionViewScope = 'global' | 'workspace' | 'conversation';
 export type ExtensionViewActivation = 'always' | 'on-route' | 'on-open' | 'on-demand';
 export type ExtensionIconName =

@@ -449,9 +449,6 @@ async function bootstrapDesktopApp(): Promise<void> {
     onShowWorkbenchMode: () => {
       windowController?.sendShortcutToFocusedWindow('show-workbench-mode');
     },
-    onShowZenMode: () => {
-      windowController?.sendShortcutToFocusedWindow('show-zen-mode');
-    },
     onHideWindow: () => {
       windowController?.hideFocusedWindow();
     },

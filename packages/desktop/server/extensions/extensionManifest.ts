@@ -12,7 +12,7 @@ export type ExtensionSurfaceKind = (typeof EXTENSION_SURFACE_KINDS)[number];
 export const EXTENSION_RIGHT_SURFACE_SCOPES = ['global', 'conversation', 'workspace', 'selection'] as const;
 export type ExtensionRightSurfaceScope = (typeof EXTENSION_RIGHT_SURFACE_SCOPES)[number];
 
-export const EXTENSION_VIEW_PLACEMENTS = ['primary', 'adaptive-primary', 'conversation-rail'] as const;
+export const EXTENSION_VIEW_PLACEMENTS = ['primary', 'workbench-tool'] as const;
 export type ExtensionViewPlacement = (typeof EXTENSION_VIEW_PLACEMENTS)[number];
 
 export const EXTENSION_VIEW_SCOPES = ['global', 'workspace', 'conversation'] as const;

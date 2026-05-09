@@ -157,27 +157,7 @@ describe('DesktopTopBar', () => {
 
     expect(html).toContain('aria-label="Workbench"');
     expect(html).toContain('aria-label="Compact"');
-    expect(html).toContain('aria-label="Zen"');
-    expect(html).toContain('aria-checked="true"');
-  });
-
-  it('keeps zen windows focused by hiding sidebar controls and marking zen active', () => {
-    const html = renderTopBar(
-      {
-        isElectron: true,
-        activeHostId: 'local',
-        activeHostLabel: 'Local',
-        activeHostKind: 'local',
-        activeHostSummary: 'Local runtime is healthy.',
-        launchMode: 'normal',
-        launchLabel: null,
-      },
-      { zenMode: true },
-    );
-
-    expect(html).toContain('aria-label="Zen"');
-    expect(html).not.toContain('Hide sidebar');
-    expect(html).toContain('title="Zen view"');
+    expect(html.match(/role="radio"/g)?.length).toBe(2);
     expect(html).toContain('aria-checked="true"');
   });
 

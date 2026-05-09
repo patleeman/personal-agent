@@ -135,10 +135,9 @@
         "route": "/knowledge",
         "component": "KnowledgePageSurface",
         "routeCapabilities": ["knowledgeFiles"],
-        "placement": "adaptive-primary",
+        "placement": "primary",
         "scope": "global",
-        "activation": "on-route",
-        "persistOpen": true
+        "activation": "on-route"
       },
       {
         "id": "knowledge-tree",
@@ -148,7 +147,7 @@
         "component": "KnowledgeTreePanel",
         "icon": "file",
         "detailView": "knowledge-file",
-        "placement": "adaptive-primary",
+        "placement": "workbench-tool",
         "activation": "on-open",
         "persistOpen": true
       },
@@ -157,7 +156,7 @@
         "title": "Knowledge file",
         "location": "workbench",
         "component": "KnowledgeFilePanel",
-        "placement": "adaptive-primary",
+        "placement": "workbench-tool",
         "scope": "global",
         "activation": "on-open",
         "persistOpen": true

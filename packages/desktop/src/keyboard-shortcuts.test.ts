@@ -5,9 +5,9 @@ import { CORE_KEYBOARD_SHORTCUT_REGISTRATIONS, DEFAULT_DESKTOP_KEYBOARD_SHORTCUT
 // ── keyboard-shortcuts — default shortcut definitions ─────────────────────
 
 describe('DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS', () => {
-  it('defines all 19 expected shortcuts from the core registry', () => {
+  it('defines all 18 expected shortcuts from the core registry', () => {
     const keys = Object.keys(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS);
-    expect(keys.length).toBe(19);
+    expect(keys.length).toBe(18);
     expect(CORE_KEYBOARD_SHORTCUT_REGISTRATIONS.map((registration) => registration.id)).toEqual(keys);
   });
 
@@ -20,7 +20,6 @@ describe('DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS', () => {
   it('includes layout mode shortcuts', () => {
     expect(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS.conversationMode).toBe('F1');
     expect(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS.workbenchMode).toBe('F2');
-    expect(DEFAULT_DESKTOP_KEYBOARD_SHORTCUTS.zenMode).toBe('F3');
   });
 
   it('includes sidebar and rail toggles', () => {

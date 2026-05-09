@@ -79,7 +79,6 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       onToggleRightRail: noop,
       onShowConversationMode: noop,
       onShowWorkbenchMode: noop,
-      onShowZenMode: noop,
     } as unknown as Parameters<typeof buildDesktopApplicationMenuTemplate>[0]);
 
     const viewMenu = items.find(

@@ -48,18 +48,6 @@ function WorkbenchViewIcon() {
   );
 }
 
-function ZenViewIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
-      <path d="M7 2.2v2" />
-      <path d="M7 9.8v2" />
-      <path d="M2.2 7h2" />
-      <path d="M9.8 7h2" />
-      <circle cx="7" cy="7" r="2.4" />
-    </svg>
-  );
-}
-
 const MAX_BROWSER_NAVIGATION_INDEX = 10_000;
 
 function isSafeNavigationIndex(value: number): boolean {
@@ -178,8 +166,6 @@ export function DesktopTopBar({
   onToggleRail,
   layoutMode,
   onLayoutModeChange,
-  onZenModeChange,
-  zenMode = false,
 }: {
   environment: DesktopEnvironmentState | null;
   sidebarOpen: boolean;
@@ -189,8 +175,6 @@ export function DesktopTopBar({
   onToggleRail: () => void;
   layoutMode: AppLayoutMode;
   onLayoutModeChange: (mode: AppLayoutMode) => void;
-  onZenModeChange?: (enabled: boolean) => void;
-  zenMode?: boolean;
 }) {
   const location = useLocation();
   const daemonPower = useDaemonPower();
@@ -275,16 +259,14 @@ export function DesktopTopBar({
       <div className="ui-desktop-top-bar__leading">
         <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" style={dragStyle} />
         <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-          {!zenMode ? (
-            <ToolbarButton
-              className="ui-desktop-top-bar__icon-button"
-              onClick={onToggleSidebar}
-              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-            >
-              <LeftSidebarToggleIcon open={sidebarOpen} />
-            </ToolbarButton>
-          ) : null}
+          <ToolbarButton
+            className="ui-desktop-top-bar__icon-button"
+            onClick={onToggleSidebar}
+            aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <LeftSidebarToggleIcon open={sidebarOpen} />
+          </ToolbarButton>
           <ToolbarButton
             className="ui-desktop-top-bar__icon-button"
             onClick={() => {
@@ -330,11 +312,10 @@ export function DesktopTopBar({
             type="button"
             className="ui-desktop-layout-switcher__button"
             role="radio"
-            aria-checked={!zenMode && layoutMode === 'compact'}
+            aria-checked={layoutMode === 'compact'}
             aria-label="Compact"
             title="Compact view"
             onClick={() => {
-              onZenModeChange?.(false);
               onLayoutModeChange('compact');
             }}
           >
@@ -344,26 +325,14 @@ export function DesktopTopBar({
             type="button"
             className="ui-desktop-layout-switcher__button"
             role="radio"
-            aria-checked={!zenMode && layoutMode === 'workbench'}
+            aria-checked={layoutMode === 'workbench'}
             aria-label="Workbench"
             title="Workbench view"
             onClick={() => {
-              onZenModeChange?.(false);
               onLayoutModeChange('workbench');
             }}
           >
             <WorkbenchViewIcon />
-          </button>
-          <button
-            type="button"
-            className="ui-desktop-layout-switcher__button"
-            role="radio"
-            aria-checked={zenMode}
-            aria-label="Zen"
-            title="Zen view"
-            onClick={() => onZenModeChange?.(true)}
-          >
-            <ZenViewIcon />
           </button>
         </div>
         {showRailToggle ? (

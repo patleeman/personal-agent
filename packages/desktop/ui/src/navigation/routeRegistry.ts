@@ -1,9 +1,4 @@
-import {
-  type ExtensionRouteCapability,
-  type ExtensionSurfaceSummary,
-  getExtensionViewPlacement,
-  isNativeExtensionPageSurface,
-} from '../extensions/types';
+import { type ExtensionRouteCapability, type ExtensionSurfaceSummary, isNativeExtensionPageSurface } from '../extensions/types';
 
 interface AppRoutePattern {
   id: string;
@@ -31,11 +26,7 @@ function extensionRouteHasCapability(pathname: string, capability: ExtensionRout
       return true;
     }
 
-    const placement = getExtensionViewPlacement(surface);
-    if (capability === 'contextRail') {
-      return placement === 'primary' || placement === 'adaptive-primary';
-    }
-    return false;
+    return capability === 'contextRail';
   });
 }
 

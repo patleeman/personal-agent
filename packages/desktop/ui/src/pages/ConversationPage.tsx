@@ -525,7 +525,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const previousSelectedCheckpointIdRef = useRef<string | null | undefined>(undefined);
   const previousSelectedRunIdRef = useRef<string | null | undefined>(undefined);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
-  const artifactOpensInWorkbenchPane = appLayoutMode === 'workbench' && new URLSearchParams(location.search).get('view') !== 'zen';
+  const artifactOpensInWorkbenchPane = appLayoutMode === 'workbench';
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns, setSessions } = useAppData();
   const conversationEventVersion = useConversationEventVersion(id);
@@ -1227,7 +1227,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [titleSaving, setTitleSaving] = useState(false);
-  const [summaryForkBusy, setSummaryForkBusy] = useState(false);
+
   const titleInputRef = useRef<HTMLInputElement>(null);
   const conversationHeaderRef = useRef<HTMLDivElement>(null);
   const [conversationHeaderOffset, setConversationHeaderOffset] = useState(96);
@@ -4493,33 +4493,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function summarizeAndForkConversation() {
-    if (draft || !id) {
-      showNotice('danger', 'Summarize + fork requires an existing conversation.', 4000);
-      return;
-    }
-
-    if (summaryForkBusy) {
-      return;
-    }
-
-    setSummaryForkBusy(true);
-    try {
-      showNotice('accent', 'Creating summary fork…', 5000);
-      const liveConversationId = await ensureConversationIsLive('be summarized and forked');
-      const { newSessionId } = await retryLiveSessionActionAfterTakeover({
-        attemptAction: () => api.summarizeAndForkSession(liveConversationId, currentSurfaceId),
-        takeOverSessionControl: () => streamTakeover(),
-      });
-      ensureConversationTabOpen(newSessionId);
-      navigate(`/conversations/${newSessionId}`);
-    } catch (error) {
-      showNotice('danger', `Summarize + fork failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
-    } finally {
-      setSummaryForkBusy(false);
-    }
-  }
-
   function addImageAttachments(files: File[]) {
     const imageFiles = files.filter((file) => file.type.startsWith('image/'));
     if (imageFiles.length > 0) {
@@ -5224,10 +5197,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           showNotice('danger', `Fork failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
         }
         return { kind: 'handled' };
-      case 'summarizeFork':
-        setInput('');
-        await summarizeAndForkConversation();
-        return { kind: 'handled' };
+
       case 'image':
         setInput('');
         openFilePicker();

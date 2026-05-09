@@ -47,10 +47,8 @@ type DesktopRendererShortcutAction =
   | 'toggle-sidebar'
   | 'toggle-right-rail'
   | 'toggle-layout-mode'
-  | 'cycle-view-mode'
   | 'show-conversation-mode'
   | 'show-workbench-mode'
-  | 'show-zen-mode'
   | 'toggle-conversation-pin'
   | 'toggle-conversation-archive'
   | 'focus-composer'
@@ -328,7 +326,7 @@ export class DesktopWindowController {
     }
 
     const hostId = input.hostId?.trim() || this.hostManager.getActiveHostId();
-    await this.openWindowForHost(hostId, `/conversations/${encodeURIComponent(conversationId)}?view=zen`, 'popout');
+    await this.openWindowForHost(hostId, `/conversations/${encodeURIComponent(conversationId)}`, 'popout');
   }
 
   async openStartupErrorWindow(input: { message: string; logsDir: string }): Promise<void> {

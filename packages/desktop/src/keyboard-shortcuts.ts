@@ -15,7 +15,6 @@ export type DesktopKeyboardShortcutId =
   | 'quit'
   | 'conversationMode'
   | 'workbenchMode'
-  | 'zenMode'
   | 'toggleSidebar'
   | 'toggleRightRail';
 
@@ -147,7 +146,7 @@ export const CORE_KEYBOARD_SHORTCUT_REGISTRATIONS: CoreKeyboardShortcutRegistrat
     id: 'conversationMode',
     title: 'Conversation mode',
     description: 'Show the normal chat layout.',
-    command: 'layout:conversation',
+    command: 'layout:compact',
     defaultKeys: ['F1'],
     menu: 'view',
   },
@@ -157,14 +156,6 @@ export const CORE_KEYBOARD_SHORTCUT_REGISTRATIONS: CoreKeyboardShortcutRegistrat
     description: 'Show the chat and workbench layout.',
     command: 'layout:workbench',
     defaultKeys: ['F2'],
-    menu: 'view',
-  },
-  {
-    id: 'zenMode',
-    title: 'Zen mode',
-    description: 'Hide side panels for focused chat.',
-    command: 'layout:zen',
-    defaultKeys: ['F3'],
     menu: 'view',
   },
   {

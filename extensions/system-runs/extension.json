@@ -96,7 +96,7 @@
         "component": "ConversationRunsPanel",
         "icon": "terminal",
         "detailView": "conversation-run-detail",
-        "placement": "conversation-rail",
+        "placement": "workbench-tool",
         "activation": "on-open"
       },
       {
@@ -104,7 +104,7 @@
         "title": "Run detail",
         "location": "workbench",
         "component": "ConversationRunDetailPanel",
-        "placement": "conversation-rail",
+        "placement": "workbench-tool",
         "scope": "conversation",
         "activation": "on-open"
       }

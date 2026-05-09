@@ -63,7 +63,7 @@
         "component": "BrowserTabsPanel",
         "icon": "browser",
         "detailView": "browser-workbench",
-        "placement": "adaptive-primary",
+        "placement": "workbench-tool",
         "activation": "on-open",
         "persistOpen": true
       },
@@ -72,7 +72,7 @@
         "title": "Browser",
         "location": "workbench",
         "component": "BrowserWorkbenchPanel",
-        "placement": "adaptive-primary",
+        "placement": "workbench-tool",
         "scope": "global",
         "activation": "on-open",
         "persistOpen": true

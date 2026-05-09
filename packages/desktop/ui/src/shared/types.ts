@@ -948,7 +948,6 @@ export interface DesktopAppPreferencesState {
     quit: string;
     conversationMode: string;
     workbenchMode: string;
-    zenMode: string;
     toggleSidebar: string;
     toggleRightRail: string;
   };

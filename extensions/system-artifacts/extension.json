@@ -76,7 +76,7 @@
         "component": "ArtifactsPanel",
         "icon": "file",
         "detailView": "artifact-detail",
-        "placement": "conversation-rail",
+        "placement": "workbench-tool",
         "activation": "on-open"
       },
       {
@@ -84,7 +84,7 @@
         "title": "Artifact",
         "location": "workbench",
         "component": "ArtifactDetailPanel",
-        "placement": "conversation-rail",
+        "placement": "workbench-tool",
         "scope": "conversation",
         "activation": "on-open"
       }

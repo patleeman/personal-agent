@@ -24,7 +24,6 @@ export interface DesktopApplicationMenuActions {
   onToggleRightRail: () => void;
   onShowConversationMode: () => void;
   onShowWorkbenchMode: () => void;
-  onShowZenMode: () => void;
   onHideWindow: () => void;
   onSettings: () => void;
   onCheckForUpdates: () => void;
@@ -57,7 +56,6 @@ const DESKTOP_MENU_SHORTCUT_ACTIONS: Record<DesktopMenuShortcutId, keyof Desktop
   quit: 'onQuit',
   conversationMode: 'onShowConversationMode',
   workbenchMode: 'onShowWorkbenchMode',
-  zenMode: 'onShowZenMode',
   toggleSidebar: 'onToggleSidebar',
   toggleRightRail: 'onToggleRightRail',
 };
@@ -175,7 +173,6 @@ export function buildDesktopApplicationMenuTemplate(
       menuShortcut('toggleRightRail', 'Toggle Right Rail', actions, keyboardShortcuts),
       menuShortcut('conversationMode', 'Conversation Mode', actions, keyboardShortcuts),
       menuShortcut('workbenchMode', 'Workbench Mode', actions, keyboardShortcuts),
-      menuShortcut('zenMode', 'Zen Mode', actions, keyboardShortcuts),
       { type: 'separator' },
       { role: 'togglefullscreen' },
     ],

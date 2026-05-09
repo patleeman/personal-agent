@@ -64,7 +64,7 @@
         "component": "ConversationDiffsPanel",
         "icon": "diff",
         "detailView": "conversation-diff-detail",
-        "placement": "conversation-rail",
+        "placement": "workbench-tool",
         "activation": "on-open"
       },
       {
@@ -72,7 +72,7 @@
         "title": "Diff detail",
         "location": "workbench",
         "component": "ConversationDiffDetailPanel",
-        "placement": "conversation-rail",
+        "placement": "workbench-tool",
         "scope": "conversation",
         "activation": "on-open"
       }

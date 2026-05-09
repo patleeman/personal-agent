@@ -69,10 +69,8 @@ type DesktopLayoutShortcutAction =
   | 'toggle-sidebar'
   | 'toggle-right-rail'
   | 'toggle-layout-mode'
-  | 'cycle-view-mode'
   | 'show-conversation-mode'
-  | 'show-workbench-mode'
-  | 'show-zen-mode';
+  | 'show-workbench-mode';
 
 type BuiltInWorkbenchRailMode = 'files' | 'diffs' | 'artifacts' | 'browser' | 'runs';
 type ExtensionWorkbenchRailMode = `extension:${string}:${string}`;
@@ -138,10 +136,8 @@ function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutSh
     value === 'toggle-sidebar' ||
     value === 'toggle-right-rail' ||
     value === 'toggle-layout-mode' ||
-    value === 'cycle-view-mode' ||
     value === 'show-conversation-mode' ||
-    value === 'show-workbench-mode' ||
-    value === 'show-zen-mode'
+    value === 'show-workbench-mode'
   );
 }
 
@@ -1273,10 +1269,9 @@ export function Layout() {
     };
   }, []);
 
-  const zenMode = searchParams.get('view') === 'zen';
-  const effectiveSidebarOpen = !zenMode && sidebarOpen;
-  const showContextRail = !zenMode && canShowContextRail && railOpen;
-  const showWorkbench = !zenMode && appLayoutMode === 'workbench' && routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces);
+  const effectiveSidebarOpen = sidebarOpen;
+  const showContextRail = canShowContextRail && railOpen;
+  const showWorkbench = appLayoutMode === 'workbench' && routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces);
   const activeConversationId = getActiveConversationId(location.pathname);
   const activeWorkbenchKnowledgeFileId = showWorkbench
     ? (searchParams.get('file') ?? (activeConversationId ? selectedFileByConversation[activeConversationId] : null) ?? null)
@@ -1356,7 +1351,7 @@ export function Layout() {
       }
       if (command.startsWith('layout:')) {
         const mode = command.slice('layout:'.length);
-        if (mode === 'conversation' || mode === 'workbench' || mode === 'zen') {
+        if (mode === 'compact' || mode === 'workbench') {
           writeAppLayoutMode(mode);
           setAppLayoutMode(mode);
           return true;
@@ -1679,24 +1674,6 @@ export function Layout() {
     ],
   );
 
-  const handleZenModeChange = useCallback(
-    (enabled: boolean) => {
-      setSearchParams(
-        (current) => {
-          const next = new URLSearchParams(current);
-          if (enabled) {
-            next.set('view', 'zen');
-          } else {
-            next.delete('view');
-          }
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
-
   useEffect(() => {
     function handleDesktopShortcut(event: Event) {
       if (hasBlockingOverlayOpen()) {
@@ -1719,36 +1696,12 @@ export function Layout() {
       }
 
       if (action === 'show-conversation-mode') {
-        handleZenModeChange(false);
         handleAppLayoutModeChange('compact');
         return;
       }
 
       if (action === 'show-workbench-mode') {
-        handleZenModeChange(false);
         handleAppLayoutModeChange('workbench');
-        return;
-      }
-
-      if (action === 'show-zen-mode') {
-        handleAppLayoutModeChange('workbench');
-        handleZenModeChange(true);
-        return;
-      }
-
-      if (action === 'cycle-view-mode') {
-        if (zenMode) {
-          handleZenModeChange(false);
-          handleAppLayoutModeChange('compact');
-          return;
-        }
-
-        if (appLayoutMode === 'compact') {
-          handleAppLayoutModeChange('workbench');
-          return;
-        }
-
-        handleZenModeChange(true);
         return;
       }
 
@@ -1771,9 +1724,6 @@ export function Layout() {
     }
 
     function handleShowWorkbenchBrowser() {
-      if (zenMode) {
-        handleZenModeChange(false);
-      }
       if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {
         navigate('/conversations/new');
       }
@@ -1793,14 +1743,12 @@ export function Layout() {
     activeRightRailControl,
     appLayoutMode,
     handleAppLayoutModeChange,
-    handleZenModeChange,
     location.hash,
     extensionRegistry.surfaces,
     location.pathname,
     location.search,
     navigate,
     systemBrowserExtensionSurface,
-    zenMode,
   ]);
 
   return (
@@ -1816,8 +1764,6 @@ export function Layout() {
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
             onLayoutModeChange={handleAppLayoutModeChange}
-            onZenModeChange={handleZenModeChange}
-            zenMode={zenMode}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
             {effectiveSidebarOpen ? (
@@ -1825,7 +1771,7 @@ export function Layout() {
                 style={{ width: sidebar.width }}
                 className="flex-shrink-0 flex flex-col overflow-hidden bg-base border-r border-border-subtle"
               >
-                <Sidebar hideBrowserNav={showWorkbench} hideAdaptiveNav={showWorkbench} />
+                <Sidebar />
               </div>
             ) : null}
 
