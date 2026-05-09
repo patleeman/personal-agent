@@ -634,6 +634,14 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.topBarElements !== undefined) {
+    for (const [index, element] of assertRecordArray(contributes.topBarElements, 'contributes.topBarElements').entries()) {
+      requireString(element.id, `contributes.topBarElements[${index}].id`);
+      requireString(element.component, `contributes.topBarElements[${index}].component`);
+      validateOptionalString(element.label, `contributes.topBarElements[${index}].label`);
+    }
+  }
+
   if (contributes.settings !== undefined && !isRecord(contributes.settings)) {
     throw new Error('Extension manifest contributes.settings must be an object.');
   }
@@ -848,6 +856,7 @@ export function readExtensionSchema() {
       'promptReferences',
       'quickOpen',
       'themes',
+      'topBarElements',
     ],
   };
 }

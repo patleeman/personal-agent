@@ -5,6 +5,9 @@
   "packageType": "system",
   "description": "Keep the system awake by managing the daemon power state.",
   "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js"
+  },
   "backend": {
     "entry": "src/backend.ts",
     "actions": [
@@ -17,6 +20,15 @@
         "id": "setPowerKeepAwake",
         "handler": "setPowerKeepAwake",
         "title": "Set daemon keep-awake"
+      }
+    ]
+  },
+  "contributes": {
+    "topBarElements": [
+      {
+        "id": "caffeine-indicator",
+        "component": "CaffeineIndicator",
+        "label": "Caffeine indicator"
       }
     ]
   },

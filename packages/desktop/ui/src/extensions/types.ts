@@ -123,6 +123,12 @@ interface ExtensionMentionContribution {
   provider: string;
 }
 
+interface ExtensionTopBarElementContribution {
+  id: string;
+  component: string;
+  label?: string;
+}
+
 interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -136,6 +142,7 @@ interface ExtensionContributions {
   promptReferences?: ExtensionPromptReferenceContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
+  topBarElements?: ExtensionTopBarElementContribution[];
   settings?: Record<string, unknown>;
 }
 

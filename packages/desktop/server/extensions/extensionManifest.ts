@@ -89,7 +89,14 @@ export interface ExtensionContributions {
   promptReferences?: ExtensionPromptReferenceContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
+  topBarElements?: ExtensionTopBarElementContribution[];
   settings?: Record<string, unknown>;
+}
+
+export interface ExtensionTopBarElementContribution {
+  id: string;
+  component: string;
+  label?: string;
 }
 
 export interface ExtensionThemeContribution {

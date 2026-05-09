@@ -143,6 +143,12 @@ export interface ExtensionThemeContribution {
   tokens: Record<string, string>;
 }
 
+export interface ExtensionTopBarElementContribution {
+  id: string;
+  component: string;
+  label?: string;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -156,6 +162,7 @@ export interface ExtensionContributions {
   promptReferences?: ExtensionPromptReferenceContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
+  topBarElements?: ExtensionTopBarElementContribution[];
   settings?: Record<string, unknown>;
 }
 
