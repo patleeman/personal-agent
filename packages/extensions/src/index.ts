@@ -166,6 +166,14 @@ export interface ExtensionMessageActionContribution {
   priority?: number;
 }
 
+export interface ExtensionComposerShelfContribution {
+  id: string;
+  component: string;
+  title?: string;
+  /** Where this shelf appears relative to built-in shelves. Default 'bottom'. */
+  placement?: 'top' | 'bottom';
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -181,6 +189,7 @@ export interface ExtensionContributions {
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
+  composerShelves?: ExtensionComposerShelfContribution[];
   settings?: Record<string, unknown>;
 }
 

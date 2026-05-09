@@ -19,6 +19,8 @@ import {
   DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS,
 } from '../components/conversation/ConversationDraftEmptyAction';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
+import { ComposerShelfHost } from '../extensions/ComposerShelfHost';
+import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationRunModePanel } from '../components/conversation/ConversationRunModePanel';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
@@ -6195,7 +6197,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const renameConversationDisabled = conversationNeedsTakeover || conversationCwdEditorOpen || conversationCwdBusy;
+  const { composerShelves } = useExtensionRegistry();
+  const composerShelvesTop = useMemo(
+    () => composerShelves.filter((shelf) => shelf.placement === 'top'),
+    [composerShelves],
+  );
+  const composerShelvesBottom = useMemo(
+    () => composerShelves.filter((shelf) => shelf.placement === 'bottom'),
+    [composerShelves],
+  );
   const hasComposerShelfContent =
+    composerShelvesTop.length > 0 ||
+    composerShelvesBottom.length > 0 ||
     attachedContextDocs.length > 0 ||
     draftMentionItems.length > 0 ||
     pendingQueue.length > 0 ||
@@ -6719,6 +6732,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+                  {composerShelvesTop.map((shelf) => (
+                    <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} />
+                  ))}
                   {stream.isStreaming &&
                     !pendingBrowserComments.length &&
                     attachedContextDocs.length === 0 &&
@@ -6844,6 +6860,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       onSelectOption={handleComposerQuestionOptionSelect}
                     />
                   )}
+                  {composerShelvesBottom.map((shelf) => (
+                    <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} />
+                  ))}
                 </div>
               )}
 

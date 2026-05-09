@@ -12,6 +12,15 @@ export interface ExtensionTopBarElementRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionComposerShelfRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  title?: string;
+  placement: 'top' | 'bottom';
+  frontendEntry?: string;
+}
+
 export interface ExtensionMessageActionRegistration {
   extensionId: string;
   id: string;
@@ -27,6 +36,7 @@ export interface ExtensionRegistryState {
   surfaces: ExtensionSurfaceSummary[];
   topBarElements: ExtensionTopBarElementRegistration[];
   messageActions: ExtensionMessageActionRegistration[];
+  composerShelves: ExtensionComposerShelfRegistration[];
   loading: boolean;
   error: string | null;
 }
@@ -69,6 +79,25 @@ function normalizeMessageActions(extensions: ExtensionManifest[]): ExtensionMess
   return result;
 }
 
+function normalizeComposerShelves(extensions: ExtensionManifest[]): ExtensionComposerShelfRegistration[] {
+  const result: ExtensionComposerShelfRegistration[] = [];
+  for (const extension of extensions) {
+    const shelves = extension.contributes?.composerShelves;
+    if (!shelves?.length) continue;
+    for (const shelf of shelves) {
+      result.push({
+        extensionId: extension.id,
+        id: shelf.id,
+        component: shelf.component,
+        title: shelf.title,
+        placement: shelf.placement ?? 'bottom',
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  return result;
+}
+
 export function useExtensionRegistry(): ExtensionRegistryState {
   const [state, setState] = useState<ExtensionRegistryState>({
     extensions: [],
@@ -76,6 +105,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     surfaces: [],
     topBarElements: [],
     messageActions: [],
+    composerShelves: [],
     loading: true,
     error: null,
   });
@@ -92,7 +122,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         typeof api.extensionSurfaces !== 'function'
       ) {
         if (cancelled) return;
-        setState({ extensions: [], routes: [], surfaces: [], topBarElements: [], messageActions: [], loading: false, error: null });
+        setState({ extensions: [], routes: [], surfaces: [], topBarElements: [], messageActions: [], composerShelves: [], loading: false, error: null });
         return;
       }
 
@@ -105,6 +135,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             surfaces,
             topBarElements: normalizeTopBarElements(extensions),
             messageActions: normalizeMessageActions(extensions),
+            composerShelves: normalizeComposerShelves(extensions),
             loading: false,
             error: null,
           });
@@ -117,6 +148,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             surfaces: [],
             topBarElements: [],
             messageActions: [],
+            composerShelves: [],
             loading: false,
             error: error.message,
           });

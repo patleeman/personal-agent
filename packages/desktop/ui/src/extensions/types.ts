@@ -138,6 +138,13 @@ interface ExtensionMessageActionContribution {
   priority?: number;
 }
 
+interface ExtensionComposerShelfContribution {
+  id: string;
+  component: string;
+  title?: string;
+  placement?: 'top' | 'bottom';
+}
+
 interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -153,6 +160,7 @@ interface ExtensionContributions {
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
+  composerShelves?: ExtensionComposerShelfContribution[];
   settings?: Record<string, unknown>;
 }
 

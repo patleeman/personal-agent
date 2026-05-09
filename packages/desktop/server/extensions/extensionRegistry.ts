@@ -165,6 +165,16 @@ export interface ExtensionQuickOpenRegistration {
   section?: string;
 }
 
+export interface ExtensionComposerShelfRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  component: string;
+  title?: string;
+  placement: 'top' | 'bottom';
+  frontendEntry?: string;
+}
+
 export interface ExtensionMessageActionRegistration {
   extensionId: string;
   id: string;
@@ -670,6 +680,15 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.composerShelves !== undefined) {
+    for (const [index, shelf] of assertRecordArray(contributes.composerShelves, 'contributes.composerShelves').entries()) {
+      requireString(shelf.id, `contributes.composerShelves[${index}].id`);
+      requireString(shelf.component, `contributes.composerShelves[${index}].component`);
+      validateOptionalString(shelf.title, `contributes.composerShelves[${index}].title`);
+      if (shelf.placement !== undefined) validateEnum(shelf.placement, ['top', 'bottom'], `contributes.composerShelves[${index}].placement`);
+    }
+  }
+
   if (contributes.settings !== undefined && !isRecord(contributes.settings)) {
     throw new Error('Extension manifest contributes.settings must be an object.');
   }
@@ -886,6 +905,7 @@ export function readExtensionSchema() {
       'themes',
       'topBarElements',
       'messageActions',
+      'composerShelves',
     ],
   };
 }
@@ -1047,6 +1067,26 @@ export function listExtensionQuickOpenRegistrations(stateRoot: string = getState
           provider: resolvedProvider,
           ...(provider.title ? { title: provider.title } : {}),
           ...(provider.section ? { section: provider.section } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionComposerShelfRegistrations(stateRoot: string = getStateRoot()): ExtensionComposerShelfRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.composerShelves ?? []).flatMap((shelf): ExtensionComposerShelfRegistration[] => {
+      const id = shelf.id.trim();
+      const component = shelf.component.trim();
+      if (!id || !component) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          component,
+          ...(shelf.title ? { title: shelf.title } : {}),
+          placement: shelf.placement ?? 'bottom',
         },
       ];
     }),

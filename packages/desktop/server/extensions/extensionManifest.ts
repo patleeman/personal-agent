@@ -91,6 +91,7 @@ export interface ExtensionContributions {
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
+  composerShelves?: ExtensionComposerShelfContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -106,6 +107,13 @@ export interface ExtensionMessageActionContribution {
   action: string;
   when?: string;
   priority?: number;
+}
+
+export interface ExtensionComposerShelfContribution {
+  id: string;
+  component: string;
+  title?: string;
+  placement?: 'top' | 'bottom';
 }
 
 export interface ExtensionThemeContribution {
