@@ -220,7 +220,7 @@ describe('conversation composer presentation helpers', () => {
         currentModel: 'model-a',
         routeModel: null,
       }),
-    ).toBeNull();
+    ).toEqual({ total: null, contextWindow: 100000, segments: undefined });
 
     expect(
       resolveConversationContextUsageTokens({

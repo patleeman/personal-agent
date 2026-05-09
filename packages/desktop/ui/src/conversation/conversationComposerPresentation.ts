@@ -163,10 +163,6 @@ export function resolveConversationContextUsageTokens(input: {
   routeModel: string | null | undefined;
 }): ConversationContextUsageTokensPresentation | null {
   const usage = input.isLiveSession ? input.liveUsage : input.historicalUsage;
-  if (!input.isLiveSession && !usage) {
-    return null;
-  }
-
   const modelId = usage?.modelId || input.currentModel || input.routeModel;
   const modelInfo = input.models.find((model) => model.id === modelId);
   const fallbackContextWindow = input.isLiveSession ? 200_000 : 128_000;
