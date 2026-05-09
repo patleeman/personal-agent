@@ -30,6 +30,22 @@
         "component": "CaffeineIndicator",
         "label": "Caffeine indicator"
       }
+    ],
+    "toolbarActions": [
+      {
+        "id": "toggle-keep-awake",
+        "title": "Toggle keep awake",
+        "icon": "play",
+        "action": "setPowerKeepAwake"
+      }
+    ],
+    "statusBarItems": [
+      {
+        "id": "caffinate-status",
+        "label": "☕ Caffinate",
+        "action": "setPowerKeepAwake",
+        "alignment": "right"
+      }
     ]
   },
   "permissions": []
