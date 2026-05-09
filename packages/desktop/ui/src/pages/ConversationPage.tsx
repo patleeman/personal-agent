@@ -1237,7 +1237,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setIsEditingTitle(false);
     setTitleDraft('');
     setTitleSaving(false);
-    setSummaryForkBusy(false);
     setConversationCwdEditorOpen(false);
     setConversationCwdDraft('');
     setConversationCwdPickBusy(false);
