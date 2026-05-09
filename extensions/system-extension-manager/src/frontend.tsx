@@ -655,7 +655,7 @@ export function ExtensionManagerPage() {
 
   return (
     <div className="h-full overflow-hidden">
-      <AppPageLayout shellClassName="flex min-h-0 max-w-[92rem]" contentClassName="flex min-h-0 flex-1 flex-col gap-5">
+      <AppPageLayout shellClassName="flex h-full min-h-0 max-w-[92rem]" contentClassName="flex min-h-0 flex-1 flex-col gap-5">
         <AppPageIntro
           eyebrow="Extension Manager"
           title="Extensions"
