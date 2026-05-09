@@ -136,12 +136,10 @@ describe('Sidebar', () => {
     const html = renderSidebar('/conversations/new');
 
     expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Threads'));
-    expect(html.indexOf('Threads')).toBeLessThan(html.indexOf('Settings'));
     expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).not.toContain('Notifications');
-    expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
     expect(html).not.toContain('Vault');
     expect(html).toContain('Threads');
@@ -829,13 +827,9 @@ describe('Sidebar', () => {
     expect(html).not.toContain('>Conversations<');
   });
 
-  it('only highlights Settings on settings routes', () => {
-    const settingsHtml = renderSidebar('/settings');
-    const automationHtml = renderSidebar('/automations');
-
-    expect(settingsHtml).toContain('href="/settings"');
-    expect(settingsHtml).toContain('ui-sidebar-nav-item-active');
-    expect(automationHtml).toContain('href="/settings"');
-    expect(automationHtml).not.toContain('href="/settings" class="ui-sidebar-nav-item ui-sidebar-nav-item-active"');
+  it('renders the settings nav section at the bottom with extension-contributed items', () => {
+    const html = renderSidebar('/settings');
+    expect(html).toContain('Threads');
+    expect(html).toContain('<div class="border-t border-border-subtle px-2 py-2 space-y-0.5">');
   });
 });

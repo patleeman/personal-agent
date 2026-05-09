@@ -546,6 +546,7 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(nav.route, `contributes.nav[${index}].route`);
       if (nav.icon !== undefined) validateEnum(nav.icon, EXTENSION_ICON_NAMES, `contributes.nav[${index}].icon`);
       validateOptionalString(nav.badgeAction, `contributes.nav[${index}].badgeAction`);
+      if (nav.section !== undefined) validateEnum(nav.section, ['primary', 'settings'], `contributes.nav[${index}].section`);
     }
   }
 

@@ -10,6 +10,15 @@
     "styles": []
   },
   "contributes": {
+    "nav": [
+      {
+        "id": "extensions-nav",
+        "label": "Extensions",
+        "route": "/extensions",
+        "icon": "sparkle",
+        "section": "settings"
+      }
+    ],
     "views": [
       {
         "id": "page",

@@ -2208,7 +2208,6 @@ export function Sidebar() {
       }),
     [workspaceConversationTabs],
   );
-  const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
   const groupedConversationRows = useMemo(() => {
     if (threadsOrganizeMode !== 'project') {
       return [];
@@ -3459,7 +3458,9 @@ export function Sidebar() {
 
   const extensionRegistry = useExtensionRegistry();
   const extensionNavItems = useMemo(() => {
-    const legacy = extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface);
+    const legacy = extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface).map(
+      (item) => ({ ...item, section: 'primary' as const }),
+    );
     const native = extensionRegistry.extensions.flatMap((extension) =>
       (extension.contributes?.nav ?? []).map(
         (item) =>
@@ -3468,6 +3469,8 @@ export function Sidebar() {
     );
     return [...legacy, ...native];
   }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
+  const primaryNavItems = useMemo(() => extensionNavItems.filter((item) => (item.section ?? 'primary') === 'primary'), [extensionNavItems]);
+  const settingsNavItems = useMemo(() => extensionNavItems.filter((item) => item.section === 'settings'), [extensionNavItems]);
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
   return (
@@ -3487,7 +3490,7 @@ export function Sidebar() {
               <span className="flex-1 text-left">Chat</span>
             </button>
           </div>
-          {extensionNavItems.map((item) => (
+          {primaryNavItems.map((item) => (
             <TopNavItem
               key={`${item.extensionId}:${item.id}`}
               to={item.route}
@@ -3616,13 +3619,15 @@ export function Sidebar() {
             </div>
           ) : null}
           <div className="border-t border-border-subtle px-2 py-2 space-y-0.5">
-            <TopNavItem
-              to="/extensions"
-              icon={PATH.sparkles}
-              label="Extensions"
-              forceActive={location.pathname.startsWith('/extensions')}
-            />
-            <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
+            {settingsNavItems.map((item) => (
+              <TopNavItem
+                key={`${item.extensionId}:${item.id}`}
+                to={item.route}
+                icon={getExtensionNavIcon(item.icon)}
+                label={item.label}
+                forceActive={routeMatchesPrefix(location.pathname, item.route)}
+              />
+            ))}
           </div>
         </div>
       </aside>

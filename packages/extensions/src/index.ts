@@ -1,5 +1,3 @@
-import type { AgentToolUpdateCallback } from '@earendil-works/pi-coding-agent';
-
 export const EXTENSION_MANIFEST_VERSION = 2;
 
 export type ExtensionPackageType = 'user' | 'system';
@@ -67,6 +65,8 @@ export interface ExtensionNavContribution {
   route: string;
   icon?: ExtensionIconName;
   badgeAction?: string;
+  /** Nav section. Default 'primary'. Use 'settings' for items in the settings area. */
+  section?: 'primary' | 'settings';
 }
 
 export interface ExtensionCommandContribution {

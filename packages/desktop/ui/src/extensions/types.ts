@@ -65,6 +65,7 @@ interface ExtensionNavContribution {
   route: string;
   icon?: ExtensionIconName;
   badgeAction?: string;
+  section?: 'primary' | 'settings';
 }
 
 interface ExtensionCommandContribution {

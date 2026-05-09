@@ -10,6 +10,15 @@
     "styles": []
   },
   "contributes": {
+    "nav": [
+      {
+        "id": "settings-nav",
+        "label": "Settings",
+        "route": "/settings",
+        "icon": "gear",
+        "section": "settings"
+      }
+    ],
     "commands": [
       {
         "id": "open-settings",
