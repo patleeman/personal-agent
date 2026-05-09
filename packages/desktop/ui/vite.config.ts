@@ -13,6 +13,7 @@ export default defineConfig({
       '@personal-agent/extensions/workbench': resolve(__dirname, 'src/extensions/workbench.ts'),
       '@personal-agent/extensions/data': resolve(__dirname, 'src/extensions/data.ts'),
       '@personal-agent/extensions/settings': resolve(__dirname, 'src/extensions/settings.ts'),
+      '@personal-agent/extensions/excalidraw': resolve(__dirname, '../../../packages/extensions/src/excalidraw.ts'),
     },
   },
   build: {

@@ -31,6 +31,10 @@
       "types": "./dist/settings.d.ts",
       "default": "./dist/settings.js"
     },
+    "./excalidraw": {
+      "types": "./dist/excalidraw.d.ts",
+      "default": "./dist/excalidraw.js"
+    },
     "./backend": {
       "types": "./dist/backend.d.ts",
       "default": "./dist/backend.js"

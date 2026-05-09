@@ -227,7 +227,7 @@ Add component-backed tools beside the attachment button in the composer input ro
 }
 ```
 
-The component receives `pa` and `toolContext`. `toolContext.addFiles(files)` routes files through the normal composer attachment pipeline. `toolContext.upsertDrawingAttachment(payload)` adds an Excalidraw-compatible drawing payload to the composer.
+The component receives `pa` and `toolContext`. `toolContext.addFiles(files)` routes files through the normal composer attachment pipeline. `toolContext.upsertDrawingAttachment(payload)` adds an Excalidraw-compatible drawing payload to the composer. Excalidraw tools should import shared serialization helpers from `@personal-agent/extensions/excalidraw` instead of duplicating preview/source generation.
 
 ### Toolbar Actions (`toolbarActions`)
 
