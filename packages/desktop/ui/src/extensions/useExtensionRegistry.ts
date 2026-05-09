@@ -12,6 +12,25 @@ export interface ExtensionTopBarElementRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionToolbarActionRegistration {
+  extensionId: string;
+  id: string;
+  title: string;
+  icon: string;
+  action: string;
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionConversationDecoratorRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  position: 'before-title' | 'after-title' | 'subtitle';
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionComposerShelfRegistration {
   extensionId: string;
   id: string;
@@ -37,6 +56,8 @@ export interface ExtensionRegistryState {
   topBarElements: ExtensionTopBarElementRegistration[];
   messageActions: ExtensionMessageActionRegistration[];
   composerShelves: ExtensionComposerShelfRegistration[];
+  toolbarActions: ExtensionToolbarActionRegistration[];
+  conversationDecorators: ExtensionConversationDecoratorRegistration[];
   loading: boolean;
   error: string | null;
 }
@@ -98,6 +119,47 @@ function normalizeComposerShelves(extensions: ExtensionManifest[]): ExtensionCom
   return result;
 }
 
+function normalizeToolbarActions(extensions: ExtensionManifest[]): ExtensionToolbarActionRegistration[] {
+  const result: ExtensionToolbarActionRegistration[] = [];
+  for (const extension of extensions) {
+    const actions = extension.contributes?.toolbarActions;
+    if (!actions?.length) continue;
+    for (const action of actions) {
+      result.push({
+        extensionId: extension.id,
+        id: action.id,
+        title: action.title,
+        icon: action.icon,
+        action: action.action,
+        ...(action.when ? { when: action.when } : {}),
+        ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
+function normalizeConversationDecorators(extensions: ExtensionManifest[]): ExtensionConversationDecoratorRegistration[] {
+  const result: ExtensionConversationDecoratorRegistration[] = [];
+  for (const extension of extensions) {
+    const decorators = extension.contributes?.conversationDecorators;
+    if (!decorators?.length) continue;
+    for (const decorator of decorators) {
+      result.push({
+        extensionId: extension.id,
+        id: decorator.id,
+        component: decorator.component,
+        position: decorator.position,
+        ...(typeof decorator.priority === 'number' ? { priority: decorator.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
 export function useExtensionRegistry(): ExtensionRegistryState {
   const [state, setState] = useState<ExtensionRegistryState>({
     extensions: [],
@@ -106,6 +168,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     topBarElements: [],
     messageActions: [],
     composerShelves: [],
+    toolbarActions: [],
+    conversationDecorators: [],
     loading: true,
     error: null,
   });
@@ -122,7 +186,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         typeof api.extensionSurfaces !== 'function'
       ) {
         if (cancelled) return;
-        setState({ extensions: [], routes: [], surfaces: [], topBarElements: [], messageActions: [], composerShelves: [], loading: false, error: null });
+        setState({ extensions: [], routes: [], surfaces: [], topBarElements: [], messageActions: [], composerShelves: [], toolbarActions: [], conversationDecorators: [], loading: false, error: null });
         return;
       }
 
@@ -136,6 +200,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: normalizeTopBarElements(extensions),
             messageActions: normalizeMessageActions(extensions),
             composerShelves: normalizeComposerShelves(extensions),
+            toolbarActions: normalizeToolbarActions(extensions),
+            conversationDecorators: normalizeConversationDecorators(extensions),
             loading: false,
             error: null,
           });
@@ -149,6 +215,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: [],
             messageActions: [],
             composerShelves: [],
+            toolbarActions: [],
+            conversationDecorators: [],
             loading: false,
             error: error.message,
           });

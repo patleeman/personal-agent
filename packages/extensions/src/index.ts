@@ -174,6 +174,26 @@ export interface ExtensionComposerShelfContribution {
   placement?: 'top' | 'bottom';
 }
 
+export interface ExtensionToolbarActionContribution {
+  id: string;
+  title: string;
+  icon: ExtensionIconName;
+  action: string;
+  /** Condition for visibility, e.g. "composerHasContent && !streamIsStreaming" */
+  when?: string;
+  /** Sort priority. Higher = closer to submit button. Default 0. */
+  priority?: number;
+}
+
+export interface ExtensionConversationDecoratorContribution {
+  id: string;
+  component: string;
+  /** Where this decorator appears relative to the conversation title. */
+  position: 'before-title' | 'after-title' | 'subtitle';
+  /** Sort priority within position. Higher = closer to title. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -190,6 +210,8 @@ export interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  toolbarActions?: ExtensionToolbarActionContribution[];
+  conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }
 

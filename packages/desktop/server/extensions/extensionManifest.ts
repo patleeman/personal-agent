@@ -92,6 +92,8 @@ export interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  toolbarActions?: ExtensionToolbarActionContribution[];
+  conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -114,6 +116,22 @@ export interface ExtensionComposerShelfContribution {
   component: string;
   title?: string;
   placement?: 'top' | 'bottom';
+}
+
+export interface ExtensionToolbarActionContribution {
+  id: string;
+  title: string;
+  icon: ExtensionIconName;
+  action: string;
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionConversationDecoratorContribution {
+  id: string;
+  component: string;
+  position: 'before-title' | 'after-title' | 'subtitle';
+  priority?: number;
 }
 
 export interface ExtensionThemeContribution {

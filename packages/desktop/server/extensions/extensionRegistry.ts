@@ -175,6 +175,27 @@ export interface ExtensionComposerShelfRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionToolbarActionRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  title: string;
+  icon: string;
+  action: string;
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionConversationDecoratorRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  component: string;
+  position: 'before-title' | 'after-title' | 'subtitle';
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionMessageActionRegistration {
   extensionId: string;
   id: string;
@@ -689,6 +710,30 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.toolbarActions !== undefined) {
+    for (const [index, action] of assertRecordArray(contributes.toolbarActions, 'contributes.toolbarActions').entries()) {
+      requireString(action.id, `contributes.toolbarActions[${index}].id`);
+      requireString(action.title, `contributes.toolbarActions[${index}].title`);
+      validateEnum(action.icon, EXTENSION_ICON_NAMES, `contributes.toolbarActions[${index}].icon`);
+      requireString(action.action, `contributes.toolbarActions[${index}].action`);
+      validateOptionalString(action.when, `contributes.toolbarActions[${index}].when`);
+      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
+        throw new Error(`Extension manifest contributes.toolbarActions[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
+  if (contributes.conversationDecorators !== undefined) {
+    for (const [index, decorator] of assertRecordArray(contributes.conversationDecorators, 'contributes.conversationDecorators').entries()) {
+      requireString(decorator.id, `contributes.conversationDecorators[${index}].id`);
+      requireString(decorator.component, `contributes.conversationDecorators[${index}].component`);
+      validateEnum(decorator.position, ['before-title', 'after-title', 'subtitle'], `contributes.conversationDecorators[${index}].position`);
+      if (decorator.priority !== undefined && (typeof decorator.priority !== 'number' || !Number.isInteger(decorator.priority))) {
+        throw new Error(`Extension manifest contributes.conversationDecorators[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.settings !== undefined && !isRecord(contributes.settings)) {
     throw new Error('Extension manifest contributes.settings must be an object.');
   }
@@ -906,6 +951,8 @@ export function readExtensionSchema() {
       'topBarElements',
       'messageActions',
       'composerShelves',
+      'toolbarActions',
+      'conversationDecorators',
     ],
   };
 }
@@ -1087,6 +1134,50 @@ export function listExtensionComposerShelfRegistrations(stateRoot: string = getS
           component,
           ...(shelf.title ? { title: shelf.title } : {}),
           placement: shelf.placement ?? 'bottom',
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionToolbarActionRegistrations(stateRoot: string = getStateRoot()): ExtensionToolbarActionRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.toolbarActions ?? []).flatMap((action): ExtensionToolbarActionRegistration[] => {
+      const id = action.id.trim();
+      const title = action.title.trim();
+      const icon = action.icon.trim();
+      const resolvedAction = action.action.trim();
+      if (!id || !title || !icon || !resolvedAction) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          title,
+          icon,
+          action: resolvedAction,
+          ...(action.when ? { when: action.when } : {}),
+          ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionConversationDecoratorRegistrations(stateRoot: string = getStateRoot()): ExtensionConversationDecoratorRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.conversationDecorators ?? []).flatMap((decorator): ExtensionConversationDecoratorRegistration[] => {
+      const id = decorator.id.trim();
+      const component = decorator.component.trim();
+      if (!id || !component) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          component,
+          position: decorator.position,
+          ...(typeof decorator.priority === 'number' ? { priority: decorator.priority } : {}),
         },
       ];
     }),

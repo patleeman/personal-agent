@@ -145,6 +145,22 @@ interface ExtensionComposerShelfContribution {
   placement?: 'top' | 'bottom';
 }
 
+interface ExtensionToolbarActionContribution {
+  id: string;
+  title: string;
+  icon: ExtensionIconName;
+  action: string;
+  when?: string;
+  priority?: number;
+}
+
+interface ExtensionConversationDecoratorContribution {
+  id: string;
+  component: string;
+  position: 'before-title' | 'after-title' | 'subtitle';
+  priority?: number;
+}
+
 interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -161,6 +177,8 @@ interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  toolbarActions?: ExtensionToolbarActionContribution[];
+  conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }
 

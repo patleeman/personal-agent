@@ -43,6 +43,7 @@ import {
   shouldUseNativeAppContextMenus,
 } from '../desktop/desktopBridge';
 import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
+import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
@@ -1388,6 +1389,16 @@ function OpenConversationRow({
 }) {
   const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLDivElement>();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
+  const { conversationDecorators } = useExtensionRegistry();
+  const decoratorsByPosition = useMemo(() => {
+    const byPos: Record<string, typeof conversationDecorators> = { 'before-title': [], 'after-title': [], subtitle: [] };
+    for (const d of conversationDecorators) {
+      const list = byPos[d.position];
+      if (list) list.push(d);
+    }
+    for (const list of Object.values(byPos)) list.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+    return byPos;
+  }, [conversationDecorators]);
   const menuRootRef = useRef<HTMLDivElement | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1702,8 +1713,23 @@ function OpenConversationRow({
             {gatewayProviders.map((provider) => (
               <GatewayRailIcon key={provider} provider={provider} />
             ))}
+            {decoratorsByPosition['before-title'].length > 0 &&
+              decoratorsByPosition['before-title'].map((d) => (
+                <ConversationDecoratorHost key={`${d.extensionId}:${d.id}`} registration={d} session={session} />
+              ))}
             <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>
+            {decoratorsByPosition['after-title'].length > 0 &&
+              decoratorsByPosition['after-title'].map((d) => (
+                <ConversationDecoratorHost key={`${d.extensionId}:${d.id}`} registration={d} session={session} />
+              ))}
           </div>
+          {decoratorsByPosition.subtitle.length > 0 && (
+            <div className="flex min-w-0 items-center gap-1.5 mt-0.5">
+              {decoratorsByPosition.subtitle.map((d) => (
+                <ConversationDecoratorHost key={`${d.extensionId}:${d.id}`} registration={d} session={session} />
+              ))}
+            </div>
+          )}
         </div>
       </Link>
       <div className="pointer-events-none absolute inset-y-0 right-2.5 flex w-[3.75rem] items-center justify-end pr-1">
