@@ -19,11 +19,11 @@ export function ExtensionPage() {
     [location.pathname, registry.surfaces],
   );
 
-  if (registry.loading) {
+  if (registry.loading && !nativeSurface) {
     return <LoadingState label="Loading extension…" />;
   }
 
-  if (registry.error) {
+  if (registry.error && !nativeSurface) {
     return <ErrorState message={`Extensions unavailable: ${registry.error}`} />;
   }
 

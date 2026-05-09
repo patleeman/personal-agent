@@ -2,7 +2,6 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
 import { ErrorState, LoadingState } from '../components/ui';
-import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
@@ -36,7 +35,7 @@ function loadExtensionModule(surface: NativeExtensionViewSummary, revision: numb
 }
 
 function extensionModuleKey(surface: NativeExtensionViewSummary): string {
-  return `${surface.extensionId}:${surface.id}:${surface.frontend?.entry ?? ''}:${getExtensionRegistryRevision()}`;
+  return `${surface.extensionId}:${surface.id}:${surface.frontend?.entry ?? ''}`;
 }
 
 function lazyExtensionComponent(surface: NativeExtensionViewSummary, revision: number) {
