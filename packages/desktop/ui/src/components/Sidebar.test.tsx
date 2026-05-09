@@ -11,7 +11,7 @@ import {
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
 } from '../local/localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
-import { getLocalSessionWorkspacePath, isRemoteConversationSession, resolveSessionExecutionTarget, Sidebar } from './Sidebar.js';
+import { Sidebar } from './Sidebar.js';
 
 const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
 const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
@@ -144,6 +144,7 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
     expect(html).toContain('Threads');
     expect(html).toContain('aria-label="Organize and sort threads"');
+    expect(html).toContain('aria-label="Find threads and archived conversations"');
     expect(html).toContain('aria-label="Add workspace"');
     expect(html).not.toContain('Conversations');
     expect(html).not.toContain('Docs');
@@ -389,97 +390,6 @@ describe('Sidebar', () => {
     });
 
     expect(html.match(/aria-label="Collapse alpha-worktree"/g) ?? []).toHaveLength(1);
-  });
-
-  it('groups remote threads by execution target before workspace folders', () => {
-    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-local', 'conv-remote-alpha', 'conv-remote-beta']));
-    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(['/tmp/local-worktree']));
-
-    const html = renderSidebar('/conversations/new', {
-      sessions: [
-        createSession({
-          id: 'conv-local',
-          title: 'Local thread',
-          cwd: '/tmp/local-worktree',
-          cwdSlug: 'local-worktree',
-        }),
-        createSession({
-          id: 'conv-remote-alpha',
-          title: 'Remote alpha thread',
-          cwd: '/srv/repos/alpha',
-          cwdSlug: 'alpha',
-          remoteHostId: 'bender',
-          remoteHostLabel: 'Bender',
-        }),
-        createSession({
-          id: 'conv-remote-beta',
-          title: 'Remote beta thread',
-          cwd: '/srv/repos/beta',
-          cwdSlug: 'beta',
-          remoteHostId: 'bender',
-          remoteHostLabel: 'Bender',
-        }),
-      ],
-    });
-
-    expect(html).toContain('title="Execution target: Bender"');
-    expect(html).not.toContain('Execution target: Local project');
-    expect(html.indexOf('local-worktree')).toBeLessThan(html.indexOf('Execution target: Bender'));
-    expect(html.indexOf('Execution target: Bender')).toBeLessThan(html.indexOf('Remote alpha thread'));
-  });
-
-  it('does not mirror remote cwd groups into local saved workspace slots', () => {
-    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-alpha', 'conv-remote-beta']));
-    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([]));
-
-    const html = renderSidebar('/conversations/new', {
-      sessions: [
-        createSession({
-          id: 'conv-remote-alpha',
-          title: 'Remote alpha thread',
-          cwd: '/srv/repos/alpha',
-          cwdSlug: 'alpha',
-          remoteHostId: 'bender',
-          remoteHostLabel: 'Bender',
-        }),
-        createSession({
-          id: 'conv-remote-beta',
-          title: 'Remote beta thread',
-          cwd: '/srv/repos/beta',
-          cwdSlug: 'beta',
-          remoteHostId: 'bender',
-          remoteHostLabel: 'Bender',
-        }),
-      ],
-    });
-
-    expect(html).toContain('title="Execution target: Bender"');
-    expect(html.match(/title="New conversation in \/srv\/repos\/alpha"/g) ?? []).toHaveLength(1);
-    expect(html.match(/title="New conversation in \/srv\/repos\/beta"/g) ?? []).toHaveLength(1);
-    expect(html).not.toContain('No threads yet.');
-  });
-
-  it('treats conversations with only remote conversation ids as remote', () => {
-    const session = createSession({
-      id: 'conv-remote-partial',
-      cwd: '/srv/repos/partial',
-      remoteConversationId: 'remote-thread-1',
-    });
-
-    expect(isRemoteConversationSession(session)).toBe(true);
-    expect(resolveSessionExecutionTarget(session)).toEqual({
-      key: 'conversation:remote-thread-1',
-      label: 'Remote',
-      isLocal: false,
-    });
-    expect(getLocalSessionWorkspacePath(session)).toBe('');
-
-    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-partial']));
-    const html = renderSidebar('/conversations/conv-remote-partial', {
-      sessions: [session],
-    });
-
-    expect(html).toContain('aria-label="Running on a remote host"');
   });
 
   it('renders saved custom cwd group labels when present', () => {

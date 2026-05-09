@@ -227,8 +227,6 @@ describe('conversation page state helpers', () => {
 
     expect(shouldSubscribeToDesktopConversationState({ draft: false })).toBe(true);
     expect(shouldSubscribeToDesktopConversationState({ draft: true })).toBe(false);
-    expect(shouldSubscribeToDesktopConversationState({ draft: false, remoteHostId: 'bender' })).toBe(false);
-    expect(shouldSubscribeToDesktopConversationState({ draft: false, remoteConversationId: 'remote-1' })).toBe(false);
 
     expect(
       shouldShowMissingConversationState({

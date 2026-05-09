@@ -9,7 +9,6 @@ import {
   buildAppendOnlySessionDetailResponse,
   buildDisplayBlocksFromEntries,
   clearSessionCaches,
-  clearStoredSessionRemoteTargetByFile,
   listSessions,
   readSessionBlock,
   readSessionBlocks,
@@ -17,7 +16,6 @@ import {
   readSessionImageAsset,
   readSessionSearchText,
   renameStoredSession,
-  setStoredSessionRemoteTargetByFile,
 } from './sessions.js';
 
 const originalEnv = process.env;
@@ -1660,94 +1658,6 @@ describe('sessions', () => {
     const detail = readSessionBlocks('session-stale-chat-workspace-marker');
     expect(detail?.meta.cwd).toBe('/tmp/personal-agent');
     expect(detail?.meta).not.toHaveProperty('workspaceCwd');
-  });
-
-  it('stores remote execution target metadata in the session header', () => {
-    const sessionsDir = createTempSessionsDir();
-    configureSessionEnv(sessionsDir);
-
-    const filePath = writeSessionFile({
-      sessionsDir,
-      sessionId: 'session-remote',
-      title: 'Remote execution thread',
-      assistantTexts: ['Generated answer'],
-    });
-
-    expect(
-      setStoredSessionRemoteTargetByFile(filePath, {
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-        remoteConversationId: 'remote-thread-1',
-      }),
-    ).toEqual(
-      expect.objectContaining({
-        id: 'session-remote',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-        remoteConversationId: 'remote-thread-1',
-      }),
-    );
-
-    expect(listSessions()[0]).toEqual(
-      expect.objectContaining({
-        id: 'session-remote',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-        remoteConversationId: 'remote-thread-1',
-      }),
-    );
-
-    expect(clearStoredSessionRemoteTargetByFile(filePath)).toEqual(
-      expect.not.objectContaining({
-        remoteHostId: expect.anything(),
-      }),
-    );
-    expect(listSessions()[0]).toEqual(
-      expect.not.objectContaining({
-        remoteHostId: expect.anything(),
-      }),
-    );
-  });
-
-  it('keeps the first session header when duplicate session records appear later in the file', () => {
-    const sessionsDir = createTempSessionsDir();
-    configureSessionEnv(sessionsDir);
-
-    const filePath = writeSessionFile({
-      sessionsDir,
-      sessionId: 'session-remote-duplicate',
-      title: 'Remote execution thread',
-      assistantTexts: ['Generated answer'],
-    });
-
-    setStoredSessionRemoteTargetByFile(filePath, {
-      remoteHostId: 'bender',
-      remoteHostLabel: 'Bender',
-      remoteConversationId: 'remote-thread-1',
-    });
-
-    appendFileSync(
-      filePath,
-      [
-        JSON.stringify({
-          type: 'session',
-          id: 'session-remote-duplicate',
-          timestamp: '2026-03-11T12:00:00.000Z',
-          cwd: '/tmp/project',
-        }),
-        JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
-        '',
-      ].join('\n'),
-    );
-
-    expect(listSessions()[0]).toEqual(
-      expect.objectContaining({
-        id: 'session-remote-duplicate',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-        remoteConversationId: 'remote-thread-1',
-      }),
-    );
   });
 
   it('lets the latest manual rename win over earlier session names', () => {

@@ -8,7 +8,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { getAvailableTcpPort } from './backend/ports.js';
-import { applyRemoteMetadataToSessionContent, stripRemoteMetadataFromSessionContent } from './conversation-session-header.js';
 import { ensurePiReleaseBinary } from './pi-release-cache.js';
 import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
 import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
@@ -417,15 +416,7 @@ export class SshRemoteConversationRuntime {
         return;
       }
 
-      const content = readFileSync(tempFile, 'utf-8');
-      const nextContent = applyRemoteMetadataToSessionContent(content, {
-        remoteHostId: this.hostId,
-        remoteHostLabel: this.hostLabel,
-        remoteConversationId: input.conversationId,
-        overrideConversationId: input.conversationId,
-        overrideCwd: this.helperRuntimeInfo?.cwd,
-      });
-      writeFileSync(input.localFilePath, nextContent, 'utf-8');
+      writeFileSync(input.localFilePath, readFileSync(tempFile, 'utf-8'), 'utf-8');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('No such file or directory')) {
@@ -445,7 +436,7 @@ export class SshRemoteConversationRuntime {
     const tempDir = mkdtempSync(join(tmpdir(), 'personal-agent-remote-upload-'));
     const tempFile = join(tempDir, 'session.jsonl');
     try {
-      writeFileSync(tempFile, stripRemoteMetadataFromSessionContent(content), 'utf-8');
+      writeFileSync(tempFile, content, 'utf-8');
       await uploadFileOverScp({
         target: this.sshTarget,
         localPath: tempFile,

@@ -55,7 +55,7 @@ describe('ConversationDraftEmptyAction', () => {
     });
 
     expect(html).toContain('bad path');
-    expect(html).not.toContain('Remote workspace path');
+    expect(html).toContain('Saved workspace');
   });
 
   it('renders related thread panel state', () => {

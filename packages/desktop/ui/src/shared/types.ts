@@ -467,9 +467,6 @@ export interface SessionMeta {
   parentSessionFile?: string;
   parentSessionId?: string;
   sourceRunId?: string;
-  remoteHostId?: string;
-  remoteHostLabel?: string;
-  remoteConversationId?: string;
   automationTaskId?: string;
   automationTitle?: string;
   needsAttention?: boolean;
@@ -1653,4 +1650,16 @@ interface ContextPointerDailyRow {
 export interface ContextPointerUsageResult {
   summary: ContextPointerUsageSummary;
   daily: ContextPointerDailyRow[];
+}
+
+export interface UnifiedSettingsEntry {
+  extensionId: string;
+  key: string;
+  type: string;
+  default?: unknown;
+  description?: string;
+  group: string;
+  enum?: string[];
+  placeholder?: string;
+  order: number;
 }

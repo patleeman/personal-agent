@@ -31,7 +31,6 @@ vi.mock('../client/api', () => ({
 
 const mountedRoots: Root[] = [];
 const THREADS_SORT_BY_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-sort-by');
-const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-manual-group-order');
 
 function createStorage() {
   const map = new Map<string, string>();
@@ -149,10 +148,6 @@ function getGroupOrder(container: HTMLElement): string[] {
     .filter(Boolean);
 }
 
-function getScopedGroupOrder(container: HTMLElement, prefix: string): string[] {
-  return getGroupOrder(container).filter((groupKey) => groupKey.startsWith(prefix));
-}
-
 function getGroup(container: HTMLElement, groupKey: string): HTMLElement {
   const element = container.querySelector<HTMLElement>(`[data-sidebar-group-key="${groupKey}"]`);
   if (!element) {
@@ -194,32 +189,6 @@ describe('Sidebar group drag reordering', () => {
     document.body.innerHTML = '';
     vi.clearAllMocks();
     vi.unstubAllGlobals();
-  });
-
-  it('does not persist remote cwd paths into saved local workspaces', async () => {
-    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-alpha']));
-    apiMocks.openConversationTabs.mockResolvedValue({
-      sessionIds: ['conv-remote-alpha'],
-      pinnedSessionIds: [],
-      archivedSessionIds: [],
-      workspacePaths: [],
-    });
-
-    renderSidebar([
-      createSession({
-        id: 'conv-remote-alpha',
-        title: 'Remote alpha thread',
-        cwd: '/srv/repos/alpha',
-        cwdSlug: 'alpha',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-      }),
-    ]);
-
-    await flushAsyncWork();
-
-    expect(localStorage.getItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY)).toBeNull();
-    expect(apiMocks.setSavedWorkspacePaths).not.toHaveBeenCalled();
   });
 
   it('reorders local project sections and moves their threads with them', async () => {
@@ -362,62 +331,5 @@ describe('Sidebar group drag reordering', () => {
     expect(apiMocks.changeConversationCwd).toHaveBeenCalledWith('conv-alpha', betaPath, expect.any(String));
     expect(apiMocks.sessions).toHaveBeenCalled();
     expect(container.textContent).toContain('Moved conversation to beta-worktree.');
-  });
-
-  it('stores manual group order for remote sections even when shelf order cannot express it', async () => {
-    const alphaKey = 'remote:bender::/srv/repos/alpha';
-    const betaKey = 'remote:bender::/srv/repos/beta';
-    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-open']));
-    localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-pinned']));
-    apiMocks.openConversationTabs.mockResolvedValue({
-      sessionIds: ['conv-remote-open'],
-      pinnedSessionIds: ['conv-remote-pinned'],
-      archivedSessionIds: [],
-      workspacePaths: [],
-    });
-
-    const container = renderSidebar([
-      createSession({
-        id: 'conv-remote-pinned',
-        title: 'Pinned remote alpha',
-        cwd: '/srv/repos/alpha',
-        cwdSlug: 'alpha',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-      }),
-      createSession({
-        id: 'conv-remote-open',
-        title: 'Open remote beta',
-        cwd: '/srv/repos/beta',
-        cwdSlug: 'beta',
-        remoteHostId: 'bender',
-        remoteHostLabel: 'Bender',
-      }),
-    ]);
-
-    await flushAsyncWork();
-
-    const alphaGroup = getGroup(container, alphaKey);
-    const betaGroup = getGroup(container, betaKey);
-    setDragBounds(alphaGroup);
-    setDragBounds(betaGroup);
-
-    const dataTransfer = new TestDataTransfer();
-    await act(async () => {
-      betaGroup.dispatchEvent(createDragEvent('dragstart', dataTransfer, 75));
-      alphaGroup.dispatchEvent(createDragEvent('dragover', dataTransfer, 10));
-      alphaGroup.dispatchEvent(createDragEvent('drop', dataTransfer, 10));
-    });
-    await flushAsyncWork();
-
-    expect(getScopedGroupOrder(container, 'remote:')).toEqual([betaKey, alphaKey]);
-    expect(localStorage.getItem(THREADS_SORT_BY_STORAGE_KEY)).toBe('manual');
-    expect(
-      JSON.parse(localStorage.getItem(THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY) ?? '[]').filter((groupKey: string) =>
-        groupKey.startsWith('remote:'),
-      ),
-    ).toEqual([betaKey, alphaKey]);
-    expect(JSON.parse(localStorage.getItem(PINNED_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-remote-pinned']);
-    expect(JSON.parse(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-remote-open']);
   });
 });

@@ -1711,39 +1711,6 @@ describe('api desktop transport', () => {
     expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
   });
 
-  it('falls back to HTTP for conversations marked with any remote identity', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse({ id: 'conversation-1', title: 'Remote partial', remoteHostId: 'bender' }))
-      .mockResolvedValueOnce(createJsonResponse({ ok: true, cwd: '/tmp/remote' }));
-    vi.stubGlobal('fetch', fetchMock);
-    const changeConversationCwd = vi.fn().mockResolvedValue({ ok: true, cwd: '/tmp/local' });
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-        }),
-        changeConversationCwd,
-      },
-    });
-
-    const { api } = await import('./api');
-    const result = await api.changeConversationCwd('conversation-1', '/tmp/remote');
-
-    expect(changeConversationCwd).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/sessions/conversation-1/meta', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/cwd', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/tmp/remote' }),
-    });
-    expect(result).toEqual({ ok: true, cwd: '/tmp/remote' });
-  });
-
   it('falls back to HTTP for non-local desktop hosts', async () => {
     const fetchMock = vi
       .fn()

@@ -26,31 +26,9 @@ function createSession(overrides: Partial<SessionMeta>): SessionMeta {
 }
 
 describe('Layout workspace selection', () => {
-  it('uses only fully local conversations for the workbench workspace', () => {
-    expect(
-      resolveActiveWorkspaceCwd(
-        [
-          createSession({ id: 'local', cwd: '/tmp/local' }),
-          createSession({ id: 'remote-host-only', cwd: '/tmp/remote-host', remoteHostId: 'bender' }),
-          createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' }),
-        ],
-        'local',
-      ),
-    ).toBe('/tmp/local');
-
-    expect(
-      resolveActiveWorkspaceCwd(
-        [createSession({ id: 'remote-host-only', cwd: '/tmp/remote-host', remoteHostId: 'bender' })],
-        'remote-host-only',
-      ),
-    ).toBeNull();
-
-    expect(
-      resolveActiveWorkspaceCwd(
-        [createSession({ id: 'remote-conversation-only', cwd: '/tmp/remote-conversation', remoteConversationId: 'remote-1' })],
-        'remote-conversation-only',
-      ),
-    ).toBeNull();
+  it('uses the active conversation cwd for the workbench workspace', () => {
+    expect(resolveActiveWorkspaceCwd([createSession({ id: 'local', cwd: '/tmp/local' })], 'local')).toBe('/tmp/local');
+    expect(resolveActiveWorkspaceCwd([createSession({ id: 'other', cwd: '/tmp/other' })], 'missing')).toBeNull();
   });
 });
 

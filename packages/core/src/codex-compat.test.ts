@@ -107,7 +107,7 @@ describe('codex compatibility mappers', () => {
         agentNickname: null,
         agentRole: null,
         gitInfo: null,
-        name: 'Remote workspace',
+        name: 'Project workspace',
         turns: [
           {
             id: 'turn-1',
@@ -137,7 +137,7 @@ describe('codex compatibility mappers', () => {
     });
 
     expect(detail.meta.id).toBe('conversation-2');
-    expect(detail.meta.title).toBe('Remote workspace');
+    expect(detail.meta.title).toBe('Project workspace');
     expect(detail.meta.model).toBe('gpt-5.4');
     expect(detail.meta.isRunning).toBe(true);
     expect(detail.blocks).toEqual([

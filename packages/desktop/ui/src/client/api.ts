@@ -221,17 +221,8 @@ async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {
   return environment?.activeHostKind === 'local';
 }
 
-async function shouldUseDesktopLocalConversationCapabilities(conversationId: string): Promise<boolean> {
-  if (!getDesktopBridge() || !(await shouldUseDesktopLocalCapabilities())) {
-    return false;
-  }
-
-  try {
-    const meta = await get<SessionMeta>(`/sessions/${encodeURIComponent(conversationId)}/meta`);
-    return !(meta.remoteHostId || meta.remoteConversationId);
-  } catch {
-    return true;
-  }
+async function shouldUseDesktopLocalConversationCapabilities(_conversationId: string): Promise<boolean> {
+  return Boolean(getDesktopBridge()) && (await shouldUseDesktopLocalCapabilities());
 }
 
 function normalizeTailBlocksParam(value: unknown): number | undefined {

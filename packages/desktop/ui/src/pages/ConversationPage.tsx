@@ -674,11 +674,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [initialHistoricalWarmupConversationId, setInitialHistoricalWarmupConversationId] = useState<string | null>(null);
   const desktopConversation = useDesktopConversationState(id ?? null, {
     tailBlocks: historicalTailBlocks,
-    enabled: shouldSubscribeToDesktopConversationState({
-      draft,
-      remoteHostId: sessionSnapshot?.remoteHostId,
-      remoteConversationId: sessionSnapshot?.remoteConversationId,
-    }),
+    enabled: shouldSubscribeToDesktopConversationState({ draft }),
   });
   const desktopConversationChecking = !draft && Boolean(id) && desktopConversation.mode === 'checking';
   const useDesktopConversation = shouldUseHealthyDesktopConversationState({

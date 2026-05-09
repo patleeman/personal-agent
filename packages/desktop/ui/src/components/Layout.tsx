@@ -164,11 +164,7 @@ export function resolveActiveWorkspaceCwd(
   }
 
   const session = sessions?.find((entry) => entry.id === activeConversationId) ?? null;
-  if (!session || session.remoteHostId?.trim() || session.remoteConversationId?.trim()) {
-    return null;
-  }
-
-  return session.cwd ?? null;
+  return session?.cwd ?? null;
 }
 
 function hasBlockingOverlayOpen(): boolean {

@@ -12,6 +12,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAppData, useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
+import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
 import {
   buildConversationGroupLabels,
   getConversationGroupLabel,
@@ -115,6 +116,7 @@ const PATH = {
   plus: 'M12 5v14M5 12h14',
   grid: 'M5 5h6v6H5V5Zm8 0h6v6h-6V5ZM5 13h6v6H5v-6Zm8 0h6v6h-6v-6Z',
   filter: 'M4.5 7.5h15M7.5 12h9M10.5 16.5h3',
+  search: 'm21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z',
   list: 'M8.25 6.75h9m-9 5.25h9m-9 5.25h9M5.25 6.75h.01M5.25 12h.01M5.25 17.25h.01',
   grip: 'M9 6.75h.01M9 12h.01M9 17.25h.01M15 6.75h.01M15 12h.01M15 17.25h.01',
   clock: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
@@ -192,9 +194,6 @@ type SidebarConversationGroup = {
   label: string;
   defaultLabel: string;
   items: SidebarConversationItem[];
-  executionTargetKey: string;
-  executionTargetLabel: string;
-  executionTargetIsLocal: boolean;
 };
 
 type PointerPosition = { x: number; y: number };
@@ -671,54 +670,12 @@ function resolveSidebarConversationHotkeyOrder<T>(input: {
   return input.groupedRows.flatMap((group) => (input.collapsedGroupKeys?.has(group.key) ? [] : [...group.items]));
 }
 
-export function isRemoteConversationSession(session: Pick<SessionMeta, 'remoteHostId' | 'remoteConversationId'>): boolean {
-  return Boolean(session.remoteHostId?.trim() || session.remoteConversationId?.trim());
-}
-
-export function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'>): {
-  key: string;
-  label: string;
-  isLocal: boolean;
-} {
-  const remoteHostId = session.remoteHostId?.trim() || '';
-  const remoteConversationId = session.remoteConversationId?.trim() || '';
-  if (!remoteHostId && !remoteConversationId) {
-    return {
-      key: 'local',
-      label: 'Local',
-      isLocal: true,
-    };
-  }
-
-  const remoteHostLabel = session.remoteHostLabel?.trim();
-  return {
-    key: remoteHostId || `conversation:${remoteConversationId}`,
-    label: remoteHostLabel || remoteHostId || 'Remote',
-    isLocal: false,
-  };
-}
-
 function getSessionWorkspaceCwd(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd'>): string | null {
   return Object.prototype.hasOwnProperty.call(session, 'workspaceCwd') ? (session.workspaceCwd ?? null) : (session.cwd ?? null);
 }
 
-export function getLocalSessionWorkspacePath(
-  session: Pick<SessionMeta, 'cwd' | 'workspaceCwd' | 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'>,
-): string {
-  const workspaceCwd = getSessionWorkspaceCwd(session);
-  return resolveSessionExecutionTarget(session).isLocal ? (workspaceCwd ?? '') : '';
-}
-
-function buildScopedConversationGroupKey(input: {
-  executionTargetKey: string;
-  executionTargetIsLocal: boolean;
-  cwdGroupKey: string;
-}): string {
-  if (input.executionTargetIsLocal) {
-    return input.cwdGroupKey;
-  }
-
-  return `remote:${input.executionTargetKey}::${input.cwdGroupKey}`;
+function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd'>): string {
+  return getSessionWorkspaceCwd(session) ?? '';
 }
 
 function matchesLetterHotkey(event: KeyboardEvent, code: string, letter: string): boolean {
@@ -997,22 +954,6 @@ function ThreadsFilterButton({
         </div>
       ) : null}
     </>
-  );
-}
-
-function ConversationExecutionTargetHeader({ label }: { label: string }) {
-  return (
-    <div className="px-4 pb-0.5 pt-1 text-[10px] uppercase tracking-[0.12em] text-accent/80">
-      <span className="inline-flex min-w-0 items-center gap-1.5" title={`Execution target: ${label}`}>
-        <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
-          <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
-          <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
-          <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
-          <path d="M7.9 7.8 9.7 7.8 9.7 6" />
-        </svg>
-        <span className="truncate">{label}</span>
-      </span>
-    </div>
   );
 }
 
@@ -1379,7 +1320,36 @@ function OpenConversationRow({
   const navigate = useNavigate();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
   const { conversationDecorators, contextMenus } = useExtensionRegistry();
-  const conversationExtensionMenuItems = useMemo(() => contextMenus.filter((m) => m.surface === 'conversationList'), [contextMenus]);
+  const conversationExtensionMenuItems = useMemo(
+    () =>
+      contextMenus.filter((menu) => {
+        if (menu.surface !== 'conversationList') {
+          return false;
+        }
+
+        if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
+          return session.id !== DRAFT_CONVERSATION_ID;
+        }
+
+        if (menu.extensionId === 'system-conversation-tools') {
+          switch (menu.action) {
+            case 'duplicateConversation':
+              return Boolean(onDuplicate);
+            case 'copyWorkingDirectory':
+              return Boolean(onCopyWorkingDirectory);
+            case 'copyConversationId':
+              return Boolean(onCopyId);
+            case 'copyDeeplink':
+              return Boolean(onCopyDeeplink);
+            default:
+              return true;
+          }
+        }
+
+        return true;
+      }),
+    [contextMenus, onCopyDeeplink, onCopyId, onCopyWorkingDirectory, onDuplicate, session.id],
+  );
   const decoratorsByPosition = useMemo(() => {
     const byPos: Record<string, typeof conversationDecorators> = { 'before-title': [], 'after-title': [], subtitle: [] };
     for (const d of conversationDecorators) {
@@ -1393,28 +1363,13 @@ function OpenConversationRow({
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [busyAction, setBusyAction] = useState<'duplicate' | null>(null);
   const [busyExtensionMenuId, setBusyExtensionMenuId] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<ConversationCopyMenuState | null>(null);
-  const hasContextMenuActions = Boolean(
-    onPin ||
-    onUnpin ||
-    onArchive ||
-    onOpenInNewWindow ||
-    onDuplicate ||
-    onCopyWorkingDirectory ||
-    onCopyId ||
-    onCopyDeeplink ||
-    conversationExtensionMenuItems.length > 0,
-  );
+  const hasContextMenuActions = Boolean(onPin || onUnpin || onArchive || onOpenInNewWindow || conversationExtensionMenuItems.length > 0);
   const contextMenuItemCount =
     (pinned && onUnpin ? 1 : !pinned && onPin ? 1 : 0) +
     Number(Boolean(onArchive)) +
     Number(Boolean(onOpenInNewWindow)) +
-    Number(Boolean(onDuplicate)) +
-    Number(Boolean(onCopyWorkingDirectory)) +
-    Number(Boolean(onCopyId)) +
-    Number(Boolean(onCopyDeeplink)) +
     conversationExtensionMenuItems.length;
 
   useEffect(() => {
@@ -1486,22 +1441,6 @@ function OpenConversationRow({
     event.stopPropagation();
   }
 
-  async function runMenuAction(action: 'duplicate', handler: () => boolean | Promise<boolean>) {
-    if (busyAction) {
-      return;
-    }
-
-    setBusyAction(action);
-    try {
-      const succeeded = await handler();
-      if (succeeded !== false) {
-        setMenuOpen(false);
-      }
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
   function getCopyMenuLabel(action: ConversationCopyMenuAction): string {
     if (!copyState || copyState.action !== action) {
       switch (action) {
@@ -1529,12 +1468,51 @@ function OpenConversationRow({
   }
 
   async function handleCopyClick(action: ConversationCopyMenuAction, handler?: () => boolean | Promise<boolean>) {
-    if (!handler || busyAction) {
+    if (!handler || busyExtensionMenuId) {
       return;
     }
 
     const succeeded = await handler();
     setCopyState({ action, status: succeeded === false ? 'failed' : 'copied' });
+  }
+
+  function getConversationToolsCopyAction(action: string): ConversationCopyMenuAction | null {
+    switch (action) {
+      case 'copyWorkingDirectory':
+        return 'working-directory';
+      case 'copyConversationId':
+        return 'id';
+      case 'copyDeeplink':
+        return 'deeplink';
+      default:
+        return null;
+    }
+  }
+
+  function getConversationToolsCopyHandler(action: ConversationCopyMenuAction): (() => boolean | Promise<boolean>) | undefined {
+    switch (action) {
+      case 'working-directory':
+        return onCopyWorkingDirectory;
+      case 'id':
+        return onCopyId;
+      case 'deeplink':
+        return onCopyDeeplink;
+    }
+  }
+
+  function getExtensionContextMenuTitle(menu: (typeof conversationExtensionMenuItems)[number]): string {
+    if (menu.extensionId === 'system-conversation-tools') {
+      const copyAction = getConversationToolsCopyAction(menu.action);
+      if (copyAction) {
+        return getCopyMenuLabel(copyAction);
+      }
+
+      if (menu.action === 'duplicateConversation' && busyExtensionMenuId === menu.id) {
+        return 'Duplicating…';
+      }
+    }
+
+    return busyExtensionMenuId === menu.id ? `${menu.title}…` : menu.title;
   }
 
   function openDomContextMenu(x: number, y: number) {
@@ -1557,11 +1535,26 @@ function OpenConversationRow({
 
   async function handleExtensionContextMenuClick(menu: (typeof conversationExtensionMenuItems)[number]) {
     if (busyExtensionMenuId) return;
+    let closeAfterAction = true;
     setBusyExtensionMenuId(menu.id);
     try {
       if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
         navigate(`/conversations/${encodeURIComponent(session.id)}?gateway=1`);
         return;
+      }
+
+      if (menu.extensionId === 'system-conversation-tools') {
+        if (menu.action === 'duplicateConversation') {
+          await onDuplicate?.();
+          return;
+        }
+
+        const copyAction = getConversationToolsCopyAction(menu.action);
+        if (copyAction) {
+          closeAfterAction = false;
+          await handleCopyClick(copyAction, getConversationToolsCopyHandler(copyAction));
+          return;
+        }
       }
 
       await getPaClient(menu.extensionId).extension.invoke(menu.action, {
@@ -1571,7 +1564,9 @@ function OpenConversationRow({
       });
     } finally {
       setBusyExtensionMenuId(null);
-      setMenuOpen(false);
+      if (closeAfterAction) {
+        setMenuOpen(false);
+      }
     }
   }
 
@@ -1635,19 +1630,6 @@ function OpenConversationRow({
         <div className="flex w-3 shrink-0 items-center justify-center self-stretch">
           {session.isRunning || needsAttention ? (
             <ConversationStatusText isRunning={session.isRunning} needsAttention={needsAttention} className="shrink-0" />
-          ) : isRemoteConversationSession(session) ? (
-            <span
-              className="shrink-0 text-accent/80"
-              title={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'}
-              aria-label={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'}
-            >
-              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
-                <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
-                <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
-                <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
-                <path d="M7.9 7.8 9.7 7.8 9.7 6" />
-              </svg>
-            </span>
           ) : null}
         </div>
         <div className="min-w-0 flex-1 pr-[4.5rem]">
@@ -1737,7 +1719,7 @@ function OpenConversationRow({
                   }
                 }}
                 className={menuItemClass}
-                disabled={busyAction !== null}
+                disabled={busyExtensionMenuId !== null}
                 role="menuitem"
               >
                 Unpin
@@ -1755,7 +1737,7 @@ function OpenConversationRow({
                   }
                 }}
                 className={menuItemClass}
-                disabled={busyAction !== null}
+                disabled={busyExtensionMenuId !== null}
                 role="menuitem"
               >
                 Pin
@@ -1773,7 +1755,7 @@ function OpenConversationRow({
                   }
                 }}
                 className={menuItemClass}
-                disabled={busyAction !== null}
+                disabled={busyExtensionMenuId !== null}
                 role="menuitem"
               >
                 Archive
@@ -1791,70 +1773,10 @@ function OpenConversationRow({
                   }
                 }}
                 className={menuItemClass}
-                disabled={busyAction !== null}
+                disabled={busyExtensionMenuId !== null}
                 role="menuitem"
               >
                 Open in Separate Window
-              </button>
-            ) : null}
-            {onDuplicate ? (
-              <button
-                type="button"
-                onPointerDown={stopRowInteraction}
-                onMouseDown={stopRowInteraction}
-                onClick={() => {
-                  void runMenuAction('duplicate', onDuplicate);
-                }}
-                className={menuItemClass}
-                disabled={busyAction !== null}
-                role="menuitem"
-              >
-                {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
-              </button>
-            ) : null}
-            {onCopyWorkingDirectory ? (
-              <button
-                type="button"
-                onPointerDown={stopRowInteraction}
-                onMouseDown={stopRowInteraction}
-                onClick={() => {
-                  void handleCopyClick('working-directory', onCopyWorkingDirectory);
-                }}
-                className={menuItemClass}
-                disabled={busyAction !== null}
-                role="menuitem"
-              >
-                {getCopyMenuLabel('working-directory')}
-              </button>
-            ) : null}
-            {onCopyId ? (
-              <button
-                type="button"
-                onPointerDown={stopRowInteraction}
-                onMouseDown={stopRowInteraction}
-                onClick={() => {
-                  void handleCopyClick('id', onCopyId);
-                }}
-                className={menuItemClass}
-                disabled={busyAction !== null}
-                role="menuitem"
-              >
-                {getCopyMenuLabel('id')}
-              </button>
-            ) : null}
-            {onCopyDeeplink ? (
-              <button
-                type="button"
-                onPointerDown={stopRowInteraction}
-                onMouseDown={stopRowInteraction}
-                onClick={() => {
-                  void handleCopyClick('deeplink', onCopyDeeplink);
-                }}
-                className={menuItemClass}
-                disabled={busyAction !== null}
-                role="menuitem"
-              >
-                {getCopyMenuLabel('deeplink')}
               </button>
             ) : null}
             {conversationExtensionMenuItems.length > 0 && (
@@ -1873,7 +1795,7 @@ function OpenConversationRow({
                     disabled={busyExtensionMenuId !== null}
                     role="menuitem"
                   >
-                    {busyExtensionMenuId === menu.id ? `${menu.title}…` : menu.title}
+                    {getExtensionContextMenuTitle(menu)}
                   </button>
                 ))}
               </>
@@ -2197,125 +2119,67 @@ export function Sidebar() {
       return [];
     }
 
-    const targetBuckets = new Map<
-      string,
-      {
-        executionTargetKey: string;
-        executionTargetLabel: string;
-        executionTargetIsLocal: boolean;
-        items: SidebarConversationItem[];
-      }
-    >();
+    const groupsByCwdKey = new Map(
+      groupConversationItemsByCwd(filteredConversationItems, (item) => getSessionWorkspaceCwd(item.session), {
+        labelsByCwd: conversationGroupLabels,
+      }).map((group) => [group.key, group] as const),
+    );
+    const baseGroups =
+      threadsFilterMode === 'all'
+        ? workspaceOrder.map(
+            (workspacePath) =>
+              groupsByCwdKey.get(workspacePath) ?? {
+                key: workspacePath,
+                cwd: workspacePath,
+                label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
+                items: [],
+              },
+          )
+        : [];
+    const groups = [...baseGroups];
+    const seenGroupKeys = new Set(groups.map((group) => group.key));
 
-    for (const item of filteredConversationItems) {
-      const executionTarget = resolveSessionExecutionTarget(item.session);
-      const existingBucket = targetBuckets.get(executionTarget.key);
-      if (existingBucket) {
-        existingBucket.items.push(item);
+    for (const group of groupsByCwdKey.values()) {
+      if (seenGroupKeys.has(group.key)) {
         continue;
       }
 
-      targetBuckets.set(executionTarget.key, {
-        executionTargetKey: executionTarget.key,
-        executionTargetLabel: executionTarget.label,
-        executionTargetIsLocal: executionTarget.isLocal,
-        items: [item],
-      });
+      groups.push(group);
+      seenGroupKeys.add(group.key);
     }
 
-    if (threadsFilterMode === 'all' && workspaceOrder.length > 0 && !targetBuckets.has('local')) {
-      targetBuckets.set('local', {
-        executionTargetKey: 'local',
-        executionTargetLabel: 'Local',
-        executionTargetIsLocal: true,
-        items: [],
-      });
-    }
+    const rows = groups.map((group, groupIndex) => ({
+      groupIndex,
+      row: {
+        key: group.key,
+        cwd: group.cwd,
+        defaultLabel: group.cwd ? group.label : 'Chats',
+        label: conversationGroupLabelOverrides[group.key]?.trim() || (group.cwd ? group.label : 'Chats'),
+        items: group.items,
+      } satisfies SidebarConversationGroup,
+    }));
 
-    const localTargetBucket = targetBuckets.get('local');
-    const remoteTargetBuckets = [...targetBuckets.values()]
-      .filter((bucket) => !bucket.executionTargetIsLocal)
-      .sort((left, right) => left.executionTargetLabel.localeCompare(right.executionTargetLabel, undefined, { sensitivity: 'base' }));
-    const orderedTargetBuckets = [...(localTargetBucket ? [localTargetBucket] : []), ...remoteTargetBuckets];
-
-    const rows: SidebarConversationGroup[] = [];
-
-    for (const targetBucket of orderedTargetBuckets) {
-      const groupsByCwdKey = new Map(
-        groupConversationItemsByCwd(targetBucket.items, (item) => getSessionWorkspaceCwd(item.session), {
-          labelsByCwd: conversationGroupLabels,
-        }).map((group) => [group.key, group] as const),
-      );
-      const baseGroups =
-        targetBucket.executionTargetIsLocal && threadsFilterMode === 'all'
-          ? workspaceOrder.map(
-              (workspacePath) =>
-                groupsByCwdKey.get(workspacePath) ?? {
-                  key: workspacePath,
-                  cwd: workspacePath,
-                  label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
-                  items: [],
-                },
-            )
-          : [];
-      const groups = [...baseGroups];
-      const seenGroupKeys = new Set(groups.map((group) => group.key));
-
-      for (const group of groupsByCwdKey.values()) {
-        if (seenGroupKeys.has(group.key)) {
-          continue;
+    if (threadsSortMode === 'manual') {
+      rows.sort((left, right) => {
+        const leftManualIndex = manualConversationGroupOrderIndex.get(left.row.key);
+        const rightManualIndex = manualConversationGroupOrderIndex.get(right.row.key);
+        if (leftManualIndex !== undefined || rightManualIndex !== undefined) {
+          if (leftManualIndex === undefined) {
+            return 1;
+          }
+          if (rightManualIndex === undefined) {
+            return -1;
+          }
+          if (leftManualIndex !== rightManualIndex) {
+            return leftManualIndex - rightManualIndex;
+          }
         }
 
-        groups.push(group);
-        seenGroupKeys.add(group.key);
-      }
-
-      const targetRows = groups.map((group, groupIndex) => {
-        const scopedGroupKey = buildScopedConversationGroupKey({
-          executionTargetKey: targetBucket.executionTargetKey,
-          executionTargetIsLocal: targetBucket.executionTargetIsLocal,
-          cwdGroupKey: group.key,
-        });
-
-        return {
-          groupIndex,
-          row: {
-            key: scopedGroupKey,
-            cwd: group.cwd,
-            defaultLabel: group.cwd ? group.label : 'Chats',
-            label: conversationGroupLabelOverrides[scopedGroupKey]?.trim() || (group.cwd ? group.label : 'Chats'),
-            items: group.items,
-            executionTargetKey: targetBucket.executionTargetKey,
-            executionTargetLabel: targetBucket.executionTargetLabel,
-            executionTargetIsLocal: targetBucket.executionTargetIsLocal,
-          } satisfies SidebarConversationGroup,
-        };
+        return left.groupIndex - right.groupIndex;
       });
-
-      if (threadsSortMode === 'manual') {
-        targetRows.sort((left, right) => {
-          const leftManualIndex = manualConversationGroupOrderIndex.get(left.row.key);
-          const rightManualIndex = manualConversationGroupOrderIndex.get(right.row.key);
-          if (leftManualIndex !== undefined || rightManualIndex !== undefined) {
-            if (leftManualIndex === undefined) {
-              return 1;
-            }
-            if (rightManualIndex === undefined) {
-              return -1;
-            }
-            if (leftManualIndex !== rightManualIndex) {
-              return leftManualIndex - rightManualIndex;
-            }
-          }
-
-          return left.groupIndex - right.groupIndex;
-        });
-      }
-
-      rows.push(...targetRows.map((entry) => entry.row));
     }
 
-    return rows;
+    return rows.map((entry) => entry.row);
   }, [
     conversationGroupLabelOverrides,
     conversationGroupLabels,
@@ -2445,17 +2309,17 @@ export function Sidebar() {
   function canDropConversationGroupOnGroup(draggedGroupKey: string, targetGroupKey: string): boolean {
     const draggedGroup = conversationGroupsByKey.get(draggedGroupKey);
     const targetGroup = conversationGroupsByKey.get(targetGroupKey);
-    return Boolean(draggedGroup && targetGroup && draggedGroup.executionTargetKey === targetGroup.executionTargetKey);
+    return Boolean(draggedGroup && targetGroup);
   }
 
   function canDropConversationOnGroup(draggedSessionId: string, targetGroupKey: string): boolean {
     const targetGroup = conversationGroupsByKey.get(targetGroupKey);
-    if (!targetGroup?.executionTargetIsLocal || !targetGroup.cwd) {
+    if (!targetGroup?.cwd) {
       return false;
     }
 
     const draggedSession = [...pinnedSessions, ...tabs].find((session) => session.id === draggedSessionId);
-    if (!draggedSession || isRemoteConversationSession(draggedSession)) {
+    if (!draggedSession) {
       return false;
     }
 
@@ -2679,9 +2543,7 @@ export function Sidebar() {
       archivedSessionIds: archivedConversationIds,
     });
 
-    const nextLocalWorkspacePaths = normalizeWorkspacePaths(
-      nextGroupedRows.flatMap((group) => (group.executionTargetIsLocal && group.cwd ? [group.cwd] : [])),
-    );
+    const nextLocalWorkspacePaths = normalizeWorkspacePaths(nextGroupedRows.flatMap((group) => (group.cwd ? [group.cwd] : [])));
     if (!sameStringLists(savedWorkspacePaths, nextLocalWorkspacePaths)) {
       persistSavedWorkspacePathsState(nextLocalWorkspacePaths);
       void api.setSavedWorkspacePaths(nextLocalWorkspacePaths).catch(() => {
@@ -2752,6 +2614,10 @@ export function Sidebar() {
     },
     [navigate],
   );
+
+  const handleOpenThreadSwitcher = useCallback(() => {
+    window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { scope: 'threads' } }));
+  }, []);
 
   const handleAddWorkspace = useCallback(() => {
     setWorkspaceQuickSelectOpen(true);
@@ -2997,29 +2863,17 @@ export function Sidebar() {
   );
 
   const handleRemoveConversationGroup = useCallback(
-    (
-      groupKey: string,
-      label: string,
-      cwd: string | null,
-      sessionIds: readonly string[],
-      includesDraft: boolean,
-      executionTargetIsLocal: boolean,
-    ) => {
+    (groupKey: string, label: string, cwd: string | null, sessionIds: readonly string[], includesDraft: boolean) => {
       const removedCount = archiveConversationGroupSessions(sessionIds);
       updateConversationGroupLabelOverride(groupKey, null);
       clearConversationGroupCollapsedState(groupKey);
 
       const normalizedCwd = normalizeConversationGroupCwd(cwd);
-      if (
-        executionTargetIsLocal &&
-        includesDraft &&
-        normalizedCwd &&
-        normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd
-      ) {
+      if (includesDraft && normalizedCwd && normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd) {
         clearDraftConversationCwd();
       }
 
-      if (executionTargetIsLocal && normalizedCwd) {
+      if (normalizedCwd) {
         const nextWorkspacePaths = savedWorkspacePaths.filter((workspacePath) => workspacePath !== normalizedCwd);
         if (!sameStringLists(savedWorkspacePaths, nextWorkspacePaths)) {
           persistSavedWorkspacePathsState(nextWorkspacePaths);
@@ -3488,6 +3342,15 @@ export function Sidebar() {
             />
             <button
               type="button"
+              onClick={handleOpenThreadSwitcher}
+              className="ui-icon-button ui-icon-button-compact shrink-0"
+              title="Find threads and archived conversations"
+              aria-label="Find threads and archived conversations"
+            >
+              <Ico d={PATH.search} size={12} />
+            </button>
+            <button
+              type="button"
               onClick={handleAddWorkspace}
               className="ui-icon-button ui-icon-button-compact -mr-1 shrink-0"
               title={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
@@ -3514,16 +3377,12 @@ export function Sidebar() {
             ) : null}
 
             {threadsOrganizeMode === 'project'
-              ? groupedConversationRows.map((group, groupIndex) => {
+              ? groupedConversationRows.map((group) => {
                   const collapsed = collapsedConversationGroupKeySet.has(group.key);
                   const groupSessionIds = group.items
                     .map(({ session }) => session.id)
                     .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
                   const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
-                  const previousGroup = groupIndex > 0 ? groupedConversationRows[groupIndex - 1] : null;
-                  const showExecutionTargetHeader =
-                    !group.executionTargetIsLocal && (!previousGroup || previousGroup.executionTargetKey !== group.executionTargetKey);
-
                   const groupDropPosition =
                     canReorderConversationGroups && groupDropTarget?.groupKey === group.key && draggingGroupKey !== group.key
                       ? groupDropTarget.position
@@ -3531,7 +3390,6 @@ export function Sidebar() {
 
                   return (
                     <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
-                      {showExecutionTargetHeader ? <ConversationExecutionTargetHeader label={group.executionTargetLabel} /> : null}
                       <ConversationCwdGroupHeader
                         label={group.label}
                         cwd={group.cwd}
@@ -3543,24 +3401,13 @@ export function Sidebar() {
                         dragId={group.key}
                         onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
                         onNewConversation={() => handleNewConversation(group.cwd)}
-                        onOpenInFinder={
-                          group.executionTargetIsLocal && group.cwd
-                            ? () => handleOpenConversationGroupInFinder(group.cwd, group.label)
-                            : undefined
-                        }
+                        onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
                         onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
                         onArchiveThreads={
                           groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined
                         }
                         onRemove={() =>
-                          handleRemoveConversationGroup(
-                            group.key,
-                            group.label,
-                            group.cwd,
-                            groupSessionIds,
-                            groupIncludesDraft,
-                            group.executionTargetIsLocal,
-                          )
+                          handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)
                         }
                         onDragStart={
                           canReorderConversationGroups ? (event) => handleConversationGroupDragStart(group.key, event) : undefined

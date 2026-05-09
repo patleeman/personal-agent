@@ -47,7 +47,7 @@ describe('ConversationComposerMeta', () => {
     const html = renderToString(<ConversationComposerMeta {...baseProps} draftCwdValue="~/repo" draftCwdError="bad path" />);
 
     expect(html).toContain('bad path');
-    expect(html).not.toContain('Remote workspace path');
+    expect(html).toContain('Workspace folder');
   });
 
   it('renders saved conversation cwd metadata', () => {

@@ -53,7 +53,7 @@ describe('ScheduledTaskPanel editor capabilities', () => {
     expect(shouldShowTaskModelControls({ targetType: 'conversation' })).toBe(true);
   });
 
-  it('uses only local conversation workspaces as project options', () => {
+  it('uses conversation workspaces as project options', () => {
     const localSession: SessionMeta = {
       id: 'local-thread',
       file: '/tmp/local.jsonl',
@@ -63,14 +63,6 @@ describe('ScheduledTaskPanel editor capabilities', () => {
       model: 'openai/gpt-5.4',
       title: 'Local thread',
       messageCount: 1,
-    };
-    const remoteSession: SessionMeta = {
-      ...localSession,
-      id: 'remote-thread',
-      cwd: '/home/patrick/remote-worktree',
-      cwdSlug: 'remote-worktree',
-      remoteHostId: 'bender',
-      remoteConversationId: 'remote-1',
     };
     const project: ProjectRecord = {
       id: 'project-1',
@@ -91,7 +83,7 @@ describe('ScheduledTaskPanel editor capabilities', () => {
       buildTaskProjectOptions({
         defaultCwd: '/',
         savedWorkspacePaths: ['/tmp/saved-worktree'],
-        sessions: [remoteSession, localSession],
+        sessions: [localSession],
         projects: [project],
       }),
     ).toEqual([
@@ -101,7 +93,7 @@ describe('ScheduledTaskPanel editor capabilities', () => {
     ]);
   });
 
-  it('uses only local conversations as existing automation thread options', () => {
+  it('uses conversations as existing automation thread options', () => {
     const localSession: SessionMeta = {
       id: 'local-thread',
       file: '/tmp/local.jsonl',
@@ -112,18 +104,11 @@ describe('ScheduledTaskPanel editor capabilities', () => {
       title: 'Local thread',
       messageCount: 1,
     };
-    const remoteSession: SessionMeta = {
-      ...localSession,
-      id: 'remote-thread',
-      title: 'Remote thread',
-      remoteHostId: 'bender',
-      remoteConversationId: 'remote-1',
-    };
 
     expect(
       buildTaskExistingThreadOptions({
         effectiveThreadCwd: '/tmp/worktree',
-        sessions: [remoteSession, localSession],
+        sessions: [localSession],
       }),
     ).toEqual([{ id: 'local-thread', label: 'Local thread', cwd: '/tmp/worktree' }]);
   });

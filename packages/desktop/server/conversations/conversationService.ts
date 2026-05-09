@@ -371,12 +371,11 @@ export function listConversationSessionsSnapshot() {
     ...syntheticLive,
     ...jsonl.map((session) => {
       const liveEntry = liveById.get(session.id);
-      const isRemoteTarget = Boolean(session.remoteHostId || session.remoteConversationId);
       return {
         ...session,
         title: liveEntry?.title || session.title,
         isRunning: isLiveEntryRunning(liveEntry),
-        isLive: isRemoteTarget || Boolean(liveEntry),
+        isLive: Boolean(liveEntry),
       };
     }),
   ];
@@ -449,13 +448,11 @@ export function readConversationSessionMeta(conversationId: string) {
     return liveEntry ? buildSyntheticLiveSessionSnapshot(liveEntry, deferredResumesBySessionFile) : null;
   }
 
-  const isRemoteTarget = Boolean(decoratedSession.remoteHostId || decoratedSession.remoteConversationId);
-
   return {
     ...decoratedSession,
     title: liveEntry?.title || decoratedSession.title,
     isRunning: isLiveEntryRunning(liveEntry),
-    isLive: isRemoteTarget || Boolean(liveEntry),
+    isLive: Boolean(liveEntry),
   };
 }
 

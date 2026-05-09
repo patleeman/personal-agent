@@ -14,9 +14,6 @@ export interface StoredSessionMeta {
   title: string;
   messageCount: number;
   lastActivityAt: string;
-  remoteHostId?: string;
-  remoteHostLabel?: string;
-  remoteConversationId?: string;
 }
 
 interface RawSessionRecord {
@@ -24,9 +21,6 @@ interface RawSessionRecord {
   id: string;
   timestamp: string;
   cwd: string;
-  remoteHostId?: string;
-  remoteHostLabel?: string;
-  remoteConversationId?: string;
 }
 
 interface RawModelChange {
@@ -274,19 +268,6 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
     }
 
     const fallbackTimestamp = normalizeIsoTimestamp(sessionRecord.timestamp, new Date(statSync(filePath).mtimeMs).toISOString());
-    const remoteHostId =
-      typeof sessionRecord.remoteHostId === 'string' && sessionRecord.remoteHostId.trim().length > 0
-        ? sessionRecord.remoteHostId.trim()
-        : null;
-    const remoteHostLabel =
-      typeof sessionRecord.remoteHostLabel === 'string' && sessionRecord.remoteHostLabel.trim().length > 0
-        ? sessionRecord.remoteHostLabel.trim()
-        : null;
-    const remoteConversationId =
-      typeof sessionRecord.remoteConversationId === 'string' && sessionRecord.remoteConversationId.trim().length > 0
-        ? sessionRecord.remoteConversationId.trim()
-        : null;
-
     const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
     const cwd = workspaceMetadata?.cwd ?? headerCwd;
     const workspaceCwd =
@@ -307,9 +288,6 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
       title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',
       messageCount,
       lastActivityAt: normalizeIsoTimestamp(lastMessageTimestamp, fallbackTimestamp),
-      ...(remoteHostId ? { remoteHostId } : {}),
-      ...(remoteHostLabel ? { remoteHostLabel } : {}),
-      ...(remoteConversationId ? { remoteConversationId } : {}),
     };
   } catch {
     return null;

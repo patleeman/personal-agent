@@ -459,12 +459,8 @@ export function shouldUseHealthyDesktopConversationState(input: {
   return !input.draft && Boolean(input.conversationId) && input.desktopMode === 'local' && !input.desktopError;
 }
 
-export function shouldSubscribeToDesktopConversationState(input: {
-  draft: boolean;
-  remoteHostId?: string | null;
-  remoteConversationId?: string | null;
-}): boolean {
-  return !input.draft && !input.remoteHostId?.trim() && !input.remoteConversationId?.trim();
+export function shouldSubscribeToDesktopConversationState(input: { draft: boolean }): boolean {
+  return !input.draft;
 }
 
 export function resolveConversationCwdChangeAction(input: {

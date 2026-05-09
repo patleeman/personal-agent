@@ -489,9 +489,6 @@ export function buildTaskProjectOptions(input: {
   }
 
   for (const session of input.sessions ?? []) {
-    if (session.remoteHostId || session.remoteConversationId) {
-      continue;
-    }
     addPath(session.cwd);
   }
 
@@ -514,10 +511,6 @@ export function buildTaskExistingThreadOptions(input: {
   const effectiveThreadCwd = normalizeConversationGroupCwd(input.effectiveThreadCwd);
   const entries = (input.sessions ?? [])
     .filter((session) => {
-      if (session.remoteHostId || session.remoteConversationId) {
-        return false;
-      }
-
       const sessionCwd = normalizeConversationGroupCwd(session.cwd);
       return !effectiveThreadCwd || !sessionCwd || sessionCwd === effectiveThreadCwd;
     })
