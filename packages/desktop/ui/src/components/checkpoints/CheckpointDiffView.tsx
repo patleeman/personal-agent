@@ -3,7 +3,7 @@ import { PatchDiff } from '@pierre/diffs/react';
 import { type CSSProperties, useCallback, useMemo } from 'react';
 
 import type { ConversationCommitCheckpointFile } from '../../shared/types';
-import { useTheme } from '../../ui-state/theme';
+import { type ColorTheme, useTheme } from '../../ui-state/theme';
 import { cx } from '../ui';
 
 const checkpointDiffStyle = {
@@ -27,6 +27,12 @@ const checkpointDiffStyle = {
   '--diffs-bg-addition-emphasis-override': 'rgb(var(--color-success) / 0.24)',
   '--diffs-bg-deletion-emphasis-override': 'rgb(var(--color-danger) / 0.24)',
 } as CSSProperties;
+
+export function resolveDiffThemeType(theme: string, availableThemes: ColorTheme[]): 'light' | 'dark' {
+  const appearance = availableThemes.find((candidate) => candidate.id === theme)?.appearance;
+  if (appearance === 'light' || appearance === 'dark') return appearance;
+  return theme.toLowerCase().includes('dark') ? 'dark' : 'light';
+}
 
 function statusLabel(file: ConversationCommitCheckpointFile): string {
   switch (file.status) {
@@ -74,11 +80,12 @@ export function CheckpointDiffSection({
   sectionClassName?: string;
   onToggleCollapse?: () => void;
 }) {
-  const { theme } = useTheme();
+  const { theme, availableThemes } = useTheme();
+  const themeType = resolveDiffThemeType(theme, availableThemes);
   const diffOptions = useMemo<FileDiffOptions<undefined>>(
     () => ({
       theme: { dark: 'tokyo-night', light: 'github-light' },
-      themeType: theme,
+      themeType,
       diffStyle: view,
       diffIndicators: 'classic',
       disableFileHeader: true,
@@ -86,7 +93,7 @@ export function CheckpointDiffSection({
       lineDiffType: 'word-alt',
       overflow: 'wrap',
     }),
-    [theme, view],
+    [themeType, view],
   );
 
   const handleToggleCollapse = useCallback(() => {

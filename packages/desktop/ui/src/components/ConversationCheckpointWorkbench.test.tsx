@@ -2,9 +2,23 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveDiffThemeType } from './checkpoints/CheckpointDiffView.js';
 import { ConversationCheckpointWorkbenchPane, ConversationDiffRailContent } from './ConversationCheckpointWorkbench.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+describe('resolveDiffThemeType', () => {
+  it('maps active Personal Agent themes to the light/dark diff theme type', () => {
+    expect(
+      resolveDiffThemeType('tokyo-night-dark', [
+        { id: 'tokyo-night-dark', label: 'Tokyo Night Dark', appearance: 'dark' },
+        { id: 'tokyo-night-light', label: 'Tokyo Night Light', appearance: 'light' },
+      ]),
+    ).toBe('dark');
+    expect(resolveDiffThemeType('custom-light', [{ id: 'custom-light', label: 'Custom Light', appearance: 'light' }])).toBe('light');
+    expect(resolveDiffThemeType('unknown-dark-theme', [])).toBe('dark');
+  });
+});
 
 describe('ConversationCheckpointWorkbench', () => {
   it('renders conversation diffs newest-first in the rail', () => {
