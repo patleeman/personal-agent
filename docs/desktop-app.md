@@ -61,7 +61,6 @@ Electron main process
 | ------------ | -------- | ------------------------------------ |
 | Conversation | `F1`     | Single-pane layout with left sidebar |
 | Workbench    | `F2`     | Multi-pane layout with side rails    |
-| Zen          | `F3`     | Full-screen reading mode, no chrome  |
 
 Switch between Conversation and Workbench with `Cmd+Option+\`. Toggle the left sidebar with `Cmd+\`. Toggle the right rail with `Cmd+Shift+\`.
 
@@ -90,8 +89,7 @@ All desktop shortcuts are configurable in Settings. Defaults:
 | Toggle workbench   | `Cmd+Option+\` |
 | Toggle right rail  | `Cmd+Shift+\`  |
 | Settings           | `Cmd+,`        |
-| Toggle layout mode | `F1`/`F2`/`F3` |
-| Zen mode           | `F3`           |
+| Toggle layout mode | `F1`/`F2`      |
 
 ## Routes
 

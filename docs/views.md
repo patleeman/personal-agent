@@ -1,6 +1,6 @@
 # Views
 
-Personal Agent has three view modes. Switch between them with `F1`/`F2`/`F3` or the dropdown in the top bar.
+Personal Agent has two view modes. Switch between them with `F1`/`F2` or the dropdown in the top bar.
 
 ## Conversation View (F1)
 
@@ -68,27 +68,6 @@ For extension authors, the right rail is for compact contextual tools. If a feat
 - Artifacts render inline (HTML, Mermaid, LaTeX)
 - Browser loads pages alongside the conversation
 
-## Zen View (F3)
-
-Full-screen reading mode. All chrome is hidden — sidebar, rails, composer, top bar.
-
-```
-┌────────────────────────────────────┐
-│                                    │
-│   ┌────────────────────────────┐  │
-│   │                            │  │
-│   │  Transcript only           │  │
-│   │  No sidebar                │  │
-│   │  No rails                  │  │
-│   │  No composer               │  │
-│   │                            │  │
-│   └────────────────────────────┘  │
-│                                    │
-└────────────────────────────────────┘
-```
-
-Use Zen for reviewing long conversation histories without distractions. Press `F3` or Escape to exit.
-
 ## Layout Shortcuts
 
 | Action                        | Shortcut       |
@@ -98,4 +77,3 @@ Use Zen for reviewing long conversation histories without distractions. Press `F
 | Toggle right rail             | `Cmd+Shift+\`  |
 | Conversation mode             | `F1`           |
 | Workbench mode                | `F2`           |
-| Zen mode                      | `F3`           |

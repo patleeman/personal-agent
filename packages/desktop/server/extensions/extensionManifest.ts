@@ -191,8 +191,6 @@ export interface ExtensionToolContribution {
   inputSchema?: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
-  /** Internal bridge for bundled system extensions that still register existing in-process tool factories. */
-  systemFactory?: string;
   /** Explicit agent tool name. Defaults to extension_{extensionId}_{toolId}. */
   name?: string;
 }

@@ -14,7 +14,7 @@ See [Getting Started](getting-started.md) for the full setup.
 
 ## Start here
 
-- [Views](views.md) — Conversation, Workbench, Zen layouts
+- [Views](views.md) — Conversation, Workbench layouts
 - [Conversations](conversations.md) — live threads, branching, async follow-through
 - [Desktop App](desktop-app.md) — Electron shell, shortcuts, and app chrome
 - [Knowledge](../extensions/system-knowledge/README.md) — vault, docs, skills, instruction files, and managed sync
@@ -47,7 +47,7 @@ Feature-specific documentation lives beside the owning extension package:
 
 ## Sections
 
-**View Modes** — Conversation, Workbench, and Zen views, plus conversation context attachments.
+**View Modes** — Conversation and Workbench views, plus conversation context attachments.
 
 **Core Product Model** — conversations and projects. Feature packages own their own docs.
 

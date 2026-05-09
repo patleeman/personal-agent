@@ -73,7 +73,6 @@ export interface ExtensionToolRegistration {
   inputSchema: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
-  systemFactory?: string;
 }
 
 export interface ExtensionAgentRegistration {
@@ -357,7 +356,6 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
         inputSchema: tool.inputSchema ?? { type: 'object', properties: {}, additionalProperties: false },
         ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
         ...(tool.promptGuidelines ? { promptGuidelines: tool.promptGuidelines } : {}),
-        ...(tool.systemFactory ? { systemFactory: tool.systemFactory } : {}),
       },
     ];
   });
@@ -609,7 +607,6 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       validateOptionalString(tool.label, `contributes.tools[${index}].label`);
       validateOptionalString(tool.action, `contributes.tools[${index}].action`);
       validateOptionalString(tool.handler, `contributes.tools[${index}].handler`);
-      validateOptionalString(tool.systemFactory, `contributes.tools[${index}].systemFactory`);
       validateOptionalString(tool.name, `contributes.tools[${index}].name`);
       if (tool.promptGuidelines !== undefined) requireStringArray(tool.promptGuidelines, `contributes.tools[${index}].promptGuidelines`);
     }

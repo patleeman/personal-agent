@@ -114,7 +114,6 @@ export interface ExtensionToolContribution {
   inputSchema?: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
-  systemFactory?: string;
   name?: string;
 }
 

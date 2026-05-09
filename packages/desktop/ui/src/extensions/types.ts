@@ -112,7 +112,6 @@ interface ExtensionToolContribution {
   inputSchema?: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
-  systemFactory?: string;
   name?: string;
 }
 
@@ -239,7 +238,6 @@ interface ExtensionToolRegistration {
   inputSchema: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
-  systemFactory?: string;
 }
 
 export interface ExtensionInstallSummary {
