@@ -252,6 +252,10 @@ export function normalizeConversationContentSearchLimit(value: unknown): number 
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? Math.min(100, value) : 80;
 }
 
+export function normalizeVaultSearchLimit(value: unknown): number {
+  return Number.isSafeInteger(value) && value > 0 ? Math.min(50, value) : 20;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status: async () => {
@@ -268,7 +272,6 @@ export const api = {
     }
     return get<DaemonState>('/daemon');
   },
-  updateDaemonPower: async (input: { keepAwake: boolean }) => patch<DaemonState>('/daemon/power', input),
   extensions: async () => get<ExtensionManifest[]>('/extensions'),
   extensionInstallations: async () => get<ExtensionInstallSummary[]>('/extensions/installed'),
   createExtension: async (input: {

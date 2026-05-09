@@ -5,25 +5,21 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getDaemonStatusMock, loadDaemonConfigMock, pingDaemonMock, resolveDaemonPathsMock, setDaemonPowerKeepAwakeMock } = vi.hoisted(
-  () => ({
-    getDaemonStatusMock: vi.fn(),
-    loadDaemonConfigMock: vi.fn(),
-    pingDaemonMock: vi.fn(),
-    resolveDaemonPathsMock: vi.fn(),
-    setDaemonPowerKeepAwakeMock: vi.fn(),
-  }),
-);
+const { getDaemonStatusMock, loadDaemonConfigMock, pingDaemonMock, resolveDaemonPathsMock } = vi.hoisted(() => ({
+  getDaemonStatusMock: vi.fn(),
+  loadDaemonConfigMock: vi.fn(),
+  pingDaemonMock: vi.fn(),
+  resolveDaemonPathsMock: vi.fn(),
+}));
 
 vi.mock('@personal-agent/daemon', () => ({
   getDaemonStatus: getDaemonStatusMock,
   loadDaemonConfig: loadDaemonConfigMock,
   pingDaemon: pingDaemonMock,
   resolveDaemonPaths: resolveDaemonPathsMock,
-  setDaemonPowerKeepAwake: setDaemonPowerKeepAwakeMock,
 }));
 
-import { readDaemonState, updateDaemonPowerAndReadState } from './daemon.js';
+import { readDaemonState } from './daemon.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -49,7 +45,6 @@ describe('automation daemon', () => {
     loadDaemonConfigMock.mockReset();
     pingDaemonMock.mockReset();
     resolveDaemonPathsMock.mockReset();
-    setDaemonPowerKeepAwakeMock.mockReset();
   });
 
   it('reads healthy daemon state and filters removed sync log lines', async () => {
@@ -110,32 +105,6 @@ describe('automation daemon', () => {
       running: false,
       socketPath: '/tmp/runtime.sock',
       moduleCount: 0,
-    });
-  });
-
-  it('updates daemon power through the running daemon and returns refreshed state', async () => {
-    const dir = createTempDir();
-    const logFile = join(dir, 'personal-agentd.log');
-
-    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
-    resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
-    pingDaemonMock.mockResolvedValue(true);
-    setDaemonPowerKeepAwakeMock.mockResolvedValue({});
-    getDaemonStatusMock.mockResolvedValue({
-      socketPath: '/tmp/runtime.sock',
-      pid: 42,
-      startedAt: '2026-04-10T00:00:00.000Z',
-      modules: [],
-      queue: { currentDepth: 0, maxDepth: 5 },
-      power: { keepAwake: true, supported: true, active: true },
-    });
-
-    await expect(updateDaemonPowerAndReadState({ keepAwake: true })).resolves.toMatchObject({
-      power: { keepAwake: true, supported: true, active: true },
-    });
-    expect(setDaemonPowerKeepAwakeMock).toHaveBeenCalledWith(true, {
-      power: { keepAwake: false },
-      ipc: { socketPath: join(dir, 'daemon.sock') },
     });
   });
 

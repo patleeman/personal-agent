@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "id": "system-caffinate",
+  "name": "Caffinate",
+  "packageType": "system",
+  "description": "Keep the system awake by managing the daemon power state.",
+  "version": "0.1.0",
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      {
+        "id": "readPowerState",
+        "handler": "readPowerState",
+        "title": "Read daemon power state"
+      },
+      {
+        "id": "setPowerKeepAwake",
+        "handler": "setPowerKeepAwake",
+        "title": "Set daemon keep-awake"
+      }
+    ]
+  },
+  "permissions": []
+}

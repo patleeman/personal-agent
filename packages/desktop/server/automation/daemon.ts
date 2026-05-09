@@ -1,6 +1,6 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 
-import { getDaemonStatus, loadDaemonConfig, pingDaemon, resolveDaemonPaths, setDaemonPowerKeepAwake } from '@personal-agent/daemon';
+import { getDaemonStatus, loadDaemonConfig, pingDaemon, resolveDaemonPaths } from '@personal-agent/daemon';
 
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
 
@@ -153,14 +153,4 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
       lines: readTailLines(logPath),
     },
   };
-}
-
-export async function updateDaemonPowerAndReadState(input: { keepAwake: boolean }): Promise<DaemonStateSnapshot> {
-  const config = loadDaemonConfig();
-  if (!(await pingDaemon(config))) {
-    throw new Error('Daemon runtime is not responding on the local socket. Start the daemon and try again.');
-  }
-
-  await setDaemonPowerKeepAwake(input.keepAwake, config);
-  return readDaemonState();
 }
