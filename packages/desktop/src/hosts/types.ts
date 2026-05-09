@@ -503,6 +503,7 @@ export interface HostController {
   destroyLiveSession?(conversationId: string): Promise<{ ok: true }>;
   branchLiveSession?(input: DesktopLiveSessionBranchRequest): Promise<{ newSessionId: string; sessionFile: string }>;
   forkLiveSession?(input: DesktopLiveSessionForkRequest): Promise<{ newSessionId: string; sessionFile: string }>;
+  summarizeAndForkLiveSession?(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt?(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult>;
   submitLiveSessionParallelPrompt?(input: DesktopLiveSessionParallelPromptRequest): Promise<DesktopLiveSessionParallelPromptResult>;
   manageLiveSessionParallelJob?(input: DesktopLiveSessionParallelJobRequest): Promise<DesktopLiveSessionParallelJobResult>;
