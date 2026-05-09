@@ -1,8 +1,7 @@
 import { ipcMain, shell, type WebContents } from 'electron';
 
-import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
+import { subscribeConversationExecutionApiStream } from './conversation-execution.js';
 import type { HostManager } from './hosts/host-manager.js';
-import { subscribeDesktopRemoteOperationStatus } from './remote-operation-events.js';
 import { captureDesktopScreenshot } from './screenshot.js';
 import type { DesktopWindowController } from './window.js';
 
@@ -10,7 +9,6 @@ const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
 const CONVERSATION_STATE_CHANNEL = `${CHANNEL_PREFIX}:conversation-state`;
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
-const REMOTE_OPERATION_CHANNEL = `${CHANNEL_PREFIX}:remote-operation`;
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 
 export function registerDesktopIpc(options: {
@@ -29,7 +27,6 @@ export function registerDesktopIpc(options: {
   const streamSubscriptions = new Map<string, () => void>();
   const conversationStateSubscriptions = new Map<string, () => void>();
   const appEventSubscriptions = new Map<string, () => void>();
-  const remoteOperationSubscriptions = new Map<string, () => void>();
   const providerOAuthSubscriptions = new Map<string, () => void>();
 
   const sendBufferedSubscriptionEvent = <T>(input: {
@@ -103,10 +100,6 @@ export function registerDesktopIpc(options: {
     return options.windowController.getNavigationStateForWebContents(event.sender.id);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:continue-conversation-in-host`, async (_event, input) => {
-    return continueConversationInHost(options.hostManager, input ?? {});
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:save-host`, async (_event, host) => {
     await options.hostManager.saveHost(host);
     options.onHostStateChanged?.();
@@ -118,20 +111,6 @@ export function registerDesktopIpc(options: {
     options.onHostStateChanged?.();
     await options.windowController.openMainWindow('/settings');
     return options.hostManager.getConnectionsState();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-remote-directory`, async (_event, input) => {
-    const hostId = typeof input?.hostId === 'string' ? input.hostId.trim() : '';
-    if (!hostId) {
-      throw new Error('hostId is required.');
-    }
-
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readDirectory) {
-      throw new Error(`Host ${hostId} does not support directory browsing.`);
-    }
-
-    return controller.readDirectory(typeof input?.path === 'string' ? input.path : undefined);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:test-ssh-connection`, async (_event, input) => {
@@ -1088,31 +1067,6 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-app-events`, async (_event, subscriptionId: string) => {
     appEventSubscriptions.get(subscriptionId)?.();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-remote-operations`, async (event) => {
-    const subscriptionId = `${event.sender.id}:remote-operation:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
-    await sendBufferedSubscriptionEvent({
-      sender: event.sender,
-      channel: REMOTE_OPERATION_CHANNEL,
-      subscriptionId,
-      store: remoteOperationSubscriptions,
-      subscribe: async (emit) => {
-        emit({ type: 'open' });
-        const unsubscribe = subscribeDesktopRemoteOperationStatus((status) => {
-          emit({ type: 'event', event: status });
-        });
-        return () => {
-          unsubscribe();
-          emit({ type: 'close' });
-        };
-      },
-    });
-    return { subscriptionId };
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, async (_event, subscriptionId: string) => {
-    remoteOperationSubscriptions.get(subscriptionId)?.();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-provider-oauth-login`, async (event, loginId: string) => {

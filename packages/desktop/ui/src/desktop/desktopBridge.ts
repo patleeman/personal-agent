@@ -19,8 +19,6 @@ import type {
   DesktopEnvironmentState,
   DesktopHostRecord,
   DesktopNavigationState,
-  DesktopRemoteDirectoryListing,
-  DesktopRemoteOperationBridgeEvent,
   DesktopSshConnectionTestResult,
   DisplayBlock,
   DurableRunDetailResult,
@@ -52,7 +50,6 @@ import type {
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 export const DESKTOP_CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversation-state';
 export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
-export const DESKTOP_REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 export const DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
 export const DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT = 'personal-agent-desktop-show-workbench-browser';
@@ -112,15 +109,8 @@ export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
   getConnections(): Promise<DesktopConnectionsState>;
   getNavigationState(): Promise<DesktopNavigationState>;
-  continueConversationInHost(input: { conversationId: string; hostId: string; cwd?: string | null }): Promise<{
-    conversationId: string;
-    remoteHostId?: string;
-    remoteHostLabel?: string;
-    remoteConversationId?: string;
-  }>;
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
-  readRemoteDirectory(input: { hostId: string; path?: string | null }): Promise<DesktopRemoteDirectoryListing>;
   testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult>;
   openNewConversation(): Promise<void>;
   openConversationPopout(input: { conversationId: string }): Promise<void>;
@@ -436,8 +426,6 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeApiStream(subscriptionId: string): Promise<void>;
   subscribeAppEvents(): Promise<{ subscriptionId: string }>;
   unsubscribeAppEvents(subscriptionId: string): Promise<void>;
-  subscribeRemoteOperations(): Promise<{ subscriptionId: string }>;
-  unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
   setWorkbenchBrowserBounds(input: {
@@ -453,11 +441,6 @@ export interface PersonalAgentDesktopBridge {
   reloadWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
   stopWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
   snapshotWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserSnapshot>;
-}
-
-export interface DesktopRemoteOperationEnvelope {
-  subscriptionId: string;
-  event: DesktopRemoteOperationBridgeEvent;
 }
 
 export function getDesktopBridge(): PersonalAgentDesktopBridge | null {

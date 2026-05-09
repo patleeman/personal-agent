@@ -853,19 +853,6 @@ export interface DesktopConnectionsState {
   hosts: Array<Extract<DesktopHostRecord, { kind: 'ssh' }>>;
 }
 
-interface DesktopRemoteDirectoryEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  isHidden: boolean;
-}
-
-export interface DesktopRemoteDirectoryListing {
-  path: string;
-  parent?: string;
-  entries: DesktopRemoteDirectoryEntry[];
-}
-
 export interface DesktopSshConnectionTestResult {
   ok: true;
   sshTarget: string;
@@ -876,34 +863,6 @@ export interface DesktopSshConnectionTestResult {
   tempDirectory: string;
   cacheDirectory: string;
   message: string;
-}
-
-export interface DesktopRemoteOperationStatus {
-  hostId: string;
-  hostLabel: string;
-  conversationId?: string;
-  scope: 'runtime' | 'directory';
-  stage:
-    | 'connect'
-    | 'detect-platform'
-    | 'download-pi'
-    | 'copy-pi'
-    | 'copy-helper'
-    | 'launch'
-    | 'attach'
-    | 'reconnect'
-    | 'restart'
-    | 'browse'
-    | 'ready'
-    | 'error';
-  status: 'running' | 'success' | 'error';
-  message: string;
-  at: string;
-}
-
-export interface DesktopRemoteOperationBridgeEvent {
-  type: 'open' | 'event' | 'close';
-  event?: DesktopRemoteOperationStatus;
 }
 
 type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
@@ -1289,41 +1248,6 @@ interface DependentCliToolState {
   binary: CliBinaryState;
 }
 
-interface McpSkillBundleState {
-  skillName: string;
-  skillPath: string;
-  manifestPath: string;
-  serverNames: string[];
-  overriddenServerNames: string[];
-}
-
-export interface McpServerConfig {
-  name: string;
-  transport: 'stdio' | 'remote';
-  command?: string;
-  args: string[];
-  cwd?: string;
-  url?: string;
-  env?: Record<string, string>;
-  source?: 'config' | 'skill';
-  sourcePath?: string;
-  skillName?: string;
-  skillPath?: string;
-  manifestPath?: string;
-  hasOAuth?: boolean;
-  callbackUrl?: string;
-  authorizeResource?: string;
-  raw: Record<string, unknown>;
-}
-
-interface McpState {
-  configPath: string;
-  configExists: boolean;
-  searchedPaths: string[];
-  servers: McpServerConfig[];
-  bundledSkills: McpSkillBundleState[];
-}
-
 interface ConfiguredPackageSource {
   source: string;
   filtered: boolean;
@@ -1354,7 +1278,6 @@ export interface ToolsState {
   newSessionInjectedMessages: InjectedPromptMessage[];
   newSessionToolDefinitions: AgentToolInfo[];
   dependentCliTools: DependentCliToolState[];
-  mcp: McpState;
   packageInstall: PackageInstallState;
 }
 

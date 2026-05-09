@@ -9,8 +9,6 @@ import { ConversationDraftEmptyAction } from './ConversationDraftEmptyAction';
 
 const baseProps: React.ComponentProps<typeof ConversationDraftEmptyAction> = {
   hasDraftCwd: false,
-  selectedExecutionTargetIsRemote: false,
-  selectedExecutionTargetLabel: 'Local',
   draftCwdValue: '',
   draftCwdError: null,
   draftCwdPickBusy: false,
@@ -25,7 +23,6 @@ const baseProps: React.ComponentProps<typeof ConversationDraftEmptyAction> = {
   relatedThreadSearchError: null,
   maxRelatedThreadSelections: 3,
   relatedThreadHotkeyLimit: 5,
-  onDraftRemoteCwdChange: vi.fn(),
   onClearDraftCwdSelection: vi.fn(),
   onSelectDraftWorkspace: vi.fn(),
   onPickDraftCwd: vi.fn(),
@@ -41,7 +38,7 @@ function renderAction(overrides: Partial<React.ComponentProps<typeof Conversatio
 }
 
 describe('ConversationDraftEmptyAction', () => {
-  it('renders local chat/workspace selection', () => {
+  it('renders chat/workspace selection', () => {
     const html = renderAction();
 
     expect(html).toContain('Chat');
@@ -51,20 +48,14 @@ describe('ConversationDraftEmptyAction', () => {
     expect(html).toContain('Choose workspace folder');
   });
 
-  it('renders remote workspace path selection', () => {
+  it('renders cwd errors without remote controls', () => {
     const html = renderAction({
-      selectedExecutionTargetIsRemote: true,
-      selectedExecutionTargetLabel: 'Remote Host',
       draftCwdValue: '~/repo',
       draftCwdError: 'bad path',
     });
 
-    expect(html).toContain('Remote workspace path');
-    expect(html).toContain('~/repo');
-    expect(html).toContain('Choose directory on Remote Host');
-    expect(html).toContain('Remote path on');
-    expect(html).toContain('Remote Host');
     expect(html).toContain('bad path');
+    expect(html).not.toContain('Remote workspace path');
   });
 
   it('renders related thread panel state', () => {

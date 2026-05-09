@@ -37,7 +37,6 @@ import type {
   DefaultCwdState,
   DeferredResumeSummary,
   DesktopEnvironmentState,
-  DesktopRemoteDirectoryListing,
   DisplayBlock,
   DurableRunDetailResult,
   DurableRunListResult,
@@ -789,14 +788,6 @@ export const api = {
 
     return post<FolderPickerResult>('/folder-picker', request);
   },
-  remoteDirectory: async (hostId: string, path?: string | null) => {
-    const desktopBridge = getDesktopBridge();
-    if (!desktopBridge || !(await shouldUseDesktopLocalCapabilities())) {
-      throw new Error('Remote directory browsing is only available in the desktop app.');
-    }
-
-    return desktopBridge.readRemoteDirectory({ hostId, ...(path !== undefined ? { path } : {}) }) as Promise<DesktopRemoteDirectoryListing>;
-  },
   pickFiles: async (cwd?: string) => post<FilePickerResult>('/file-picker', cwd !== undefined ? { cwd } : {}),
 
   // ── Memory browser ────────────────────────────────────────────────────────
@@ -1182,15 +1173,6 @@ export const api = {
 
     return post<ConversationRecoveryResult>(`/conversations/${encodeURIComponent(id)}/recover`);
   },
-  continueConversationInHost: async (id: string, hostId: string, cwd?: string | null) => {
-    const desktopBridge = getDesktopBridge();
-    if (!desktopBridge || !(await shouldUseDesktopLocalCapabilities())) {
-      throw new Error('Continue in is only available in the desktop app.');
-    }
-
-    return desktopBridge.continueConversationInHost({ conversationId: id, hostId, ...(cwd !== undefined ? { cwd } : {}) });
-  },
-
   createLiveSession: async (
     cwd?: string,
     text?: string,

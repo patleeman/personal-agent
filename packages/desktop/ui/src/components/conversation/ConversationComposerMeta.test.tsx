@@ -7,22 +7,12 @@ import { ConversationComposerMeta } from './ConversationComposerMeta';
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 const baseProps: React.ComponentProps<typeof ConversationComposerMeta> = {
-  showExecutionTargetPicker: true,
-  selectedExecutionTargetId: 'local',
-  executionTargetOptions: [{ value: 'local', label: 'Local' }],
-  continueInBusy: false,
-  onSelectExecutionTarget: vi.fn(),
-  remoteOperationInlineStatus: null,
-  remoteOperationStatusKind: null,
   draft: true,
   hasDraftCwd: false,
-  selectedExecutionTargetIsRemote: false,
-  selectedExecutionTargetLabel: 'Local',
   draftCwdValue: '',
   draftCwdError: null,
   draftCwdPickBusy: false,
   availableDraftWorkspacePaths: ['/repo'],
-  onDraftRemoteCwdChange: vi.fn(),
   onClearDraftCwdSelection: vi.fn(),
   onSelectDraftWorkspace: vi.fn(),
   onPickDraftCwd: vi.fn(),
@@ -44,7 +34,7 @@ const baseProps: React.ComponentProps<typeof ConversationComposerMeta> = {
 };
 
 describe('ConversationComposerMeta', () => {
-  it('renders draft local workspace controls', () => {
+  it('renders draft workspace controls', () => {
     const html = renderToString(<ConversationComposerMeta {...baseProps} />);
 
     expect(html).toContain('Workspace folder');
@@ -53,21 +43,11 @@ describe('ConversationComposerMeta', () => {
     expect(html).toContain('Conversation options');
   });
 
-  it('renders draft remote workspace controls', () => {
-    const html = renderToString(
-      <ConversationComposerMeta
-        {...baseProps}
-        selectedExecutionTargetIsRemote
-        selectedExecutionTargetLabel="Remote"
-        draftCwdValue="~/repo"
-        draftCwdError="bad path"
-      />,
-    );
+  it('renders draft cwd errors', () => {
+    const html = renderToString(<ConversationComposerMeta {...baseProps} draftCwdValue="~/repo" draftCwdError="bad path" />);
 
-    expect(html).toContain('Remote workspace path');
-    expect(html).toContain('~/repo');
-    expect(html).toContain('Choose directory on Remote');
     expect(html).toContain('bad path');
+    expect(html).not.toContain('Remote workspace path');
   });
 
   it('renders saved conversation cwd metadata', () => {
@@ -75,7 +55,6 @@ describe('ConversationComposerMeta', () => {
       <ConversationComposerMeta
         {...baseProps}
         draft={false}
-        showExecutionTargetPicker={false}
         currentCwd="/repo/project"
         currentCwdLabel="project"
         branchLabel="main"

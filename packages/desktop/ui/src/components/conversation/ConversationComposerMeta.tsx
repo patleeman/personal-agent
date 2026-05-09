@@ -7,7 +7,7 @@ import { StatusBarItemHost } from '../../extensions/StatusBarItemHost';
 import { type ExtensionStatusBarItemRegistration, useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { GatewayState } from '../../shared/types';
 import { cx } from '../ui';
-import { BrowsePathButton, ChatBubbleIcon, FolderIcon, RemoteExecutionIcon } from './ConversationComposerChrome';
+import { BrowsePathButton, ChatBubbleIcon, FolderIcon } from './ConversationComposerChrome';
 
 export type ConversationGitSummaryPresentation =
   | { kind: 'none' }
@@ -15,22 +15,12 @@ export type ConversationGitSummaryPresentation =
   | { kind: 'diff'; added: string; deleted: string };
 
 export function ConversationComposerMeta({
-  showExecutionTargetPicker,
-  selectedExecutionTargetId,
-  executionTargetOptions,
-  continueInBusy,
-  onSelectExecutionTarget,
-  remoteOperationInlineStatus,
-  remoteOperationStatusKind,
   draft,
   hasDraftCwd,
-  selectedExecutionTargetIsRemote,
-  selectedExecutionTargetLabel,
   draftCwdValue,
   draftCwdError,
   draftCwdPickBusy,
   availableDraftWorkspacePaths,
-  onDraftRemoteCwdChange,
   onClearDraftCwdSelection,
   onSelectDraftWorkspace,
   onPickDraftCwd,
@@ -53,22 +43,12 @@ export function ConversationComposerMeta({
   conversationTitle,
   openGatewayPickerSignal,
 }: {
-  showExecutionTargetPicker: boolean;
-  selectedExecutionTargetId: string;
-  executionTargetOptions: Array<{ value: string; label: string }>;
-  continueInBusy: boolean;
-  onSelectExecutionTarget: (targetId: string) => void;
-  remoteOperationInlineStatus: string | null;
-  remoteOperationStatusKind: 'error' | 'info' | null;
   draft: boolean;
   hasDraftCwd: boolean;
-  selectedExecutionTargetIsRemote: boolean;
-  selectedExecutionTargetLabel: string;
   draftCwdValue: string;
   draftCwdError: string | null;
   draftCwdPickBusy: boolean;
   availableDraftWorkspacePaths: string[];
-  onDraftRemoteCwdChange: (value: string) => void;
   onClearDraftCwdSelection: () => void;
   onSelectDraftWorkspace: (workspacePath: string) => void;
   onPickDraftCwd: () => void;
@@ -145,87 +125,54 @@ export function ConversationComposerMeta({
   return (
     <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
-        {remoteOperationInlineStatus ? (
-          <span className={cx(remoteOperationStatusKind === 'error' ? 'text-danger/85' : 'text-accent/80')}>
-            {remoteOperationInlineStatus}
-          </span>
-        ) : null}
-
         {draft ? (
           <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 xl:max-w-[26rem] xl:flex-none">
             {hasDraftCwd ? <FolderIcon className="shrink-0 text-dim/70" /> : <ChatBubbleIcon className="shrink-0 text-dim/70" />}
-            {selectedExecutionTargetIsRemote ? (
-              <>
-                <label className="sr-only" htmlFor="draft-composer-remote-cwd">
-                  Remote workspace path
-                </label>
-                <input
-                  id="draft-composer-remote-cwd"
-                  value={draftCwdValue}
-                  onChange={(event) => {
-                    onDraftRemoteCwdChange(event.target.value);
-                  }}
-                  placeholder="~/workingdir/project"
-                  spellCheck={false}
-                  className="h-7 min-w-0 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50 xl:max-w-[22rem]"
-                  aria-label="Remote workspace path"
-                />
-                <BrowsePathButton
-                  busy={draftCwdPickBusy}
-                  onClick={onPickDraftCwd}
-                  title={draftCwdPickBusy ? 'Choosing folder…' : `Choose directory on ${selectedExecutionTargetLabel}`}
-                  ariaLabel={`Choose directory on ${selectedExecutionTargetLabel}`}
-                />
-              </>
-            ) : (
-              <>
-                <label className="sr-only" htmlFor="draft-composer-cwd">
-                  Workspace folder
-                </label>
-                <div className="relative min-w-0 flex-1 xl:max-w-[22rem]">
-                  <select
-                    id="draft-composer-cwd"
-                    value={draftCwdValue}
-                    onChange={(event) => {
-                      const nextWorkspacePath = event.target.value.trim();
-                      if (!nextWorkspacePath) {
-                        onClearDraftCwdSelection();
-                        return;
-                      }
-                      onSelectDraftWorkspace(nextWorkspacePath);
-                    }}
-                    className="h-7 w-full min-w-0 truncate appearance-none rounded-md bg-transparent pl-1 pr-6 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
-                  >
-                    <option value="">Chat</option>
-                    {availableDraftWorkspacePaths.map((workspacePath) => (
-                      <option key={workspacePath} value={workspacePath}>
-                        {workspacePath}
-                      </option>
-                    ))}
-                  </select>
-                  <svg
-                    aria-hidden="true"
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-dim/70"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </div>
-                <BrowsePathButton
-                  busy={draftCwdPickBusy}
-                  onClick={onPickDraftCwd}
-                  title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
-                  ariaLabel="Choose folder"
-                />
-              </>
-            )}
+            <label className="sr-only" htmlFor="draft-composer-cwd">
+              Workspace folder
+            </label>
+            <div className="relative min-w-0 flex-1 xl:max-w-[22rem]">
+              <select
+                id="draft-composer-cwd"
+                value={draftCwdValue}
+                onChange={(event) => {
+                  const nextWorkspacePath = event.target.value.trim();
+                  if (!nextWorkspacePath) {
+                    onClearDraftCwdSelection();
+                    return;
+                  }
+                  onSelectDraftWorkspace(nextWorkspacePath);
+                }}
+                className="h-7 w-full min-w-0 truncate appearance-none rounded-md bg-transparent pl-1 pr-6 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
+              >
+                <option value="">Chat</option>
+                {availableDraftWorkspacePaths.map((workspacePath) => (
+                  <option key={workspacePath} value={workspacePath}>
+                    {workspacePath}
+                  </option>
+                ))}
+              </select>
+              <svg
+                aria-hidden="true"
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-dim/70"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+            <BrowsePathButton
+              busy={draftCwdPickBusy}
+              onClick={onPickDraftCwd}
+              title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
+              ariaLabel="Choose folder"
+            />
           </div>
         ) : conversationCwdEditorOpen ? (
           <form
@@ -316,34 +263,11 @@ export function ConversationComposerMeta({
           </button>
           {moreOpen ? (
             <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-default bg-surface p-2 text-left text-[12px] shadow-2xl">
-              {showExecutionTargetPicker && !gatewayOnlyOpen ? (
-                <label className="block px-2 py-1.5 text-[11px] text-secondary">
-                  Run on
-                  <span className="relative mt-1 flex min-w-0 items-center">
-                    <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
-                    <select
-                      value={selectedExecutionTargetId}
-                      onChange={(event) => {
-                        onSelectExecutionTarget(event.target.value);
-                      }}
-                      disabled={continueInBusy}
-                      aria-label="Execution target"
-                      className="h-8 w-full appearance-none rounded-md border border-border-subtle bg-surface/45 pl-7 pr-7 text-[12px] text-primary outline-none focus:border-accent/50 disabled:opacity-50"
-                    >
-                      {executionTargetOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </span>
-                </label>
-              ) : null}
               {!draft && conversationId ? (
                 <GatewayComposerControl
                   conversationId={conversationId}
                   conversationTitle={conversationTitle}
-                  standalone={gatewayOnlyOpen || !showExecutionTargetPicker}
+                  standalone={gatewayOnlyOpen}
                 />
               ) : null}
             </div>

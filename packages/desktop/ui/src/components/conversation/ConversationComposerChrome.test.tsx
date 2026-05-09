@@ -7,7 +7,6 @@ import {
   ChatBubbleIcon,
   ComposerActionIcon,
   FolderIcon,
-  RemoteExecutionIcon,
   resolveConversationComposerShellStateClassName,
 } from './ConversationComposerChrome';
 
@@ -17,7 +16,6 @@ describe('ConversationComposerChrome', () => {
   it('renders composer chrome icons and path button markup', () => {
     expect(renderToString(<FolderIcon className="folder" />)).toContain('folder');
     expect(renderToString(<ChatBubbleIcon className="chat" />)).toContain('chat');
-    expect(renderToString(<RemoteExecutionIcon className="remote" />)).toContain('remote');
     expect(renderToString(<ComposerActionIcon label="Follow up" className="follow" />)).toContain('follow');
     expect(renderToString(<ComposerActionIcon label="Parallel" />)).toContain('M7 7h10');
 

@@ -11,8 +11,6 @@ export { DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS };
 
 export function ConversationDraftEmptyAction({
   hasDraftCwd,
-  selectedExecutionTargetIsRemote,
-  selectedExecutionTargetLabel,
   draftCwdValue,
   draftCwdError,
   draftCwdPickBusy,
@@ -27,15 +25,12 @@ export function ConversationDraftEmptyAction({
   relatedThreadSearchError,
   maxRelatedThreadSelections,
   relatedThreadHotkeyLimit,
-  onDraftRemoteCwdChange,
   onClearDraftCwdSelection,
   onSelectDraftWorkspace,
   onPickDraftCwd,
   onToggleRelatedThread,
 }: {
   hasDraftCwd: boolean;
-  selectedExecutionTargetIsRemote: boolean;
-  selectedExecutionTargetLabel: string;
   draftCwdValue: string;
   draftCwdError: string | null;
   draftCwdPickBusy: boolean;
@@ -50,7 +45,6 @@ export function ConversationDraftEmptyAction({
   relatedThreadSearchError: string | null;
   maxRelatedThreadSelections: number;
   relatedThreadHotkeyLimit: number;
-  onDraftRemoteCwdChange: (value: string) => void;
   onClearDraftCwdSelection: () => void;
   onSelectDraftWorkspace: (workspacePath: string) => void;
   onPickDraftCwd: () => void;
@@ -63,82 +57,56 @@ export function ConversationDraftEmptyAction({
         <span>{hasDraftCwd ? 'Workspace' : 'Chat'}</span>
       </div>
       <div className="flex w-full flex-wrap items-center justify-start gap-1.5">
-        {selectedExecutionTargetIsRemote ? (
-          <label className="min-w-[16rem] max-w-full flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
-            <span className="sr-only">Remote workspace path</span>
-            <input
-              value={draftCwdValue}
-              onChange={(event) => {
-                onDraftRemoteCwdChange(event.target.value);
-              }}
-              className="h-10 w-full min-w-0 bg-transparent font-mono text-[13px] text-primary outline-none placeholder:text-secondary/70"
-              aria-label="Remote workspace path"
-              placeholder="~/workingdir/project"
-              spellCheck={false}
-            />
-          </label>
-        ) : (
-          <label className="relative min-w-[16rem] max-w-full flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
-            <span className="sr-only">Saved workspace</span>
-            <select
-              value={draftCwdValue}
-              onChange={(event) => {
-                const nextWorkspacePath = event.target.value.trim();
-                if (!nextWorkspacePath) {
-                  onClearDraftCwdSelection();
-                  return;
-                }
+        <label className="relative min-w-[16rem] max-w-full flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
+          <span className="sr-only">Saved workspace</span>
+          <select
+            value={draftCwdValue}
+            onChange={(event) => {
+              const nextWorkspacePath = event.target.value.trim();
+              if (!nextWorkspacePath) {
+                onClearDraftCwdSelection();
+                return;
+              }
 
-                onSelectDraftWorkspace(nextWorkspacePath);
-              }}
-              className={cx(EMPTY_STATE_WORKSPACE_SELECT_CLASS, hasDraftCwd ? 'font-mono text-primary' : 'text-secondary')}
-              aria-label="Saved workspace"
-              title={hasDraftCwd ? draftCwdValue : 'Start as a chat with no attached workspace.'}
-              disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
-            >
-              <option value="">
-                {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0 ? 'Loading workspaces…' : 'Chat — no workspace'}
+              onSelectDraftWorkspace(nextWorkspacePath);
+            }}
+            className={cx(EMPTY_STATE_WORKSPACE_SELECT_CLASS, hasDraftCwd ? 'font-mono text-primary' : 'text-secondary')}
+            aria-label="Saved workspace"
+            title={hasDraftCwd ? draftCwdValue : 'Start as a chat with no attached workspace.'}
+            disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
+          >
+            <option value="">
+              {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0 ? 'Loading workspaces…' : 'Chat — no workspace'}
+            </option>
+            {availableDraftWorkspacePaths.map((workspacePath) => (
+              <option key={workspacePath} value={workspacePath}>
+                {workspacePath}
               </option>
-              {availableDraftWorkspacePaths.map((workspacePath) => (
-                <option key={workspacePath} value={workspacePath}>
-                  {workspacePath}
-                </option>
-              ))}
-            </select>
-            <svg
-              aria-hidden="true"
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </label>
-        )}
+            ))}
+          </select>
+          <svg
+            aria-hidden="true"
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </label>
 
         <BrowsePathButton
           busy={draftCwdPickBusy}
           onClick={onPickDraftCwd}
-          title={
-            draftCwdPickBusy
-              ? 'Choosing workspace…'
-              : selectedExecutionTargetIsRemote
-                ? `Choose directory on ${selectedExecutionTargetLabel}`
-                : 'Choose workspace folder'
-          }
-          ariaLabel={selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
+          title={draftCwdPickBusy ? 'Choosing workspace…' : 'Choose workspace folder'}
+          ariaLabel="Choose workspace folder"
         />
       </div>
-
-      {selectedExecutionTargetIsRemote ? (
-        <p className="text-[11px] text-secondary">Remote path on {selectedExecutionTargetLabel}.</p>
-      ) : null}
 
       {draftCwdError && <p className="text-[11px] text-danger/80">{draftCwdError}</p>}
 

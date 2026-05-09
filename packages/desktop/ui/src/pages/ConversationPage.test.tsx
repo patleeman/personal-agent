@@ -13,7 +13,6 @@ import {
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   replaceConversationMetaInSessionList,
   resolveConversationCwdChangeAction,
-  resolveConversationExecutionOverride,
   resolveConversationPerformanceMode,
   resolveDisplayedConversationPendingStatusLabel,
   shouldAutoDispatchPendingInitialPrompt,
@@ -127,30 +126,6 @@ describe('desktop conversation state fallback', () => {
       { id: 't1', description: 'Create task list', status: 'done' },
       { id: 't2', description: 'Persist task list', status: 'pending' },
     ]);
-  });
-
-  it('preserves partial remote execution identity overrides', () => {
-    expect(
-      resolveConversationExecutionOverride({
-        remoteConversationId: ' remote-1 ',
-      }),
-    ).toEqual({ remoteConversationId: 'remote-1' });
-
-    expect(
-      resolveConversationExecutionOverride({
-        remoteHostId: ' host-1 ',
-        remoteHostLabel: ' Remote Host ',
-      }),
-    ).toEqual({ remoteHostId: 'host-1', remoteHostLabel: 'Remote Host' });
-
-    expect(
-      resolveConversationExecutionOverride({
-        remoteHostId: 'host-1',
-        remoteHostLabel: '   ',
-      }),
-    ).toEqual({ remoteHostId: 'host-1' });
-
-    expect(resolveConversationExecutionOverride({})).toBeNull();
   });
 
   it('syncs active conversation meta back into the session list', () => {

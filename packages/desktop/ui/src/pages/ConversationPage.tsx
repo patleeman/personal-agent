@@ -23,7 +23,6 @@ import { ConversationQueueShelf } from '../components/conversation/ConversationQ
 import { ConversationRunModePanel } from '../components/conversation/ConversationRunModePanel';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
-import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { AppPageEmptyState, cx, EmptyState, LoadingState, PageHeader, Pill } from '../components/ui';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
@@ -212,15 +211,7 @@ import {
   type DesktopWorkbenchBrowserCommentTarget,
   type DesktopWorkbenchBrowserState,
   getDesktopBridge,
-  readDesktopConnections,
 } from '../desktop/desktopBridge';
-import {
-  buildContinueInExecutionTargetOptions,
-  findSelectedExecutionTargetHost,
-  resolveConversationExecutionTargetOptions,
-  resolveSelectedConversationExecutionTargetId,
-} from '../desktop/desktopExecutionTargets';
-import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
 import { ComposerShelfHost } from '../extensions/ComposerShelfHost';
 import { ConversationHeaderHost } from '../extensions/ConversationHeaderHost';
 import { buildExtensionMentionItems } from '../extensions/extensionMentions';
@@ -259,15 +250,11 @@ import type {
   ConversationAutoModeState,
   ConversationContextDocRef,
   DeferredResumeSummary,
-  DesktopConnectionsState,
-  DesktopHostRecord,
-  DesktopRemoteOperationStatus,
   DurableRunRecord,
   LiveSessionContext,
   MemoryData,
   MessageBlock,
   PromptAttachmentRefInput,
-  SessionMeta,
   type TaskState,
 } from '../shared/types';
 import type { ConversationSummaryRecord } from '../shared/types';
@@ -462,23 +449,6 @@ function hasAskUserQuestionAnswers(answers: AskUserQuestionAnswers): boolean {
   return Object.values(answers).some((values) => values.length > 0);
 }
 
-export function resolveConversationExecutionOverride(
-  meta: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null | undefined,
-): Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null {
-  const remoteHostId = meta?.remoteHostId?.trim() || '';
-  const remoteHostLabel = meta?.remoteHostLabel?.trim() || '';
-  const remoteConversationId = meta?.remoteConversationId?.trim() || '';
-  if (!remoteHostId && !remoteConversationId) {
-    return null;
-  }
-
-  return {
-    ...(remoteHostId ? { remoteHostId } : {}),
-    ...(remoteHostLabel ? { remoteHostLabel } : {}),
-    ...(remoteConversationId ? { remoteConversationId } : {}),
-  };
-}
-
 function hasBlockingOverlayOpen(): boolean {
   return typeof document !== 'undefined' && hasBlockingConversationOverlay();
 }
@@ -659,93 +629,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   // ── Live session detection ─────────────────────────────────────────────────
-  const [conversationExecutionOverride, setConversationExecutionOverride] = useState<Pick<
-    SessionMeta,
-    'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'
-  > | null>(null);
-  const [continueInBusy, setContinueInBusy] = useState(false);
-  const [desktopConnectionsState, setDesktopConnectionsState] = useState<DesktopConnectionsState | null>(null);
-  const [continueInOptions, setContinueInOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [draftExecutionTargetId, setDraftExecutionTargetId] = useState('local');
-  const [remoteDirectoryBrowserState, setRemoteDirectoryBrowserState] = useState<null | {
-    kind: 'draft' | 'conversation';
-    initialPath?: string | null;
-  }>(null);
-  const [remoteOperationStatus, setRemoteOperationStatus] = useState<DesktopRemoteOperationStatus | null>(null);
-  const remoteOperationStatusClearTimeoutRef = useRef<number | null>(null);
   const rawSessionSnapshot = useMemo(() => (id ? (sessions?.find((session) => session.id === id) ?? null) : null), [id, sessions]);
-  const sessionSnapshot = useMemo(() => {
-    if (!rawSessionSnapshot) {
-      return null;
-    }
-
-    return conversationExecutionOverride ? { ...rawSessionSnapshot, ...conversationExecutionOverride } : rawSessionSnapshot;
-  }, [conversationExecutionOverride, rawSessionSnapshot]);
-  useEffect(() => {
-    setConversationExecutionOverride(resolveConversationExecutionOverride(rawSessionSnapshot));
-  }, [
-    rawSessionSnapshot?.id,
-    rawSessionSnapshot?.remoteConversationId,
-    rawSessionSnapshot?.remoteHostId,
-    rawSessionSnapshot?.remoteHostLabel,
-  ]);
-
-  useEffect(() => {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      setDesktopConnectionsState(null);
-      setContinueInOptions([]);
-      return;
-    }
-
-    let cancelled = false;
-    void readDesktopConnections()
-      .then((connections) => {
-        if (cancelled || !connections) {
-          return;
-        }
-
-        setDesktopConnectionsState(connections);
-        setContinueInOptions(buildContinueInExecutionTargetOptions(connections));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDesktopConnectionsState(null);
-          setContinueInOptions([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const executionTargetOptions = useMemo(
-    () =>
-      resolveConversationExecutionTargetOptions({
-        continueInOptions,
-        hasDesktopBridge: Boolean(getDesktopBridge()),
-        currentRemoteHostId: sessionSnapshot?.remoteHostId,
-        currentRemoteHostLabel: sessionSnapshot?.remoteHostLabel,
-        currentRemoteConversationId: sessionSnapshot?.remoteConversationId,
-      }),
-    [continueInOptions, sessionSnapshot?.remoteConversationId, sessionSnapshot?.remoteHostId, sessionSnapshot?.remoteHostLabel],
-  );
-  const selectedExecutionTargetId = resolveSelectedConversationExecutionTargetId({
-    draft,
-    draftExecutionTargetId,
-    currentRemoteHostId: sessionSnapshot?.remoteHostId,
-    currentRemoteConversationId: sessionSnapshot?.remoteConversationId,
-  });
-  const selectedExecutionTargetHost = useMemo<Extract<DesktopHostRecord, { kind: 'ssh' }> | null>(
-    () => findSelectedExecutionTargetHost({ selectedTargetId: selectedExecutionTargetId, connections: desktopConnectionsState }),
-    [desktopConnectionsState, selectedExecutionTargetId],
-  );
-  const selectedExecutionTargetLabel =
-    selectedExecutionTargetHost?.label ??
-    executionTargetOptions.find((option) => option.value === selectedExecutionTargetId)?.label ??
-    (selectedExecutionTargetId === 'local' ? 'Local' : selectedExecutionTargetId);
-  const selectedExecutionTargetIsRemote = selectedExecutionTargetId !== 'local';
+  const sessionSnapshot = rawSessionSnapshot;
 
   const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
@@ -1462,122 +1347,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [conversationCwdError, setConversationCwdError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getDesktopBridge()) {
-      return;
-    }
-
-    let cancelled = false;
-    const clearRemoteOperationStatus = (delayMs = 1800) => {
-      if (remoteOperationStatusClearTimeoutRef.current !== null) {
-        window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
-        remoteOperationStatusClearTimeoutRef.current = null;
-      }
-      remoteOperationStatusClearTimeoutRef.current = window.setTimeout(() => {
-        if (!cancelled) {
-          setRemoteOperationStatus(null);
-        }
-        remoteOperationStatusClearTimeoutRef.current = null;
-      }, delayMs);
-    };
-
-    let unsubscribeRemoteOperations: (() => void) | null = null;
-    void subscribeDesktopRemoteOperations({
-      onevent: (event) => {
-        if (event.hostId !== selectedExecutionTargetId || !selectedExecutionTargetIsRemote) {
-          return;
-        }
-        if (event.scope === 'directory' && !remoteDirectoryBrowserState) {
-          return;
-        }
-        if (
-          event.scope === 'runtime' &&
-          !draft &&
-          id &&
-          event.conversationId &&
-          event.conversationId !== id &&
-          !continueInBusy &&
-          !conversationCwdBusy
-        ) {
-          return;
-        }
-
-        if (remoteOperationStatusClearTimeoutRef.current !== null) {
-          window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
-          remoteOperationStatusClearTimeoutRef.current = null;
-        }
-
-        setRemoteOperationStatus(event);
-        if (event.status !== 'running') {
-          clearRemoteOperationStatus();
-        }
-      },
-      onclose: () => {
-        if (remoteOperationStatusClearTimeoutRef.current !== null) {
-          window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
-          remoteOperationStatusClearTimeoutRef.current = null;
-        }
-      },
-    })
-      .then((cleanup) => {
-        if (cancelled) {
-          cleanup();
-          return;
-        }
-        unsubscribeRemoteOperations = cleanup;
-      })
-      .catch(() => {
-        // Ignore best-effort subscription failures in non-desktop test contexts.
-      });
-
-    return () => {
-      cancelled = true;
-      unsubscribeRemoteOperations?.();
-      if (remoteOperationStatusClearTimeoutRef.current !== null) {
-        window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
-        remoteOperationStatusClearTimeoutRef.current = null;
-      }
-    };
-  }, [
-    continueInBusy,
-    conversationCwdBusy,
-    draft,
-    id,
-    remoteDirectoryBrowserState,
-    selectedExecutionTargetId,
-    selectedExecutionTargetIsRemote,
-  ]);
-
-  useEffect(() => {
-    if (selectedExecutionTargetIsRemote) {
-      return;
-    }
-
-    if (remoteOperationStatusClearTimeoutRef.current !== null) {
-      window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
-      remoteOperationStatusClearTimeoutRef.current = null;
-    }
-    setRemoteOperationStatus(null);
-  }, [selectedExecutionTargetIsRemote]);
-
-  const remoteOperationInlineStatus =
-    remoteOperationStatus?.scope === 'directory'
-      ? null
-      : (remoteOperationStatus?.message ??
-        (continueInBusy
-          ? `Preparing ${selectedExecutionTargetLabel}…`
-          : conversationCwdBusy && selectedExecutionTargetIsRemote
-            ? `Switching directory on ${selectedExecutionTargetLabel}…`
-            : null));
-  const remoteDirectoryStatusMessage =
-    remoteOperationStatus?.scope === 'directory'
-      ? remoteOperationStatus.message
-      : remoteDirectoryBrowserState && selectedExecutionTargetHost
-        ? `Connecting to ${selectedExecutionTargetHost.label}…`
-        : null;
-  const remoteDirectoryStatusTone =
-    remoteOperationStatus?.scope === 'directory' && remoteOperationStatus.status === 'error' ? 'danger' : 'accent';
-
-  useEffect(() => {
     if (!draft) {
       setDraftCwdValue('');
       return;
@@ -1770,6 +1539,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
 
   const [liveSessionContext, setLiveSessionContext] = useState<LiveSessionContext | null>(null);
+  const [draftWorkspaceGit, setDraftWorkspaceGit] = useState<{
+    branch: string | null;
+    changeCount: number;
+    linesAdded: number;
+    linesDeleted: number;
+  } | null>(null);
 
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | 'serviceTier' | null>(null);
@@ -1785,52 +1560,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
-
-  const applyDraftExecutionTarget = useCallback(
-    async (conversationId: string, cwd?: string | null) => {
-      const hostId = draftExecutionTargetId.trim();
-      if (!hostId || hostId === 'local') {
-        return null;
-      }
-
-      return api.continueConversationInHost(conversationId, hostId, cwd);
-    },
-    [draftExecutionTargetId],
-  );
-
-  const handleContinueConversationInHost = useCallback(
-    async (hostId: string) => {
-      if (hostId === selectedExecutionTargetId) {
-        return;
-      }
-
-      if (!id) {
-        setDraftExecutionTargetId(hostId);
-        return;
-      }
-
-      if (continueInBusy) {
-        return;
-      }
-
-      setContinueInBusy(true);
-      try {
-        const result = await api.continueConversationInHost(id, hostId);
-        setConversationExecutionOverride(resolveConversationExecutionOverride(result));
-        showNotice(
-          'accent',
-          result.remoteHostId ? `Continuing on ${result.remoteHostLabel ?? result.remoteHostId}.` : 'Continuing locally.',
-          3000,
-        );
-        streamReconnect();
-      } catch (error) {
-        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      } finally {
-        setContinueInBusy(false);
-      }
-    },
-    [continueInBusy, id, selectedExecutionTargetId, showNotice, streamReconnect],
-  );
 
   useEffect(() => {
     if (draft || !id || !initialDraftHydrationState?.enableAutoModeOnLoad) {
@@ -2550,7 +2279,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     },
     [showNotice],
   );
-  const branchLabel = liveSessionContext?.branch ?? null;
+  const branchLabel = draft ? (draftWorkspaceGit?.branch ?? null) : (liveSessionContext?.branch ?? null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -2695,17 +2424,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setConversationCwdDraft(currentCwd ?? '');
     }
   }, [conversationCwdEditorOpen, currentCwd, draft]);
+  useEffect(() => {
+    if (!draft || !draftCwdValue) {
+      setDraftWorkspaceGit(null);
+      return;
+    }
+
+    let cancelled = false;
+    api
+      .workspaceUncommittedDiff(draftCwdValue)
+      .then((result) => {
+        if (!cancelled) {
+          setDraftWorkspaceGit({
+            branch: result.branch,
+            changeCount: result.changeCount,
+            linesAdded: result.linesAdded,
+            linesDeleted: result.linesDeleted,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDraftWorkspaceGit(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, draftCwdValue]);
+
   const gitSummaryPresentation = useMemo(
-    () => resolveConversationGitSummaryPresentation(liveSessionContext?.git ?? null),
-    [liveSessionContext?.git],
+    () => resolveConversationGitSummaryPresentation(draft ? draftWorkspaceGit : (liveSessionContext?.git ?? null)),
+    [draft, draftWorkspaceGit, liveSessionContext?.git],
   );
   const hasGitSummary = gitSummaryPresentation.kind !== 'none';
-  const showExecutionTargetPicker = executionTargetOptions.length > 0;
-  const showComposerMeta =
-    showExecutionTargetPicker ||
-    Boolean(sessionTokens) ||
-    Boolean(draft ? draftCwdValue : currentCwd || conversationCwdEditorOpen || conversationCwdError) ||
-    (!draft && (Boolean(branchLabel) || hasGitSummary));
+  const showComposerMeta = draft
+    ? Boolean(draftCwdValue)
+    : Boolean(sessionTokens) ||
+      Boolean(currentCwd || conversationCwdEditorOpen || conversationCwdError) ||
+      Boolean(branchLabel) ||
+      hasGitSummary;
 
   useEffect(() => {
     const nextSessions = replaceConversationMetaInSessionList(sessions, id, currentSessionMeta);
@@ -3599,11 +3358,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (selectedExecutionTargetIsRemote) {
-      openRemoteDirectoryBrowser('conversation', conversationCwdDraft.trim() || currentCwd || undefined);
-      return;
-    }
-
     setConversationCwdPickBusy(true);
     setConversationCwdError(null);
 
@@ -3623,17 +3377,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setConversationCwdPickBusy(false);
     }
-  }, [
-    conversationCwdBusy,
-    conversationCwdDraft,
-    conversationCwdPickBusy,
-    currentCwd,
-    draft,
-    ensureConversationCanControl,
-    id,
-    openRemoteDirectoryBrowser,
-    selectedExecutionTargetIsRemote,
-  ]);
+  }, [conversationCwdBusy, conversationCwdDraft, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id]);
 
   const beginConversationCwdEdit = useCallback(() => {
     if (draft || !id || conversationCwdBusy) {
@@ -3783,26 +3527,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return id;
       }
 
-      const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
-      const draftRemoteCwd = draftExecutionTarget === 'local' ? undefined : draftCwdValue || null;
-      if (draftExecutionTarget !== 'local' && !draftRemoteCwd) {
-        throw new Error(`Choose a remote directory on ${selectedExecutionTargetLabel} first.`);
-      }
-
-      const created = await api.createLiveSession(
-        draftExecutionTarget === 'local' ? draftCwdValue || undefined : undefined,
-        undefined,
-        createLiveSessionPreferenceInput,
-      );
-      if (draftExecutionTarget === 'local') {
-        primeCreatedConversationOpenCaches(created, {
-          tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-          bootstrapVersionKey: conversationVersionKey,
-          sessionDetailVersion: conversationEventVersion,
-        });
-      } else {
-        await applyDraftExecutionTarget(created.id, draftRemoteCwd);
-      }
+      const created = await api.createLiveSession(draftCwdValue || undefined, undefined, createLiveSessionPreferenceInput);
+      primeCreatedConversationOpenCaches(created, {
+        tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+        bootstrapVersionKey: conversationVersionKey,
+        sessionDetailVersion: conversationEventVersion,
+      });
 
       const newId = created.id;
       if (input.length > 0) {
@@ -4701,47 +4431,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setDraftCwdValue(normalizedCwd);
   }, []);
 
-  function openRemoteDirectoryBrowser(kind: 'draft' | 'conversation', initialPath?: string | null) {
-    if (!selectedExecutionTargetHost) {
-      const message = 'Choose an SSH remote first.';
-      if (kind === 'draft') {
-        setDraftCwdError(message);
-      } else {
-        setConversationCwdError(message);
-      }
-      return;
-    }
-
-    setRemoteDirectoryBrowserState({ kind, initialPath });
-  }
-
-  function handleRemoteDirectorySelected(path: string) {
-    if (remoteDirectoryBrowserState?.kind === 'draft') {
-      const nextWorkspacePaths = syncSavedWorkspacePaths([...savedWorkspacePaths, path]);
-      void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
-        // Ignore best-effort sync failures.
-      });
-      setDraftConversationCwd(path);
-      setDraftCwdError(null);
-    } else {
-      setConversationCwdDraft(path);
-      setConversationCwdEditorOpen(true);
-      setConversationCwdError(null);
-    }
-
-    setRemoteDirectoryBrowserState(null);
-    if (remoteOperationStatus?.scope === 'directory') {
-      setRemoteOperationStatus(null);
-    }
-  }
-
   const pickDraftConversationCwd = useCallback(async () => {
     if (!draft || draftCwdPickBusy) {
-      return;
-    }
-
-    if (selectedExecutionTargetIsRemote) {
-      openRemoteDirectoryBrowser('draft', draftCwdValue || undefined);
       return;
     }
 
@@ -4766,16 +4457,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setDraftCwdPickBusy(false);
     }
-  }, [
-    draft,
-    draftCwdPickBusy,
-    draftCwdValue,
-    openRemoteDirectoryBrowser,
-    savedWorkspacePaths,
-    selectedExecutionTargetIsRemote,
-    setDraftConversationCwd,
-    syncSavedWorkspacePaths,
-  ]);
+  }, [draft, draftCwdPickBusy, draftCwdValue, savedWorkspacePaths, setDraftConversationCwd, syncSavedWorkspacePaths]);
 
   const selectDraftConversationWorkspace = useCallback(
     (workspacePath: string) => {
@@ -5118,21 +4800,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       let conversationId = id ?? null;
 
       if (!conversationId) {
-        const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
-        const draftRemoteCwd = draftExecutionTarget === 'local' ? undefined : draftCwdValue || null;
-        if (draftExecutionTarget !== 'local' && !draftRemoteCwd) {
-          throw new Error(`Choose a remote directory on ${selectedExecutionTargetLabel} first.`);
-        }
-
-        const created = await api.createLiveSession(
-          draftExecutionTarget === 'local' ? draftCwdValue || undefined : undefined,
-          undefined,
-          createLiveSessionPreferenceInput,
-        );
+        const created = await api.createLiveSession(draftCwdValue || undefined, undefined, createLiveSessionPreferenceInput);
         conversationId = created.id;
-        if (draftExecutionTarget !== 'local') {
-          await applyDraftExecutionTarget(created.id, draftRemoteCwd);
-        }
       } else {
         conversationId = await ensureConversationIsLive('run bash commands');
       }
@@ -5279,16 +4948,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       const requestedBehavior = behavior ?? (isLiveSession ? defaultComposerBehavior : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, allowQueuedPrompts);
-      const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
-      const draftRemoteCwd = draftExecutionTarget === 'local' ? undefined : draftCwdValue || null;
-      if (!id && !visibleSessionDetail && draftExecutionTarget !== 'local' && !draftRemoteCwd) {
-        showNotice('danger', `Choose a remote directory on ${selectedExecutionTargetLabel} first.`, 4000);
-        setInput(inputSnapshot);
-        setAttachments(pendingImageAttachments);
-        setDrawingAttachments(pendingDrawingAttachments);
-        setPendingBrowserComments(pendingBrowserCommentsSnapshot);
-        return;
-      }
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -5325,21 +4984,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setPendingAssistantStatusLabel('Creating conversation…');
 
           try {
-            const created = await api.createLiveSession(
-              draftExecutionTarget === 'local' ? draftCwdValue || undefined : undefined,
-              undefined,
-              createLiveSessionPreferenceInput,
-            );
+            const created = await api.createLiveSession(draftCwdValue || undefined, undefined, createLiveSessionPreferenceInput);
             createdSessionId = created.id;
-            if (draftExecutionTarget === 'local') {
-              primeCreatedConversationOpenCaches(created, {
-                tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-                bootstrapVersionKey: conversationVersionKey,
-                sessionDetailVersion: conversationEventVersion,
-              });
-            } else {
-              await applyDraftExecutionTarget(created.id, draftRemoteCwd);
-            }
+            primeCreatedConversationOpenCaches(created, {
+              tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+              bootstrapVersionKey: conversationVersionKey,
+              sessionDetailVersion: conversationEventVersion,
+            });
 
             const attachmentRefs = await persistPromptDrawings(created.id);
             await persistPromptContextDocs(created.id);
@@ -5436,21 +5087,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         let createdSessionId: string | null = null;
         let navigatedToCreatedConversation = false;
         try {
-          const created = await api.createLiveSession(
-            draftExecutionTarget === 'local' ? draftCwdValue || undefined : undefined,
-            undefined,
-            createLiveSessionPreferenceInput,
-          );
+          const created = await api.createLiveSession(draftCwdValue || undefined, undefined, createLiveSessionPreferenceInput);
           createdSessionId = created.id;
-          if (draftExecutionTarget === 'local') {
-            primeCreatedConversationOpenCaches(created, {
-              tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-              bootstrapVersionKey: conversationVersionKey,
-              sessionDetailVersion: conversationEventVersion,
-            });
-          } else {
-            await applyDraftExecutionTarget(created.id, draftRemoteCwd);
-          }
+          primeCreatedConversationOpenCaches(created, {
+            tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+            bootstrapVersionKey: conversationVersionKey,
+            sessionDetailVersion: conversationEventVersion,
+          });
           const newId = created.id;
           const attachmentRefs = await persistPromptDrawings(newId);
           await persistPromptContextDocs(newId);
@@ -6321,8 +5964,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 draft ? (
                   <ConversationDraftEmptyAction
                     hasDraftCwd={hasDraftCwd}
-                    selectedExecutionTargetIsRemote={selectedExecutionTargetIsRemote}
-                    selectedExecutionTargetLabel={selectedExecutionTargetLabel}
                     draftCwdValue={draftCwdValue}
                     draftCwdError={draftCwdError}
                     draftCwdPickBusy={draftCwdPickBusy}
@@ -6337,12 +5978,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     relatedThreadSearchError={relatedThreadSearchError}
                     maxRelatedThreadSelections={MAX_RELATED_THREAD_SELECTIONS}
                     relatedThreadHotkeyLimit={MAX_RELATED_THREAD_HOTKEYS}
-                    onDraftRemoteCwdChange={(value) => {
-                      setDraftConversationCwd(value);
-                      if (draftCwdError) {
-                        setDraftCwdError(null);
-                      }
-                    }}
                     onClearDraftCwdSelection={clearDraftConversationCwdSelection}
                     onSelectDraftWorkspace={selectDraftConversationWorkspace}
                     onPickDraftCwd={() => {
@@ -6809,31 +6444,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             {showComposerMeta ? (
               <ConversationComposerMeta
-                showExecutionTargetPicker={showExecutionTargetPicker}
-                selectedExecutionTargetId={selectedExecutionTargetId}
-                executionTargetOptions={executionTargetOptions}
-                continueInBusy={continueInBusy}
-                onSelectExecutionTarget={(targetId) => {
-                  void handleContinueConversationInHost(targetId);
-                }}
-                remoteOperationInlineStatus={remoteOperationInlineStatus}
-                remoteOperationStatusKind={
-                  remoteOperationStatus?.status === 'error' ? 'error' : remoteOperationInlineStatus ? 'info' : null
-                }
                 draft={draft}
                 hasDraftCwd={hasDraftCwd}
-                selectedExecutionTargetIsRemote={selectedExecutionTargetIsRemote}
-                selectedExecutionTargetLabel={selectedExecutionTargetLabel}
                 draftCwdValue={draftCwdValue}
                 draftCwdError={draftCwdError}
                 draftCwdPickBusy={draftCwdPickBusy}
                 availableDraftWorkspacePaths={availableDraftWorkspacePaths}
-                onDraftRemoteCwdChange={(value) => {
-                  setDraftConversationCwd(value);
-                  if (draftCwdError) {
-                    setDraftCwdError(null);
-                  }
-                }}
                 onClearDraftCwdSelection={clearDraftConversationCwdSelection}
                 onSelectDraftWorkspace={selectDraftConversationWorkspace}
                 onPickDraftCwd={() => {
@@ -6871,24 +6487,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
         </div>
       )}
-
-      {remoteDirectoryBrowserState && selectedExecutionTargetHost ? (
-        <RemoteDirectoryBrowserModal
-          hostId={selectedExecutionTargetHost.id}
-          hostLabel={selectedExecutionTargetHost.label}
-          initialPath={remoteDirectoryBrowserState.initialPath}
-          title={remoteDirectoryBrowserState.kind === 'draft' ? 'Choose remote workspace' : 'Choose remote working directory'}
-          statusMessage={remoteDirectoryStatusMessage}
-          statusTone={remoteDirectoryStatusTone}
-          onSelect={handleRemoteDirectorySelected}
-          onClose={() => {
-            setRemoteDirectoryBrowserState(null);
-            if (remoteOperationStatus?.scope === 'directory') {
-              setRemoteOperationStatus(null);
-            }
-          }}
-        />
-      ) : null}
 
       {selectedArtifactId && id && !artifactOpensInWorkbenchPane && (
         <Suspense fallback={null}>
