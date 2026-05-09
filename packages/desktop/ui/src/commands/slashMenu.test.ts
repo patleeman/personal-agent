@@ -79,14 +79,6 @@ describe('buildSlashMenuItems', () => {
     expect(items.some((item) => item.displayCmd === '/skill:project-planning')).toBe(true);
   });
 
-  it('includes drawing slash commands in the command menu', () => {
-    const drawItems = buildSlashMenuItems('/draw', SKILLS);
-    expect(drawItems.some((item) => item.displayCmd === '/draw')).toBe(true);
-
-    const drawingsItems = buildSlashMenuItems('/drawings', SKILLS);
-    expect(drawingsItems.some((item) => item.displayCmd === '/drawings')).toBe(true);
-  });
-
   it('includes the deferred resume slash command in the command menu', () => {
     const items = buildSlashMenuItems('/res', SKILLS);
     expect(items.some((item) => item.displayCmd === '/resume')).toBe(true);

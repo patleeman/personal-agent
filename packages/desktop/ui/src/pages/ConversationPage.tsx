@@ -4121,19 +4121,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }
 
-  async function openDrawingEditor() {
-    const result = await createNativeExtensionClient(EXCALIDRAW_INPUT_EXTENSION_ID).ui.openModal({
-      component: 'ExcalidrawEditorModal',
-      props: { saveLabel: 'Save drawing' },
-      size: 'fullscreen',
-    });
-
-    if (result && typeof result === 'object') {
-      upsertDrawingAttachment(result as ExcalidrawEditorSavePayload);
-      showNotice('accent', 'Drawing saved to composer.');
-    }
-  }
-
   async function editDrawing(localId: string) {
     const drawing = drawingAttachments.find((attachment) => attachment.localId === localId);
     if (!drawing) return;
@@ -4642,18 +4629,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       case 'copy':
         setInput('');
         await copyLastAgentMessage();
-        return { kind: 'handled' };
-      case 'draw':
-        setInput('');
-        await openDrawingEditor();
-        return { kind: 'handled' };
-      case 'drawings':
-        setInput('');
-        if (!id) {
-          showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
-        } else {
-          setDrawingsPickerOpen(true);
-        }
         return { kind: 'handled' };
       case 'export': {
         if (draft) {

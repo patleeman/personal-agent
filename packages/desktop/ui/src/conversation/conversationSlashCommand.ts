@@ -4,8 +4,6 @@ export type ConversationSlashCommand =
   | { action: 'clear' }
   | { action: 'compact'; customInstructions?: string }
   | { action: 'copy' }
-  | { action: 'draw' }
-  | { action: 'drawings' }
   | { action: 'export'; outputPath?: string }
   | { action: 'fork' }
   | { action: 'image' }
@@ -49,10 +47,6 @@ export function parseConversationSlashCommand(input: string): ConversationSlashP
       };
     case '/copy':
       return parseNoArgCommand('copy', argument, 'Usage: /copy');
-    case '/draw':
-      return parseNoArgCommand('draw', argument, 'Usage: /draw');
-    case '/drawings':
-      return parseNoArgCommand('drawings', argument, 'Usage: /drawings');
     case '/export':
       return {
         kind: 'command',

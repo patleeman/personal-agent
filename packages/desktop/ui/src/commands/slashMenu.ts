@@ -33,8 +33,6 @@ const BASE_SLASH_COMMANDS = [
   { cmd: '/compact', icon: '≡', desc: 'Manually compact the session context' },
   { cmd: '/reload', icon: '↻', desc: 'Reload extensions, skills, prompts, and themes' },
   { cmd: '/page', icon: '◫', desc: 'Create or reference a page for this conversation' },
-  { cmd: '/draw', icon: '✎', desc: 'Create an Excalidraw drawing attachment' },
-  { cmd: '/drawings', icon: '☰', desc: 'Attach an existing saved drawing' },
   { cmd: '/resume', icon: '⏰', desc: 'Schedule this conversation to continue later' },
 ] as const;
 
