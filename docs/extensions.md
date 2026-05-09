@@ -100,7 +100,15 @@ The manifest declares what your extension contributes:
 | `transcriptRenderers` | Custom tool result rendering  |                        |
 | `promptReferences`    | @-mention resolvers           |                        |
 | `quickOpen`           | Quick-open providers          |                        |
-| `settings`            | Settings schema contributions | [See below](#settings) |
+| `settings`                     | Settings schema contributions          | [See below](#settings) |
+| `topBarElements`               | Top bar indicator icons                | [See below](#top-bar-elements-topbarelements) |
+| `conversationHeaderElements`   | Badges in conversation header          | [See below](#conversation-header-elements-conversationheaderelements) |
+| `messageActions`               | Hover buttons on messages              | [See below](#message-actions-messageactions) |
+| `composerShelves`              | Sections above the composer            | [See below](#composer-shelves-composershelves) |
+| `toolbarActions`               | Icon buttons in composer toolbar       | [See below](#toolbar-actions-toolbaractions) |
+| `conversationDecorators`       | Badges on conversation list items      | [See below](#conversation-decorators-conversationdecorators) |
+| `contextMenus`                 | Right-click menu items                 | [See below](#context-menus-contextmenus) |
+| `statusBarItems`               | Labels in the composer status bar      | [See below](#status-bar-items-statusbaritems) |
 
 ### Views
 
@@ -374,7 +382,8 @@ The `pa` client provides:
 
 - `pa.extension.invoke(actionId, input)` — call backend actions
 - `pa.ui.toast(message, type)` — show toast notification
-- `pa.ui.confirm(options)` — show confirmation dialog
+- `pa.ui.confirm(options)` — show confirmation dialog (`{ title?, message }`)
+- `pa.ui.openModal(options)` — open a custom modal dialog (`{ title?, component, props? }`). The `component` must be a named export from your extension's frontend entry. It receives `{ pa, props, close }`. Returns a promise that resolves when the modal is closed.
 - `pa.storage.*` — read/write extension state
 - `pa.workspace.*` — workspace file operations
 - `pa.browser.*` — browser control
