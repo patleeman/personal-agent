@@ -273,7 +273,7 @@ export interface ExtensionSettingsRegistration {
   order: number;
 }
 
-export interface ExtensionSettingsPanelRegistration {
+export interface ExtensionSettingsComponentRegistration {
   extensionId: string;
   id: string;
   packageType: ExtensionManifest['packageType'];
@@ -912,16 +912,18 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
-  if (contributes.settingsPanels !== undefined) {
-    for (const [index, panel] of assertRecordArray(contributes.settingsPanels, 'contributes.settingsPanels').entries()) {
-      requireString(panel.id, `contributes.settingsPanels[${index}].id`);
-      requireString(panel.component, `contributes.settingsPanels[${index}].component`);
-      requireString(panel.sectionId, `contributes.settingsPanels[${index}].sectionId`);
-      requireString(panel.label, `contributes.settingsPanels[${index}].label`);
-      validateOptionalString(panel.description, `contributes.settingsPanels[${index}].description`);
-      if (panel.order !== undefined && (typeof panel.order !== 'number' || !Number.isInteger(panel.order))) {
-        throw new Error(`Extension manifest contributes.settingsPanels[${index}].order must be an integer.`);
-      }
+  if (contributes.settingsComponent !== undefined) {
+    if (!isRecord(contributes.settingsComponent)) {
+      throw new Error('Extension manifest contributes.settingsComponent must be an object.');
+    }
+    const panel = contributes.settingsComponent as Record<string, unknown>;
+    requireString(panel.id, 'contributes.settingsComponent.id');
+    requireString(panel.component, 'contributes.settingsComponent.component');
+    requireString(panel.sectionId, 'contributes.settingsComponent.sectionId');
+    requireString(panel.label, 'contributes.settingsComponent.label');
+    validateOptionalString(panel.description, 'contributes.settingsComponent.description');
+    if (panel.order !== undefined && (typeof panel.order !== 'number' || !Number.isInteger(panel.order))) {
+      throw new Error('Extension manifest contributes.settingsComponent.order must be an integer.');
     }
   }
 
@@ -1148,7 +1150,7 @@ export function readExtensionSchema() {
       'slashCommands',
       'mentions',
       'settings',
-      'settingsPanels',
+      'settingsComponent',
       'skills',
       'tools',
       'promptReferences',
@@ -1556,31 +1558,29 @@ export function listExtensionSettingsRegistrations(stateRoot: string = getStateR
   return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionSettingsRegistrations);
 }
 
-export function listExtensionSettingsPanelRegistrations(stateRoot: string = getStateRoot()): ExtensionSettingsPanelRegistration[] {
-  return listEnabledExtensionEntries(stateRoot)
-    .flatMap((entry) =>
-      (entry.manifest.contributes?.settingsPanels ?? []).flatMap((panel): ExtensionSettingsPanelRegistration[] => {
-        const id = panel.id.trim();
-        const component = panel.component.trim();
-        const sectionId = panel.sectionId.trim();
-        const label = panel.label.trim();
-        if (!id || !component || !sectionId || !label) return [];
-        return [
-          {
-            extensionId: entry.manifest.id,
-            id,
-            packageType: entry.manifest.packageType ?? 'user',
-            component,
-            sectionId,
-            label,
-            ...(panel.description ? { description: panel.description } : {}),
-            ...(typeof panel.order === 'number' ? { order: panel.order } : {}),
-            frontendEntry: entry.manifest.frontend?.entry,
-          },
-        ];
-      }),
-    )
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+export function listExtensionSettingsComponentRegistrations(stateRoot: string = getStateRoot()): ExtensionSettingsComponentRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry): ExtensionSettingsComponentRegistration[] => {
+    const panel = entry.manifest.contributes?.settingsComponent;
+    if (!panel) return [];
+    const id = panel.id.trim();
+    const component = panel.component.trim();
+    const sectionId = panel.sectionId.trim();
+    const label = panel.label.trim();
+    if (!id || !component || !sectionId || !label) return [];
+    return [
+      {
+        extensionId: entry.manifest.id,
+        id,
+        packageType: entry.manifest.packageType ?? 'user',
+        component,
+        sectionId,
+        label,
+        ...(panel.description ? { description: panel.description } : {}),
+        ...(typeof panel.order === 'number' ? { order: panel.order } : {}),
+        frontendEntry: entry.manifest.frontend?.entry,
+      },
+    ];
+  });
 }
 
 export function findExtensionEntry(extensionId: string): ExtensionRegistryEntry | null {

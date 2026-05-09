@@ -37,4 +37,4 @@ export type { UnifiedSettingsEntry } from '../shared/types';
 export { type ColorTheme, type ThemePreference, useTheme } from '../ui-state/theme';
 export { SettingsPanelHost } from './SettingsPanelHost';
 export type { ExtensionKeybindingRegistration } from './types';
-export { type ExtensionSettingsPanelRegistration, useExtensionRegistry } from './useExtensionRegistry';
+export { type ExtensionSettingsComponentRegistration, useExtensionRegistry } from './useExtensionRegistry';

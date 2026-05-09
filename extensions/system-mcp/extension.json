@@ -15,16 +15,14 @@
     "actions": [{ "id": "inspectSettings", "handler": "inspectMcpSettings", "title": "Inspect MCP settings" }]
   },
   "contributes": {
-    "settingsPanels": [
-      {
-        "id": "mcp-tools",
-        "component": "McpSettingsPanel",
-        "sectionId": "settings-tools",
-        "label": "Tools",
-        "description": "MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration.",
-        "order": 40
-      }
-    ]
+    "settingsComponent": {
+      "id": "mcp-tools",
+      "component": "McpSettingsPanel",
+      "sectionId": "settings-tools",
+      "label": "Tools",
+      "description": "MCP wrapper config for skills, explicit tool servers, and runtime tool orchestration.",
+      "order": 40
+    }
   },
   "permissions": ["mcp:read", "mcp:write"]
 }

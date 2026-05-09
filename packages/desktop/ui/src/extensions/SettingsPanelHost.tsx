@@ -5,7 +5,7 @@ import { LoadingState } from '../components/ui';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
-import type { ExtensionSettingsPanelRegistration } from './useExtensionRegistry';
+import type { ExtensionSettingsComponentRegistration } from './useExtensionRegistry';
 
 interface ExtensionSettingsPanelContext {
   sectionId: string;
@@ -16,7 +16,7 @@ type ExtensionSettingsPanelComponent = ComponentType<{
   settingsContext: ExtensionSettingsPanelContext;
 }>;
 
-function loadPanelModule(registration: ExtensionSettingsPanelRegistration, revision: number): Promise<Record<string, unknown>> {
+function loadPanelModule(registration: ExtensionSettingsComponentRegistration, revision: number): Promise<Record<string, unknown>> {
   const systemLoader = systemExtensionModules.get(registration.extensionId);
   if (systemLoader) return systemLoader();
   const entry = registration.frontendEntry;
@@ -27,7 +27,7 @@ function loadPanelModule(registration: ExtensionSettingsPanelRegistration, revis
   return import(/* @vite-ignore */ source) as Promise<Record<string, unknown>>;
 }
 
-export function SettingsPanelHost({ registration }: { registration: ExtensionSettingsPanelRegistration }) {
+export function SettingsPanelHost({ registration }: { registration: ExtensionSettingsComponentRegistration }) {
   const moduleKey = `${registration.extensionId}:${registration.frontendEntry ?? ''}:${getExtensionRegistryRevision()}`;
   const pa = useMemo(() => createNativeExtensionClient(registration.extensionId), [registration.extensionId]);
   const Component = useMemo(

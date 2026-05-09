@@ -1880,7 +1880,7 @@ function ExtensionSettingsSection() {
 }
 
 export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
-  const { settingsPanels } = useExtensionRegistry();
+  const { settingsComponent } = useExtensionRegistry();
   const { theme, themePreference, lightTheme, darkTheme, availableThemes, setThemePreference, setLightTheme, setDarkTheme } = useTheme();
   const {
     data: skillFoldersState,
@@ -1953,14 +1953,14 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
 
   const visibleSectionIds = useMemo(() => (sectionIds ? new Set(sectionIds) : null), [sectionIds]);
   const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(() => {
-    const extensionSectionIds = new Set(settingsPanels.map((panel) => panel.sectionId));
+    const extensionSectionIds = settingsComponent ? new Set([settingsComponent.sectionId]) : new Set();
     const shellFiltered =
       desktopEnvironment?.isElectron || isDesktopShell()
         ? SETTINGS_QUICK_LINKS
         : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard');
     const extensionFiltered = shellFiltered.filter((item) => item.id !== 'settings-dictation' || extensionSectionIds.has(item.id));
     return visibleSectionIds ? extensionFiltered.filter((item) => visibleSectionIds.has(item.id)) : extensionFiltered;
-  }, [desktopEnvironment?.isElectron, settingsPanels, visibleSectionIds]);
+  }, [desktopEnvironment?.isElectron, settingsComponent, visibleSectionIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3497,16 +3497,16 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               </div>
             </SettingsSection>
 
-            {settingsPanels.map((panel) => (
+            {settingsComponent ? (
               <SettingsSection
-                key={`${panel.extensionId}:${panel.id}`}
-                id={panel.sectionId as SettingsQuickLinkId}
-                label={panel.label}
-                description={panel.description}
+                key={`${settingsComponent.extensionId}:${settingsComponent.id}`}
+                id={settingsComponent.sectionId as SettingsQuickLinkId}
+                label={settingsComponent.label}
+                description={settingsComponent.description}
               >
-                <SettingsPanelHost registration={panel} />
+                <SettingsPanelHost registration={settingsComponent} />
               </SettingsSection>
-            ))}
+            ) : null}
 
             <SettingsSection
               id="settings-providers"

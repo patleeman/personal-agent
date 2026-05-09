@@ -28,16 +28,14 @@
         "priority": 100
       }
     ],
-    "settingsPanels": [
-      {
-        "id": "dictation",
-        "component": "DictationSettingsPanel",
-        "sectionId": "settings-dictation",
-        "label": "Dictation",
-        "description": "Choose the transcription backend used by the composer mic button. No automatic fallback is applied.",
-        "order": 30
-      }
-    ]
+    "settingsComponent": {
+      "id": "dictation",
+      "component": "DictationSettingsPanel",
+      "sectionId": "settings-dictation",
+      "label": "Dictation",
+      "description": "Choose the transcription backend used by the composer mic button. No automatic fallback is applied.",
+      "order": 30
+    }
   },
   "permissions": ["settings:read", "settings:write"]
 }

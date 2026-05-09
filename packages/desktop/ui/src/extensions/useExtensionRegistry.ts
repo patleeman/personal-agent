@@ -89,7 +89,7 @@ export interface ExtensionComposerShelfRegistration {
   frontendEntry?: string;
 }
 
-export interface ExtensionSettingsPanelRegistration {
+export interface ExtensionSettingsComponentRegistration {
   extensionId: string;
   id: string;
   component: string;
@@ -116,7 +116,7 @@ export interface ExtensionRegistryState {
   topBarElements: ExtensionTopBarElementRegistration[];
   messageActions: ExtensionMessageActionRegistration[];
   composerShelves: ExtensionComposerShelfRegistration[];
-  settingsPanels: ExtensionSettingsPanelRegistration[];
+  settingsComponent: ExtensionSettingsComponentRegistration | null;
   composerButtons: ExtensionComposerButtonRegistration[];
   composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
@@ -185,26 +185,22 @@ function normalizeComposerShelves(extensions: ExtensionManifest[]): ExtensionCom
   return result;
 }
 
-function normalizeSettingsPanels(extensions: ExtensionManifest[]): ExtensionSettingsPanelRegistration[] {
-  const result: ExtensionSettingsPanelRegistration[] = [];
+function normalizeSettingsComponent(extensions: ExtensionManifest[]): ExtensionSettingsComponentRegistration | null {
   for (const extension of extensions) {
-    const panels = extension.contributes?.settingsPanels;
-    if (!panels?.length) continue;
-    for (const panel of panels) {
-      result.push({
-        extensionId: extension.id,
-        id: panel.id,
-        component: panel.component,
-        sectionId: panel.sectionId,
-        label: panel.label,
-        ...(panel.description ? { description: panel.description } : {}),
-        ...(typeof panel.order === 'number' ? { order: panel.order } : {}),
-        frontendEntry: extension.frontend?.entry,
-      });
-    }
+    const panel = extension.contributes?.settingsComponent;
+    if (!panel) continue;
+    return {
+      extensionId: extension.id,
+      id: panel.id,
+      component: panel.component,
+      sectionId: panel.sectionId,
+      label: panel.label,
+      ...(panel.description ? { description: panel.description } : {}),
+      ...(typeof panel.order === 'number' ? { order: panel.order } : {}),
+      frontendEntry: extension.frontend?.entry,
+    };
   }
-  result.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  return result;
+  return null;
 }
 
 function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionComposerButtonRegistration[] {
@@ -358,7 +354,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     topBarElements: [],
     messageActions: [],
     composerShelves: [],
-    settingsPanels: [],
+    settingsComponent: null,
     composerButtons: [],
     composerInputTools: [],
     toolbarActions: [],
@@ -389,7 +385,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           topBarElements: [],
           messageActions: [],
           composerShelves: [],
-          settingsPanels: [],
+          settingsComponent: null,
           composerButtons: [],
           composerInputTools: [],
           toolbarActions: [],
@@ -413,7 +409,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: normalizeTopBarElements(extensions),
             messageActions: normalizeMessageActions(extensions),
             composerShelves: normalizeComposerShelves(extensions),
-            settingsPanels: normalizeSettingsPanels(extensions),
+            settingsComponent: normalizeSettingsComponent(extensions),
             composerButtons: normalizeComposerButtons(extensions),
             composerInputTools: normalizeComposerInputTools(extensions),
             toolbarActions: normalizeToolbarActions(extensions),
@@ -434,7 +430,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: [],
             messageActions: [],
             composerShelves: [],
-            settingsPanels: [],
+            settingsComponent: null,
             composerButtons: [],
             composerInputTools: [],
             toolbarActions: [],

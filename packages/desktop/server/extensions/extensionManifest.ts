@@ -100,7 +100,7 @@ export interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
-  settingsPanels?: ExtensionSettingsPanelContribution[];
+  settingsComponent?: ExtensionSettingsComponentContribution;
 }
 
 export interface ExtensionTopBarElementContribution {
@@ -183,7 +183,7 @@ export interface ExtensionSettingsContribution {
   order?: number;
 }
 
-export interface ExtensionSettingsPanelContribution {
+export interface ExtensionSettingsComponentContribution {
   id: string;
   component: string;
   sectionId: string;

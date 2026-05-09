@@ -201,7 +201,7 @@ interface ExtensionConversationDecoratorContribution {
   priority?: number;
 }
 
-interface ExtensionSettingsPanelContribution {
+interface ExtensionSettingsComponentContribution {
   id: string;
   component: string;
   sectionId: string;
@@ -234,7 +234,7 @@ interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
-  settingsPanels?: ExtensionSettingsPanelContribution[];
+  settingsComponent?: ExtensionSettingsComponentContribution;
 }
 
 interface ExtensionThemeContribution {

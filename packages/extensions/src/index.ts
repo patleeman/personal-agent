@@ -299,7 +299,7 @@ export interface ExtensionConversationDecoratorContribution {
   priority?: number;
 }
 
-export interface ExtensionSettingsPanelContribution {
+export interface ExtensionSettingsComponentContribution {
   id: string;
   component: string;
   /** Settings page section id, e.g. "settings-dictation". */
@@ -334,7 +334,7 @@ export interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
-  settingsPanels?: ExtensionSettingsPanelContribution[];
+  settingsComponent?: ExtensionSettingsComponentContribution;
 }
 
 export interface ExtensionManifest {
