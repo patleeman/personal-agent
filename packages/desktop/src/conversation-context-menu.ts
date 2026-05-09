@@ -6,7 +6,6 @@ export type ConversationContextMenuAction =
   | 'archive'
   | 'open-in-new-window'
   | 'duplicate'
-  | 'summarize-and-new'
   | 'attach-to-gateway'
   | 'copy-working-directory'
   | 'copy-id'
@@ -19,12 +18,11 @@ export interface ConversationContextMenuInput {
   canArchive?: boolean;
   canOpenInNewWindow?: boolean;
   canDuplicate?: boolean;
-  canSummarizeAndNew?: boolean;
   canAttachToGateway?: boolean;
   canCopyWorkingDirectory?: boolean;
   canCopyId?: boolean;
   canCopyDeeplink?: boolean;
-  busyAction?: 'duplicate' | 'summarize' | null;
+  busyAction?: 'duplicate' | null;
 }
 
 export function normalizeConversationContextMenuCoordinate(value: number | undefined): number {
@@ -58,7 +56,7 @@ export function buildConversationContextMenuTemplate(
   input: ConversationContextMenuInput,
   onSelect: (action: ConversationContextMenuAction) => void,
 ): MenuItemConstructorOptions[] {
-  const menuDisabled = input.busyAction === 'duplicate' || input.busyAction === 'summarize';
+  const menuDisabled = input.busyAction === 'duplicate';
   const conversationSection: MenuItemConstructorOptions[] = [];
   const windowSection: MenuItemConstructorOptions[] = [];
   const creationSection: MenuItemConstructorOptions[] = [];
@@ -100,14 +98,6 @@ export function buildConversationContextMenuTemplate(
       label: input.busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate Chat',
       enabled: !menuDisabled,
       click: () => onSelect('duplicate'),
-    });
-  }
-
-  if (input.canSummarizeAndNew) {
-    creationSection.push({
-      label: input.busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New',
-      enabled: !menuDisabled,
-      click: () => onSelect('summarize-and-new'),
     });
   }
 

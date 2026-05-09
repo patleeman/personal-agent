@@ -55,7 +55,6 @@ function createMockController() {
     destroyLiveSession: vi.fn(),
     branchLiveSession: vi.fn(),
     forkLiveSession: vi.fn(),
-    summarizeAndForkLiveSession: vi.fn(),
     abortLiveSession: vi.fn(),
     renameConversation: vi.fn(),
     recoverConversation: vi.fn(),

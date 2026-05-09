@@ -106,7 +106,6 @@ import {
   resumeLiveSessionCapability,
   submitLiveSessionParallelPromptCapability,
   submitLiveSessionPromptCapability,
-  summarizeAndForkLiveSessionCapability,
   takeOverLiveSessionCapability,
 } from '../conversations/liveSessionCapability.js';
 import {
@@ -2129,10 +2128,6 @@ export async function forkDesktopLiveSession(input: {
   beforeEntry?: boolean;
 }) {
   return forkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
-}
-
-export async function summarizeAndForkDesktopLiveSession(input: { conversationId: string }) {
-  return summarizeAndForkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
 export async function forkDesktopConversation(input: {

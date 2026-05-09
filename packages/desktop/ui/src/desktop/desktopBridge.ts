@@ -82,7 +82,6 @@ interface DesktopConversationContextMenuRequest {
   canArchive?: boolean;
   canOpenInNewWindow?: boolean;
   canDuplicate?: boolean;
-  canSummarizeAndNew?: boolean;
   canAttachToGateway?: boolean;
   canCopyWorkingDirectory?: boolean;
   canCopyId?: boolean;
@@ -445,7 +444,6 @@ export interface PersonalAgentDesktopBridge {
     preserveSource?: boolean;
     beforeEntry?: boolean;
   }): Promise<{ newSessionId: string; sessionFile: string }>;
-  summarizeAndForkLiveSession(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt(input: {
     conversationId: string;
     text?: string;

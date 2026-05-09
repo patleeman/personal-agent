@@ -47,7 +47,7 @@ import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
-import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
+import { getOrCreateConversationSurfaceId } from '../hooks/useSessionStream';
 import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { routeIsKnowledge, routeMatchesPrefix } from '../navigation/routeRegistry';
@@ -1349,7 +1349,6 @@ function OpenConversationRow({
   onArchive,
   onOpenInNewWindow,
   onDuplicate,
-  onSummarizeAndNew,
   onAttachToGateway,
   onCopyWorkingDirectory,
   onCopyId,
@@ -1375,7 +1374,6 @@ function OpenConversationRow({
   onArchive?: () => boolean | Promise<boolean>;
   onOpenInNewWindow?: () => boolean | Promise<boolean>;
   onDuplicate?: () => boolean | Promise<boolean>;
-  onSummarizeAndNew?: () => boolean | Promise<boolean>;
   onAttachToGateway?: () => boolean | Promise<boolean>;
   onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
   onCopyId?: () => boolean | Promise<boolean>;
@@ -1395,7 +1393,7 @@ function OpenConversationRow({
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [busyAction, setBusyAction] = useState<'duplicate' | 'summarize' | null>(null);
+  const [busyAction, setBusyAction] = useState<'duplicate' | null>(null);
   const [copyState, setCopyState] = useState<ConversationCopyMenuState | null>(null);
   const hasContextMenuActions = Boolean(
     onPin ||
@@ -1403,7 +1401,6 @@ function OpenConversationRow({
     onArchive ||
     onOpenInNewWindow ||
     onDuplicate ||
-    onSummarizeAndNew ||
     onAttachToGateway ||
     onCopyWorkingDirectory ||
     onCopyId ||
@@ -1414,7 +1411,6 @@ function OpenConversationRow({
     Number(Boolean(onArchive)) +
     Number(Boolean(onOpenInNewWindow)) +
     Number(Boolean(onDuplicate)) +
-    Number(Boolean(onSummarizeAndNew)) +
     Number(Boolean(onAttachToGateway)) +
     Number(Boolean(onCopyWorkingDirectory)) +
     Number(Boolean(onCopyId)) +
@@ -1489,7 +1485,7 @@ function OpenConversationRow({
     event.stopPropagation();
   }
 
-  async function runMenuAction(action: 'duplicate' | 'summarize', handler: () => boolean | Promise<boolean>) {
+  async function runMenuAction(action: 'duplicate', handler: () => boolean | Promise<boolean>) {
     if (busyAction) {
       return;
     }
@@ -1577,11 +1573,6 @@ function OpenConversationRow({
           await runMenuAction('duplicate', onDuplicate);
         }
         return;
-      case 'summarize-and-new':
-        if (onSummarizeAndNew) {
-          await runMenuAction('summarize', onSummarizeAndNew);
-        }
-        return;
       case 'attach-to-gateway':
         await onAttachToGateway?.();
         return;
@@ -1622,7 +1613,6 @@ function OpenConversationRow({
           canArchive: Boolean(onArchive),
           canOpenInNewWindow: Boolean(onOpenInNewWindow),
           canDuplicate: Boolean(onDuplicate),
-          canSummarizeAndNew: Boolean(onSummarizeAndNew),
           canAttachToGateway: Boolean(onAttachToGateway),
           canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
           canCopyId: Boolean(onCopyId),
@@ -1840,21 +1830,6 @@ function OpenConversationRow({
                 role="menuitem"
               >
                 {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
-              </button>
-            ) : null}
-            {onSummarizeAndNew ? (
-              <button
-                type="button"
-                onPointerDown={stopRowInteraction}
-                onMouseDown={stopRowInteraction}
-                onClick={() => {
-                  void runMenuAction('summarize', onSummarizeAndNew);
-                }}
-                className={menuItemClass}
-                disabled={busyAction !== null}
-                role="menuitem"
-              >
-                {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
               </button>
             ) : null}
             {onAttachToGateway ? (
@@ -2837,19 +2812,6 @@ export function Sidebar({ hideBrowserNav = false }: { hideBrowserNav?: boolean }
     }
   }, [addWorkspaceBusy, draftCwd, handleNewConversation, persistSavedWorkspacePathsState, savedWorkspacePaths, showSidebarNotice]);
 
-  const resolveLiveConversationIdForAction = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>, actionDescription: string) => {
-    if (session.isLive) {
-      return session.id;
-    }
-
-    const recovered = await api.recoverConversation(session.id);
-    if (!recovered.live) {
-      throw new Error(`This conversation could not ${actionDescription}.`);
-    }
-
-    return recovered.conversationId;
-  }, []);
-
   const openCreatedConversation = useCallback(
     (sessionId: string, initialPromptText?: string) => {
       if (initialPromptText) {
@@ -2875,24 +2837,6 @@ export function Sidebar({ hideBrowserNav = false }: { hideBrowserNav?: boolean }
       }
     },
     [openCreatedConversation, showSidebarNotice],
-  );
-
-  const handleSummarizeConversation = useCallback(
-    async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
-      try {
-        const liveConversationId = await resolveLiveConversationIdForAction(session, 'be summarized into a new conversation');
-        const { newSessionId } = await retryLiveSessionActionAfterTakeover({
-          attemptAction: () => api.summarizeAndForkSession(liveConversationId, conversationSurfaceId),
-          takeOverSessionControl: () => api.takeoverLiveSession(liveConversationId, conversationSurfaceId),
-        });
-        openCreatedConversation(newSessionId);
-        return true;
-      } catch (error) {
-        showSidebarNotice('danger', `Summarize & New failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
-        return false;
-      }
-    },
-    [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice],
   );
 
   const copyTextToClipboard = useCallback(
@@ -3500,7 +3444,6 @@ export function Sidebar({ hideBrowserNav = false }: { hideBrowserNav?: boolean }
         }
         onOpenInNewWindow={!isDraftTab ? () => handleOpenConversationInNewWindow(session.id) : undefined}
         onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
-        onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
         onAttachToGateway={!isDraftTab ? () => handleAttachConversationToGateway(session.id) : undefined}
         onCopyWorkingDirectory={!isDraftTab && session.cwd?.trim() ? () => handleCopyConversationWorkingDirectory(session.cwd) : undefined}
         onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}

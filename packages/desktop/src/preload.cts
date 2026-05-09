@@ -53,7 +53,6 @@ const desktopBridge = {
     canArchive?: boolean;
     canOpenInNewWindow?: boolean;
     canDuplicate?: boolean;
-    canSummarizeAndNew?: boolean;
     canAttachToGateway?: boolean;
     canCopyWorkingDirectory?: boolean;
     canCopyId?: boolean;
@@ -304,8 +303,6 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:branch-live-session`, input),
   forkLiveSession: (input: { conversationId: string; entryId: string; preserveSource?: boolean; beforeEntry?: boolean }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:fork-live-session`, input),
-  summarizeAndForkLiveSession: (conversationId: string) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:summarize-and-fork-live-session`, conversationId),
   submitLiveSessionPrompt: (input: {
     conversationId: string;
     text?: string;

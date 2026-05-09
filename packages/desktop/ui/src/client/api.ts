@@ -1389,14 +1389,6 @@ export const api = {
       ...(surfaceId ? { surfaceId } : {}),
     });
   },
-  summarizeAndForkSession: async (id: string, surfaceId?: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {
-      return desktopBridge.summarizeAndForkLiveSession(id);
-    }
-
-    return post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/summarize-fork`, surfaceId ? { surfaceId } : {});
-  },
   reloadSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && (await shouldUseDesktopLocalConversationCapabilities(id))) {

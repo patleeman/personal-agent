@@ -1000,16 +1000,6 @@ export function registerDesktopIpc(options: {
     return controller.forkLiveSession(input);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:summarize-and-fork-live-session`, async (event, conversationId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id) ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.summarizeAndForkLiveSession) {
-      throw new Error('Dedicated desktop live-session summary fork is only available for the local host.');
-    }
-
-    return controller.summarizeAndForkLiveSession(conversationId);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:submit-live-session-prompt`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id) ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);

@@ -634,11 +634,6 @@ export class LocalHostController implements HostController {
     return module.forkDesktopLiveSession(input);
   }
 
-  async summarizeAndForkLiveSession(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }> {
-    const module = await this.loadLocalApi();
-    return module.summarizeAndForkDesktopLiveSession({ conversationId });
-  }
-
   async submitLiveSessionPrompt(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult> {
     const module = await this.loadLocalApi();
     return module.submitDesktopLiveSessionPrompt(input);

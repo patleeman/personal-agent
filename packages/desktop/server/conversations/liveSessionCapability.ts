@@ -44,7 +44,6 @@ import {
   resumeSession as resumeLocalSession,
   startParallelPromptSession,
   submitPromptSession as submitLocalPromptSession,
-  summarizeAndForkSession as summarizeAndForkLiveSession,
   takeOverSessionControl,
 } from './liveSessions.js';
 import { buildRelatedConversationPointers, readCachedRelatedConversationPointers } from './relatedConversationPointers.js';
@@ -194,10 +193,6 @@ export interface ForkLiveSessionCapabilityInput {
   entryId: string;
   preserveSource?: boolean;
   beforeEntry?: boolean;
-}
-
-export interface SummarizeAndForkLiveSessionCapabilityInput {
-  conversationId: string;
 }
 
 export class LiveSessionCapabilityInputError extends Error {}
@@ -1081,18 +1076,6 @@ export async function forkLiveSessionCapability(
     beforeEntry: input.beforeEntry,
     ...buildLiveSessionOptions(context),
   });
-}
-
-export async function summarizeAndForkLiveSessionCapability(
-  input: SummarizeAndForkLiveSessionCapabilityInput,
-  context: LiveSessionCapabilityContext,
-): Promise<{ newSessionId: string; sessionFile: string }> {
-  const conversationId = input.conversationId.trim();
-  if (!conversationId) {
-    throw new LiveSessionCapabilityInputError('conversationId required');
-  }
-
-  return summarizeAndForkLiveSession(conversationId, buildLiveSessionOptions(context));
 }
 
 export async function abortLiveSessionCapability(input: { conversationId: string }): Promise<{ ok: true }> {

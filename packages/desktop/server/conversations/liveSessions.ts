@@ -111,7 +111,6 @@ import {
   readLiveSessionStateSnapshotFromEntry,
 } from './liveSessionStateSnapshot.js';
 import { subscribeLiveSession } from './liveSessionSubscription.js';
-import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
 import { resolveStableSessionTitle } from './liveSessionTitle.js';
 import { type BeforeAgentStartProbeMessage, inspectAvailableLiveSessionTools } from './liveSessionToolInspection.js';
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
@@ -956,22 +955,6 @@ export async function forkSession(
       buildConversationServiceTierPreferenceInput(
         resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
       ),
-  });
-}
-
-export async function summarizeAndForkSession(
-  sessionId: string,
-  options: LiveSessionLoaderOptions = {},
-): Promise<{ newSessionId: string; sessionFile: string }> {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    throw new Error(`Session ${sessionId} is not live`);
-  }
-  return summarizeAndForkLiveSession(entry, options, {
-    createSessionFromExisting,
-    resumeSession,
-    compactSession,
-    appendVisibleCustomMessage,
   });
 }
 
