@@ -22,19 +22,7 @@ export interface SlashMenuItem {
   action?: string;
 }
 
-const BASE_SLASH_COMMANDS = [
-  { cmd: '/model', icon: '⊕', desc: 'Select model (opens selector UI)' },
-  { cmd: '/export', icon: '⇪', desc: 'Export session to HTML file' },
-  { cmd: '/copy', icon: '⎘', desc: 'Copy last agent message to clipboard' },
-  { cmd: '/name', icon: '✎', desc: 'Set session display name' },
-  { cmd: '/session', icon: 'ⓘ', desc: 'Show session info and stats' },
-  { cmd: '/fork', icon: '⑂', desc: 'Create a new fork from a previous message' },
-  { cmd: '/new', icon: '↺', desc: 'Start a new session' },
-  { cmd: '/compact', icon: '≡', desc: 'Manually compact the session context' },
-  { cmd: '/reload', icon: '↻', desc: 'Reload extensions, skills, prompts, and themes' },
-  { cmd: '/page', icon: '◫', desc: 'Create or reference a page for this conversation' },
-  { cmd: '/resume', icon: '⏰', desc: 'Schedule this conversation to continue later' },
-] as const;
+const BASE_SLASH_COMMANDS = [] as const;
 
 interface ParsedSlashInput {
   command: string;

@@ -412,6 +412,7 @@ function formatExtensionDiagnostics(extension: ExtensionInstallSummary): string 
       packageRoot: extension.packageRoot ?? null,
       errors: extension.errors ?? [],
       diagnostics: extension.diagnostics ?? [],
+      buildError: extension.buildError ?? null,
       skills: extension.skills ?? [],
       manifest: extension.manifest,
     },
@@ -770,7 +771,14 @@ export function ExtensionManagerPage() {
                                   <CompactCount icon={<BackendIcon />} count={counts.backend} title="Backend actions" />
                                   <CompactCount icon={<SkillIcon />} count={counts.skills} title="Skills" />
                                   {extension.diagnostics?.length ? <span className="text-[12px] text-danger">!</span> : null}
-                                  {Object.values(counts).every((count) => count === 0) && !extension.diagnostics?.length ? (
+                                  {extension.buildError ? (
+                                    <span className="text-[12px] text-danger" title={extension.buildError}>
+                                      Build failed
+                                    </span>
+                                  ) : null}
+                                  {Object.values(counts).every((count) => count === 0) &&
+                                  !extension.diagnostics?.length &&
+                                  !extension.buildError ? (
                                     <span className="text-dim">—</span>
                                   ) : null}
                                 </div>
@@ -1131,6 +1139,14 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
                         {message}
                       </p>
                     ))}
+                  </div>
+                </DetailBlock>
+              ) : null}
+
+              {extension.buildError ? (
+                <DetailBlock title="Build error">
+                  <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2">
+                    <p className="whitespace-pre-wrap break-words text-[12px] leading-5 text-danger">{extension.buildError}</p>
                   </div>
                 </DetailBlock>
               ) : null}

@@ -348,6 +348,7 @@ export interface ExtensionInstallSummary {
   status?: 'enabled' | 'disabled' | 'invalid';
   errors?: string[];
   diagnostics?: string[];
+  buildError?: string;
   description?: string;
   version?: string;
   packageRoot?: string;

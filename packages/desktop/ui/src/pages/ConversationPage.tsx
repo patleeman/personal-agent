@@ -1681,7 +1681,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setAttachments(restoreComposerImageFiles(storedAttachments.images, fallbackNamePrefix));
     setDrawingAttachments(storedAttachments.drawings);
-    setEditingDrawingLocalId(null);
     setDrawingsPickerOpen(false);
     setConversationAttachments([]);
     setAttachedContextDocs(draft ? readDraftConversationContextDocs() : []);
@@ -4598,15 +4597,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     command: ConversationSlashCommand,
   ): Promise<{ kind: 'handled' } | { kind: 'send'; text: string }> {
     switch (command.action) {
-      case 'clear':
-        setInput('');
-        setAttachments([]);
-        setDrawingAttachments([]);
-        setDrawingsError(null);
-        if (!draft) {
-          await handleClear();
-        }
-        return { kind: 'handled' };
       case 'compact': {
         if (draft) {
           showNotice('danger', 'Compaction requires an existing conversation.', 4000);
@@ -4626,96 +4616,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
         return { kind: 'handled' };
       }
-      case 'copy':
-        setInput('');
-        await copyLastAgentMessage();
-        return { kind: 'handled' };
-      case 'export': {
-        if (draft) {
-          showNotice('danger', 'Export requires an existing conversation.', 4000);
-          return { kind: 'handled' };
-        }
-
-        setInput('');
-        try {
-          const liveConversationId = await ensureConversationIsLive('be exported');
-          const result = await api.exportSession(liveConversationId, command.outputPath);
-          showNotice('accent', `Exported session HTML to ${result.path}`, 5000);
-        } catch (error) {
-          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-        }
-        return { kind: 'handled' };
-      }
-      case 'fork':
-        setInput('');
-        if (!id) {
-          showNotice('danger', 'Forking requires an existing conversation.', 4000);
-          return { kind: 'handled' };
-        }
-        try {
-          const liveConversationId = await ensureConversationIsLive('be forked');
-          const entries = await api.forkEntries(liveConversationId);
-          const entry = entries[entries.length - 1];
-          if (!entry) {
-            showNotice('danger', 'No forkable messages yet.', 4000);
-            return { kind: 'handled' };
-          }
-
-          if (!ensureConversationCanControl('fork it')) {
-            return { kind: 'handled' };
-          }
-
-          const { newSessionId } = await api.forkSession(
-            liveConversationId,
-            entry.entryId,
-            {
-              preserveSource: true,
-              beforeEntry: true,
-            },
-            currentSurfaceId,
-          );
-          persistForkPromptDraft(newSessionId, entry.text);
-          ensureConversationTabOpen(newSessionId);
-          navigate(`/conversations/${newSessionId}`);
-        } catch (error) {
-          showNotice('danger', `Fork failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
-        }
-        return { kind: 'handled' };
-
-      case 'image':
-        setInput('');
-        openFilePicker();
-        return { kind: 'handled' };
-      case 'name':
-        setInput('');
-        if (command.name) {
-          await renameConversationTo(command.name);
-        } else {
-          beginTitleEdit();
-        }
-        return { kind: 'handled' };
-      case 'new':
-        startNewConversation();
-        return { kind: 'handled' };
-      case 'reload': {
-        if (draft) {
-          showNotice('danger', 'Reload requires an existing conversation.', 4000);
-          return { kind: 'handled' };
-        }
-
-        setInput('');
-        try {
-          const liveConversationId = await ensureConversationIsLive('reload its resources');
-          if (!ensureConversationCanControl('reload its resources')) {
-            return { kind: 'handled' };
-          }
-          await api.reloadSession(liveConversationId, currentSurfaceId);
-          showNotice('accent', 'Session resources reloaded.');
-        } catch (error) {
-          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-        }
-        return { kind: 'handled' };
-      }
       case 'run':
         return {
           kind: 'send',
@@ -4723,12 +4623,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         };
       case 'search':
         return { kind: 'send', text: `Search the web for: ${command.query}` };
-      case 'session':
-        setInput('');
-        showSessionSummary();
-        return { kind: 'handled' };
-      case 'summarize':
-        return { kind: 'send', text: 'Summarize our conversation so far concisely.' };
       case 'think':
         return {
           kind: 'send',

@@ -26,14 +26,30 @@ describe('parseSlashInput', () => {
 });
 
 describe('buildSlashMenuItems', () => {
-  it('fuzzy-finds built-in commands for a generic slash query', () => {
-    const items = buildSlashMenuItems('/mdl', SKILLS);
-    expect(items[0]?.displayCmd).toBe('/model');
+  it('returns empty command list when no built-in commands exist', () => {
+    const items = buildSlashMenuItems('/', SKILLS);
+    expect(items.filter((item) => item.kind === 'command')).toHaveLength(0);
   });
 
-  it('keeps matching slash commands by command token even after an argument starts', () => {
-    const items = buildSlashMenuItems('/model gpt', SKILLS);
-    expect(items[0]?.displayCmd).toBe('/model');
+  it('fuzzy-finds extension slash commands for a matching query', () => {
+    const items = buildSlashMenuItems('/tas', SKILLS, [
+      {
+        extensionId: 'agent-board',
+        surfaceId: 'task',
+        packageType: 'user',
+        name: 'task',
+        description: 'Create a board task',
+        action: 'createTask',
+      },
+    ]);
+
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        key: 'extension:agent-board:task',
+        displayCmd: '/task',
+        kind: 'extensionSlashCommand',
+      }),
+    );
   });
 
   it('returns skill entries when the query targets skills', () => {
@@ -55,7 +71,6 @@ describe('buildSlashMenuItems', () => {
   it('does not flood the default slash menu with every skill when only / is typed', () => {
     const items = buildSlashMenuItems('/', SKILLS);
     expect(items.some((item) => item.kind === 'skill')).toBe(false);
-    expect(items.some((item) => item.displayCmd === '/model')).toBe(true);
   });
 
   it('shows the full skill list when the slash query targets skills directly', () => {
@@ -64,7 +79,7 @@ describe('buildSlashMenuItems', () => {
     expect(items.every((item) => item.kind === 'skill')).toBe(true);
   });
 
-  it('includes matching skills alongside slash commands', () => {
+  it('includes matching extension slash commands alongside skills', () => {
     const items = buildSlashMenuItems('/pag', [
       ...SKILLS,
       {
@@ -75,13 +90,7 @@ describe('buildSlashMenuItems', () => {
       },
     ]);
 
-    expect(items.some((item) => item.displayCmd === '/page')).toBe(true);
     expect(items.some((item) => item.displayCmd === '/skill:project-planning')).toBe(true);
-  });
-
-  it('includes the deferred resume slash command in the command menu', () => {
-    const items = buildSlashMenuItems('/res', SKILLS);
-    expect(items.some((item) => item.displayCmd === '/resume')).toBe(true);
   });
 
   it('includes matching extension slash commands', () => {

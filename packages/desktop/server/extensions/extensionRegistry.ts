@@ -25,6 +25,17 @@ import {
 import { listExtensionPackagePaths } from './extensionPackagePaths.js';
 import { SYSTEM_EXTENSION_ENTRIES } from './systemExtensions.js';
 
+// Per-extension build errors stored in memory. Cleared on successful build or reload.
+const buildErrors = new Map<string, string>();
+
+export function setBuildError(extensionId: string, error: string): void {
+  buildErrors.set(extensionId, error);
+}
+
+export function clearBuildError(extensionId: string): void {
+  buildErrors.delete(extensionId);
+}
+
 export interface InvalidExtensionEntry {
   id: string;
   name: string;
@@ -1084,6 +1095,7 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
     const views = manifest.contributes?.views ?? [];
     const enabled = isExtensionEnabled(manifest.id, stateRoot);
     const diagnostics = listExtensionContributionDiagnostics(entry);
+    const buildError = buildErrors.get(manifest.id);
     return {
       id: manifest.id,
       name: manifest.name,
@@ -1091,6 +1103,7 @@ export function listExtensionInstallSummaries(stateRoot: string = getStateRoot()
       enabled,
       status: enabled ? ('enabled' as const) : ('disabled' as const),
       ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      ...(buildError ? { buildError } : {}),
       ...(manifest.description ? { description: manifest.description } : {}),
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(entry.packageRoot ? { packageRoot: entry.packageRoot } : {}),
