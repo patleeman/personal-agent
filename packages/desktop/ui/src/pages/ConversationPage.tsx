@@ -37,6 +37,7 @@ import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSea
 import { bytesToBase64, type ComposerDictationCapture, startComposerDictationCapture } from '../conversation/conversationComposerDictation';
 import {
   canNavigateComposerHistoryValue,
+  insertTextAtComposerSelection,
   resolveComposerClearShortcut,
   resolveComposerHistoryNavigation,
 } from '../conversation/conversationComposerEditing';
@@ -1906,9 +1907,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
   const composerHistoryDraftRef = useRef('');
   const dictationCaptureRef = useRef<ComposerDictationCapture | null>(null);
-  const dictationStreamTimerRef = useRef<number | null>(null);
-  const dictationStreamBusyRef = useRef(false);
-  const dictationStreamRangeRef = useRef<{ start: number; end: number; text: string } | null>(null);
   const dictationPointerRef = useRef<{ pointerId: number; startedAt: number; startedExistingRecording: boolean } | null>(null);
   const composerAttachmentScopeKey = draft ? 'draft' : id ? `conversation:${id}` : null;
 
@@ -1965,10 +1963,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(
     () => () => {
-      if (dictationStreamTimerRef.current !== null) {
-        window.clearInterval(dictationStreamTimerRef.current);
-        dictationStreamTimerRef.current = null;
-      }
       const capture = dictationCaptureRef.current;
       dictationCaptureRef.current = null;
       if (capture) {
@@ -3114,70 +3108,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, []);
 
-  const clearDictationStreamTimer = useCallback(() => {
-    if (dictationStreamTimerRef.current !== null) {
-      window.clearInterval(dictationStreamTimerRef.current);
-      dictationStreamTimerRef.current = null;
-    }
-  }, []);
-
-  const replaceDictationStreamText = useCallback(
+  const insertTextIntoComposer = useCallback(
     (text: string) => {
-      const trimmedText = text.trim();
-      const currentInput = textareaRef.current?.value ?? input;
-      const range = dictationStreamRangeRef.current;
-
-      if (!trimmedText) {
+      const insertion = insertTextAtComposerSelection({
+        currentInput: textareaRef.current?.value ?? input,
+        selection: composerSelectionRef.current,
+        text,
+      });
+      if (!insertion) {
         return;
       }
 
-      const start = range?.start ?? composerSelectionRef.current?.start ?? currentInput.length;
-      const end = range?.end ?? composerSelectionRef.current?.end ?? start;
-      const nextInput = `${currentInput.slice(0, start)}${trimmedText}${currentInput.slice(end)}`;
-      const nextEnd = start + trimmedText.length;
-      dictationStreamRangeRef.current = { start, end: nextEnd, text: trimmedText };
-      setInput(nextInput);
+      setInput(insertion.nextInput);
       window.requestAnimationFrame(() => {
         const el = textareaRef.current;
         if (!el) {
           return;
         }
         el.focus();
-        el.setSelectionRange(nextEnd, nextEnd);
-        composerSelectionRef.current = { start: nextEnd, end: nextEnd };
+        el.setSelectionRange(insertion.nextCaret, insertion.nextCaret);
+        composerSelectionRef.current = { start: insertion.nextCaret, end: insertion.nextCaret };
         scheduleComposerResize();
       });
     },
     [input, scheduleComposerResize, setInput],
   );
-
-  const transcribeDictationSnapshot = useCallback(async () => {
-    const capture = dictationCaptureRef.current;
-    if (!capture || dictationStreamBusyRef.current) {
-      return;
-    }
-
-    const { audio, durationMs, mimeType, fileName } = capture.getSnapshot();
-    if (audio.byteLength === 0 || durationMs < 700) {
-      return;
-    }
-
-    dictationStreamBusyRef.current = true;
-    try {
-      const result = await api.transcribeFile({
-        dataBase64: bytesToBase64(audio),
-        mimeType,
-        fileName,
-      });
-      if (dictationCaptureRef.current === capture) {
-        replaceDictationStreamText(result.text);
-      }
-    } catch {
-      // Partial dictation is best-effort; the final transcription reports real failures.
-    } finally {
-      dictationStreamBusyRef.current = false;
-    }
-  }, [replaceDictationStreamText]);
 
   const stopDictation = useCallback(async () => {
     const capture = dictationCaptureRef.current;
@@ -3185,7 +3140,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    clearDictationStreamTimer();
     dictationCaptureRef.current = null;
     setDictationStartedAt(null);
     setDictationState('transcribing');
@@ -3206,8 +3160,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      replaceDictationStreamText(result.text);
-      dictationStreamRangeRef.current = null;
+      insertTextIntoComposer(result.text);
       showNotice('accent', 'Dictation inserted.', 1800);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -3215,10 +3168,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         showNotice('danger', message, 5000);
       }
     } finally {
-      dictationStreamRangeRef.current = null;
       setDictationState('idle');
     }
-  }, [clearDictationStreamTimer, replaceDictationStreamText, showNotice]);
+  }, [insertTextIntoComposer, showNotice]);
 
   const startDictation = useCallback(async () => {
     if (composerDisabled || dictationCaptureRef.current || dictationState === 'transcribing') {
@@ -3232,8 +3184,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      clearDictationStreamTimer();
-      dictationStreamRangeRef.current = null;
       setDictationLevelSamples([]);
       setDictationStartedAt(performance.now());
       const capture = await startComposerDictationCapture({
@@ -3242,16 +3192,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         },
       });
       dictationCaptureRef.current = capture;
-      dictationStreamTimerRef.current = window.setInterval(() => {
-        void transcribeDictationSnapshot();
-      }, 1500);
       setDictationState('recording');
     } catch (error) {
       setDictationStartedAt(null);
       setDictationState('idle');
       showNotice('danger', error instanceof Error ? error.message : String(error), 5000);
     }
-  }, [clearDictationStreamTimer, composerDisabled, dictationState, showNotice, transcribeDictationSnapshot]);
+  }, [composerDisabled, dictationState, showNotice]);
 
   const handleDictationPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {

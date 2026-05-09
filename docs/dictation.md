@@ -1,5 +1,5 @@
 # Dictation
 
-Dictation captures browser PCM audio in the composer and transcribes it with the configured local Whisper provider.
+Dictation captures browser PCM audio in the composer and transcribes it with the configured local Whisper provider after recording stops.
 
-The composer shows simulated streaming by periodically transcribing the current recording snapshot while the microphone is active. Those partial transcripts replace the live dictation span in-place, then the final full recording transcription replaces the partial text when recording stops. This keeps the UX responsive without depending on a true incremental Whisper decoder.
+The composer keeps microphone capture local while recording, then sends one full PCM buffer to the transcription API on stop and inserts the final transcript at the current composer selection. Avoid periodic partial transcription for now; repeatedly running local Whisper on growing snapshots can saturate the app and beachball the desktop UI.

@@ -1,5 +1,4 @@
 export interface ComposerDictationCapture {
-  getSnapshot: () => { audio: Uint8Array; durationMs: number; mimeType: string; fileName: string };
   stop: () => Promise<{ audio: Uint8Array; durationMs: number; mimeType: string; fileName: string }>;
 }
 
@@ -112,15 +111,7 @@ export async function startComposerDictationCapture(options: ComposerDictationCa
   processor.connect(silentGain);
   silentGain.connect(audioContext.destination);
 
-  const getSnapshot = () => ({
-    audio: int16ChunksToBytes(chunks),
-    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
-    mimeType: 'audio/pcm;rate=16000;channels=1',
-    fileName: 'dictation.pcm',
-  });
-
   return {
-    getSnapshot,
     stop: async () => {
       if (stopped) {
         return { audio: new Uint8Array(), durationMs: 0, mimeType: 'audio/pcm;rate=16000;channels=1', fileName: 'dictation.pcm' };
@@ -132,7 +123,12 @@ export async function startComposerDictationCapture(options: ComposerDictationCa
       silentGain.disconnect();
       stream.getTracks().forEach((track) => track.stop());
       await audioContext.close().catch(() => {});
-      return getSnapshot();
+      return {
+        audio: int16ChunksToBytes(chunks),
+        durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+        mimeType: 'audio/pcm;rate=16000;channels=1',
+        fileName: 'dictation.pcm',
+      };
     },
   };
 }
