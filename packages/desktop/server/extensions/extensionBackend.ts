@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
@@ -54,6 +54,10 @@ export interface ExtensionBackendContext {
 }
 
 type ExtensionBackendModule = Record<string, unknown>;
+
+const EXTENSION_BACKEND_BUILD_CACHE_VERSION = 'bundle-host-runtime-externals-v3';
+const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
+  /^(@personal-agent\/(core|daemon)|@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom)(\/.*)?$/;
 
 interface ExtensionBackendBuildResult {
   path: string;
@@ -126,41 +130,59 @@ function createBackendContext(
   };
 }
 
-function hashExtensionPackage(packageRoot: string): string {
-  const hash = createHash('sha256');
-  const visit = (directory: string): void => {
-    for (const entryName of readdirSync(directory).sort((left, right) => left.localeCompare(right))) {
-      if (entryName === 'node_modules' || entryName === '.git') {
-        continue;
-      }
+function hashFileInto(hash: ReturnType<typeof createHash>, root: string, entryPath: string, namespace: string): void {
+  const relativePath = relative(root, entryPath);
+  if (relativePath.startsWith('..')) {
+    return;
+  }
 
-      const entryPath = join(directory, entryName);
-      const relativePath = relative(packageRoot, entryPath);
-      if (relativePath.startsWith('..')) {
-        continue;
-      }
+  hash.update(namespace);
+  hash.update('\0');
+  hash.update(relativePath);
+  hash.update('\0');
+  hash.update(readFileSync(entryPath));
+  hash.update('\0');
+}
 
-      const stat = readdirSafeStat(entryPath);
-      if (!stat) {
-        continue;
-      }
-
-      if (stat.isDirectory()) {
-        visit(entryPath);
-        continue;
-      }
-      if (!stat.isFile()) {
-        continue;
-      }
-
-      hash.update(relativePath);
-      hash.update('\0');
-      hash.update(readFileSync(entryPath));
-      hash.update('\0');
+function hashDirectoryInto(hash: ReturnType<typeof createHash>, root: string, directory: string, namespace: string): void {
+  for (const entryName of readdirSync(directory).sort((left, right) => left.localeCompare(right))) {
+    if (entryName === 'node_modules' || entryName === '.git') {
+      continue;
     }
-  };
 
-  visit(packageRoot);
+    const entryPath = join(directory, entryName);
+    const stat = readdirSafeStat(entryPath);
+    if (!stat) {
+      continue;
+    }
+
+    if (stat.isDirectory()) {
+      hashDirectoryInto(hash, root, entryPath, namespace);
+      continue;
+    }
+    if (!stat.isFile()) {
+      continue;
+    }
+
+    hashFileInto(hash, root, entryPath, namespace);
+  }
+}
+
+function hashExtensionBackendInputs(packageRoot: string): string {
+  const hash = createHash('sha256');
+  hash.update(EXTENSION_BACKEND_BUILD_CACHE_VERSION);
+  hash.update('\0');
+  hashDirectoryInto(hash, packageRoot, packageRoot, 'extension');
+
+  const backendApiPath = resolveExtensionBackendApiPath();
+  const backendApiRoot = dirname(backendApiPath);
+  hashFileInto(hash, backendApiRoot, backendApiPath, 'backend-api');
+
+  const backendApiDirectory = resolve(backendApiRoot, 'backendApi');
+  if (existsSync(backendApiDirectory)) {
+    hashDirectoryInto(hash, backendApiRoot, backendApiDirectory, 'backend-api');
+  }
+
   return hash.digest('hex');
 }
 
@@ -173,11 +195,34 @@ function readdirSafeStat(entryPath: string) {
 }
 
 function resolveExtensionBackendApiPath(): string {
-  const sourcePath = fileURLToPath(new URL('./backendApi.ts', import.meta.url));
-  if (existsSync(sourcePath)) {
-    return sourcePath;
+  // When loaded from source: import.meta.url points to extensionBackend.ts, same dir as backendApi.ts
+  // When bundled into dist/app/localApi.js: import.meta.url points to dist/app/
+  // so we try multiple candidate paths.
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(currentDir, 'backendApi.ts'),
+    resolve(currentDir, '../../extensions/backendApi.ts'),
+    resolve(currentDir, '../extensions/backendApi.ts'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
   }
-  return fileURLToPath(new URL('./backendApi.js', import.meta.url));
+
+  // Fallback to compiled .js in same locations
+  for (const candidate of candidates) {
+    const jsPath = candidate.replace(/\.ts$/, '.js');
+    if (existsSync(jsPath)) {
+      return jsPath;
+    }
+  }
+
+  throw new Error(
+    'Could not find extension backend API source (backendApi.ts). ' +
+      'Ensure the server source files are available, or set PERSONAL_AGENT_REPO_ROOT.',
+  );
 }
 
 function createExtensionBackendApiPlugin(): Plugin {
@@ -186,6 +231,19 @@ function createExtensionBackendApiPlugin(): Plugin {
     name: 'personal-agent-extension-backend-api',
     setup(buildContext) {
       buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend$/ }, () => ({ path: backendApiPath }));
+    },
+  };
+}
+
+function createHostRuntimeExternalPlugin(): Plugin {
+  return {
+    name: 'personal-agent-extension-host-runtime-externals',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: HOST_RUNTIME_EXTERNAL_IMPORT_RE }, async (args) => {
+        const resolveImport = (import.meta as ImportMeta & { resolve(specifier: string): string | Promise<string> }).resolve;
+        const resolvedUrl = await Promise.resolve(resolveImport(args.path));
+        return { path: fileURLToPath(resolvedUrl), external: true };
+      });
     },
   };
 }
@@ -199,7 +257,7 @@ async function buildExtensionBackend(
   const cacheDir = join(getExtensionCacheRoot(), extensionId);
   const outfile = join(cacheDir, 'backend.mjs');
   const hashFile = join(cacheDir, 'backend.hash');
-  const packageHash = hashExtensionPackage(packageRoot);
+  const packageHash = hashExtensionBackendInputs(packageRoot);
   await mkdir(cacheDir, { recursive: true });
 
   if (existsSync(outfile) && existsSync(hashFile) && readFileSync(hashFile, 'utf-8').trim() === packageHash) {
@@ -218,8 +276,11 @@ async function buildExtensionBackend(
       target: 'node20',
       sourcemap: 'inline',
       logLevel: 'silent',
-      external: ['@personal-agent/*', 'electron'],
-      plugins: [createExtensionBackendApiPlugin()],
+      banner: {
+        js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
+      },
+      external: ['electron'],
+      plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
     });
     renameSync(candidate, outfile);
     writeFileSync(hashFile, `${packageHash}\n`);
