@@ -122,6 +122,7 @@ export function ChatRenderItemView({
             block={block}
             messageIndex={absoluteIndex}
             onRewindMessage={onRewindMessage}
+            onForkMessage={onForkMessage}
             onHydrateMessage={onHydrateMessage}
             hydratingMessageBlockIds={hydratingMessageBlockIds}
             onOpenFilePath={onOpenFilePath}

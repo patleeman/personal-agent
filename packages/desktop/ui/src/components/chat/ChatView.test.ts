@@ -903,7 +903,7 @@ describe('chat view streaming disclosure', () => {
     expect(new Set(footnoteIds).size).toBe(footnoteIds.length);
   });
 
-  it('renders a rewind action for user messages when rewinding is available', () => {
+  it('renders copy rewind and fork actions for user messages when available', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -914,13 +914,16 @@ describe('chat view streaming disclosure', () => {
           },
         ],
         onRewindMessage: () => undefined,
+        onForkMessage: () => undefined,
       }),
     );
 
+    expect(html).toContain('⎘ copy');
     expect(html).toContain('↩ rewind');
+    expect(html).toContain('⑂ fork');
   });
 
-  it('renders rewind and fork actions for assistant messages when both are available', () => {
+  it('renders copy rewind and fork actions for assistant messages when available', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -935,6 +938,7 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
+    expect(html).toContain('⎘ copy');
     expect(html).toContain('↩ rewind');
     expect(html).toContain('⑂ fork');
   });

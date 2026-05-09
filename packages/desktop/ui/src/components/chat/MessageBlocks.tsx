@@ -33,6 +33,7 @@ export const UserMessage = memo(function UserMessage({
   block,
   messageIndex,
   onRewindMessage,
+  onForkMessage,
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenFilePath,
@@ -43,6 +44,7 @@ export const UserMessage = memo(function UserMessage({
   block: Extract<MessageBlock, { type: 'user' }>;
   messageIndex?: number;
   onRewindMessage?: (messageIndex: number) => Promise<void> | void;
+  onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenFilePath?: (path: string) => void;
@@ -59,15 +61,17 @@ export const UserMessage = memo(function UserMessage({
 
     return onRewindMessage?.(messageIndex);
   }, [messageIndex, onRewindMessage]);
+  const handleFork = useCallback(() => {
+    if (typeof messageIndex !== 'number') {
+      return;
+    }
+
+    return onForkMessage?.(messageIndex);
+  }, [messageIndex, onForkMessage]);
+  const canAddressMessage = typeof messageIndex === 'number';
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <MessageActions
-        isUser
-        blockText={block.text}
-        blockId={block.id}
-        onRewind={onRewindMessage && typeof messageIndex === 'number' ? handleRewind : undefined}
-      />
       <div className={layout === 'compact' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
@@ -104,7 +108,18 @@ export const UserMessage = memo(function UserMessage({
             <div className="px-1.5 pb-0.5">{renderMarkdownText(block.text, { onOpenFilePath, onOpenCheckpoint })}</div>
           ) : null}
         </div>
-        <p className="ui-message-meta mt-1 text-right pr-1">{timeAgo(block.ts)}</p>
+        <div className="flex flex-wrap items-center gap-2 pt-1 pr-1">
+          <p className="ui-message-meta">{timeAgo(block.ts)}</p>
+          <span className="flex-1" />
+          <MessageActions
+            isUser
+            blockText={block.text}
+            blockId={block.id}
+            copyText={block.text}
+            onRewind={onRewindMessage && canAddressMessage ? handleRewind : undefined}
+            onFork={onForkMessage && canAddressMessage ? handleFork : undefined}
+          />
+        </div>
       </div>
     </div>
   );

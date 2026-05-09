@@ -60,7 +60,7 @@ export function MessageActions({
   const [busyActionIds, setBusyActionIds] = useState<Set<string>>(new Set());
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const copyResetTimeoutRef = useRef<number | null>(null);
-  const canCopy = !isUser && typeof copyText === 'string' && copyText.length > 0;
+  const canCopy = typeof copyText === 'string' && copyText.length > 0;
   const { messageActions } = useExtensionRegistry();
 
   const extensionActionInvocations = useRef<Map<string, ReturnType<typeof createNativeExtensionClient>>>(new Map());
@@ -171,14 +171,14 @@ export function MessageActions({
           {isRewinding ? '↩ rewinding…' : '↩ rewind'}
         </button>
       )}
-      {!isUser && onFork && (
+      {onFork && (
         <button
           type="button"
           onClick={() => {
             void handleFork();
           }}
           className={cx('ui-message-action-button', isForking && 'text-accent')}
-          title="Fork into a new conversation from here"
+          title={isUser ? 'Fork into a new conversation with this prompt in the input' : 'Fork into a new conversation from here'}
           disabled={isForking}
         >
           {isForking ? '⑂ forking…' : '⑂ fork'}
