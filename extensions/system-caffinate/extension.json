@@ -24,15 +24,6 @@
     ]
   },
   "contributes": {
-    "settings": {
-      "daemon.keepAwake": {
-        "type": "boolean",
-        "default": false,
-        "description": "Keep the Mac awake while the daemon is running to prevent idle sleep",
-        "group": "Daemon",
-        "order": 1
-      }
-    },
     "topBarElements": [
       {
         "id": "caffeine-indicator",
