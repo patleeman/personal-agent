@@ -34,17 +34,17 @@ export function TracesModelUsage({
   const peakThroughputTokensPerSec = Math.max(...throughput.map((t) => t.peakTokensPerSec), 0);
 
   return (
-    <div className="rounded-2xl bg-surface/35">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">📊 Model Usage &amp; Cost</span>
-        <span className="ml-auto text-[10px] text-dim">Last 24h</span>
+        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">Last 24h</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 divide-x divide-y divide-border-subtle">
         {/* Cell 1: Tokens by model */}
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Tokens by Model</div>
-          <div className="flex gap-4 flex-wrap pb-3 mb-3">
+          <div className="flex gap-4 flex-wrap pb-3 mb-3 border-b border-border-subtle">
             <Metric value={formatNumber(totalTokens)} label="Total" cls="text-accent" />
             <Metric value={formatNumber(tokensInput)} label="Input" />
             <Metric value={formatNumber(tokensOutput)} label="Output" />
@@ -137,7 +137,7 @@ export function TracesModelUsage({
             pct={Math.min((tokensInput + tokensCached) / Math.max(totalTokens, 1), 1)}
             color="bg-success"
           />
-          <div className="mt-2 pt-2 text-[11px] text-dim">
+          <div className="mt-2 pt-2 border-t border-border-subtle text-[11px] text-dim">
             {cacheHitRate > 0 ? <span className="text-warning">{cacheHitRate}%</span> : null} of prompt input read from cache
           </div>
         </div>

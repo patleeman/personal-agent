@@ -7,8 +7,8 @@ import type { TraceAgentLoop } from '@personal-agent/extensions/data';
 export function TracesAgentLoop({ loop }: { loop: TraceAgentLoop | null }) {
   if (!loop) {
     return (
-      <div className="rounded-2xl bg-surface/35">
-        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
           <span className="text-[12px] font-semibold">🔄 Agent Loop Health</span>
           <span className="ml-auto text-[10px] text-dim">No data yet</span>
         </div>
@@ -18,10 +18,10 @@ export function TracesAgentLoop({ loop }: { loop: TraceAgentLoop | null }) {
   }
 
   return (
-    <div className="rounded-2xl bg-surface/35">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">🔄 Agent Loop Health</span>
-        <span className="ml-auto text-[10px] text-dim">Selected range</span>
+        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">Selected range</span>
       </div>
       <div className="p-4">
         {/* Loop stats grid */}
@@ -38,7 +38,7 @@ export function TracesAgentLoop({ loop }: { loop: TraceAgentLoop | null }) {
           <LoopStat value={String(loop.stuckRuns)} label="Stuck Runs (&gt;10m)" cls={loop.stuckRuns > 0 ? 'text-danger' : 'text-dim'} />
         </div>
 
-        <div className="pt-3">
+        <div className="pt-3 border-t border-border-subtle">
           <div className="text-[11px] font-medium mb-3">Run Duration Distribution</div>
           {loop.durationP99Ms > 0 ? (
             <>

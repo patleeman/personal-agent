@@ -7,8 +7,8 @@ import type { AutoModeSummary } from '@personal-agent/extensions/data';
 export function TracesAutoMode({ data }: { data: AutoModeSummary | null }) {
   if (!data || data.recentEvents.length === 0) {
     return (
-      <div className="rounded-2xl bg-surface/35">
-        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
           <span className="text-[12px] font-semibold">🤖 Auto Mode</span>
           <span className="ml-auto text-[10px] text-dim">No auto mode activity</span>
         </div>
@@ -18,14 +18,14 @@ export function TracesAutoMode({ data }: { data: AutoModeSummary | null }) {
   }
 
   return (
-    <div className="rounded-2xl bg-surface/35">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">🤖 Auto Mode</span>
-        <span className="ml-auto text-[10px] text-dim">
+        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">
           {data.currentActive} active · {data.enabledCount} enabled · {data.disabledCount} stopped
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 divide-x divide-y divide-border-subtle">
         {/* Cell 1: Summary stats */}
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Activity</div>
@@ -35,7 +35,7 @@ export function TracesAutoMode({ data }: { data: AutoModeSummary | null }) {
             <QuickStat value={String(data.disabledCount)} label="Times Stopped" cls="text-warning" />
           </div>
           {data.topStopReasons.length > 0 && (
-            <div className="pt-3">
+            <div className="pt-3 border-t border-border-subtle">
               <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-2">Top Stop Reasons</div>
               <div className="space-y-1">
                 {data.topStopReasons.map((r, i) => {
@@ -60,7 +60,7 @@ export function TracesAutoMode({ data }: { data: AutoModeSummary | null }) {
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Recent Events</div>
           <div className="max-h-[200px] overflow-y-auto space-y-0.5">
             {data.recentEvents.slice(0, 15).map((e, i) => (
-              <div key={i} className="flex items-center gap-2 py-1 text-[11px]">
+              <div key={i} className="flex items-center gap-2 py-1 text-[11px] border-b border-border-subtle/20 last:border-0">
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${e.enabled ? 'bg-success' : 'bg-dim'}`} />
                 <span className="font-mono text-[10px] text-dim w-[40px] shrink-0">{e.ts.slice(11, 16)}</span>
                 <span className={e.enabled ? 'text-success font-medium' : 'text-secondary'}>{e.enabled ? 'Enabled' : 'Stopped'}</span>

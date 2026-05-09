@@ -7,8 +7,8 @@ import type { ToolFlowResult } from '@personal-agent/extensions/data';
 export function TracesToolFlow({ data }: { data: ToolFlowResult | null }) {
   if (!data || (data.transitions.length === 0 && data.coOccurrences.length === 0)) {
     return (
-      <div className="rounded-2xl bg-surface/35">
-        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
           <span className="text-[12px] font-semibold">🔀 Tool Flow &amp; Trajectories</span>
           <span className="ml-auto text-[10px] text-dim">No tool sequences yet</span>
         </div>
@@ -18,14 +18,14 @@ export function TracesToolFlow({ data }: { data: ToolFlowResult | null }) {
   }
 
   return (
-    <div className="rounded-2xl bg-surface/35">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">🔀 Tool Flow &amp; Trajectories</span>
-        <span className="ml-auto text-[10px] text-dim">
+        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">
           {data.transitions.length} transitions · {data.coOccurrences.length} co-occurrences
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 divide-x divide-y divide-border-subtle">
         {/* Cell 1: Top transitions — Sankey-like flow */}
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Top Tool Transitions</div>
@@ -80,7 +80,7 @@ export function TracesToolFlow({ data }: { data: ToolFlowResult | null }) {
           {data.failureTrajectories.length > 0 ? (
             <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
               {data.failureTrajectories.slice(0, 15).map((f, i) => (
-                <div key={i} className="flex items-center gap-2 py-1.5 text-[11px]">
+                <div key={i} className="flex items-center gap-2 py-1.5 text-[11px] border-b border-border-subtle/20 last:border-0">
                   <span className="text-dim font-mono w-[40px] shrink-0 text-[10px]">{f.ts.slice(11, 16)}</span>
                   <span className="flex items-center gap-1 text-secondary min-w-0">
                     {f.previousCalls.length > 0 ? (

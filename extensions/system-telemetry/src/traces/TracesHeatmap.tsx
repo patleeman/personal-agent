@@ -7,8 +7,8 @@ import type { TraceTokenDaily } from '@personal-agent/extensions/data';
 export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
   if (!data || data.length === 0) {
     return (
-      <div className="rounded-2xl bg-surface/35">
-        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+      <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
           <span className="text-[12px] font-semibold">🔥 Token Activity — Last 12 Weeks</span>
           <span className="ml-auto text-[10px] text-dim">No data yet</span>
         </div>
@@ -41,10 +41,10 @@ export function TracesHeatmap({ data }: { data: TraceTokenDaily[] }) {
   const avg = total / Math.max(values.length, 1);
 
   return (
-    <div className="rounded-2xl bg-surface/35">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">🔥 Token Activity — Last {data.length} Days</span>
-        <span className="ml-auto text-[10px] text-dim">
+        <span className="ml-auto text-[10px] text-dim bg-elevated px-2 py-0.5 rounded-full">
           {formatNumber(total)} total · {formatNumber(avg)} avg/day
         </span>
       </div>

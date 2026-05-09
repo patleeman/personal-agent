@@ -14,11 +14,11 @@ export function TracesCacheAndSystemPrompt({
   if (!cacheEfficiency && !systemPrompt) return null;
 
   return (
-    <div className="rounded-2xl bg-surface/35">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+    <div className="rounded-xl border border-border-subtle bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <span className="text-[12px] font-semibold">💾 Cache Efficiency &amp; System Prompt</span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 divide-x divide-border-subtle">
         {/* Cache */}
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-[0.08em] text-dim mb-3">Prompt Cache</div>
@@ -52,7 +52,7 @@ export function TracesCacheAndSystemPrompt({
                   </div>
                 );
               })}
-              <div className="text-[11px] text-dim pt-2 mt-2">
+              <div className="text-[11px] text-dim pt-2 mt-2 border-t border-border-subtle">
                 Request hit rate counts requests with any cache read. Cached share is provider-reported cached token volume.
               </div>
             </>
@@ -82,7 +82,7 @@ export function TracesCacheAndSystemPrompt({
                   ))}
                 </div>
               )}
-              <div className="text-[11px] text-dim pt-2">
+              <div className="text-[11px] text-dim pt-2 border-t border-border-subtle">
                 Sampled from {systemPrompt.samples} session{systemPrompt.samples !== 1 ? 's' : ''}
               </div>
             </>

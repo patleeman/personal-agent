@@ -1665,10 +1665,6 @@ export function Layout() {
           });
           return;
         }
-
-        if (!routeSupportsWorkbench(location.pathname, extensionRegistry.surfaces)) {
-          navigate(lastWorkbenchRouteRef.current);
-        }
       }
     },
     [
