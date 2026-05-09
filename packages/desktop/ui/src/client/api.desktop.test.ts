@@ -265,7 +265,6 @@ describe('api desktop transport', () => {
     const reloadLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const branchLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
     const forkLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
-    const summarizeAndForkLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     const abortLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const destroyLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const getEnvironment = vi.fn().mockResolvedValue({
@@ -330,7 +329,6 @@ describe('api desktop transport', () => {
         reloadLiveSession,
         branchLiveSession,
         forkLiveSession,
-        summarizeAndForkLiveSession,
         abortLiveSession,
         destroyLiveSession,
       },
@@ -393,7 +391,6 @@ describe('api desktop transport', () => {
     const reloaded = await api.reloadSession('live-1', 'surface-1');
     const branched = await api.branchSession('live-1', 'entry-1', 'surface-1');
     const forked = await api.forkSession('live-1', 'entry-1', { preserveSource: true, beforeEntry: true }, 'surface-1');
-    const summaryFork = await api.summarizeAndForkSession('live-1', 'surface-1');
     const aborted = await api.abortSession('live-1', 'surface-1');
     const destroyed = await api.destroySession('conversation-1', 'surface-1');
 
@@ -484,7 +481,6 @@ describe('api desktop transport', () => {
       preserveSource: true,
       beforeEntry: true,
     });
-    expect(summarizeAndForkLiveSession).toHaveBeenCalledWith('live-1');
     expect(abortLiveSession).toHaveBeenCalledWith('live-1');
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
     expect(status).toEqual({
@@ -625,7 +621,6 @@ describe('api desktop transport', () => {
     expect(reloaded).toEqual({ ok: true });
     expect(branched).toEqual({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
     expect(forked).toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
-    expect(summaryFork).toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     expect(aborted).toEqual({ ok: true });
     expect(destroyed).toEqual({ ok: true });
   });

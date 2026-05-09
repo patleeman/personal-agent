@@ -100,7 +100,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     destroyDesktopLiveSession: vi.fn(),
     branchDesktopLiveSession: vi.fn(),
     forkDesktopLiveSession: vi.fn(),
-    summarizeAndForkDesktopLiveSession: vi.fn(),
     abortDesktopLiveSession: vi.fn(),
     subscribeDesktopLocalApiStream: vi.fn(),
     subscribeDesktopAppEvents: vi.fn(),
@@ -742,10 +741,6 @@ describe('LocalHostController', () => {
     const destroyDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const branchDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
     const forkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
-    const summarizeAndForkDesktopLiveSession = vi.fn().mockResolvedValue({
-      newSessionId: 'summary-1',
-      sessionFile: '/tmp/summary-1.jsonl',
-    });
     const abortDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const loadLocalApi = vi.fn().mockResolvedValue(
       createLocalApiModuleMock({
@@ -777,7 +772,6 @@ describe('LocalHostController', () => {
         destroyDesktopLiveSession,
         branchDesktopLiveSession,
         forkDesktopLiveSession,
-        summarizeAndForkDesktopLiveSession,
         abortDesktopLiveSession,
       }),
     );
@@ -918,10 +912,6 @@ describe('LocalHostController', () => {
     await expect(
       controller.forkLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true, beforeEntry: true }),
     ).resolves.toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
-    await expect(controller.summarizeAndForkLiveSession?.('live-1')).resolves.toEqual({
-      newSessionId: 'summary-1',
-      sessionFile: '/tmp/summary-1.jsonl',
-    });
     await expect(controller.abortLiveSession?.('live-1')).resolves.toEqual({ ok: true });
 
     expect(readDesktopDurableRuns).toHaveBeenCalledTimes(1);
@@ -970,7 +960,6 @@ describe('LocalHostController', () => {
       preserveSource: true,
       beforeEntry: true,
     });
-    expect(summarizeAndForkDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1' });
     expect(abortDesktopLiveSession).toHaveBeenCalledWith('live-1');
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });

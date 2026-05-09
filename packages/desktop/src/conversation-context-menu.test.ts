@@ -42,13 +42,10 @@ describe('buildConversationContextMenuTemplate', () => {
     ).toBe(true);
   });
 
-  it('includes duplicate and summarize+new', () => {
-    const items = buildConversationContextMenuTemplate({ canDuplicate: true, canSummarizeAndNew: true }, () => {});
+  it('includes duplicate chat', () => {
+    const items = buildConversationContextMenuTemplate({ canDuplicate: true }, () => {});
     expect(
       items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Duplicate Chat'),
-    ).toBe(true);
-    expect(
-      items.some((item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Summarize & New'),
     ).toBe(true);
   });
 
@@ -59,15 +56,6 @@ describe('buildConversationContextMenuTemplate', () => {
     );
     expect(duplicate).toBeDefined();
     expect(duplicate && 'enabled' in duplicate ? duplicate.enabled : true).toBe(false);
-  });
-
-  it('disables summarize when busyAction is summarize', () => {
-    const items = buildConversationContextMenuTemplate({ canSummarizeAndNew: true, busyAction: 'summarize' }, () => {});
-    const summarize = items.find(
-      (item: Electron.MenuItemConstructorOptions | Electron.MenuItem) => 'label' in item && item.label === 'Summarizing…',
-    );
-    expect(summarize).toBeDefined();
-    expect(summarize && 'enabled' in summarize ? summarize.enabled : true).toBe(false);
   });
 
   it('includes attach to gateway', () => {

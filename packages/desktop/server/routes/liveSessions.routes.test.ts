@@ -45,7 +45,6 @@ const {
   setServerTimingHeadersMock,
   submitLocalPromptSessionMock,
   subscribeLocalMock,
-  summarizeAndForkSessionMock,
   syncWebLiveConversationRunMock,
   takeOverSessionControlMock,
   buildReferencedMemoryDocsContextMock,
@@ -101,7 +100,6 @@ const {
   setServerTimingHeadersMock: vi.fn(),
   submitLocalPromptSessionMock: vi.fn(),
   subscribeLocalMock: vi.fn(),
-  summarizeAndForkSessionMock: vi.fn(),
   syncWebLiveConversationRunMock: vi.fn(),
   takeOverSessionControlMock: vi.fn(),
   buildReferencedMemoryDocsContextMock: vi.fn(),
@@ -152,7 +150,6 @@ vi.mock('../conversations/liveSessions.js', () => ({
   resumeSession: resumeLocalSessionMock,
   submitPromptSession: submitLocalPromptSessionMock,
   subscribe: subscribeLocalMock,
-  summarizeAndForkSession: summarizeAndForkSessionMock,
   takeOverSessionControl: takeOverSessionControlMock,
 }));
 
@@ -355,7 +352,6 @@ describe('live session routes', () => {
     setServerTimingHeadersMock.mockReset();
     submitLocalPromptSessionMock.mockReset();
     subscribeLocalMock.mockReset();
-    summarizeAndForkSessionMock.mockReset();
     syncWebLiveConversationRunMock.mockReset();
     takeOverSessionControlMock.mockReset();
     buildReferencedMemoryDocsContextMock.mockReset();
@@ -414,7 +410,6 @@ describe('live session routes', () => {
     resumeLocalSessionMock.mockResolvedValue({ id: 'live-resumed' });
     submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
     subscribeLocalMock.mockImplementation(() => createSessionListenerUnsubscribeMock);
-    summarizeAndForkSessionMock.mockResolvedValue({ id: 'summary-fork-1' });
     syncWebLiveConversationRunMock.mockResolvedValue(undefined);
     takeOverSessionControlMock.mockReturnValue({ ok: true, surfaceId: 'surface-1' });
     buildReferencedMemoryDocsContextMock.mockReturnValue('Memory docs context');
@@ -1095,17 +1090,6 @@ describe('live session routes', () => {
         linesDeleted: 2,
       },
     });
-
-    const summarizeRes = createResponse();
-    await postHandler('/api/live-sessions/:id/summarize-fork')(
-      createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }),
-      summarizeRes,
-    );
-    expect(summarizeAndForkSessionMock).toHaveBeenCalledWith('live-1', {
-      additionalExtensionPaths: ['extensions'],
-      extensionFactories: ['factory'],
-    });
-    expect(summarizeRes.json).toHaveBeenCalledWith({ id: 'summary-fork-1' });
 
     const missingEntryIdRes = createResponse();
     await postHandler('/api/live-sessions/:id/branch')(createRequest({ params: { id: 'live-1' }, body: {} }), missingEntryIdRes);
