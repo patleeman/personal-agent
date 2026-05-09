@@ -154,6 +154,14 @@ interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+interface ExtensionStatusBarItemContribution {
+  id: string;
+  label: string;
+  action?: string;
+  alignment?: 'left' | 'right';
+  priority?: number;
+}
+
 interface ExtensionContextMenuContribution {
   id: string;
   title: string;
@@ -188,6 +196,7 @@ interface ExtensionContributions {
   composerShelves?: ExtensionComposerShelfContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }

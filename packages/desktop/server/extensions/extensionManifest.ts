@@ -94,6 +94,7 @@ export interface ExtensionContributions {
   composerShelves?: ExtensionComposerShelfContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }
@@ -125,6 +126,14 @@ export interface ExtensionToolbarActionContribution {
   icon: ExtensionIconName;
   action: string;
   when?: string;
+  priority?: number;
+}
+
+export interface ExtensionStatusBarItemContribution {
+  id: string;
+  label: string;
+  action?: string;
+  alignment?: 'left' | 'right';
   priority?: number;
 }
 

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../client/api';
+import { createNativeExtensionClient } from '../../extensions/nativePaClient';
+import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { GatewayState } from '../../shared/types';
 import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon, RemoteExecutionIcon } from './ConversationComposerChrome';
@@ -90,6 +92,9 @@ export function ConversationComposerMeta({
   conversationTitle?: string;
   openGatewayPickerSignal?: string | null;
 }) {
+  const { statusBarItems } = useExtensionRegistry();
+  const leftStatusItems = statusBarItems.filter((item) => item.alignment === 'left');
+  const rightStatusItems = statusBarItems.filter((item) => item.alignment === 'right');
   const [moreOpen, setMoreOpen] = useState(false);
   const [gatewayOnlyOpen, setGatewayOnlyOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -282,6 +287,13 @@ export function ConversationComposerMeta({
         ) : null}
       </div>
 
+      {leftStatusItems.length > 0 && (
+        <div className="flex shrink-0 items-center gap-2">
+          {leftStatusItems.map((item) => (
+            <StatusBarItem key={item.id} item={item} />
+          ))}
+        </div>
+      )}
       <div className="flex shrink-0 items-center justify-end gap-2 text-right">
         {!draft && branchLabel ? (
           <span className="max-w-[8rem] truncate font-mono" title={branchLabel}>
@@ -349,7 +361,39 @@ export function ConversationComposerMeta({
           ) : null}
         </div>
       </div>
+      {rightStatusItems.length > 0 &&
+        rightStatusItems.map((item) => (
+          <StatusBarItem key={item.id} item={item} />
+        ))}
     </div>
+  );
+}
+
+function StatusBarItem({ item }: { item: { extensionId: string; id: string; label: string; action?: string } }) {
+  const [busy, setBusy] = useState(false);
+  const paClient = useRef<ReturnType<typeof createNativeExtensionClient> | null>(null);
+  if (!paClient.current) paClient.current = createNativeExtensionClient(item.extensionId);
+
+  if (!item.action) {
+    return <span className="shrink-0 truncate font-mono max-w-[6rem]">{item.label}</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void paClient
+          .current!.extension.invoke(item.action, {})
+          .catch(() => {})
+          .finally(() => setBusy(false));
+      }}
+      className="shrink-0 truncate max-w-[6rem] font-mono text-secondary transition-colors hover:text-primary disabled:opacity-50"
+      title={item.label}
+    >
+      {busy ? `${item.label}…` : item.label}
+    </button>
   );
 }
 

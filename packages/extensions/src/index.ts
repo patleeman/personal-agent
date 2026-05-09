@@ -185,6 +185,16 @@ export interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+export interface ExtensionStatusBarItemContribution {
+  id: string;
+  label: string;
+  action?: string;
+  /** Left or right alignment. Default 'right'. */
+  alignment?: 'left' | 'right';
+  /** Sort priority within alignment. Higher = closer to edge. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionContextMenuContribution {
   id: string;
   title: string;
@@ -224,6 +234,7 @@ export interface ExtensionContributions {
   composerShelves?: ExtensionComposerShelfContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
+  statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }

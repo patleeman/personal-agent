@@ -196,6 +196,16 @@ export interface ExtensionConversationDecoratorRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionStatusBarItemRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  label: string;
+  action?: string;
+  alignment: 'left' | 'right';
+  priority?: number;
+}
+
 export interface ExtensionContextMenuRegistration {
   extensionId: string;
   id: string;
@@ -747,6 +757,18 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.statusBarItems !== undefined) {
+    for (const [index, item] of assertRecordArray(contributes.statusBarItems, 'contributes.statusBarItems').entries()) {
+      requireString(item.id, `contributes.statusBarItems[${index}].id`);
+      requireString(item.label, `contributes.statusBarItems[${index}].label`);
+      validateOptionalString(item.action, `contributes.statusBarItems[${index}].action`);
+      if (item.alignment !== undefined) validateEnum(item.alignment, ['left', 'right'], `contributes.statusBarItems[${index}].alignment`);
+      if (item.priority !== undefined && (typeof item.priority !== 'number' || !Number.isInteger(item.priority))) {
+        throw new Error(`Extension manifest contributes.statusBarItems[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.conversationDecorators !== undefined) {
     for (const [index, decorator] of assertRecordArray(contributes.conversationDecorators, 'contributes.conversationDecorators').entries()) {
       requireString(decorator.id, `contributes.conversationDecorators[${index}].id`);
@@ -978,6 +1000,7 @@ export function readExtensionSchema() {
       'toolbarActions',
       'conversationDecorators',
       'contextMenus',
+      'statusBarItems',
     ],
   };
 }
@@ -1183,6 +1206,27 @@ export function listExtensionToolbarActionRegistrations(stateRoot: string = getS
           action: resolvedAction,
           ...(action.when ? { when: action.when } : {}),
           ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionStatusBarItemRegistrations(stateRoot: string = getStateRoot()): ExtensionStatusBarItemRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.statusBarItems ?? []).flatMap((item): ExtensionStatusBarItemRegistration[] => {
+      const id = item.id.trim();
+      const label = item.label.trim();
+      if (!id || !label) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          label,
+          ...(item.action ? { action: item.action } : {}),
+          alignment: item.alignment ?? 'right',
+          ...(typeof item.priority === 'number' ? { priority: item.priority } : {}),
         },
       ];
     }),
