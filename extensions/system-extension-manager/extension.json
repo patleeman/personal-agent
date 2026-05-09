@@ -20,16 +20,6 @@
         "placement": "primary",
         "scope": "global",
         "activation": "on-route"
-      },
-      {
-        "id": "details",
-        "title": "Extension details",
-        "location": "rightRail",
-        "component": "ExtensionDetailsPanel",
-        "placement": "primary",
-        "scope": "global",
-        "activation": "on-route",
-        "persistOpen": true
       }
     ],
     "skills": [
