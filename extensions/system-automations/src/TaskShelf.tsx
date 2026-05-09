@@ -42,7 +42,9 @@ export function TaskShelf({
 
   return (
     <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-[11px]">
-      <span className="text-secondary">{taskCount} scheduled task{taskCount === 1 ? '' : 's'}</span>
+      <span className="text-secondary">
+        {taskCount} scheduled task{taskCount === 1 ? '' : 's'}
+      </span>
       {dueCount && dueCount > 0 ? <span className="text-accent">{dueCount} due soon</span> : null}
     </div>
   );

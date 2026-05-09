@@ -6,6 +6,22 @@
   "description": "Agent tools for conversation questions, inspection, titles, and working directory changes.",
   "version": "0.1.0",
   "contributes": {
+    "messageActions": [
+      {
+        "id": "log-message-action",
+        "title": "Log",
+        "action": "logMessageAction",
+        "when": "role:assistant && hasText"
+      }
+    ],
+    "contextMenus": [
+      {
+        "id": "copy-conversation-id",
+        "title": "Copy Conversation ID",
+        "action": "copyConversationId",
+        "surface": "conversationList"
+      }
+    ],
     "commands": [
       { "id": "open-thread-palette", "title": "Open thread palette", "action": "commandPalette:threads" },
       { "id": "open-global-search", "title": "Search all", "action": "commandPalette:search" }
@@ -27,6 +43,18 @@
   },
   "backend": {
     "entry": "src/backend.ts",
+    "actions": [
+      {
+        "id": "logMessageAction",
+        "handler": "logMessageAction",
+        "title": "Log message action"
+      },
+      {
+        "id": "copyConversationId",
+        "handler": "copyConversationId",
+        "title": "Copy conversation ID"
+      }
+    ],
     "agentExtension": "createConversationToolsAgentExtension"
   },
   "permissions": ["conversations:readwrite", "ui:notify"]

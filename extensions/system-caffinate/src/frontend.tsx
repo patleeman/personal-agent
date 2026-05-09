@@ -1,3 +1,5 @@
+export { CaffeineDecorator } from './CaffeineDecorator.js';
+
 import { type NativeExtensionClient } from '@personal-agent/extensions';
 import { useEffect, useRef, useState } from 'react';
 

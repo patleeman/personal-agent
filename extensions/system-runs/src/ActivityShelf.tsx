@@ -18,9 +18,7 @@ export function ActivityShelf({
       try {
         const runs = (await pa.runs.list()) as Array<{ runId: string; status?: { status: string }; tags?: Record<string, string> }>;
         if (cancelled) return;
-        const active = runs.filter(
-          (r) => r.tags?.conversationId === shelfContext.conversationId && r.status?.status === 'running',
-        );
+        const active = runs.filter((r) => r.tags?.conversationId === shelfContext.conversationId && r.status?.status === 'running');
         setRunCount(active.length);
       } catch {
         if (!cancelled) setRunCount(null);
@@ -58,7 +56,9 @@ export function ActivityShelf({
       <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-accent" aria-hidden="true">
         <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
       </span>
-      <span className="text-secondary">{runCount} active run{runCount === 1 ? '' : 's'}</span>
+      <span className="text-secondary">
+        {runCount} active run{runCount === 1 ? '' : 's'}
+      </span>
       {cancellingRunIds.size > 0 && <span className="text-dim">Cancelling…</span>}
     </div>
   );

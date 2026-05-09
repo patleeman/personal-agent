@@ -79,6 +79,7 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-daemon', label: 'Daemon', summary: 'Background runtime and wake behavior' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
   { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
+  { id: 'settings-extensions', label: 'Extensions', summary: 'Extension-registered settings' },
   { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
@@ -1869,6 +1870,192 @@ export function DesktopConnectionsSettingsPanel() {
         ) : null}
       </SettingsPanel>
     </SettingsSection>
+  );
+}
+
+interface UnifiedSettingsEntry {
+  extensionId: string;
+  key: string;
+  type: string;
+  default?: unknown;
+  description?: string;
+  group: string;
+  enum?: string[];
+  placeholder?: string;
+  order: number;
+}
+
+function UnifiedSettingsSection() {
+  const { data: values, loading, error, refetch } = useApi<Record<string, unknown>>(api.settings as never);
+  const { data: schema, loading: schemaLoading, error: schemaError } = useApi<UnifiedSettingsEntry[]>(api.settingsSchema as never);
+  const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (values) {
+      setDraft((prev) => {
+        const merged = { ...values };
+        // Keep any local edits that haven't been saved yet
+        for (const [key, value] of Object.entries(prev)) {
+          if (prev[key] !== values[key]) {
+            merged[key] = prev[key];
+          }
+        }
+        return merged;
+      });
+    }
+  }, [values]);
+
+  // Debounced auto-save
+  useEffect(() => {
+    if (!values || !draft) return;
+    const dirty = Object.keys(draft).some((key) => draft[key] !== values[key]);
+    if (!dirty) return;
+
+    const timeout = window.setTimeout(async () => {
+      const changes: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(draft)) {
+        if (value !== values[key]) {
+          changes[key] = value;
+        }
+      }
+      if (Object.keys(changes).length === 0) return;
+
+      setSaving('Saving…');
+      setSaveError(null);
+      try {
+        await api.updateSettings(changes);
+        setSaveNotice('Saved.');
+        await refetch({ resetLoading: false });
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSaving(null);
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [draft, values, refetch]);
+
+  const grouped = useMemo(() => {
+    if (!schema) return new Map<string, UnifiedSettingsEntry[]>();
+    const groups = new Map<string, UnifiedSettingsEntry[]>();
+    for (const entry of schema) {
+      const group = entry.group || 'General';
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group)!.push(entry);
+    }
+    // Sort entries within each group by order
+    for (const [, entries] of groups) {
+      entries.sort((a, b) => a.order - b.order);
+    }
+    return groups;
+  }, [schema]);
+
+  if (loading || schemaLoading) return null;
+  if (error || schemaError) return null;
+  if (grouped.size === 0) return null;
+
+  return (
+    <>
+      {[...grouped.entries()].map(([group, entries]) => {
+        const sectionId = `settings-extension-${group
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')}`;
+        return (
+          <SettingsSection key={group} id={sectionId} label={group} description={`Settings registered by extensions under ${group}.`}>
+            <div className="space-y-0">
+              <SettingsPanel title={group}>
+                {entries.map((entry) => {
+                  const currentValue = draft[entry.key] ?? entry.default;
+                  const displayValue = currentValue === undefined ? '' : currentValue;
+
+                  return (
+                    <div key={entry.key} className="space-y-2 py-3 first:pt-0">
+                      <label htmlFor={`unified-settings-${entry.key}`} className="block text-[13px] font-medium text-primary">
+                        {entry.key.split('.').pop() ?? entry.key}
+                        {entry.description ? (
+                          <span className="ml-2 text-[12px] font-normal text-secondary">{entry.description}</span>
+                        ) : null}
+                      </label>
+
+                      {entry.type === 'boolean' ? (
+                        <label className="inline-flex items-center gap-3 text-[14px] text-primary">
+                          <input
+                            id={`unified-settings-${entry.key}`}
+                            type="checkbox"
+                            checked={Boolean(displayValue)}
+                            onChange={(e) => {
+                              setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
+                              setSaveNotice(null);
+                              setSaveError(null);
+                            }}
+                            className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
+                          />
+                          <span>Enabled</span>
+                        </label>
+                      ) : entry.type === 'select' && entry.enum ? (
+                        <select
+                          id={`unified-settings-${entry.key}`}
+                          value={String(displayValue)}
+                          onChange={(e) => {
+                            setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
+                            setSaveNotice(null);
+                            setSaveError(null);
+                          }}
+                          className={INPUT_CLASS}
+                        >
+                          {entry.enum.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : entry.type === 'number' ? (
+                        <input
+                          id={`unified-settings-${entry.key}`}
+                          type="number"
+                          value={displayValue as number}
+                          placeholder={entry.placeholder}
+                          onChange={(e) => {
+                            setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
+                            setSaveNotice(null);
+                            setSaveError(null);
+                          }}
+                          className={INPUT_CLASS}
+                        />
+                      ) : (
+                        <input
+                          id={`unified-settings-${entry.key}`}
+                          type="text"
+                          value={String(displayValue)}
+                          placeholder={entry.placeholder}
+                          onChange={(e) => {
+                            setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
+                            setSaveNotice(null);
+                            setSaveError(null);
+                          }}
+                          className={`${INPUT_CLASS} font-mono text-[13px]`}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+
+                {saving ? <p className="ui-card-meta">{saving}</p> : null}
+                {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
+                {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
+              </SettingsPanel>
+            </div>
+          </SettingsSection>
+        );
+      })}
+    </>
   );
 }
 
@@ -4927,6 +5114,8 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
             <DesktopConnectionsSettingsPanel />
 
             {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
+
+            <UnifiedSettingsSection />
 
             <SettingsSection
               id="settings-interface"
