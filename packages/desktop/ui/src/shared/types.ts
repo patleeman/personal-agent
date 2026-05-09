@@ -434,18 +434,10 @@ interface DaemonRuntimeSummary {
   maxQueueDepth?: number;
 }
 
-interface DaemonPowerSummary {
-  keepAwake: boolean;
-  supported: boolean;
-  active: boolean;
-  error?: string;
-}
-
 export interface DaemonState {
   warnings: string[];
   service: DaemonServiceSummary;
   runtime: DaemonRuntimeSummary;
-  power: DaemonPowerSummary;
   log: LogTail;
 }
 

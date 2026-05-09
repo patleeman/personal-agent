@@ -28,33 +28,20 @@ Desktop app ←──→ Daemon (child process)
 
 If the daemon crashes or is killed, the desktop app restarts it automatically.
 
-## Keep Awake
-
-When background work is running (runs, scheduled tasks, long-running automations), the daemon can prevent macOS idle sleep. Toggle this in Settings or via the API.
-
 ## Daemon State API
 
-| Endpoint            | Method | What it returns                                  |
-| ------------------- | ------ | ------------------------------------------------ |
-| `/api/daemon`       | GET    | Current state: running status, keepAwake, uptime |
-| `/api/daemon/power` | PATCH  | Update keepAwake, returns updated state          |
+| Endpoint      | Method | What it returns                          |
+| ------------- | ------ | ---------------------------------------- |
+| `/api/daemon` | GET    | Current daemon runtime status and uptime |
 
 ### State response
 
 ```json
 {
   "running": true,
-  "keepAwake": true,
   "pid": 82341,
   "uptimeMs": 2845000
 }
-```
-
-### Power update
-
-```json
-// PATCH /api/daemon/power
-{ "keepAwake": true }
 ```
 
 ## Companion API

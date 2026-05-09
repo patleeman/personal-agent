@@ -1,4 +1,4 @@
-import { getDurableTasksDir, getMachineConfigFilePath, readMachineConfigSection, updateMachineConfigSection } from '@personal-agent/core';
+import { getDurableTasksDir, getMachineConfigFilePath, readMachineConfigSection } from '@personal-agent/core';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 
@@ -20,9 +20,6 @@ export interface TasksModuleConfig {
 
 export interface DaemonConfig {
   logLevel: LogLevel;
-  power?: {
-    keepAwake: boolean;
-  };
   queue: {
     maxDepth: number;
   };
@@ -74,10 +71,6 @@ function readCompanionPort(value: unknown, fallback = 3843): number {
   return fallback;
 }
 
-function readBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback;
-}
-
 function expandConfigPaths(config: DaemonConfig): DaemonConfig {
   return {
     ...config,
@@ -89,9 +82,6 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
       enabled: config.companion?.enabled !== false,
       host: config.companion?.host ? String(config.companion.host).trim() || '127.0.0.1' : '127.0.0.1',
       port: readCompanionPort(config.companion?.port),
-    },
-    power: {
-      keepAwake: readBoolean(config.power?.keepAwake, false),
     },
     modules: {
       ...config.modules,
@@ -158,9 +148,6 @@ export function getDaemonConfigFilePath(): string {
 export function getDefaultDaemonConfig(): DaemonConfig {
   return {
     logLevel: 'info',
-    power: {
-      keepAwake: false,
-    },
     queue: {
       maxDepth: 1000,
     },
@@ -196,25 +183,4 @@ export function loadDaemonConfig(): DaemonConfig {
   const merged = deepMerge(defaults as unknown as Record<string, unknown>, fromDisk);
 
   return expandConfigPaths(merged as unknown as DaemonConfig);
-}
-
-export function writeDaemonPowerConfig(input: { keepAwake: boolean }, filePath = getDaemonConfigFilePath()): DaemonConfig {
-  updateMachineConfigSection(
-    'daemon',
-    (currentSection) => {
-      const current = currentSection ?? {};
-      const currentPower = isRecord(current.power) ? current.power : {};
-
-      return {
-        ...current,
-        power: {
-          ...currentPower,
-          keepAwake: input.keepAwake,
-        },
-      };
-    },
-    { filePath },
-  );
-
-  return loadDaemonConfig();
 }

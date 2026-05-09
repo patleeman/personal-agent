@@ -48,7 +48,6 @@ export {
   listRecoverableWebLiveConversationRunsFromDaemon,
   pingDaemon,
   rerunDurableRun,
-  setDaemonPowerKeepAwake,
   startBackgroundRun,
   startScheduledTaskRun,
   stopDaemon,
@@ -122,7 +121,7 @@ export type {
   CompanionUnsubscribeMessage,
 } from './companion/types.js';
 export { COMPANION_API_ROOT, COMPANION_PROTOCOL_VERSION, COMPANION_SOCKET_PATH } from './companion/types.js';
-export { type DaemonConfig, getDaemonConfigFilePath, getDefaultDaemonConfig, loadDaemonConfig, writeDaemonPowerConfig } from './config.js';
+export { type DaemonConfig, getDaemonConfigFilePath, getDefaultDaemonConfig, loadDaemonConfig } from './config.js';
 export { buildDeferredResumeActivityId, buildDeferredResumeAlertId, surfaceReadyDeferredResume } from './conversation-wakeups.js';
 export { createDaemonEvent, DAEMON_EVENT_VERSION, isDaemonEvent } from './events.js';
 export {
@@ -136,7 +135,6 @@ export {
 export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export { parseTaskDefinition } from './modules/tasks-parser.js';
 export { resolveDaemonPaths } from './paths.js';
-export { DaemonPowerController } from './power.js';
 export {
   type BackgroundRunResultSummary,
   listPendingBackgroundRunResults,
@@ -222,7 +220,6 @@ export type {
   DaemonEvent,
   DaemonEventInput,
   DaemonModuleStatus,
-  DaemonPowerStatus,
   DaemonStatus,
   FollowUpDurableRunResult,
   GetDurableRunResult,

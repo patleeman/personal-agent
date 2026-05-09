@@ -6,13 +6,12 @@ import { createServer, type Server, type Socket } from 'net';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { DaemonCompanionServer } from './companion/server.js';
 import type { CompanionRuntimeProvider } from './companion/types.js';
-import { type DaemonConfig, loadDaemonConfig, type LogLevel, writeDaemonPowerConfig } from './config.js';
+import { type DaemonConfig, loadDaemonConfig, type LogLevel } from './config.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { type DaemonRequest, type DaemonResponse, parseRequest, serializeResponse } from './ipc-protocol.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from './modules/index.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
-import { DaemonPowerController } from './power.js';
 import { deliverBackgroundRunCallbackWakeup } from './runs/background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from './runs/background-run-deferred-resumes.js';
 import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from './runs/background-run-replays.js';
@@ -189,7 +188,6 @@ export class PersonalAgentDaemon {
   private readonly stopRequestBehavior: DaemonStopRequestBehavior;
   private readonly logSink?: (line: string) => void;
   private readonly companionRuntimeProvider?: CompanionRuntimeProvider;
-  private readonly powerController: DaemonPowerController;
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
@@ -205,12 +203,6 @@ export class PersonalAgentDaemon {
     this.stopRequestBehavior = options.stopRequestBehavior ?? 'exit-process';
     this.logSink = options.logSink;
     this.companionRuntimeProvider = options.companionRuntimeProvider;
-    this.powerController = new DaemonPowerController({
-      logger: {
-        warn: (message) => this.log('warn', message),
-        info: (message) => this.log('info', message),
-      },
-    });
     this.paths = resolveDaemonPaths(this.config.ipc.socketPath);
     this.runsRoot = resolveDurableRunsRoot(this.paths.root);
     this.startedAt = new Date().toISOString();
@@ -253,7 +245,6 @@ export class PersonalAgentDaemon {
 
     await this.recoverInterruptedBackgroundRuns();
     this.logDurableRunRecoverySummary('startup');
-    this.powerController.setKeepAwake(this.config.power?.keepAwake === true);
 
     for (const moduleRuntime of this.modules) {
       await moduleRuntime.module.start(this.createModuleContext(moduleRuntime.module.name));
@@ -301,7 +292,6 @@ export class PersonalAgentDaemon {
 
     await Promise.all([...this.activeBackgroundRuns.keys()].map((runId) => this.cancelBackgroundRun(runId, 'Daemon stopping')));
     await this.bus.waitForIdle();
-    this.powerController.stop();
 
     for (const moduleRuntime of this.modules) {
       if (moduleRuntime.module.stop) {
@@ -348,7 +338,6 @@ export class PersonalAgentDaemon {
       pid: this.pid,
       startedAt: this.startedAt,
       socketPath: this.paths.socketPath,
-      power: this.powerController.getStatus(),
       queue: this.bus.getStatus(),
       modules: this.modules.map((moduleRuntime) => ({
         ...moduleRuntime.status,
@@ -399,13 +388,6 @@ export class PersonalAgentDaemon {
       await this.companionServer.start().catch(() => undefined);
       throw error;
     }
-  }
-
-  updatePowerConfig(input: { keepAwake: boolean }): DaemonStatus {
-    this.config.power = { keepAwake: input.keepAwake };
-    writeDaemonPowerConfig({ keepAwake: input.keepAwake });
-    this.powerController.setKeepAwake(input.keepAwake);
-    return this.getStatus();
   }
 
   private prepareSocket(): void {
@@ -585,11 +567,6 @@ export class PersonalAgentDaemon {
 
     if (request.type === 'status') {
       this.respond(socket, { id: request.id, ok: true, result: this.getStatus() });
-      return;
-    }
-
-    if (request.type === 'power.setKeepAwake') {
-      this.respond(socket, { id: request.id, ok: true, result: this.updatePowerConfig({ keepAwake: request.keepAwake }) });
       return;
     }
 

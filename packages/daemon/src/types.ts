@@ -59,19 +59,11 @@ export interface DaemonModuleStatus {
   detail?: Record<string, unknown>;
 }
 
-export interface DaemonPowerStatus {
-  keepAwake: boolean;
-  supported: boolean;
-  active: boolean;
-  error?: string;
-}
-
 export interface DaemonStatus {
   running: boolean;
   pid: number;
   startedAt: string;
   socketPath: string;
-  power: DaemonPowerStatus;
   queue: DaemonQueueStatus;
   modules: DaemonModuleStatus[];
 }

@@ -52,7 +52,7 @@ describe('automation daemon', () => {
     const logFile = join(dir, 'personal-agentd.log');
     writeFileSync(logFile, 'line one\n[module:sync] hidden\nline two\n', 'utf-8');
 
-    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
     pingDaemonMock.mockResolvedValue(true);
     getDaemonStatusMock.mockResolvedValue({
@@ -61,7 +61,6 @@ describe('automation daemon', () => {
       startedAt: '2026-04-10T00:00:00.000Z',
       modules: [{ id: 'tasks' }, { id: 'runs' }],
       queue: { currentDepth: 2, maxDepth: 5 },
-      power: { keepAwake: false, supported: true, active: false },
     });
 
     const state = await readDaemonState();
@@ -82,11 +81,6 @@ describe('automation daemon', () => {
       queueDepth: 2,
       maxQueueDepth: 5,
     });
-    expect(state.power).toEqual({
-      keepAwake: false,
-      supported: true,
-      active: false,
-    });
     expect(state.log.path).toEqual(expect.any(String));
     expect(state.log.lines).toEqual(['line one', 'line two']);
   });
@@ -95,7 +89,7 @@ describe('automation daemon', () => {
     const dir = createTempDir();
     const logFile = join(dir, 'personal-agentd.log');
 
-    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
     pingDaemonMock.mockResolvedValue(false);
 
@@ -113,7 +107,7 @@ describe('automation daemon', () => {
     const unreadableLogPath = join(dir, 'logs');
     mkdirSync(unreadableLogPath);
 
-    loadDaemonConfigMock.mockReturnValue({ power: { keepAwake: false }, ipc: { socketPath: join(dir, 'daemon.sock') } });
+    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
     resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile: unreadableLogPath });
     pingDaemonMock.mockRejectedValue(new Error('runtime failed'));
 

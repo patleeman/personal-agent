@@ -868,10 +868,9 @@ See the system extensions in `extensions/` for practical examples:
 - **`system-automations`** — Scheduled tasks + composer shelf (TaskShelf)
 - **`system-images`** — Image generation and probing tools
 - **`system-conversation-tools`** — Agent lifecycle hooks + messageActions + contextMenus
-- **`system-extension-manager`** — Extension management UI + statusBarItems + nav
-- **`system-caffinate`** — topBarElements + toolbarActions + statusBarItems + conversationDecorators
+- **`system-extension-manager`** — Extension management UI + nav
 - **`system-runs`** — Background runs + composer shelf (ActivityShelf)
-- **`system-gateways`** — Gateway management + statusBarItems
+- **`system-gateways`** — Gateway management UI + nav
 - **`system-settings`** — Settings panels + nav
 
 Each system extension has a complete `extension.json` manifest and

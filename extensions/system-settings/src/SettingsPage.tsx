@@ -75,7 +75,6 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-skills', label: 'Skills', summary: 'Folders and AGENTS.md instructions' },
   { id: 'settings-tools', label: 'Tools', summary: 'MCP wrappers and runtime tool config' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
-  { id: 'settings-daemon', label: 'Daemon', summary: 'Background runtime and wake behavior' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
   { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
   { id: 'settings-extensions', label: 'Extensions', summary: 'Extension-registered settings' },
@@ -503,99 +502,6 @@ function formatStartOnSystemStartSummary(state: DesktopAppPreferencesState | nul
   return state.startOnSystemStart
     ? 'Personal Agent will launch in the background when you sign in to this Mac.'
     : 'Personal Agent only starts when you open it manually.';
-}
-
-function formatDaemonPowerSummary(state: DaemonState | null): string {
-  if (!state) return 'Loading daemon power state…';
-  const power = state.power ?? { keepAwake: false, supported: true, active: false };
-  if (power.keepAwake && !power.supported) return 'Configured, but keeping the daemon awake is only supported on macOS.';
-  if (power.keepAwake && power.active) return 'Idle system sleep is blocked while the daemon is running. Display sleep is still allowed.';
-  if (power.keepAwake && power.error) return `Keep-awake is enabled but inactive: ${power.error}`;
-  return 'The Mac can idle sleep normally.';
-}
-
-function DaemonSettingsSection() {
-  const [daemonState, setDaemonState] = useState<DaemonState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const loadDaemonState = useCallback(async () => {
-    try {
-      const state = await api.daemon();
-      setDaemonState(state);
-      setError(null);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDaemonState();
-  }, [loadDaemonState]);
-
-  async function handleKeepAwakeChange(keepAwake: boolean) {
-    setSaving(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const state = await api.updateDaemonPower({ keepAwake });
-      setDaemonState(state);
-      setNotice('Daemon power setting saved.');
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const daemonPower = daemonState?.power ?? { keepAwake: false, supported: true, active: false };
-
-  return (
-    <SettingsSection id="settings-daemon" label="Daemon" description="Background runtime behavior for automations and durable runs.">
-      <SettingsPanel title="Power" description="Control whether the daemon keeps this Mac awake for unattended background work.">
-        {loading ? <p className="ui-card-meta">Loading daemon settings…</p> : null}
-        {daemonState ? (
-          <div className="space-y-3">
-            <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="daemon-keep-awake">
-              <input
-                id="daemon-keep-awake"
-                type="checkbox"
-                checked={daemonPower.keepAwake}
-                onChange={(event) => {
-                  void handleKeepAwakeChange(event.target.checked);
-                }}
-                disabled={saving || !daemonState.runtime.running}
-                className={CHECKBOX_CLASS}
-              />
-              <span>Keep Mac awake while daemon is running</span>
-            </label>
-            <p className="ui-card-meta break-words">
-              Prevents idle system sleep so automations and background runs continue. Display can still sleep.
-            </p>
-            <p className="ui-card-meta break-words">{formatDaemonPowerSummary(daemonState)}</p>
-            {!daemonState.runtime.running ? (
-              <p className="text-[12px] text-danger">Start the daemon before changing this setting.</p>
-            ) : null}
-            {daemonState.warnings.length > 0 ? (
-              <div className="space-y-1">
-                {daemonState.warnings.map((warning) => (
-                  <p key={warning} className="text-[12px] text-warning">
-                    {warning}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {notice ? <p className="text-[12px] text-accent">{notice}</p> : null}
-        {error ? <p className="text-[12px] text-danger">Failed to load daemon settings: {error}</p> : null}
-      </SettingsPanel>
-    </SettingsSection>
-  );
 }
 
 function formatKeyboardShortcutLabel(shortcut: string): string {
@@ -4808,7 +4714,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               </div>
             </SettingsSection>
 
-            <DaemonSettingsSection />
             <DesktopConnectionsSettingsPanel />
 
             {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}

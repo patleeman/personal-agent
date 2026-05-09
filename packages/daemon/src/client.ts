@@ -166,22 +166,6 @@ export async function getDaemonStatus(config?: DaemonConfig): Promise<DaemonStat
   );
 }
 
-export async function setDaemonPowerKeepAwake(keepAwake: boolean, config?: DaemonConfig): Promise<DaemonStatus> {
-  const transport = getTransport();
-  if (transport) {
-    return transport.setPowerKeepAwake(keepAwake, config);
-  }
-
-  return sendRequest<DaemonStatus>(
-    {
-      id: `req_${randomUUID()}`,
-      type: 'power.setKeepAwake',
-      keepAwake,
-    },
-    config,
-  );
-}
-
 export async function stopDaemon(config?: DaemonConfig): Promise<void> {
   const transport = getTransport();
   if (transport) {

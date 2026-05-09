@@ -74,7 +74,6 @@ await api.updateSettings({ 'myExt.timeout': 60 }); // updates + returns merged
 | Skills       | Built-in (folders, AGENTS.md)           |
 | Tools        | Built-in (MCP wrapper config)           |
 | Providers    | Built-in (model providers, credentials) |
-| Daemon       | Built-in (keep-awake)                   |
 | Desktop      | Built-in (updates, SSH remotes)         |
 | Keyboard     | Built-in (shortcut editor)              |
 | Extensions   | Auto-generated from extension manifests |
@@ -154,13 +153,6 @@ Models are discovered from configured providers and listed automatically.
 - Model selection
 - Install button to preload the model
 - Installation status indicator
-
-## Daemon Controls
-
-- **Daemon status** — running / stopped indicator
-- **Keep awake** — toggle to prevent sleep during background work
-
----
 
 <!-- Source: docs/providers-models.md -->
 

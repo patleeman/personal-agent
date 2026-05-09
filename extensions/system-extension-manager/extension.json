@@ -19,13 +19,6 @@
         "section": "settings"
       }
     ],
-    "statusBarItems": [
-      {
-        "id": "extension-count",
-        "label": "Extensions",
-        "alignment": "right"
-      }
-    ],
     "views": [
       {
         "id": "page",
