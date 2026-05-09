@@ -40,7 +40,7 @@ export function KnowledgeTreePanel({ pa }: ExtensionSurfaceProps) {
   );
 
   return (
-    <div className="min-h-0 flex-1 overflow-hidden">
+    <div className="h-full min-h-0 overflow-hidden">
       <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
         <LazyVaultFileTree
           activeFileId={activeFileId}
