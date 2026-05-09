@@ -121,16 +121,6 @@ function iconGlyphForExtensionSurface(icon: string | undefined): string {
   }
 }
 
-function isExtensionToolPanelAvailableForContext(
-  surface: (ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary,
-  input: { conversationId: string | null; workspaceCwd: string | null },
-): boolean {
-  if (surface.scope === 'conversation') return Boolean(input.conversationId);
-  if (surface.scope === 'workspace') return Boolean(input.workspaceCwd);
-  if (surface.scope === 'selection') return false;
-  return true;
-}
-
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
   return (
     value === 'toggle-sidebar' ||
@@ -736,10 +726,7 @@ function WorkbenchKnowledgeRail({
     activeRunConnected,
     runsLoaded: runs !== null,
   });
-  const availableExtensionToolPanels = useMemo(
-    () => extensionToolPanels.filter((surface) => isExtensionToolPanelAvailableForContext(surface, { conversationId, workspaceCwd })),
-    [conversationId, extensionToolPanels, workspaceCwd],
-  );
+  const availableExtensionToolPanels = extensionToolPanels;
   const activeExtensionToolPanel = useMemo(() => {
     const parsed = parseExtensionToolPanelMode(activeTool);
     if (!parsed) return null;
@@ -1095,12 +1082,7 @@ function WorkbenchKnowledgeRail({
           </button>
         ) : null}
         {availableExtensionToolPanels
-          .filter(
-            (surface) =>
-              surface.extensionId !== 'system-artifacts' &&
-              surface.extensionId !== 'system-browser' &&
-              surface.extensionId !== 'system-files',
-          )
+          .filter((surface) => surface.extensionId !== 'system-artifacts' && surface.extensionId !== 'system-files')
           .map((surface) => (
             <button
               key={`${surface.extensionId}:${surface.id}`}

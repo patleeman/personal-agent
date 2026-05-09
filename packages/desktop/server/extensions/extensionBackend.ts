@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getStateRoot } from '@personal-agent/core';
@@ -172,8 +172,16 @@ function readdirSafeStat(entryPath: string) {
   }
 }
 
+function resolveExtensionBackendApiPath(): string {
+  const sourcePath = fileURLToPath(new URL('./backendApi.ts', import.meta.url));
+  if (existsSync(sourcePath)) {
+    return sourcePath;
+  }
+  return fileURLToPath(new URL('./backendApi.js', import.meta.url));
+}
+
 function createExtensionBackendApiPlugin(): Plugin {
-  const backendApiPath = new URL('./backendApi.ts', import.meta.url).pathname;
+  const backendApiPath = resolveExtensionBackendApiPath();
   return {
     name: 'personal-agent-extension-backend-api',
     setup(buildContext) {

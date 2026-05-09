@@ -50,7 +50,19 @@ export function WorkspaceFilesPanel({ context }: ExtensionSurfaceProps) {
 export function WorkspaceFileDetailPanel({ context }: ExtensionSurfaceProps) {
   const filePath = getWorkspaceFilePath(context.search);
 
-  if (!context.cwd || !filePath) {
+  if (!context.cwd) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center select-text">
+        <div className="max-w-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Workbench</p>
+          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a local conversation</h2>
+          <p className="mt-2 text-[13px] leading-6 text-secondary">Open a local conversation to browse its workspace.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!filePath) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center select-text">
         <div className="max-w-sm">
