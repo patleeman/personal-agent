@@ -2,6 +2,9 @@ export const EXTENSION_MANIFEST_VERSION = 2;
 
 export type ExtensionPackageType = 'user' | 'system';
 export type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
+export type ExtensionViewPlacement = 'primary' | 'adaptive-primary' | 'conversation-rail';
+export type ExtensionViewScope = 'global' | 'workspace' | 'conversation';
+export type ExtensionViewActivation = 'always' | 'on-route' | 'on-open' | 'on-demand';
 export type ExtensionIconName =
   | 'app'
   | 'automation'
@@ -42,9 +45,14 @@ export interface ExtensionViewContribution {
   location: 'main' | 'rightRail' | 'workbench';
   component: string;
   route?: string;
-  scope?: ExtensionRightSurfaceScope;
+  scope?: ExtensionRightSurfaceScope | ExtensionViewScope;
   icon?: ExtensionIconName;
+  /** Controls where this view appears across compact/workbench layout modes. */
+  placement?: ExtensionViewPlacement;
+  /** Controls when the host should mount/load this view. */
+  activation?: ExtensionViewActivation;
   defaultOpen?: boolean;
+  persistOpen?: boolean;
   /** For rightRail views, optional paired workbench view id rendered in the center pane while this rail tool is active. */
   detailView?: string;
   /** Optional host layout behaviors enabled when this main view's route is active. */

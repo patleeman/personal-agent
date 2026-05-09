@@ -43,7 +43,12 @@ import {
   getDesktopBridge,
   shouldUseNativeAppContextMenus,
 } from '../desktop/desktopBridge';
-import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
+import {
+  type ExtensionSurfaceSummary,
+  getExtensionViewPlacement,
+  isExtensionLeftNavItemSurface,
+  isNativeExtensionPageSurface,
+} from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
@@ -1927,7 +1932,7 @@ function OpenConversationRow({
   );
 }
 
-export function Sidebar({ hideBrowserNav = false }: { hideBrowserNav?: boolean }) {
+export function Sidebar({ hideBrowserNav = false, hideAdaptiveNav = false }: { hideBrowserNav?: boolean; hideAdaptiveNav?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
@@ -3519,13 +3524,25 @@ export function Sidebar({ hideBrowserNav = false }: { hideBrowserNav?: boolean }
   const extensionNavItems = useMemo(() => {
     const legacy = extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface);
     const native = extensionRegistry.extensions.flatMap((extension) =>
-      (extension.contributes?.nav ?? []).map(
-        (item) =>
-          ({ ...item, extensionId: extension.id, packageType: extension.packageType ?? 'user' }) as ExtensionSurfaceSummary & typeof item,
-      ),
+      (extension.contributes?.nav ?? [])
+        .filter((item) => {
+          if (!hideAdaptiveNav) return true;
+          const pageSurface = extensionRegistry.surfaces.find(
+            (surface) =>
+              surface.extensionId === extension.id &&
+              isNativeExtensionPageSurface(surface) &&
+              routeMatchesPrefix(item.route, surface.route) &&
+              getExtensionViewPlacement(surface) === 'adaptive-primary',
+          );
+          return !pageSurface;
+        })
+        .map(
+          (item) =>
+            ({ ...item, extensionId: extension.id, packageType: extension.packageType ?? 'user' }) as ExtensionSurfaceSummary & typeof item,
+        ),
     );
     return [...legacy, ...native];
-  }, [extensionRegistry.extensions, extensionRegistry.surfaces]);
+  }, [extensionRegistry.extensions, extensionRegistry.surfaces, hideAdaptiveNav]);
   const browserNavVisible =
     !hideBrowserNav &&
     (extensionRegistry.loading || extensionRegistry.surfaces.some((surface) => surface.extensionId === 'system-browser'));

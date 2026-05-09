@@ -75,13 +75,18 @@
         "scope": "conversation",
         "component": "ArtifactsPanel",
         "icon": "file",
-        "detailView": "artifact-detail"
+        "detailView": "artifact-detail",
+        "placement": "conversation-rail",
+        "activation": "on-open"
       },
       {
         "id": "artifact-detail",
         "title": "Artifact",
         "location": "workbench",
-        "component": "ArtifactDetailPanel"
+        "component": "ArtifactDetailPanel",
+        "placement": "conversation-rail",
+        "scope": "conversation",
+        "activation": "on-open"
       }
     ],
     "skills": [

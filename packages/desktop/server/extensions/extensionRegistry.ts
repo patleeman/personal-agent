@@ -18,6 +18,9 @@ import {
   EXTENSION_RIGHT_SURFACE_SCOPES,
   EXTENSION_ROUTE_CAPABILITIES,
   EXTENSION_SURFACE_KINDS,
+  EXTENSION_VIEW_ACTIVATIONS,
+  EXTENSION_VIEW_PLACEMENTS,
+  EXTENSION_VIEW_SCOPES,
 } from './extensionManifest.js';
 import { listExtensionPackagePaths } from './extensionPackagePaths.js';
 import { SYSTEM_EXTENSION_ENTRIES } from './systemExtensions.js';
@@ -500,6 +503,12 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(view.component, `contributes.views[${index}].component`);
       validateOptionalString(view.route, `contributes.views[${index}].route`);
       if (view.scope !== undefined) validateEnum(view.scope, EXTENSION_RIGHT_SURFACE_SCOPES, `contributes.views[${index}].scope`);
+      if (view.placement !== undefined) validateEnum(view.placement, EXTENSION_VIEW_PLACEMENTS, `contributes.views[${index}].placement`);
+      if (view.placement !== undefined && view.scope !== undefined) {
+        validateEnum(view.scope, EXTENSION_VIEW_SCOPES, `contributes.views[${index}].scope`);
+      }
+      if (view.activation !== undefined)
+        validateEnum(view.activation, EXTENSION_VIEW_ACTIVATIONS, `contributes.views[${index}].activation`);
       if (view.icon !== undefined) validateEnum(view.icon, EXTENSION_ICON_NAMES, `contributes.views[${index}].icon`);
       validateOptionalString(view.detailView, `contributes.views[${index}].detailView`);
       if (view.routeCapabilities !== undefined) {

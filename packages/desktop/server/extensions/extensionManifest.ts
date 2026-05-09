@@ -12,6 +12,15 @@ export type ExtensionSurfaceKind = (typeof EXTENSION_SURFACE_KINDS)[number];
 export const EXTENSION_RIGHT_SURFACE_SCOPES = ['global', 'conversation', 'workspace', 'selection'] as const;
 export type ExtensionRightSurfaceScope = (typeof EXTENSION_RIGHT_SURFACE_SCOPES)[number];
 
+export const EXTENSION_VIEW_PLACEMENTS = ['primary', 'adaptive-primary', 'conversation-rail'] as const;
+export type ExtensionViewPlacement = (typeof EXTENSION_VIEW_PLACEMENTS)[number];
+
+export const EXTENSION_VIEW_SCOPES = ['global', 'workspace', 'conversation'] as const;
+export type ExtensionViewScope = (typeof EXTENSION_VIEW_SCOPES)[number];
+
+export const EXTENSION_VIEW_ACTIVATIONS = ['always', 'on-route', 'on-open', 'on-demand'] as const;
+export type ExtensionViewActivation = (typeof EXTENSION_VIEW_ACTIVATIONS)[number];
+
 export const EXTENSION_ROUTE_CAPABILITIES = ['contextRail', 'workbench', 'workbenchFilePane', 'knowledgeFiles', 'settingsSection'] as const;
 export type ExtensionRouteCapability = (typeof EXTENSION_ROUTE_CAPABILITIES)[number];
 
@@ -109,9 +118,12 @@ export interface ExtensionViewContribution {
   location: 'main' | 'rightRail' | 'workbench';
   component: string;
   route?: string;
-  scope?: ExtensionRightSurfaceScope;
+  scope?: ExtensionRightSurfaceScope | ExtensionViewScope;
   icon?: ExtensionIconName;
+  placement?: ExtensionViewPlacement;
+  activation?: ExtensionViewActivation;
   defaultOpen?: boolean;
+  persistOpen?: boolean;
   /** For rightRail views, optional paired workbench view id rendered in the center pane while this rail tool is active. */
   detailView?: string;
   /** Optional host layout behaviors enabled when this main view's route is active. */

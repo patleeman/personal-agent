@@ -13,6 +13,9 @@ type ExtensionIconName =
   | 'sparkle'
   | 'terminal';
 type ExtensionRightSurfaceScope = 'global' | 'conversation' | 'workspace' | 'selection';
+export type ExtensionViewPlacement = 'primary' | 'adaptive-primary' | 'conversation-rail';
+export type ExtensionViewScope = 'global' | 'workspace' | 'conversation';
+export type ExtensionViewActivation = 'always' | 'on-route' | 'on-open' | 'on-demand';
 export type ExtensionRouteCapability = 'contextRail' | 'workbench' | 'workbenchFilePane' | 'knowledgeFiles' | 'settingsSection';
 
 interface ExtensionBackendActionSummary {
@@ -46,9 +49,12 @@ interface ExtensionViewContribution {
   location: 'main' | 'rightRail' | 'workbench';
   component: string;
   route?: string;
-  scope?: ExtensionRightSurfaceScope;
+  scope?: ExtensionRightSurfaceScope | ExtensionViewScope;
   icon?: ExtensionIconName;
+  placement?: ExtensionViewPlacement;
+  activation?: ExtensionViewActivation;
   defaultOpen?: boolean;
+  persistOpen?: boolean;
   detailView?: string;
   routeCapabilities?: ExtensionRouteCapability[];
 }
@@ -351,6 +357,23 @@ export function isNativeExtensionRightRailSurface(
   surface: unknown,
 ): surface is NativeExtensionViewSummary & { location: 'rightRail'; scope: ExtensionRightSurfaceScope } {
   return isNativeExtensionViewSurface(surface) && surface.location === 'rightRail' && typeof surface.scope === 'string';
+}
+
+export function getExtensionViewPlacement(surface: Pick<NativeExtensionViewSummary, 'location' | 'placement'>): ExtensionViewPlacement {
+  if (surface.placement) return surface.placement;
+  return surface.location === 'rightRail' || surface.location === 'workbench' ? 'conversation-rail' : 'primary';
+}
+
+export function getExtensionViewScope(surface: Pick<NativeExtensionViewSummary, 'scope' | 'placement' | 'location'>): ExtensionViewScope {
+  if (surface.scope === 'conversation' || surface.scope === 'workspace' || surface.scope === 'global') return surface.scope;
+  return getExtensionViewPlacement(surface) === 'conversation-rail' ? 'conversation' : 'global';
+}
+
+export function getExtensionViewActivation(
+  surface: Pick<NativeExtensionViewSummary, 'activation' | 'placement' | 'location'>,
+): ExtensionViewActivation {
+  if (surface.activation) return surface.activation;
+  return getExtensionViewPlacement(surface) === 'primary' ? 'on-route' : 'on-open';
 }
 
 export function isNativeExtensionWorkbenchSurface(surface: unknown): surface is NativeExtensionViewSummary & { location: 'workbench' } {

@@ -5,7 +5,10 @@
   "packageType": "system",
   "description": "Inspect app traces, model usage, tool health, and runtime performance.",
   "version": "0.1.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "contributes": {
     "views": [
       {
@@ -14,10 +17,19 @@
         "location": "main",
         "route": "/telemetry",
         "component": "TelemetryPage",
-        "routeCapabilities": ["contextRail"]
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
       }
     ],
-    "nav": [{ "id": "nav", "label": "Telemetry", "route": "/telemetry", "icon": "graph" }]
+    "nav": [
+      {
+        "id": "nav",
+        "label": "Telemetry",
+        "route": "/telemetry",
+        "icon": "graph"
+      }
+    ]
   },
   "permissions": ["telemetry:read"]
 }

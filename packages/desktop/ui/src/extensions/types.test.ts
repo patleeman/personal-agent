@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getExtensionViewActivation,
+  getExtensionViewPlacement,
+  getExtensionViewScope,
   isNativeExtensionPageSurface,
   isNativeExtensionRightRailSurface,
   isNativeExtensionWorkbenchSurface,
@@ -56,5 +59,15 @@ describe('extension surface type guards', () => {
     expect(
       isNativeExtensionRightRailSurface({ extensionId: 'agent-board', id: 'rail', location: 'rightRail', component: 'AgentBoardRail' }),
     ).toBe(false);
+  });
+
+  it('normalizes placement, scope, and activation defaults', () => {
+    expect(getExtensionViewPlacement({ location: 'main' })).toBe('primary');
+    expect(getExtensionViewPlacement({ location: 'rightRail' })).toBe('conversation-rail');
+    expect(getExtensionViewPlacement({ location: 'main', placement: 'adaptive-primary' })).toBe('adaptive-primary');
+    expect(getExtensionViewScope({ location: 'rightRail', placement: 'conversation-rail' })).toBe('conversation');
+    expect(getExtensionViewScope({ location: 'rightRail', placement: 'adaptive-primary', scope: 'global' })).toBe('global');
+    expect(getExtensionViewActivation({ location: 'main', placement: 'primary' })).toBe('on-route');
+    expect(getExtensionViewActivation({ location: 'rightRail', placement: 'conversation-rail' })).toBe('on-open');
   });
 });

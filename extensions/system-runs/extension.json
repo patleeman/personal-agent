@@ -95,13 +95,18 @@
         "scope": "conversation",
         "component": "ConversationRunsPanel",
         "icon": "terminal",
-        "detailView": "conversation-run-detail"
+        "detailView": "conversation-run-detail",
+        "placement": "conversation-rail",
+        "activation": "on-open"
       },
       {
         "id": "conversation-run-detail",
         "title": "Run detail",
         "location": "workbench",
-        "component": "ConversationRunDetailPanel"
+        "component": "ConversationRunDetailPanel",
+        "placement": "conversation-rail",
+        "scope": "conversation",
+        "activation": "on-open"
       }
     ],
     "skills": [

@@ -1,4 +1,9 @@
-import { type ExtensionRouteCapability, type ExtensionSurfaceSummary, isNativeExtensionPageSurface } from '../extensions/types';
+import {
+  type ExtensionRouteCapability,
+  type ExtensionSurfaceSummary,
+  getExtensionViewPlacement,
+  isNativeExtensionPageSurface,
+} from '../extensions/types';
 
 interface AppRoutePattern {
   id: string;
@@ -17,12 +22,21 @@ export function routeMatchesPrefix(pathname: string, prefix: string): boolean {
 }
 
 function extensionRouteHasCapability(pathname: string, capability: ExtensionRouteCapability, surfaces: ExtensionSurfaceSummary[]): boolean {
-  return surfaces.some(
-    (surface) =>
-      isNativeExtensionPageSurface(surface) &&
-      routeMatchesPrefix(pathname, surface.route) &&
-      (surface.routeCapabilities ?? []).includes(capability),
-  );
+  return surfaces.some((surface) => {
+    if (!isNativeExtensionPageSurface(surface) || !routeMatchesPrefix(pathname, surface.route)) {
+      return false;
+    }
+
+    if ((surface.routeCapabilities ?? []).includes(capability)) {
+      return true;
+    }
+
+    const placement = getExtensionViewPlacement(surface);
+    if (capability === 'contextRail') {
+      return placement === 'primary' || placement === 'adaptive-primary';
+    }
+    return false;
+  });
 }
 
 function routeHasCapability(pathname: string, capability: ExtensionRouteCapability, surfaces: ExtensionSurfaceSummary[] = []): boolean {

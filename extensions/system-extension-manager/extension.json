@@ -17,7 +17,9 @@
         "location": "main",
         "route": "/extensions",
         "component": "ExtensionManagerPage",
-        "routeCapabilities": ["contextRail"]
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
       }
     ],
     "skills": [

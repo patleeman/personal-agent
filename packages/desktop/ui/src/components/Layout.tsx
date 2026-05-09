@@ -1829,7 +1829,7 @@ export function Layout() {
                 style={{ width: sidebar.width }}
                 className="flex-shrink-0 flex flex-col overflow-hidden bg-base border-r border-border-subtle"
               >
-                <Sidebar hideBrowserNav={showWorkbench && activeConversationId !== null} />
+                <Sidebar hideBrowserNav={showWorkbench} hideAdaptiveNav={showWorkbench} />
               </div>
             ) : null}
 

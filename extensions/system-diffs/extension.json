@@ -5,10 +5,19 @@
   "packageType": "system",
   "description": "Inspect conversation checkpoint and workspace diffs.",
   "version": "0.2.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "backend": {
     "entry": "src/backend.ts",
-    "actions": [{ "id": "checkpoint", "handler": "checkpoint", "title": "Checkpoint" }]
+    "actions": [
+      {
+        "id": "checkpoint",
+        "handler": "checkpoint",
+        "title": "Checkpoint"
+      }
+    ]
   },
   "contributes": {
     "tools": [
@@ -21,10 +30,25 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "action": { "type": "string", "enum": ["save", "get", "list"] },
-            "checkpointId": { "type": "string", "description": "Stable checkpoint id. Defaults to the created commit SHA." },
-            "message": { "type": "string", "description": "Commit message for the checkpoint. Required when action=save." },
-            "paths": { "type": "array", "items": { "type": "string" }, "description": "Targeted file or directory paths to include." }
+            "action": {
+              "type": "string",
+              "enum": ["save", "get", "list"]
+            },
+            "checkpointId": {
+              "type": "string",
+              "description": "Stable checkpoint id. Defaults to the created commit SHA."
+            },
+            "message": {
+              "type": "string",
+              "description": "Commit message for the checkpoint. Required when action=save."
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Targeted file or directory paths to include."
+            }
           },
           "required": ["action"],
           "additionalProperties": false
@@ -39,13 +63,18 @@
         "scope": "conversation",
         "component": "ConversationDiffsPanel",
         "icon": "diff",
-        "detailView": "conversation-diff-detail"
+        "detailView": "conversation-diff-detail",
+        "placement": "conversation-rail",
+        "activation": "on-open"
       },
       {
         "id": "conversation-diff-detail",
         "title": "Diff detail",
         "location": "workbench",
-        "component": "ConversationDiffDetailPanel"
+        "component": "ConversationDiffDetailPanel",
+        "placement": "conversation-rail",
+        "scope": "conversation",
+        "activation": "on-open"
       }
     ]
   },

@@ -207,7 +207,9 @@
         "location": "main",
         "route": "/automations",
         "component": "AutomationsPage",
-        "routeCapabilities": ["contextRail", "workbench", "workbenchFilePane"]
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
       }
     ],
     "skills": [

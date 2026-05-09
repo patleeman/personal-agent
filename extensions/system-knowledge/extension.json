@@ -5,31 +5,111 @@
   "packageType": "system",
   "description": "Browse and edit knowledge base files beside the active conversation.",
   "version": "0.1.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "backend": {
     "entry": "src/backend.ts",
     "actions": [
-      { "id": "readState", "handler": "readState", "title": "Read knowledge state" },
-      { "id": "updateState", "handler": "updateState", "title": "Update knowledge state" },
-      { "id": "sync", "handler": "sync", "title": "Sync knowledge base" },
-      { "id": "vaultListFiles", "handler": "vaultListFiles", "title": "List knowledge files" },
-      { "id": "vaultTree", "handler": "vaultTree", "title": "Read knowledge tree" },
-      { "id": "vaultReadFile", "handler": "vaultReadFile", "title": "Read knowledge file" },
-      { "id": "vaultWriteFile", "handler": "vaultWriteFile", "title": "Write knowledge file" },
-      { "id": "vaultCreateFolder", "handler": "vaultCreateFolder", "title": "Create knowledge folder" },
-      { "id": "vaultDeleteFile", "handler": "vaultDeleteFile", "title": "Delete knowledge entry" },
-      { "id": "vaultRename", "handler": "vaultRename", "title": "Rename knowledge entry" },
-      { "id": "vaultMove", "handler": "vaultMove", "title": "Move knowledge entry" },
-      { "id": "vaultBacklinks", "handler": "vaultBacklinks", "title": "Read knowledge backlinks" },
-      { "id": "vaultSearch", "handler": "vaultSearch", "title": "Search knowledge" },
-      { "id": "vaultUploadImage", "handler": "vaultUploadImage", "title": "Upload knowledge image" },
-      { "id": "vaultImportUrl", "handler": "vaultImportUrl", "title": "Import URL into knowledge" },
-      { "id": "resolvePromptReferences", "handler": "resolvePromptReferences", "title": "Resolve knowledge prompt references" }
+      {
+        "id": "readState",
+        "handler": "readState",
+        "title": "Read knowledge state"
+      },
+      {
+        "id": "updateState",
+        "handler": "updateState",
+        "title": "Update knowledge state"
+      },
+      {
+        "id": "sync",
+        "handler": "sync",
+        "title": "Sync knowledge base"
+      },
+      {
+        "id": "vaultListFiles",
+        "handler": "vaultListFiles",
+        "title": "List knowledge files"
+      },
+      {
+        "id": "vaultTree",
+        "handler": "vaultTree",
+        "title": "Read knowledge tree"
+      },
+      {
+        "id": "vaultReadFile",
+        "handler": "vaultReadFile",
+        "title": "Read knowledge file"
+      },
+      {
+        "id": "vaultWriteFile",
+        "handler": "vaultWriteFile",
+        "title": "Write knowledge file"
+      },
+      {
+        "id": "vaultCreateFolder",
+        "handler": "vaultCreateFolder",
+        "title": "Create knowledge folder"
+      },
+      {
+        "id": "vaultDeleteFile",
+        "handler": "vaultDeleteFile",
+        "title": "Delete knowledge entry"
+      },
+      {
+        "id": "vaultRename",
+        "handler": "vaultRename",
+        "title": "Rename knowledge entry"
+      },
+      {
+        "id": "vaultMove",
+        "handler": "vaultMove",
+        "title": "Move knowledge entry"
+      },
+      {
+        "id": "vaultBacklinks",
+        "handler": "vaultBacklinks",
+        "title": "Read knowledge backlinks"
+      },
+      {
+        "id": "vaultSearch",
+        "handler": "vaultSearch",
+        "title": "Search knowledge"
+      },
+      {
+        "id": "vaultUploadImage",
+        "handler": "vaultUploadImage",
+        "title": "Upload knowledge image"
+      },
+      {
+        "id": "vaultImportUrl",
+        "handler": "vaultImportUrl",
+        "title": "Import URL into knowledge"
+      },
+      {
+        "id": "resolvePromptReferences",
+        "handler": "resolvePromptReferences",
+        "title": "Resolve knowledge prompt references"
+      }
     ]
   },
   "contributes": {
-    "promptReferences": [{ "id": "knowledge-files", "handler": "resolvePromptReferences", "title": "Knowledge files" }],
-    "quickOpen": [{ "id": "knowledge-files", "provider": "knowledgeQuickOpenProvider", "title": "Knowledge files", "section": "files" }],
+    "promptReferences": [
+      {
+        "id": "knowledge-files",
+        "handler": "resolvePromptReferences",
+        "title": "Knowledge files"
+      }
+    ],
+    "quickOpen": [
+      {
+        "id": "knowledge-files",
+        "provider": "knowledgeQuickOpenProvider",
+        "title": "Knowledge files",
+        "section": "files"
+      }
+    ],
     "mentions": [
       {
         "id": "knowledge-files",
@@ -39,7 +119,14 @@
         "provider": "buildKnowledgeMentionItems"
       }
     ],
-    "nav": [{ "id": "knowledge", "label": "Knowledge", "route": "/knowledge", "icon": "file" }],
+    "nav": [
+      {
+        "id": "knowledge",
+        "label": "Knowledge",
+        "route": "/knowledge",
+        "icon": "file"
+      }
+    ],
     "views": [
       {
         "id": "knowledge-page",
@@ -47,7 +134,11 @@
         "location": "main",
         "route": "/knowledge",
         "component": "KnowledgePageSurface",
-        "routeCapabilities": ["contextRail", "knowledgeFiles"]
+        "routeCapabilities": ["knowledgeFiles"],
+        "placement": "adaptive-primary",
+        "scope": "global",
+        "activation": "on-route",
+        "persistOpen": true
       },
       {
         "id": "knowledge-tree",
@@ -56,13 +147,20 @@
         "scope": "global",
         "component": "KnowledgeTreePanel",
         "icon": "file",
-        "detailView": "knowledge-file"
+        "detailView": "knowledge-file",
+        "placement": "adaptive-primary",
+        "activation": "on-open",
+        "persistOpen": true
       },
       {
         "id": "knowledge-file",
         "title": "Knowledge file",
         "location": "workbench",
-        "component": "KnowledgeFilePanel"
+        "component": "KnowledgeFilePanel",
+        "placement": "adaptive-primary",
+        "scope": "global",
+        "activation": "on-open",
+        "persistOpen": true
       }
     ]
   },

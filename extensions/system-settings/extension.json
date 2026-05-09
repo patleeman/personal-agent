@@ -5,9 +5,19 @@
   "packageType": "system",
   "description": "Native extension routes for first-party settings panels.",
   "version": "0.1.0",
-  "frontend": { "entry": "dist/frontend.js", "styles": [] },
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "contributes": {
-    "commands": [{ "id": "open-settings", "title": "Open Settings", "action": "navigate:/settings", "icon": "gear" }],
+    "commands": [
+      {
+        "id": "open-settings",
+        "title": "Open Settings",
+        "action": "navigate:/settings",
+        "icon": "gear"
+      }
+    ],
     "keybindings": [
       {
         "id": "open-settings",
@@ -22,23 +32,41 @@
         "title": "Settings",
         "location": "main",
         "route": "/settings",
-        "component": "SettingsPage"
+        "component": "SettingsPage",
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
       },
       {
         "id": "providers",
         "title": "Provider settings",
         "location": "main",
         "route": "/settings/providers",
-        "component": "ProviderSettingsPage"
+        "component": "ProviderSettingsPage",
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
       },
       {
         "id": "dictation",
         "title": "Dictation settings",
         "location": "main",
         "route": "/settings/dictation",
-        "component": "DictationSettingsPage"
+        "component": "DictationSettingsPage",
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
       },
-      { "id": "desktop", "title": "Desktop settings", "location": "main", "route": "/settings/desktop", "component": "DesktopSettingsPage" }
+      {
+        "id": "desktop",
+        "title": "Desktop settings",
+        "location": "main",
+        "route": "/settings/desktop",
+        "component": "DesktopSettingsPage",
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
+      }
     ]
   },
   "permissions": ["settings:read", "settings:write"]

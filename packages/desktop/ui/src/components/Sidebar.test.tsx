@@ -91,7 +91,7 @@ describe('Sidebar', () => {
       tasks?: ScheduledTaskSummary[];
       liveTitles?: Map<string, string>;
       runs?: DurableRunListResult;
-      hideKnowledgeNav?: boolean;
+      hideAdaptiveNav?: boolean;
     },
   ) {
     return renderToString(
@@ -125,7 +125,7 @@ describe('Sidebar', () => {
             }}
           >
             <LiveTitlesContext.Provider value={{ titles: options?.liveTitles ?? new Map(), setTitle: () => {} }}>
-              <Sidebar hideKnowledgeNav={options?.hideKnowledgeNav} />
+              <Sidebar hideAdaptiveNav={options?.hideAdaptiveNav} />
             </LiveTitlesContext.Provider>
           </AppDataContext.Provider>
         </SseConnectionContext.Provider>

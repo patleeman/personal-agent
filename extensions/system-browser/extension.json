@@ -62,13 +62,20 @@
         "scope": "global",
         "component": "BrowserTabsPanel",
         "icon": "browser",
-        "detailView": "browser-workbench"
+        "detailView": "browser-workbench",
+        "placement": "adaptive-primary",
+        "activation": "on-open",
+        "persistOpen": true
       },
       {
         "id": "browser-workbench",
         "title": "Browser",
         "location": "workbench",
-        "component": "BrowserWorkbenchPanel"
+        "component": "BrowserWorkbenchPanel",
+        "placement": "adaptive-primary",
+        "scope": "global",
+        "activation": "on-open",
+        "persistOpen": true
       }
     ],
     "skills": [
