@@ -8,6 +8,7 @@ interface ModalState {
   title?: string;
   component: string;
   props: Record<string, unknown>;
+  size?: 'default' | 'fullscreen';
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 }
@@ -28,6 +29,7 @@ export function ExtensionModalHost() {
         title,
         component: componentName,
         props,
+        size,
         resolve,
         reject,
       } = event.detail as ModalState & {
@@ -35,7 +37,7 @@ export function ExtensionModalHost() {
       };
       resolveRef.current = resolve;
 
-      setModal({ extensionId, title, component: componentName, props, resolve, reject });
+      setModal({ extensionId, title, component: componentName, props, size, resolve, reject });
     }
 
     window.addEventListener('pa-extension-modal', handleModal as EventListener);
@@ -85,6 +87,7 @@ export function ExtensionModalHost() {
   if (!modal || !Component) return null;
 
   const pa = createNativeExtensionClient(modal.extensionId);
+  const fullscreen = modal.size === 'fullscreen';
 
   return (
     <div
@@ -99,7 +102,13 @@ export function ExtensionModalHost() {
       aria-modal="true"
       aria-label={modal.title ?? 'Extension dialog'}
     >
-      <div className="mx-4 max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border-default bg-surface p-6 shadow-2xl">
+      <div
+        className={
+          fullscreen
+            ? 'mx-4 flex h-[85vh] max-h-[85vh] w-[min(85vw,1600px)] min-w-0 flex-col overflow-hidden rounded-2xl border border-border-default bg-surface shadow-2xl'
+            : 'mx-4 max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border-default bg-surface p-6 shadow-2xl'
+        }
+      >
         {modal.title ? (
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-[15px] font-semibold text-primary">{modal.title}</h2>

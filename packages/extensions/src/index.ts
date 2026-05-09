@@ -7,7 +7,12 @@ export interface NativeExtensionClient {
   ui: {
     toast(message: string): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
-    openModal(options: { title?: string; component: string; props?: Record<string, unknown> }): Promise<unknown>;
+    openModal(options: {
+      title?: string;
+      component: string;
+      props?: Record<string, unknown>;
+      size?: 'default' | 'fullscreen';
+    }): Promise<unknown>;
   };
   [capability: string]: unknown;
 }
@@ -209,6 +214,16 @@ export interface ExtensionComposerButtonContribution {
   priority?: number;
 }
 
+export interface ExtensionComposerInputToolContribution {
+  id: string;
+  component: string;
+  title?: string;
+  /** Condition for visibility, e.g. "!streamIsStreaming" */
+  when?: string;
+  /** Sort priority. Higher = closer to the text input. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionConversationHeaderContribution {
   id: string;
   component: string;
@@ -312,6 +327,7 @@ export interface ExtensionContributions {
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
+  composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
@@ -423,7 +439,12 @@ export interface PersonalAgentClient {
   ui: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
-    openModal(options: { title?: string; component: string; props?: Record<string, unknown> }): Promise<unknown>;
+    openModal(options: {
+      title?: string;
+      component: string;
+      props?: Record<string, unknown>;
+      size?: 'default' | 'fullscreen';
+    }): Promise<unknown>;
   };
   /** Inter-extension communication. */
   events: {

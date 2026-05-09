@@ -32,6 +32,16 @@ export interface ExtensionComposerButtonRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionComposerInputToolRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  title?: string;
+  when?: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionConversationHeaderElementRegistration {
   extensionId: string;
   id: string;
@@ -108,6 +118,7 @@ export interface ExtensionRegistryState {
   composerShelves: ExtensionComposerShelfRegistration[];
   settingsPanels: ExtensionSettingsPanelRegistration[];
   composerButtons: ExtensionComposerButtonRegistration[];
+  composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
   contextMenus: ExtensionContextMenuRegistration[];
   statusBarItems: ExtensionStatusBarItemRegistration[];
@@ -209,6 +220,27 @@ function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionCom
         ...(button.title ? { title: button.title } : {}),
         ...(button.when ? { when: button.when } : {}),
         ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  return result;
+}
+
+function normalizeComposerInputTools(extensions: ExtensionManifest[]): ExtensionComposerInputToolRegistration[] {
+  const result: ExtensionComposerInputToolRegistration[] = [];
+  for (const extension of extensions) {
+    const tools = extension.contributes?.composerInputTools;
+    if (!tools?.length) continue;
+    for (const tool of tools) {
+      result.push({
+        extensionId: extension.id,
+        id: tool.id,
+        component: tool.component,
+        ...(tool.title ? { title: tool.title } : {}),
+        ...(tool.when ? { when: tool.when } : {}),
+        ...(typeof tool.priority === 'number' ? { priority: tool.priority } : {}),
         frontendEntry: extension.frontend?.entry,
       });
     }
@@ -328,6 +360,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     composerShelves: [],
     settingsPanels: [],
     composerButtons: [],
+    composerInputTools: [],
     toolbarActions: [],
     contextMenus: [],
     statusBarItems: [],
@@ -358,6 +391,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           composerShelves: [],
           settingsPanels: [],
           composerButtons: [],
+          composerInputTools: [],
           toolbarActions: [],
           contextMenus: [],
           statusBarItems: [],
@@ -381,6 +415,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             composerShelves: normalizeComposerShelves(extensions),
             settingsPanels: normalizeSettingsPanels(extensions),
             composerButtons: normalizeComposerButtons(extensions),
+            composerInputTools: normalizeComposerInputTools(extensions),
             toolbarActions: normalizeToolbarActions(extensions),
             contextMenus: normalizeContextMenus(extensions),
             statusBarItems: normalizeStatusBarItems(extensions),
@@ -401,6 +436,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             composerShelves: [],
             settingsPanels: [],
             composerButtons: [],
+            composerInputTools: [],
             toolbarActions: [],
             contextMenus: [],
             statusBarItems: [],

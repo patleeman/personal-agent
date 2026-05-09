@@ -80,7 +80,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onKeyDown={vi.fn()}
       onPaste={vi.fn()}
       onOpenFilePicker={vi.fn()}
-      onOpenDrawingEditor={vi.fn()}
+      onUpsertDrawingAttachment={vi.fn()}
       onSelectModel={vi.fn()}
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
@@ -100,7 +100,6 @@ describe('ConversationComposerInputControls', () => {
 
     expect(html).toContain('Message… / commands, @ notes');
     expect(html).toContain('Attach image or file');
-    expect(html).toContain('Create drawing');
     expect(html).toContain('Conversation model');
     expect(html).toContain('aria-label="Send"');
   });

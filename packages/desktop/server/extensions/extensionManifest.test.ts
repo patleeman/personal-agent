@@ -36,6 +36,7 @@ describe('extension manifest schema constants', () => {
           { id: 'rail', title: 'Board', location: 'rightRail', scope: 'conversation', component: 'AgentBoardRail' },
         ],
         nav: [{ id: 'nav', label: 'Agent Board', route: '/ext/agent-board', icon: 'kanban' }],
+        composerInputTools: [{ id: 'draw', component: 'DrawButton', title: 'Draw', when: '!streamIsStreaming' }],
       },
       backend: {
         entry: 'dist/backend.mjs',
@@ -45,6 +46,7 @@ describe('extension manifest schema constants', () => {
     };
 
     expect(manifest.contributes?.views?.map((surface) => surface.id)).toEqual(['page', 'rail']);
+    expect(manifest.contributes?.composerInputTools?.[0]?.component).toBe('DrawButton');
   });
 
   it('exposes type guards for manifest generation and validation', () => {

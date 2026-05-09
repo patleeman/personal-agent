@@ -109,6 +109,7 @@ The manifest declares what your extension contributes:
 | `messageActions`             | Hover buttons on messages         | [See below](#message-actions-messageactions)                          |
 | `composerShelves`            | Sections above the composer       | [See below](#composer-shelves-composershelves)                        |
 | `composerButtons`            | Component buttons beside submit   | [See below](#composer-buttons-composerbuttons)                        |
+| `composerInputTools`         | Component tools beside attachment | [See below](#composer-input-tools-composerinputtools)                 |
 | `toolbarActions`             | Icon buttons in composer toolbar  | [See below](#toolbar-actions-toolbaractions)                          |
 | `conversationDecorators`     | Badges on conversation list items | [See below](#conversation-decorators-conversationdecorators)          |
 | `contextMenus`               | Right-click menu items            | [See below](#context-menus-contextmenus)                              |
@@ -211,6 +212,22 @@ Add component-backed buttons in the compact shelf directly to the left of the su
 ```
 
 The component receives `pa` and `buttonContext`; `buttonContext.insertText(text)` inserts text at the current composer selection.
+
+### Composer Input Tools (`composerInputTools`)
+
+Add component-backed tools beside the attachment button in the composer input row. Use this for input-producing tools such as drawing editors or file-producing widgets, not submit-adjacent actions.
+
+```json
+{
+  "id": "draw",
+  "component": "DrawButton",
+  "title": "Create drawing",
+  "when": "!streamIsStreaming",
+  "priority": 10
+}
+```
+
+The component receives `pa` and `toolContext`. `toolContext.addFiles(files)` routes files through the normal composer attachment pipeline. `toolContext.upsertDrawingAttachment(payload)` adds an Excalidraw-compatible drawing payload to the composer.
 
 ### Toolbar Actions (`toolbarActions`)
 

@@ -42,6 +42,15 @@ describe('useExtensionRegistry', () => {
               priority: 100,
             },
           ],
+          composerInputTools: [
+            {
+              id: 'draw',
+              component: 'DrawButton',
+              title: 'Draw',
+              when: '!streamIsStreaming',
+              priority: 25,
+            },
+          ],
         },
       },
     ] as never);
@@ -71,6 +80,17 @@ describe('useExtensionRegistry', () => {
         frontendEntry: 'dist/frontend.js',
       },
     ]);
+    expect(result.current.composerInputTools).toEqual([
+      {
+        extensionId: 'test-extension',
+        id: 'draw',
+        component: 'DrawButton',
+        title: 'Draw',
+        when: '!streamIsStreaming',
+        priority: 25,
+        frontendEntry: 'dist/frontend.js',
+      },
+    ]);
   });
 
   it('keeps registry arrays defined when the extension API is unavailable', async () => {
@@ -84,6 +104,7 @@ describe('useExtensionRegistry', () => {
       expect(result.current.conversationHeaderElements).toEqual([]);
       expect(result.current.conversationDecorators).toEqual([]);
       expect(result.current.statusBarItems).toEqual([]);
+      expect(result.current.composerInputTools).toEqual([]);
     } finally {
       (api as unknown as { extensions: typeof originalExtensions }).extensions = originalExtensions;
     }

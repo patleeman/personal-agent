@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "id": "system-excalidraw-input",
+  "name": "Excalidraw input",
+  "packageType": "system",
+  "description": "Composer drawing input tool backed by Excalidraw.",
+  "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "contributes": {
+    "composerInputTools": [
+      {
+        "id": "excalidraw",
+        "component": "ExcalidrawInputTool",
+        "title": "Create drawing",
+        "when": "!streamIsStreaming",
+        "priority": 100
+      }
+    ]
+  }
+}

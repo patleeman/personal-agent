@@ -22,8 +22,8 @@ import { ConversationQuestionShelf } from '../components/conversation/Conversati
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationRunModePanel } from '../components/conversation/ConversationRunModePanel';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
-import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { AppPageEmptyState, cx, EmptyState, LoadingState, PageHeader, Pill } from '../components/ui';
+import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import {
@@ -215,6 +215,7 @@ import {
 import { ComposerShelfHost } from '../extensions/ComposerShelfHost';
 import { ConversationHeaderHost } from '../extensions/ConversationHeaderHost';
 import { buildExtensionMentionItems } from '../extensions/extensionMentions';
+import { createNativeExtensionClient } from '../extensions/nativePaClient';
 import type { ExtensionMentionRegistration, ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -307,9 +308,19 @@ const ConversationArtifactModal = lazy(() =>
 const ConversationDrawingsPickerModal = lazy(() =>
   import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })),
 );
-const ExcalidrawEditorModal = lazy(() =>
-  import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })),
-);
+const EXCALIDRAW_INPUT_EXTENSION_ID = 'system-excalidraw-input';
+
+interface ExcalidrawEditorSavePayload {
+  title: string;
+  scene: ExcalidrawSceneData;
+  sourceData: string;
+  sourceMimeType: string;
+  sourceName: string;
+  previewData: string;
+  previewMimeType: string;
+  previewName: string;
+  previewUrl: string;
+}
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 120;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
@@ -1620,7 +1631,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     deserialize: (raw) => normalizePendingBrowserComments(JSON.parse(raw) as unknown),
     shouldPersist: (comments) => comments.length > 0,
   });
-  const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
   const [drawingsPickerOpen, setDrawingsPickerOpen] = useState(false);
   const [conversationAttachments, setConversationAttachments] = useState<ConversationAttachmentSummary[]>([]);
   const [attachedContextDocs, setAttachedContextDocs] = useState<ConversationContextDocRef[]>([]);
@@ -4070,46 +4080,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     fileInputRef.current?.click();
   }
 
-  function openDrawingEditor() {
-    setEditingDrawingLocalId('__new__');
-  }
-
-  function closeDrawingEditor() {
-    setEditingDrawingLocalId(null);
-  }
-
-  function editDrawing(localId: string) {
-    setEditingDrawingLocalId(localId);
-  }
-
   function removeDrawingAttachment(localId: string) {
     setDrawingAttachments((current) => removeComposerDrawingAttachmentByLocalId(current, localId));
   }
 
-  async function saveDrawingFromEditor(payload: ExcalidrawEditorSavePayload) {
-    const activeLocalId = editingDrawingLocalId;
-
+  function upsertDrawingAttachment(payload: ExcalidrawEditorSavePayload, localId?: string) {
     setDrawingAttachments((current) => {
-      if (activeLocalId && activeLocalId !== '__new__') {
-        return current.map((attachment) => {
-          if (attachment.localId !== activeLocalId) {
-            return attachment;
-          }
-
-          return {
-            ...attachment,
-            title: payload.title,
-            sourceData: payload.sourceData,
-            sourceMimeType: payload.sourceMimeType,
-            sourceName: payload.sourceName,
-            previewData: payload.previewData,
-            previewMimeType: payload.previewMimeType,
-            previewName: payload.previewName,
-            previewUrl: payload.previewUrl,
-            scene: payload.scene,
-            dirty: true,
-          } satisfies ComposerDrawingAttachment;
-        });
+      if (localId) {
+        return current.map((attachment) =>
+          attachment.localId === localId
+            ? {
+                ...attachment,
+                title: payload.title,
+                sourceData: payload.sourceData,
+                sourceMimeType: payload.sourceMimeType,
+                sourceName: payload.sourceName,
+                previewData: payload.previewData,
+                previewMimeType: payload.previewMimeType,
+                previewName: payload.previewName,
+                previewUrl: payload.previewUrl,
+                scene: payload.scene,
+                dirty: true,
+              }
+            : attachment,
+        );
       }
 
       return [
@@ -4129,9 +4123,35 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         } satisfies ComposerDrawingAttachment,
       ];
     });
+  }
 
-    closeDrawingEditor();
-    showNotice('accent', 'Drawing saved to composer.');
+  async function openDrawingEditor() {
+    const result = await createNativeExtensionClient(EXCALIDRAW_INPUT_EXTENSION_ID).ui.openModal({
+      component: 'ExcalidrawEditorModal',
+      props: { saveLabel: 'Save drawing' },
+      size: 'fullscreen',
+    });
+
+    if (result && typeof result === 'object') {
+      upsertDrawingAttachment(result as ExcalidrawEditorSavePayload);
+      showNotice('accent', 'Drawing saved to composer.');
+    }
+  }
+
+  async function editDrawing(localId: string) {
+    const drawing = drawingAttachments.find((attachment) => attachment.localId === localId);
+    if (!drawing) return;
+
+    const result = await createNativeExtensionClient(EXCALIDRAW_INPUT_EXTENSION_ID).ui.openModal({
+      component: 'ExcalidrawEditorModal',
+      props: { initialTitle: drawing.title, initialScene: drawing.scene, saveLabel: 'Update drawing' },
+      size: 'fullscreen',
+    });
+
+    if (result && typeof result === 'object') {
+      upsertDrawingAttachment(result as ExcalidrawEditorSavePayload, localId);
+      showNotice('accent', 'Drawing saved to composer.');
+    }
   }
 
   async function attachSavedDrawing(selection: { attachment: ConversationAttachmentSummary; revision: number }) {
@@ -4629,7 +4649,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return { kind: 'handled' };
       case 'draw':
         setInput('');
-        openDrawingEditor();
+        await openDrawingEditor();
         return { kind: 'handled' };
       case 'drawings':
         setInput('');
@@ -5724,13 +5744,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const conversationPerformanceMode = resolveConversationPerformanceMode({
     messageCount: realMessages?.length ?? 0,
   });
-  const editingDrawingAttachment = useMemo(() => {
-    if (!editingDrawingLocalId || editingDrawingLocalId === '__new__') {
-      return null;
-    }
-
-    return drawingAttachments.find((attachment) => attachment.localId === editingDrawingLocalId) ?? null;
-  }, [drawingAttachments, editingDrawingLocalId]);
   const visibleTranscriptState =
     hasRenderableMessages && realMessages
       ? {
@@ -6412,7 +6425,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 onOpenFilePicker={openFilePicker}
-                onOpenDrawingEditor={openDrawingEditor}
+                onUpsertDrawingAttachment={(payload) => {
+                  upsertDrawingAttachment(payload as ExcalidrawEditorSavePayload);
+                }}
                 onSelectModel={(modelId) => {
                   void saveModelPreference(modelId);
                 }}
@@ -6487,19 +6502,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       {selectedArtifactId && id && !artifactOpensInWorkbenchPane && (
         <Suspense fallback={null}>
           <ConversationArtifactModal conversationId={id} artifactId={selectedArtifactId} />
-        </Suspense>
-      )}
-
-      {editingDrawingLocalId && (
-        <Suspense fallback={null}>
-          <ExcalidrawEditorModal
-            key={editingDrawingLocalId}
-            initialTitle={editingDrawingAttachment?.title ?? 'Drawing'}
-            initialScene={editingDrawingAttachment?.scene ?? null}
-            saveLabel={editingDrawingAttachment ? 'Update drawing' : 'Save drawing'}
-            onSave={saveDrawingFromEditor}
-            onClose={closeDrawingEditor}
-          />
         </Suspense>
       )}
 

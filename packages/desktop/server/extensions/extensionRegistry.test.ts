@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isExtensionEnabled,
+  listExtensionComposerInputToolRegistrations,
   listExtensionInstallSummaries,
   listExtensionSkillRegistrations,
   listExtensionToolRegistrations,
@@ -77,6 +78,16 @@ describe('extension registry', () => {
         expect.objectContaining({ extensionId: 'system-automations', id: 'scheduled-tasks' }),
         expect.objectContaining({ extensionId: 'system-browser', id: 'browser' }),
         expect.objectContaining({ extensionId: 'system-runs', id: 'runs' }),
+      ]),
+    );
+    expect(listExtensionComposerInputToolRegistrations()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          extensionId: 'system-excalidraw-input',
+          id: 'excalidraw',
+          component: 'ExcalidrawInputTool',
+          packageType: 'system',
+        }),
       ]),
     );
   });

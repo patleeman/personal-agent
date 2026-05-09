@@ -1,5 +1,8 @@
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react';
+import { type ClipboardEventHandler, type KeyboardEventHandler, type RefObject, useMemo } from 'react';
 
+import type { ComposerDrawingAttachment } from '../../conversation/promptAttachments';
+import { ComposerInputToolHost } from '../../extensions/ComposerInputToolHost';
+import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { ConversationAutoModeState, ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
@@ -39,8 +42,8 @@ export function ConversationComposerInputControls({
   onKeyDown,
   onPaste,
   onOpenFilePicker,
+  onUpsertDrawingAttachment,
 
-  onOpenDrawingEditor,
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
@@ -83,8 +86,8 @@ export function ConversationComposerInputControls({
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>;
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onOpenFilePicker: () => void;
+  onUpsertDrawingAttachment: (payload: Omit<ComposerDrawingAttachment, 'localId' | 'dirty'>) => void;
 
-  onOpenDrawingEditor: () => void;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
@@ -95,6 +98,24 @@ export function ConversationComposerInputControls({
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
 }) {
+  const { composerInputTools } = useExtensionRegistry();
+  const visibleComposerInputTools = useMemo(
+    () =>
+      composerInputTools.filter((tool) => {
+        const expr = tool.when;
+        if (!expr) return true;
+        const clauses = expr.split(/\s*&&\s*/).filter(Boolean);
+        for (const clause of clauses) {
+          const trimmed = clause.trim();
+          if (trimmed === 'composerHasContent' && !composerHasContent) return false;
+          if (trimmed === 'streamIsStreaming' && !streamIsStreaming) return false;
+          if (trimmed === '!streamIsStreaming' && streamIsStreaming) return false;
+        }
+        return true;
+      }),
+    [composerHasContent, composerInputTools, streamIsStreaming],
+  );
+
   return (
     <div className="px-3 pt-2.5 pb-2.5">
       <input
@@ -172,28 +193,19 @@ export function ConversationComposerInputControls({
               </svg>
             </button>
 
-            <button
-              type="button"
-              onClick={onOpenDrawingEditor}
-              disabled={composerDisabled || streamIsStreaming}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-              title="Create drawing"
-              aria-label="Create drawing"
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
-            </button>
+            {visibleComposerInputTools.map((tool) => (
+              <ComposerInputToolHost
+                key={`${tool.extensionId}:${tool.id}`}
+                registration={tool}
+                toolContext={{
+                  composerDisabled,
+                  streamIsStreaming,
+                  composerHasContent,
+                  addFiles: onFilesSelected,
+                  upsertDrawingAttachment: onUpsertDrawingAttachment,
+                }}
+              />
+            ))}
             {streamIsStreaming && (
               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center" aria-label="Working">
                 <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent/70" />
