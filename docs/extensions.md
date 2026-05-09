@@ -867,7 +867,7 @@ See the system extensions in `extensions/` for practical examples:
 - **`system-browser`** — Browser automation tool + views
 - **`system-automations`** — Scheduled tasks, reminders, conversation queues, and the Automations page
 - **`system-images`** — Image generation and probing tools
-- **`system-conversation-tools`** — Agent lifecycle hooks + messageActions + contextMenus
+- **`system-conversation-tools`** — Agent lifecycle hooks + contextMenus
 - **`system-extension-manager`** — Extension management UI + nav
 - **`system-runs`** — Background runs + composer shelf (ActivityShelf)
 - **`system-gateways`** — Gateway management UI + nav
