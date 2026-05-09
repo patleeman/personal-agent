@@ -11,6 +11,22 @@
   },
   "permissions": ["conversations:readwrite"],
   "contributes": {
+    "settings": {
+      "autoMode.maxIterations": {
+        "type": "number",
+        "default": 10,
+        "description": "Maximum loop iterations before auto-stop",
+        "group": "Auto Mode",
+        "order": 1
+      },
+      "autoMode.defaultDelay": {
+        "type": "number",
+        "default": 300,
+        "description": "Default delay in seconds between loop iterations",
+        "group": "Auto Mode",
+        "order": 2
+      }
+    },
     "skills": [
       {
         "id": "auto-mode",
