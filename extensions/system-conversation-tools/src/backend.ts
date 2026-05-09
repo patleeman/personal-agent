@@ -12,11 +12,34 @@ import { createChangeWorkingDirectoryAgentExtension } from './changeWorkingDirec
 import { createConversationInspectAgentExtension } from './conversationInspectAgentExtension.js';
 import { createConversationTitleAgentExtension } from './conversationTitleAgentExtension.js';
 
-export async function copyConversationId(
-  input: { conversationId?: string; sessionTitle?: string; cwd?: string },
-  ctx: ExtensionBackendContext,
-) {
+type ConversationContextMenuInput = { conversationId?: string; sessionTitle?: string; cwd?: string };
+
+export async function duplicateConversation(input: ConversationContextMenuInput, ctx: ExtensionBackendContext) {
+  ctx.log.info('context menu: duplicate conversation', {
+    conversationId: input.conversationId,
+    title: input.sessionTitle,
+  });
+  return { ok: true, conversationId: input.conversationId };
+}
+
+export async function copyWorkingDirectory(input: ConversationContextMenuInput, ctx: ExtensionBackendContext) {
+  ctx.log.info('context menu: copy working directory', {
+    conversationId: input.conversationId,
+    title: input.sessionTitle,
+  });
+  return { ok: true, cwd: input.cwd };
+}
+
+export async function copyConversationId(input: ConversationContextMenuInput, ctx: ExtensionBackendContext) {
   ctx.log.info('context menu: copy conversation id', {
+    conversationId: input.conversationId,
+    title: input.sessionTitle,
+  });
+  return { ok: true, conversationId: input.conversationId };
+}
+
+export async function copyDeeplink(input: ConversationContextMenuInput, ctx: ExtensionBackendContext) {
+  ctx.log.info('context menu: copy deeplink', {
     conversationId: input.conversationId,
     title: input.sessionTitle,
   });

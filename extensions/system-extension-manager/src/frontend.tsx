@@ -841,8 +841,8 @@ function ExtensionSettingsBlock({ extension }: { extension: ExtensionInstallSumm
     if (values) {
       setDraft((prev) => {
         const merged = { ...values };
-        for (const key of Object.keys(prev)) {
-          if (prev[key] !== values[key]) merged[key] = prev[key];
+        for (const [key, value] of Object.entries(prev)) {
+          if (value !== values[key]) merged[key] = value;
         }
         return merged;
       });
@@ -853,8 +853,8 @@ function ExtensionSettingsBlock({ extension }: { extension: ExtensionInstallSumm
   useEffect(() => {
     if (!values || !draft || saving) return;
     const changes: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(draft)) {
-      if (val !== values[key]) changes[key] = val;
+    for (const [key, value] of Object.entries(draft)) {
+      if (value !== values[key]) changes[key] = value;
     }
     if (Object.keys(changes).length === 0) return;
 

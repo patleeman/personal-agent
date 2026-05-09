@@ -1,8 +1,8 @@
 # Settings Extension
 
-This extension owns the Settings UI in the desktop app. It renders both
-hand-built panels (providers, keyboard shortcuts) and auto-generated
-panels from settings declared by any extension's manifest.
+This extension owns the core Settings UI in the desktop app. It renders
+hand-built panels for app-level configuration and mounts component-backed
+settings panels contributed by extensions.
 
 ---
 
@@ -13,12 +13,13 @@ The Settings panel is the desktop UI for all configuration. Open it from the app
 ## Architecture
 
 Settings are stored in a single `<stateRoot>/settings.json` file. Each
-extension declares its settings schema in its `extension.json` under
-`contributes.settings`. The system merges all schemas, and the Settings
-UI auto-generates form controls for each declared setting.
+extension can declare scalar settings in its `extension.json` under
+`contributes.settings`; those manifest-owned controls are edited from the
+Extension Manager detail view. Extensions that need richer UI can also
+contribute component-backed Settings sections with `contributes.settingsPanels`.
 
 ```
-Extension manifests ──► Schema registry ──► Settings UI (auto-generated)
+Extension manifests ──► Schema registry ──► Extension Manager settings editor
                           │
                      settings.json
                           │
@@ -45,7 +46,7 @@ In your `extension.json`:
 }
 ```
 
-The setting appears in the Settings UI grouped under "My Extension".
+The setting appears in that extension's Extension Manager detail view.
 No React code needed.
 
 ### API
@@ -70,17 +71,15 @@ await api.updateSettings({ 'myExt.timeout': 60 }); // updates + returns merged
 | ------------ | --------------------------------------- |
 | Appearance   | Built-in (theme picker)                 |
 | Conversation | Built-in (model, thinking)              |
-| Workspace    | Built-in (knowledge, working dir)       |
+| Workspace    | Built-in (default working dir)          |
 | Skills       | Built-in (folders, AGENTS.md)           |
-| Tools        | Built-in (MCP wrapper config)           |
+| Tools        | Extension-contributed settings panels   |
 | Providers    | Built-in (model providers, credentials) |
 | Desktop      | Built-in (updates, SSH remotes)         |
 | Keyboard     | Built-in (shortcut editor)              |
-| Extensions   | Auto-generated from extension manifests |
-| Interface    | Built-in (reset UI state)               |
 
-The **Extensions** section is populated dynamically from every extension's
-`contributes.settings` declarations, grouped by the `group` field.
+Knowledge setup lives in the Knowledge extension. Manifest-declared
+extension settings live in Extension Manager, not the core Settings page.
 
 ## Usage
 

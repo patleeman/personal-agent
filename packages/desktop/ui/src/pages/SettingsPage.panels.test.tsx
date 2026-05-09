@@ -94,11 +94,10 @@ describe('SettingsPage — untested panel rendering', () => {
 
   // Section header tests — section headers render synchronously without data
 
-  it('renders the daemon section heading', () => {
+  it('does not render daemon controls in core settings', () => {
     const html = renderPage('/settings');
-    expect(html).toContain('Daemon');
-    // The section always renders, showing loading state initially
-    expect(html).toContain('Background runtime');
+    expect(html).not.toContain('Daemon');
+    expect(html).not.toContain('Background runtime');
   });
 
   it('renders the skills section heading', () => {
@@ -113,10 +112,10 @@ describe('SettingsPage — untested panel rendering', () => {
     expect(html).toContain('MCP wrappers and runtime tool config');
   });
 
-  it('renders the interface reset section', () => {
+  it('does not render interface reset controls in core settings', () => {
     const html = renderPage('/settings');
-    expect(html).toContain('Interface');
-    expect(html).toContain('Reset saved UI preferences');
+    expect(html).not.toContain('Interface');
+    expect(html).not.toContain('Reset saved UI preferences');
   });
 
   it('renders the providers section heading', () => {

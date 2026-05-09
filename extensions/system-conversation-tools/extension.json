@@ -19,9 +19,27 @@
     ],
     "contextMenus": [
       {
+        "id": "duplicate-conversation",
+        "title": "Duplicate",
+        "action": "duplicateConversation",
+        "surface": "conversationList"
+      },
+      {
+        "id": "copy-working-directory",
+        "title": "Copy Working Directory",
+        "action": "copyWorkingDirectory",
+        "surface": "conversationList"
+      },
+      {
         "id": "copy-conversation-id",
-        "title": "Copy Conversation ID",
+        "title": "Copy Session ID",
         "action": "copyConversationId",
+        "surface": "conversationList"
+      },
+      {
+        "id": "copy-deeplink",
+        "title": "Copy Deeplink",
+        "action": "copyDeeplink",
         "surface": "conversationList"
       }
     ],
@@ -48,9 +66,24 @@
     "entry": "src/backend.ts",
     "actions": [
       {
+        "id": "duplicateConversation",
+        "handler": "duplicateConversation",
+        "title": "Duplicate conversation"
+      },
+      {
+        "id": "copyWorkingDirectory",
+        "handler": "copyWorkingDirectory",
+        "title": "Copy working directory"
+      },
+      {
         "id": "copyConversationId",
         "handler": "copyConversationId",
         "title": "Copy conversation ID"
+      },
+      {
+        "id": "copyDeeplink",
+        "handler": "copyDeeplink",
+        "title": "Copy deeplink"
       }
     ],
     "agentExtension": "createConversationToolsAgentExtension"

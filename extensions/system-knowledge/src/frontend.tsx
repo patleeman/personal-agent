@@ -10,8 +10,9 @@ import {
   useApi,
 } from '@personal-agent/extensions/ui';
 import { Suspense, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
+import { KnowledgeSettingsPanel } from './components/KnowledgeSettingsPanel';
 import { VaultEditor } from './components/VaultEditor';
 import { VaultFileTree } from './components/VaultFileTree';
 import { knowledgeApi } from './lib/knowledgeApi';
@@ -95,31 +96,16 @@ export function KnowledgePageSurface() {
             align="start"
             title="Connect a git repo to start using Knowledge"
             body={
-              <div className="space-y-3 leading-6">
-                <p>
-                  Knowledge stores durable docs, skills, and instruction files in a git repository. PA clones the repo, watches for local
-                  edits, and syncs changes automatically.
+              <div className="space-y-4">
+                <p className="text-[13px] leading-6 text-secondary">
+                  Knowledge stores durable docs, skills, and instruction files in a git repository. Enter the clone URL below and PA will
+                  clone it, watch for local edits, and sync changes automatically. Private repos work too — PA uses git credential helpers
+                  from the environment.
                 </p>
-                <div className="rounded-2xl border border-border-subtle bg-surface px-4 py-3">
-                  <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-dim">Setup</p>
-                  <ol className="ml-4 list-decimal space-y-1.5 text-[13px]">
-                    <li>Create a git repository. It can be empty or already have content.</li>
-                    <li>
-                      Copy the clone URL — HTTPS format like{' '}
-                      <code className="rounded bg-elevated px-1 py-0.5 font-mono text-[12px]">
-                        https://github.com/you/knowledge-base.git
-                      </code>
-                    </li>
-                    <li>Paste it in Settings and PA will clone and manage the rest.</li>
-                  </ol>
+                <div className="rounded-2xl border border-border-subtle bg-surface px-5 py-5">
+                  <KnowledgeSettingsPanel />
                 </div>
-                <p className="text-[12px] text-dim">Private repos work too — PA uses git credential helpers from the environment.</p>
               </div>
-            }
-            action={
-              <Link to="/settings#settings-general" className="ui-toolbar-button">
-                Open Settings
-              </Link>
             }
           />
         </AppPageLayout>

@@ -33,6 +33,7 @@ export type {
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
 } from '../shared/types';
+export type { UnifiedSettingsEntry } from '../shared/types';
 export { type ColorTheme, type ThemePreference, useTheme } from '../ui-state/theme';
 export { SettingsPanelHost } from './SettingsPanelHost';
 export type { ExtensionKeybindingRegistration } from './types';

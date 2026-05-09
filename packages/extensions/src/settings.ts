@@ -24,6 +24,7 @@ export interface ColorTheme {
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type TranscriptionModelStatus = unknown;
 export type TranscriptionProviderId = unknown;
+export type UnifiedSettingsEntry = unknown;
 
 export declare const DesktopCompanionSettingsPanel: HostComponent;
 export declare const DesktopConnectionsSettingsPanel: HostComponent;
