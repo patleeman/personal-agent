@@ -11,7 +11,7 @@ import {
   ToolbarButton,
 } from '@personal-agent/extensions/ui';
 import { getDesktopBridge } from '@personal-agent/extensions/workbench';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 type NativeViewContribution = NonNullable<NonNullable<NonNullable<ExtensionInstallSummary['manifest']>['contributes']>['views']>[number];
@@ -106,6 +106,109 @@ function CompactCount({ icon, count, title }: { icon: ReactNode; count: number; 
       <span className="grid h-4 w-4 place-items-center text-dim">{icon}</span>
       <span>{count}</span>
     </span>
+  );
+}
+
+function ExtensionActionsMenu({
+  extension,
+  onOpenFolder,
+  onBuild,
+  onReload,
+  onSnapshot,
+  onExport,
+  onCopyDiagnostics,
+}: {
+  extension: ExtensionInstallSummary;
+  onOpenFolder: () => void;
+  onBuild: () => void;
+  onReload: () => void;
+  onSnapshot: () => void;
+  onExport: () => void;
+  onCopyDiagnostics: () => void;
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && rootRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
+  const run = useCallback((event: ReactMouseEvent<HTMLButtonElement>, action: () => void) => {
+    event.stopPropagation();
+    setOpen(false);
+    action();
+  }, []);
+
+  return (
+    <div ref={rootRef} className="relative" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        className="ui-icon-button ui-icon-button-compact"
+        title="More actions"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        <MoreIcon />
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-40 rounded-xl border border-border-subtle bg-surface p-1.5 shadow-xl" role="menu">
+          {extension.packageRoot ? (
+            <>
+              <button
+                className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+                onClick={(event) => run(event, onOpenFolder)}
+              >
+                Open folder
+              </button>
+              <button
+                className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+                onClick={(event) => run(event, onBuild)}
+              >
+                Build
+              </button>
+            </>
+          ) : null}
+          <button
+            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+            onClick={(event) => run(event, onReload)}
+          >
+            Reload
+          </button>
+          <button
+            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+            onClick={(event) => run(event, onSnapshot)}
+          >
+            Snapshot
+          </button>
+          <button
+            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+            onClick={(event) => run(event, onExport)}
+          >
+            Export
+          </button>
+          <button
+            className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
+            onClick={(event) => run(event, onCopyDiagnostics)}
+          >
+            Copy diagnostics
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -672,63 +775,15 @@ export function ExtensionManagerPage() {
                                     <OpenIcon />
                                   </Link>
                                 ) : null}
-                                <details className="relative" onClick={(event) => event.stopPropagation()}>
-                                  <summary
-                                    className="ui-icon-button ui-icon-button-compact list-none cursor-pointer"
-                                    title="More actions"
-                                    aria-label="More actions"
-                                  >
-                                    <MoreIcon />
-                                  </summary>
-                                  <div className="absolute right-0 z-20 mt-2 w-40 rounded-xl border border-border-subtle bg-surface p-1.5 shadow-xl">
-                                    {extension.packageRoot ? (
-                                      <>
-                                        <button
-                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-                                          onClick={() => openFolder(extension)}
-                                        >
-                                          Open folder
-                                        </button>
-                                        <button
-                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy || extension.status === 'invalid'}
-                                          onClick={() => void buildExtension(extension)}
-                                        >
-                                          Build
-                                        </button>
-                                        <button
-                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy || extension.status === 'invalid'}
-                                          onClick={() => void reloadExtension(extension)}
-                                        >
-                                          Reload
-                                        </button>
-                                        <button
-                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy}
-                                          onClick={() => void snapshotExtension(extension)}
-                                        >
-                                          Snapshot
-                                        </button>
-                                        <button
-                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary disabled:opacity-50"
-                                          disabled={busy || extension.status === 'invalid'}
-                                          onClick={() => void exportExtension(extension)}
-                                        >
-                                          Export
-                                        </button>
-                                        <button
-                                          className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-secondary hover:bg-base hover:text-primary"
-                                          onClick={() => void copyExtensionDiagnostics(extension)}
-                                        >
-                                          Copy diagnostics
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <span className="block px-2.5 py-1.5 text-[12px] text-dim">No package actions</span>
-                                    )}
-                                  </div>
-                                </details>
+                                <ExtensionActionsMenu
+                                  extension={extension}
+                                  onOpenFolder={() => openFolder(extension)}
+                                  onBuild={() => void buildExtension(extension)}
+                                  onReload={() => void reloadExtension(extension)}
+                                  onSnapshot={() => void snapshotExtension(extension)}
+                                  onExport={() => void exportExtension(extension)}
+                                  onCopyDiagnostics={() => void copyExtensionDiagnostics(extension)}
+                                />
                               </div>
                             </td>
                           </tr>
