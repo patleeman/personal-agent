@@ -6,6 +6,7 @@ import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
+import { useExtensionStyles } from './useExtensionStyles';
 
 type ExtensionComponent = ComponentType<{
   pa: NativeExtensionClient;
@@ -68,6 +69,8 @@ export function NativeExtensionSurfaceHost({
   conversationId?: string | null;
   cwd?: string | null;
 }) {
+  useExtensionStyles(surface.extensionId, surface.frontend?.styles);
+
   const pa = useMemo(() => createNativeExtensionClient(surface.extensionId), [surface.extensionId]);
   const moduleKey = extensionModuleKey(surface);
   const Component = useMemo(() => lazyExtensionComponent(surface, getExtensionRegistryRevision()), [surface, moduleKey]);

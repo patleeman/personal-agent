@@ -6,6 +6,7 @@ import type { MessageBlock } from '../shared/types';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionInstallSummary, ExtensionTranscriptRendererContribution } from './types';
+import { useExtensionStyles } from './useExtensionStyles';
 
 type ToolBlock = Extract<MessageBlock, { type: 'tool_use' }>;
 
@@ -58,6 +59,8 @@ export function NativeExtensionToolBlockHost({
   block: ToolBlock;
   context: ExtensionToolBlockContext;
 }) {
+  useExtensionStyles(extension.id, extension.manifest.frontend?.styles);
+
   const moduleKey = extensionModuleKey(extension);
   const Component = useMemo(
     () => lazyRendererComponent(extension, renderer, getExtensionRegistryRevision()),

@@ -230,123 +230,128 @@ export function ConversationDiffRailContent({
   }
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto px-1.5 py-2">
-      <div className="flex flex-col gap-1">
-        {/* Uncommitted entry */}
-        {uncommitted ? (
-          <UncommittedRailEntry
-            result={uncommitted}
-            loading={uncommittedLoading}
-            selected={uncommittedSelected}
-            onSelect={() => onOpenCheckpoint(UNCOMMITTED_SENTINEL)}
-            showFiles={uncommittedSelected}
-            onFileClick={(filePath) => {
-              if (uncommittedSelected && onScrollToFile) {
-                onScrollToFile(filePath);
-              }
-            }}
-          />
-        ) : workspaceCwd && uncommittedLoading ? (
-          <div className="rounded-lg px-2.5 py-2">
-            <p className="text-[11px] text-dim">Checking uncommitted changes…</p>
-          </div>
-        ) : null}
-
-        {/* Checkpoint entries */}
-        {checkpoints.map((checkpoint) => {
-          const selected = checkpoint.id === activeCheckpointId;
-          const files = filesByCheckpoint[checkpoint.id];
-          const showFiles = selected || (!activeCheckpointId && checkpoint.id === latestCheckpointId);
-          return (
-            <div key={checkpoint.id} className={cx('rounded-lg', selected && 'bg-elevated/70')}>
-              <button
-                type="button"
-                onClick={() => onOpenCheckpoint(checkpoint.id)}
-                className={cx(
-                  'flex w-full min-w-0 items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20',
-                  selected ? 'text-primary' : 'text-secondary hover:bg-elevated/60 hover:text-primary',
-                )}
-                title={checkpoint.shortSha}
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={cx('mt-0.5 shrink-0 text-dim transition-transform', showFiles && 'rotate-90')}
-                  aria-hidden="true"
-                >
-                  <path d="m8.5 5.5 5 6.5-5 6.5" />
-                </svg>
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 font-mono text-[11px] text-steel">{checkpoint.shortSha}</span>
-                    <span className="shrink-0 text-[10px] text-dim">
-                      {checkpoint.fileCount} file{checkpoint.fileCount === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-dim">
-                    <span className="font-mono tabular-nums">
-                      <span className="text-success">+{checkpoint.linesAdded}</span>{' '}
-                      <span className="text-danger">-{checkpoint.linesDeleted}</span>
-                    </span>
-                  </div>
-                </div>
-              </button>
-              {showFiles ? (
-                <div className="pb-1 pl-7 pr-1">
-                  {files ? (
-                    files.slice(0, 12).map((file) => (
-                      <button
-                        key={`${checkpoint.id}:${file.path}:${file.previousPath ?? ''}`}
-                        type="button"
-                        onClick={() => {
-                          if (checkpoint.id === activeCheckpointId && onScrollToFile) {
-                            onScrollToFile(file.path);
-                          } else {
-                            onOpenCheckpoint(checkpoint.id);
-                          }
-                        }}
-                        className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
-                        title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
-                      >
-                        <svg
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="shrink-0 text-dim group-hover:text-secondary"
-                          aria-hidden="true"
-                        >
-                          <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
-                          <path d="M14.25 3.75V6.75h3" />
-                        </svg>
-                        <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
-                        <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums">
-                          <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-2 py-1.5 text-[11px] text-dim">Loading files…</div>
-                  )}
-                  {files && files.length > 12 ? (
-                    <div className="px-2 py-1 text-[10px] text-dim">+{files.length - 12} more files</div>
-                  ) : null}
-                </div>
-              ) : null}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 px-3 py-2">
+        <p className="ui-section-label">Diffs</p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
+        <div className="flex flex-col gap-1">
+          {/* Uncommitted entry */}
+          {uncommitted ? (
+            <UncommittedRailEntry
+              result={uncommitted}
+              loading={uncommittedLoading}
+              selected={uncommittedSelected}
+              onSelect={() => onOpenCheckpoint(UNCOMMITTED_SENTINEL)}
+              showFiles={uncommittedSelected}
+              onFileClick={(filePath) => {
+                if (uncommittedSelected && onScrollToFile) {
+                  onScrollToFile(filePath);
+                }
+              }}
+            />
+          ) : workspaceCwd && uncommittedLoading ? (
+            <div className="rounded-lg px-2.5 py-2">
+              <p className="text-[11px] text-dim">Checking uncommitted changes…</p>
             </div>
-          );
-        })}
+          ) : null}
+
+          {/* Checkpoint entries */}
+          {checkpoints.map((checkpoint) => {
+            const selected = checkpoint.id === activeCheckpointId;
+            const files = filesByCheckpoint[checkpoint.id];
+            const showFiles = selected || (!activeCheckpointId && checkpoint.id === latestCheckpointId);
+            return (
+              <div key={checkpoint.id} className={cx('rounded-lg', selected && 'bg-elevated/70')}>
+                <button
+                  type="button"
+                  onClick={() => onOpenCheckpoint(checkpoint.id)}
+                  className={cx(
+                    'flex w-full min-w-0 items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20',
+                    selected ? 'text-primary' : 'text-secondary hover:bg-elevated/60 hover:text-primary',
+                  )}
+                  title={checkpoint.shortSha}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={cx('mt-0.5 shrink-0 text-dim transition-transform', showFiles && 'rotate-90')}
+                    aria-hidden="true"
+                  >
+                    <path d="m8.5 5.5 5 6.5-5 6.5" />
+                  </svg>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 font-mono text-[11px] text-steel">{checkpoint.shortSha}</span>
+                      <span className="shrink-0 text-[10px] text-dim">
+                        {checkpoint.fileCount} file{checkpoint.fileCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-dim">
+                      <span className="font-mono tabular-nums">
+                        <span className="text-success">+{checkpoint.linesAdded}</span>{' '}
+                        <span className="text-danger">-{checkpoint.linesDeleted}</span>
+                      </span>
+                    </div>
+                  </div>
+                </button>
+                {showFiles ? (
+                  <div className="pb-1 pl-7 pr-1">
+                    {files ? (
+                      files.slice(0, 12).map((file) => (
+                        <button
+                          key={`${checkpoint.id}:${file.path}:${file.previousPath ?? ''}`}
+                          type="button"
+                          onClick={() => {
+                            if (checkpoint.id === activeCheckpointId && onScrollToFile) {
+                              onScrollToFile(file.path);
+                            } else {
+                              onOpenCheckpoint(checkpoint.id);
+                            }
+                          }}
+                          className="group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
+                          title={fileDisplayPath(file as ConversationCommitCheckpointRecord['files'][number])}
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="shrink-0 text-dim group-hover:text-secondary"
+                            aria-hidden="true"
+                          >
+                            <path d="M14.25 3.75H6.75v16.5h10.5V6.75l-3-3Z" />
+                            <path d="M14.25 3.75V6.75h3" />
+                          </svg>
+                          <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
+                          <span className="hidden min-w-0 flex-1 truncate text-[10px] text-dim xl:block">{parentPath(file.path)}</span>
+                          <span className="shrink-0 font-mono text-[10px] tabular-nums">
+                            <span className="text-success">+{file.additions}</span> <span className="text-danger">-{file.deletions}</span>
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-2 py-1.5 text-[11px] text-dim">Loading files…</div>
+                    )}
+                    {files && files.length > 12 ? (
+                      <div className="px-2 py-1 text-[10px] text-dim">+{files.length - 12} more files</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

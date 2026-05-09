@@ -107,11 +107,8 @@ export function ConversationRunsRailContent({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border-subtle px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Runs</p>
-          <span className="text-[10px] text-dim">{connectedRuns.length}</span>
-        </div>
+      <div className="shrink-0 px-3 py-2">
+        <p className="ui-section-label">Runs</p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
         {!hasRuns ? (
@@ -126,7 +123,7 @@ export function ConversationRunsRailContent({
                 <div key={group}>
                   <div className="flex items-center gap-2 px-1.5 py-1.5">
                     <span className={cx('font-mono text-[10px]', config.tone)}>{config.icon}</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-steel/70">{config.label}</span>
+                    <span className="ui-section-label">{config.label}</span>
                     <span className="text-[9px] text-dim">{items.length}</span>
                   </div>
                   <div className="flex flex-col gap-0.5">

@@ -7,7 +7,7 @@
   "version": "0.1.0",
   "frontend": {
     "entry": "dist/frontend.js",
-    "styles": []
+    "styles": ["src/components/knowledge.css"]
   },
   "backend": {
     "entry": "src/backend.ts",

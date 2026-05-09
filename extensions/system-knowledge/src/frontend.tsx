@@ -1,3 +1,5 @@
+import './components/knowledge.css';
+
 import { type MemoryDocItem, type MentionItem } from '@personal-agent/extensions/data';
 import {
   AppPageEmptyState,
