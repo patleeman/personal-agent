@@ -108,6 +108,7 @@ export interface ExtensionBackendContext {
       extensionName: string;
       actions: Array<{ id: string; title?: string; description?: string }>;
     }>;
+    getStatus(extensionId: string): { enabled: boolean; healthy: boolean; errors?: string[] };
   };
   ui: {
     invalidate(topics: string | string[]): void;
@@ -226,6 +227,18 @@ function createBackendContext(
               description: action.description,
             })),
           })),
+      getStatus: (targetExtensionId) => {
+        const summary = listExtensionInstallSummaries().find(
+          (e) => e.id === targetExtensionId,
+        );
+        if (!summary) return { enabled: false, healthy: false };
+        const enabled = summary.status === 'enabled';
+        return {
+          enabled,
+          healthy: enabled && (!summary.errors || summary.errors.length === 0),
+          ...(summary.errors?.length ? { errors: summary.errors } : {}),
+        };
+      },
     },
     ui: {
       invalidate: (topics) => invalidateAppTopics(...(Array.isArray(topics) ? topics : [topics])),

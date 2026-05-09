@@ -63,6 +63,7 @@ export interface NativeExtensionClient {
   extensions: {
     callAction(extensionId: string, actionId: string, input?: unknown): Promise<unknown>;
     listActions(): Promise<Array<{ extensionId: string; extensionName: string; actions: Array<{ id: string; title?: string; description?: string }> }>>;
+    getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
   ui: {
     toast(message: string): void;
@@ -226,6 +227,9 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
       async listActions() {
         return api.listExtensionActions();
+      },
+      async getStatus(targetExtensionId) {
+        return api.extensionStatus(targetExtensionId);
       },
     },
     ui: {

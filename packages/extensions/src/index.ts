@@ -384,6 +384,8 @@ export interface PersonalAgentClient {
         actions: Array<{ id: string; title?: string; description?: string }>;
       }>
     >;
+    /** Check whether an extension is enabled and healthy. */
+    getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
 }
 
@@ -426,6 +428,7 @@ export interface ExtensionBackendContext {
         actions: Array<{ id: string; title?: string; description?: string }>;
       }>
     >;
+    getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
   ui: { invalidate(topics: string | string[]): void };
   log: {

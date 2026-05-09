@@ -423,6 +423,28 @@ export function registerExtensionRoutes(
     }
   });
 
+  // ── Extension status check ──────────────────────────────────────────
+
+  router.get('/api/extensions/:id/status', (req, res) => {
+    try {
+      const entry = findExtensionEntry(req.params.id);
+      const summary = listExtensionInstallSummaries().find((e) => e.id === req.params.id);
+      if (!entry && !summary) {
+        res.json({ enabled: false, healthy: false, error: 'Extension not found.' });
+        return;
+      }
+      const enabled =
+        summary?.status === 'enabled' || (summary?.enabled === true && summary?.status !== 'disabled');
+      res.json({
+        enabled,
+        healthy: enabled && (!summary?.errors || summary.errors.length === 0),
+        ...(summary?.errors?.length ? { errors: summary.errors } : {}),
+      });
+    } catch (err) {
+      sendRouteError(res, 'extension status error', err);
+    }
+  });
+
   // ── Notification badge state ─────────────────────────────────────────
 
   router.get('/api/extensions/badge', (_req, res) => {
