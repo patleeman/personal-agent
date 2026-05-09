@@ -29,6 +29,14 @@
         "route": "/gateways",
         "icon": "database"
       }
+    ],
+    "contextMenus": [
+      {
+        "id": "attach-conversation",
+        "title": "Attach to Gateway",
+        "action": "attachConversation",
+        "surface": "conversationList"
+      }
     ]
   },
   "permissions": ["gateways:read", "gateways:write"]

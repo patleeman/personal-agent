@@ -1339,7 +1339,6 @@ function OpenConversationRow({
   onArchive,
   onOpenInNewWindow,
   onDuplicate,
-  onAttachToGateway,
   onCopyWorkingDirectory,
   onCopyId,
   onCopyDeeplink,
@@ -1364,7 +1363,6 @@ function OpenConversationRow({
   onArchive?: () => boolean | Promise<boolean>;
   onOpenInNewWindow?: () => boolean | Promise<boolean>;
   onDuplicate?: () => boolean | Promise<boolean>;
-  onAttachToGateway?: () => boolean | Promise<boolean>;
   onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
   onCopyId?: () => boolean | Promise<boolean>;
   onCopyDeeplink?: () => boolean | Promise<boolean>;
@@ -1378,6 +1376,7 @@ function OpenConversationRow({
   onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
   const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLDivElement>();
+  const navigate = useNavigate();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
   const { conversationDecorators, contextMenus } = useExtensionRegistry();
   const conversationExtensionMenuItems = useMemo(() => contextMenus.filter((m) => m.surface === 'conversationList'), [contextMenus]);
@@ -1403,7 +1402,6 @@ function OpenConversationRow({
     onArchive ||
     onOpenInNewWindow ||
     onDuplicate ||
-    onAttachToGateway ||
     onCopyWorkingDirectory ||
     onCopyId ||
     onCopyDeeplink ||
@@ -1414,7 +1412,6 @@ function OpenConversationRow({
     Number(Boolean(onArchive)) +
     Number(Boolean(onOpenInNewWindow)) +
     Number(Boolean(onDuplicate)) +
-    Number(Boolean(onAttachToGateway)) +
     Number(Boolean(onCopyWorkingDirectory)) +
     Number(Boolean(onCopyId)) +
     Number(Boolean(onCopyDeeplink)) +
@@ -1558,11 +1555,16 @@ function OpenConversationRow({
     onPrefetch?.();
   }, [onPrefetch]);
 
-  async function handleExtensionContextMenuClick(menuId: string, action: string) {
+  async function handleExtensionContextMenuClick(menu: (typeof conversationExtensionMenuItems)[number]) {
     if (busyExtensionMenuId) return;
-    setBusyExtensionMenuId(menuId);
+    setBusyExtensionMenuId(menu.id);
     try {
-      await getPaClient(session.id).extension.invoke(action, {
+      if (menu.extensionId === 'system-gateways' && menu.action === 'attachConversation') {
+        navigate(`/conversations/${encodeURIComponent(session.id)}?gateway=1`);
+        return;
+      }
+
+      await getPaClient(menu.extensionId).extension.invoke(menu.action, {
         conversationId: session.id,
         sessionTitle: session.title,
         cwd: session.cwd,
@@ -1810,24 +1812,6 @@ function OpenConversationRow({
                 {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
               </button>
             ) : null}
-            {onAttachToGateway ? (
-              <button
-                type="button"
-                onPointerDown={stopRowInteraction}
-                onMouseDown={stopRowInteraction}
-                onClick={async () => {
-                  const succeeded = await onAttachToGateway();
-                  if (succeeded !== false) {
-                    setMenuOpen(false);
-                  }
-                }}
-                className={menuItemClass}
-                disabled={busyAction !== null}
-                role="menuitem"
-              >
-                Attach to Gateway
-              </button>
-            ) : null}
             {onCopyWorkingDirectory ? (
               <button
                 type="button"
@@ -1883,7 +1867,7 @@ function OpenConversationRow({
                     onPointerDown={stopRowInteraction}
                     onMouseDown={stopRowInteraction}
                     onClick={() => {
-                      void handleExtensionContextMenuClick(menu.id, menu.action);
+                      void handleExtensionContextMenuClick(menu);
                     }}
                     className={menuItemClass}
                     disabled={busyExtensionMenuId !== null}
@@ -2892,15 +2876,6 @@ export function Sidebar() {
     [copyTextToClipboard, showSidebarNotice],
   );
 
-  const handleAttachConversationToGateway = useCallback(
-    async (conversationId: string) => {
-      openSession(conversationId);
-      navigate(`/conversations/${encodeURIComponent(conversationId)}?gateway=1`);
-      return true;
-    },
-    [navigate, openSession],
-  );
-
   const handleOpenConversationInNewWindow = useCallback(
     async (conversationId: string) => {
       const desktopBridge = getDesktopBridge();
@@ -3442,7 +3417,6 @@ export function Sidebar() {
         }
         onOpenInNewWindow={!isDraftTab ? () => handleOpenConversationInNewWindow(session.id) : undefined}
         onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
-        onAttachToGateway={!isDraftTab ? () => handleAttachConversationToGateway(session.id) : undefined}
         onCopyWorkingDirectory={!isDraftTab && session.cwd?.trim() ? () => handleCopyConversationWorkingDirectory(session.cwd) : undefined}
         onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}
         onCopyDeeplink={!isDraftTab ? () => handleCopyConversationDeeplink(session.id) : undefined}

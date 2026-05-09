@@ -31,6 +31,14 @@ describe('system-gateways manifest', () => {
     expect(nav.route).toBe('/gateways');
   });
 
+  it('declares the conversation list attach menu', () => {
+    const menu = manifest.contributes.contextMenus.find((m: { id: string }) => m.id === 'attach-conversation');
+    expect(menu).toBeDefined();
+    expect(menu.title).toBe('Attach to Gateway');
+    expect(menu.action).toBe('attachConversation');
+    expect(menu.surface).toBe('conversationList');
+  });
+
   it('declares required permissions', () => {
     expect(manifest.permissions).toContain('gateways:read');
     expect(manifest.permissions).toContain('gateways:write');
