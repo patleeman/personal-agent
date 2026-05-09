@@ -1958,17 +1958,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     composerAttachmentsHydratedRef.current = true;
   }, [draft, id]);
 
-  useEffect(
-    () => () => {
-      const capture = dictationCaptureRef.current;
-      dictationCaptureRef.current = null;
-      if (capture) {
-        void capture.stop().catch(() => {});
-      }
-    },
-    [],
-  );
-
   useEffect(() => {
     if (!composerAttachmentsHydratedRef.current || (!draft && !id)) {
       return;

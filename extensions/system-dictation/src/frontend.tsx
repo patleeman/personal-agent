@@ -1,5 +1,5 @@
 import { type NativeExtensionClient } from '@personal-agent/extensions';
-import { AppPageLayout, AppPageSection, cx, ToolbarButton } from '@personal-agent/extensions/ui';
+import { cx, ToolbarButton } from '@personal-agent/extensions/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { bytesToBase64, type ComposerDictationCapture, startComposerDictationCapture } from './capture.js';
@@ -188,7 +188,7 @@ export function DictationButton({
   );
 }
 
-export function DictationSettingsPage({ pa }: { pa: NativeExtensionClient }) {
+export function DictationSettingsPanel({ pa }: { pa: NativeExtensionClient }) {
   const [settings, setSettings] = useState<TranscriptionSettingsState | null>(null);
   const [provider, setProvider] = useState<TranscriptionProviderId | ''>('');
   const [model, setModel] = useState('base.en');
@@ -269,73 +269,80 @@ export function DictationSettingsPage({ pa }: { pa: NativeExtensionClient }) {
       : 'Select a provider and model to check install status.';
 
   return (
-    <AppPageLayout title="Dictation" intro={<span>Configure the composer mic button and local transcription model.</span>}>
-      <AppPageSection
-        title="Transcription provider"
-        description="The composer records browser audio and sends it to this provider when dictation stops."
-      >
-        {!settings ? <p className="ui-card-meta">Loading dictation settings…</p> : null}
-        {settings ? (
-          <div className="space-y-3">
-            <label className="ui-card-meta" htmlFor="settings-transcription-provider">
-              Provider
-            </label>
-            <select
-              id="settings-transcription-provider"
-              value={provider}
-              onChange={(event) => {
-                const next = event.target.value as TranscriptionProviderId | '';
-                setProvider(next);
-                void save(next, model);
-              }}
-              className={INPUT_CLASS}
-            >
-              <option value="">Disabled</option>
-              {settings.providers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            {provider ? (
-              <>
-                <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
-                  Model
-                </label>
-                <input
-                  id="settings-transcription-model"
-                  list="settings-transcription-model-options"
-                  value={model}
-                  onChange={(event) => setModel(event.target.value)}
-                  onBlur={() => void save()}
-                  className={`${INPUT_CLASS} font-mono text-[13px]`}
-                  placeholder="base.en"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <datalist id="settings-transcription-model-options">
-                  {TRANSCRIPTION_MODEL_OPTIONS.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
-                <p className={cx('text-[12px]', status?.installed ? 'text-success' : 'text-dim')}>{statusLabel}</p>
-                <ToolbarButton
-                  type="button"
-                  className={ACTION_BUTTON_CLASS}
-                  disabled={Boolean(busy) || !model.trim()}
-                  onClick={() => void install()}
-                >
-                  {busy === 'Installing…' ? 'Installing…' : status?.installed ? 'Reinstall local model' : 'Install local model'}
-                </ToolbarButton>
-              </>
-            ) : (
-              <p className="ui-card-meta">Dictation is disabled until a provider is selected.</p>
-            )}
-            {busy === 'Saving…' ? <p className="ui-card-meta">Saving…</p> : null}
-            {message ? <p className="text-[12px] text-secondary">{message}</p> : null}
+    <div className="space-y-0">
+      <section className="scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <div className="min-w-0 space-y-2">
+          <div className="space-y-1.5">
+            <h3 className="text-[15px] font-medium tracking-tight text-primary">Transcription provider</h3>
+            <p className="max-w-sm text-[12px] leading-5 text-secondary">
+              The composer records browser audio and sends it to this provider when dictation stops.
+            </p>
           </div>
-        ) : null}
-      </AppPageSection>
-    </AppPageLayout>
+        </div>
+        <div className="min-w-0 space-y-3.5">
+          {!settings ? <p className="ui-card-meta">Loading dictation settings…</p> : null}
+          {settings ? (
+            <div className="space-y-3">
+              <label className="ui-card-meta" htmlFor="settings-transcription-provider">
+                Provider
+              </label>
+              <select
+                id="settings-transcription-provider"
+                value={provider}
+                onChange={(event) => {
+                  const next = event.target.value as TranscriptionProviderId | '';
+                  setProvider(next);
+                  void save(next, model);
+                }}
+                className={INPUT_CLASS}
+              >
+                <option value="">Disabled</option>
+                {settings.providers.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              {provider ? (
+                <>
+                  <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
+                    Model
+                  </label>
+                  <input
+                    id="settings-transcription-model"
+                    list="settings-transcription-model-options"
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                    onBlur={() => void save()}
+                    className={`${INPUT_CLASS} font-mono text-[13px]`}
+                    placeholder="base.en"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <datalist id="settings-transcription-model-options">
+                    {TRANSCRIPTION_MODEL_OPTIONS.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+                  <p className={cx('text-[12px]', status?.installed ? 'text-success' : 'text-dim')}>{statusLabel}</p>
+                  <ToolbarButton
+                    type="button"
+                    className={ACTION_BUTTON_CLASS}
+                    disabled={Boolean(busy) || !model.trim()}
+                    onClick={() => void install()}
+                  >
+                    {busy === 'Installing…' ? 'Installing…' : status?.installed ? 'Reinstall local model' : 'Install local model'}
+                  </ToolbarButton>
+                </>
+              ) : (
+                <p className="ui-card-meta">Dictation is disabled until a provider is selected.</p>
+              )}
+              {busy === 'Saving…' ? <p className="ui-card-meta">Saving…</p> : null}
+              {message ? <p className="text-[12px] text-secondary">{message}</p> : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
   );
 }

@@ -219,10 +219,29 @@ export interface ExtensionStatusBarItemContribution {
   id: string;
   label: string;
   action?: string;
+  /** Optional component for dynamic status bar content. */
+  component?: string;
   /** Left or right alignment. Default 'right'. */
   alignment?: 'left' | 'right';
   /** Sort priority within alignment. Higher = closer to edge. Default 0. */
   priority?: number;
+}
+
+export interface ExtensionStatusBarItemContext {
+  conversationId?: string | null;
+  cwd?: string | null;
+  branchLabel?: string | null;
+  gitSummary?: {
+    kind: 'none' | 'summary' | 'diff';
+    text?: string;
+    added?: string;
+    deleted?: string;
+  };
+}
+
+export interface ExtensionStatusBarItemProps {
+  pa: NativeExtensionClient;
+  statusBarContext: ExtensionStatusBarItemContext;
 }
 
 export interface ExtensionContextMenuContribution {
@@ -261,6 +280,17 @@ export interface ExtensionConversationDecoratorContribution {
   priority?: number;
 }
 
+export interface ExtensionSettingsPanelContribution {
+  id: string;
+  component: string;
+  /** Settings page section id, e.g. "settings-dictation". */
+  sectionId: string;
+  label: string;
+  description?: string;
+  /** Sort order among extension settings panels. Default 0. */
+  order?: number;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -284,6 +314,7 @@ export interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
+  settingsPanels?: ExtensionSettingsPanelContribution[];
 }
 
 export interface ExtensionManifest {

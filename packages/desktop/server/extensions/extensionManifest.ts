@@ -99,6 +99,7 @@ export interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
+  settingsPanels?: ExtensionSettingsPanelContribution[];
 }
 
 export interface ExtensionTopBarElementContribution {
@@ -149,6 +150,7 @@ export interface ExtensionStatusBarItemContribution {
   id: string;
   label: string;
   action?: string;
+  component?: string;
   alignment?: 'left' | 'right';
   priority?: number;
 }
@@ -169,6 +171,15 @@ export interface ExtensionSettingsContribution {
   group?: string;
   enum?: string[];
   placeholder?: string;
+  order?: number;
+}
+
+export interface ExtensionSettingsPanelContribution {
+  id: string;
+  component: string;
+  sectionId: string;
+  label: string;
+  description?: string;
   order?: number;
 }
 

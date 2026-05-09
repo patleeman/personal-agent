@@ -28,25 +28,14 @@
         "priority": 100
       }
     ],
-    "nav": [
+    "settingsPanels": [
       {
-        "id": "dictation-settings",
+        "id": "dictation",
+        "component": "DictationSettingsPanel",
+        "sectionId": "settings-dictation",
         "label": "Dictation",
-        "route": "/settings/dictation",
-        "icon": "gear",
-        "section": "settings"
-      }
-    ],
-    "views": [
-      {
-        "id": "dictation-settings",
-        "title": "Dictation settings",
-        "location": "main",
-        "route": "/settings/dictation",
-        "component": "DictationSettingsPage",
-        "placement": "primary",
-        "scope": "global",
-        "activation": "on-route"
+        "description": "Choose the transcription backend used by the composer mic button. No automatic fallback is applied.",
+        "order": 30
       }
     ]
   },

@@ -33,8 +33,8 @@ export type {
   ProviderAuthSummary,
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
-  TranscriptionModelStatus,
-  TranscriptionProviderId,
 } from '../shared/types';
 export { type ColorTheme, type ThemePreference, useTheme } from '../ui-state/theme';
+export { SettingsPanelHost } from './SettingsPanelHost';
 export type { ExtensionKeybindingRegistration } from './types';
+export { type ExtensionSettingsPanelRegistration, useExtensionRegistry } from './useExtensionRegistry';

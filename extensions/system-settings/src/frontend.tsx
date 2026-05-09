@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 import { SettingsPage } from './SettingsPage';
 
-type SettingsSectionId = 'settings-providers' | 'settings-dictation' | 'settings-desktop' | 'settings-keyboard';
+type SettingsSectionId = 'settings-providers' | 'settings-desktop' | 'settings-keyboard';
 
 function SettingsSectionPage({ sectionIds }: { sectionIds: SettingsSectionId[] }) {
   useEffect(() => {
@@ -16,10 +16,6 @@ export { SettingsPage };
 
 export function ProviderSettingsPage() {
   return <SettingsSectionPage sectionIds={['settings-providers']} />;
-}
-
-export function DictationSettingsPage() {
-  return <SettingsSectionPage sectionIds={['settings-dictation']} />;
 }
 
 export function DesktopSettingsPage() {

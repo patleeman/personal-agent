@@ -40,11 +40,13 @@ import {
   readDesktopEnvironment,
   resetStoredConversationUiState,
   resetStoredLayoutPreferences,
+  SettingsPanelHost,
   subscribeDesktopProviderOAuthLogin,
   type ThemePreference,
   THINKING_LEVEL_OPTIONS,
   ToolbarButton,
   useApi,
+  useExtensionRegistry,
   useTheme,
 } from '@personal-agent/extensions/settings';
 import QRCode from 'qrcode';
@@ -2032,6 +2034,7 @@ function UnifiedSettingsSection() {
 }
 
 export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
+  const { settingsPanels } = useExtensionRegistry();
   const { theme, themePreference, lightTheme, darkTheme, availableThemes, setThemePreference, setLightTheme, setDarkTheme } = useTheme();
   const {
     data: skillFoldersState,
@@ -2107,12 +2110,14 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
 
   const visibleSectionIds = useMemo(() => (sectionIds ? new Set(sectionIds) : null), [sectionIds]);
   const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(() => {
+    const extensionSectionIds = new Set(settingsPanels.map((panel) => panel.sectionId));
     const shellFiltered =
       desktopEnvironment?.isElectron || isDesktopShell()
         ? SETTINGS_QUICK_LINKS
         : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard');
-    return visibleSectionIds ? shellFiltered.filter((item) => visibleSectionIds.has(item.id)) : shellFiltered;
-  }, [desktopEnvironment?.isElectron, visibleSectionIds]);
+    const extensionFiltered = shellFiltered.filter((item) => item.id !== 'settings-dictation' || extensionSectionIds.has(item.id));
+    return visibleSectionIds ? extensionFiltered.filter((item) => visibleSectionIds.has(item.id)) : extensionFiltered;
+  }, [desktopEnvironment?.isElectron, settingsPanels, visibleSectionIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3687,6 +3692,17 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                 </SettingsPanel>
               </div>
             </SettingsSection>
+
+            {settingsPanels.map((panel) => (
+              <SettingsSection
+                key={`${panel.extensionId}:${panel.id}`}
+                id={panel.sectionId as SettingsQuickLinkId}
+                label={panel.label}
+                description={panel.description}
+              >
+                <SettingsPanelHost registration={panel} />
+              </SettingsSection>
+            ))}
 
             <SettingsSection
               id="settings-providers"

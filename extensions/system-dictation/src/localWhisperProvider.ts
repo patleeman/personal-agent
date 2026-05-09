@@ -95,12 +95,17 @@ function pcm16ToFloat32(data: Buffer): Float32Array {
 }
 
 const _require = createRequire(fileURLToPath(import.meta.url));
+const hostRequire = createRequire(join(process.cwd(), 'package.json'));
 
 let whisperCppModule: WhisperCppNodeModule | undefined;
 
 function loadWhisperCpp(): WhisperCppNodeModule {
   if (!whisperCppModule) {
-    whisperCppModule = _require('whisper-cpp-node') as WhisperCppNodeModule;
+    try {
+      whisperCppModule = hostRequire('whisper-cpp-node') as WhisperCppNodeModule;
+    } catch {
+      whisperCppModule = _require('whisper-cpp-node') as WhisperCppNodeModule;
+    }
   }
   return whisperCppModule;
 }

@@ -20,11 +20,10 @@ describe('system-settings manifest', () => {
     expect(manifest.frontend.entry).toBe('dist/frontend.js');
   });
 
-  it('declares all four settings views', () => {
+  it('declares the core settings views', () => {
     const views = manifest.contributes.views;
     expect(views.find((v: { id: string }) => v.id === 'settings')).toBeDefined();
     expect(views.find((v: { id: string }) => v.id === 'providers')).toBeDefined();
-    expect(views.find((v: { id: string }) => v.id === 'dictation')).toBeDefined();
     expect(views.find((v: { id: string }) => v.id === 'desktop')).toBeDefined();
   });
 

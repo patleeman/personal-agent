@@ -172,6 +172,7 @@ interface ExtensionStatusBarItemContribution {
   id: string;
   label: string;
   action?: string;
+  component?: string;
   alignment?: 'left' | 'right';
   priority?: number;
 }
@@ -190,6 +191,15 @@ interface ExtensionConversationDecoratorContribution {
   component: string;
   position: 'before-title' | 'after-title' | 'subtitle';
   priority?: number;
+}
+
+interface ExtensionSettingsPanelContribution {
+  id: string;
+  component: string;
+  sectionId: string;
+  label: string;
+  description?: string;
+  order?: number;
 }
 
 interface ExtensionContributions {
@@ -215,6 +225,7 @@ interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
+  settingsPanels?: ExtensionSettingsPanelContribution[];
 }
 
 interface ExtensionThemeContribution {
