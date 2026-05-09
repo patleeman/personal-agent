@@ -56,11 +56,13 @@ export interface ExtensionBackendContext {
 type ExtensionBackendModule = Record<string, unknown>;
 
 const EXTENSION_BACKEND_BUILD_CACHE_VERSION = 'bundle-host-runtime-externals-v3';
+const backendModuleCache = new Map<string, { cacheKey: string; module: Promise<ExtensionBackendModule> }>();
 const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
   /^(@personal-agent\/(core|daemon)|@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom)(\/.*)?$/;
 
 interface ExtensionBackendBuildResult {
   path: string;
+  hash: string;
   rebuilt: boolean;
   stale: boolean;
 }
@@ -261,7 +263,7 @@ async function buildExtensionBackend(
   await mkdir(cacheDir, { recursive: true });
 
   if (existsSync(outfile) && existsSync(hashFile) && readFileSync(hashFile, 'utf-8').trim() === packageHash) {
-    return { path: outfile, rebuilt: false, stale: false };
+    return { path: outfile, hash: packageHash, rebuilt: false, stale: false };
   }
 
   const candidate = join(cacheDir, `backend.${packageHash}.candidate.mjs`);
@@ -284,11 +286,12 @@ async function buildExtensionBackend(
     });
     renameSync(candidate, outfile);
     writeFileSync(hashFile, `${packageHash}\n`);
-    return { path: outfile, rebuilt: true, stale: false };
+    return { path: outfile, hash: packageHash, rebuilt: true, stale: false };
   } catch (error) {
     rmSync(candidate, { force: true });
     if (options.allowStaleOnFailure && existsSync(outfile)) {
-      return { path: outfile, rebuilt: false, stale: true };
+      const staleHash = existsSync(hashFile) ? readFileSync(hashFile, 'utf-8').trim() : `stale-${statSync(outfile).mtimeMs}`;
+      return { path: outfile, hash: staleHash, rebuilt: false, stale: true };
     }
     throw error;
   }
@@ -314,7 +317,16 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
   if (compiled.stale) {
     console.warn(`[extension:${extensionId}] backend build failed; using previous compiled backend`);
   }
-  return import(`${pathToFileURL(compiled.path).href}?t=${Date.now()}`) as Promise<ExtensionBackendModule>;
+
+  const cacheKey = `${compiled.path}:${compiled.hash}`;
+  const cached = backendModuleCache.get(extensionId);
+  if (cached?.cacheKey === cacheKey) {
+    return cached.module;
+  }
+
+  const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
+  backendModuleCache.set(extensionId, { cacheKey, module });
+  return module;
 }
 
 export async function loadExtensionAgentFactory(extensionId: string, exportName = 'default'): Promise<ExtensionFactory> {
@@ -370,6 +382,9 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
   const entryPath = resolve(packageRoot, backendEntry);
   assertInside(packageRoot, entryPath);
   const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: false });
-  await import(`${pathToFileURL(compiled.path).href}?t=${Date.now()}`);
+  const cacheKey = `${compiled.path}:${compiled.hash}`;
+  const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
+  backendModuleCache.set(extensionId, { cacheKey, module });
+  await module;
   return { ok: true, extensionId, rebuilt: compiled.rebuilt };
 }
