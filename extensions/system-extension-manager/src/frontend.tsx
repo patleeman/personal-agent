@@ -12,7 +12,7 @@ import {
 } from '@personal-agent/extensions/ui';
 import { getDesktopBridge } from '@personal-agent/extensions/workbench';
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 type NativeViewContribution = NonNullable<NonNullable<NonNullable<ExtensionInstallSummary['manifest']>['contributes']>['views']>[number];
 
@@ -402,11 +402,29 @@ export function ExtensionManagerPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'system' | 'user' | 'enabled' | 'disabled'>('all');
   const [query, setQuery] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('extension');
+  const setSelectedId = useCallback(
+    (extensionId: string | null) => {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          if (extensionId) {
+            next.set('extension', extensionId);
+          } else {
+            next.delete('extension');
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const load = useCallback(() => {
     setLoading(true);
@@ -518,19 +536,6 @@ export function ExtensionManagerPage() {
     void bridge.openPath(extension.packageRoot).then((result) => {
       if (!result.opened) {
         setNotice(result.error ?? extension.packageRoot ?? 'Could not open extension folder.');
-      }
-    });
-  }, []);
-
-  const openPath = useCallback((path: string) => {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      setNotice(path);
-      return;
-    }
-    void bridge.openPath(path).then((result) => {
-      if (!result.opened) {
-        setNotice(result.error ?? path);
       }
     });
   }, []);
@@ -703,8 +708,8 @@ export function ExtensionManagerPage() {
             {visibleExtensions.length === 0 ? (
               <EmptyState title="No matching extensions" body="Adjust the filter or search query." />
             ) : (
-              <div className="grid min-h-0 flex-1 gap-6" style={{ gridTemplateColumns: 'minmax(0, 1fr) 22rem' }}>
-                <section className="min-w-0 min-h-0 overflow-auto">
+              <div className="flex min-h-0 flex-1">
+                <section className="min-h-0 min-w-0 flex-1 overflow-auto">
                   <table className="w-full border-collapse text-left text-[13px]">
                     <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
                       <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">
@@ -792,158 +797,215 @@ export function ExtensionManagerPage() {
                     </tbody>
                   </table>
                 </section>
-
-                {selectedExtension ? (
-                  <aside className="min-h-0 overflow-auto border-l border-border-subtle pl-6">
-                    <div className="space-y-5 pb-8">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="truncate text-[18px] font-semibold tracking-tight text-primary">{selectedExtension.name}</h2>
-                          <span
-                            className={cx(
-                              'h-1.5 w-1.5 rounded-full',
-                              selectedExtension.status === 'invalid' ? 'bg-danger' : selectedExtension.enabled ? 'bg-success' : 'bg-dim',
-                            )}
-                          />
-                        </div>
-                        <p className="mt-1 font-mono text-[11px] text-dim">{selectedExtension.id}</p>
-                        {selectedExtension.description ? (
-                          <p className="mt-3 text-[13px] leading-6 text-secondary">{selectedExtension.description}</p>
-                        ) : null}
-                      </div>
-
-                      {selectedExtension.status === 'invalid' ? (
-                        <DetailBlock
-                          title="Validation errors"
-                          action={
-                            <button
-                              type="button"
-                              className="text-[11px] text-secondary transition-colors hover:text-primary"
-                              onClick={() => void copyExtensionDiagnostics(selectedExtension)}
-                            >
-                              Copy diagnostics
-                            </button>
-                          }
-                        >
-                          <div className="space-y-2">
-                            {(selectedExtension.errors ?? ['Extension manifest is invalid.']).map((message) => (
-                              <p
-                                key={message}
-                                className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-5 text-danger"
-                              >
-                                {message}
-                              </p>
-                            ))}
-                          </div>
-                        </DetailBlock>
-                      ) : null}
-
-                      {selectedExtension.diagnostics?.length ? (
-                        <DetailBlock
-                          title="Diagnostics"
-                          action={
-                            <button
-                              type="button"
-                              className="text-[11px] text-secondary transition-colors hover:text-primary"
-                              onClick={() => void copyExtensionDiagnostics(selectedExtension)}
-                            >
-                              Copy diagnostics
-                            </button>
-                          }
-                        >
-                          <div className="space-y-2">
-                            {selectedExtension.diagnostics.map((message) => (
-                              <p
-                                key={message}
-                                className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-5 text-danger"
-                              >
-                                {message}
-                              </p>
-                            ))}
-                          </div>
-                        </DetailBlock>
-                      ) : null}
-
-                      <DetailBlock title="Surfaces">
-                        {getLogicalSurfaces(selectedExtension).length ? (
-                          <div className="space-y-2">
-                            {getLogicalSurfaces(selectedExtension).map((surface) => (
-                              <div key={surface.id}>
-                                <div className="text-[13px] font-medium text-primary">{surface.title}</div>
-                                <div className="text-[12px] text-secondary">
-                                  {surface.kind}
-                                  {surface.detail ? ` · detail: ${surface.detail.title}` : ''}
-                                </div>
-                                {surface.warning ? <div className="text-[12px] text-danger">{surface.warning}</div> : null}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[13px] text-dim">No surfaces.</p>
-                        )}
-                      </DetailBlock>
-
-                      <DetailBlock title="Capabilities">
-                        <dl className="space-y-3 text-[12px]">
-                          <DetailRow label="UI" value={`Frontend: ${formatFrontendSummary(selectedExtension)}`} />
-                          <DetailRow
-                            label="Agent"
-                            value={`Tools: ${formatToolSummary(selectedExtension)} · Hook: ${formatAgentHookSummary(selectedExtension)} · Skills: ${formatSkillSummary(selectedExtension)}`}
-                          />
-                          <DetailRow label="Shortcuts" value={formatKeybindingSummary(selectedExtension)} />
-                          <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(selectedExtension)}`} />
-                          <DetailRow label="Permissions" value={formatPermissionSummary(selectedExtension)} />
-                        </dl>
-                      </DetailBlock>
-
-                      <DetailBlock title="Skills">
-                        {selectedExtension.skills?.length ? (
-                          <div className="space-y-3">
-                            {selectedExtension.skills.map((skill) => (
-                              <div key={skill.name} className="group/skill">
-                                <button
-                                  type="button"
-                                  className="text-left text-[13px] font-medium text-primary transition-colors hover:text-accent"
-                                  onClick={() => openPath(skill.path)}
-                                >
-                                  {skill.title ?? skill.name}
-                                </button>
-                                <div className="font-mono text-[11px] text-dim">{skill.name}</div>
-                                {skill.description ? (
-                                  <p className="mt-1 text-[12px] leading-5 text-secondary">{skill.description}</p>
-                                ) : null}
-                                <p className="mt-1 break-all font-mono text-[11px] leading-5 text-dim">{skill.path}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[13px] text-dim">No skills.</p>
-                        )}
-                      </DetailBlock>
-
-                      {selectedExtension.packageRoot ? (
-                        <DetailBlock title="Package">
-                          <p className="break-all font-mono text-[11px] leading-5 text-secondary">{selectedExtension.packageRoot}</p>
-                        </DetailBlock>
-                      ) : null}
-
-                      <details>
-                        <summary className="cursor-pointer select-none text-[12px] text-dim transition-colors hover:text-secondary">
-                          Raw manifest
-                        </summary>
-                        <pre className="mt-3 max-h-[22rem] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-secondary">
-                          {JSON.stringify(selectedExtension.manifest, null, 2)}
-                        </pre>
-                      </details>
-                    </div>
-                  </aside>
-                ) : null}
               </div>
             )}
           </div>
         )}
       </AppPageLayout>
     </div>
+  );
+}
+
+export function ExtensionDetailsPanel() {
+  const [extensions, setExtensions] = useState<ExtensionInstallSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const selectedId = searchParams.get('extension');
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    api
+      .extensionInstallations()
+      .then((items) => {
+        setExtensions(items);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    load();
+    window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
+    return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
+  }, [load]);
+
+  const openPath = useCallback((path: string) => {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setNotice(path);
+      return;
+    }
+    void bridge.openPath(path).then((result) => {
+      if (!result.opened) {
+        setNotice(result.error ?? path);
+      }
+    });
+  }, []);
+
+  const copyExtensionDiagnostics = useCallback(async (extension: ExtensionInstallSummary) => {
+    const diagnostics = formatExtensionDiagnostics(extension);
+    try {
+      await navigator.clipboard.writeText(diagnostics);
+      setNotice(`Copied diagnostics for ${extension.name}.`);
+    } catch {
+      setNotice(diagnostics);
+    }
+  }, []);
+
+  if (loading) {
+    return <LoadingState label="Loading extension details…" className="h-full justify-center" />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} className="m-4" />;
+  }
+
+  const selectedExtension = extensions.find((extension) => extension.id === selectedId) ?? extensions[0] ?? null;
+  if (!selectedExtension) {
+    return <EmptyState title="No extension selected" body="Select an extension from the list." className="h-full justify-center" />;
+  }
+
+  return (
+    <aside className="h-full overflow-auto px-4 py-5">
+      <div className="space-y-5 pb-8">
+        {notice ? <p className="text-[12px] leading-5 text-secondary">{notice}</p> : null}
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-[18px] font-semibold tracking-tight text-primary">{selectedExtension.name}</h2>
+            <span
+              className={cx(
+                'h-1.5 w-1.5 rounded-full',
+                selectedExtension.status === 'invalid' ? 'bg-danger' : selectedExtension.enabled ? 'bg-success' : 'bg-dim',
+              )}
+            />
+          </div>
+          <p className="mt-1 font-mono text-[11px] text-dim">{selectedExtension.id}</p>
+          {selectedExtension.description ? (
+            <p className="mt-3 text-[13px] leading-6 text-secondary">{selectedExtension.description}</p>
+          ) : null}
+        </div>
+
+        {selectedExtension.status === 'invalid' ? (
+          <DetailBlock
+            title="Validation errors"
+            action={
+              <button
+                type="button"
+                className="text-[11px] text-secondary transition-colors hover:text-primary"
+                onClick={() => void copyExtensionDiagnostics(selectedExtension)}
+              >
+                Copy diagnostics
+              </button>
+            }
+          >
+            <div className="space-y-2">
+              {(selectedExtension.errors ?? ['Extension manifest is invalid.']).map((message) => (
+                <p key={message} className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-5 text-danger">
+                  {message}
+                </p>
+              ))}
+            </div>
+          </DetailBlock>
+        ) : null}
+
+        {selectedExtension.diagnostics?.length ? (
+          <DetailBlock
+            title="Diagnostics"
+            action={
+              <button
+                type="button"
+                className="text-[11px] text-secondary transition-colors hover:text-primary"
+                onClick={() => void copyExtensionDiagnostics(selectedExtension)}
+              >
+                Copy diagnostics
+              </button>
+            }
+          >
+            <div className="space-y-2">
+              {selectedExtension.diagnostics.map((message) => (
+                <p key={message} className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-5 text-danger">
+                  {message}
+                </p>
+              ))}
+            </div>
+          </DetailBlock>
+        ) : null}
+
+        <DetailBlock title="Surfaces">
+          {getLogicalSurfaces(selectedExtension).length ? (
+            <div className="space-y-2">
+              {getLogicalSurfaces(selectedExtension).map((surface) => (
+                <div key={surface.id}>
+                  <div className="text-[13px] font-medium text-primary">{surface.title}</div>
+                  <div className="text-[12px] text-secondary">
+                    {surface.kind}
+                    {surface.detail ? ` · detail: ${surface.detail.title}` : ''}
+                  </div>
+                  {surface.warning ? <div className="text-[12px] text-danger">{surface.warning}</div> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-dim">No surfaces.</p>
+          )}
+        </DetailBlock>
+
+        <DetailBlock title="Capabilities">
+          <dl className="space-y-3 text-[12px]">
+            <DetailRow label="UI" value={`Frontend: ${formatFrontendSummary(selectedExtension)}`} />
+            <DetailRow
+              label="Agent"
+              value={`Tools: ${formatToolSummary(selectedExtension)} · Hook: ${formatAgentHookSummary(selectedExtension)} · Skills: ${formatSkillSummary(selectedExtension)}`}
+            />
+            <DetailRow label="Shortcuts" value={formatKeybindingSummary(selectedExtension)} />
+            <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(selectedExtension)}`} />
+            <DetailRow label="Permissions" value={formatPermissionSummary(selectedExtension)} />
+          </dl>
+        </DetailBlock>
+
+        <DetailBlock title="Skills">
+          {selectedExtension.skills?.length ? (
+            <div className="space-y-3">
+              {selectedExtension.skills.map((skill) => (
+                <div key={skill.name} className="group/skill">
+                  <button
+                    type="button"
+                    className="text-left text-[13px] font-medium text-primary transition-colors hover:text-accent"
+                    onClick={() => openPath(skill.path)}
+                  >
+                    {skill.title ?? skill.name}
+                  </button>
+                  <div className="font-mono text-[11px] text-dim">{skill.name}</div>
+                  {skill.description ? <p className="mt-1 text-[12px] leading-5 text-secondary">{skill.description}</p> : null}
+                  <p className="mt-1 break-all font-mono text-[11px] leading-5 text-dim">{skill.path}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-dim">No skills.</p>
+          )}
+        </DetailBlock>
+
+        {selectedExtension.packageRoot ? (
+          <DetailBlock title="Package">
+            <p className="break-all font-mono text-[11px] leading-5 text-secondary">{selectedExtension.packageRoot}</p>
+          </DetailBlock>
+        ) : null}
+
+        <details>
+          <summary className="cursor-pointer select-none text-[12px] text-dim transition-colors hover:text-secondary">Raw manifest</summary>
+          <pre className="mt-3 max-h-[22rem] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-secondary">
+            {JSON.stringify(selectedExtension.manifest, null, 2)}
+          </pre>
+        </details>
+      </div>
+    </aside>
   );
 }
 

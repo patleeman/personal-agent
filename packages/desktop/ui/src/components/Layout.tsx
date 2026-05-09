@@ -16,7 +16,9 @@ import {
   type ExtensionKeybindingRegistration,
   type ExtensionRightToolPanelSurface,
   type ExtensionSurfaceSummary,
+  getExtensionViewPlacement,
   isExtensionRightToolPanelSurface,
+  isNativeExtensionPageSurface,
   isNativeExtensionRightRailSurface,
   isNativeExtensionWorkbenchSurface,
   type NativeExtensionViewSummary,
@@ -1134,7 +1136,7 @@ function WorkbenchKnowledgeRail({
           />
         </div>
       ) : activeExtensionToolPanel ? (
-        <div className="min-h-0 flex-1 overflow-hidden bg-base">
+        <div className="min-h-0 flex-1 overflow-hidden bg-surface [&>[data-extension-id]]:bg-surface">
           {'component' in activeExtensionToolPanel ? (
             <NativeExtensionSurfaceHost
               surface={activeExtensionToolPanel}
@@ -1294,8 +1296,26 @@ export function Layout() {
     () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null,
     [extensionRightToolPanels],
   );
+  const routePrimaryRailSurface = useMemo(() => {
+    if (showWorkbench) return null;
+    const pageSurface = extensionRegistry.surfaces.find(
+      (surface) => isNativeExtensionPageSurface(surface) && routeMatchesPrefix(location.pathname, surface.route),
+    );
+    if (!pageSurface) return null;
+    return (
+      extensionRightToolPanels.find(
+        (surface) =>
+          surface.extensionId === pageSurface.extensionId &&
+          'location' in surface &&
+          surface.location === 'rightRail' &&
+          getExtensionViewPlacement(surface) === 'primary',
+      ) ?? null
+    );
+  }, [extensionRegistry.surfaces, extensionRightToolPanels, location.pathname, showWorkbench]);
+  const showRoutePrimaryRail = routePrimaryRailSurface !== null && railOpen;
   const showKnowledgeRouteRail =
     !showWorkbench &&
+    !routePrimaryRailSurface &&
     routeIsKnowledge(location.pathname, extensionRegistry.surfaces) &&
     railOpen &&
     systemKnowledgeExtensionSurface !== null;
@@ -1599,9 +1619,9 @@ export function Layout() {
         railOpen: workbenchExplorerOpen,
         toggleRail: toggleWorkbenchExplorer,
       }
-    : showKnowledgeRouteRail || routeIsKnowledge(location.pathname, extensionRegistry.surfaces)
+    : routePrimaryRailSurface || showKnowledgeRouteRail || routeIsKnowledge(location.pathname, extensionRegistry.surfaces)
       ? {
-          railOpen: showKnowledgeRouteRail,
+          railOpen: showRoutePrimaryRail || showKnowledgeRouteRail,
           toggleRail: () => setRailOpen((current) => !current),
         }
       : (registeredRightRailControl ??
@@ -1751,7 +1771,7 @@ export function Layout() {
             environment={desktopEnvironment}
             sidebarOpen={effectiveSidebarOpen}
             onToggleSidebar={() => setSidebarOpen((current) => !current)}
-            showRailToggle={showWorkbench && activeRightRailControl !== null}
+            showRailToggle={activeRightRailControl !== null}
             railOpen={activeRightRailControl?.railOpen ?? false}
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
@@ -1761,7 +1781,7 @@ export function Layout() {
             {effectiveSidebarOpen ? (
               <div
                 style={{ width: sidebar.width }}
-                className="flex-shrink-0 flex flex-col overflow-hidden bg-base border-r border-border-subtle"
+                className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle"
               >
                 <Sidebar />
               </div>
@@ -1817,7 +1837,7 @@ export function Layout() {
                         <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
                         <aside
                           style={{ width: workbenchExplorer.width }}
-                          className="flex-shrink-0 overflow-hidden bg-base select-text"
+                          className="flex-shrink-0 overflow-hidden bg-surface select-text"
                           aria-label="Workbench sidebar"
                         >
                           <WorkbenchKnowledgeRail
@@ -1840,15 +1860,15 @@ export function Layout() {
                   </>
                 ) : null}
 
-                {showKnowledgeRouteRail && systemKnowledgeExtensionSurface ? (
+                {(showRoutePrimaryRail && routePrimaryRailSurface) || (showKnowledgeRouteRail && systemKnowledgeExtensionSurface) ? (
                   <>
                     <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
                     <aside
                       style={{ width: railWidth }}
-                      className="relative z-10 flex-shrink-0 overflow-hidden border-l border-border-subtle bg-base select-text"
+                      className="relative z-10 flex-shrink-0 overflow-hidden border-l border-border-subtle bg-surface select-text [&>[data-extension-id]]:bg-surface"
                     >
                       <NativeExtensionSurfaceHost
-                        surface={systemKnowledgeExtensionSurface}
+                        surface={routePrimaryRailSurface ?? systemKnowledgeExtensionSurface}
                         pathname={location.pathname}
                         search={location.search}
                         hash={location.hash}
@@ -1860,7 +1880,7 @@ export function Layout() {
                 ) : showContextRail ? (
                   <>
                     <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-                    <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
+                    <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden bg-surface select-text">
                       <Suspense
                         fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}
                       >
