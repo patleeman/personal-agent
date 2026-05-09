@@ -1518,4 +1518,23 @@ export const api = {
   tracesSystemPrompt: (range?: string) =>
     get<{ series: SystemPromptPoint[]; aggregate: SystemPromptAggregate }>(`/traces/system-prompt${range ? `?range=${range}` : ''}`),
   tracesContextPointers: (range?: string) => get<ContextPointerUsageResult>(`/traces/context-pointers${range ? `?range=${range}` : ''}`),
+
+  // ── Unified settings store ──────────────────────────────────────
+
+  settings: async () => get<Record<string, unknown>>('/settings'),
+  settingsSchema: async () =>
+    get<
+      Array<{
+        extensionId: string;
+        key: string;
+        type: string;
+        default?: unknown;
+        description?: string;
+        group: string;
+        enum?: string[];
+        placeholder?: string;
+        order: number;
+      }>
+    >('/settings/schema'),
+  updateSettings: async (overrides: Record<string, unknown>) => patch<Record<string, unknown>>('/settings', overrides),
 };

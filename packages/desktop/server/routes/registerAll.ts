@@ -12,6 +12,7 @@ import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerModelRoutes } from './models.js';
 import { registerRunAppRoutes } from './runsApp.js';
 import { registerRunsOpsRoutes } from './runsOps.js';
+import { registerSettingsRoutes } from './settings.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
@@ -25,6 +26,8 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerAppTelemetryRoutes(app);
 
   registerDaemonRoutes(app);
+
+  registerSettingsRoutes(app, context);
 
   registerTaskRoutes(app, context);
 

@@ -207,6 +207,21 @@ export interface ExtensionContextMenuContribution {
   when?: string;
 }
 
+export type ExtensionSettingType = 'string' | 'boolean' | 'number' | 'select';
+
+export interface ExtensionSettingsContribution {
+  type: ExtensionSettingType;
+  default?: unknown;
+  description?: string;
+  /** Group label for UI organization. Defaults to 'General'. */
+  group?: string;
+  /** Enum values for 'select' type. */
+  enum?: string[];
+  placeholder?: string;
+  /** Sort order within group. Default 0. */
+  order?: number;
+}
+
 export interface ExtensionConversationDecoratorContribution {
   id: string;
   component: string;
@@ -236,7 +251,7 @@ export interface ExtensionContributions {
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
-  settings?: Record<string, unknown>;
+  settings?: Record<string, ExtensionSettingsContribution>;
 }
 
 export interface ExtensionManifest {

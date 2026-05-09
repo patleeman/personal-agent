@@ -227,6 +227,19 @@ export interface ExtensionMessageActionRegistration {
   priority?: number;
 }
 
+export interface ExtensionSettingsRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  key: string;
+  type: string;
+  default?: unknown;
+  description?: string;
+  group: string;
+  enum?: string[];
+  placeholder?: string;
+  order: number;
+}
+
 interface ExtensionRegistryConfig {
   disabledIds?: string[];
   disabledKeybindings?: string[];
@@ -390,6 +403,36 @@ function buildExtensionMentionRegistrations(entry: ExtensionRegistryEntry): Exte
         ...(mention.description ? { description: mention.description } : {}),
         kinds: mention.kinds,
         provider,
+      },
+    ];
+  });
+}
+
+function buildExtensionSettingsRegistrations(entry: ExtensionRegistryEntry): ExtensionSettingsRegistration[] {
+  const contributes = entry.manifest.contributes?.settings;
+  if (!contributes) {
+    return [];
+  }
+  return Object.entries(contributes).flatMap(([key, setting]) => {
+    if (!setting || typeof setting !== 'object') {
+      return [];
+    }
+    const type = typeof setting.type === 'string' ? setting.type : 'string';
+    if (!['string', 'boolean', 'number', 'select'].includes(type)) {
+      return [];
+    }
+    return [
+      {
+        extensionId: entry.manifest.id,
+        packageType: entry.manifest.packageType ?? 'user',
+        key,
+        type,
+        default: setting.default,
+        description: typeof setting.description === 'string' ? setting.description : undefined,
+        group: typeof setting.group === 'string' && setting.group.trim() ? setting.group.trim() : 'General',
+        enum: Array.isArray(setting.enum) ? setting.enum.filter((e): e is string => typeof e === 'string') : undefined,
+        placeholder: typeof setting.placeholder === 'string' ? setting.placeholder : undefined,
+        order: typeof setting.order === 'number' ? setting.order : 0,
       },
     ];
   });
@@ -727,7 +770,8 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(shelf.id, `contributes.composerShelves[${index}].id`);
       requireString(shelf.component, `contributes.composerShelves[${index}].component`);
       validateOptionalString(shelf.title, `contributes.composerShelves[${index}].title`);
-      if (shelf.placement !== undefined) validateEnum(shelf.placement, ['top', 'bottom'], `contributes.composerShelves[${index}].placement`);
+      if (shelf.placement !== undefined)
+        validateEnum(shelf.placement, ['top', 'bottom'], `contributes.composerShelves[${index}].placement`);
     }
   }
 
@@ -770,18 +814,39 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
   }
 
   if (contributes.conversationDecorators !== undefined) {
-    for (const [index, decorator] of assertRecordArray(contributes.conversationDecorators, 'contributes.conversationDecorators').entries()) {
+    for (const [index, decorator] of assertRecordArray(
+      contributes.conversationDecorators,
+      'contributes.conversationDecorators',
+    ).entries()) {
       requireString(decorator.id, `contributes.conversationDecorators[${index}].id`);
       requireString(decorator.component, `contributes.conversationDecorators[${index}].component`);
-      validateEnum(decorator.position, ['before-title', 'after-title', 'subtitle'], `contributes.conversationDecorators[${index}].position`);
+      validateEnum(
+        decorator.position,
+        ['before-title', 'after-title', 'subtitle'],
+        `contributes.conversationDecorators[${index}].position`,
+      );
       if (decorator.priority !== undefined && (typeof decorator.priority !== 'number' || !Number.isInteger(decorator.priority))) {
         throw new Error(`Extension manifest contributes.conversationDecorators[${index}].priority must be an integer.`);
       }
     }
   }
 
-  if (contributes.settings !== undefined && !isRecord(contributes.settings)) {
-    throw new Error('Extension manifest contributes.settings must be an object.');
+  if (contributes.settings !== undefined) {
+    if (!isRecord(contributes.settings)) {
+      throw new Error('Extension manifest contributes.settings must be an object.');
+    }
+    for (const [key, setting] of Object.entries(contributes.settings)) {
+      if (!isRecord(setting)) {
+        throw new Error(`Extension manifest contributes.settings.${key} must be an object.`);
+      }
+      const allowedTypes = ['string', 'boolean', 'number', 'select'];
+      if (typeof setting.type === 'string' && !allowedTypes.includes(setting.type)) {
+        throw new Error(`Extension manifest contributes.settings.${key}.type must be one of: ${allowedTypes.join(', ')}.`);
+      }
+      if (setting.enum !== undefined && !Array.isArray(setting.enum)) {
+        throw new Error(`Extension manifest contributes.settings.${key}.enum must be an array.`);
+      }
+    }
   }
 }
 
@@ -1256,7 +1321,9 @@ export function listExtensionContextMenuRegistrations(stateRoot: string = getSta
   );
 }
 
-export function listExtensionConversationDecoratorRegistrations(stateRoot: string = getStateRoot()): ExtensionConversationDecoratorRegistration[] {
+export function listExtensionConversationDecoratorRegistrations(
+  stateRoot: string = getStateRoot(),
+): ExtensionConversationDecoratorRegistration[] {
   return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
     (entry.manifest.contributes?.conversationDecorators ?? []).flatMap((decorator): ExtensionConversationDecoratorRegistration[] => {
       const id = decorator.id.trim();
@@ -1318,6 +1385,10 @@ export function listExtensionAgentRegistrations(stateRoot: string = getStateRoot
       },
     ];
   });
+}
+
+export function listExtensionSettingsRegistrations(stateRoot: string = getStateRoot()): ExtensionSettingsRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionSettingsRegistrations);
 }
 
 export function findExtensionEntry(extensionId: string): ExtensionRegistryEntry | null {

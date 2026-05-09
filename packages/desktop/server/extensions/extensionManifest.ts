@@ -96,7 +96,7 @@ export interface ExtensionContributions {
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
-  settings?: Record<string, unknown>;
+  settings?: Record<string, ExtensionSettingsContribution>;
 }
 
 export interface ExtensionTopBarElementContribution {
@@ -144,6 +144,16 @@ export interface ExtensionContextMenuContribution {
   surface: 'message' | 'conversationList';
   separator?: boolean;
   when?: string;
+}
+
+export interface ExtensionSettingsContribution {
+  type: 'string' | 'boolean' | 'number' | 'select';
+  default?: unknown;
+  description?: string;
+  group?: string;
+  enum?: string[];
+  placeholder?: string;
+  order?: number;
 }
 
 export interface ExtensionConversationDecoratorContribution {

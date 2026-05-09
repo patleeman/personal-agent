@@ -1,0 +1,712 @@
+# Extension Authoring Guide
+
+Extensions add capabilities to the Personal Agent desktop app. This guide
+covers how to create, structure, and publish extensions.
+
+## Contents
+
+- [Extension Structure](#extension-structure)
+- [Manifest (`extension.json`)](#manifest-extensionjson)
+- [Frontend (UI)](#frontend-ui)
+- [Backend (Server-side)](#backend-server-side)
+- [Agent Lifecycle Hooks](#agent-lifecycle-hooks)
+- [Conversation Write API](#conversation-write-api)
+- [Inter-extension Communication](#inter-extension-communication)
+- [Notifications and Badge](#notifications-and-badge)
+- [Permissions](#permissions)
+- [Development Workflow](#development-workflow)
+- [Examples](#examples)
+
+## Extension Structure
+
+A minimal extension looks like:
+
+```
+my-extension/
+├── extension.json      # Manifest
+├── package.json        # Dependencies (optional)
+├── src/
+│   ├── frontend.tsx    # UI components (optional)
+│   └── backend.ts      # Backend handlers (optional)
+└── dist/               # Built output
+```
+
+Create a new extension with:
+
+```bash
+POST /api/extensions
+{
+  "id": "my-ext",
+  "name": "My Extension",
+  "template": "main-page"   # "main-page", "right-rail", or "workbench-detail"
+}
+```
+
+## Manifest (`extension.json`)
+
+The manifest declares what your extension contributes:
+
+```json
+{
+  "schemaVersion": 2,
+  "id": "my-extension",
+  "name": "My Extension",
+  "description": "What it does",
+  "version": "0.1.0",
+  "packageType": "user",
+  "permissions": ["storage:readwrite"],
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      {
+        "id": "ping",
+        "handler": "ping",
+        "title": "Ping"
+      }
+    ]
+  },
+  "contributes": {
+    "views": [],
+    "nav": [],
+    "commands": [],
+    "tools": [],
+    "skills": [],
+    "themes": []
+  }
+}
+```
+
+**`packageType`**: `"user"` (your own extension) or `"system"` (bundled with the app).
+
+**`permissions`**: See [Permissions](#permissions).
+
+### Contribution Types
+
+| Field                 | Purpose                       | Docs                |
+| --------------------- | ----------------------------- | ------------------- |
+| `views`               | UI surfaces (pages, panels)   | See `docs/views.md` |
+| `nav`                 | Left sidebar navigation items |                     |
+| `commands`            | Command palette commands      |                     |
+| `keybindings`         | Keyboard shortcuts            |                     |
+| `slashCommands`       | `/command` in composer        |                     |
+| `tools`               | Agent-callable tools          |                     |
+| `mentions`            | @-mention providers           |                     |
+| `skills`              | Agent Skills (markdown)       |                     |
+| `themes`              | Color themes                  |                     |
+| `transcriptRenderers` | Custom tool result rendering  |                     |
+| `promptReferences`    | @-mention resolvers           |                     |
+| `quickOpen`           | Quick-open providers          |                     |
+| `settings`            | Settings schema contributions |                     |
+
+### Views
+
+Views are the primary way to add UI. Three locations:
+
+- **`main`**: Full-page view at a custom route (`/ext/your-id`).
+- **`rightRail`**: Collapsible panel beside the conversation.
+- **`workbench`**: Center detail pane, paired with a right rail view.
+
+```json
+{
+  "id": "my-panel",
+  "title": "My Panel",
+  "location": "rightRail",
+  "component": "MyComponent",
+  "scope": "conversation",
+  "icon": "app",
+  "activation": "on-open"
+}
+```
+
+**`activation`** controls when the component loads:
+
+- `"on-route"` — loads when the route is active (for main pages).
+- `"on-open"` — loads when the user opens the panel.
+- `"on-demand"` — loads lazily when needed.
+- `"always"` — always mounted.
+
+**`scope`** for rightRail views:
+
+- `"conversation"` — one instance per conversation.
+- `"workspace"` — one per workspace/cwd.
+- `"global"` — single instance.
+
+### Message Actions (`messageActions`)
+
+Add hover-reveal text buttons on messages, inline with copy/fork/rewind.
+Action-based — no frontend entry needed.
+
+```json
+{
+  "id": "summarize-message",
+  "title": "Summarize",
+  "action": "summarizeHandler",
+  "when": "role:assistant && hasText",
+  "priority": 10
+}
+```
+
+**`when`** predicates:
+- `role:assistant` — only on assistant messages
+- `role:user` — only on user messages
+- `hasText` — message has text content
+
+Backend handler receives:
+```typescript
+{
+  messageText: string;
+  messageRole: 'user' | 'assistant';
+  blockId: string;
+  conversationId: string;
+}
+```
+
+### Toolbar Actions (`toolbarActions`)
+
+Add icon buttons in the composer toolbar row (between dictation and submit).
+Action-based — no frontend entry needed.
+
+```json
+{
+  "id": "open-browser",
+  "title": "Open browser",
+  "icon": "browser",
+  "action": "openBrowserBackend",
+  "when": "!streamIsStreaming",
+  "priority": 10
+}
+```
+
+**`when`** predicates:
+- `composerHasContent` — input has text
+- `streamIsStreaming` — agent is streaming
+- `!streamIsStreaming` — agent is idle
+
+### Composer Shelves (`composerShelves`)
+
+Add sections in the scrollable area above the composer input.
+Component-based — requires a frontend entry with a named component export.
+
+```json
+{
+  "id": "status-shelf",
+  "component": "StatusShelf",
+  "title": "Status",
+  "placement": "bottom"
+}
+```
+
+**`placement`**: `"top"` (before built-in shelves) or `"bottom"` (after).
+
+The component receives:
+```typescript
+{
+  pa: PersonalAgentClient;
+  shelfContext: {
+    conversationId: string;
+    isStreaming: boolean;
+    isLive: boolean;
+  };
+}
+```
+
+### Conversation Decorators (`conversationDecorators`)
+
+Add badges, icons, or indicators on conversation tab items in the sidebar.
+Component-based — requires a frontend entry.
+
+```json
+{
+  "id": "gateway-badge",
+  "component": "GatewayBadge",
+  "position": "after-title",
+  "priority": 10
+}
+```
+
+**`position`**: `"before-title"`, `"after-title"`, or `"subtitle"` (below title).
+
+The component receives:
+```typescript
+{
+  pa: PersonalAgentClient;
+  session: SessionMeta;  // conversation metadata
+}
+```
+
+### Context Menus (`contextMenus`)
+
+Add right-click menu items. Action-based — no frontend entry needed.
+
+```json
+{
+  "id": "copy-deeplink",
+  "title": "Copy Deeplink",
+  "action": "copyDeeplinkHandler",
+  "surface": "conversationList"
+}
+```
+
+**`surface`**: `"message"` (on message blocks) or `"conversationList"` (on sidebar items).
+
+Conversation list backend handler receives:
+```typescript
+{
+  conversationId: string;
+  sessionTitle: string;
+  cwd: string;
+}
+```
+
+### Status Bar Items (`statusBarItems`)
+
+Add labels in the status bar below the composer. Action-based — no frontend entry needed.
+
+```json
+{
+  "id": "gateway-status",
+  "label": "Gateway",
+  "action": "openGatewayPanel",
+  "alignment": "right",
+  "priority": 10
+}
+```
+
+**`alignment`**: `"left"` or `"right"`. **`priority`**: sort order (higher = closer to edge).
+Items without an `action` are static labels. Items with an `action` are clickable.
+
+### Tools
+
+Extensions can register agent-callable tools. The agent sees them as
+`extension_{extensionId}_{toolId}` unless a custom `name` is given.
+
+```json
+{
+  "id": "summarize",
+  "name": "summarize_text",
+  "description": "Summarize a block of text",
+  "action": "summarizeHandler",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string" }
+    },
+    "required": ["text"]
+  }
+}
+```
+
+#### Overriding built-in tools
+
+Extension tools can replace built-in tools using the `replaces` field.
+When set, the tool registers under the built-in tool's name, overriding it.
+
+```json
+{
+  "id": "my-bash",
+  "description": "Safer bash execution with logging",
+  "action": "bashHandler",
+  "replaces": "bash",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "command": { "type": "string" }
+    },
+    "required": ["command"]
+  }
+}
+```
+
+Supported overridable tools: `bash`, `read`, `write`, `edit`, `grep`, `find`, `ls`, `notify`, `web_fetch`, `web_search`.
+
+The replacement tool must accept the same input schema as the original
+and return compatible output.
+
+#### Streaming progress in tool handlers
+
+Backend action handlers called from manifest-declared tools can stream
+progress updates during execution using `ctx.toolContext?.onUpdate()`.
+
+```typescript
+export async function longRunningHandler(input: unknown, ctx: ExtensionBackendContext) {
+  // Send progress updates back to the agent
+  ctx.toolContext?.onUpdate?.({
+    content: [{ type: 'text', text: 'Step 1 of 3 complete...' }],
+  });
+
+  const result = await doWork();
+
+  // Final result
+  return { content: [{ type: 'text', text: 'Done!' }] };
+}
+```
+
+This is useful for tools that take multiple seconds to complete — the
+agent sees intermediate progress instead of waiting silently.```
+
+## Frontend (UI)
+
+Your `src/frontend.tsx` exports React components referenced in the manifest.
+
+```tsx
+import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
+
+export function MyPanel({ pa, context }: ExtensionSurfaceProps) {
+  return (
+    <div>
+      <button onClick={() => pa.ui.toast('Hello!')}>Test Toast</button>
+    </div>
+  );
+}
+```
+
+The `pa` client provides:
+
+- `pa.extension.invoke(actionId, input)` — call backend actions
+- `pa.ui.toast(message, type)` — show toast notification
+- `pa.ui.confirm(options)` — show confirmation dialog
+- `pa.storage.*` — read/write extension state
+- `pa.workspace.*` — workspace file operations
+- `pa.browser.*` — browser control
+- `pa.runs.*` — background run operations
+- `pa.automations.*` — scheduled task management
+- `pa.events.publish(event, payload)` — publish inter-extension events
+- `pa.extensions.callAction(id, action, input)` — call another extension's action
+- `pa.extensions.listActions()` — list available extension actions
+
+See `packages/extensions/src/index.ts` for the full API.
+
+## Backend (Server-side)
+
+The backend runs in the Node.js server process. It exposes actions
+that the frontend can call via `pa.extension.invoke()`.
+
+```typescript
+import type { ExtensionBackendContext } from '@personal-agent/extensions';
+
+export async function ping(_input: unknown, ctx: ExtensionBackendContext) {
+  ctx.log.info('ping received');
+  return { ok: true, at: new Date().toISOString() };
+}
+```
+
+### Backend Context (`ctx`)
+
+The `ExtensionBackendContext` provides:
+
+| Property            | Purpose                                                  |
+| ------------------- | -------------------------------------------------------- |
+| `ctx.storage`       | Persistent key-value store per extension (SQLite-backed) |
+| `ctx.automations`   | Scheduled task management                                |
+| `ctx.runs`          | Background run management                                |
+| `ctx.conversations` | Conversation read/write operations                       |
+| `ctx.workspace`     | Workspace file operations (read, write, list)            |
+| `ctx.vault`         | Knowledge vault operations                               |
+| `ctx.git`           | Git status, diff, log                                    |
+| `ctx.shell`         | Shell command execution                                  |
+| `ctx.notify`        | Toast, system notifications, badge (see below)           |
+| `ctx.events`        | Inter-extension event pub/sub                            |
+| `ctx.extensions`    | Call actions on other extensions                         |
+| `ctx.ui`            | Invalidate UI state topics                               |
+| `ctx.log`           | Structured logging                                       |
+
+## Conversation Write API
+
+The `conversations` object in the backend context now supports
+write operations in addition to reads.
+
+```typescript
+// Send a message into a live conversation
+await ctx.conversations.sendMessage(
+  conversationId,
+  'Your message here',
+  { steer: true }, // or { steer: false } for followUp
+);
+
+// Update the conversation title
+await ctx.conversations.setTitle(conversationId, 'New Title');
+
+// Trigger compaction
+await ctx.conversations.compact(conversationId);
+
+// Read operations (pre-existing)
+await ctx.conversations.list();
+await ctx.conversations.getMeta(conversationId);
+await ctx.conversations.get(conversationId, { tailBlocks: 20 });
+await ctx.conversations.searchIndex(sessionIds);
+```
+
+**Permission required:** `conversations:readwrite` for write operations.
+
+**Limitations:**
+
+- Write operations require the conversation to be live (in-memory).
+- Creating new conversations via the API is not yet supported.
+- Fork operations are not yet available.
+
+## Inter-extension Communication
+
+Extensions can communicate with each other through a shared event bus
+and by calling each other's actions.
+
+### Event Bus
+
+Publish events that other extensions subscribe to:
+
+```typescript
+// In extension A — backend.ts
+await ctx.events.publish({
+  event: 'task:completed',
+  payload: { taskId: '123', result: 'success' },
+});
+```
+
+Subscribe to events from other extensions:
+
+```typescript
+// In extension B — backend.ts
+const sub = ctx.events.subscribe('task:*', async (event) => {
+  console.log(`Received ${event.event} from ${event.sourceExtensionId}`);
+  // event.payload, event.publishedAt
+});
+
+// Later, to unsubscribe:
+sub.unsubscribe();
+```
+
+**Pattern syntax:**
+
+- `"*"` — matches all events
+- `"task:*"` — matches `task:completed`, `task:failed`, etc.
+- `"task:completed"` — exact match only
+
+### Cross-extension Action Calls
+
+Call an action exposed by another extension:
+
+```typescript
+const result = await ctx.extensions.callAction('other-extension', 'someAction', { key: 'value' });
+```
+
+List available extension actions:
+
+```typescript
+const actions = await ctx.extensions.listActions();
+// Returns: [{ extensionId, extensionName, actions: [{ id, title, description }] }]
+```
+
+## Notifications and Badge
+
+Extensions can send notifications and set dock badges:
+
+```typescript
+// In-app toast
+ctx.notify.toast('Hello!', 'info'); // "info" | "warning" | "error"
+
+// System notification (macOS notification centre)
+ctx.notify.system({
+  title: 'Task Complete',
+  message: 'Your background task finished.',
+  subtitle: 'Optional subtitle',
+  persistent: true, // stays until acknowledged
+});
+
+// Dock badge count (accumulated across all extensions)
+ctx.notify.setBadge(5); // Set badge to 5
+ctx.notify.clearBadge(); // Clear this extension's badge
+
+// Check if system notifications are available
+const available = ctx.notify.isSystemAvailable();
+```
+
+## Permissions
+
+Extensions must declare the permissions they need. The system currently
+enforces permissions for storage and conversation operations.
+
+```json
+{
+  "permissions": [
+    "storage:read",
+    "storage:write",
+    "storage:readwrite",
+    "conversations:read",
+    "conversations:readwrite",
+    "vault:read",
+    "vault:write",
+    "vault:readwrite",
+    "runs:read",
+    "runs:start",
+    "runs:cancel",
+    "ui:notify"
+  ]
+}
+```
+
+Custom permissions are also supported: `"${string}:${string}"`.
+
+## Agent Lifecycle Hooks
+
+Desktop manifest extensions can hook into the agent's lifecycle by
+exporting an `ExtensionFactory` function via the `backend.agentExtension` field.
+
+```typescript
+// backend.ts — exported as the value referenced by agentExtension
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+export default function (pi: ExtensionAPI) {
+  // Subscribe to agent lifecycle events
+  pi.on('before_agent_start', async (event, ctx) => {
+    // Modify the system prompt before each turn
+    return {
+      systemPrompt: event.systemPrompt + '\nExtra instructions for this turn...',
+    };
+  });
+
+  pi.on('tool_call', async (event, ctx) => {
+    // Block or modify tool calls
+    if (event.toolName === 'bash' && event.input.command?.includes('rm -rf')) {
+      return { block: true, reason: 'Dangerous command blocked by extension' };
+    }
+  });
+
+  pi.on('tool_result', async (event, ctx) => {
+    // Post-process results
+    if (event.toolName === 'read') {
+      return { content: [{ type: 'text', text: event.content + '\n— End of file' }] };
+    }
+  });
+
+  pi.on('session_start', async (event, ctx) => {
+    ctx.ui.notify(`Session started: ${event.reason}`, 'info');
+  });
+
+  // Register custom tools
+  pi.registerTool({
+    name: 'my_tool',
+    label: 'My Tool',
+    description: 'A custom tool',
+    parameters: { type: 'object', properties: {} },
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      return { content: [{ type: 'text', text: 'Done!' }] };
+    },
+  });
+
+  // Override a built-in tool
+  pi.registerTool({
+    name: 'bash', // Same name as built-in → replaces it
+    label: 'Safe Bash',
+    description: 'Bash with guardrails',
+    parameters: { type: 'object', properties: { command: { type: 'string' } } },
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      // Custom implementation
+      return { content: [{ type: 'text', text: params.command }] };
+    },
+  });
+}
+```
+
+Then in your manifest:
+
+```json
+{
+  "backend": {
+    "entry": "src/backend.ts",
+    "agentExtension": "default"
+  }
+}
+```
+
+The `agentExtension` field names the exported function that receives
+the `ExtensionAPI`. If set to `"default"`, the default export is used.
+
+**All pi-coding-agent events are available:**
+
+| Event                      | When                                | Use Case                             |
+| -------------------------- | ----------------------------------- | ------------------------------------ |
+| `before_agent_start`       | Before the agent processes a prompt | Inject context, modify system prompt |
+| `input`                    | User input received                 | Intercept or transform input         |
+| `context`                  | Before LLM call                     | Modify messages                      |
+| `tool_call`                | Before tool execution               | Block/modify tool calls              |
+| `tool_result`              | After tool execution                | Post-process results                 |
+| `session_start`            | Session loaded                      | Initialize state                     |
+| `session_shutdown`         | Session ending                      | Clean up resources                   |
+| `session_before_compact`   | Before compaction                   | Customize compaction                 |
+| `message_start/update/end` | Message lifecycle                   | Custom rendering                     |
+| `turn_start/end`           | Turn lifecycle                      | Track progress                       |
+| `agent_start/end`          | Agent cycle lifecycle               | Track agent activity                 |
+
+For the full list of events and their signatures, see the
+[pi-coding-agent extensions documentation](../../node_modules/@earendil-works/pi-coding-agent/docs/extensions.md).
+
+## Development Workflow
+
+### Building
+
+Extensions need to be built before they can be loaded:
+
+```bash
+POST /api/extensions/my-ext/build
+
+# Or from the extension manager UI, click "Build"
+```
+
+### Hot Reload
+
+After changing backend code:
+
+```bash
+POST /api/extensions/my-ext/reload
+```
+
+Note: the frontend is re-evaluated on page load. Use the extension
+manager UI's "Reload" button or restart the app.
+
+### Debugging
+
+- Backend logs appear in the server console with `[extension:my-ext]` prefix.
+- Frontend errors appear in the web console.
+- Use `ctx.log.info/warn/error()` for structured logging.
+- Check the extension manager UI for diagnostics.
+
+### State
+
+Extensions get persistent key-value storage:
+
+```typescript
+// Write
+await ctx.storage.put('my-key', { count: 42 });
+
+// Read
+const data = await ctx.storage.get('my-key');
+
+// List
+const items = await ctx.storage.list('prefix-');
+
+// Delete
+await ctx.storage.delete('my-key');
+```
+
+State is SQLite-backed and survives app restarts.
+
+## Examples
+
+See the system extensions in `extensions/` for practical examples:
+
+- **`system-artifacts`** — Tools + views + transcript renderer + skills
+- **`system-browser`** — Browser automation tool + views
+- **`system-automations`** — Scheduled tasks + composer shelf (TaskShelf)
+- **`system-images`** — Image generation and probing tools
+- **`system-conversation-tools`** — Agent lifecycle hooks + messageActions + contextMenus
+- **`system-extension-manager`** — Extension management UI + statusBarItems + nav
+- **`system-caffinate`** — topBarElements + toolbarActions + statusBarItems + conversationDecorators
+- **`system-runs`** — Background runs + composer shelf (ActivityShelf)
+- **`system-gateways`** — Gateway management + statusBarItems
+- **`system-settings`** — Settings panels + nav
+
+Each system extension has a complete `extension.json` manifest and
+`src/backend.ts` + optionally `src/frontend.tsx`.
