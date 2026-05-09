@@ -27,6 +27,7 @@ const sharedEsbuildOptions = {
     '@xenova/transformers',
     'better-sqlite3',
     'electron',
+    'esbuild',
     'jsdom',
   ],
 };
