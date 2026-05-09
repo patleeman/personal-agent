@@ -70,7 +70,7 @@ describe('ConversationComposerMeta', () => {
     expect(html).toContain('bad path');
   });
 
-  it('renders saved conversation cwd and token metadata', () => {
+  it('renders saved conversation cwd metadata', () => {
     const html = renderToString(
       <ConversationComposerMeta
         {...baseProps}
@@ -86,6 +86,6 @@ describe('ConversationComposerMeta', () => {
 
     expect(html).toContain('Working directory: /repo/project');
     expect(html).toContain('project');
-    expect(html).toContain('Context usage:');
+    expect(html).toContain('Conversation options');
   });
 });

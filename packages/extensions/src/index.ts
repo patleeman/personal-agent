@@ -237,6 +237,10 @@ export interface ExtensionStatusBarItemContext {
     added?: string;
     deleted?: string;
   };
+  contextUsage?: {
+    total: number | null;
+    contextWindow: number;
+  } | null;
 }
 
 export interface ExtensionStatusBarItemProps {

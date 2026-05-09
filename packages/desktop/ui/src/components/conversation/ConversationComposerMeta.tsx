@@ -1,13 +1,13 @@
 import { type ComponentProps, useEffect, useRef, useState } from 'react';
 
 import { api } from '../../client/api';
+import type { ConversationContextUsageTokensPresentation } from '../../conversation/conversationComposerPresentation';
 import { createNativeExtensionClient } from '../../extensions/nativePaClient';
 import { StatusBarItemHost } from '../../extensions/StatusBarItemHost';
 import { type ExtensionStatusBarItemRegistration, useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { GatewayState } from '../../shared/types';
 import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon, RemoteExecutionIcon } from './ConversationComposerChrome';
-import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from './ConversationContextUsageIndicator';
 
 export type ConversationGitSummaryPresentation =
   | { kind: 'none' }
@@ -86,7 +86,7 @@ export function ConversationComposerMeta({
   onBeginConversationCwdEdit: () => void;
   branchLabel: string | null;
   gitSummaryPresentation: ConversationGitSummaryPresentation;
-  sessionTokens: ConversationContextUsageTokens | null;
+  sessionTokens: ConversationContextUsageTokensPresentation | null;
   conversationId?: string | null;
   conversationTitle?: string;
   openGatewayPickerSignal?: string | null;
@@ -99,6 +99,7 @@ export function ConversationComposerMeta({
     cwd: currentCwd,
     branchLabel,
     gitSummary: gitSummaryPresentation,
+    contextUsage: sessionTokens,
   };
   const [moreOpen, setMoreOpen] = useState(false);
   const [gatewayOnlyOpen, setGatewayOnlyOpen] = useState(false);
@@ -300,7 +301,6 @@ export function ConversationComposerMeta({
         </div>
       )}
       <div className="flex shrink-0 items-center justify-end gap-2 text-right">
-        {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
         <div className="relative" ref={menuRef}>
           <button
             type="button"
