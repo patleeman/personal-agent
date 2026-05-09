@@ -654,10 +654,9 @@ export function ExtensionManagerPage() {
 
   return (
     <>
-      <div className="h-full overflow-hidden">
-        <AppPageLayout shellClassName="flex h-full min-h-0 max-w-[92rem]" contentClassName="flex min-h-0 flex-1 flex-col gap-5">
+      <div className="h-full overflow-y-auto">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
           <AppPageIntro
-            eyebrow="Extension Manager"
             title="Extensions"
             summary="Install, enable, build, and inspect local product modules."
             actions={
@@ -676,7 +675,7 @@ export function ExtensionManagerPage() {
           {extensions.length === 0 ? (
             <EmptyState title="No extensions installed" body="Ask an agent to create one under the runtime extensions directory." />
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-1 rounded-xl bg-surface/40 p-1">
                   {(['all', 'system', 'user', 'enabled', 'disabled'] as const).map((nextFilter) => (
@@ -703,8 +702,8 @@ export function ExtensionManagerPage() {
               {visibleExtensions.length === 0 ? (
                 <EmptyState title="No matching extensions" body="Adjust the filter or search query." />
               ) : (
-                <div className="flex min-h-0 flex-1">
-                  <section className="min-h-0 min-w-0 flex-1 overflow-auto">
+                <div>
+                  <section className="min-w-0 overflow-auto">
                     <table className="w-full border-collapse text-left text-[13px]">
                       <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
                         <tr className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">

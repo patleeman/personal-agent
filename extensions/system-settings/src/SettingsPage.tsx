@@ -3254,7 +3254,7 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
       <div ref={settingsScrollRef} className="h-full overflow-y-auto">
         <AppPageLayout
           asideLayout="centered"
-          contentClassName="max-w-[72rem] flex flex-col gap-12"
+          contentClassName="flex flex-col gap-10"
           aside={
             visibleQuickLinks.length > 1 ? (
               <SettingsTableOfContents items={visibleQuickLinks} activeId={activeQuickLinkId} onNavigate={navigateToSection} />
