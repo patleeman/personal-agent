@@ -1,25 +1,112 @@
 # Settings Extension
 
-This extension owns the product behavior documented below. Keep extension-specific user and agent docs here so the implementation and documentation move together.
+This extension owns the Settings UI in the desktop app. It renders both
+hand-built panels (providers, keyboard shortcuts) and auto-generated
+panels from settings declared by any extension's manifest.
 
 ---
-
-<!-- Source: docs/settings.md -->
 
 # Settings
 
 The Settings panel is the desktop UI for all configuration. Open it from the app menu, `Cmd+,`, or navigate to `/settings`.
 
+## Architecture
+
+Settings are stored in a single `<stateRoot>/settings.json` file. Each
+extension declares its settings schema in its `extension.json` under
+`contributes.settings`. The system merges all schemas, and the Settings
+UI auto-generates form controls for each declared setting.
+
+```
+Extension manifests ──► Schema registry ──► Settings UI (auto-generated)
+                          │
+                     settings.json
+                          │
+                   Backend actions / agent
+```
+
+### Adding settings to an extension
+
+In your `extension.json`:
+
+```json
+{
+  "contributes": {
+    "settings": {
+      "myExt.timeout": {
+        "type": "number",
+        "default": 30,
+        "description": "Timeout in seconds",
+        "group": "My Extension",
+        "order": 1
+      }
+    }
+  }
+}
+```
+
+The setting appears in the Settings UI grouped under "My Extension".
+No React code needed.
+
+### API
+
+| Method | Endpoint               | Description                                      |
+| ------ | ---------------------- | ------------------------------------------------ |
+| GET    | `/api/settings`        | All current values (defaults + overrides merged) |
+| GET    | `/api/settings/schema` | Unified schema from all extensions               |
+| PATCH  | `/api/settings`        | Update one or more settings                      |
+
+Client-side:
+
+```ts
+const values = await api.settings(); // Record<string, unknown>
+const schema = await api.settingsSchema(); // ExtensionSettingsRegistration[]
+await api.updateSettings({ 'myExt.timeout': 60 }); // updates + returns merged
+```
+
 ## Sections
 
-| Section            | What it controls                                       |
-| ------------------ | ------------------------------------------------------ |
-| Theme              | Light, dark, or system-follow                          |
-| Keyboard Shortcuts | View, customize, and search every shortcut             |
-| Providers          | API provider configuration (add, remove, edit)         |
-| Models             | Default provider, default model, model selection       |
-| Dictation          | Transcription provider, model selection, model install |
-| Daemon             | Daemon status, keep-awake toggle                       |
+| Section      | Source                                  |
+| ------------ | --------------------------------------- |
+| Appearance   | Built-in (theme picker)                 |
+| Conversation | Built-in (model, thinking)              |
+| Workspace    | Built-in (knowledge, working dir)       |
+| Skills       | Built-in (folders, AGENTS.md)           |
+| Dictation    | Built-in (transcription provider)       |
+| Tools        | Built-in (MCP wrapper config)           |
+| Providers    | Built-in (model providers, credentials) |
+| Daemon       | Built-in (keep-awake)                   |
+| Desktop      | Built-in (updates, SSH remotes)         |
+| Keyboard     | Built-in (shortcut editor)              |
+| Extensions   | Auto-generated from extension manifests |
+| Interface    | Built-in (reset UI state)               |
+
+The **Extensions** section is populated dynamically from every extension's
+`contributes.settings` declarations, grouped by the `group` field.
+
+## Usage
+
+### Accessing settings from a backend action
+
+```typescript
+import { createSettingsStore } from '@personal-agent/desktop/server/settings/settingsStore.js';
+
+const store = createSettingsStore();
+const allSettings = store.read();
+const timeout = allSettings['myExt.timeout'] ?? 30;
+```
+
+### Accessing settings from the frontend
+
+```typescript
+const values = await api.settings();
+```
+
+### Reading/writing settings from the agent
+
+Settings are not tool-accessible by default (no tool registered for them).
+To let the agent read/update settings, register a tool in your extension
+that wraps the settings store.
 
 ## Theme
 

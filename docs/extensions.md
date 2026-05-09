@@ -86,21 +86,21 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                 | Purpose                       | Docs                |
-| --------------------- | ----------------------------- | ------------------- |
-| `views`               | UI surfaces (pages, panels)   | See `docs/views.md` |
-| `nav`                 | Left sidebar navigation items |                     |
-| `commands`            | Command palette commands      |                     |
-| `keybindings`         | Keyboard shortcuts            |                     |
-| `slashCommands`       | `/command` in composer        |                     |
-| `tools`               | Agent-callable tools          |                     |
-| `mentions`            | @-mention providers           |                     |
-| `skills`              | Agent Skills (markdown)       |                     |
-| `themes`              | Color themes                  |                     |
-| `transcriptRenderers` | Custom tool result rendering  |                     |
-| `promptReferences`    | @-mention resolvers           |                     |
-| `quickOpen`           | Quick-open providers          |                     |
-| `settings`            | Settings schema contributions |                     |
+| Field                 | Purpose                       | Docs                   |
+| --------------------- | ----------------------------- | ---------------------- |
+| `views`               | UI surfaces (pages, panels)   | See `docs/views.md`    |
+| `nav`                 | Left sidebar navigation items |                        |
+| `commands`            | Command palette commands      |                        |
+| `keybindings`         | Keyboard shortcuts            |                        |
+| `slashCommands`       | `/command` in composer        |                        |
+| `tools`               | Agent-callable tools          |                        |
+| `mentions`            | @-mention providers           |                        |
+| `skills`              | Agent Skills (markdown)       |                        |
+| `themes`              | Color themes                  |                        |
+| `transcriptRenderers` | Custom tool result rendering  |                        |
+| `promptReferences`    | @-mention resolvers           |                        |
+| `quickOpen`           | Quick-open providers          |                        |
+| `settings`            | Settings schema contributions | [See below](#settings) |
 
 ### Views
 
@@ -151,11 +151,13 @@ Action-based — no frontend entry needed.
 ```
 
 **`when`** predicates:
+
 - `role:assistant` — only on assistant messages
 - `role:user` — only on user messages
 - `hasText` — message has text content
 
 Backend handler receives:
+
 ```typescript
 {
   messageText: string;
@@ -182,6 +184,7 @@ Action-based — no frontend entry needed.
 ```
 
 **`when`** predicates:
+
 - `composerHasContent` — input has text
 - `streamIsStreaming` — agent is streaming
 - `!streamIsStreaming` — agent is idle
@@ -203,6 +206,7 @@ Component-based — requires a frontend entry with a named component export.
 **`placement`**: `"top"` (before built-in shelves) or `"bottom"` (after).
 
 The component receives:
+
 ```typescript
 {
   pa: PersonalAgentClient;
@@ -210,7 +214,7 @@ The component receives:
     conversationId: string;
     isStreaming: boolean;
     isLive: boolean;
-  };
+  }
 }
 ```
 
@@ -231,10 +235,11 @@ Component-based — requires a frontend entry.
 **`position`**: `"before-title"`, `"after-title"`, or `"subtitle"` (below title).
 
 The component receives:
+
 ```typescript
 {
   pa: PersonalAgentClient;
-  session: SessionMeta;  // conversation metadata
+  session: SessionMeta; // conversation metadata
 }
 ```
 
@@ -254,6 +259,7 @@ Add right-click menu items. Action-based — no frontend entry needed.
 **`surface`**: `"message"` (on message blocks) or `"conversationList"` (on sidebar items).
 
 Conversation list backend handler receives:
+
 ```typescript
 {
   conversationId: string;
@@ -393,6 +399,80 @@ export async function ping(_input: unknown, ctx: ExtensionBackendContext) {
   return { ok: true, at: new Date().toISOString() };
 }
 ```
+
+### Settings
+
+Extensions can declare user-facing settings in their manifest. These appear
+in the Settings UI (under "Extensions") grouped by the `group` field — no
+React code required for basic types.
+
+```json
+{
+  "contributes": {
+    "settings": {
+      "myExt.timeout": {
+        "type": "number",
+        "default": 30,
+        "description": "Timeout in seconds",
+        "group": "My Extension",
+        "order": 1
+      },
+      "myExt.featureEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable the new feature",
+        "group": "My Extension",
+        "order": 2
+      },
+      "myExt.mode": {
+        "type": "select",
+        "default": "auto",
+        "enum": ["auto", "manual", "off"],
+        "description": "Operation mode",
+        "group": "My Extension",
+        "order": 3
+      }
+    }
+  }
+}
+```
+
+Each setting key is a dot-separated path (e.g. `myExt.timeout`).
+The Settings UI renders the appropriate control based on `type`:
+
+| Type      | Control      |
+| --------- | ------------ |
+| `string`  | Text input   |
+| `boolean` | Checkbox     |
+| `number`  | Number input |
+| `select`  | Dropdown     |
+
+All settings are stored in a single `<stateRoot>/settings.json` file.
+
+| Property      | Description                                   | Required   |
+| ------------- | --------------------------------------------- | ---------- |
+| `type`        | `string`, `boolean`, `number`, or `select`    | Yes        |
+| `default`     | Default value                                 | No         |
+| `description` | Shown next to the field in the Settings UI    | No         |
+| `group`       | Groups settings together. Default `"General"` | No         |
+| `enum`        | Allowed values for `select` type              | For select |
+| `placeholder` | Placeholder text for string inputs            | No         |
+| `order`       | Sort order within group. Default 0.           | No         |
+
+#### Settings vs Extension Storage
+
+Extensions have two storage mechanisms for different purposes:
+
+| Mechanism    | Location                             | Purpose                                  |
+| ------------ | ------------------------------------ | ---------------------------------------- |
+| **Settings** | `<stateRoot>/settings.json` (shared) | User-facing config declared in manifest  |
+| **Storage**  | SQLite-backed, per-extension         | Internal runtime state (caches, session) |
+
+- Use **settings** for values the user configures through the Settings UI.
+- Use **storage** (`ctx.storage` / `pa.storage`) for internal state like
+  cached API responses, session tokens, or counter values.
+- Settings are discoverable (all extensions contribute to a unified schema);
+  storage is private to each extension.
 
 ### Backend Context (`ctx`)
 
