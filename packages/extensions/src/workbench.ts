@@ -1,9 +1,6 @@
 export type HostComponent = (...args: never[]) => unknown;
 export type BrowserTabsState = unknown;
 
-export declare const ArtifactToolBlock: HostComponent;
-export declare const CheckpointToolBlock: HostComponent;
-export declare const AskUserQuestionToolBlock: HostComponent;
 export declare const TerminalToolBlock: HostComponent;
 export declare const ConversationArtifactRailContent: HostComponent;
 export declare const ConversationArtifactWorkbenchPane: HostComponent;

@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import {
-  CheckpointToolBlock,
   ConversationCheckpointWorkbenchPane,
   ConversationDiffRailContent,
   getConversationCheckpointIdFromSearch,
@@ -11,6 +10,7 @@ import {
   setConversationCheckpointIdInSearch,
   useConversationCheckpointSummaries,
 } from '@personal-agent/extensions/workbench';
+import { CheckpointToolBlock } from './CheckpointToolBlock.js';
 
 export function CheckpointTranscriptRenderer({
   block,

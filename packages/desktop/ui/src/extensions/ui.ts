@@ -1,4 +1,5 @@
 export { buildApiPath } from '../client/apiBase';
+export { CheckpointInlineDiff } from '../components/chat/CheckpointInlineDiff';
 export { ContextMenuWrapper } from '../components/shared/ContextMenuWrapper';
 export { canDropAllPaths, getTopLevelDraggedPaths, useFileTreeModel } from '../components/shared/useFileTreeModel';
 export {
@@ -13,6 +14,7 @@ export {
   IconButton,
   LoadingState,
   Pill,
+  SurfacePanel,
   ToolbarButton,
 } from '../components/ui';
 export { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';

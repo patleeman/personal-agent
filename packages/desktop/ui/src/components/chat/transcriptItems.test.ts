@@ -92,7 +92,10 @@ describe('chat transcript items', () => {
     expect(items.every((item) => item.type === 'message')).toBe(true);
   });
 
-  it('keeps ask_user_question tool blocks visible as standalone message items', () => {
+  it('keeps ask_user_question tool blocks as standalone message items (not inside internal-work)', () => {
+    // ask_user_question is now rendered by the extension. It's no longer special-cased
+    // in the clustering logic, but without adjacent thinking/tool blocks to cluster with
+    // it stays as a standalone message.
     const messages: MessageBlock[] = [
       { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'I need one clarification.' },
       {

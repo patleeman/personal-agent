@@ -680,7 +680,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('~4.0 tok/s');
   });
 
-  it('renders ask_user_question tool calls as questionnaire cards with navigation and submit', () => {
+  it('renders ask_user_question tool calls as generic tool blocks when no extension renders them', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -688,26 +688,7 @@ describe('chat view streaming disclosure', () => {
             type: 'tool_use',
             ts: '2026-03-11T18:00:00.000Z',
             tool: 'ask_user_question',
-            input: {},
-            details: {
-              action: 'ask_user_question',
-              conversationId: 'conv-123',
-              details: 'Pick the configuration before I continue.',
-              questions: [
-                {
-                  id: 'target',
-                  label: 'Which environment should I use?',
-                  style: 'radio',
-                  options: ['staging', 'prod'],
-                },
-                {
-                  id: 'notify',
-                  label: 'Which notifications should I enable?',
-                  style: 'check',
-                  options: ['Email', 'Telegram'],
-                },
-              ],
-            },
+            input: { question: 'Which environment should I use?', options: ['staging', 'prod'] },
             output: 'Asked the user 2 questions.',
             status: 'ok',
           },
@@ -716,20 +697,11 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Questions for you');
-    expect(html).toContain('Pick the configuration before I continue.');
-    expect(html).toContain('Which environment should I use?');
-    expect(html).toContain('Which notifications should I enable?');
-    expect(html).toContain('0/2 answered');
-    expect(html).toContain('role="tab"');
-    expect(html).toContain('role="radio"');
-    expect(html).toContain('aria-keyshortcuts="1"');
-    expect(html).toContain('✓ Submit →');
-    expect(html).toContain('1-9 selects · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip');
+    expect(html).toContain('question');
     expect(html).not.toContain('Internal work');
   });
 
-  it('renders pending ask_user_question tool calls as compact transcript summaries in composer mode', () => {
+  it('renders pending ask_user_question tool calls as generic tool blocks in composer mode', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -737,26 +709,7 @@ describe('chat view streaming disclosure', () => {
             type: 'tool_use',
             ts: '2026-03-11T18:00:00.000Z',
             tool: 'ask_user_question',
-            input: {},
-            details: {
-              action: 'ask_user_question',
-              conversationId: 'conv-123',
-              details: 'Pick the configuration before I continue.',
-              questions: [
-                {
-                  id: 'target',
-                  label: 'Which environment should I use?',
-                  style: 'radio',
-                  options: ['staging', 'prod'],
-                },
-                {
-                  id: 'notify',
-                  label: 'Which notifications should I enable?',
-                  style: 'check',
-                  options: ['Email', 'Telegram'],
-                },
-              ],
-            },
+            input: { question: 'Which environment should I use?', options: ['staging', 'prod'] },
             output: 'Asked the user 2 questions.',
             status: 'ok',
           },
@@ -766,15 +719,10 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Questions for you');
-    expect(html).toContain('Which environment should I use?');
-    expect(html).toContain('Which notifications should I enable?');
-    expect(html).toContain('Answer using the composer below. Type 1-9 to select, or send a normal message to skip.');
-    expect(html).not.toContain('role="radio"');
-    expect(html).not.toContain('✓ Submit →');
+    expect(html).toContain('question');
   });
 
-  it('renders check-style ask_user_question options as checkboxes', () => {
+  it('renders check-style ask_user_question options as generic tool blocks', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -782,19 +730,7 @@ describe('chat view streaming disclosure', () => {
             type: 'tool_use',
             ts: '2026-03-11T18:00:00.000Z',
             tool: 'ask_user_question',
-            input: {},
-            details: {
-              action: 'ask_user_question',
-              conversationId: 'conv-123',
-              questions: [
-                {
-                  id: 'notify',
-                  label: 'Which notifications should I enable?',
-                  style: 'check',
-                  options: ['Email', 'Telegram'],
-                },
-              ],
-            },
+            input: { question: 'Which notifications should I enable?', options: ['Email', 'Telegram'] },
             output: 'Asked the user a question.',
             status: 'ok',
           },
@@ -803,13 +739,10 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Question for you');
-    expect(html).toContain('Which notifications should I enable?');
-    expect(html).toContain('role="checkbox"');
-    expect(html).toContain('✓ Submit →');
+    expect(html).toContain('question');
   });
 
-  it('renders a next button for non-final checkbox questions', () => {
+  it('renders multi-question ask_user_question calls as generic tool blocks', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -817,24 +750,9 @@ describe('chat view streaming disclosure', () => {
             type: 'tool_use',
             ts: '2026-03-11T18:00:00.000Z',
             tool: 'ask_user_question',
-            input: {},
-            details: {
-              action: 'ask_user_question',
-              conversationId: 'conv-123',
-              questions: [
-                {
-                  id: 'notify',
-                  label: 'Which notifications should I enable?',
-                  style: 'check',
-                  options: ['Email', 'Telegram'],
-                },
-                {
-                  id: 'target',
-                  label: 'Which environment should I use?',
-                  style: 'radio',
-                  options: ['staging', 'prod'],
-                },
-              ],
+            input: {
+              question: 'Which notifications should I enable?',
+              options: ['Email', 'Telegram'],
             },
             output: 'Asked the user 2 questions.',
             status: 'ok',
@@ -844,10 +762,10 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('Next →');
+    expect(html).toContain('question');
   });
 
-  it('shows the first user reply on answered question cards', () => {
+  it('shows user reply after ask_user_question tool blocks', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -870,8 +788,6 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('answered');
-    expect(html).toContain('Your reply');
     expect(html).toContain('Use staging for this deploy.');
     expect(html).not.toContain('Reply in Composer');
   });

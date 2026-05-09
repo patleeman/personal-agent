@@ -1,9 +1,10 @@
 import {
-  AskUserQuestionToolBlock,
   describeAskUserQuestionState,
   readAskUserQuestionPresentation,
   TerminalToolBlock,
 } from '@personal-agent/extensions/workbench';
+
+import { AskUserQuestionToolBlock } from './AskUserQuestionToolBlock.js';
 
 export function AskUserQuestionTranscriptRenderer({
   block,

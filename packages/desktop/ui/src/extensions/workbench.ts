@@ -1,5 +1,3 @@
-export { ArtifactToolBlock, CheckpointToolBlock } from '../components/chat/ArtifactCheckpointToolBlocks';
-export { AskUserQuestionToolBlock, describeAskUserQuestionState } from '../components/chat/AskUserQuestionToolBlock';
 export { TerminalToolBlock } from '../components/chat/TerminalToolBlock';
 export {
   ConversationArtifactRailContent,
@@ -31,5 +29,5 @@ export {
   readBrowserTabsState,
   writeBrowserTabsState,
 } from '../local/workbenchBrowserTabs';
-export { readAskUserQuestionPresentation } from '../transcript/askUserQuestions';
+export { describeAskUserQuestionState, readAskUserQuestionPresentation } from '../transcript/askUserQuestions';
 export { readTerminalBashToolPresentation } from '../transcript/terminalBashBlock';

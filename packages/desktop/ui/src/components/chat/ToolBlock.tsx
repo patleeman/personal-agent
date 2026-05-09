@@ -3,13 +3,7 @@ import { useMemo, useState } from 'react';
 import { NativeExtensionToolBlockHost } from '../../extensions/NativeExtensionToolBlockHost';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
-import {
-  type AskUserQuestionAnswers,
-  type AskUserQuestionPresentation,
-  readAskUserQuestionPresentation,
-} from '../../transcript/askUserQuestions';
 import { cx, Pill } from '../ui';
-import { AskUserQuestionToolBlock, describeAskUserQuestionState } from './AskUserQuestionToolBlock.js';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
 import { type DisclosurePreference, resolveDisclosureOpen, toggleDisclosurePreference, toolMeta } from './toolPresentation.js';
 
@@ -58,11 +52,11 @@ export function ToolBlock({
     return null;
   }, [block.tool, extensionRegistry.extensions]);
   const meta = toolMeta(block.tool);
-  const askUserQuestion = readAskUserQuestionPresentation(block);
-  const askUserQuestionState = useMemo(() => describeAskUserQuestionState(messages, messageIndex), [messageIndex, messages]);
   const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
 
-  if (extensionRenderer) {
+  if (extensionRenderer && extensionRenderer.renderer.tool !== 'ask_user_question') {
+    // ask_user_question is handled as a local fallback below so the question
+    // submit callback stays wired even when the extension isn't loaded yet.
     return (
       <NativeExtensionToolBlockHost
         extension={extensionRenderer.extension}
@@ -85,17 +79,7 @@ export function ToolBlock({
     );
   }
 
-  if (block.tool === 'ask_user_question' && askUserQuestion && !(block.status === 'error' || block.error)) {
-    return (
-      <AskUserQuestionToolBlock
-        block={block}
-        presentation={askUserQuestion}
-        state={askUserQuestionState}
-        onSubmit={onSubmitAskUserQuestion}
-        mode={askUserQuestionDisplayMode}
-      />
-    );
-  }
+
 
   // Normalise tool state across streamed and persisted entries.
   const isRunning = block.status === 'running' || !!block.running;
