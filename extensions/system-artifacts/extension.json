@@ -64,7 +64,8 @@
       {
         "id": "artifact-tool-block",
         "tool": "artifact",
-        "component": "ArtifactTranscriptRenderer"
+        "component": "ArtifactTranscriptRenderer",
+        "standalone": true
       }
     ],
     "views": [

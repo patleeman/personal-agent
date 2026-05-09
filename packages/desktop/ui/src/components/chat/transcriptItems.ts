@@ -1,5 +1,4 @@
 import type { MessageBlock } from '../../shared/types';
-import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
 
 export type TraceConversationBlock = Extract<MessageBlock, { type: 'thinking' | 'tool_use' | 'subagent' | 'error' }>;
 
@@ -33,16 +32,14 @@ function addSummaryCategory(categories: Map<string, TraceClusterSummaryCategory>
   categories.set(category.key, { ...category, count: 1 });
 }
 
-function isTraceConversationBlock(block: MessageBlock): block is TraceConversationBlock {
+function isTraceConversationBlock(block: MessageBlock, standaloneTools: Set<string>): block is TraceConversationBlock {
   switch (block.type) {
     case 'thinking':
     case 'subagent':
     case 'error':
       return true;
     case 'tool_use':
-      return (
-        block.tool !== 'artifact' && block.tool !== 'checkpoint' && block.tool !== 'ask_user_question' && !isTerminalBashToolBlock(block)
-      );
+      return !standaloneTools.has(block.tool);
     default:
       return false;
   }
@@ -98,7 +95,7 @@ function summarizeTraceCluster(blocks: TraceConversationBlock[]): TraceClusterSu
   };
 }
 
-export function buildChatRenderItems(messages: MessageBlock[]): ChatRenderItem[] {
+export function buildChatRenderItems(messages: MessageBlock[], standaloneTools: Set<string> = new Set()): ChatRenderItem[] {
   const items: ChatRenderItem[] = [];
   let pendingTraceBlocks: TraceConversationBlock[] = [];
   let traceStartIndex = -1;
@@ -122,7 +119,7 @@ export function buildChatRenderItems(messages: MessageBlock[]): ChatRenderItem[]
   }
 
   for (const [index, block] of messages.entries()) {
-    if (isTraceConversationBlock(block)) {
+    if (isTraceConversationBlock(block, standaloneTools)) {
       if (pendingTraceBlocks.length === 0) {
         traceStartIndex = index;
       }

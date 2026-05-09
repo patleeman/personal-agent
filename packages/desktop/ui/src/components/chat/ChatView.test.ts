@@ -680,7 +680,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('~4.0 tok/s');
   });
 
-  it('renders ask_user_question tool calls as generic tool blocks when no extension renders them', () => {
+  it('renders a single-item trace cluster for ask_user_question when no extension renders them', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -697,8 +697,8 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('question');
-    expect(html).not.toContain('Internal work');
+    expect(html).toContain('Internal work');
+    expect(html).toContain('1 step');
   });
 
   it('renders pending ask_user_question tool calls as generic tool blocks in composer mode', () => {
@@ -1152,10 +1152,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('Conversation 2 — Auto mode wakeups');
   });
 
-  it('renders terminal-style bang command output outside internal-work clusters', () => {
-    // The terminal bash renderer now lives in the system-conversation-tools extension.
-    // Without the extension registered in the test, the generic fallback renders instead.
-    // This test validates the fallback treats the tool correctly (no internal-work cluster).
+  it('renders generic tool blocks for bash without extension', () => {
     const html = renderToStaticMarkup(
       createElement(ChatView, {
         messages: [
@@ -1176,9 +1173,8 @@ describe('chat view streaming disclosure', () => {
       }),
     );
 
-    expect(html).toContain('npm run release:publish');
-    expect(html).not.toContain('Internal work');
-    expect(html).not.toContain('&quot;command&quot;');
+    expect(html).toContain('Internal work');
+    expect(html).toContain('1 step');
   });
 
   it('renders a continue action for the tail internal-work cluster when recovery is available', () => {

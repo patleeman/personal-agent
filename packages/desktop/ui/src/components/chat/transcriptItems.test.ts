@@ -53,6 +53,7 @@ describe('chat transcript items', () => {
   });
 
   it('keeps artifact tool blocks visible as standalone message items', () => {
+    const standaloneTools = new Set(['artifact']);
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-12T18:00:00.000Z', text: 'Show me the mockup' },
       {
@@ -66,13 +67,14 @@ describe('chat transcript items', () => {
       { type: 'text', ts: '2026-03-12T18:00:02.000Z', text: 'Opened the artifact.' },
     ];
 
-    const items = buildChatRenderItems(messages);
+    const items = buildChatRenderItems(messages, standaloneTools);
 
     expect(items).toHaveLength(3);
     expect(items.every((item) => item.type === 'message')).toBe(true);
   });
 
   it('keeps terminal-style bash blocks visible as standalone message items', () => {
+    const standaloneTools = new Set(['bash']);
     const messages: MessageBlock[] = [
       { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'Retry it directly.' },
       {
@@ -86,16 +88,14 @@ describe('chat transcript items', () => {
       },
     ];
 
-    const items = buildChatRenderItems(messages);
+    const items = buildChatRenderItems(messages, standaloneTools);
 
     expect(items).toHaveLength(2);
     expect(items.every((item) => item.type === 'message')).toBe(true);
   });
 
   it('keeps ask_user_question tool blocks as standalone message items (not inside internal-work)', () => {
-    // ask_user_question is now rendered by the extension. It's no longer special-cased
-    // in the clustering logic, but without adjacent thinking/tool blocks to cluster with
-    // it stays as a standalone message.
+    const standaloneTools = new Set(['ask_user_question']);
     const messages: MessageBlock[] = [
       { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'I need one clarification.' },
       {
@@ -108,7 +108,7 @@ describe('chat transcript items', () => {
       },
     ];
 
-    const items = buildChatRenderItems(messages);
+    const items = buildChatRenderItems(messages, standaloneTools);
 
     expect(items).toHaveLength(2);
     expect(items.every((item) => item.type === 'message')).toBe(true);

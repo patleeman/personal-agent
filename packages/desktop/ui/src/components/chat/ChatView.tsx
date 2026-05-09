@@ -13,6 +13,7 @@ import {
 } from './chatWindowing.js';
 import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
 import { getStreamingStatusLabel } from './toolPresentation.js';
+import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
 import { useChatReplySelection } from './useChatReplySelection.js';
 import { useChatWindowing } from './useChatWindowing.js';
@@ -118,7 +119,20 @@ export const ChatView = memo(function ChatView({
   windowingHeaderContent,
   anchorWindowingToTail = false,
 }: ChatViewProps) {
-  const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
+  const extensionRegistry = useExtensionRegistry();
+  const standaloneTools = useMemo(() => {
+    const tools = new Set<string>();
+    for (const extension of extensionRegistry.extensions) {
+      if (!extension.enabled) continue;
+      for (const renderer of extension.manifest?.contributes?.transcriptRenderers ?? []) {
+        if (renderer.standalone) {
+          tools.add(renderer.tool);
+        }
+      }
+    }
+    return tools;
+  }, [extensionRegistry.extensions]);
+  const renderItems = useMemo(() => buildChatRenderItems(messages, standaloneTools), [messages, standaloneTools]);
   const { isInlineRunExpanded, toggleInlineRun } = useInlineTraceRunExpansion(renderItems);
 
   const streamingStatusLabel = isCompacting

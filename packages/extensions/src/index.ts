@@ -147,6 +147,8 @@ export interface ExtensionTranscriptRendererContribution {
   id: string;
   tool: string;
   component: string;
+  /** When true, this block renders outside internal-work trace clusters. */
+  standalone?: boolean;
 }
 
 export interface ExtensionPromptReferenceContribution {

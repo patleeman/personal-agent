@@ -14,12 +14,14 @@
       {
         "id": "ask-user-question-tool-block",
         "tool": "ask_user_question",
-        "component": "AskUserQuestionTranscriptRenderer"
+        "component": "AskUserQuestionTranscriptRenderer",
+        "standalone": true
       },
       {
         "id": "terminal-bash-tool-block",
         "tool": "bash",
-        "component": "TerminalBashTranscriptRenderer"
+        "component": "TerminalBashTranscriptRenderer",
+        "standalone": true
       }
     ],
     "contextMenus": [
