@@ -24,7 +24,6 @@ export type {
   DesktopEnvironmentState,
   DesktopHostRecord,
   DesktopSshConnectionTestResult,
-  McpServerConfig,
   ModelProviderApi,
   ModelProviderConfig,
   ModelProviderModelConfig,

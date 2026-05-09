@@ -1357,7 +1357,6 @@ function CapabilitiesOverviewContext({
   tasks,
   tools,
   unavailableCliCount,
-  mcpServerCount,
 }: {
   section: ReturnType<typeof getCapabilitiesSection>;
   presets: ConversationAutomationWorkflowPreset[];
@@ -1365,7 +1364,6 @@ function CapabilitiesOverviewContext({
   tasks: ScheduledTaskSummary[];
   tools: AgentToolInfo[];
   unavailableCliCount: number;
-  mcpServerCount: number;
 }) {
   const location = useLocation();
   const activeTools = tools.filter((tool) => tool.active);
@@ -1452,7 +1450,6 @@ function CapabilitiesOverviewContext({
         <div className="space-y-2">
           <RailMetadataRow label="Active tools" value={activeTools.length} />
           <RailMetadataRow label="CLI issues" value={unavailableCliCount} />
-          <RailMetadataRow label="MCP servers" value={mcpServerCount} />
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Active by default</p>
@@ -1667,7 +1664,6 @@ function CapabilitiesContextPanel() {
       tasks={tasks}
       tools={tools}
       unavailableCliCount={(toolsResult.data?.dependentCliTools ?? []).filter((tool) => !tool.binary.available).length}
-      mcpServerCount={toolsResult.data?.mcp.servers.length ?? 0}
     />
   );
 }

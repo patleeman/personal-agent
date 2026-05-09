@@ -1,5 +1,42 @@
-import { api, cx, type McpServerConfig, Pill, useApi } from '@personal-agent/extensions/settings';
+import { api, cx, Pill, useApi } from '@personal-agent/extensions/settings';
 import React, { type ReactNode } from 'react';
+
+type McpServerConfig = {
+  name: string;
+  transport: 'stdio' | 'remote';
+  command?: string;
+  args: string[];
+  cwd?: string;
+  url?: string;
+  source?: 'config' | 'skill';
+  sourcePath?: string;
+  skillName?: string;
+  skillPath?: string;
+  manifestPath?: string;
+  hasOAuth?: boolean;
+  callbackUrl?: string;
+  authorizeResource?: string;
+  raw: Record<string, unknown>;
+};
+
+type McpSettingsState = {
+  configPath: string;
+  configExists: boolean;
+  searchedPaths: string[];
+  servers: McpServerConfig[];
+  bundledSkills: Array<{
+    skillName: string;
+    skillPath: string;
+    manifestPath: string;
+    serverNames: string[];
+    overriddenServerNames: string[];
+  }>;
+};
+
+async function inspectMcpSettings(): Promise<McpSettingsState> {
+  const response = await api.invokeExtensionAction('system-mcp', 'inspectSettings', {});
+  return response.result as McpSettingsState;
+}
 
 function formatMcpServerSource(server: McpServerConfig): string {
   if (server.source === 'skill' && server.skillName) {
@@ -54,7 +91,7 @@ function SettingsPanel({
 }
 
 export function McpSettingsPanel() {
-  const { data: toolsState, loading: toolsLoading, error: toolsError } = useApi(api.tools);
+  const { data: mcpState, loading: mcpLoading, error: mcpError } = useApi(inspectMcpSettings, 'system-mcp-settings');
 
   return (
     <div className="space-y-0">
@@ -62,29 +99,29 @@ export function McpSettingsPanel() {
         title="Bundled MCP wrappers"
         description="Skills can keep their MCP CLI wrapper config in mcp.json next to SKILL.md. Explicit config still wins when server names collide."
       >
-        {toolsLoading && !toolsState ? (
+        {mcpLoading && !mcpState ? (
           <p className="ui-card-meta">Loading MCP wrappers…</p>
-        ) : toolsError && !toolsState ? (
-          <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
-        ) : toolsState ? (
+        ) : mcpError && !mcpState ? (
+          <p className="text-[12px] text-danger">Failed to load MCP wrappers: {mcpError}</p>
+        ) : mcpState ? (
           <div className="space-y-5">
             <p className="ui-card-meta break-all">
-              {toolsState.mcp.configExists ? (
+              {mcpState.configExists ? (
                 <>
-                  Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
+                  Explicit config file: <span className="font-mono text-[11px]">{mcpState.configPath}</span>
                 </>
               ) : (
                 'No explicit MCP config file found. Using bundled skill manifests only.'
               )}
             </p>
 
-            {toolsState.mcp.bundledSkills.length > 0 ? (
+            {mcpState.bundledSkills.length > 0 ? (
               <div className="space-y-3">
                 <p className="ui-card-meta">
-                  {toolsState.mcp.bundledSkills.length} bundled skill wrapper
-                  {toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active.
+                  {mcpState.bundledSkills.length} bundled skill wrapper
+                  {mcpState.bundledSkills.length === 1 ? '' : 's'} active.
                 </p>
-                {toolsState.mcp.bundledSkills.map((bundle) => (
+                {mcpState.bundledSkills.map((bundle) => (
                   <div key={bundle.manifestPath} className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
@@ -111,10 +148,10 @@ export function McpSettingsPanel() {
               <p className="ui-card-meta">No skill-local mcp.json wrappers found in the active skill set.</p>
             )}
 
-            {toolsState.mcp.servers.length > 0 ? (
+            {mcpState.servers.length > 0 ? (
               <div className="space-y-3">
                 <p className="ui-card-meta">Effective MCP servers</p>
-                {toolsState.mcp.servers.map((server) => (
+                {mcpState.servers.map((server) => (
                   <div key={server.name} className="space-y-2 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[12px] text-primary">{server.name}</span>

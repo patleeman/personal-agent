@@ -1,6 +1,5 @@
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
-import { readPackageSourceTargetState } from '@personal-agent/core';
-import { buildMergedMcpConfigDocument, inspectCliBinary, readBundledSkillMcpManifests, readMcpConfigDocument } from '@personal-agent/core';
+import { inspectCliBinary, readPackageSourceTargetState } from '@personal-agent/core';
 import type { Express, Response } from 'express';
 
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
@@ -50,17 +49,6 @@ function buildPackageInstallState() {
   };
 }
 
-function buildMcpCallbackUrl(input: { callbackHost?: string; callbackPort?: number; callbackPath?: string }): string | undefined {
-  if (!input.callbackHost && !input.callbackPort && !input.callbackPath) {
-    return undefined;
-  }
-
-  const host = input.callbackHost ?? 'localhost';
-  const port = input.callbackPort ?? 3334;
-  const path = input.callbackPath ?? '/oauth/callback';
-  return `http://${host}:${port}${path}`;
-}
-
 async function handleToolsRequest(_req: unknown, res: Response): Promise<void> {
   try {
     const runtimeName = getCurrentProfileFn();
@@ -72,27 +60,6 @@ async function handleToolsRequest(_req: unknown, res: Response): Promise<void> {
         extensionFactories: buildLiveSessionExtensionFactoriesFn(),
       }),
     );
-    const bundledSkillManifests = readBundledSkillMcpManifests(resourceOptions.additionalSkillPaths ?? []);
-    const configDiscoveryEnv = { ...process.env };
-    delete configDiscoveryEnv.MCP_CONFIG_PATH;
-    const mergedMcpConfig = buildMergedMcpConfigDocument({
-      cwd: getRepoRootFn(),
-      env: configDiscoveryEnv,
-      skillDirs: resourceOptions.additionalSkillPaths ?? [],
-    });
-    const parsedMcpConfig = readMcpConfigDocument({
-      path: mergedMcpConfig.baseConfigPath,
-      exists: mergedMcpConfig.baseConfigExists || Object.keys(mergedMcpConfig.document.mcpServers).length > 0,
-      searchedPaths: mergedMcpConfig.searchedPaths,
-      document: mergedMcpConfig.document,
-    });
-    const explicitServerNames = new Set(mergedMcpConfig.baseServerNames);
-    const bundledManifestByServerName = new Map<string, ReturnType<typeof readBundledSkillMcpManifests>[number]>();
-    for (const manifest of bundledSkillManifests) {
-      for (const serverName of manifest.serverNames) {
-        bundledManifestByServerName.set(serverName, manifest);
-      }
-    }
     const onePasswordCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || 'op';
     const dependentCliTools = [
       {
@@ -108,44 +75,6 @@ async function handleToolsRequest(_req: unknown, res: Response): Promise<void> {
     res.json({
       ...details,
       dependentCliTools,
-      mcp: {
-        configPath: parsedMcpConfig.path,
-        configExists: mergedMcpConfig.baseConfigExists,
-        searchedPaths: parsedMcpConfig.searchedPaths,
-        servers: parsedMcpConfig.servers.map((server) => {
-          const bundledManifest = bundledManifestByServerName.get(server.name);
-          const source = explicitServerNames.has(server.name) ? 'config' : 'skill';
-          const callbackUrl = buildMcpCallbackUrl({
-            callbackHost: server.callbackHost,
-            callbackPort: server.callbackPort,
-            callbackPath: server.callbackPath,
-          });
-          return {
-            name: server.name,
-            transport: server.transport,
-            command: server.command,
-            args: [...server.args],
-            cwd: server.cwd,
-            url: server.url,
-            source,
-            sourcePath: source === 'skill' ? bundledManifest?.manifestPath : parsedMcpConfig.path,
-            skillName: source === 'skill' ? bundledManifest?.skillName : undefined,
-            skillPath: source === 'skill' ? bundledManifest?.skillDir : undefined,
-            manifestPath: source === 'skill' ? bundledManifest?.manifestPath : undefined,
-            hasOAuth: Boolean(server.oauthClientInfo || server.oauthClientMetadata || callbackUrl),
-            callbackUrl,
-            authorizeResource: server.authorizeResource,
-            raw: {},
-          };
-        }),
-        bundledSkills: bundledSkillManifests.map((manifest) => ({
-          skillName: manifest.skillName,
-          skillPath: manifest.skillDir,
-          manifestPath: manifest.manifestPath,
-          serverNames: [...manifest.serverNames],
-          overriddenServerNames: manifest.serverNames.filter((serverName) => explicitServerNames.has(serverName)),
-        })),
-      },
       packageInstall: buildPackageInstallState(),
     });
   } catch (err) {

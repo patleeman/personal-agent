@@ -55,7 +55,6 @@ describe('api desktop transport', () => {
           newSessionInjectedMessages: [],
           newSessionToolDefinitions: [],
           dependentCliTools: [],
-          mcp: { servers: [], missingCli: [] },
           packageInstall: { available: false, managers: [] },
         }),
       );

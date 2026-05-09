@@ -4,7 +4,6 @@ export type DesktopConnectionsState = unknown;
 export type DesktopEnvironmentState = unknown;
 export type DesktopHostRecord = unknown;
 export type DesktopSshConnectionTestResult = unknown;
-export type McpServerConfig = unknown;
 export type ModelEditorDraft = unknown;
 export type ModelProviderApi = unknown;
 export type ModelProviderConfig = unknown;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createMcpAgentExtension } from './backend.js';
+import { createMcpAgentExtension, inspectMcpSettings } from './backend.js';
 
 type ExtensionAPI = ReturnType<typeof createMcpAgentExtension> extends (api: infer A) => unknown ? A : never;
 
@@ -16,7 +16,7 @@ function createMockApi(): { api: ExtensionAPI; registeredExecute: (params: unkno
   };
 }
 
-vi.mock('@personal-agent/core', () => ({
+vi.mock('@personal-agent/extensions/backend', () => ({
   listMcpCatalog: vi.fn(),
   inspectMcpServer: vi.fn(),
   inspectMcpTool: vi.fn(),
@@ -24,12 +24,15 @@ vi.mock('@personal-agent/core', () => ({
   callMcpTool: vi.fn(),
   authenticateMcpServer: vi.fn(),
   clearMcpServerAuth: vi.fn(),
+  buildMergedMcpConfigDocument: vi.fn(),
+  readBundledSkillMcpManifests: vi.fn(),
+  readMcpConfigDocument: vi.fn(),
   getDurableSessionsDir: vi.fn(() => '/tmp/durable-sessions'),
   getPiAgentRuntimeDir: vi.fn(() => '/tmp/pi-agent-runtime'),
   getConfigRoot: vi.fn(() => '/tmp/pi-agent-config'),
 }));
 
-const core = await import('@personal-agent/core');
+const core = await import('@personal-agent/extensions/backend');
 
 function buildHandler() {
   const { api, registeredExecute } = createMockApi();
@@ -37,6 +40,96 @@ function buildHandler() {
   ext(api);
   return registeredExecute;
 }
+
+describe('inspectMcpSettings', () => {
+  it('returns extension-owned MCP settings state', () => {
+    const context = {
+      runtime: {
+        getLiveSessionResourceOptions: () => ({
+          cwd: '/repo',
+          additionalSkillPaths: ['/skills/runtime/jira-helper'],
+        }),
+        getRepoRoot: () => '/repo',
+      },
+    };
+    vi.mocked(core.readBundledSkillMcpManifests).mockReturnValue([
+      {
+        skillName: 'jira-helper',
+        skillDir: '/skills/runtime/jira-helper',
+        manifestPath: '/skills/runtime/jira-helper/mcp.json',
+        serverNames: ['atlassian'],
+      },
+    ]);
+    vi.mocked(core.buildMergedMcpConfigDocument).mockReturnValue({
+      baseConfigPath: '/repo/.mcp.json',
+      baseConfigExists: true,
+      baseServerNames: ['github'],
+      searchedPaths: ['/repo/.mcp.json'],
+      bundledServerCount: 1,
+      manifestPaths: ['/skills/runtime/jira-helper/mcp.json'],
+      document: { mcpServers: {} },
+    });
+    vi.mocked(core.readMcpConfigDocument).mockReturnValue({
+      path: '/repo/.mcp.json',
+      exists: true,
+      searchedPaths: ['/repo/.mcp.json'],
+      servers: [
+        {
+          name: 'atlassian',
+          transport: 'remote',
+          args: [],
+          url: 'https://mcp.atlassian.com/v1/mcp',
+          callbackHost: 'localhost',
+          callbackPort: 3118,
+          callbackPath: '/callback',
+          authorizeResource: 'https://datadoghq.atlassian.net/',
+          oauthClientInfo: { client_id: 'test-client' },
+          raw: {},
+        },
+        {
+          name: 'github',
+          transport: 'stdio',
+          command: 'npx',
+          args: ['@mcp/github'],
+          cwd: '/repo',
+          raw: {},
+        },
+      ],
+    });
+
+    expect(inspectMcpSettings({}, context)).toMatchObject({
+      configPath: '/repo/.mcp.json',
+      configExists: true,
+      servers: [
+        {
+          name: 'atlassian',
+          source: 'skill',
+          sourcePath: '/skills/runtime/jira-helper/mcp.json',
+          hasOAuth: true,
+          callbackUrl: 'http://localhost:3118/callback',
+        },
+        {
+          name: 'github',
+          source: 'config',
+          sourcePath: '/repo/.mcp.json',
+          hasOAuth: false,
+        },
+      ],
+      bundledSkills: [
+        {
+          skillName: 'jira-helper',
+          serverNames: ['atlassian'],
+          overriddenServerNames: [],
+        },
+      ],
+    });
+    expect(core.buildMergedMcpConfigDocument).toHaveBeenCalledWith({
+      cwd: '/repo',
+      env: expect.not.objectContaining({ MCP_CONFIG_PATH: expect.any(String) }),
+      skillDirs: ['/skills/runtime/jira-helper'],
+    });
+  });
+});
 
 describe('mcpAgentExtension', () => {
   describe('action: list', () => {

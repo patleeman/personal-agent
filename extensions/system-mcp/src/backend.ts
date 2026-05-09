@@ -1,18 +1,53 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import {
   authenticateMcpServer,
+  buildMergedMcpConfigDocument,
   callMcpTool,
   clearMcpServerAuth,
   grepMcpTools,
   inspectMcpServer,
   inspectMcpTool,
   listMcpCatalog,
+  readBundledSkillMcpManifests,
+  readMcpConfigDocument,
 } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 
 const MCP_ACTION_VALUES = ['list', 'info', 'grep', 'call', 'auth', 'logout'] as const;
 
 type McpAction = (typeof MCP_ACTION_VALUES)[number];
+
+type McpServerSettingsState = {
+  name: string;
+  transport: 'stdio' | 'remote';
+  command?: string;
+  args: string[];
+  cwd?: string;
+  url?: string;
+  source?: 'config' | 'skill';
+  sourcePath?: string;
+  skillName?: string;
+  skillPath?: string;
+  manifestPath?: string;
+  hasOAuth?: boolean;
+  callbackUrl?: string;
+  authorizeResource?: string;
+  raw: Record<string, unknown>;
+};
+
+type McpSettingsState = {
+  configPath: string;
+  configExists: boolean;
+  searchedPaths: string[];
+  servers: McpServerSettingsState[];
+  bundledSkills: Array<{
+    skillName: string;
+    skillPath: string;
+    manifestPath: string;
+    serverNames: string[];
+    overriddenServerNames: string[];
+  }>;
+};
 
 const McpToolParams = Type.Object({
   action: Type.Union(
@@ -54,6 +89,86 @@ function validateMcpString(value: string | undefined, label: string): string {
   }
 
   return value.trim();
+}
+
+function buildMcpCallbackUrl(input: { callbackHost?: string; callbackPort?: number; callbackPath?: string }): string | undefined {
+  if (!input.callbackHost && !input.callbackPort && !input.callbackPath) {
+    return undefined;
+  }
+
+  const host = input.callbackHost ?? 'localhost';
+  const port = input.callbackPort ?? 3334;
+  const path = input.callbackPath ?? '/oauth/callback';
+  return `http://${host}:${port}${path}`;
+}
+
+export function inspectMcpSettings(
+  _input: unknown,
+  ctx: { runtime: { getLiveSessionResourceOptions(): { additionalSkillPaths?: string[]; cwd?: string }; getRepoRoot(): string } },
+): McpSettingsState {
+  const resourceOptions = ctx.runtime.getLiveSessionResourceOptions();
+  const skillDirs = resourceOptions.additionalSkillPaths ?? [];
+  const cwd = resourceOptions.cwd ?? ctx.runtime.getRepoRoot();
+  const bundledSkillManifests = readBundledSkillMcpManifests(skillDirs);
+  const configDiscoveryEnv = { ...process.env };
+  delete configDiscoveryEnv.MCP_CONFIG_PATH;
+  const mergedMcpConfig = buildMergedMcpConfigDocument({
+    cwd,
+    env: configDiscoveryEnv,
+    skillDirs,
+  });
+  const parsedMcpConfig = readMcpConfigDocument({
+    path: mergedMcpConfig.baseConfigPath,
+    exists: mergedMcpConfig.baseConfigExists || Object.keys(mergedMcpConfig.document.mcpServers).length > 0,
+    searchedPaths: mergedMcpConfig.searchedPaths,
+    document: mergedMcpConfig.document,
+  });
+  const explicitServerNames = new Set(mergedMcpConfig.baseServerNames);
+  const bundledManifestByServerName = new Map<string, (typeof bundledSkillManifests)[number]>();
+  for (const manifest of bundledSkillManifests) {
+    for (const serverName of manifest.serverNames) {
+      bundledManifestByServerName.set(serverName, manifest);
+    }
+  }
+
+  return {
+    configPath: parsedMcpConfig.path,
+    configExists: mergedMcpConfig.baseConfigExists,
+    searchedPaths: parsedMcpConfig.searchedPaths,
+    servers: parsedMcpConfig.servers.map((server) => {
+      const bundledManifest = bundledManifestByServerName.get(server.name);
+      const source = explicitServerNames.has(server.name) ? 'config' : 'skill';
+      const callbackUrl = buildMcpCallbackUrl({
+        callbackHost: server.callbackHost,
+        callbackPort: server.callbackPort,
+        callbackPath: server.callbackPath,
+      });
+      return {
+        name: server.name,
+        transport: server.transport,
+        command: server.command,
+        args: [...server.args],
+        cwd: server.cwd,
+        url: server.url,
+        source,
+        sourcePath: source === 'skill' ? bundledManifest?.manifestPath : parsedMcpConfig.path,
+        skillName: source === 'skill' ? bundledManifest?.skillName : undefined,
+        skillPath: source === 'skill' ? bundledManifest?.skillDir : undefined,
+        manifestPath: source === 'skill' ? bundledManifest?.manifestPath : undefined,
+        hasOAuth: Boolean(server.oauthClientInfo || server.oauthClientMetadata || callbackUrl),
+        callbackUrl,
+        authorizeResource: server.authorizeResource,
+        raw: {},
+      };
+    }),
+    bundledSkills: bundledSkillManifests.map((manifest) => ({
+      skillName: manifest.skillName,
+      skillPath: manifest.skillDir,
+      manifestPath: manifest.manifestPath,
+      serverNames: [...manifest.serverNames],
+      overriddenServerNames: manifest.serverNames.filter((serverName) => explicitServerNames.has(serverName)),
+    })),
+  };
 }
 
 export function createMcpAgentExtension(): ExtensionAPI {

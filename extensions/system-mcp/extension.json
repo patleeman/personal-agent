@@ -11,7 +11,8 @@
   },
   "backend": {
     "entry": "src/backend.ts",
-    "agentExtension": "createMcpAgentExtension"
+    "agentExtension": "createMcpAgentExtension",
+    "actions": [{ "id": "inspectSettings", "handler": "inspectMcpSettings", "title": "Inspect MCP settings" }]
   },
   "contributes": {
     "settingsPanels": [

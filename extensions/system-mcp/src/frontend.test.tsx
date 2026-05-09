@@ -4,13 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { McpSettingsPanel } from './frontend';
 
-const mocks = vi.hoisted(() => {
-  const tools = vi.fn();
-  return {
-    api: { tools },
-    useApi: vi.fn(),
-  };
-});
+const mocks = vi.hoisted(() => ({
+  api: { invokeExtensionAction: vi.fn() },
+  useApi: vi.fn(),
+}));
 
 vi.mock('@personal-agent/extensions/settings', () => ({
   api: mocks.api,
@@ -34,64 +31,51 @@ describe('McpSettingsPanel', () => {
   it('renders MCP wrapper and effective server state', () => {
     mocks.useApi.mockReturnValue(
       buildUseApiResult({
-        profile: 'assistant',
-        tools: [],
-        toolsets: [],
-        dependentCliTools: [],
-        mcp: {
-          configPath: '/tmp/mcp_servers.json',
-          configExists: true,
-          searchedPaths: ['/tmp/mcp_servers.json'],
-          servers: [
-            {
-              name: 'atlassian',
-              transport: 'remote',
-              args: [],
-              url: 'https://mcp.atlassian.com/v1/mcp',
-              source: 'skill',
-              sourcePath: '/vault/skills/dd-atlassian-mcp/mcp.json',
-              skillName: 'dd-atlassian-mcp',
-              skillPath: '/vault/skills/dd-atlassian-mcp',
-              manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
-              hasOAuth: true,
-              callbackUrl: 'http://localhost:3118/callback',
-              authorizeResource: 'https://datadoghq.atlassian.net/',
-              raw: {},
-            },
-            {
-              name: 'github',
-              transport: 'stdio',
-              command: 'npx',
-              args: ['@mcp/github'],
-              source: 'config',
-              sourcePath: '/tmp/mcp_servers.json',
-              hasOAuth: false,
-              raw: {},
-            },
-          ],
-          bundledSkills: [
-            {
-              skillName: 'dd-atlassian-mcp',
-              skillPath: '/vault/skills/dd-atlassian-mcp',
-              manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
-              serverNames: ['atlassian'],
-              overriddenServerNames: [],
-            },
-          ],
-        },
-        packageInstall: {
-          localTarget: {
-            target: 'local',
-            settingsPath: '/tmp/packages.json',
-            packages: [],
+        configPath: '/tmp/mcp_servers.json',
+        configExists: true,
+        searchedPaths: ['/tmp/mcp_servers.json'],
+        servers: [
+          {
+            name: 'atlassian',
+            transport: 'remote',
+            args: [],
+            url: 'https://mcp.atlassian.com/v1/mcp',
+            source: 'skill',
+            sourcePath: '/vault/skills/dd-atlassian-mcp/mcp.json',
+            skillName: 'dd-atlassian-mcp',
+            skillPath: '/vault/skills/dd-atlassian-mcp',
+            manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
+            hasOAuth: true,
+            callbackUrl: 'http://localhost:3118/callback',
+            authorizeResource: 'https://datadoghq.atlassian.net/',
+            raw: {},
           },
-        },
+          {
+            name: 'github',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['@mcp/github'],
+            source: 'config',
+            sourcePath: '/tmp/mcp_servers.json',
+            hasOAuth: false,
+            raw: {},
+          },
+        ],
+        bundledSkills: [
+          {
+            skillName: 'dd-atlassian-mcp',
+            skillPath: '/vault/skills/dd-atlassian-mcp',
+            manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
+            serverNames: ['atlassian'],
+            overriddenServerNames: [],
+          },
+        ],
       }),
     );
 
     const html = renderToString(<McpSettingsPanel />);
 
-    expect(mocks.useApi).toHaveBeenCalledWith(mocks.api.tools);
+    expect(mocks.useApi).toHaveBeenCalledWith(expect.any(Function), 'system-mcp-settings');
     expect(html).toContain('Bundled MCP wrappers');
     expect(html).toContain('Bundled with dd-atlassian-mcp');
     expect(html).toContain('Callback');

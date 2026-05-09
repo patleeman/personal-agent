@@ -1,31 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  buildMergedMcpConfigDocumentMock,
-  inspectAvailableToolsMock,
-  inspectCliBinaryMock,
-  listRuntimeScopesMock,
-  logErrorMock,
-  readBundledSkillMcpManifestsMock,
-  readMcpConfigDocumentMock,
-  readPackageSourceTargetStateMock,
-} = vi.hoisted(() => ({
-  buildMergedMcpConfigDocumentMock: vi.fn(),
-  inspectAvailableToolsMock: vi.fn(),
-  inspectCliBinaryMock: vi.fn(),
-  listRuntimeScopesMock: vi.fn(),
-  logErrorMock: vi.fn(),
-  readBundledSkillMcpManifestsMock: vi.fn(),
-  readMcpConfigDocumentMock: vi.fn(),
-  readPackageSourceTargetStateMock: vi.fn(),
-}));
+const { inspectAvailableToolsMock, inspectCliBinaryMock, listRuntimeScopesMock, logErrorMock, readPackageSourceTargetStateMock } =
+  vi.hoisted(() => ({
+    inspectAvailableToolsMock: vi.fn(),
+    inspectCliBinaryMock: vi.fn(),
+    listRuntimeScopesMock: vi.fn(),
+    logErrorMock: vi.fn(),
+    readPackageSourceTargetStateMock: vi.fn(),
+  }));
 
 vi.mock('@personal-agent/core', () => ({
-  buildMergedMcpConfigDocument: buildMergedMcpConfigDocumentMock,
   inspectCliBinary: inspectCliBinaryMock,
   listRuntimeScopes: listRuntimeScopesMock,
-  readBundledSkillMcpManifests: readBundledSkillMcpManifestsMock,
-  readMcpConfigDocument: readMcpConfigDocumentMock,
   readPackageSourceTargetState: readPackageSourceTargetStateMock,
 }));
 
@@ -84,9 +70,6 @@ describe('registerToolsRoutes', () => {
     inspectCliBinaryMock.mockReset();
     listRuntimeScopesMock.mockReset();
     logErrorMock.mockReset();
-    buildMergedMcpConfigDocumentMock.mockReset();
-    readBundledSkillMcpManifestsMock.mockReset();
-    readMcpConfigDocumentMock.mockReset();
     readPackageSourceTargetStateMock.mockReset();
   });
 
@@ -103,64 +86,6 @@ describe('registerToolsRoutes', () => {
     inspectAvailableToolsMock.mockResolvedValueOnce({
       tools: [{ id: 'shell' }],
       toolsets: [{ id: 'default' }],
-    });
-    readBundledSkillMcpManifestsMock.mockReturnValue([
-      {
-        skillName: 'jira-helper',
-        skillDir: '/skills/runtime/jira-helper',
-        manifestPath: '/skills/runtime/jira-helper/mcp.json',
-        serverNames: ['atlassian'],
-      },
-    ]);
-    buildMergedMcpConfigDocumentMock.mockReturnValue({
-      baseConfigPath: '/repo/.mcp.json',
-      baseConfigExists: true,
-      baseServerNames: ['github'],
-      searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
-      bundledServerCount: 1,
-      manifestPaths: ['/skills/runtime/jira-helper/mcp.json'],
-      document: {
-        mcpServers: {
-          github: {
-            command: 'npx',
-            args: ['@mcp/github'],
-          },
-          atlassian: {
-            command: 'pa',
-            args: ['mcp', 'serve', 'atlassian'],
-          },
-        },
-      },
-    });
-    readMcpConfigDocumentMock.mockReturnValue({
-      path: '/repo/.mcp.json',
-      exists: true,
-      searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
-      servers: [
-        {
-          name: 'atlassian',
-          transport: 'remote',
-          command: undefined,
-          args: [],
-          cwd: undefined,
-          url: 'https://mcp.atlassian.com/v1/mcp',
-          callbackHost: 'localhost',
-          callbackPort: 3118,
-          callbackPath: '/callback',
-          authorizeResource: 'https://datadoghq.atlassian.net/',
-          oauthClientInfo: { client_id: 'test-client' },
-          raw: {},
-        },
-        {
-          name: 'github',
-          transport: 'stdio',
-          command: 'npx',
-          args: ['@mcp/github'],
-          cwd: '/repo',
-          url: undefined,
-          raw: {},
-        },
-      ],
     });
     inspectCliBinaryMock.mockReturnValue({
       command: 'op-custom',
@@ -195,56 +120,6 @@ describe('registerToolsRoutes', () => {
           binary: { command: 'op-custom', exists: true },
         },
       ],
-      mcp: {
-        configPath: '/repo/.mcp.json',
-        configExists: true,
-        searchedPaths: ['/repo/.mcp.json', '/repo/.mcp/config.json'],
-        servers: [
-          {
-            name: 'atlassian',
-            transport: 'remote',
-            command: undefined,
-            args: [],
-            cwd: undefined,
-            url: 'https://mcp.atlassian.com/v1/mcp',
-            source: 'skill',
-            sourcePath: '/skills/runtime/jira-helper/mcp.json',
-            skillName: 'jira-helper',
-            skillPath: '/skills/runtime/jira-helper',
-            manifestPath: '/skills/runtime/jira-helper/mcp.json',
-            hasOAuth: true,
-            callbackUrl: 'http://localhost:3118/callback',
-            authorizeResource: 'https://datadoghq.atlassian.net/',
-            raw: {},
-          },
-          {
-            name: 'github',
-            transport: 'stdio',
-            command: 'npx',
-            args: ['@mcp/github'],
-            cwd: '/repo',
-            url: undefined,
-            source: 'config',
-            sourcePath: '/repo/.mcp.json',
-            skillName: undefined,
-            skillPath: undefined,
-            manifestPath: undefined,
-            hasOAuth: false,
-            callbackUrl: undefined,
-            authorizeResource: undefined,
-            raw: {},
-          },
-        ],
-        bundledSkills: [
-          {
-            skillName: 'jira-helper',
-            skillPath: '/skills/runtime/jira-helper',
-            manifestPath: '/skills/runtime/jira-helper/mcp.json',
-            serverNames: ['atlassian'],
-            overriddenServerNames: [],
-          },
-        ],
-      },
       packageInstall: {
         localTarget: { installedSources: ['local:pkg'] },
       },

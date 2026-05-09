@@ -8,7 +8,7 @@ import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getStateRoot } from '@personal-agent/core';
 import { build, type Plugin } from 'esbuild';
 
-import type { ServerRouteContext } from '../routes/context.js';
+import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
@@ -54,6 +54,10 @@ export interface ExtensionBackendContext {
     onUpdate?: (update: { content?: Array<{ type: string; text: string }>; isError?: boolean }) => void;
   };
   agentToolContext?: unknown;
+  runtime: {
+    getLiveSessionResourceOptions(): LiveSessionResourceOptions;
+    getRepoRoot(): string;
+  };
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
     put(key: string, value: unknown): Promise<{ ok: true }>;
@@ -164,9 +168,12 @@ function createStorage(extensionId: string): ExtensionBackendContext['storage'] 
   };
 }
 
+type ExtensionBackendServerContext = Pick<ServerRouteContext, 'getCurrentProfile'> &
+  Partial<Pick<ServerRouteContext, 'buildLiveSessionResourceOptions' | 'getRepoRoot'>>;
+
 function createBackendContext(
   extensionId: string,
-  serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+  serverContext?: ExtensionBackendServerContext,
   toolContext?: ExtensionBackendContext['toolContext'],
   agentToolContext?: unknown,
 ): ExtensionBackendContext {
@@ -175,6 +182,15 @@ function createBackendContext(
     profile: serverContext?.getCurrentProfile() ?? 'shared',
     ...(toolContext ? { toolContext } : {}),
     ...(agentToolContext ? { agentToolContext } : {}),
+    runtime: {
+      getLiveSessionResourceOptions: () => {
+        if (!serverContext?.buildLiveSessionResourceOptions) {
+          throw new Error('Live session resource option builder is not available for this extension action.');
+        }
+        return serverContext.buildLiveSessionResourceOptions(serverContext.getCurrentProfile());
+      },
+      getRepoRoot: () => serverContext?.getRepoRoot?.() ?? process.cwd(),
+    },
     storage: createStorage(extensionId),
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
@@ -479,7 +495,7 @@ export async function invokeExtensionAction(
   extensionId: string,
   actionId: string,
   input: unknown,
-  serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>,
+  serverContext?: ExtensionBackendServerContext,
   toolContext?: ExtensionBackendContext['toolContext'],
   agentToolContext?: unknown,
 ): Promise<ExtensionActionInvokeResult> {

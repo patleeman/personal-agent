@@ -195,26 +195,6 @@ describe('SettingsPage provider model editor', () => {
         },
       ],
     });
-    const toolsResult = buildUseApiResult({
-      profile: 'assistant',
-      tools: [],
-      toolsets: [],
-      dependentCliTools: [],
-      mcp: {
-        configPath: '/tmp/mcp_servers.json',
-        configExists: true,
-        searchedPaths: ['/tmp/mcp_servers.json'],
-        servers: [],
-        bundledSkills: [],
-      },
-      packageInstall: {
-        localTarget: {
-          target: 'local',
-          settingsPath: '/tmp/packages.json',
-          packages: [],
-        },
-      },
-    });
     const modelProvidersResult = buildUseApiResult({
       profile: 'assistant',
       filePath: '/tmp/assistant-models.json',
@@ -311,10 +291,6 @@ describe('SettingsPage provider model editor', () => {
 
       if (fetcher === api.models) {
         return modelsResult;
-      }
-
-      if (fetcher === api.tools) {
-        return toolsResult;
       }
 
       if (fetcher === api.modelProviders) {
