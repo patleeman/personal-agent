@@ -129,8 +129,8 @@ function StatusToggle({ extension, busy, onToggle }: { extension: ExtensionInsta
       >
         <span
           className={cx(
-            'absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-transform',
-            extension.enabled ? 'translate-x-[18px] bg-success' : 'translate-x-1 bg-dim',
+            'absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left,background-color]',
+            extension.enabled ? 'left-[18px] bg-success' : 'left-1 bg-dim',
           )}
         />
       </span>
