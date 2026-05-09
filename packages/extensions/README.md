@@ -73,7 +73,7 @@ Supported top-level fields:
 - `id`, `name`, `description`, `version`, `packageType`.
 - `frontend`: native React bundle entry and optional styles.
 - `backend`: backend module entry, backend actions, and optional agent lifecycle factory.
-- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, and settings metadata.
+- `contributes`: views, nav, commands, keybindings, slash commands, mentions, quick-open providers, prompt reference resolvers, skills, tools, transcript renderers, themes, topBarElements, messageActions, composerShelves, toolbarActions, conversationDecorators, contextMenus, statusBarItems, and settings metadata.
 - `permissions`: declared capability intent.
 
 Minimal example:
@@ -382,12 +382,21 @@ Pick the smallest surface that matches the product shape. Do not use the right r
 | Surface               | Use for                                                              | Avoid using for                       |
 | --------------------- | -------------------------------------------------------------------- | ------------------------------------- |
 | Main page view        | Durable app-level workflows with their own route                     | Tiny contextual helpers               |
-| Left nav item         | Primary destinations users should see every day                      | Settings subpanels or secondary tools |
+| Left nav item         | Primary destinations users should see every day (`section: 'primary'`) | Settings subpanels                   |
+| Nav item (settings)   | Settings/configuration destinations (`section: 'settings'`)          | Product workflows                     |
 | Right-rail panel      | Compact contextual companions for a conversation/workspace/selection | Wide editors or log/diff viewers      |
 | Workbench detail view | Large detail rendering paired to a right-rail selector               | Standalone app-level workflows        |
 | Settings contribution | Configuration and preferences                                        | Product workflows                     |
 | Command               | Fast one-shot actions or opening a surface                           | Persistent UI                         |
 | Slash command         | Conversation-authored actions that affect prompt context             | Global app navigation                 |
+| Top bar element       | Status indicator icon/badge in the top bar                           | Full UI surfaces                      |
+| Message action        | Hover-reveal action button on a message block                        | Persistent UI elements                |
+| Toolbar action        | Icon button in the composer toolbar row                              | Text-heavy actions                    |
+| Composer shelf        | Info/status section above the composer input                         | Full-page workflows                   |
+| Conversation decorator| Badge/indicator on a conversation list item                          | Interactive UI                        |
+| Context menu          | Right-click menu item on message or sidebar item                     | Primary navigation                    |
+| Status bar item       | Label in the status bar below the composer                           | Interactive controls                  |
+| Theme                 | Color theme via CSS variable tokens                                  | Layout or UI changes                  |
 
 Right-rail views may point at a paired workbench detail view with `detailView`:
 
