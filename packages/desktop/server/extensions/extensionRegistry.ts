@@ -382,7 +382,12 @@ export function isExtensionEnabled(extensionId: string, stateRoot: string = getS
   return !(readExtensionRegistryConfig(stateRoot).disabledIds ?? []).includes(extensionId);
 }
 
+const LOCKED_EXTENSION_IDS = ['system-extension-manager'];
+
 export function setExtensionEnabled(extensionId: string, enabled: boolean, stateRoot: string = getStateRoot()): void {
+  if (!enabled && LOCKED_EXTENSION_IDS.includes(extensionId)) {
+    throw new Error(`Cannot disable ${extensionId}: this extension is required by the application.`);
+  }
   const config = readExtensionRegistryConfig(stateRoot);
   const disabledIds = new Set(config.disabledIds ?? []);
   if (enabled) {

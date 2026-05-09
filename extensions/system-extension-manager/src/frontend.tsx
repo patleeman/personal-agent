@@ -212,32 +212,45 @@ function ExtensionActionsMenu({
   );
 }
 
+const LOCKED_EXTENSION_IDS = ['system-extension-manager'];
+
+function isLocked(extension: ExtensionInstallSummary): boolean {
+  return LOCKED_EXTENSION_IDS.includes(extension.id);
+}
+
 function StatusToggle({ extension, busy, onToggle }: { extension: ExtensionInstallSummary; busy: boolean; onToggle: () => void }) {
+  const locked = isLocked(extension);
   return (
     <button
       type="button"
       className="inline-flex items-center gap-2 text-[12px] text-secondary transition-colors hover:text-primary disabled:opacity-50"
-      disabled={busy}
+      disabled={busy || locked}
       onClick={(event) => {
+        if (locked) return;
         event.stopPropagation();
         onToggle();
       }}
       aria-label={`${extension.enabled ? 'Disable' : 'Enable'} ${extension.name}`}
+      title={locked ? 'This extension is required by the application.' : undefined}
     >
       <span
         className={cx(
           'relative h-5 w-9 rounded-full border transition-colors',
-          extension.enabled ? 'border-success/40 bg-success/20' : 'border-border-subtle bg-surface/60',
+          locked
+            ? 'border-border-subtle bg-surface/40'
+            : extension.enabled
+              ? 'border-success/40 bg-success/20'
+              : 'border-border-subtle bg-surface/60',
         )}
       >
         <span
           className={cx(
             'absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left,background-color]',
-            extension.enabled ? 'left-[18px] bg-success' : 'left-1 bg-dim',
+            locked ? 'left-[18px] bg-dim' : extension.enabled ? 'left-[18px] bg-success' : 'left-1 bg-dim',
           )}
         />
       </span>
-      <span>{extension.enabled ? 'Enabled' : 'Disabled'}</span>
+      <span>{locked ? 'Always on' : extension.enabled ? 'Enabled' : 'Disabled'}</span>
     </button>
   );
 }

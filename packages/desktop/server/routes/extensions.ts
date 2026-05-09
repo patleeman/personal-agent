@@ -341,6 +341,10 @@ export function registerExtensionRoutes(
         res.status(400).json({ error: 'enabled must be a boolean.' });
         return;
       }
+      if (!enabled && entry.manifest.id === 'system-extension-manager') {
+        res.status(400).json({ error: 'Cannot disable the Extension Manager: this extension is required by the application.' });
+        return;
+      }
       setExtensionEnabled(entry.manifest.id, enabled);
       res.json({ ok: true, extension: listExtensionInstallSummaries().find((extension) => extension.id === entry.manifest.id) });
     } catch (err) {
