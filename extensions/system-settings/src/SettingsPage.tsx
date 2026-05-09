@@ -36,8 +36,6 @@ import {
   type ProviderOAuthLoginStreamEvent,
   readDesktopConnections,
   readDesktopEnvironment,
-  resetStoredConversationUiState,
-  resetStoredLayoutPreferences,
   SettingsPanelHost,
   subscribeDesktopProviderOAuthLogin,
   type ThemePreference,
@@ -60,8 +58,6 @@ import {
   useState,
 } from 'react';
 
-import { KnowledgeSettingsPanel } from '../../system-knowledge/src/components/KnowledgeSettingsPanel';
-
 const INPUT_CLASS =
   'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
@@ -69,14 +65,12 @@ const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accen
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
   { id: 'settings-conversation', label: 'Conversation', summary: 'Default model, vision, and thinking' },
-  { id: 'settings-workspace', label: 'Workspace', summary: 'Working directory and knowledge base' },
+  { id: 'settings-workspace', label: 'Workspace', summary: 'Default working directory' },
   { id: 'settings-skills', label: 'Skills', summary: 'Folders and AGENTS.md instructions' },
   { id: 'settings-tools', label: 'Tools', summary: 'MCP wrappers and runtime tool config' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
   { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
-  { id: 'settings-extensions', label: 'Extensions', summary: 'Extension-registered settings' },
-  { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
 type SettingsQuickLink = (typeof SETTINGS_QUICK_LINKS)[number];
@@ -1734,186 +1728,6 @@ export function DesktopConnectionsSettingsPanel() {
   );
 }
 
-interface UnifiedSettingsEntry {
-  extensionId: string;
-  key: string;
-  type: string;
-  default?: unknown;
-  description?: string;
-  group: string;
-  enum?: string[];
-  placeholder?: string;
-  order: number;
-}
-
-function UnifiedSettingsSection() {
-  const { data: values, loading, error, refetch } = useApi<Record<string, unknown>>(api.settings as never);
-  const { data: schema, loading: schemaLoading, error: schemaError } = useApi<UnifiedSettingsEntry[]>(api.settingsSchema as never);
-  const [draft, setDraft] = useState<Record<string, unknown>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveNotice, setSaveNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (values) {
-      setDraft((prev) => {
-        const merged = { ...values };
-        // Keep any local edits that haven't been saved yet
-        for (const key of Object.keys(prev)) {
-          if (prev[key] !== values[key]) {
-            merged[key] = prev[key];
-          }
-        }
-        return merged;
-      });
-    }
-  }, [values]);
-
-  // Debounced auto-save
-  useEffect(() => {
-    if (!values || !draft) return;
-    const dirty = Object.keys(draft).some((key) => draft[key] !== values[key]);
-    if (!dirty) return;
-
-    const timeout = window.setTimeout(async () => {
-      const changes: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(draft)) {
-        if (value !== values[key]) {
-          changes[key] = value;
-        }
-      }
-      if (Object.keys(changes).length === 0) return;
-
-      setSaving('Saving…');
-      setSaveError(null);
-      try {
-        await api.updateSettings(changes);
-        setSaveNotice('Saved.');
-        await refetch({ resetLoading: false });
-      } catch (err) {
-        setSaveError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setSaving(null);
-      }
-    }, 500);
-
-    return () => window.clearTimeout(timeout);
-  }, [draft, values, refetch]);
-
-  const grouped = useMemo(() => {
-    if (!schema) return new Map<string, UnifiedSettingsEntry[]>();
-    const groups = new Map<string, UnifiedSettingsEntry[]>();
-    for (const entry of schema) {
-      const group = entry.group || 'General';
-      if (!groups.has(group)) groups.set(group, []);
-      groups.get(group)!.push(entry);
-    }
-    // Sort entries within each group by order
-    for (const [, entries] of groups) {
-      entries.sort((a, b) => a.order - b.order);
-    }
-    return groups;
-  }, [schema]);
-
-  if (loading || schemaLoading) return null;
-  if (error || schemaError) return null;
-  if (grouped.size === 0) return null;
-
-  return (
-    <SettingsSection
-      id="settings-extensions"
-      label="Extensions"
-      description="Settings registered by extension manifests, grouped by their declared group name."
-    >
-      <div className="space-y-0">
-        {[...grouped.entries()].map(([group, entries]) => (
-          <SettingsPanel key={group} title={group}>
-            {entries.map((entry) => {
-              const currentValue = draft[entry.key] ?? entry.default;
-              const displayValue = currentValue === undefined ? '' : currentValue;
-
-              return (
-                <div key={entry.key} className="space-y-2 py-3 first:pt-0">
-                  <label htmlFor={`unified-settings-${entry.key}`} className="block text-[13px] font-medium text-primary">
-                    {entry.key.split('.').pop() ?? entry.key}
-                    {entry.description ? <span className="ml-2 text-[12px] font-normal text-secondary">{entry.description}</span> : null}
-                  </label>
-
-                  {entry.type === 'boolean' ? (
-                    <label className="inline-flex items-center gap-3 text-[14px] text-primary">
-                      <input
-                        id={`unified-settings-${entry.key}`}
-                        type="checkbox"
-                        checked={Boolean(displayValue)}
-                        onChange={(e) => {
-                          setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
-                          setSaveNotice(null);
-                          setSaveError(null);
-                        }}
-                        className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
-                      />
-                      <span>Enabled</span>
-                    </label>
-                  ) : entry.type === 'select' && entry.enum ? (
-                    <select
-                      id={`unified-settings-${entry.key}`}
-                      value={String(displayValue)}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                        setSaveNotice(null);
-                        setSaveError(null);
-                      }}
-                      className={INPUT_CLASS}
-                    >
-                      {entry.enum.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : entry.type === 'number' ? (
-                    <input
-                      id={`unified-settings-${entry.key}`}
-                      type="number"
-                      value={displayValue as number}
-                      placeholder={entry.placeholder}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
-                        setSaveNotice(null);
-                        setSaveError(null);
-                      }}
-                      className={INPUT_CLASS}
-                    />
-                  ) : (
-                    <input
-                      id={`unified-settings-${entry.key}`}
-                      type="text"
-                      value={String(displayValue)}
-                      placeholder={entry.placeholder}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                        setSaveNotice(null);
-                        setSaveError(null);
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  )}
-                </div>
-              );
-            })}
-
-            {saving ? <p className="ui-card-meta">{saving}</p> : null}
-            {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
-            {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
-          </SettingsPanel>
-        ))}
-      </div>
-    </SettingsSection>
-  );
-}
-
 export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
   const { settingsPanels } = useExtensionRegistry();
   const { theme, themePreference, lightTheme, darkTheme, availableThemes, setThemePreference, setLightTheme, setDarkTheme } = useTheme();
@@ -1983,8 +1797,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
   const [oauthError, setOauthError] = useState<string | null>(null);
   const oauthTerminalStateKeyRef = useRef<string | null>(null);
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
-  const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
-  const [resetError, setResetError] = useState<string | null>(null);
   const settingsScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeQuickLinkId, setActiveQuickLinkId] = useState<SettingsQuickLinkId>(SETTINGS_QUICK_LINKS[0].id);
 
@@ -3095,34 +2907,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
     }
   }
 
-  async function handleReset(kind: 'layout' | 'conversation') {
-    const confirmed = window.confirm(
-      kind === 'layout'
-        ? 'Reset the saved sidebar and context-rail widths back to defaults?'
-        : 'Clear the saved open-conversation state, unread attention cache, and composer history?',
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    setResetError(null);
-    setResetting(kind);
-
-    try {
-      if (kind === 'layout') {
-        resetStoredLayoutPreferences();
-      } else {
-        resetStoredConversationUiState();
-        await api.setOpenConversationTabs([]);
-      }
-
-      window.location.reload();
-    } catch (error) {
-      setResetError(error instanceof Error ? error.message : String(error));
-      setResetting(null);
-    }
-  }
-
   function navigateToSection(sectionId: SettingsQuickLinkId) {
     setActiveQuickLinkId(sectionId);
     const section = settingsScrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
@@ -3481,19 +3265,8 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               </div>
             </SettingsSection>
 
-            <SettingsSection
-              id="settings-workspace"
-              label="Workspace"
-              description="Working directory and knowledge base for project context."
-            >
+            <SettingsSection id="settings-workspace" label="Workspace" description="Default working directory for project context.">
               <div className="space-y-0">
-                <SettingsPanel
-                  title="Knowledge base"
-                  description="Point PA at a git repo and let it manage the local mirror and sync loop."
-                >
-                  <KnowledgeSettingsPanel />
-                </SettingsPanel>
-
                 <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
                   {defaultCwdLoading && !defaultCwdState ? (
                     <p className="ui-card-meta">Loading default working directory…</p>
@@ -4577,59 +4350,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
             <DesktopConnectionsSettingsPanel />
 
             {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
-
-            <UnifiedSettingsSection />
-
-            <SettingsSection
-              id="settings-interface"
-              label="Interface"
-              description="Browser-local UI state, saved layout preferences, and reset tools."
-            >
-              <SettingsPanel
-                title="Reset saved UI preferences"
-                description="Clears saved UI state only. Conversations and data stay intact."
-              >
-                {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
-
-                <div className="space-y-6">
-                  <div className="space-y-2 min-w-0">
-                    <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
-                    <p className="ui-card-meta">
-                      Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files), and per-doc context rail
-                      widths, then reloads the page.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleReset('layout');
-                      }}
-                      disabled={resetting !== null}
-                      className={ACTION_BUTTON_CLASS}
-                    >
-                      {resetting === 'layout' ? 'Resetting…' : 'Reset layout + reload'}
-                    </button>
-                  </div>
-
-                  <div className="space-y-2 border-t border-border-subtle pt-6 min-w-0">
-                    <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
-                    <p className="ui-card-meta">
-                      Clears stored open-tab state, seen message counts, and composer history in this app, plus the durable open-tab
-                      snapshot stored by the desktop UI, then reloads the page.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleReset('conversation');
-                      }}
-                      disabled={resetting !== null}
-                      className={ACTION_BUTTON_CLASS}
-                    >
-                      {resetting === 'conversation' ? 'Resetting…' : 'Reset conversation UI + reload'}
-                    </button>
-                  </div>
-                </div>
-              </SettingsPanel>
-            </SettingsSection>
           </div>
         </AppPageLayout>
       </div>

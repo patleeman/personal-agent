@@ -1,5 +1,6 @@
 import type { ExtensionInstallSummary } from '@personal-agent/extensions/data';
 import { api, EXTENSION_REGISTRY_CHANGED_EVENT, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
+import type { UnifiedSettingsEntry } from '@personal-agent/extensions/settings';
 import {
   AppPageIntro,
   AppPageLayout,
@@ -807,6 +808,154 @@ export function ExtensionManagerPage() {
   );
 }
 
+function ExtensionSettingsBlock({ extension }: { extension: ExtensionInstallSummary }) {
+  const { data: values } = useApi<Record<string, unknown>>(api.settings as never);
+  const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  const contributes = extension.manifest?.contributes?.settings;
+  const rawSettings = contributes && typeof contributes === 'object' && !Array.isArray(contributes) ? contributes : {};
+
+  const entries: UnifiedSettingsEntry[] = useMemo(
+    () =>
+      Object.entries(rawSettings).map(([key, value]) => {
+        const s = value as Record<string, unknown>;
+        return {
+          extensionId: extension.id,
+          key,
+          type: (s.type as string) ?? 'string',
+          default: s.default,
+          description: (s.description as string) ?? undefined,
+          group: (s.group as string) ?? 'General',
+          enum: Array.isArray(s.enum) ? (s.enum as string[]) : undefined,
+          placeholder: (s.placeholder as string) ?? undefined,
+          order: (s.order as number) ?? 0,
+        };
+      }),
+    [rawSettings, extension.id],
+  );
+
+  useEffect(() => {
+    if (values) {
+      setDraft((prev) => {
+        const merged = { ...values };
+        for (const key of Object.keys(prev)) {
+          if (prev[key] !== values[key]) merged[key] = prev[key];
+        }
+        return merged;
+      });
+    }
+  }, [values]);
+
+  // Debounced auto-save
+  useEffect(() => {
+    if (!values || !draft || saving) return;
+    const changes: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(draft)) {
+      if (val !== values[key]) changes[key] = val;
+    }
+    if (Object.keys(changes).length === 0) return;
+
+    const timeout = window.setTimeout(async () => {
+      setSaving(true);
+      setSaveError(null);
+      try {
+        await api.updateSettings(changes);
+        setSaveNotice('Saved.');
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSaving(false);
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [draft, values, saving]);
+
+  if (Object.keys(rawSettings).length === 0) return null;
+
+  entries.sort((a, b) => a.order - b.order);
+
+  return (
+    <div className="space-y-4">
+      {entries.map((entry) => {
+        const currentValue = draft[entry.key] ?? entry.default;
+        return (
+          <div key={entry.key} className="space-y-1.5">
+            <label className="block text-[13px] font-medium text-primary">
+              {entry.key.split('.').pop() ?? entry.key}
+              {entry.description ? <span className="ml-2 font-normal text-[12px] text-secondary">{entry.description}</span> : null}
+            </label>
+
+            {entry.type === 'boolean' ? (
+              <label className="inline-flex items-center gap-2 text-[13px] text-primary">
+                <input
+                  type="checkbox"
+                  checked={Boolean(currentValue)}
+                  onChange={(e) => {
+                    setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
+                    setSaveNotice(null);
+                    setSaveError(null);
+                  }}
+                  className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
+                />
+                <span>Enabled</span>
+              </label>
+            ) : entry.type === 'select' && entry.enum ? (
+              <select
+                value={String(currentValue)}
+                onChange={(e) => {
+                  setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
+                  setSaveNotice(null);
+                  setSaveError(null);
+                }}
+                className="w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none"
+              >
+                {entry.enum.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            ) : entry.type === 'number' ? (
+              <input
+                type="number"
+                value={currentValue as number}
+                placeholder={entry.placeholder}
+                onChange={(e) => {
+                  setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
+                  setSaveNotice(null);
+                  setSaveError(null);
+                }}
+                className="w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none"
+              />
+            ) : (
+              <input
+                type="text"
+                value={String(currentValue)}
+                placeholder={entry.placeholder}
+                onChange={(e) => {
+                  setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
+                  setSaveNotice(null);
+                  setSaveError(null);
+                }}
+                className="w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] font-mono text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            )}
+          </div>
+        );
+      })}
+      {saving ? <p className="text-[12px] text-dim">Saving…</p> : null}
+      {saveNotice ? <p className="text-[12px] text-success">{saveNotice}</p> : null}
+      {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
+    </div>
+  );
+}
+
 function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; onClose: () => void }) {
   const [extensions, setExtensions] = useState<ExtensionInstallSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -988,6 +1137,10 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
                   <DetailRow label="Backend" value={`Actions: ${formatBackendActionSummary(extension)}`} />
                   <DetailRow label="Permissions" value={formatPermissionSummary(extension)} />
                 </dl>
+              </DetailBlock>
+
+              <DetailBlock title="Settings">
+                <ExtensionSettingsBlock extension={extension} />
               </DetailBlock>
 
               <DetailBlock title="Skills">
