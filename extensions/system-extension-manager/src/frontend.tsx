@@ -311,6 +311,16 @@ function ToolIcon() {
   );
 }
 
+function DetailsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 7.5v3.5" />
+      <circle cx="8" cy="5.5" r=".75" fill="currentColor" />
+    </svg>
+  );
+}
+
 function BackendIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -759,13 +769,15 @@ export function ExtensionManagerPage() {
                                   ) : null}
                                   <button
                                     type="button"
-                                    className="text-[12px] text-secondary transition-colors hover:text-primary"
+                                    className="ui-icon-button ui-icon-button-compact"
+                                    title={`Details for ${extension.name}`}
+                                    aria-label={`Details for ${extension.name}`}
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       setDetailsExtensionId(extension.id);
                                     }}
                                   >
-                                    Details
+                                    <DetailsIcon />
                                   </button>
                                   <ExtensionActionsMenu
                                     extension={extension}
@@ -854,7 +866,7 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-10 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/45 px-4 py-10 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
       <div
