@@ -2,6 +2,7 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
 import { ErrorState, LoadingState } from '../components/ui';
+import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { NativeExtensionViewSummary } from './types';
