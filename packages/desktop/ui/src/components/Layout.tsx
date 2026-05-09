@@ -1294,6 +1294,11 @@ export function Layout() {
     () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null,
     [extensionRightToolPanels],
   );
+  const showKnowledgeRouteRail =
+    !showWorkbench &&
+    routeIsKnowledge(location.pathname, extensionRegistry.surfaces) &&
+    railOpen &&
+    systemKnowledgeExtensionSurface !== null;
   const activeExtensionWorkbenchSurface = useMemo(() => {
     const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
     if (!parsed) return null;
@@ -1594,13 +1599,18 @@ export function Layout() {
         railOpen: workbenchExplorerOpen,
         toggleRail: toggleWorkbenchExplorer,
       }
-    : (registeredRightRailControl ??
-      (canShowContextRail
-        ? {
-            railOpen: showContextRail,
-            toggleRail: () => setRailOpen((current) => !current),
-          }
-        : null));
+    : showKnowledgeRouteRail || routeIsKnowledge(location.pathname, extensionRegistry.surfaces)
+      ? {
+          railOpen: showKnowledgeRouteRail,
+          toggleRail: () => setRailOpen((current) => !current),
+        }
+      : (registeredRightRailControl ??
+        (canShowContextRail
+          ? {
+              railOpen: showContextRail,
+              toggleRail: () => setRailOpen((current) => !current),
+            }
+          : null));
 
   const handleAppLayoutModeChange = useCallback(
     (mode: AppLayoutMode) => {
@@ -1830,7 +1840,24 @@ export function Layout() {
                   </>
                 ) : null}
 
-                {showContextRail ? (
+                {showKnowledgeRouteRail && systemKnowledgeExtensionSurface ? (
+                  <>
+                    <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+                    <aside
+                      style={{ width: railWidth }}
+                      className="relative z-10 flex-shrink-0 overflow-hidden border-l border-border-subtle bg-base select-text"
+                    >
+                      <NativeExtensionSurfaceHost
+                        surface={systemKnowledgeExtensionSurface}
+                        pathname={location.pathname}
+                        search={location.search}
+                        hash={location.hash}
+                        conversationId={activeConversationId}
+                        cwd={activeWorkspaceCwd}
+                      />
+                    </aside>
+                  </>
+                ) : showContextRail ? (
                   <>
                     <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
                     <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
