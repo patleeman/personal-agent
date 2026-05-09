@@ -6,12 +6,17 @@ import {
   getDesktopBridge,
   getTabSessionKey,
   readBrowserTabsState,
+  BrowserToolBlock,
   WorkbenchBrowserTab,
   writeBrowserTabsState,
 } from '@personal-agent/extensions/workbench';
 import { useCallback, useEffect, useState } from 'react';
 
 const BROWSER_TABS_CHANGED_EVENT = 'pa:system-browser-tabs-changed';
+
+export function BrowserTranscriptRenderer({ block, context }: { block: never; context: { onOpenBrowser?: () => void } }) {
+  return <BrowserToolBlock block={block} onOpenBrowser={context.onOpenBrowser} />;
+}
 
 let browserTabsSnapshot: BrowserTabsState = readBrowserTabsState();
 

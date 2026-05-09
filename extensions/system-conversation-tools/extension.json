@@ -5,7 +5,18 @@
   "packageType": "system",
   "description": "Agent tools for conversation questions, inspection, titles, and working directory changes.",
   "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
   "contributes": {
+    "transcriptRenderers": [
+      {
+        "id": "ask-user-question-tool-block",
+        "tool": "ask_user_question",
+        "component": "AskUserQuestionTranscriptRenderer"
+      }
+    ],
     "contextMenus": [
       {
         "id": "copy-conversation-id",

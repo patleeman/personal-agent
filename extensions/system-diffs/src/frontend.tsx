@@ -3,12 +3,33 @@ import { useSearchParams } from 'react-router-dom';
 
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import {
+  CheckpointToolBlock,
   ConversationCheckpointWorkbenchPane,
   ConversationDiffRailContent,
   getConversationCheckpointIdFromSearch,
+  readCheckpointPresentation,
   setConversationCheckpointIdInSearch,
   useConversationCheckpointSummaries,
 } from '@personal-agent/extensions/workbench';
+
+export function CheckpointTranscriptRenderer({
+  block,
+  context,
+}: {
+  block: never;
+  context: { onOpenCheckpoint?: (checkpointId: string) => void; activeCheckpointId?: string | null };
+}) {
+  const checkpoint = readCheckpointPresentation(block);
+  if (!checkpoint) return null;
+  return (
+    <CheckpointToolBlock
+      block={block}
+      checkpoint={checkpoint}
+      onOpenCheckpoint={context.onOpenCheckpoint}
+      activeCheckpointId={context.activeCheckpointId}
+    />
+  );
+}
 
 export function ConversationDiffsPanel({ context }: ExtensionSurfaceProps) {
   const [searchParams, setSearchParams] = useSearchParams();

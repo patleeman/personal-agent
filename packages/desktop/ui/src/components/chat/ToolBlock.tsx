@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 
-import { readCheckpointPresentation } from '../../conversation/conversationCheckpoints';
 import { NativeExtensionToolBlockHost } from '../../extensions/NativeExtensionToolBlockHost';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
@@ -11,7 +10,6 @@ import {
 } from '../../transcript/askUserQuestions';
 import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
-import { BrowserToolBlock, CheckpointToolBlock } from './ArtifactCheckpointToolBlocks.js';
 import { AskUserQuestionToolBlock, describeAskUserQuestionState } from './AskUserQuestionToolBlock.js';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
 import { TerminalToolBlock } from './TerminalToolBlock.js';
@@ -62,7 +60,6 @@ export function ToolBlock({
     return null;
   }, [block.tool, extensionRegistry.extensions]);
   const meta = toolMeta(block.tool);
-  const checkpoint = readCheckpointPresentation(block);
   const askUserQuestion = readAskUserQuestionPresentation(block);
   const askUserQuestionState = useMemo(() => describeAskUserQuestionState(messages, messageIndex), [messageIndex, messages]);
   const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
@@ -73,29 +70,19 @@ export function ToolBlock({
         extension={extensionRenderer.extension}
         renderer={extensionRenderer.renderer}
         block={block}
-        context={{ onOpenArtifact, activeArtifactId, onOpenCheckpoint, activeCheckpointId, onOpenBrowser }}
+        context={{
+          onOpenArtifact,
+          activeArtifactId,
+          onOpenCheckpoint,
+          activeCheckpointId,
+          onOpenBrowser,
+          messages,
+          messageIndex,
+          onSubmitAskUserQuestion,
+          askUserQuestionDisplayMode,
+        }}
       />
     );
-  }
-
-  if (checkpoint) {
-    return (
-      <CheckpointToolBlock
-        block={block}
-        checkpoint={checkpoint}
-        onOpenCheckpoint={onOpenCheckpoint}
-        activeCheckpointId={activeCheckpointId}
-      />
-    );
-  }
-
-  if (block.tool === 'browser_snapshot' || block.tool === 'browser_cdp' || block.tool === 'browser_screenshot') {
-    return <BrowserToolBlock block={block} onOpenBrowser={onOpenBrowser} />;
-  }
-
-  const terminalBash = readTerminalBashToolPresentation(block);
-  if (terminalBash) {
-    return <TerminalToolBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
   }
 
   if (block.tool === 'ask_user_question' && askUserQuestion && !(block.status === 'error' || block.error)) {
@@ -108,6 +95,11 @@ export function ToolBlock({
         mode={askUserQuestionDisplayMode}
       />
     );
+  }
+
+  const terminalBash = readTerminalBashToolPresentation(block);
+  if (terminalBash) {
+    return <TerminalToolBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
   }
 
   // Normalise tool state across streamed and persisted entries.

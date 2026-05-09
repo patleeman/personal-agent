@@ -3,6 +3,7 @@ import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 import { buildApiPath } from '../client/apiBase';
 import { ErrorState, LoadingState } from '../components/ui';
 import type { MessageBlock } from '../shared/types';
+import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../transcript/askUserQuestions';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionInstallSummary, ExtensionTranscriptRendererContribution } from './types';
@@ -16,6 +17,10 @@ export interface ExtensionToolBlockContext {
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
   onOpenBrowser?: () => void;
+  messages?: MessageBlock[];
+  messageIndex?: number;
+  onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
+  askUserQuestionDisplayMode?: 'inline' | 'composer';
 }
 
 type ExtensionToolBlockComponent = ComponentType<{

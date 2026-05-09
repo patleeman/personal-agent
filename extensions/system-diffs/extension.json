@@ -20,6 +20,22 @@
     ]
   },
   "contributes": {
+    "settings": {
+      "diffs.autoRefresh": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically refresh diff panels when new checkpoints are created",
+        "group": "Diffs",
+        "order": 1
+      },
+      "diffs.refreshInterval": {
+        "type": "number",
+        "default": 30,
+        "description": "Auto-refresh interval in seconds",
+        "group": "Diffs",
+        "order": 2
+      }
+    },
     "tools": [
       {
         "id": "checkpoint",
@@ -53,6 +69,13 @@
           "required": ["action"],
           "additionalProperties": false
         }
+      }
+    ],
+    "transcriptRenderers": [
+      {
+        "id": "checkpoint-tool-block",
+        "tool": "checkpoint",
+        "component": "CheckpointTranscriptRenderer"
       }
     ],
     "views": [

@@ -1,4 +1,5 @@
-export { ArtifactToolBlock } from '../components/chat/ArtifactCheckpointToolBlocks';
+export { ArtifactToolBlock, BrowserToolBlock, CheckpointToolBlock } from '../components/chat/ArtifactCheckpointToolBlocks';
+export { AskUserQuestionToolBlock, describeAskUserQuestionState } from '../components/chat/AskUserQuestionToolBlock';
 export {
   ConversationArtifactRailContent,
   ConversationArtifactWorkbenchPane,
@@ -14,7 +15,11 @@ export { cx } from '../components/ui';
 export { WorkbenchBrowserTab } from '../components/workbench/WorkbenchBrowserTab';
 export { WorkspaceExplorer, WorkspaceFileDocument } from '../components/workspace/WorkspaceExplorer';
 export { readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
-export { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
+export {
+  getConversationCheckpointIdFromSearch,
+  readCheckpointPresentation,
+  setConversationCheckpointIdInSearch,
+} from '../conversation/conversationCheckpoints';
 export { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
 export { getDesktopBridge } from '../desktop/desktopBridge';
 export {
@@ -25,3 +30,4 @@ export {
   readBrowserTabsState,
   writeBrowserTabsState,
 } from '../local/workbenchBrowserTabs';
+export { readAskUserQuestionPresentation } from '../transcript/askUserQuestions';
