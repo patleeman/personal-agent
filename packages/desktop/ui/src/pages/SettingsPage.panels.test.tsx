@@ -101,12 +101,6 @@ describe('SettingsPage — untested panel rendering', () => {
     expect(html).toContain('Background runtime');
   });
 
-  it('renders the dictation section heading', () => {
-    const html = renderPage('/settings');
-    expect(html).toContain('Dictation');
-    expect(html).toContain('Transcription provider');
-  });
-
   it('renders the skills section heading', () => {
     const html = renderPage('/settings');
     expect(html).toContain('Skills');

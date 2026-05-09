@@ -5,6 +5,7 @@
     "postcss",
     "esbuild",
     "qrcode",
+    "whisper-cpp-node",
     "@personal-agent/extensions",
     "@tiptap/core",
     "@tiptap/extension-image",

@@ -9,6 +9,7 @@ covers how to create, structure, and publish extensions.
 - [Manifest (`extension.json`)](#manifest-extensionjson)
 - [Frontend (UI)](#frontend-ui)
 - [Main page layout](#main-page-layout)
+- [Styling guidance](#styling-guidance)
 - [Backend (Server-side)](#backend-server-side)
 - [Agent Lifecycle Hooks](#agent-lifecycle-hooks)
 - [Conversation Write API](#conversation-write-api)
@@ -106,6 +107,7 @@ The manifest declares what your extension contributes:
 | `conversationHeaderElements` | Badges in conversation header     | [See below](#conversation-header-elements-conversationheaderelements) |
 | `messageActions`             | Hover buttons on messages         | [See below](#message-actions-messageactions)                          |
 | `composerShelves`            | Sections above the composer       | [See below](#composer-shelves-composershelves)                        |
+| `composerButtons`            | Component buttons beside submit   | [See below](#composer-buttons-composerbuttons)                        |
 | `toolbarActions`             | Icon buttons in composer toolbar  | [See below](#toolbar-actions-toolbaractions)                          |
 | `conversationDecorators`     | Badges on conversation list items | [See below](#conversation-decorators-conversationdecorators)          |
 | `contextMenus`               | Right-click menu items            | [See below](#context-menus-contextmenus)                              |
@@ -176,9 +178,25 @@ Backend handler receives:
 }
 ```
 
+### Composer Buttons (`composerButtons`)
+
+Add component-backed buttons in the compact shelf directly to the left of the submit button. Use this for interactive controls that need their own frontend state.
+
+```json
+{
+  "id": "dictation",
+  "component": "DictationButton",
+  "title": "Dictation",
+  "when": "!streamIsStreaming",
+  "priority": 10
+}
+```
+
+The component receives `pa` and `buttonContext`; `buttonContext.insertText(text)` inserts text at the current composer selection.
+
 ### Toolbar Actions (`toolbarActions`)
 
-Add icon buttons in the composer toolbar row (between dictation and submit).
+Add simple action-backed icon buttons in the composer toolbar row.
 Action-based — no frontend entry needed.
 
 ```json
@@ -410,6 +428,31 @@ Main-route extension pages should use the shared app page primitives instead of 
 ```
 
 Use the same `max-w-[72rem]`, `space-y-10`, and `AppPageIntro` title/summary pattern for normal pages. Only use a wider shell for table-heavy management surfaces that genuinely need it.
+
+## Styling guidance
+
+Extension UIs should look native to Personal Agent, not like embedded websites. Default to the shared primitives from `@personal-agent/extensions/ui` and Tailwind utility classes that use app theme tokens.
+
+```tsx
+<section className="space-y-4 border-t border-border-subtle pt-6">
+  <div className="flex items-baseline justify-between gap-4">
+    <h2 className="text-[18px] font-semibold tracking-tight text-primary">Section title</h2>
+    <span className="text-[12px] text-dim">Optional metadata</span>
+  </div>
+  <p className="max-w-3xl text-[13px] leading-6 text-secondary">Short explanatory copy.</p>
+  <ToolbarButton>Action</ToolbarButton>
+</section>
+```
+
+Guidelines:
+
+- Use semantic theme tokens: `bg-base`, `bg-surface`, `bg-elevated`, `text-primary`, `text-secondary`, `text-dim`, `border-border-subtle`, `text-accent`, `text-success`, `text-warning`, and `text-danger`.
+- Avoid hard-coded colors, custom shadows, gradients, decorative pills, and nested bordered cards. Spacing, typography, and alignment should do most of the hierarchy work.
+- Keep typography consistent: page titles come from `AppPageIntro`; section titles are usually `text-[18px] font-semibold tracking-tight`; body copy is usually `text-[13px] leading-6 text-secondary`.
+- Prefer `ToolbarButton`, `EmptyState`, `LoadingState`, `ErrorState`, `AppPageEmptyState`, and `AppPageSection` over local button/state implementations.
+- Right-rail and panel views are compact tools, not full pages. Use tighter padding, smaller type, and avoid page-scale headers there.
+
+If a page needs a style that fights these defaults, first ask whether it should be a new shared primitive. One-off chrome is how UI entropy sneaks in wearing a fake mustache.
 
 ## Backend (Server-side)
 

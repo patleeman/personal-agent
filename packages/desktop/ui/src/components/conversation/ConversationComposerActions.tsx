@@ -1,6 +1,7 @@
-import { type PointerEventHandler, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { formatComposerActionLabel } from '../../conversation/conversationComposerPresentation';
+import { ComposerButtonHost } from '../../extensions/ComposerButtonHost';
 import { createNativeExtensionClient } from '../../extensions/nativePaClient';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import { cx } from '../ui';
@@ -9,9 +10,6 @@ import { ComposerActionIcon } from './ConversationComposerChrome';
 export type ConversationComposerSubmitLabel = 'Send' | 'Steer' | 'Follow up' | 'Parallel';
 
 export function ConversationComposerActions({
-  dictationState,
-  dictationLevelSamples,
-  dictationStartedAt,
   composerDisabled,
   streamIsStreaming,
   conversationNeedsTakeover,
@@ -23,16 +21,11 @@ export function ConversationComposerActions({
   composerSubmitLabel,
   composerAltHeld,
   composerParallelHeld,
-  onDictationPointerDown,
-  onDictationPointerUp,
-  onDictationPointerCancel,
+  onInsertComposerText,
   onSubmitComposerQuestion,
   onSubmitComposerActionForModifiers,
   onAbortStream,
 }: {
-  dictationState: 'idle' | 'recording' | 'transcribing';
-  dictationLevelSamples?: number[];
-  dictationStartedAt?: number | null;
   composerDisabled: boolean;
   streamIsStreaming: boolean;
   conversationNeedsTakeover: boolean;
@@ -44,14 +37,12 @@ export function ConversationComposerActions({
   composerSubmitLabel: ConversationComposerSubmitLabel;
   composerAltHeld: boolean;
   composerParallelHeld: boolean;
-  onDictationPointerDown: PointerEventHandler<HTMLButtonElement>;
-  onDictationPointerUp: PointerEventHandler<HTMLButtonElement>;
-  onDictationPointerCancel: PointerEventHandler<HTMLButtonElement>;
+  onInsertComposerText: (text: string) => void;
   onSubmitComposerQuestion: () => void;
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
 }) {
-  const { toolbarActions } = useExtensionRegistry();
+  const { composerButtons, toolbarActions } = useExtensionRegistry();
   const visibleToolbarActions = useMemo(
     () =>
       toolbarActions.filter((action) => {
@@ -67,6 +58,23 @@ export function ConversationComposerActions({
         return true;
       }),
     [toolbarActions, composerHasContent, streamIsStreaming],
+  );
+
+  const visibleComposerButtons = useMemo(
+    () =>
+      composerButtons.filter((button) => {
+        const expr = button.when;
+        if (!expr) return true;
+        const clauses = expr.split(/\s*&&\s*/).filter(Boolean);
+        for (const clause of clauses) {
+          const trimmed = clause.trim();
+          if (trimmed === 'composerHasContent' && !composerHasContent) return false;
+          if (trimmed === 'streamIsStreaming' && !streamIsStreaming) return false;
+          if (trimmed === '!streamIsStreaming' && streamIsStreaming) return false;
+        }
+        return true;
+      }),
+    [composerButtons, composerHasContent, streamIsStreaming],
   );
 
   const paClientByExtension = useRef<Map<string, ReturnType<typeof createNativeExtensionClient>>>(new Map());
@@ -100,53 +108,13 @@ export function ConversationComposerActions({
           ))}
         </div>
       )}
-      {dictationState === 'recording' ? (
-        <DictationWaveform samples={dictationLevelSamples ?? []} startedAt={dictationStartedAt ?? null} />
-      ) : null}
-      <button
-        type="button"
-        onPointerDown={onDictationPointerDown}
-        onPointerUp={onDictationPointerUp}
-        onPointerCancel={onDictationPointerCancel}
-        disabled={composerDisabled || dictationState === 'transcribing'}
-        className={cx(
-          'flex h-8 w-8 shrink-0 touch-none items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
-          dictationState === 'recording'
-            ? 'bg-danger/15 text-danger hover:bg-danger/25'
-            : dictationState === 'transcribing'
-              ? 'bg-elevated text-accent'
-              : 'text-secondary hover:bg-elevated/60 hover:text-primary',
-        )}
-        title={
-          dictationState === 'recording'
-            ? 'Recording dictation — release after a hold to stop, or click again to toggle off'
-            : dictationState === 'transcribing'
-              ? 'Transcribing…'
-              : 'Dictate. Hold to record while held, or click to toggle.'
-        }
-        aria-label={dictationState === 'recording' ? 'Stop dictation' : 'Start dictation'}
-      >
-        {dictationState === 'transcribing' ? (
-          <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
-        ) : (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
-            <path d="M19 11a7 7 0 0 1-14 0" />
-            <path d="M12 18v3" />
-            <path d="M8 21h8" />
-          </svg>
-        )}
-      </button>
+      {visibleComposerButtons.map((button) => (
+        <ComposerButtonHost
+          key={`${button.extensionId}:${button.id}`}
+          registration={button}
+          buttonContext={{ composerDisabled, streamIsStreaming, composerHasContent, insertText: onInsertComposerText }}
+        />
+      ))}
       {streamIsStreaming ? (
         <>
           {composerHasContent ? (
@@ -516,42 +484,4 @@ function ToolbarActionIcon({ icon }: { icon: string }) {
         </svg>
       );
   }
-}
-
-function formatDictationElapsed(startedAt: number | null, now: number): string {
-  if (!startedAt) {
-    return '0:00';
-  }
-
-  const totalSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = String(totalSeconds % 60).padStart(2, '0');
-  return `${minutes}:${seconds}`;
-}
-
-function DictationWaveform({ samples, startedAt }: { samples: number[]; startedAt: number | null }) {
-  const [now, setNow] = useState(() => performance.now());
-  const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 44 }, () => 0.04);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setNow(performance.now());
-    }, 250);
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  return (
-    <div className="flex min-w-[9rem] max-w-[16rem] items-center gap-2 text-secondary" aria-label="Recording dictation">
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-[2px]" aria-hidden="true">
-        {visibleSamples.slice(-52).map((sample, index) => {
-          const height = Math.max(2, Math.round(3 + sample * 22));
-          const opacity = 0.28 + Math.min(0.72, sample * 1.4);
-          return <span key={index} className="w-[2px] shrink-0 rounded-full bg-current" style={{ height: `${height}px`, opacity }} />;
-        })}
-      </div>
-      <span className="shrink-0 font-mono text-[12px] text-secondary">{formatDictationElapsed(startedAt, now)}</span>
-    </div>
-  );
 }

@@ -7,7 +7,6 @@ import { ConversationComposerActions } from './ConversationComposerActions';
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 const baseProps: React.ComponentProps<typeof ConversationComposerActions> = {
-  dictationState: 'idle',
   composerDisabled: false,
   streamIsStreaming: false,
   conversationNeedsTakeover: false,
@@ -19,9 +18,7 @@ const baseProps: React.ComponentProps<typeof ConversationComposerActions> = {
   composerSubmitLabel: 'Send',
   composerAltHeld: false,
   composerParallelHeld: false,
-  onDictationPointerDown: vi.fn(),
-  onDictationPointerUp: vi.fn(),
-  onDictationPointerCancel: vi.fn(),
+  onInsertComposerText: vi.fn(),
   onSubmitComposerQuestion: vi.fn(),
   onSubmitComposerActionForModifiers: vi.fn(),
   onAbortStream: vi.fn(),
@@ -35,7 +32,6 @@ describe('ConversationComposerActions', () => {
   it('renders disabled send affordance when composer has no content', () => {
     const html = renderActions();
 
-    expect(html).toContain('Start dictation');
     expect(html).toContain('aria-label="Send"');
     expect(html).toContain('disabled=""');
   });
@@ -57,15 +53,13 @@ describe('ConversationComposerActions', () => {
     expect(html).toContain('aria-label="Stop"');
   });
 
-  it('renders question submit and dictation busy states', () => {
+  it('renders question submit busy state', () => {
     const html = renderActions({
       composerShowsQuestionSubmit: true,
       composerQuestionCanSubmit: true,
       composerQuestionSubmitting: true,
-      dictationState: 'transcribing',
     });
 
-    expect(html).toContain('Transcribing…');
     expect(html).toContain('Submitting…');
     expect(html).toContain('aria-label="Submit answers"');
   });

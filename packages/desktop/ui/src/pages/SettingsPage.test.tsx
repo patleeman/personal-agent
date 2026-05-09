@@ -330,8 +330,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('aria-label="Settings sections"');
     expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-conversation"'));
     expect(html.indexOf('href="#settings-conversation"')).toBeLessThan(html.indexOf('href="#settings-workspace"'));
-    expect(html.indexOf('href="#settings-workspace"')).toBeLessThan(html.indexOf('href="#settings-dictation"'));
-    expect(html.indexOf('href="#settings-dictation"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
+    expect(html.indexOf('href="#settings-workspace"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
     expect(html.indexOf('href="#settings-skills"')).toBeLessThan(html.indexOf('href="#settings-tools"'));
     expect(html.indexOf('href="#settings-tools"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');

@@ -154,6 +154,14 @@ interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+interface ExtensionComposerButtonContribution {
+  id: string;
+  component: string;
+  title?: string;
+  when?: string;
+  priority?: number;
+}
+
 interface ExtensionConversationHeaderContribution {
   id: string;
   component: string;
@@ -200,6 +208,7 @@ interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  composerButtons?: ExtensionComposerButtonContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];

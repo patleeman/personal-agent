@@ -1,0 +1,341 @@
+import { type NativeExtensionClient } from '@personal-agent/extensions';
+import { AppPageLayout, AppPageSection, cx, ToolbarButton } from '@personal-agent/extensions/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { bytesToBase64, type ComposerDictationCapture, startComposerDictationCapture } from './capture.js';
+
+const INPUT_CLASS =
+  'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
+const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
+const TRANSCRIPTION_MODEL_OPTIONS = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
+
+type TranscriptionProviderId = 'local-whisper';
+interface TranscriptionSettingsState {
+  settings: { provider: TranscriptionProviderId | null; model: string };
+  providers: Array<{ id: TranscriptionProviderId; label: string; status: 'implemented' | 'planned'; transports: Array<'file' | 'stream'> }>;
+}
+interface TranscriptionModelStatus {
+  provider: TranscriptionProviderId;
+  model: string;
+  installed: boolean;
+  sizeBytes?: number;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+function formatElapsed(startedAt: number | null, now: number): string {
+  if (!startedAt) return '0:00';
+  const totalSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+function DictationWaveform({ samples, startedAt }: { samples: number[]; startedAt: number | null }) {
+  const [now, setNow] = useState(() => performance.now());
+  const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 44 }, () => 0.04);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(performance.now()), 250);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex min-w-[9rem] max-w-[16rem] items-center gap-2 text-secondary" aria-label="Recording dictation">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-[2px]" aria-hidden="true">
+        {visibleSamples.slice(-52).map((sample, index) => {
+          const height = Math.max(2, Math.round(3 + sample * 22));
+          const opacity = 0.28 + Math.min(0.72, sample * 1.4);
+          return <span key={index} className="w-[2px] shrink-0 rounded-full bg-current" style={{ height: `${height}px`, opacity }} />;
+        })}
+      </div>
+      <span className="shrink-0 font-mono text-[12px] text-secondary">{formatElapsed(startedAt, now)}</span>
+    </div>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
+      <path d="M19 11a7 7 0 0 1-14 0" />
+      <path d="M12 18v3" />
+      <path d="M8 21h8" />
+    </svg>
+  );
+}
+
+export function DictationButton({
+  pa,
+  buttonContext,
+}: {
+  pa: NativeExtensionClient;
+  buttonContext: { composerDisabled: boolean; insertText: (text: string) => void };
+}) {
+  const [state, setState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [samples, setSamples] = useState<number[]>([]);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const captureRef = useRef<ComposerDictationCapture | null>(null);
+  const pointerRef = useRef<{ pointerId: number; startedAt: number; startedExistingRecording: boolean } | null>(null);
+
+  const stop = useCallback(async () => {
+    const capture = captureRef.current;
+    if (!capture) return;
+    captureRef.current = null;
+    setStartedAt(null);
+    setState('transcribing');
+    try {
+      const { audio, durationMs, mimeType, fileName } = await capture.stop();
+      if (audio.byteLength === 0 || durationMs < 150) return;
+      const result = (await pa.extension.invoke('transcribeFile', { dataBase64: bytesToBase64(audio), mimeType, fileName })) as {
+        text?: string;
+      };
+      const text = result.text?.trim();
+      if (!text) return;
+      buttonContext.insertText(text);
+      pa.ui.toast('Dictation inserted.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.toLowerCase().includes('empty transcript')) pa.ui.toast(message);
+    } finally {
+      setState('idle');
+    }
+  }, [buttonContext, pa]);
+
+  const start = useCallback(async () => {
+    if (buttonContext.composerDisabled || captureRef.current || state === 'transcribing') return;
+    try {
+      const settings = (await pa.extension.invoke('readSettings')) as TranscriptionSettingsState;
+      if (!settings.settings.provider) {
+        pa.ui.toast('Choose a dictation provider in Settings first.');
+        return;
+      }
+      setSamples([]);
+      setStartedAt(performance.now());
+      captureRef.current = await startComposerDictationCapture({
+        onLevel: (level) => setSamples((current) => [...current.slice(-71), level]),
+      });
+      setState('recording');
+    } catch (error) {
+      setStartedAt(null);
+      setState('idle');
+      pa.ui.toast(error instanceof Error ? error.message : String(error));
+    }
+  }, [buttonContext.composerDisabled, pa, state]);
+
+  return (
+    <>
+      {state === 'recording' ? <DictationWaveform samples={samples} startedAt={startedAt} /> : null}
+      <button
+        type="button"
+        onPointerDown={(event) => {
+          if (event.button !== 0 || buttonContext.composerDisabled || state === 'transcribing') return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const startedExistingRecording = captureRef.current !== null;
+          pointerRef.current = { pointerId: event.pointerId, startedAt: performance.now(), startedExistingRecording };
+          if (!startedExistingRecording) void start();
+        }}
+        onPointerUp={(event) => {
+          const pointer = pointerRef.current;
+          if (!pointer || pointer.pointerId !== event.pointerId) return;
+          event.preventDefault();
+          pointerRef.current = null;
+          if (pointer.startedExistingRecording || performance.now() - pointer.startedAt >= 300) void stop();
+        }}
+        onPointerCancel={(event) => {
+          const pointer = pointerRef.current;
+          if (!pointer || pointer.pointerId !== event.pointerId) return;
+          pointerRef.current = null;
+          if (!pointer.startedExistingRecording) void stop();
+        }}
+        disabled={buttonContext.composerDisabled || state === 'transcribing'}
+        className={cx(
+          'flex h-8 w-8 shrink-0 touch-none items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+          state === 'recording'
+            ? 'bg-danger/15 text-danger hover:bg-danger/25'
+            : state === 'transcribing'
+              ? 'bg-elevated text-accent'
+              : 'text-secondary hover:bg-elevated/60 hover:text-primary',
+        )}
+        title={
+          state === 'recording'
+            ? 'Recording dictation — release after a hold to stop, or click again to toggle off'
+            : state === 'transcribing'
+              ? 'Transcribing…'
+              : 'Dictate. Hold to record while held, or click to toggle.'
+        }
+        aria-label={state === 'recording' ? 'Stop dictation' : 'Start dictation'}
+      >
+        {state === 'transcribing' ? (
+          <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+        ) : (
+          <MicIcon />
+        )}
+      </button>
+    </>
+  );
+}
+
+export function DictationSettingsPage({ pa }: { pa: NativeExtensionClient }) {
+  const [settings, setSettings] = useState<TranscriptionSettingsState | null>(null);
+  const [provider, setProvider] = useState<TranscriptionProviderId | ''>('');
+  const [model, setModel] = useState('base.en');
+  const [status, setStatus] = useState<TranscriptionModelStatus | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const state = (await pa.extension.invoke('readSettings')) as TranscriptionSettingsState;
+    setSettings(state);
+    setProvider(state.settings.provider ?? '');
+    setModel(state.settings.model);
+  }, [pa]);
+
+  useEffect(() => {
+    void load().catch((error) => setMessage(error instanceof Error ? error.message : String(error)));
+  }, [load]);
+
+  useEffect(() => {
+    if (!provider || !model.trim()) {
+      setStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void pa.extension
+      .invoke('modelStatus', { provider, model: model.trim() })
+      .then((value) => {
+        if (!cancelled) setStatus(value as TranscriptionModelStatus);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [model, pa, provider]);
+
+  async function save(nextProvider = provider, nextModel = model) {
+    setBusy('Saving…');
+    setMessage(null);
+    try {
+      const saved = (await pa.extension.invoke('updateSettings', {
+        provider: nextProvider || null,
+        model: nextModel.trim(),
+      })) as TranscriptionSettingsState;
+      setSettings(saved);
+      setMessage('Saved.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function install() {
+    if (!provider || !model.trim()) return;
+    setBusy('Installing…');
+    setMessage(null);
+    try {
+      const installed = (await pa.extension.invoke('installModel', { provider, model: model.trim() })) as {
+        model: string;
+        cacheDir: string;
+      };
+      setMessage(`Installed ${installed.model} in ${installed.cacheDir}.`);
+      setStatus((await pa.extension.invoke('modelStatus', { provider, model: model.trim() })) as TranscriptionModelStatus);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const statusLabel =
+    provider && model.trim()
+      ? status?.installed
+        ? `Installed locally${status.sizeBytes ? ` · ${formatBytes(status.sizeBytes)}` : ''}`
+        : 'Not installed yet'
+      : 'Select a provider and model to check install status.';
+
+  return (
+    <AppPageLayout title="Dictation" intro={<span>Configure the composer mic button and local transcription model.</span>}>
+      <AppPageSection
+        title="Transcription provider"
+        description="The composer records browser audio and sends it to this provider when dictation stops."
+      >
+        {!settings ? <p className="ui-card-meta">Loading dictation settings…</p> : null}
+        {settings ? (
+          <div className="space-y-3">
+            <label className="ui-card-meta" htmlFor="settings-transcription-provider">
+              Provider
+            </label>
+            <select
+              id="settings-transcription-provider"
+              value={provider}
+              onChange={(event) => {
+                const next = event.target.value as TranscriptionProviderId | '';
+                setProvider(next);
+                void save(next, model);
+              }}
+              className={INPUT_CLASS}
+            >
+              <option value="">Disabled</option>
+              {settings.providers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            {provider ? (
+              <>
+                <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
+                  Model
+                </label>
+                <input
+                  id="settings-transcription-model"
+                  list="settings-transcription-model-options"
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                  onBlur={() => void save()}
+                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                  placeholder="base.en"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <datalist id="settings-transcription-model-options">
+                  {TRANSCRIPTION_MODEL_OPTIONS.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+                <p className={cx('text-[12px]', status?.installed ? 'text-success' : 'text-dim')}>{statusLabel}</p>
+                <ToolbarButton
+                  type="button"
+                  className={ACTION_BUTTON_CLASS}
+                  disabled={Boolean(busy) || !model.trim()}
+                  onClick={() => void install()}
+                >
+                  {busy === 'Installing…' ? 'Installing…' : status?.installed ? 'Reinstall local model' : 'Install local model'}
+                </ToolbarButton>
+              </>
+            ) : (
+              <p className="ui-card-meta">Dictation is disabled until a provider is selected.</p>
+            )}
+            {busy === 'Saving…' ? <p className="ui-card-meta">Saving…</p> : null}
+            {message ? <p className="text-[12px] text-secondary">{message}</p> : null}
+          </div>
+        ) : null}
+      </AppPageSection>
+    </AppPageLayout>
+  );
+}

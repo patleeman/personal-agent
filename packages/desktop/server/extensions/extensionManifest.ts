@@ -92,6 +92,7 @@ export interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  composerButtons?: ExtensionComposerButtonContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
@@ -126,6 +127,14 @@ export interface ExtensionToolbarActionContribution {
   title: string;
   icon: ExtensionIconName;
   action: string;
+  when?: string;
+  priority?: number;
+}
+
+export interface ExtensionComposerButtonContribution {
+  id: string;
+  component: string;
+  title?: string;
   when?: string;
   priority?: number;
 }

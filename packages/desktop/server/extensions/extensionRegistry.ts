@@ -186,6 +186,17 @@ export interface ExtensionToolbarActionRegistration {
   priority?: number;
 }
 
+export interface ExtensionComposerButtonRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  component: string;
+  title?: string;
+  when?: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionConversationDecoratorRegistration {
   extensionId: string;
   id: string;
@@ -784,6 +795,18 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.composerButtons !== undefined) {
+    for (const [index, button] of assertRecordArray(contributes.composerButtons, 'contributes.composerButtons').entries()) {
+      requireString(button.id, `contributes.composerButtons[${index}].id`);
+      requireString(button.component, `contributes.composerButtons[${index}].component`);
+      validateOptionalString(button.title, `contributes.composerButtons[${index}].title`);
+      validateOptionalString(button.when, `contributes.composerButtons[${index}].when`);
+      if (button.priority !== undefined && (typeof button.priority !== 'number' || !Number.isInteger(button.priority))) {
+        throw new Error(`Extension manifest contributes.composerButtons[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.toolbarActions !== undefined) {
     for (const [index, action] of assertRecordArray(contributes.toolbarActions, 'contributes.toolbarActions').entries()) {
       requireString(action.id, `contributes.toolbarActions[${index}].id`);
@@ -1082,6 +1105,7 @@ export function readExtensionSchema() {
       'topBarElements',
       'messageActions',
       'composerShelves',
+      'composerButtons',
       'toolbarActions',
       'conversationDecorators',
       'contextMenus',
@@ -1268,6 +1292,28 @@ export function listExtensionComposerShelfRegistrations(stateRoot: string = getS
           component,
           ...(shelf.title ? { title: shelf.title } : {}),
           placement: shelf.placement ?? 'bottom',
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionComposerButtonRegistrations(stateRoot: string = getStateRoot()): ExtensionComposerButtonRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.composerButtons ?? []).flatMap((button): ExtensionComposerButtonRegistration[] => {
+      const id = button.id.trim();
+      const component = button.component.trim();
+      if (!id || !component) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          component,
+          ...(button.title ? { title: button.title } : {}),
+          ...(button.when ? { when: button.when } : {}),
+          ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),
+          frontendEntry: entry.manifest.frontend?.entry,
         },
       ];
     }),

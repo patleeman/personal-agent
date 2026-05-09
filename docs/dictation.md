@@ -1,5 +1,7 @@
 # Dictation
 
-Dictation captures browser PCM audio in the composer and transcribes it with the configured local Whisper provider after recording stops.
+Dictation is implemented by the bundled `system-dictation` extension.
 
-The composer keeps microphone capture local while recording, then sends one full PCM buffer to the transcription API on stop and inserts the final transcript at the current composer selection. Avoid periodic partial transcription for now; repeatedly running local Whisper on growing snapshots can saturate the app and beachball the desktop UI.
+The extension contributes the composer mic button through `contributes.composerButtons`, owns the `/settings/dictation` settings page, and exposes backend actions for reading/updating settings, installing local Whisper models, checking model status, and transcribing captured PCM audio.
+
+The composer button keeps microphone capture in the extension frontend while recording, then sends one full PCM buffer to the extension backend on stop. Avoid periodic partial transcription for now; repeatedly running local Whisper on growing snapshots can saturate the app and beachball the desktop UI.

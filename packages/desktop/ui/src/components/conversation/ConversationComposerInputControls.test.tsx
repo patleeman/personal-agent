@@ -65,9 +65,6 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       showAutoModeToggle
       conversationAutoModeEnabled={false}
       conversationAutoModeBusy={false}
-      dictationState="idle"
-      dictationLevelSamples={[]}
-      dictationStartedAt={null}
       conversationNeedsTakeover={false}
       composerHasContent={false}
       composerShowsQuestionSubmit={false}
@@ -88,9 +85,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onSelectThinkingLevel={vi.fn()}
       onSelectServiceTier={vi.fn()}
       onToggleAutoMode={vi.fn()}
-      onDictationPointerDown={vi.fn()}
-      onDictationPointerUp={vi.fn()}
-      onDictationPointerCancel={vi.fn()}
+      onInsertComposerText={vi.fn()}
       onSubmitComposerQuestion={vi.fn()}
       onSubmitComposerActionForModifiers={vi.fn()}
       onAbortStream={vi.fn()}
@@ -100,14 +95,13 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
 }
 
 describe('ConversationComposerInputControls', () => {
-  it('renders textarea, attachment controls, preferences, dictation, and disabled send', () => {
+  it('renders textarea, attachment controls, preferences, and disabled send', () => {
     const html = renderControls();
 
     expect(html).toContain('Message… / commands, @ notes');
     expect(html).toContain('Attach image or file');
     expect(html).toContain('Create drawing');
     expect(html).toContain('Conversation model');
-    expect(html).toContain('Start dictation');
     expect(html).toContain('aria-label="Send"');
   });
 
@@ -235,16 +229,5 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('<select');
     expect(html).toContain('value="2s"');
     expect(html).not.toContain('>Repeat</span>');
-  });
-
-  it('renders the dictation waveform while recording', () => {
-    const html = renderControls({
-      dictationState: 'recording',
-      dictationStartedAt: 1000,
-      dictationLevelSamples: [0.1, 0.8, 0.2],
-    });
-
-    expect(html).toContain('Recording dictation');
-    expect(html).toContain('Stop dictation');
   });
 });

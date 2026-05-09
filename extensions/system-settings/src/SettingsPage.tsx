@@ -44,8 +44,6 @@ import {
   type ThemePreference,
   THINKING_LEVEL_OPTIONS,
   ToolbarButton,
-  type TranscriptionModelStatus,
-  type TranscriptionProviderId,
   useApi,
   useTheme,
 } from '@personal-agent/extensions/settings';
@@ -72,7 +70,6 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
   { id: 'settings-conversation', label: 'Conversation', summary: 'Default model, vision, and thinking' },
   { id: 'settings-workspace', label: 'Workspace', summary: 'Working directory and knowledge base' },
-  { id: 'settings-dictation', label: 'Dictation', summary: 'Transcription provider and model' },
   { id: 'settings-skills', label: 'Skills', summary: 'Folders and AGENTS.md instructions' },
   { id: 'settings-tools', label: 'Tools', summary: 'MCP wrappers and runtime tool config' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
@@ -161,11 +158,6 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
   { value: 'anthropic-messages', label: 'Anthropic Messages' },
   { value: 'google-generative-ai', label: 'Google Generative AI' },
 ];
-
-const TRANSCRIPTION_MODEL_OPTIONS: Record<TranscriptionProviderId, string[]> = {
-  'local-whisper': ['tiny.en', 'base.en', 'small.en', 'medium.en'],
-};
-const CLOUD_TRANSCRIPTION_MODEL_PATTERN = /^(?:gpt-4o(?:-mini)?-transcribe|whisper-1)$/i;
 
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
@@ -309,20 +301,6 @@ function formatMcpServerCommand(server: McpServerConfig): string {
 
 function formatMcpServerSourcePathLabel(server: McpServerConfig): string {
   return server.source === 'skill' ? 'Manifest' : 'Config';
-}
-
-function normalizeTranscriptionModelDraft(provider: TranscriptionProviderId | '', model: string): string {
-  if (CLOUD_TRANSCRIPTION_MODEL_PATTERN.test(model.trim())) {
-    return 'base.en';
-  }
-  return model;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  }
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 function ThemeButton({
@@ -2082,12 +2060,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
     refetch: refetchDefaultCwd,
   } = useApi(api.defaultCwd);
   const {
-    data: transcriptionState,
-    loading: transcriptionLoading,
-    error: transcriptionError,
-    replaceData: replaceTranscriptionState,
-  } = useApi(api.transcriptionSettings);
-  const {
     data: providerAuthState,
     loading: providerAuthLoading,
     error: providerAuthError,
@@ -2105,15 +2077,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
   const [pathPickerTarget, setPathPickerTarget] = useState<'default-cwd' | 'skill-folders' | 'instruction-files' | null>(null);
-  const [transcriptionProviderDraft, setTranscriptionProviderDraft] = useState<TranscriptionProviderId | ''>('');
-  const [transcriptionModelDraft, setTranscriptionModelDraft] = useState('base.en');
-  const [savingTranscription, setSavingTranscription] = useState(false);
-  const [transcriptionSaveError, setTranscriptionSaveError] = useState<string | null>(null);
-  const [installingTranscriptionModel, setInstallingTranscriptionModel] = useState(false);
-  const [transcriptionInstallNotice, setTranscriptionInstallNotice] = useState<string | null>(null);
-  const [transcriptionInstallError, setTranscriptionInstallError] = useState<string | null>(null);
-  const [transcriptionModelStatus, setTranscriptionModelStatus] = useState<TranscriptionModelStatus | null>(null);
-  const [loadingTranscriptionModelStatus, setLoadingTranscriptionModelStatus] = useState(false);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
   const [providerEditorMode, setProviderEditorMode] = useState<'provider' | 'custom'>('custom');
   const [modelProviderPickerId, setModelProviderPickerId] = useState('');
@@ -2395,25 +2358,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
   }, [editableModelProviderId, providerAuthState]);
 
   const defaultCwdDirty = defaultCwdState ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd : false;
-  const transcriptionDirty = transcriptionState
-    ? transcriptionProviderDraft !== (transcriptionState.settings.provider ?? '') ||
-      transcriptionModelDraft.trim() !== transcriptionState.settings.model
-    : false;
-  const transcriptionModelOptions = transcriptionProviderDraft
-    ? TRANSCRIPTION_MODEL_OPTIONS[transcriptionProviderDraft]
-    : Array.from(new Set(Object.values(TRANSCRIPTION_MODEL_OPTIONS).flat()));
-  const transcriptionStatusMatchesDraft =
-    transcriptionModelStatus?.provider === transcriptionProviderDraft && transcriptionModelStatus.model === transcriptionModelDraft.trim();
-  const transcriptionModelStatusLabel =
-    transcriptionProviderDraft && transcriptionModelDraft.trim()
-      ? loadingTranscriptionModelStatus
-        ? 'Checking model cache…'
-        : transcriptionStatusMatchesDraft
-          ? transcriptionModelStatus.installed
-            ? `Installed locally${transcriptionModelStatus.sizeBytes ? ` · ${formatBytes(transcriptionModelStatus.sizeBytes)}` : ''}`
-            : 'Not installed yet'
-          : 'Model cache status unavailable'
-      : 'Select a provider and model to check install status.';
   const skillFoldersDirty = skillFoldersState
     ? skillFoldersDraft.length !== skillFoldersState.skillDirs.length ||
       skillFoldersDraft.some((value, index) => value !== skillFoldersState.skillDirs[index])
@@ -2431,109 +2375,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
       setDefaultCwdDraft(defaultCwdState.currentCwd);
     }
   }, [defaultCwdState?.currentCwd]);
-
-  useEffect(() => {
-    if (transcriptionState) {
-      const provider = transcriptionState.settings.provider ?? '';
-      setTranscriptionProviderDraft(provider);
-      setTranscriptionModelDraft(normalizeTranscriptionModelDraft(provider, transcriptionState.settings.model));
-    }
-  }, [transcriptionState?.settings.model, transcriptionState?.settings.provider]);
-
-  const refreshTranscriptionModelStatus = useCallback(async (provider: TranscriptionProviderId | '', model: string) => {
-    const normalizedModel = model.trim();
-    if (!provider || !normalizedModel) {
-      setTranscriptionModelStatus(null);
-      setLoadingTranscriptionModelStatus(false);
-      return;
-    }
-
-    setLoadingTranscriptionModelStatus(true);
-    try {
-      const status = await api.transcriptionModelStatus({ provider, model: normalizedModel });
-      setTranscriptionModelStatus(status);
-    } catch {
-      setTranscriptionModelStatus(null);
-    } finally {
-      setLoadingTranscriptionModelStatus(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const provider = transcriptionProviderDraft;
-    const model = transcriptionModelDraft.trim();
-    if (!provider || !model) {
-      setTranscriptionModelStatus(null);
-      setLoadingTranscriptionModelStatus(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingTranscriptionModelStatus(true);
-    api
-      .transcriptionModelStatus({ provider, model })
-      .then((status) => {
-        if (!cancelled) {
-          setTranscriptionModelStatus(status);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTranscriptionModelStatus(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingTranscriptionModelStatus(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [transcriptionModelDraft, transcriptionProviderDraft]);
-
-  useEffect(() => {
-    if (!transcriptionState || !transcriptionDirty || savingTranscription || installingTranscriptionModel) {
-      return;
-    }
-
-    const model = transcriptionModelDraft.trim();
-    if (!model) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setTranscriptionSaveError(null);
-      setSavingTranscription(true);
-      api
-        .updateTranscriptionSettings({
-          provider: transcriptionProviderDraft || null,
-          model,
-        })
-        .then((saved) => {
-          replaceTranscriptionState(saved);
-        })
-        .catch((error) => {
-          setTranscriptionSaveError(error instanceof Error ? error.message : String(error));
-        })
-        .finally(() => {
-          setSavingTranscription(false);
-        });
-    }, 500);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [
-    installingTranscriptionModel,
-    replaceTranscriptionState,
-    savingTranscription,
-    transcriptionDirty,
-    transcriptionModelDraft,
-    transcriptionProviderDraft,
-    transcriptionState,
-  ]);
 
   useEffect(() => {
     if (skillFoldersState) {
@@ -2954,39 +2795,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
       window.clearTimeout(timeout);
     };
   }, [defaultCwdDirty, defaultCwdDraft, defaultCwdState, pickingDefaultCwd, savingDefaultCwd]);
-
-  async function handleTranscriptionInstallModel() {
-    if (installingTranscriptionModel) {
-      return;
-    }
-
-    const model = transcriptionModelDraft.trim();
-    if (!transcriptionProviderDraft) {
-      setTranscriptionInstallError('Select a dictation provider first.');
-      return;
-    }
-    if (!model) {
-      setTranscriptionInstallError('Transcription model is required.');
-      return;
-    }
-
-    setTranscriptionInstallError(null);
-    setTranscriptionInstallNotice(null);
-    setInstallingTranscriptionModel(true);
-
-    try {
-      const installed = await api.installTranscriptionModel({
-        provider: transcriptionProviderDraft,
-        model,
-      });
-      setTranscriptionInstallNotice(`Installed ${installed.model} in ${installed.cacheDir}.`);
-      await refreshTranscriptionModelStatus(installed.provider, installed.model);
-    } catch (error) {
-      setTranscriptionInstallError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setInstallingTranscriptionModel(false);
-    }
-  }
 
   function startNewModelProvider(initialId = '', mode: 'provider' | 'custom' = initialId ? 'provider' : 'custom') {
     setSelectedModelProviderId(NEW_MODEL_PROVIDER_ID);
@@ -3876,126 +3684,6 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                   ) : null}
 
                   {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
-                </SettingsPanel>
-              </div>
-            </SettingsSection>
-
-            <SettingsSection
-              id="settings-dictation"
-              label="Dictation"
-              description="Choose the transcription backend used by the composer mic button. No automatic fallback is applied."
-            >
-              <div className="space-y-0">
-                <SettingsPanel
-                  title="Transcription provider"
-                  description="The composer records browser audio and sends it to this provider when dictation stops."
-                >
-                  {transcriptionLoading && !transcriptionState ? (
-                    <p className="ui-card-meta">Loading dictation settings…</p>
-                  ) : transcriptionError && !transcriptionState ? (
-                    <p className="text-[12px] text-danger">Failed to load dictation settings: {transcriptionError}</p>
-                  ) : transcriptionState ? (
-                    <div className="space-y-3">
-                      <label className="ui-card-meta" htmlFor="settings-transcription-provider">
-                        Provider
-                      </label>
-                      <select
-                        id="settings-transcription-provider"
-                        value={transcriptionProviderDraft}
-                        onChange={(event) => {
-                          const provider = event.target.value as TranscriptionProviderId | '';
-                          setTranscriptionProviderDraft(provider);
-                          setTranscriptionModelDraft((current) => normalizeTranscriptionModelDraft(provider, current));
-                          setTranscriptionSaveError(null);
-                          setTranscriptionInstallNotice(null);
-                          setTranscriptionInstallError(null);
-                          setTranscriptionModelStatus(null);
-                        }}
-                        disabled={installingTranscriptionModel}
-                        className={INPUT_CLASS}
-                      >
-                        <option value="">Disabled</option>
-                        {transcriptionState.providers.map((provider) => (
-                          <option key={provider.id} value={provider.id}>
-                            {provider.label}
-                            {provider.status === 'planned' ? ' (planned)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {transcriptionProviderDraft
-                          ? transcriptionState.providers.find((provider) => provider.id === transcriptionProviderDraft)?.status ===
-                            'planned'
-                            ? 'This provider is documented but not implemented yet.'
-                            : 'Uses the selected provider only. If it fails, dictation fails visibly.'
-                          : 'Dictation is disabled until a provider is selected.'}
-                      </p>
-
-                      {transcriptionProviderDraft ? (
-                        <>
-                          <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
-                            Model
-                          </label>
-                          <input
-                            id="settings-transcription-model"
-                            list="settings-transcription-model-options"
-                            value={transcriptionModelDraft}
-                            onChange={(event) => {
-                              setTranscriptionModelDraft(event.target.value);
-                              setTranscriptionSaveError(null);
-                              setTranscriptionInstallNotice(null);
-                              setTranscriptionInstallError(null);
-                              setTranscriptionModelStatus(null);
-                            }}
-                            disabled={installingTranscriptionModel}
-                            className={`${INPUT_CLASS} font-mono text-[13px]`}
-                            placeholder="base.en"
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                          <datalist id="settings-transcription-model-options">
-                            {transcriptionModelOptions.map((model) => (
-                              <option key={model} value={model} />
-                            ))}
-                          </datalist>
-                          <p className="ui-card-meta">
-                            Models download on demand into the local runtime cache; we do not bundle them. base.en is the sane default.
-                          </p>
-                          <p
-                            className={cx(
-                              'text-[12px]',
-                              transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed ? 'text-success' : 'text-dim',
-                            )}
-                          >
-                            {transcriptionModelStatusLabel}
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={installingTranscriptionModel || savingTranscription || !transcriptionModelDraft.trim()}
-                              onClick={() => {
-                                void handleTranscriptionInstallModel();
-                              }}
-                              className={ACTION_BUTTON_CLASS}
-                            >
-                              {installingTranscriptionModel
-                                ? 'Installing…'
-                                : transcriptionStatusMatchesDraft && transcriptionModelStatus?.installed
-                                  ? 'Reinstall local model'
-                                  : 'Install local model'}
-                            </button>
-                            {savingTranscription ? <span className="ui-card-meta">Saving…</span> : null}
-                          </div>
-                        </>
-                      ) : null}
-
-                      {transcriptionInstallNotice && <p className="text-[12px] text-accent">{transcriptionInstallNotice}</p>}
-                      {transcriptionInstallError && <p className="text-[12px] text-danger">{transcriptionInstallError}</p>}
-                    </div>
-                  ) : null}
-
-                  {transcriptionSaveError && <p className="text-[12px] text-danger">{transcriptionSaveError}</p>}
                 </SettingsPanel>
               </div>
             </SettingsSection>

@@ -17,7 +17,6 @@ import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
 import { registerTraceRoutes } from './traces.js';
-import { registerTranscriptionRoutes } from './transcription.js';
 import { registerUiPreferenceRoutes } from './uiPreferences.js';
 import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerWorkspaceExplorerRoutes } from './workspaceExplorer.js';
@@ -34,8 +33,6 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerExtensionRoutes(app, context);
 
   registerModelRoutes(app, context);
-
-  registerTranscriptionRoutes(app, context);
 
   registerToolsRoutes(app, context);
 

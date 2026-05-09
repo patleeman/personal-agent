@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 2,
+  "id": "system-dictation",
+  "name": "Dictation",
+  "packageType": "system",
+  "description": "Composer dictation button, local Whisper transcription, and dictation settings.",
+  "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      { "id": "readSettings", "handler": "readSettings", "title": "Read dictation settings" },
+      { "id": "updateSettings", "handler": "updateSettings", "title": "Update dictation settings" },
+      { "id": "modelStatus", "handler": "modelStatus", "title": "Read dictation model status" },
+      { "id": "installModel", "handler": "installModel", "title": "Install dictation model" },
+      { "id": "transcribeFile", "handler": "transcribeFile", "title": "Transcribe dictation audio" }
+    ]
+  },
+  "contributes": {
+    "composerButtons": [
+      {
+        "id": "dictation",
+        "component": "DictationButton",
+        "title": "Dictation",
+        "priority": 100
+      }
+    ],
+    "nav": [
+      {
+        "id": "dictation-settings",
+        "label": "Dictation",
+        "route": "/settings/dictation",
+        "icon": "gear",
+        "section": "settings"
+      }
+    ],
+    "views": [
+      {
+        "id": "dictation-settings",
+        "title": "Dictation settings",
+        "location": "main",
+        "route": "/settings/dictation",
+        "component": "DictationSettingsPage",
+        "placement": "primary",
+        "scope": "global",
+        "activation": "on-route"
+      }
+    ]
+  },
+  "permissions": ["settings:read", "settings:write"]
+}

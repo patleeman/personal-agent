@@ -79,11 +79,6 @@ import type {
   TraceThroughput,
   TraceTokenDaily,
   TraceToolHealth,
-  TranscriptionInstallResult,
-  TranscriptionModelStatus,
-  TranscriptionProviderId,
-  TranscriptionResult,
-  TranscriptionSettingsState,
   UncommittedDiffResult,
   WorkspaceDiffOverlay,
   WorkspaceDirectoryListing,
@@ -530,19 +525,6 @@ export const api = {
     }
 
     return patch<DefaultCwdState>('/default-cwd', { cwd });
-  },
-  transcriptionSettings: async () => get<TranscriptionSettingsState>('/transcription/settings'),
-  updateTranscriptionSettings: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
-    return patch<TranscriptionSettingsState>('/transcription/settings', input);
-  },
-  installTranscriptionModel: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
-    return post<TranscriptionInstallResult>('/transcription/install-model', input);
-  },
-  transcriptionModelStatus: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
-    return post<TranscriptionModelStatus>('/transcription/model-status', input);
-  },
-  transcribeFile: async (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string }) => {
-    return post<TranscriptionResult>('/transcription/transcribe-file', input);
   },
   providerAuth: async () => {
     const desktopBridge = getDesktopBridge();

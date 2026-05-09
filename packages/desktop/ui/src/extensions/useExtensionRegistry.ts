@@ -22,6 +22,16 @@ interface ExtensionToolbarActionRegistration {
   priority?: number;
 }
 
+export interface ExtensionComposerButtonRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  title?: string;
+  when?: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionConversationHeaderElementRegistration {
   extensionId: string;
   id: string;
@@ -83,6 +93,7 @@ export interface ExtensionRegistryState {
   topBarElements: ExtensionTopBarElementRegistration[];
   messageActions: ExtensionMessageActionRegistration[];
   composerShelves: ExtensionComposerShelfRegistration[];
+  composerButtons: ExtensionComposerButtonRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
   contextMenus: ExtensionContextMenuRegistration[];
   statusBarItems: ExtensionStatusBarItemRegistration[];
@@ -146,6 +157,27 @@ function normalizeComposerShelves(extensions: ExtensionManifest[]): ExtensionCom
       });
     }
   }
+  return result;
+}
+
+function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionComposerButtonRegistration[] {
+  const result: ExtensionComposerButtonRegistration[] = [];
+  for (const extension of extensions) {
+    const buttons = extension.contributes?.composerButtons;
+    if (!buttons?.length) continue;
+    for (const button of buttons) {
+      result.push({
+        extensionId: extension.id,
+        id: button.id,
+        component: button.component,
+        ...(button.title ? { title: button.title } : {}),
+        ...(button.when ? { when: button.when } : {}),
+        ...(typeof button.priority === 'number' ? { priority: button.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
   return result;
 }
 
@@ -256,6 +288,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     topBarElements: [],
     messageActions: [],
     composerShelves: [],
+    composerButtons: [],
     toolbarActions: [],
     contextMenus: [],
     statusBarItems: [],
@@ -284,6 +317,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           topBarElements: [],
           messageActions: [],
           composerShelves: [],
+          composerButtons: [],
           toolbarActions: [],
           contextMenus: [],
           statusBarItems: [],
@@ -305,6 +339,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: normalizeTopBarElements(extensions),
             messageActions: normalizeMessageActions(extensions),
             composerShelves: normalizeComposerShelves(extensions),
+            composerButtons: normalizeComposerButtons(extensions),
             toolbarActions: normalizeToolbarActions(extensions),
             contextMenus: normalizeContextMenus(extensions),
             statusBarItems: normalizeStatusBarItems(extensions),
@@ -323,6 +358,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: [],
             messageActions: [],
             composerShelves: [],
+            composerButtons: [],
             toolbarActions: [],
             contextMenus: [],
             statusBarItems: [],

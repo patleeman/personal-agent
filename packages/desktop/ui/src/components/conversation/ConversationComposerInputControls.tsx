@@ -1,4 +1,4 @@
-import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, RefObject } from 'react';
+import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react';
 
 import type { ConversationAutoModeState, ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
@@ -24,9 +24,6 @@ export function ConversationComposerInputControls({
   conversationAutoModeEnabled,
   conversationAutoModeBusy,
   conversationAutoMode,
-  dictationState,
-  dictationLevelSamples,
-  dictationStartedAt,
   conversationNeedsTakeover,
   composerHasContent,
   composerShowsQuestionSubmit,
@@ -49,9 +46,7 @@ export function ConversationComposerInputControls({
   onSelectServiceTier,
   onToggleAutoMode,
   onSelectMode,
-  onDictationPointerDown,
-  onDictationPointerUp,
-  onDictationPointerCancel,
+  onInsertComposerText,
   onSubmitComposerQuestion,
   onSubmitComposerActionForModifiers,
   onAbortStream,
@@ -73,9 +68,6 @@ export function ConversationComposerInputControls({
   conversationAutoModeEnabled: boolean;
   conversationAutoModeBusy: boolean;
   conversationAutoMode: ConversationAutoModeState | null;
-  dictationState: 'idle' | 'recording' | 'transcribing';
-  dictationLevelSamples: number[];
-  dictationStartedAt: number | null;
   conversationNeedsTakeover: boolean;
   composerHasContent: boolean;
   composerShowsQuestionSubmit: boolean;
@@ -98,9 +90,7 @@ export function ConversationComposerInputControls({
   onSelectServiceTier: (enableFastMode: boolean) => void;
   onToggleAutoMode: () => void;
   onSelectMode: (mode: import('../../shared/types').RunMode) => void;
-  onDictationPointerDown: PointerEventHandler<HTMLButtonElement>;
-  onDictationPointerUp: PointerEventHandler<HTMLButtonElement>;
-  onDictationPointerCancel: PointerEventHandler<HTMLButtonElement>;
+  onInsertComposerText: (text: string) => void;
   onSubmitComposerQuestion: () => void;
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
@@ -229,9 +219,6 @@ export function ConversationComposerInputControls({
           </div>
 
           <ConversationComposerActions
-            dictationState={dictationState}
-            dictationLevelSamples={dictationLevelSamples}
-            dictationStartedAt={dictationStartedAt}
             composerDisabled={composerDisabled}
             streamIsStreaming={streamIsStreaming}
             conversationNeedsTakeover={conversationNeedsTakeover}
@@ -243,9 +230,7 @@ export function ConversationComposerInputControls({
             composerSubmitLabel={composerSubmitLabel}
             composerAltHeld={composerAltHeld}
             composerParallelHeld={composerParallelHeld}
-            onDictationPointerDown={onDictationPointerDown}
-            onDictationPointerUp={onDictationPointerUp}
-            onDictationPointerCancel={onDictationPointerCancel}
+            onInsertComposerText={onInsertComposerText}
             onSubmitComposerQuestion={onSubmitComposerQuestion}
             onSubmitComposerActionForModifiers={onSubmitComposerActionForModifiers}
             onAbortStream={onAbortStream}

@@ -1,3 +1,17 @@
+export interface NativeExtensionClient {
+  extension: {
+    invoke(actionId: string, input?: unknown): Promise<unknown>;
+    getManifest(): Promise<unknown>;
+    listSurfaces(): Promise<unknown>;
+  };
+  ui: {
+    toast(message: string): void;
+    confirm(options: { title?: string; message: string }): Promise<boolean>;
+    openModal(options: { title?: string; component: string; props?: Record<string, unknown> }): Promise<unknown>;
+  };
+  [capability: string]: unknown;
+}
+
 export const EXTENSION_MANIFEST_VERSION = 2;
 
 export type ExtensionPackageType = 'user' | 'system';
@@ -185,6 +199,16 @@ export interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+export interface ExtensionComposerButtonContribution {
+  id: string;
+  component: string;
+  title?: string;
+  /** Condition for visibility, e.g. "composerHasContent && !streamIsStreaming" */
+  when?: string;
+  /** Sort priority. Higher = closer to submit button. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionConversationHeaderContribution {
   id: string;
   component: string;
@@ -253,6 +277,7 @@ export interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  composerButtons?: ExtensionComposerButtonContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];

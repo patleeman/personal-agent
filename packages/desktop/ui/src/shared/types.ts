@@ -1487,53 +1487,6 @@ export interface UncommittedDiffResult {
   files: ConversationCommitCheckpointFile[];
 }
 
-// ── Transcription / dictation ───────────────────────────────────────────────
-
-export type TranscriptionProviderId = 'local-whisper';
-
-interface TranscriptionSettings {
-  provider: TranscriptionProviderId | null;
-  model: string;
-}
-
-export interface TranscriptionSettingsState {
-  settingsFile: string;
-  settings: TranscriptionSettings;
-  providers: Array<{
-    id: TranscriptionProviderId;
-    label: string;
-    status: 'implemented' | 'planned';
-    transports: Array<'stream' | 'file'>;
-  }>;
-}
-
-export interface TranscriptionInstallResult {
-  provider: TranscriptionProviderId;
-  model: string;
-  cacheDir: string;
-}
-
-export interface TranscriptionModelStatus {
-  provider: TranscriptionProviderId;
-  model: string;
-  cacheDir: string;
-  installed: boolean;
-  sizeBytes?: number;
-}
-
-export interface TranscriptionResult {
-  text: string;
-  provider: TranscriptionProviderId;
-  model?: string;
-  language?: string;
-  durationMs?: number;
-  segments?: Array<{
-    startMs?: number;
-    endMs?: number;
-    text: string;
-  }>;
-}
-
 // ── Traces / Telemetry ─────────────────────────────────────────────────────
 
 export interface TraceSummary {
