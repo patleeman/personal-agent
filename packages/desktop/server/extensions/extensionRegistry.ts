@@ -73,6 +73,8 @@ export interface ExtensionToolRegistration {
   inputSchema: Record<string, unknown>;
   promptSnippet?: string;
   promptGuidelines?: string[];
+  /** Built-in tool name this tool overrides. */
+  replaces?: string;
 }
 
 export interface ExtensionAgentRegistration {
@@ -161,6 +163,16 @@ export interface ExtensionQuickOpenRegistration {
   provider: string;
   title?: string;
   section?: string;
+}
+
+export interface ExtensionMessageActionRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  title: string;
+  action: string;
+  when?: string;
+  priority?: number;
 }
 
 interface ExtensionRegistryConfig {
@@ -340,7 +352,8 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
     const extensionPart = normalizeToolNamePart(entry.manifest.id);
     const toolPart = normalizeToolNamePart(id);
     const explicitName = typeof tool.name === 'string' ? tool.name.trim() : '';
-    if ((!extensionPart || !toolPart) && !explicitName) {
+    const replaces = typeof tool.replaces === 'string' ? tool.replaces.trim() : '';
+    if ((!extensionPart || !toolPart) && !explicitName && !replaces) {
       return [];
     }
     return [
@@ -348,7 +361,7 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
         extensionId: entry.manifest.id,
         packageType: entry.manifest.packageType ?? 'user',
         id,
-        name: explicitName || `extension_${extensionPart}_${toolPart}`,
+        name: replaces || explicitName || `extension_${extensionPart}_${toolPart}`,
         action: tool.action ?? tool.handler ?? id,
         ...(tool.title ? { title: tool.title } : {}),
         ...(tool.label ? { label: tool.label } : {}),
@@ -356,6 +369,7 @@ function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): Extensi
         inputSchema: tool.inputSchema ?? { type: 'object', properties: {}, additionalProperties: false },
         ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
         ...(tool.promptGuidelines ? { promptGuidelines: tool.promptGuidelines } : {}),
+        ...(replaces ? { replaces } : {}),
       },
     ];
   });
@@ -613,6 +627,7 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       validateOptionalString(tool.action, `contributes.tools[${index}].action`);
       validateOptionalString(tool.handler, `contributes.tools[${index}].handler`);
       validateOptionalString(tool.name, `contributes.tools[${index}].name`);
+      validateOptionalString(tool.replaces, `contributes.tools[${index}].replaces`);
       if (tool.promptGuidelines !== undefined) requireStringArray(tool.promptGuidelines, `contributes.tools[${index}].promptGuidelines`);
     }
   }
@@ -639,6 +654,18 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
       requireString(element.id, `contributes.topBarElements[${index}].id`);
       requireString(element.component, `contributes.topBarElements[${index}].component`);
       validateOptionalString(element.label, `contributes.topBarElements[${index}].label`);
+    }
+  }
+
+  if (contributes.messageActions !== undefined) {
+    for (const [index, action] of assertRecordArray(contributes.messageActions, 'contributes.messageActions').entries()) {
+      requireString(action.id, `contributes.messageActions[${index}].id`);
+      requireString(action.title, `contributes.messageActions[${index}].title`);
+      requireString(action.action, `contributes.messageActions[${index}].action`);
+      validateOptionalString(action.when, `contributes.messageActions[${index}].when`);
+      if (action.priority !== undefined && (typeof action.priority !== 'number' || !Number.isInteger(action.priority))) {
+        throw new Error(`Extension manifest contributes.messageActions[${index}].priority must be an integer.`);
+      }
     }
   }
 
@@ -857,6 +884,7 @@ export function readExtensionSchema() {
       'quickOpen',
       'themes',
       'topBarElements',
+      'messageActions',
     ],
   };
 }
@@ -1018,6 +1046,28 @@ export function listExtensionQuickOpenRegistrations(stateRoot: string = getState
           provider: resolvedProvider,
           ...(provider.title ? { title: provider.title } : {}),
           ...(provider.section ? { section: provider.section } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionMessageActionRegistrations(stateRoot: string = getStateRoot()): ExtensionMessageActionRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.messageActions ?? []).flatMap((action): ExtensionMessageActionRegistration[] => {
+      const id = action.id.trim();
+      const title = action.title.trim();
+      const resolvedAction = action.action.trim();
+      if (!id || !title || !resolvedAction) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          title,
+          action: resolvedAction,
+          ...(action.when ? { when: action.when } : {}),
+          ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
         },
       ];
     }),

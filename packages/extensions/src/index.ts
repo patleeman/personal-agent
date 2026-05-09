@@ -1,3 +1,5 @@
+import type { AgentToolUpdateCallback } from '@earendil-works/pi-coding-agent';
+
 export const EXTENSION_MANIFEST_VERSION = 2;
 
 export type ExtensionPackageType = 'user' | 'system';
@@ -115,6 +117,11 @@ export interface ExtensionToolContribution {
   promptSnippet?: string;
   promptGuidelines?: string[];
   name?: string;
+  /**
+   * Name of a built-in tool to replace (e.g. "bash", "read", "write", "edit").
+   * When set, this tool overrides the built-in tool of that name.
+   */
+  replaces?: string;
 }
 
 export interface ExtensionTranscriptRendererContribution {
@@ -149,6 +156,16 @@ export interface ExtensionTopBarElementContribution {
   label?: string;
 }
 
+export interface ExtensionMessageActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  /** Context condition for when this action is visible, e.g. "role:assistant && hasText" */
+  when?: string;
+  /** Sort priority. Higher = closer to end of button row. Default 0. */
+  priority?: number;
+}
+
 export interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -163,6 +180,7 @@ export interface ExtensionContributions {
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
+  messageActions?: ExtensionMessageActionContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -266,13 +284,32 @@ export interface PersonalAgentClient {
     snapshot(input?: { tabId?: string | null }): Promise<unknown>;
   };
   ui: {
-    toast(message: string): void;
+    toast(message: string, type?: 'info' | 'warning' | 'error'): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
+  };
+  /** Inter-extension communication. */
+  events: {
+    /** Publish an event that other extensions can receive. */
+    publish(event: string, payload: unknown): Promise<void>;
+  };
+  /** List and call actions on other extensions. */
+  extensions: {
+    /** Invoke an action on any installed extension. */
+    callAction(extensionId: string, actionId: string, input?: unknown): Promise<unknown>;
+    /** List all extensions that expose callable actions. */
+    listActions(): Promise<
+      Array<{
+        extensionId: string;
+        extensionName: string;
+        actions: Array<{ id: string; title?: string; description?: string }>;
+      }>
+    >;
   };
 }
 
 export interface ExtensionBackendContext {
   extensionId: string;
+  profile: string;
   storage: {
     get<T = unknown>(key: string): Promise<T | null>;
     put(key: string, value: unknown, opts?: { expectedVersion?: number }): Promise<{ ok: true }>;
@@ -286,6 +323,30 @@ export interface ExtensionBackendContext {
   workspace: Record<string, (...args: never[]) => Promise<unknown>>;
   git: Record<string, (...args: never[]) => Promise<unknown>>;
   shell: Record<string, (...args: never[]) => Promise<unknown>>;
+  notify: {
+    toast(message: string, type?: 'info' | 'warning' | 'error'): void;
+    system(input: { message: string; title?: string; subtitle?: string; persistent?: boolean }): boolean;
+    setBadge(count: number): { badge: number; aggregated: number };
+    clearBadge(): void;
+    isSystemAvailable(): boolean;
+  };
+  events: {
+    publish(input: { event: string; payload: unknown }): Promise<void>;
+    subscribe(
+      pattern: string,
+      handler: (event: { event: string; payload: unknown; sourceExtensionId: string; publishedAt: string }) => void | Promise<void>,
+    ): { unsubscribe: () => void };
+  };
+  extensions: {
+    callAction(extensionId: string, actionId: string, input?: unknown): Promise<unknown>;
+    listActions(): Promise<
+      Array<{
+        extensionId: string;
+        extensionName: string;
+        actions: Array<{ id: string; title?: string; description?: string }>;
+      }>
+    >;
+  };
   ui: { invalidate(topics: string | string[]): void };
   log: {
     info(message: string, fields?: Record<string, unknown>): void;

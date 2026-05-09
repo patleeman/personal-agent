@@ -62,7 +62,12 @@ export const UserMessage = memo(function UserMessage({
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <MessageActions isUser onRewind={onRewindMessage && typeof messageIndex === 'number' ? handleRewind : undefined} />
+      <MessageActions
+        isUser
+        blockText={block.text}
+        blockId={block.id}
+        onRewind={onRewindMessage && typeof messageIndex === 'number' ? handleRewind : undefined}
+      />
       <div className={layout === 'compact' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
@@ -180,6 +185,8 @@ export const AssistantMessage = memo(function AssistantMessage({
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
           <span className="flex-1" />
           <MessageActions
+            blockText={block.text}
+            blockId={blockId}
             copyText={block.text}
             onRewind={onRewindMessage && typeof messageIndex === 'number' ? handleRewind : undefined}
             onFork={onForkMessage && typeof messageIndex === 'number' ? handleFork : undefined}

@@ -101,7 +101,7 @@ const TerminalToolBlock = memo(function TerminalToolBlock({
 
       <div className="flex items-center gap-2">
         <span className="flex-1" />
-        <MessageActions copyText={copyText} />
+        <MessageActions blockText={block.output ?? ''} blockId={blockId} copyText={copyText} />
       </div>
     </div>
   );

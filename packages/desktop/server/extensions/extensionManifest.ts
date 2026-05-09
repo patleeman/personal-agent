@@ -90,6 +90,7 @@ export interface ExtensionContributions {
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
+  messageActions?: ExtensionMessageActionContribution[];
   settings?: Record<string, unknown>;
 }
 
@@ -97,6 +98,14 @@ export interface ExtensionTopBarElementContribution {
   id: string;
   component: string;
   label?: string;
+}
+
+export interface ExtensionMessageActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  when?: string;
+  priority?: number;
 }
 
 export interface ExtensionThemeContribution {
@@ -200,6 +209,12 @@ export interface ExtensionToolContribution {
   promptGuidelines?: string[];
   /** Explicit agent tool name. Defaults to extension_{extensionId}_{toolId}. */
   name?: string;
+  /**
+   * Name of a built-in tool to replace (e.g. "bash", "read", "write", "edit").
+   * When set, this tool overrides the built-in tool of that name.
+   * The extension must have the same permission level as the tool it replaces.
+   */
+  replaces?: string;
 }
 
 export type ExtensionSurface =

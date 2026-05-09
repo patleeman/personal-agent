@@ -129,6 +129,14 @@ interface ExtensionTopBarElementContribution {
   label?: string;
 }
 
+interface ExtensionMessageActionContribution {
+  id: string;
+  title: string;
+  action: string;
+  when?: string;
+  priority?: number;
+}
+
 interface ExtensionContributions {
   views?: ExtensionViewContribution[];
   nav?: ExtensionNavContribution[];
@@ -143,6 +151,7 @@ interface ExtensionContributions {
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
+  messageActions?: ExtensionMessageActionContribution[];
   settings?: Record<string, unknown>;
 }
 

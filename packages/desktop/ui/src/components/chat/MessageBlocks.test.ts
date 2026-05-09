@@ -1,4 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Mock extension module imports that aren't available in the test environment.
+// The test only imports non-React helpers from MessageBlocks.
+vi.mock('../extensions/useExtensionRegistry', () => ({
+  useExtensionRegistry: () => ({ messageActions: [] }),
+}));
+vi.mock('../extensions/nativePaClient', () => ({
+  createNativeExtensionClient: () => ({ extension: { invoke: async () => {} } }),
+}));
+vi.mock('../client/apiBase', () => ({}));
 
 import { resolveCompactionSummaryDetail, resolveCompactionSummaryLabel } from './MessageBlocks.js';
 
