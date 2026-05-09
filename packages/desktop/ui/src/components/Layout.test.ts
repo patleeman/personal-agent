@@ -6,6 +6,7 @@ import {
   readStoredPanelWidth,
   readStoredWorkbenchExplorerOpen,
   resolveActiveWorkspaceCwd,
+  resolveWorkbenchRailMode,
   shouldResetWorkbenchRunsOnConversationChange,
   shouldShowConversationRunsTab,
 } from './Layout';
@@ -109,6 +110,13 @@ describe('Layout workbench rail state', () => {
         activeRunId: 'run-1',
       }),
     ).toBe(true);
+  });
+
+  it('routes built-in rail actions through native extension surfaces when registered', () => {
+    expect(resolveWorkbenchRailMode('runs', null)).toBe('runs');
+    expect(resolveWorkbenchRailMode('runs', { extensionId: 'system-runs', id: 'runs-tool' } as never)).toBe(
+      'extension:system-runs:runs-tool',
+    );
   });
 
   it('clears workbench-only diff and run params when switching to compact mode', () => {

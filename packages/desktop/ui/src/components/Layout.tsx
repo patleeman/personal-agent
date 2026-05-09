@@ -85,6 +85,13 @@ function extensionToolPanelMode(
   return `extension:${surface.extensionId}:${surface.id}`;
 }
 
+export function resolveWorkbenchRailMode(
+  builtInMode: BuiltInWorkbenchRailMode,
+  surface: ((ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) | NativeExtensionViewSummary) | null | undefined,
+): WorkbenchRailMode {
+  return surface ? extensionToolPanelMode(surface) : builtInMode;
+}
+
 function parseExtensionToolPanelMode(mode: WorkbenchRailMode): { extensionId: string; surfaceId: string } | null {
   if (!mode.startsWith('extension:')) return null;
   const [, extensionId, surfaceId] = mode.split(':');
@@ -807,7 +814,7 @@ function WorkbenchKnowledgeRail({
     systemArtifactsExtensionSurface,
   ]);
   const handleRunsModeSelect = useCallback(() => {
-    onActiveToolChange('runs');
+    onActiveToolChange(resolveWorkbenchRailMode('runs', systemRunsExtensionSurface));
     onWorkspaceFileClear();
     onCheckpointSelect(null);
     const nextRunId = activeRunId;
@@ -818,7 +825,7 @@ function WorkbenchKnowledgeRail({
       next.delete('checkpoint');
       return new URLSearchParams(setConversationRunIdInSearch(next.toString(), nextRunId));
     });
-  }, [activeRunId, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  }, [activeRunId, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemRunsExtensionSurface]);
   const handleCheckpointSelect = useCallback(
     (checkpointId: string) => {
       onActiveToolChange('diffs');
@@ -851,7 +858,7 @@ function WorkbenchKnowledgeRail({
   );
   const handleRunSelect = useCallback(
     (runId: string) => {
-      onActiveToolChange('runs');
+      onActiveToolChange(resolveWorkbenchRailMode('runs', systemRunsExtensionSurface));
       onWorkspaceFileClear();
       onCheckpointSelect(null);
       onRunSelect(runId);
@@ -863,7 +870,7 @@ function WorkbenchKnowledgeRail({
         return new URLSearchParams(setConversationRunIdInSearch(next.toString(), runId));
       });
     },
-    [onActiveToolChange, onCheckpointSelect, onRunSelect, onWorkspaceFileClear, setSearchParams],
+    [onActiveToolChange, onCheckpointSelect, onRunSelect, onWorkspaceFileClear, setSearchParams, systemRunsExtensionSurface],
   );
   const handleExtensionToolPanelSelect = useCallback(
     (surface: ExtensionRightToolPanelSurface & ExtensionSurfaceSummary) => {
@@ -898,7 +905,7 @@ function WorkbenchKnowledgeRail({
 
   useEffect(() => {
     if (activeRunId) {
-      onActiveToolChange(systemRunsExtensionSurface ? extensionToolPanelMode(systemRunsExtensionSurface) : 'runs');
+      onActiveToolChange(resolveWorkbenchRailMode('runs', systemRunsExtensionSurface));
       onWorkspaceFileClear();
     }
   }, [activeRunId, onActiveToolChange, onWorkspaceFileClear, systemRunsExtensionSurface]);
@@ -1092,7 +1099,11 @@ function WorkbenchKnowledgeRail({
               type="button"
               className={cx(
                 'ui-sidebar-nav-item w-full text-left',
-                activeTool === extensionToolPanelMode(surface) && 'ui-sidebar-nav-item-active',
+                (activeTool === extensionToolPanelMode(surface) ||
+                  (surface.extensionId === 'system-runs' && activeTool === 'runs') ||
+                  (surface.extensionId === 'system-diffs' && activeTool === 'diffs') ||
+                  (surface.extensionId === 'system-artifacts' && activeTool === 'artifacts')) &&
+                  'ui-sidebar-nav-item-active',
               )}
               title={labelForExtensionToolPanel(surface)}
               onClick={() => handleExtensionToolPanelSelect(surface)}
@@ -1126,15 +1137,26 @@ function WorkbenchKnowledgeRail({
             workspaceCwd={workspaceCwd}
           />
         </div>
-      ) : activeTool === 'runs' && !systemRunsExtensionSurface ? (
+      ) : activeTool === 'runs' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          <ConversationRunsRailContent
-            conversationId={conversationId}
-            runs={runs}
-            activeRunId={activeRunId}
-            lookups={runLookups}
-            onOpenRun={handleRunSelect}
-          />
+          {systemRunsExtensionSurface ? (
+            <NativeExtensionSurfaceHost
+              surface={systemRunsExtensionSurface}
+              pathname={location.pathname}
+              search={location.search}
+              hash={location.hash}
+              conversationId={conversationId}
+              cwd={workspaceCwd}
+            />
+          ) : (
+            <ConversationRunsRailContent
+              conversationId={conversationId}
+              runs={runs}
+              activeRunId={activeRunId}
+              lookups={runLookups}
+              onOpenRun={handleRunSelect}
+            />
+          )}
         </div>
       ) : activeExtensionToolPanel ? (
         <div className="min-h-0 flex-1 overflow-hidden bg-surface [&>[data-extension-id]]:bg-surface">
