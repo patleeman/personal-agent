@@ -15,6 +15,11 @@
         "id": "ask-user-question-tool-block",
         "tool": "ask_user_question",
         "component": "AskUserQuestionTranscriptRenderer"
+      },
+      {
+        "id": "terminal-bash-tool-block",
+        "tool": "bash",
+        "component": "TerminalBashTranscriptRenderer"
       }
     ],
     "contextMenus": [

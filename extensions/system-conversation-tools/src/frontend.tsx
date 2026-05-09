@@ -2,6 +2,7 @@ import {
   AskUserQuestionToolBlock,
   describeAskUserQuestionState,
   readAskUserQuestionPresentation,
+  TerminalToolBlock,
 } from '@personal-agent/extensions/workbench';
 
 export function AskUserQuestionTranscriptRenderer({
@@ -26,6 +27,22 @@ export function AskUserQuestionTranscriptRenderer({
       state={state}
       onSubmit={context.onSubmitAskUserQuestion}
       mode={context.askUserQuestionDisplayMode ?? 'inline'}
+    />
+  );
+}
+
+export function TerminalBashTranscriptRenderer({
+  block,
+  context,
+}: {
+  block: never;
+  context: { onHydrateMessage?: unknown; hydratingMessageBlockIds?: unknown };
+}) {
+  return (
+    <TerminalToolBlock
+      block={block}
+      onHydrateMessage={context.onHydrateMessage}
+      hydratingMessageBlockIds={context.hydratingMessageBlockIds}
     />
   );
 }

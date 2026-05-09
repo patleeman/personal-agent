@@ -21,6 +21,8 @@ export interface ExtensionToolBlockContext {
   messageIndex?: number;
   onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
   askUserQuestionDisplayMode?: 'inline' | 'composer';
+  onHydrateMessage?: (blockId: string) => Promise<void> | void;
+  hydratingMessageBlockIds?: ReadonlySet<string>;
 }
 
 type ExtensionToolBlockComponent = ComponentType<{

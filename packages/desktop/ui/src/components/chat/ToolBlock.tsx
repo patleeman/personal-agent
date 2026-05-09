@@ -8,11 +8,9 @@ import {
   type AskUserQuestionPresentation,
   readAskUserQuestionPresentation,
 } from '../../transcript/askUserQuestions';
-import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
 import { cx, Pill } from '../ui';
 import { AskUserQuestionToolBlock, describeAskUserQuestionState } from './AskUserQuestionToolBlock.js';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
-import { TerminalToolBlock } from './TerminalToolBlock.js';
 import { type DisclosurePreference, resolveDisclosureOpen, toggleDisclosurePreference, toolMeta } from './toolPresentation.js';
 
 const MAX_VISIBLE_LINKED_RUNS = 5;
@@ -80,6 +78,8 @@ export function ToolBlock({
           messageIndex,
           onSubmitAskUserQuestion,
           askUserQuestionDisplayMode,
+          onHydrateMessage,
+          hydratingMessageBlockIds,
         }}
       />
     );
@@ -95,11 +95,6 @@ export function ToolBlock({
         mode={askUserQuestionDisplayMode}
       />
     );
-  }
-
-  const terminalBash = readTerminalBashToolPresentation(block);
-  if (terminalBash) {
-    return <TerminalToolBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
   }
 
   // Normalise tool state across streamed and persisted entries.
