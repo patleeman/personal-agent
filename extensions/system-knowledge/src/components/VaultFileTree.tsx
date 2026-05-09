@@ -733,6 +733,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
     [folderIds],
   );
   const knowledgeBaseDisabled = knowledgeBaseState?.configured === false;
+  const knowledgeBaseSnapshotKey = knowledgeBaseState?.configured ? (knowledgeBaseState.effectiveRoot ?? 'configured') : null;
   const knowledgeBaseSyncPresentation = useMemo(() => {
     if (knowledgeBaseError && !knowledgeBaseState && !knowledgeBaseLoading) {
       return {
@@ -1241,7 +1242,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
       return;
     }
 
-    if (knowledgeBaseDisabled) {
+    if (!knowledgeBaseSnapshotKey) {
       setEntries([]);
       resetTree([]);
       setLoading(false);
@@ -1249,7 +1250,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
     }
 
     void loadSnapshot();
-  }, [knowledgeBaseDisabled, knowledgeBaseError, knowledgeBaseLoading, knowledgeBaseState, loadSnapshot, resetTree]);
+  }, [knowledgeBaseError, knowledgeBaseLoading, knowledgeBaseSnapshotKey, loadSnapshot, resetTree]);
 
   // Delete/Backspace keyboard shortcut — scoped to the tree wrapper so it
   // doesn't process keystrokes from other parts of the app.
@@ -1365,6 +1366,8 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
       void loadSnapshot({ keepLoadingState: false });
       void refetchKnowledgeBase({ resetLoading: false });
     }, [loadSnapshot, refetchKnowledgeBase]),
+    undefined,
+    { enabled: Boolean(knowledgeBaseSnapshotKey && !knowledgeBaseError) },
   );
 
   useEffect(() => {
@@ -1469,7 +1472,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
         <>
           <div ref={headerRef} className="px-3 pt-1 pb-1 shrink-0 rounded-md">
             <div className="flex items-center gap-1">
-              <p className="ui-section-label flex-1">Knowledge Base</p>
+              <p className="ui-section-label flex-1">Knowledge</p>
               <span
                 role="status"
                 aria-label={knowledgeBaseSyncPresentation.text}
@@ -1520,7 +1523,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
           <div ref={headerRef} className="px-3 pt-1 pb-1 shrink-0 rounded-md">
             <div className="flex items-center gap-1">
-              <p className="ui-section-label flex-1">Knowledge Base</p>
+              <p className="ui-section-label flex-1">Knowledge</p>
               <span
                 role="status"
                 aria-label={knowledgeBaseSyncPresentation.text}

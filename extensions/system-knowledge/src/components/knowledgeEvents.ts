@@ -56,14 +56,15 @@ const VAULT_WATCH_DEBOUNCE_MS = 180;
  * Calls onEvent (with debounce) whenever a 'vault' event is received.
  * Also calls onReady with the root path on connection.
  */
-export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) => void): void {
+export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) => void, options?: { enabled?: boolean }): void {
+  const enabled = options?.enabled ?? true;
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    if (!enabled || typeof window === 'undefined' || typeof EventSource === 'undefined') return;
     let timer: number | null = null;
     let source: EventSource | null = null;
 
@@ -96,5 +97,5 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
       if (timer !== null) window.clearTimeout(timer);
       source?.close();
     };
-  }, []);
+  }, [enabled]);
 }
