@@ -33,7 +33,6 @@ import {
   type CompanionConversationCreateInput,
   type CompanionConversationCwdChangeInput,
   type CompanionConversationDuplicateInput,
-  type CompanionConversationExecutionTargetChangeInput,
   type CompanionConversationModelPreferencesUpdateInput,
   type CompanionConversationParallelJobInput,
   type CompanionConversationPromptInput,
@@ -48,7 +47,6 @@ import {
   type CompanionKnowledgeImportInput,
   type CompanionKnowledgeRenameInput,
   type CompanionPairedDeviceSummary,
-  type CompanionRemoteDirectoryInput,
   type CompanionRuntime,
   type CompanionRuntimeProvider,
   type CompanionScheduledTaskInput,
@@ -261,8 +259,6 @@ function buildHello(stateRoot: string): CompanionHostHello {
     },
     capabilities: {
       fullConversationLifecycle: true,
-      executionTargets: true,
-      executionTargetSwitching: true,
       attachments: true,
       attachmentWrite: true,
       knowledge: true,
@@ -701,21 +697,6 @@ export class DaemonCompanionServer {
 
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
       sendJson(response, 200, await runtime.deleteSshTarget(decodeURIComponent(sshTargetMatch[1] || '')));
-      return;
-    }
-
-    const executionTargetDirectoryMatch = /^\/companion\/v1\/(?:execution-targets|ssh-targets)\/([^/]+)\/directories$/.exec(pathname);
-    if (executionTargetDirectoryMatch && request.method === 'GET') {
-      if (!(await this.requireBearer(request, response))) {
-        return;
-      }
-
-      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
-      const input: CompanionRemoteDirectoryInput = {
-        executionTargetId: decodeURIComponent(executionTargetDirectoryMatch[1] || ''),
-        ...(requestUrl.searchParams.has('path') ? { path: requestUrl.searchParams.get('path') } : {}),
-      };
-      sendJson(response, 200, await runtime.readRemoteDirectory(input));
       return;
     }
 
@@ -1707,8 +1688,6 @@ export class DaemonCompanionServer {
     switch (message.name) {
       case 'conversations.list':
         return runtime.listConversations();
-      case 'executionTargets.list':
-        return runtime.listExecutionTargets();
       case 'conversation.bootstrap': {
         const input: CompanionConversationBootstrapInput = {
           conversationId: readRequiredString(payload.conversationId, 'conversationId'),
@@ -1730,7 +1709,6 @@ export class DaemonCompanionServer {
           model: payload.model === null ? null : readOptionalString(payload.model),
           thinkingLevel: payload.thinkingLevel === null ? null : readOptionalString(payload.thinkingLevel),
           serviceTier: payload.serviceTier === null ? null : readOptionalString(payload.serviceTier),
-          executionTargetId: payload.executionTargetId === null ? null : readOptionalString(payload.executionTargetId),
           ...(promptPayload
             ? {
                 prompt: {
@@ -1757,7 +1735,6 @@ export class DaemonCompanionServer {
         const input: CompanionConversationResumeInput = {
           sessionFile: readRequiredString(payload.sessionFile, 'sessionFile'),
           cwd: readOptionalString(payload.cwd),
-          executionTargetId: payload.executionTargetId === null ? null : readOptionalString(payload.executionTargetId),
         };
         return runtime.resumeConversation(input);
       }
@@ -1801,15 +1778,6 @@ export class DaemonCompanionServer {
           surfaceId: readOptionalString(payload.surfaceId),
         };
         return runtime.renameConversation(input);
-      }
-      case 'conversation.change_execution_target': {
-        const input: CompanionConversationExecutionTargetChangeInput = {
-          conversationId: readRequiredString(payload.conversationId, 'conversationId'),
-          executionTargetId: readRequiredString(payload.executionTargetId, 'executionTargetId'),
-          ...(payload.cwd === null ? { cwd: null } : {}),
-          ...(readOptionalString(payload.cwd) ? { cwd: readOptionalString(payload.cwd) } : {}),
-        };
-        return runtime.changeConversationExecutionTarget(input);
       }
       default:
         throw new Error(`Unsupported companion command: ${message.name}`);

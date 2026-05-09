@@ -11,17 +11,6 @@ export type DesktopHostRecord =
       sshTarget: string;
     };
 
-export interface DesktopRemoteDirectoryListing {
-  path: string;
-  parent?: string;
-  entries: Array<{
-    name: string;
-    path: string;
-    isDir: boolean;
-    isHidden: boolean;
-  }>;
-}
-
 export interface DesktopSshConnectionTestResult {
   ok: true;
   sshTarget: string;
@@ -32,29 +21,6 @@ export interface DesktopSshConnectionTestResult {
   tempDirectory: string;
   cacheDirectory: string;
   message: string;
-}
-
-export interface DesktopRemoteOperationStatus {
-  hostId: string;
-  hostLabel: string;
-  conversationId?: string;
-  scope: 'runtime' | 'directory';
-  stage:
-    | 'connect'
-    | 'detect-platform'
-    | 'download-pi'
-    | 'copy-pi'
-    | 'copy-helper'
-    | 'launch'
-    | 'attach'
-    | 'reconnect'
-    | 'restart'
-    | 'browse'
-    | 'ready'
-    | 'error';
-  status: 'running' | 'success' | 'error';
-  message: string;
-  at: string;
 }
 
 export interface DesktopAppPreferences {
@@ -376,7 +342,6 @@ export interface HostController {
   updateDefaultCwd?(cwd: string | null): Promise<unknown>;
   readVaultFiles?(): Promise<unknown>;
   pickFolder?(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown>;
-  readDirectory?(path?: string | null): Promise<DesktopRemoteDirectoryListing>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;

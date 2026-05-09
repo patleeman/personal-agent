@@ -92,7 +92,6 @@ describe('daemon companion server', () => {
       }),
       updateConversationTabs: async () => ({ ok: true }),
       duplicateConversation: async () => ({ ok: true, conversationId: 'duplicate-1' }),
-      listExecutionTargets: async () => ({ executionTargets: [{ id: 'local', label: 'Local', kind: 'local' }] }),
       readModels: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] }),
       listSshTargets: async () => ({ hosts: [{ id: 'ssh-1', label: 'Buildbox', kind: 'ssh', sshTarget: 'user@buildbox' }] }),
       saveSshTarget: async (input) => ({
@@ -110,7 +109,6 @@ describe('daemon companion server', () => {
         cacheDirectory: '/tmp/.cache',
         message: 'reachable',
       }),
-      readRemoteDirectory: async (input) => ({ path: input.path ?? '/repo', parent: '/', entries: [] }),
       readConversationBootstrap: async (input) => ({
         conversationId: input.conversationId,
         bootstrap: true,
@@ -184,7 +182,6 @@ describe('daemon companion server', () => {
       readConversationArtifact: async ({ conversationId, artifactId }) => ({ conversationId, artifact: { id: artifactId } }),
       listConversationCheckpoints: async (conversationId) => ({ conversationId, checkpoints: [] }),
       readConversationCheckpoint: async ({ conversationId, checkpointId }) => ({ conversationId, checkpoint: { id: checkpointId } }),
-      changeConversationExecutionTarget: async (input) => ({ ok: true, executionTargetId: input.executionTargetId }),
       readConversationBlockImage: async ({ imageIndex }) => ({
         data: Buffer.from(typeof imageIndex === 'number' ? `image-${String(imageIndex)}` : 'image-block', 'utf-8'),
         mimeType: 'image/png',
@@ -739,7 +736,6 @@ describe('daemon companion server', () => {
       }),
       updateConversationTabs: async () => ({ ok: true }),
       duplicateConversation: async () => ({ ok: true, conversationId: 'duplicate-1' }),
-      listExecutionTargets: async () => ({ executionTargets: [] }),
       readModels: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] }),
       listSshTargets: async () => ({ hosts: [] }),
       saveSshTarget: async () => ({ hosts: [] }),
@@ -755,7 +751,6 @@ describe('daemon companion server', () => {
         cacheDirectory: '/tmp/.cache',
         message: 'reachable',
       }),
-      readRemoteDirectory: async () => ({ path: '/repo', entries: [] }),
       readConversationBootstrap: async (input: any) => ({ conversationId: input.conversationId, bootstrap: true }),
       readConversationBlockImage: async () => ({
         data: Buffer.from('image-block', 'utf-8'),
@@ -807,7 +802,6 @@ describe('daemon companion server', () => {
       readConversationArtifact: async () => ({ conversationId: 'conversation-1', artifact: { id: 'artifact-1' } }),
       listConversationCheckpoints: async () => ({ conversationId: 'conversation-1', checkpoints: [] }),
       readConversationCheckpoint: async () => ({ conversationId: 'conversation-1', checkpoint: { id: 'checkpoint-1' } }),
-      changeConversationExecutionTarget: async () => ({ ok: true, executionTargetId: 'local' }),
       listConversationAttachments: async () => ({ conversationId: 'conversation-1', attachments: [] }),
       readConversationAttachment: async () => ({ conversationId: 'conversation-1', attachment: { id: 'attachment-1' } }),
       createConversationAttachment: async () => ({ conversationId: 'conversation-1', attachment: { id: 'attachment-1' } }),

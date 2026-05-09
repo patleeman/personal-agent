@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { loadLocalApiModule, type LocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
-import { emitDesktopRemoteOperationStatus } from '../remote-operation-events.js';
 import { parseRemotePlatform } from '../remote-platform.js';
 import { SshRemoteConversationRuntime } from '../ssh-remote-runtime.js';
 import { runSshCommand } from '../system-ssh.js';
@@ -437,13 +436,6 @@ export class SshHostController implements HostController {
     return parseApiDispatchResult(response);
   }
 
-  async readDirectory(path?: string | null) {
-    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label, (status) =>
-      emitDesktopRemoteOperationStatus(status),
-    );
-    return runtime.readDirectory(path);
-  }
-
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
     const { pathname, query } = parsePath(path);
     const conversationId = readConversationId(pathname, /^\/api\/live-sessions\/([^/]+)\/events$/);
@@ -658,9 +650,7 @@ export class SshHostController implements HostController {
       return existing;
     }
 
-    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label, (status) =>
-      emitDesktopRemoteOperationStatus(status),
-    );
+    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label);
     this.runtimes.set(conversationId, runtime);
     return runtime;
   }

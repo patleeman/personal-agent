@@ -1,6 +1,5 @@
 import { ipcMain, shell, type WebContents } from 'electron';
 
-import { subscribeConversationExecutionApiStream } from './conversation-execution.js';
 import type { HostManager } from './hosts/host-manager.js';
 import { captureDesktopScreenshot } from './screenshot.js';
 import type { DesktopWindowController } from './window.js';
@@ -1007,16 +1006,7 @@ export function registerDesktopIpc(options: {
       channel: API_STREAM_CHANNEL,
       subscriptionId,
       store: streamSubscriptions,
-      subscribe: async (emit) => {
-        if (hostId === 'local') {
-          const targeted = await subscribeConversationExecutionApiStream(options.hostManager, path, emit);
-          if (targeted) {
-            return targeted;
-          }
-        }
-
-        return options.hostManager.getHostController(hostId).subscribeApiStream(path, emit);
-      },
+      subscribe: (emit) => options.hostManager.getHostController(hostId).subscribeApiStream(path, emit),
     });
     return { subscriptionId };
   });

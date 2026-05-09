@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { getDaemonClientTransportOverride, loadDaemonConfig } from '@personal-agent/daemon';
 import { app, protocol, type Session as ElectronSession, session } from 'electron';
 
-import { dispatchConversationExecutionRequest, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
@@ -304,11 +303,6 @@ function createDesktopProtocolHandler(options?: {
           if (options?.hostManager) {
             const streamPath = `${url.pathname}${url.search}`;
             const subscribe = async (onEvent: (event: DesktopApiStreamEvent) => void) => {
-              const targeted = await subscribeConversationExecutionApiStream(options.hostManager as HostManager, streamPath, onEvent);
-              if (targeted) {
-                return targeted;
-              }
-
               const controller = options.hostManager?.getHostController(options.hostId ?? 'local');
               if (!controller) {
                 throw new Error('Desktop host controller unavailable.');
@@ -346,20 +340,12 @@ function createDesktopProtocolHandler(options?: {
         }
 
         if (options?.hostManager) {
-          const targetedResponse = await dispatchConversationExecutionRequest(options.hostManager, {
+          const response = await options.hostManager.getHostController(options.hostId ?? 'local').dispatchApiRequest({
             method: request.method,
             path: requestPath,
             body: requestBody,
             headers: requestHeaders,
           });
-          const response =
-            targetedResponse ??
-            (await options.hostManager.getHostController(options.hostId ?? 'local').dispatchApiRequest({
-              method: request.method,
-              path: requestPath,
-              body: requestBody,
-              headers: requestHeaders,
-            }));
 
           return createBinaryProtocolResponse(response);
         }

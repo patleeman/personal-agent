@@ -9,7 +9,6 @@ import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 import { getAvailableTcpPort } from './backend/ports.js';
 import { applyRemoteMetadataToSessionContent, stripRemoteMetadataFromSessionContent } from './conversation-session-header.js';
-import type { DesktopRemoteDirectoryListing, DesktopRemoteOperationStatus } from './hosts/types.js';
 import { ensurePiReleaseBinary } from './pi-release-cache.js';
 import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
 import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
@@ -148,7 +147,6 @@ export class SshRemoteConversationRuntime {
     private readonly sshTarget: string,
     private readonly hostId: string,
     private readonly hostLabel: string,
-    private readonly onStatus?: (event: DesktopRemoteOperationStatus) => void,
   ) {}
 
   async detectRemotePlatform(context?: RemoteStatusContext): Promise<RemotePlatformInfo> {
@@ -169,49 +167,6 @@ export class SshRemoteConversationRuntime {
     }
 
     return this.platformPromise;
-  }
-
-  async readDirectory(path: string | null | undefined): Promise<DesktopRemoteDirectoryListing> {
-    const context: RemoteStatusContext = { scope: 'directory' };
-    const normalizedPath = typeof path === 'string' ? path.trim() : '';
-    const pathLabel = normalizedPath || '~';
-
-    try {
-      this.emitStatus({
-        ...context,
-        stage: 'connect',
-        status: 'running',
-        message: `Connecting to ${this.hostLabel}…`,
-      });
-      const platform = await this.detectRemotePlatform(context);
-      const helperBinary = resolveRemoteHelperBinary(platform);
-      const remoteHelperPath = buildRemoteHelperPath(helperBinary.version, platform);
-      await this.ensureRemoteHelperInstalled(platform, helperBinary.version, helperBinary.path, context);
-
-      this.emitStatus({
-        ...context,
-        stage: 'browse',
-        status: 'running',
-        message: `Loading ${pathLabel} on ${this.hostLabel}…`,
-      });
-      const command = [`${renderRemotePathForShell(remoteHelperPath)}`, 'list-dir', '--path', quoteForShell(normalizedPath)].join(' ');
-      const output = (await runSshCommand(this.sshTarget, renderRemoteCommand(command))).trim();
-      this.emitStatus({
-        ...context,
-        stage: 'browse',
-        status: 'success',
-        message: `Loaded ${pathLabel} on ${this.hostLabel}.`,
-      });
-      return JSON.parse(output) as DesktopRemoteDirectoryListing;
-    } catch (error) {
-      this.emitStatus({
-        ...context,
-        stage: 'error',
-        status: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
   }
 
   async ensureRuntime(input: {
@@ -709,13 +664,8 @@ export class SshRemoteConversationRuntime {
     }
   }
 
-  private emitStatus(input: Omit<DesktopRemoteOperationStatus, 'hostId' | 'hostLabel' | 'at'>): void {
-    this.onStatus?.({
-      hostId: this.hostId,
-      hostLabel: this.hostLabel,
-      ...input,
-      at: new Date().toISOString(),
-    });
+  private emitStatus(_input: RemoteStatusContext & { stage: string; status: 'running' | 'success' | 'error'; message: string }): void {
+    // Progress reporting was removed with remote execution controls; SSH host dispatch no longer surfaces it.
   }
 
   private disposeConnection(): void {

@@ -13,7 +13,6 @@ import type {
   CompanionConversationCreateInput,
   CompanionConversationCwdChangeInput,
   CompanionConversationDuplicateInput,
-  CompanionConversationExecutionTargetChangeInput,
   CompanionConversationModelPreferencesUpdateInput,
   CompanionConversationParallelJobInput,
   CompanionConversationPromptInput,
@@ -25,7 +24,6 @@ import type {
   CompanionConversationTakeoverInput,
   CompanionDurableRunLogInput,
   CompanionKnowledgeImportInput,
-  CompanionRemoteDirectoryInput,
   CompanionRuntime,
   CompanionScheduledTaskInput,
   CompanionScheduledTaskUpdateInput,
@@ -34,11 +32,6 @@ import type {
   CompanionSurfaceType,
 } from '@personal-agent/daemon';
 
-import {
-  continueConversationInHost,
-  dispatchConversationExecutionRequest,
-  subscribeConversationExecutionApiStream,
-} from '../conversation-execution.js';
 import { parseApiDispatchResult, readApiDispatchError } from '../hosts/api-dispatch.js';
 import type { HostManager } from '../hosts/host-manager.js';
 import type { DesktopApiStreamEvent } from '../hosts/types.js';
@@ -75,11 +68,6 @@ async function dispatchDesktopApi(
     headers?: Record<string, string>;
   },
 ) {
-  const targeted = await dispatchConversationExecutionRequest(hostManager, input);
-  if (targeted) {
-    return targeted;
-  }
-
   return hostManager.getHostController('local').dispatchApiRequest(input);
 }
 
@@ -105,11 +93,6 @@ async function subscribeDesktopApiStream(
   path: string,
   onEvent: (event: DesktopApiStreamEvent) => void,
 ): Promise<() => void> {
-  const targeted = await subscribeConversationExecutionApiStream(hostManager, path, onEvent);
-  if (targeted) {
-    return targeted;
-  }
-
   return hostManager.getHostController('local').subscribeApiStream(path, onEvent);
 }
 
@@ -252,18 +235,6 @@ function normalizeConversationEventForCompanion(conversationId: string, event: u
   return event;
 }
 
-function buildExecutionTargets(hostManager: HostManager) {
-  const connections = hostManager.getConnectionsState();
-  return [
-    { id: 'local', label: 'Local', kind: 'local' as const },
-    ...connections.hosts.map((host) => ({
-      id: host.id,
-      label: host.label,
-      kind: 'ssh' as const,
-    })),
-  ];
-}
-
 async function buildConversationListState(hostManager: HostManager) {
   const localController = hostManager.getHostController('local');
   const [sessions, ordering] = await Promise.all([
@@ -280,7 +251,6 @@ async function buildConversationListState(hostManager: HostManager) {
   return {
     sessions,
     ordering,
-    executionTargets: buildExecutionTargets(hostManager),
   };
 }
 
@@ -338,12 +308,6 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
-    async listExecutionTargets() {
-      return {
-        executionTargets: buildExecutionTargets(hostManager),
-      };
-    },
-
     async readModels() {
       const localController = hostManager.getHostController('local');
       if (localController.readModels) {
@@ -381,14 +345,6 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       return hostManager.testSshConnection(input);
     },
 
-    async readRemoteDirectory(input: CompanionRemoteDirectoryInput) {
-      const controller = hostManager.getHostController(input.executionTargetId);
-      if (!controller.readDirectory) {
-        throw new Error('Remote directory browsing is unavailable for this execution target.');
-      }
-      return controller.readDirectory(input.path);
-    },
-
     async readConversationBootstrap(input: CompanionConversationBootstrapInput) {
       const localController = hostManager.getHostController('local');
       const tailBlocks = normalizeCompanionTailBlocks(input.tailBlocks);
@@ -400,21 +356,19 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         ...(input.knownLastBlockId ? { knownLastBlockId: input.knownLastBlockId } : {}),
       });
 
-      const [bootstrap, sessionMeta, attachments, executionTargets] = await Promise.all([
+      const [bootstrap, sessionMeta, attachments] = await Promise.all([
         invokeDesktopApi(hostManager, {
           method: 'GET',
           path: `/api/conversations/${encodeURIComponent(input.conversationId)}/bootstrap${query}`,
         }),
         localController.readSessionMeta?.(input.conversationId).catch(() => null) ?? Promise.resolve(null),
         localController.readConversationAttachments?.(input.conversationId).catch(() => null) ?? Promise.resolve(null),
-        Promise.resolve(buildExecutionTargets(hostManager)),
       ]);
 
       return normalizeConversationBootstrapForCompanion(input.conversationId, {
         bootstrap,
         sessionMeta,
         attachments,
-        executionTargets,
       });
     },
 
@@ -433,12 +387,6 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
 
       const conversationId = created.id;
-      if (input.executionTargetId && input.executionTargetId !== 'local') {
-        await continueConversationInHost(hostManager, {
-          conversationId,
-          hostId: input.executionTargetId,
-        });
-      }
 
       if (input.prompt && (input.prompt.text?.trim() || (input.prompt.images?.length ?? 0) > 0)) {
         await this.promptConversation({
@@ -467,13 +415,6 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         sessionFile: input.sessionFile,
         ...(input.cwd ? { cwd: input.cwd } : {}),
       });
-
-      if (input.executionTargetId && input.executionTargetId !== 'local') {
-        await continueConversationInHost(hostManager, {
-          conversationId: resumed.id,
-          hostId: input.executionTargetId,
-        });
-      }
 
       await restoreConversationToSharedLayout(localController, resumed.id);
 
@@ -710,15 +651,6 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       }
 
       return localController.readConversationCheckpoint(input);
-    },
-
-    async changeConversationExecutionTarget(input: CompanionConversationExecutionTargetChangeInput) {
-      await continueConversationInHost(hostManager, {
-        conversationId: input.conversationId,
-        hostId: input.executionTargetId,
-        ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
-      });
-      return this.readConversationBootstrap({ conversationId: input.conversationId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
     },
 
     async readConversationBlockImage(input: CompanionConversationBlockImageInput): Promise<CompanionBinaryAsset> {

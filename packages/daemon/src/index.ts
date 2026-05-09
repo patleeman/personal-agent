@@ -105,7 +105,6 @@ export type {
   CompanionPairedDeviceSummary,
   CompanionPairingCode,
   CompanionReadyEvent,
-  CompanionRemoteDirectoryInput,
   CompanionRuntime,
   CompanionRuntimeProvider,
   CompanionScheduledTaskInput,

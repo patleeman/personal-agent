@@ -1,5 +1,3 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-
 interface SessionHeaderRecord {
   type: 'session';
   id: string;
@@ -10,89 +8,6 @@ interface SessionHeaderRecord {
   remoteHostId?: string;
   remoteHostLabel?: string;
   remoteConversationId?: string;
-}
-
-function readSessionHeader(filePath: string): { lines: string[]; headerIndex: number; header: SessionHeaderRecord } {
-  const raw = readFileSync(filePath, 'utf-8');
-  const lines = raw.split(/\r?\n/);
-  const headerIndex = lines.findIndex((line) => line.trim().length > 0);
-  if (headerIndex === -1) {
-    throw new Error(`Conversation header missing in ${filePath}`);
-  }
-
-  const parsed = JSON.parse(lines[headerIndex] ?? '') as Partial<SessionHeaderRecord>;
-  if (
-    parsed.type !== 'session' ||
-    typeof parsed.id !== 'string' ||
-    typeof parsed.timestamp !== 'string' ||
-    typeof parsed.cwd !== 'string'
-  ) {
-    throw new Error(`Conversation header missing in ${filePath}`);
-  }
-
-  return {
-    lines,
-    headerIndex,
-    header: parsed as SessionHeaderRecord,
-  };
-}
-
-function writeSessionHeader(filePath: string, header: SessionHeaderRecord, lines: string[], headerIndex: number): void {
-  lines[headerIndex] = JSON.stringify(header);
-  writeFileSync(filePath, `${lines.filter((line) => line.length > 0).join('\n')}\n`, 'utf-8');
-}
-
-export function setSessionRemoteTarget(
-  filePath: string,
-  input: {
-    remoteHostId: string;
-    remoteHostLabel?: string;
-    remoteConversationId: string;
-  },
-): void {
-  const { lines, headerIndex, header } = readSessionHeader(filePath);
-  writeSessionHeader(
-    filePath,
-    {
-      ...header,
-      remoteHostId: input.remoteHostId,
-      ...(input.remoteHostLabel ? { remoteHostLabel: input.remoteHostLabel } : {}),
-      remoteConversationId: input.remoteConversationId,
-    },
-    lines,
-    headerIndex,
-  );
-}
-
-export function clearSessionRemoteTarget(filePath: string): void {
-  const { lines, headerIndex, header } = readSessionHeader(filePath);
-  const nextHeader = { ...header };
-  delete nextHeader.remoteHostId;
-  delete nextHeader.remoteHostLabel;
-  delete nextHeader.remoteConversationId;
-  writeSessionHeader(filePath, nextHeader, lines, headerIndex);
-}
-
-export function setSessionCwd(filePath: string, cwd: string): void {
-  const normalizedCwd = cwd.trim();
-  if (!normalizedCwd) {
-    return;
-  }
-
-  const { lines, headerIndex, header } = readSessionHeader(filePath);
-  if (header.cwd === normalizedCwd) {
-    return;
-  }
-
-  writeSessionHeader(
-    filePath,
-    {
-      ...header,
-      cwd: normalizedCwd,
-    },
-    lines,
-    headerIndex,
-  );
 }
 
 export function stripRemoteMetadataFromSessionContent(content: string): string {

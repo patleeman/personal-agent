@@ -1,6 +1,3 @@
-import { readdir, stat } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
@@ -153,48 +150,6 @@ export class LocalHostController implements HostController {
   async pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.pickDesktopFolder(input);
-  }
-
-  async readDirectory(path?: string | null) {
-    const targetPath = resolve(path?.trim() || process.cwd());
-    let targetStat;
-    try {
-      targetStat = await stat(targetPath);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT') {
-        throw new Error(`Directory not found: ${targetPath}`);
-      }
-      throw error;
-    }
-
-    if (!targetStat) {
-      throw new Error(`Directory not found: ${targetPath}`);
-    }
-    if (!targetStat.isDirectory()) {
-      throw new Error(`Not a directory: ${targetPath}`);
-    }
-
-    const entries = (await readdir(targetPath, { withFileTypes: true }))
-      .map((entry) => ({
-        name: entry.name,
-        path: resolve(targetPath, entry.name),
-        isDir: entry.isDirectory(),
-        isHidden: entry.name.startsWith('.'),
-      }))
-      .sort((left, right) => {
-        if (left.isDir !== right.isDir) {
-          return left.isDir ? -1 : 1;
-        }
-        return left.name.localeCompare(right.name);
-      });
-
-    const parent = dirname(targetPath);
-    return {
-      path: targetPath,
-      ...(parent !== targetPath ? { parent } : {}),
-      entries,
-    };
   }
 
   async readConversationTitleSettings(): Promise<unknown> {
