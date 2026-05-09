@@ -8,17 +8,8 @@ const {
   writeMergedMcpConfigFileMock,
   materializeRuntimeResourcesToAgentDirMock,
   resolveRuntimeResourcesMock,
-  createArtifactAgentExtensionMock,
-  createCheckpointAgentExtensionMock,
-  createConversationQueueAgentExtensionMock,
-  createReminderAgentExtensionMock,
-  createRunAgentExtensionMock,
-  createScheduledTaskAgentExtensionMock,
-  createImageAgentExtensionMock,
   createImageProbeAgentExtensionMock,
-  webToolsExtensionMock,
   createManifestAgentExtensionsMock,
-  daemonRunOrchestrationPromptExtensionMock,
   authStorageMock,
   readSavedModelPreferencesMock,
   listExtensionSkillRegistrationsMock,
@@ -34,17 +25,8 @@ const {
     materializeRuntimeResourcesToAgentDirMock: vi.fn(),
     resolveRuntimeResourcesMock: vi.fn(),
     writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
-    createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
-    createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
-    createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
-    createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
-    createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
-    createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
-    createImageAgentExtensionMock: vi.fn(() => 'image-extension'),
     createImageProbeAgentExtensionMock: vi.fn(() => 'image-probe-extension'),
-    webToolsExtensionMock: vi.fn(() => 'web-tools-extension'),
     createManifestAgentExtensionsMock: vi.fn(() => ['manifest-agent-extension']),
-    daemonRunOrchestrationPromptExtensionMock: vi.fn(() => 'daemon-run-orchestration-prompt-extension'),
     authStorageMock,
     readSavedModelPreferencesMock: vi.fn(() => ({ currentVisionModel: 'openai/gpt-4o' })),
     listExtensionSkillRegistrationsMock: vi.fn(() => []),
@@ -57,34 +39,6 @@ vi.mock('@personal-agent/core', () => ({
   materializeRuntimeResourcesToAgentDir: materializeRuntimeResourcesToAgentDirMock,
   resolveRuntimeResources: resolveRuntimeResourcesMock,
   writeMergedMcpConfigFile: writeMergedMcpConfigFileMock,
-}));
-
-vi.mock('../extensions/artifactAgentExtension.js', () => ({
-  createArtifactAgentExtension: createArtifactAgentExtensionMock,
-}));
-
-vi.mock('../extensions/checkpointAgentExtension.js', () => ({
-  createCheckpointAgentExtension: createCheckpointAgentExtensionMock,
-}));
-
-vi.mock('../extensions/conversationQueueAgentExtension.js', () => ({
-  createConversationQueueAgentExtension: createConversationQueueAgentExtensionMock,
-}));
-
-vi.mock('../extensions/reminderAgentExtension.js', () => ({
-  createReminderAgentExtension: createReminderAgentExtensionMock,
-}));
-
-vi.mock('../extensions/runAgentExtension.js', () => ({
-  createRunAgentExtension: createRunAgentExtensionMock,
-}));
-
-vi.mock('../extensions/scheduledTaskAgentExtension.js', () => ({
-  createScheduledTaskAgentExtension: createScheduledTaskAgentExtensionMock,
-}));
-
-vi.mock('../extensions/imageAgentExtension.js', () => ({
-  createImageAgentExtension: createImageAgentExtensionMock,
 }));
 
 vi.mock('../extensions/imageProbeAgentExtension.js', () => ({
@@ -101,14 +55,6 @@ vi.mock('../extensions/manifestToolAgentExtension.js', () => ({
 
 vi.mock('../extensions/extensionAgentExtensions.js', () => ({
   createManifestAgentExtensions: createManifestAgentExtensionsMock,
-}));
-
-vi.mock('../extensions/web-tools/index.js', () => ({
-  default: webToolsExtensionMock,
-}));
-
-vi.mock('../extensions/daemon-run-orchestration-prompt/index.js', () => ({
-  default: daemonRunOrchestrationPromptExtensionMock,
 }));
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
@@ -145,11 +91,6 @@ describe('createRuntimeState', () => {
     materializeRuntimeResourcesToAgentDirMock.mockReset();
     resolveRuntimeResourcesMock.mockReset();
     resolveRuntimeResourcesMock.mockReturnValue(resolvedShared);
-    createArtifactAgentExtensionMock.mockClear();
-    createConversationQueueAgentExtensionMock.mockClear();
-    createReminderAgentExtensionMock.mockClear();
-    createRunAgentExtensionMock.mockClear();
-    createScheduledTaskAgentExtensionMock.mockClear();
     createManifestAgentExtensionsMock.mockClear();
     createImageProbeAgentExtensionMock.mockClear();
     listExtensionSkillRegistrationsMock.mockReset();
