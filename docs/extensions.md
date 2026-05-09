@@ -8,6 +8,7 @@ covers how to create, structure, and publish extensions.
 - [Extension Structure](#extension-structure)
 - [Manifest (`extension.json`)](#manifest-extensionjson)
 - [Frontend (UI)](#frontend-ui)
+- [Main page layout](#main-page-layout)
 - [Backend (Server-side)](#backend-server-side)
 - [Agent Lifecycle Hooks](#agent-lifecycle-hooks)
 - [Conversation Write API](#conversation-write-api)
@@ -86,29 +87,29 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                 | Purpose                       | Docs                   |
-| --------------------- | ----------------------------- | ---------------------- |
-| `views`               | UI surfaces (pages, panels)   | See `docs/views.md`    |
-| `nav`                 | Left sidebar navigation items |                        |
-| `commands`            | Command palette commands      |                        |
-| `keybindings`         | Keyboard shortcuts            |                        |
-| `slashCommands`       | `/command` in composer        |                        |
-| `tools`               | Agent-callable tools          |                        |
-| `mentions`            | @-mention providers           |                        |
-| `skills`              | Agent Skills (markdown)       |                        |
-| `themes`              | Color themes                  |                        |
-| `transcriptRenderers` | Custom tool result rendering  |                        |
-| `promptReferences`    | @-mention resolvers           |                        |
-| `quickOpen`           | Quick-open providers          |                        |
-| `settings`                     | Settings schema contributions          | [See below](#settings) |
-| `topBarElements`               | Top bar indicator icons                | [See below](#top-bar-elements-topbarelements) |
-| `conversationHeaderElements`   | Badges in conversation header          | [See below](#conversation-header-elements-conversationheaderelements) |
-| `messageActions`               | Hover buttons on messages              | [See below](#message-actions-messageactions) |
-| `composerShelves`              | Sections above the composer            | [See below](#composer-shelves-composershelves) |
-| `toolbarActions`               | Icon buttons in composer toolbar       | [See below](#toolbar-actions-toolbaractions) |
-| `conversationDecorators`       | Badges on conversation list items      | [See below](#conversation-decorators-conversationdecorators) |
-| `contextMenus`                 | Right-click menu items                 | [See below](#context-menus-contextmenus) |
-| `statusBarItems`               | Labels in the composer status bar      | [See below](#status-bar-items-statusbaritems) |
+| Field                        | Purpose                           | Docs                                                                  |
+| ---------------------------- | --------------------------------- | --------------------------------------------------------------------- |
+| `views`                      | UI surfaces (pages, panels)       | See `docs/views.md`                                                   |
+| `nav`                        | Left sidebar navigation items     |                                                                       |
+| `commands`                   | Command palette commands          |                                                                       |
+| `keybindings`                | Keyboard shortcuts                |                                                                       |
+| `slashCommands`              | `/command` in composer            |                                                                       |
+| `tools`                      | Agent-callable tools              |                                                                       |
+| `mentions`                   | @-mention providers               |                                                                       |
+| `skills`                     | Agent Skills (markdown)           |                                                                       |
+| `themes`                     | Color themes                      |                                                                       |
+| `transcriptRenderers`        | Custom tool result rendering      |                                                                       |
+| `promptReferences`           | @-mention resolvers               |                                                                       |
+| `quickOpen`                  | Quick-open providers              |                                                                       |
+| `settings`                   | Settings schema contributions     | [See below](#settings)                                                |
+| `topBarElements`             | Top bar indicator icons           | [See below](#top-bar-elements-topbarelements)                         |
+| `conversationHeaderElements` | Badges in conversation header     | [See below](#conversation-header-elements-conversationheaderelements) |
+| `messageActions`             | Hover buttons on messages         | [See below](#message-actions-messageactions)                          |
+| `composerShelves`            | Sections above the composer       | [See below](#composer-shelves-composershelves)                        |
+| `toolbarActions`             | Icon buttons in composer toolbar  | [See below](#toolbar-actions-toolbaractions)                          |
+| `conversationDecorators`     | Badges on conversation list items | [See below](#conversation-decorators-conversationdecorators)          |
+| `contextMenus`               | Right-click menu items            | [See below](#context-menus-contextmenus)                              |
+| `statusBarItems`             | Labels in the composer status bar | [See below](#status-bar-items-statusbaritems)                         |
 
 ### Views
 
@@ -394,6 +395,21 @@ The `pa` client provides:
 - `pa.extensions.listActions()` — list available extension actions
 
 See `packages/extensions/src/index.ts` for the full API.
+
+## Main page layout
+
+Main-route extension pages should use the shared app page primitives instead of hand-rolled widths or padding:
+
+```tsx
+<div className="h-full overflow-y-auto">
+  <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-10">
+    <AppPageIntro title="Page title" summary="One sentence explaining what this page controls." actions={actions} />
+    {/* page sections */}
+  </AppPageLayout>
+</div>
+```
+
+Use the same `max-w-[72rem]`, `space-y-10`, and `AppPageIntro` title/summary pattern for normal pages. Only use a wider shell for table-heavy management surfaces that genuinely need it.
 
 ## Backend (Server-side)
 

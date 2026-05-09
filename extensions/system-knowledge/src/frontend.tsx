@@ -78,8 +78,8 @@ export function KnowledgePageSurface() {
   if (knowledgeBaseLoading && !knowledgeBaseState) {
     return (
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-          <AppPageIntro title="Knowledge" />
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="flex min-h-full flex-col gap-10">
+          <AppPageIntro title="Knowledge" summary="Durable notes, skills, and project context for the agent." />
           <AppPageEmptyState align="start" title="Loading knowledge base…" body="Checking whether managed sync is enabled." />
         </AppPageLayout>
       </div>
@@ -89,8 +89,8 @@ export function KnowledgePageSurface() {
   if (knowledgeBaseState?.configured === false) {
     return (
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-          <AppPageIntro title="Knowledge" />
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="flex min-h-full flex-col gap-10">
+          <AppPageIntro title="Knowledge" summary="Durable notes, skills, and project context for the agent." />
           <AppPageEmptyState
             align="start"
             title="Connect a git repo to start using Knowledge"
@@ -133,8 +133,8 @@ export function KnowledgePageSurface() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-        <AppPageIntro title="Knowledge" />
+      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="flex min-h-full flex-col gap-10">
+        <AppPageIntro title="Knowledge" summary="Durable notes, skills, and project context for the agent." />
         <AppPageEmptyState
           align="start"
           title="Select a file to start editing"
