@@ -18,19 +18,28 @@ describe('useExtensionRegistry', () => {
     vi.clearAllMocks();
   });
 
-  it('normalizes conversation header elements from extension manifests', async () => {
+  it('normalizes component-backed extension chrome from manifests', async () => {
     vi.mocked(api.extensions).mockResolvedValue([
       {
         schemaVersion: 2,
-        id: 'system-caffinate',
-        name: 'Caffinate',
+        id: 'test-extension',
+        name: 'Test Extension',
         frontend: { entry: 'dist/frontend.js', styles: [] },
         contributes: {
           conversationHeaderElements: [
             {
-              id: 'keep-awake-indicator',
-              component: 'CaffeineHeaderIndicator',
-              label: 'Keep awake',
+              id: 'header-indicator',
+              component: 'HeaderIndicator',
+              label: 'Header indicator',
+            },
+          ],
+          statusBarItems: [
+            {
+              id: 'git-status',
+              label: 'Git status',
+              component: 'GitStatusIndicator',
+              alignment: 'right',
+              priority: 100,
             },
           ],
         },
@@ -44,10 +53,21 @@ describe('useExtensionRegistry', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.conversationHeaderElements).toEqual([
       {
-        extensionId: 'system-caffinate',
-        id: 'keep-awake-indicator',
-        component: 'CaffeineHeaderIndicator',
-        label: 'Keep awake',
+        extensionId: 'test-extension',
+        id: 'header-indicator',
+        component: 'HeaderIndicator',
+        label: 'Header indicator',
+        frontendEntry: 'dist/frontend.js',
+      },
+    ]);
+    expect(result.current.statusBarItems).toEqual([
+      {
+        extensionId: 'test-extension',
+        id: 'git-status',
+        label: 'Git status',
+        component: 'GitStatusIndicator',
+        alignment: 'right',
+        priority: 100,
         frontendEntry: 'dist/frontend.js',
       },
     ]);
@@ -63,6 +83,7 @@ describe('useExtensionRegistry', () => {
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.conversationHeaderElements).toEqual([]);
       expect(result.current.conversationDecorators).toEqual([]);
+      expect(result.current.statusBarItems).toEqual([]);
     } finally {
       (api as unknown as { extensions: typeof originalExtensions }).extensions = originalExtensions;
     }

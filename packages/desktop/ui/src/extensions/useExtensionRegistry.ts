@@ -40,13 +40,15 @@ export interface ExtensionConversationHeaderElementRegistration {
   frontendEntry?: string;
 }
 
-interface ExtensionStatusBarItemRegistration {
+export interface ExtensionStatusBarItemRegistration {
   extensionId: string;
   id: string;
   label: string;
   action?: string;
+  component?: string;
   alignment: 'left' | 'right';
   priority?: number;
+  frontendEntry?: string;
 }
 
 interface ExtensionContextMenuRegistration {
@@ -305,8 +307,10 @@ function normalizeStatusBarItems(extensions: ExtensionManifest[]): ExtensionStat
         id: item.id,
         label: item.label,
         ...(item.action ? { action: item.action } : {}),
+        ...(item.component ? { component: item.component } : {}),
         alignment: item.alignment ?? 'right',
         ...(typeof item.priority === 'number' ? { priority: item.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
       });
     }
   }

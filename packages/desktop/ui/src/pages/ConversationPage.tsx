@@ -6862,7 +6862,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onBeginConversationCwdEdit={beginConversationCwdEdit}
                 branchLabel={branchLabel}
                 gitSummaryPresentation={gitSummaryPresentation}
-                hasGitSummary={hasGitSummary}
                 sessionTokens={sessionTokens}
                 conversationId={id ?? null}
                 conversationTitle={title}

@@ -27,6 +27,7 @@ describe('extension registry', () => {
         expect.objectContaining({ id: 'system-telemetry', packageType: 'system', name: 'Telemetry' }),
         expect.objectContaining({ id: 'system-files', packageType: 'system', name: 'File Explorer' }),
         expect.objectContaining({ id: 'system-diffs', packageType: 'system', name: 'Diffs' }),
+        expect.objectContaining({ id: 'system-git-status', packageType: 'system', name: 'Git Status' }),
         expect.objectContaining({ id: 'system-runs', packageType: 'system', name: 'Runs' }),
       ]),
     );

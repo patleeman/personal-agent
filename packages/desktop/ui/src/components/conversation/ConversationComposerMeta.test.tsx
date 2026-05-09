@@ -40,7 +40,6 @@ const baseProps: React.ComponentProps<typeof ConversationComposerMeta> = {
   onBeginConversationCwdEdit: vi.fn(),
   branchLabel: null,
   gitSummaryPresentation: { kind: 'none' },
-  hasGitSummary: false,
   sessionTokens: null,
 };
 
@@ -71,7 +70,7 @@ describe('ConversationComposerMeta', () => {
     expect(html).toContain('bad path');
   });
 
-  it('renders saved conversation cwd, branch, git, and token metadata', () => {
+  it('renders saved conversation cwd and token metadata', () => {
     const html = renderToString(
       <ConversationComposerMeta
         {...baseProps}
@@ -80,7 +79,6 @@ describe('ConversationComposerMeta', () => {
         currentCwd="/repo/project"
         currentCwdLabel="project"
         branchLabel="main"
-        hasGitSummary
         gitSummaryPresentation={{ kind: 'diff', added: '+12', deleted: '-3' }}
         sessionTokens={{ total: 50000, contextWindow: 100000 }}
       />,
@@ -88,9 +86,6 @@ describe('ConversationComposerMeta', () => {
 
     expect(html).toContain('Working directory: /repo/project');
     expect(html).toContain('project');
-    expect(html).toContain('main');
-    expect(html).toContain('+12');
-    expect(html).toContain('-3');
     expect(html).toContain('Context usage:');
   });
 });

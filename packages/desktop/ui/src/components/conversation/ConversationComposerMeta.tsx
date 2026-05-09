@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ComponentProps, useEffect, useRef, useState } from 'react';
 
 import { api } from '../../client/api';
 import { createNativeExtensionClient } from '../../extensions/nativePaClient';
-import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
+import { StatusBarItemHost } from '../../extensions/StatusBarItemHost';
+import { type ExtensionStatusBarItemRegistration, useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { GatewayState } from '../../shared/types';
 import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon, RemoteExecutionIcon } from './ConversationComposerChrome';
@@ -47,7 +48,6 @@ export function ConversationComposerMeta({
   onBeginConversationCwdEdit,
   branchLabel,
   gitSummaryPresentation,
-  hasGitSummary,
   sessionTokens,
   conversationId,
   conversationTitle,
@@ -86,7 +86,6 @@ export function ConversationComposerMeta({
   onBeginConversationCwdEdit: () => void;
   branchLabel: string | null;
   gitSummaryPresentation: ConversationGitSummaryPresentation;
-  hasGitSummary: boolean;
   sessionTokens: ConversationContextUsageTokens | null;
   conversationId?: string | null;
   conversationTitle?: string;
@@ -95,6 +94,12 @@ export function ConversationComposerMeta({
   const { statusBarItems } = useExtensionRegistry();
   const leftStatusItems = statusBarItems.filter((item) => item.alignment === 'left');
   const rightStatusItems = statusBarItems.filter((item) => item.alignment === 'right');
+  const statusBarContext = {
+    conversationId,
+    cwd: currentCwd,
+    branchLabel,
+    gitSummary: gitSummaryPresentation,
+  };
   const [moreOpen, setMoreOpen] = useState(false);
   const [gatewayOnlyOpen, setGatewayOnlyOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -290,27 +295,11 @@ export function ConversationComposerMeta({
       {leftStatusItems.length > 0 && (
         <div className="flex shrink-0 items-center gap-2">
           {leftStatusItems.map((item) => (
-            <StatusBarItem key={item.id} item={item} />
+            <StatusBarItem key={item.id} item={item} statusBarContext={statusBarContext} />
           ))}
         </div>
       )}
       <div className="flex shrink-0 items-center justify-end gap-2 text-right">
-        {!draft && branchLabel ? (
-          <span className="max-w-[8rem] truncate font-mono" title={branchLabel}>
-            {branchLabel}
-          </span>
-        ) : null}
-        {!draft && hasGitSummary ? (
-          gitSummaryPresentation.kind === 'diff' ? (
-            <span className="font-mono tabular-nums">
-              <span className="text-success">{gitSummaryPresentation.added}</span>
-              <span className="text-dim">/</span>
-              <span className="text-danger">{gitSummaryPresentation.deleted}</span>
-            </span>
-          ) : gitSummaryPresentation.kind === 'summary' ? (
-            <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
-          ) : null
-        ) : null}
         {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
         <div className="relative" ref={menuRef}>
           <button
@@ -361,15 +350,26 @@ export function ConversationComposerMeta({
           ) : null}
         </div>
       </div>
-      {rightStatusItems.length > 0 && rightStatusItems.map((item) => <StatusBarItem key={item.id} item={item} />)}
+      {rightStatusItems.length > 0 &&
+        rightStatusItems.map((item) => <StatusBarItem key={item.id} item={item} statusBarContext={statusBarContext} />)}
     </div>
   );
 }
 
-function StatusBarItem({ item }: { item: { extensionId: string; id: string; label: string; action?: string } }) {
+function StatusBarItem({
+  item,
+  statusBarContext,
+}: {
+  item: ExtensionStatusBarItemRegistration;
+  statusBarContext: ComponentProps<typeof StatusBarItemHost>['statusBarContext'];
+}) {
   const [busy, setBusy] = useState(false);
   const paClient = useRef<ReturnType<typeof createNativeExtensionClient> | null>(null);
   if (!paClient.current) paClient.current = createNativeExtensionClient(item.extensionId);
+
+  if (item.component) {
+    return <StatusBarItemHost registration={item} statusBarContext={statusBarContext} />;
+  }
 
   if (!item.action) {
     return <span className="shrink-0 truncate font-mono max-w-[6rem]">{item.label}</span>;

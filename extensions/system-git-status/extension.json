@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "id": "system-git-status",
+  "name": "Git Status",
+  "packageType": "system",
+  "description": "Show the current workspace branch and git diff summary in the composer status bar.",
+  "version": "0.1.0",
+  "frontend": {
+    "entry": "dist/frontend.js",
+    "styles": []
+  },
+  "contributes": {
+    "statusBarItems": [
+      {
+        "id": "composer-git-status",
+        "label": "Git status",
+        "component": "GitStatusIndicator",
+        "alignment": "right",
+        "priority": 100
+      }
+    ]
+  },
+  "permissions": []
+}
