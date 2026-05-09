@@ -494,7 +494,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
-  const openGatewayPickerSignal = new URLSearchParams(location.search).get('gateway') === '1' ? location.search : null;
   const previousSelectedCheckpointIdRef = useRef<string | null | undefined>(undefined);
   const previousSelectedRunIdRef = useRef<string | null | undefined>(undefined);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
@@ -6479,9 +6478,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 branchLabel={branchLabel}
                 gitSummaryPresentation={gitSummaryPresentation}
                 sessionTokens={sessionTokens}
-                conversationId={id ?? null}
-                conversationTitle={title}
-                openGatewayPickerSignal={openGatewayPickerSignal}
               />
             ) : null}
           </div>

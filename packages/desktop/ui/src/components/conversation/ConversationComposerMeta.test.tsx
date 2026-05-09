@@ -40,7 +40,7 @@ describe('ConversationComposerMeta', () => {
     expect(html).toContain('Workspace folder');
     expect(html).toContain('/repo');
     expect(html).toContain('Choose folder');
-    expect(html).toContain('Conversation options');
+    expect(html).not.toContain('Conversation options');
   });
 
   it('renders draft cwd errors', () => {
@@ -65,6 +65,6 @@ describe('ConversationComposerMeta', () => {
 
     expect(html).toContain('Working directory: /repo/project');
     expect(html).toContain('project');
-    expect(html).toContain('Conversation options');
+    expect(html).not.toContain('Conversation options');
   });
 });

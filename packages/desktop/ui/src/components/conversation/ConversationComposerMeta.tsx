@@ -1,12 +1,9 @@
-import { type ComponentProps, useEffect, useRef, useState } from 'react';
+import { type ComponentProps, useRef, useState } from 'react';
 
-import { api } from '../../client/api';
 import type { ConversationContextUsageTokensPresentation } from '../../conversation/conversationComposerPresentation';
 import { createNativeExtensionClient } from '../../extensions/nativePaClient';
 import { StatusBarItemHost } from '../../extensions/StatusBarItemHost';
 import { type ExtensionStatusBarItemRegistration, useExtensionRegistry } from '../../extensions/useExtensionRegistry';
-import type { GatewayState } from '../../shared/types';
-import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon } from './ConversationComposerChrome';
 
 export type ConversationGitSummaryPresentation =
@@ -39,9 +36,6 @@ export function ConversationComposerMeta({
   branchLabel,
   gitSummaryPresentation,
   sessionTokens,
-  conversationId,
-  conversationTitle,
-  openGatewayPickerSignal,
 }: {
   draft: boolean;
   hasDraftCwd: boolean;
@@ -67,61 +61,16 @@ export function ConversationComposerMeta({
   branchLabel: string | null;
   gitSummaryPresentation: ConversationGitSummaryPresentation;
   sessionTokens: ConversationContextUsageTokensPresentation | null;
-  conversationId?: string | null;
-  conversationTitle?: string;
-  openGatewayPickerSignal?: string | null;
 }) {
   const { statusBarItems } = useExtensionRegistry();
   const leftStatusItems = statusBarItems.filter((item) => item.alignment === 'left');
   const rightStatusItems = statusBarItems.filter((item) => item.alignment === 'right');
   const statusBarContext = {
-    conversationId,
     cwd: currentCwd,
     branchLabel,
     gitSummary: gitSummaryPresentation,
     contextUsage: sessionTokens,
   };
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [gatewayOnlyOpen, setGatewayOnlyOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (openGatewayPickerSignal) {
-      setMoreOpen(true);
-      setGatewayOnlyOpen(true);
-    }
-  }, [openGatewayPickerSignal]);
-
-  useEffect(() => {
-    if (!moreOpen || typeof document === 'undefined') {
-      return;
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-      if (target instanceof Node && menuRef.current?.contains(target)) {
-        return;
-      }
-
-      setMoreOpen(false);
-      setGatewayOnlyOpen(false);
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setMoreOpen(false);
-        setGatewayOnlyOpen(false);
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [moreOpen]);
-
   return (
     <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
@@ -247,33 +196,6 @@ export function ConversationComposerMeta({
           ))}
         </div>
       )}
-      <div className="flex shrink-0 items-center justify-end gap-2 text-right">
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-secondary transition-colors hover:bg-surface/45 hover:text-primary"
-            aria-label="Conversation options"
-            title="Conversation options"
-            onClick={() => {
-              setGatewayOnlyOpen(false);
-              setMoreOpen((current) => !current);
-            }}
-          >
-            <MoreIcon />
-          </button>
-          {moreOpen ? (
-            <div className="absolute bottom-8 right-0 z-30 w-72 rounded-xl border border-border-default bg-surface p-2 text-left text-[12px] shadow-2xl">
-              {!draft && conversationId ? (
-                <GatewayComposerControl
-                  conversationId={conversationId}
-                  conversationTitle={conversationTitle}
-                  standalone={gatewayOnlyOpen}
-                />
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
       {rightStatusItems.length > 0 &&
         rightStatusItems.map((item) => <StatusBarItem key={item.id} item={item} statusBarContext={statusBarContext} />)}
     </div>
@@ -315,131 +237,5 @@ function StatusBarItem({
     >
       {busy ? `${item.label}…` : item.label}
     </button>
-  );
-}
-
-type GatewayProviderChoice = 'telegram' | 'slack_mcp';
-
-function GatewayComposerControl({
-  conversationId,
-  conversationTitle,
-  standalone = false,
-}: {
-  conversationId: string;
-  conversationTitle?: string;
-  standalone?: boolean;
-}) {
-  const [state, setState] = useState<GatewayState | null>(null);
-  const [provider, setProvider] = useState<GatewayProviderChoice>('telegram');
-  const [busy, setBusy] = useState(false);
-  const connection = state?.connections.find((item) => item.provider === provider) ?? null;
-  const binding = state?.bindings.find((item) => item.provider === provider && item.conversationId === conversationId) ?? null;
-  const existingBinding = state?.bindings.find((item) => item.provider === provider) ?? null;
-  const chatTarget = state?.chatTargets.find((item) => item.provider === provider && item.connectionId === connection?.id) ?? null;
-  const externalChatId = chatTarget?.externalChatId || existingBinding?.externalChatId || '';
-  const externalChatLabel = chatTarget?.externalChatLabel || existingBinding?.externalChatLabel || externalChatId;
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .gateways()
-      .then((next) => {
-        if (!cancelled) setState(next);
-      })
-      .catch(() => {
-        if (!cancelled) setState(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [conversationId]);
-
-  async function attach() {
-    if (!externalChatId) return;
-    setBusy(true);
-    try {
-      setState(
-        await api.attachGatewayConversation({
-          provider,
-          conversationId,
-          ...(conversationTitle ? { conversationTitle } : {}),
-          externalChatId,
-          externalChatLabel,
-        }),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function detach() {
-    setBusy(true);
-    try {
-      setState(await api.detachGatewayConversation(conversationId, provider));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const providerLabel = provider === 'telegram' ? 'Telegram' : 'Slack';
-  const statusLabel = connection ? connection.status.replace(/_/g, ' ') : 'not configured';
-
-  return (
-    <div className={cx(standalone ? 'px-2 py-1.5' : 'border-t border-border-subtle px-2 py-2')}>
-      <label className="block text-[11px] text-secondary">
-        Gateway
-        <select
-          value={provider}
-          onChange={(event) => setProvider(event.target.value as GatewayProviderChoice)}
-          className="mt-1 h-8 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[12px] text-primary outline-none focus:border-accent/50"
-        >
-          <option value="telegram">Telegram</option>
-          <option value="slack_mcp">Slack</option>
-        </select>
-      </label>
-      <div className="mt-2 rounded-lg bg-surface/35 px-2 py-1.5 text-[11px] text-dim">
-        <p>Status: {statusLabel}</p>
-        <p className="truncate">Target: {externalChatLabel || 'No saved target'}</p>
-        {binding ? <p className="text-accent">Attached to this thread</p> : null}
-      </div>
-      <div className="mt-2 flex gap-2">
-        <button
-          type="button"
-          className="ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-          onClick={attach}
-          disabled={busy || !externalChatId}
-        >
-          {busy ? 'Working…' : binding ? `Reattach ${providerLabel}` : `Attach ${providerLabel}`}
-        </button>
-        <button
-          type="button"
-          className="ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none"
-          onClick={detach}
-          disabled={busy || !binding}
-        >
-          Detach
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 12h.01" />
-      <path d="M19 12h.01" />
-      <path d="M5 12h.01" />
-    </svg>
   );
 }
