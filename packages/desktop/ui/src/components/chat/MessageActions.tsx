@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { createNativeExtensionClient } from '../extensions/nativePaClient';
-import type { ExtensionMessageActionRegistration } from '../extensions/useExtensionRegistry';
-import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
+import { createNativeExtensionClient } from '../../extensions/nativePaClient';
+import type { ExtensionMessageActionRegistration } from '../../extensions/useExtensionRegistry';
+import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import { cx } from '../ui';
 
 /**

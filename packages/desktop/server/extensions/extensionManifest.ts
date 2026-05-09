@@ -95,6 +95,7 @@ export interface ExtensionContributions {
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
+  conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
 }
@@ -127,6 +128,12 @@ export interface ExtensionToolbarActionContribution {
   action: string;
   when?: string;
   priority?: number;
+}
+
+export interface ExtensionConversationHeaderContribution {
+  id: string;
+  component: string;
+  label?: string;
 }
 
 export interface ExtensionStatusBarItemContribution {

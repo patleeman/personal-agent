@@ -170,14 +170,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .extensions()
-      .then((extensions) => {
-        if (!cancelled) setExtensionThemes(readExtensionThemes(extensions));
-      })
-      .catch(() => {
-        if (!cancelled) setExtensionThemes([]);
-      });
+    if (typeof api.extensions === 'function') {
+      api
+        .extensions()
+        .then((extensions) => {
+          if (!cancelled) setExtensionThemes(readExtensionThemes(extensions));
+        })
+        .catch(() => {
+          if (!cancelled) setExtensionThemes([]);
+        });
+    } else {
+      setExtensionThemes([]);
+    }
     return () => {
       cancelled = true;
     };

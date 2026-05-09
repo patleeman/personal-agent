@@ -206,6 +206,15 @@ export interface ExtensionStatusBarItemRegistration {
   priority?: number;
 }
 
+export interface ExtensionConversationHeaderRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  component: string;
+  label?: string;
+  frontendEntry?: string;
+}
+
 export interface ExtensionContextMenuRegistration {
   extensionId: string;
   id: string;
@@ -813,6 +822,14 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.conversationHeaderElements !== undefined) {
+    for (const [index, element] of assertRecordArray(contributes.conversationHeaderElements, 'contributes.conversationHeaderElements').entries()) {
+      requireString(element.id, `contributes.conversationHeaderElements[${index}].id`);
+      requireString(element.component, `contributes.conversationHeaderElements[${index}].component`);
+      validateOptionalString(element.label, `contributes.conversationHeaderElements[${index}].label`);
+    }
+  }
+
   if (contributes.conversationDecorators !== undefined) {
     for (const [index, decorator] of assertRecordArray(
       contributes.conversationDecorators,
@@ -1066,6 +1083,7 @@ export function readExtensionSchema() {
       'conversationDecorators',
       'contextMenus',
       'statusBarItems',
+      'conversationHeaderElements',
     ],
   };
 }
@@ -1315,6 +1333,27 @@ export function listExtensionContextMenuRegistrations(stateRoot: string = getSta
           surface: menu.surface,
           ...(menu.separator ? { separator: true } : {}),
           ...(menu.when ? { when: menu.when } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionConversationHeaderRegistrations(
+  stateRoot: string = getStateRoot(),
+): ExtensionConversationHeaderRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.conversationHeaderElements ?? []).flatMap((element): ExtensionConversationHeaderRegistration[] => {
+      const id = element.id.trim();
+      const component = element.component.trim();
+      if (!id || !component) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          component,
+          ...(element.label ? { label: element.label } : {}),
         },
       ];
     }),

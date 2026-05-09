@@ -19,6 +19,7 @@ const {
   recoverConversationCapabilityMock,
   readConversationAutoModeStateFromSessionManagerMock,
   readLiveSessionAutoModeStateMock,
+  buildModeContextMessageMock,
   logSlowConversationPerfMock,
   parsePendingOperationMock,
   parseTailBlocksQueryMock,
@@ -64,6 +65,7 @@ const {
   recoverConversationCapabilityMock: vi.fn(),
   readConversationAutoModeStateFromSessionManagerMock: vi.fn(),
   readLiveSessionAutoModeStateMock: vi.fn(),
+  buildModeContextMessageMock: vi.fn(),
   parsePendingOperationMock: vi.fn(),
   parseTailBlocksQueryMock: vi.fn(),
   promptLocalSessionMock: vi.fn(),
@@ -178,6 +180,7 @@ vi.mock('./liveSessions.js', () => ({
 vi.mock('../conversations/conversationAutoMode.js', () => ({
   readConversationAutoModeStateFromSessionManager: readConversationAutoModeStateFromSessionManagerMock,
   writeConversationAutoModeState: writeConversationAutoModeStateMock,
+  buildModeContextMessage: buildModeContextMessageMock,
 }));
 
 vi.mock('../conversations/conversationRecovery.js', () => ({

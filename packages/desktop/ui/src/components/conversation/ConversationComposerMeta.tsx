@@ -361,10 +361,7 @@ export function ConversationComposerMeta({
           ) : null}
         </div>
       </div>
-      {rightStatusItems.length > 0 &&
-        rightStatusItems.map((item) => (
-          <StatusBarItem key={item.id} item={item} />
-        ))}
+      {rightStatusItems.length > 0 && rightStatusItems.map((item) => <StatusBarItem key={item.id} item={item} />)}
     </div>
   );
 }

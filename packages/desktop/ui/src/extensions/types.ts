@@ -154,6 +154,12 @@ interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+interface ExtensionConversationHeaderContribution {
+  id: string;
+  component: string;
+  label?: string;
+}
+
 interface ExtensionStatusBarItemContribution {
   id: string;
   label: string;
@@ -197,6 +203,7 @@ interface ExtensionContributions {
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
+  conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }

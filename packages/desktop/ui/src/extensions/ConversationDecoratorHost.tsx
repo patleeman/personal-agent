@@ -1,11 +1,11 @@
 import { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
-import { createNativeExtensionClient } from './nativePaClient';
+import type { SessionMeta } from '../shared/types';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
+import { createNativeExtensionClient } from './nativePaClient';
 import { systemExtensionModules } from './systemExtensionModules';
 import type { ExtensionConversationDecoratorRegistration } from './useExtensionRegistry';
-import type { SessionMeta } from '../shared/types';
 
 type DecoratorComponent = ComponentType<{
   pa: ReturnType<typeof createNativeExtensionClient>;

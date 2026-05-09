@@ -185,6 +185,12 @@ export interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+export interface ExtensionConversationHeaderContribution {
+  id: string;
+  component: string;
+  label?: string;
+}
+
 export interface ExtensionStatusBarItemContribution {
   id: string;
   label: string;
@@ -250,6 +256,7 @@ export interface ExtensionContributions {
   toolbarActions?: ExtensionToolbarActionContribution[];
   contextMenus?: ExtensionContextMenuContribution[];
   statusBarItems?: ExtensionStatusBarItemContribution[];
+  conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
 }
@@ -356,6 +363,7 @@ export interface PersonalAgentClient {
   ui: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
+    openModal(options: { title?: string; component: string; props?: Record<string, unknown> }): Promise<unknown>;
   };
   /** Inter-extension communication. */
   events: {

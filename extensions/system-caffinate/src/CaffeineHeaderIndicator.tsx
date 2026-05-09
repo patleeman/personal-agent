@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 
-export function CaffeineDecorator({
+export function CaffeineHeaderIndicator({
   pa,
-  session,
 }: {
   pa: { extension: { invoke(actionId: string, input?: unknown): Promise<unknown> } };
-  session: { id: string };
 }) {
   const [active, setActive] = useState(false);
 
@@ -34,23 +32,13 @@ export function CaffeineDecorator({
 
   return (
     <span
-      className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center text-amber"
-      title="Keep awake active"
-      aria-label="Keep awake active"
+      className="inline-flex items-center gap-1 rounded-md bg-amber/10 px-2 py-0.5 text-[10px] font-medium text-amber"
+      title="Keep awake is active"
     >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
       </svg>
+      Keep awake
     </span>
   );
 }

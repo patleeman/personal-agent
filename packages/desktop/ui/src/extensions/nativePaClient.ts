@@ -50,6 +50,7 @@ export interface NativeExtensionClient {
   ui: {
     toast(message: string): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
+    openModal(options: { title?: string; component: string; props?: Record<string, unknown> }): Promise<unknown>;
   };
 }
 
@@ -194,6 +195,11 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
       async confirm(options) {
         return window.confirm(options.title ? `${options.title}\n\n${options.message}` : options.message);
+      },
+      openModal(options) {
+        return new Promise((resolve, reject) => {
+          window.dispatchEvent(new CustomEvent('pa-extension-modal', { detail: { extensionId, ...options, resolve, reject } }));
+        });
       },
     },
   };

@@ -1900,6 +1900,7 @@ export function Layout() {
       ))}
 
       <AlertToaster />
+      <ExtensionModalHost />
       <PageSearchBar rootRef={pageSearchRootRef} desktopShell={desktopEnvironment?.isElectron ?? isDesktopShell()} />
       <CommandPalette />
     </>

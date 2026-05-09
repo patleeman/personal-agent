@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { AgentToolUpdateCallback, ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import type { ServerRouteContext } from '../routes/context.js';
 import { invokeExtensionAction } from './extensionBackend.js';
@@ -14,17 +14,37 @@ export interface ManifestToolFactoryOptions {
   serverContext?: Pick<ServerRouteContext, 'getCurrentProfile'>;
 }
 
+/**
+ * Built-in tool names that user extensions are allowed to override via `replaces`.
+ * This list prevents accidental or malicious replacement of critical infrastructure
+ * while still allowing well-intentioned overrides of the primary coding tools.
+ */
+const OVERRIDABLE_TOOLS = new Set(['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls', 'notify', 'web_fetch', 'web_search']);
+
+function isOverridableTool(toolName: string): boolean {
+  return OVERRIDABLE_TOOLS.has(toolName);
+}
+
 export function createManifestToolAgentExtensions(options: ManifestToolFactoryOptions): Array<(pi: ExtensionAPI) => void> {
   return listExtensionToolRegistrations().map((tool) => {
+    // When `replaces` is set and the target tool is overridable, use that name
+    // so pi.registerTool() replaces the built-in tool.
+    const registerName = tool.replaces && isOverridableTool(tool.replaces) ? tool.replaces : tool.name;
+    const isOverride = registerName !== tool.name;
+
     return (pi: ExtensionAPI) => {
       pi.registerTool({
-        name: tool.name,
+        name: registerName,
         label: tool.label ?? tool.title ?? tool.id,
         description: tool.description,
         promptSnippet: tool.promptSnippet ?? tool.description,
-        promptGuidelines: tool.promptGuidelines ?? [`Use this extension-provided tool when the task needs ${tool.extensionId}/${tool.id}.`],
+        promptGuidelines: tool.promptGuidelines ?? [
+          isOverride
+            ? `This tool replaces the built-in "${registerName}" tool.`
+            : `Use this extension-provided tool when the task needs ${tool.extensionId}/${tool.id}.`,
+        ],
         parameters: tool.inputSchema,
-        async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        async execute(_toolCallId, params, _signal, onUpdate, ctx) {
           const result = await invokeExtensionAction(
             tool.extensionId,
             tool.action,
@@ -36,10 +56,22 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
               cwd: ctx.sessionManager.getCwd?.(),
               sessionFile: ctx.sessionManager.getSessionFile?.(),
               preferredVisionModel: options.getPreferredVisionModel?.(),
+              // Forward the streaming update callback so backend handlers can
+              // send progress updates during long-running tool execution.
+              onUpdate: (update) => {
+                onUpdate?.({
+                  content: update.content ?? [],
+                });
+              },
             },
-            ctx,
+            // Forward the streaming callback so backend handlers can
+            // send progress updates during tool execution.
+            { onUpdate } satisfies { onUpdate?: AgentToolUpdateCallback },
           );
-          const extensionResult = result.result as { content?: unknown; text?: unknown; details?: unknown; isError?: unknown } | null;
+          const extensionResult = result.result as
+            | { content?: unknown; text?: unknown; details?: unknown; isError?: unknown }
+            | null
+            | undefined;
           const content =
             extensionResult &&
             typeof extensionResult === 'object' &&

@@ -12,12 +12,39 @@ import type { ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
-import { findExtensionEntry } from './extensionRegistry.js';
+import { publishExtensionEvent, subscribeExtensionEvents, unsubscribeExtensionEvents } from './extensionEventBus.js';
+import {
+  getAggregatedBadgeCount,
+  isSystemNotificationAvailable,
+  sendNotifyAsSystemNotification,
+  setExtensionBadge,
+} from './extensionNotifications.js';
+import { findExtensionEntry, listExtensionInstallSummaries } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
 import { createExtensionGitCapability, createExtensionShellCapability } from './extensionShell.js';
 import { deleteExtensionState, listExtensionState, readExtensionState, writeExtensionState } from './extensionStorage.js';
 import { createExtensionVaultCapability } from './extensionVault.js';
 import { createExtensionWorkspaceCapability } from './extensionWorkspace.js';
+
+export interface ExtensionBackendNotifyInput {
+  /** Primary notification text. */
+  message: string;
+  /** Optional notification title (defaults to extension name). */
+  title?: string;
+  /** Optional subtitle (macOS only). */
+  subtitle?: string;
+  /** If true, the notification persists until acknowledged. */
+  persistent?: boolean;
+  /** Optional payload delivered on notification click. */
+  actionPayload?: unknown;
+}
+
+export interface ExtensionBackendEventPublishInput {
+  /** Event name, e.g. "task:completed". */
+  event: string;
+  /** Free-form payload. */
+  payload: unknown;
+}
 
 export interface ExtensionBackendContext {
   extensionId: string;
@@ -28,6 +55,8 @@ export interface ExtensionBackendContext {
     sessionFile?: string;
     sessionId?: string;
     preferredVisionModel?: string;
+    /** Streaming update callback for long-running tool operations. */
+    onUpdate?: (update: { content?: Array<{ type: string; text: string }>; isError?: boolean }) => void;
   };
   agentToolContext?: unknown;
   storage: {
@@ -43,6 +72,43 @@ export interface ExtensionBackendContext {
   workspace: ReturnType<typeof createExtensionWorkspaceCapability>;
   git: ReturnType<typeof createExtensionGitCapability>;
   shell: ReturnType<typeof createExtensionShellCapability>;
+  /** Notification and UI capabilities. */
+  notify: {
+    /** Show an in-app toast notification. */
+    toast(message: string, type?: 'info' | 'warning' | 'error'): void;
+    /**
+     * Send a system/OS notification.
+     * Returns true if the notification was delivered.
+     */
+    system(input: ExtensionBackendNotifyInput): boolean;
+    /** Set the dock badge count (accumulated across all extensions). */
+    setBadge(count: number): { badge: number; aggregated: number };
+    /** Clear this extension's badge contribution. */
+    clearBadge(): void;
+    /** Check if system notification support is available. */
+    isSystemAvailable(): boolean;
+  };
+  /** Inter-extension event bus. */
+  events: {
+    /** Publish an event that other extensions can subscribe to. */
+    publish(input: ExtensionBackendEventPublishInput): Promise<void>;
+    /** Subscribe to events matching a pattern. */
+    subscribe(
+      pattern: string,
+      handler: (event: { event: string; payload: unknown; sourceExtensionId: string; publishedAt: string }) => void | Promise<void>,
+    ): { unsubscribe: () => void };
+  };
+  /** Call actions exposed by other extensions. */
+  extensions: {
+    /** Invoke an action on another extension by its id and action id. */
+    callAction(extensionId: string, actionId: string, input?: unknown): Promise<unknown>;
+    /** List all installed extensions and their actions. */
+    listActions(): Array<{
+      extensionId: string;
+      extensionName: string;
+      actions: Array<{ id: string; title?: string; description?: string }>;
+    }>;
+  };
   ui: {
     invalidate(topics: string | string[]): void;
   };
@@ -121,6 +187,46 @@ function createBackendContext(
     workspace: createExtensionWorkspaceCapability(),
     git: createExtensionGitCapability(),
     shell: createExtensionShellCapability(),
+    notify: {
+      toast: (message, type = 'info') => {
+        console.log(`[extension:${extensionId}] [${type}] ${message}`);
+        invalidateAppTopics('notifications');
+      },
+      system: (input) => sendNotifyAsSystemNotification(extensionId, input),
+      setBadge: (count) => setExtensionBadge(extensionId, count),
+      clearBadge: () => setExtensionBadge(extensionId, 0),
+      isSystemAvailable: () => isSystemNotificationAvailable(),
+    },
+    events: {
+      publish: async (input) => {
+        await publishExtensionEvent(extensionId, input.event, input.payload);
+      },
+      subscribe: (pattern, handler) => {
+        return subscribeExtensionEvents(extensionId, pattern, handler);
+      },
+    },
+    extensions: {
+      callAction: async (targetExtensionId, actionId, input) => {
+        const entry = findExtensionEntry(targetExtensionId);
+        if (!entry) throw new Error(`Extension "${targetExtensionId}" not found.`);
+        const action = entry.manifest.backend?.actions?.find((candidate) => candidate.id === actionId);
+        if (!action) throw new Error(`Action "${actionId}" not found on extension "${targetExtensionId}".`);
+        const result = await invokeExtensionAction(targetExtensionId, actionId, input, serverContext, toolContext, agentToolContext);
+        return result.result;
+      },
+      listActions: () =>
+        listExtensionInstallSummaries()
+          .filter((summary) => summary.status === 'enabled' && summary.backendActions.length > 0)
+          .map((summary) => ({
+            extensionId: summary.id,
+            extensionName: summary.name,
+            actions: summary.backendActions!.map((action) => ({
+              id: action.id,
+              title: action.title,
+              description: action.description,
+            })),
+          })),
+    },
     ui: {
       invalidate: (topics) => invalidateAppTopics(...(Array.isArray(topics) ? topics : [topics])),
     },
@@ -178,11 +284,17 @@ function hashExtensionBackendInputs(packageRoot: string): string {
 
   const backendApiPath = resolveExtensionBackendApiPath();
   const backendApiRoot = dirname(backendApiPath);
-  hashFileInto(hash, backendApiRoot, backendApiPath, 'backend-api');
 
-  const backendApiDirectory = resolve(backendApiRoot, 'backendApi');
-  if (existsSync(backendApiDirectory)) {
-    hashDirectoryInto(hash, backendApiRoot, backendApiDirectory, 'backend-api');
+  // Directory-based backend API (refactored to backendApi/index.ts): hash the whole directory
+  // Flat file backend API (backendApi.ts): hash the file and check for sibling backendApi/ dir
+  if (backendApiPath.endsWith(`${sep}index.ts`) || backendApiPath.endsWith(`${sep}index.js`)) {
+    hashDirectoryInto(hash, backendApiRoot, backendApiRoot, 'backend-api');
+  } else {
+    hashFileInto(hash, backendApiRoot, backendApiPath, 'backend-api');
+    const backendApiDirectory = resolve(backendApiRoot, 'backendApi');
+    if (existsSync(backendApiDirectory)) {
+      hashDirectoryInto(hash, backendApiRoot, backendApiDirectory, 'backend-api');
+    }
   }
 
   return hash.digest('hex');
@@ -207,17 +319,36 @@ function resolveExtensionBackendApiPath(): string {
     resolve(currentDir, '../extensions/backendApi.ts'),
   ];
 
+  // Check flat .ts files
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
       return candidate;
     }
   }
 
-  // Fallback to compiled .js in same locations
+  // Flat .js fallbacks
   for (const candidate of candidates) {
     const jsPath = candidate.replace(/\.ts$/, '.js');
     if (existsSync(jsPath)) {
       return jsPath;
+    }
+  }
+
+  // Check directory-based backendApi/index.ts (refactored from flat file to directory)
+  for (const candidate of candidates) {
+    const dirPath = candidate.replace(/\.ts$/, '');
+    const indexPath = resolve(dirPath, 'index.ts');
+    if (existsSync(indexPath)) {
+      return indexPath;
+    }
+  }
+
+  // Directory-based backendApi/index.js
+  for (const candidate of candidates) {
+    const dirPath = candidate.replace(/\.ts$/, '');
+    const indexJsPath = resolve(dirPath, 'index.js');
+    if (existsSync(indexJsPath)) {
+      return indexJsPath;
     }
   }
 

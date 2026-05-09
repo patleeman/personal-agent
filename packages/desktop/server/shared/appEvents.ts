@@ -30,7 +30,8 @@ export type AppEventTopic =
   | 'automation'
   | 'daemon'
   | 'workspace'
-  | 'knowledgeBase';
+  | 'knowledgeBase'
+  | 'notifications';
 
 export type AppEvent =
   | { type: 'connected' }

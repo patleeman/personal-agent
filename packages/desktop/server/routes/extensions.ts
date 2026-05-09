@@ -4,6 +4,7 @@ import { resolve, sep } from 'node:path';
 import type { Express, Request, Response } from 'express';
 
 import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
+import { listExtensionEventSubscriptions } from '../extensions/extensionEventBus.js';
 import {
   buildRuntimeExtension,
   createRuntimeExtension,
@@ -11,6 +12,7 @@ import {
   importRuntimeExtensionBundle,
   snapshotRuntimeExtension,
 } from '../extensions/extensionLifecycle.js';
+import { getAggregatedBadgeCount } from '../extensions/extensionNotifications.js';
 import {
   findExtensionEntry,
   listExtensionCommandRegistrations,
@@ -387,6 +389,47 @@ export function registerExtensionRoutes(
       res.json({ ok: true, id: req.params.id, reloaded: true, message: 'Extension backend rebuilt.' });
     } catch (err) {
       sendRouteError(res, 'extension reload error', err);
+    }
+  });
+
+  // ── Inter-extension event bus ────────────────────────────────────────
+
+  router.get('/api/extensions/events/subscriptions', (_req, res) => {
+    try {
+      res.json(listExtensionEventSubscriptions());
+    } catch (err) {
+      sendRouteError(res, 'extension event subscriptions error', err);
+    }
+  });
+
+  // ── Inter-extension action listing ───────────────────────────────────
+
+  router.get('/api/extensions/actions', (_req, res) => {
+    try {
+      const summaries = listExtensionInstallSummaries()
+        .filter((extension) => extension.status === 'enabled' && extension.backendActions.length > 0)
+        .map((extension) => ({
+          extensionId: extension.id,
+          extensionName: extension.name,
+          actions: extension.backendActions.map((action) => ({
+            id: action.id,
+            title: action.title,
+            description: action.description,
+          })),
+        }));
+      res.json(summaries);
+    } catch (err) {
+      sendRouteError(res, 'extension actions list error', err);
+    }
+  });
+
+  // ── Notification badge state ─────────────────────────────────────────
+
+  router.get('/api/extensions/badge', (_req, res) => {
+    try {
+      res.json({ aggregated: getAggregatedBadgeCount() });
+    } catch (err) {
+      sendRouteError(res, 'extension badge error', err);
     }
   });
 }

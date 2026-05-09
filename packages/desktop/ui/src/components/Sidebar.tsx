@@ -37,8 +37,8 @@ import {
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
 import { getDesktopBridge } from '../desktop/desktopBridge';
-import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
+import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useConversations } from '../hooks/useConversations';
@@ -1385,10 +1385,7 @@ function OpenConversationRow({
   const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLDivElement>();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
   const { conversationDecorators, contextMenus } = useExtensionRegistry();
-  const conversationExtensionMenuItems = useMemo(
-    () => contextMenus.filter((m) => m.surface === 'conversationList'),
-    [contextMenus],
-  );
+  const conversationExtensionMenuItems = useMemo(() => contextMenus.filter((m) => m.surface === 'conversationList'), [contextMenus]);
   const decoratorsByPosition = useMemo(() => {
     const byPos: Record<string, typeof conversationDecorators> = { 'before-title': [], 'after-title': [], subtitle: [] };
     for (const d of conversationDecorators) {
@@ -3466,9 +3463,9 @@ export function Sidebar() {
 
   const extensionRegistry = useExtensionRegistry();
   const extensionNavItems = useMemo(() => {
-    const legacy = extensionRegistry.surfaces.filter(isExtensionLeftNavItemSurface).map(
-      (item) => ({ ...item, section: 'primary' as const }),
-    );
+    const legacy = extensionRegistry.surfaces
+      .filter(isExtensionLeftNavItemSurface)
+      .map((item) => ({ ...item, section: 'primary' as const }));
     const native = extensionRegistry.extensions.flatMap((extension) =>
       (extension.contributes?.nav ?? []).map(
         (item) =>

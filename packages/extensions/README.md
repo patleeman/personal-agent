@@ -379,24 +379,24 @@ The runtime registers a stable generated tool name: `extension_{extensionId}_{to
 
 Pick the smallest surface that matches the product shape. Do not use the right rail as a junk drawer.
 
-| Surface               | Use for                                                              | Avoid using for                       |
-| --------------------- | -------------------------------------------------------------------- | ------------------------------------- |
-| Main page view        | Durable app-level workflows with their own route                     | Tiny contextual helpers               |
-| Left nav item         | Primary destinations users should see every day (`section: 'primary'`) | Settings subpanels                   |
-| Nav item (settings)   | Settings/configuration destinations (`section: 'settings'`)          | Product workflows                     |
-| Right-rail panel      | Compact contextual companions for a conversation/workspace/selection | Wide editors or log/diff viewers      |
-| Workbench detail view | Large detail rendering paired to a right-rail selector               | Standalone app-level workflows        |
-| Settings contribution | Configuration and preferences                                        | Product workflows                     |
-| Command               | Fast one-shot actions or opening a surface                           | Persistent UI                         |
-| Slash command         | Conversation-authored actions that affect prompt context             | Global app navigation                 |
-| Top bar element       | Status indicator icon/badge in the top bar                           | Full UI surfaces                      |
-| Message action        | Hover-reveal action button on a message block                        | Persistent UI elements                |
-| Toolbar action        | Icon button in the composer toolbar row                              | Text-heavy actions                    |
-| Composer shelf        | Info/status section above the composer input                         | Full-page workflows                   |
-| Conversation decorator| Badge/indicator on a conversation list item                          | Interactive UI                        |
-| Context menu          | Right-click menu item on message or sidebar item                     | Primary navigation                    |
-| Status bar item       | Label in the status bar below the composer                           | Interactive controls                  |
-| Theme                 | Color theme via CSS variable tokens                                  | Layout or UI changes                  |
+| Surface                | Use for                                                                | Avoid using for                  |
+| ---------------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| Main page view         | Durable app-level workflows with their own route                       | Tiny contextual helpers          |
+| Left nav item          | Primary destinations users should see every day (`section: 'primary'`) | Settings subpanels               |
+| Nav item (settings)    | Settings/configuration destinations (`section: 'settings'`)            | Product workflows                |
+| Right-rail panel       | Compact contextual companions for a conversation/workspace/selection   | Wide editors or log/diff viewers |
+| Workbench detail view  | Large detail rendering paired to a right-rail selector                 | Standalone app-level workflows   |
+| Settings contribution  | Configuration and preferences                                          | Product workflows                |
+| Command                | Fast one-shot actions or opening a surface                             | Persistent UI                    |
+| Slash command          | Conversation-authored actions that affect prompt context               | Global app navigation            |
+| Top bar element        | Status indicator icon/badge in the top bar                             | Full UI surfaces                 |
+| Message action         | Hover-reveal action button on a message block                          | Persistent UI elements           |
+| Toolbar action         | Icon button in the composer toolbar row                                | Text-heavy actions               |
+| Composer shelf         | Info/status section above the composer input                           | Full-page workflows              |
+| Conversation decorator | Badge/indicator on a conversation list item                            | Interactive UI                   |
+| Context menu           | Right-click menu item on message or sidebar item                       | Primary navigation               |
+| Status bar item        | Label in the status bar below the composer                             | Interactive controls             |
+| Theme                  | Color theme via CSS variable tokens                                    | Layout or UI changes             |
 
 Right-rail views may point at a paired workbench detail view with `detailView`:
 

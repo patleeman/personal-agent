@@ -62,6 +62,13 @@
         "component": "CaffeineDecorator",
         "position": "after-title"
       }
+    ],
+    "conversationHeaderElements": [
+      {
+        "id": "caffeine-header",
+        "component": "CaffeineHeaderIndicator",
+        "label": "Keep awake status"
+      }
     ]
   },
   "permissions": []

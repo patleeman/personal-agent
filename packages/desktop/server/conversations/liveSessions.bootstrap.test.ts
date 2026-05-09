@@ -667,6 +667,10 @@ describe('liveSessions bootstrap helpers', () => {
       getCwd: vi.fn(() => '/tmp/fork-workspace'),
       sessionFile: '/tmp/fork-session.jsonl',
     });
+    const summaryManager = createMockManager({
+      getEntry: vi.fn(() => ({ id: 'entry-summary' })),
+      sessionFile: '/tmp/summary-session.jsonl',
+    });
     const forkResumedSession = createMockSession({
       sessionId: 'session-fork-live',
       cwd: '/tmp/fork-workspace',
