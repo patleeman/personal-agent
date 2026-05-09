@@ -16,6 +16,9 @@ pipeline.
 - Prefer correct full implementations over backwards-compatibility layers. I don't want to implement the fastest smallest improvement most of the time.
 - Build all new product features as extensions by default. First ask: “could this be an extension?” The answer should be yes unless the work is core runtime, security, persistence, extension-host infrastructure, or app-shell plumbing.
 - If the extensions API is not powerful enough for the feature, improve the extensions API with general-purpose capabilities instead of hardcoding a one-off app feature. Every new extension should be able to reuse the new capability.
+- The core of PA is the small, stable platform: agent/conversation runtime, model/tool execution protocol, transcript/event stream, durable storage primitives, knowledge/system-prompt assembly, extension host/manifest/API/permissions, security boundaries, desktop/web app shell, routing, install/update plumbing, and shared UI primitives.
+- Anything user-facing, domain-specific, or workflow-specific should be an extension: pages, panels, tool renderers, slash/command surfaces, integrations, context providers, automations, import/export flows, diagnostics views, settings sections, and opinionated UX built on top of the platform.
+- When in doubt, put the feature in a system extension and add only the minimum general-purpose API surface to core needed to support it. Core should make features possible; extensions should be where features live.
 - For web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.
 - I often work on multiple features at the same time. Check other active runs and coordinate your work if you start seeing unintended changes to files you're editing.
 - If the worktree already has unrelated changes, I always want targeted commits that stage only the files for the task at hand.
