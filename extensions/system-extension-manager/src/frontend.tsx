@@ -484,7 +484,21 @@ export function ExtensionManagerPage() {
       });
       setNotice(`Created ${result.packageRoot}`);
       notifyExtensionRegistryChanged();
-      load();
+      await load();
+      // Auto-build the newly created extension so its frontend is immediately usable.
+      try {
+        const buildResult = await api.buildExtension(result.extension?.id ?? id.trim());
+        setNotice(
+          buildResult.outputs.length > 0
+            ? `Created and built ${buildResult.outputs.length} bundle output${buildResult.outputs.length === 1 ? '' : 's'}.`
+            : 'Created extension with no build outputs.',
+        );
+        await api.reloadExtension(result.extension?.id ?? id.trim()).catch(() => undefined);
+        notifyExtensionRegistryChanged();
+        await load();
+      } catch {
+        setNotice(`Created extension at ${result.packageRoot}. Build manually from the actions menu.`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -499,7 +513,21 @@ export function ExtensionManagerPage() {
       const result = await api.importExtension({ zipPath: zipPath.trim() });
       setNotice(`Imported ${result.packageRoot}`);
       notifyExtensionRegistryChanged();
-      load();
+      await load();
+      // Auto-build the imported extension.
+      try {
+        const extId = result.extension?.id;
+        if (extId) {
+          const buildResult = await api.buildExtension(extId);
+          if (buildResult.outputs.length > 0) {
+            await api.reloadExtension(extId).catch(() => undefined);
+            notifyExtensionRegistryChanged();
+            await load();
+          }
+        }
+      } catch {
+        // Imported extension may already have built outputs — that's fine.
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
