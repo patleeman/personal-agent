@@ -1,6 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
-import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
+
 import { findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement } from './replySelection.js';
 
 interface ReplySelectionState {
@@ -466,24 +466,6 @@ export function useChatReplySelection({
         text: selectionText,
         replySelection: resolvedReplySelection?.selection ?? null,
       };
-      const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
-
-      if (desktopBridge?.showSelectionContextMenu) {
-        closeSelectionContextMenu();
-        void desktopBridge
-          .showSelectionContextMenu({
-            x: menuState.x,
-            y: menuState.y,
-            canReply: Boolean(menuState.replySelection),
-            canCopy: true,
-          })
-          .then(({ action }) => runSelectionContextMenuAction(action, menuState))
-          .catch(() => {
-            openDomSelectionContextMenu(menuState);
-          });
-        return;
-      }
-
       openDomSelectionContextMenu(menuState);
     },
     [

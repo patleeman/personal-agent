@@ -185,6 +185,18 @@ export interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+export interface ExtensionContextMenuContribution {
+  id: string;
+  title: string;
+  action: string;
+  /** Which context menu this item appears in. */
+  surface: 'message' | 'conversationList';
+  /** Show a separator above this item. */
+  separator?: boolean;
+  /** Context condition, e.g. "selectedText" or "role:assistant" */
+  when?: string;
+}
+
 export interface ExtensionConversationDecoratorContribution {
   id: string;
   component: string;
@@ -211,6 +223,7 @@ export interface ExtensionContributions {
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
+  contextMenus?: ExtensionContextMenuContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }

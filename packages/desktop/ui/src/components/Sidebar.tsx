@@ -36,12 +36,7 @@ import {
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
-import {
-  type DesktopConversationContextMenuAction,
-  type DesktopConversationCwdGroupContextMenuAction,
-  getDesktopBridge,
-  shouldUseNativeAppContextMenus,
-} from '../desktop/desktopBridge';
+import { getDesktopBridge } from '../desktop/desktopBridge';
 import { type ExtensionSurfaceSummary, isExtensionLeftNavItemSurface } from '../extensions/types';
 import { ConversationDecoratorHost } from '../extensions/ConversationDecoratorHost';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
@@ -1389,7 +1384,11 @@ function OpenConversationRow({
 }) {
   const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLDivElement>();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
-  const { conversationDecorators } = useExtensionRegistry();
+  const { conversationDecorators, contextMenus } = useExtensionRegistry();
+  const conversationExtensionMenuItems = useMemo(
+    () => contextMenus.filter((m) => m.surface === 'conversationList'),
+    [contextMenus],
+  );
   const decoratorsByPosition = useMemo(() => {
     const byPos: Record<string, typeof conversationDecorators> = { 'before-title': [], 'after-title': [], subtitle: [] };
     for (const d of conversationDecorators) {
@@ -1404,6 +1403,7 @@ function OpenConversationRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [busyAction, setBusyAction] = useState<'duplicate' | null>(null);
+  const [busyExtensionMenuId, setBusyExtensionMenuId] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<ConversationCopyMenuState | null>(null);
   const hasContextMenuActions = Boolean(
     onPin ||
@@ -1414,7 +1414,8 @@ function OpenConversationRow({
     onAttachToGateway ||
     onCopyWorkingDirectory ||
     onCopyId ||
-    onCopyDeeplink,
+    onCopyDeeplink ||
+    conversationExtensionMenuItems.length > 0,
   );
   const contextMenuItemCount =
     (pinned && onUnpin ? 1 : !pinned && onPin ? 1 : 0) +
@@ -1424,7 +1425,8 @@ function OpenConversationRow({
     Number(Boolean(onAttachToGateway)) +
     Number(Boolean(onCopyWorkingDirectory)) +
     Number(Boolean(onCopyId)) +
-    Number(Boolean(onCopyDeeplink));
+    Number(Boolean(onCopyDeeplink)) +
+    conversationExtensionMenuItems.length;
 
   useEffect(() => {
     if (!menuOpen || typeof document === 'undefined') {
@@ -1560,47 +1562,34 @@ function OpenConversationRow({
     setMenuOpen(true);
   }
 
-  async function runNativeContextMenuAction(action: DesktopConversationContextMenuAction | null) {
-    if (!action) {
-      return;
-    }
-
-    switch (action) {
-      case 'pin':
-        await onPin?.();
-        return;
-      case 'unpin':
-        await onUnpin?.();
-        return;
-      case 'archive':
-        await onArchive?.();
-        return;
-      case 'open-in-new-window':
-        await onOpenInNewWindow?.();
-        return;
-      case 'duplicate':
-        if (onDuplicate) {
-          await runMenuAction('duplicate', onDuplicate);
-        }
-        return;
-      case 'attach-to-gateway':
-        await onAttachToGateway?.();
-        return;
-      case 'copy-working-directory':
-        await onCopyWorkingDirectory?.();
-        return;
-      case 'copy-id':
-        await onCopyId?.();
-        return;
-      case 'copy-deeplink':
-        await onCopyDeeplink?.();
-        return;
-    }
-  }
-
   const handleConversationIntent = useCallback(() => {
     onPrefetch?.();
   }, [onPrefetch]);
+
+  async function handleExtensionContextMenuClick(menuId: string, action: string) {
+    if (busyExtensionMenuId) return;
+    setBusyExtensionMenuId(menuId);
+    try {
+      await getPaClient(session.id).extension.invoke(action, {
+        conversationId: session.id,
+        sessionTitle: session.title,
+        cwd: session.cwd,
+      });
+    } finally {
+      setBusyExtensionMenuId(null);
+      setMenuOpen(false);
+    }
+  }
+
+  const paClientByExtension = useRef<Map<string, ReturnType<typeof createNativeExtensionClient>>>(new Map());
+  function getPaClient(extensionId: string) {
+    let client = paClientByExtension.current.get(extensionId);
+    if (!client) {
+      client = createNativeExtensionClient(extensionId);
+      paClientByExtension.current.set(extensionId, client);
+    }
+    return client;
+  }
 
   function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
     if (!hasContextMenuActions) {
@@ -1608,35 +1597,7 @@ function OpenConversationRow({
     }
 
     stopRowInteraction(event);
-    const x = event.clientX;
-    const y = event.clientY;
-    const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
-
-    if (desktopBridge?.showConversationContextMenu) {
-      setMenuOpen(false);
-      setMenuPosition(null);
-      void desktopBridge
-        .showConversationContextMenu({
-          x,
-          y,
-          pinAction: pinned && onUnpin ? 'unpin' : !pinned && onPin ? 'pin' : null,
-          canArchive: Boolean(onArchive),
-          canOpenInNewWindow: Boolean(onOpenInNewWindow),
-          canDuplicate: Boolean(onDuplicate),
-          canAttachToGateway: Boolean(onAttachToGateway),
-          canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
-          canCopyId: Boolean(onCopyId),
-          canCopyDeeplink: Boolean(onCopyDeeplink),
-          busyAction,
-        })
-        .then(({ action }) => runNativeContextMenuAction(action))
-        .catch(() => {
-          openDomContextMenu(x, y);
-        });
-      return;
-    }
-
-    openDomContextMenu(x, y);
+    openDomContextMenu(event.clientX, event.clientY);
   }
 
   return (
@@ -1920,6 +1881,27 @@ function OpenConversationRow({
                 {getCopyMenuLabel('deeplink')}
               </button>
             ) : null}
+            {conversationExtensionMenuItems.length > 0 && (
+              <>
+                <div className="border-t border-border-subtle mx-2 my-1" />
+                {conversationExtensionMenuItems.map((menu) => (
+                  <button
+                    key={menu.id}
+                    type="button"
+                    onPointerDown={stopRowInteraction}
+                    onMouseDown={stopRowInteraction}
+                    onClick={() => {
+                      void handleExtensionContextMenuClick(menu.id, menu.action);
+                    }}
+                    className={menuItemClass}
+                    disabled={busyExtensionMenuId !== null}
+                    role="menuitem"
+                  >
+                    {busyExtensionMenuId === menu.id ? `${menu.title}…` : menu.title}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       ) : null}

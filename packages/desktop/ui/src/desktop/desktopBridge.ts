@@ -57,58 +57,6 @@ export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oau
 export const DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
 export const DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT = 'personal-agent-desktop-show-workbench-browser';
 
-export type DesktopConversationContextMenuAction =
-  | 'pin'
-  | 'unpin'
-  | 'archive'
-  | 'open-in-new-window'
-  | 'duplicate'
-  | 'summarize-and-new'
-  | 'attach-to-gateway'
-  | 'copy-working-directory'
-  | 'copy-id'
-  | 'copy-deeplink';
-
-export type DesktopConversationCwdGroupContextMenuAction = 'open-in-finder' | 'edit-name' | 'archive-threads' | 'remove';
-
-export type DesktopKnowledgeEntryContextMenuAction = 'new-file' | 'new-folder' | 'open-in-finder' | 'rename' | 'move' | 'delete';
-
-type DesktopSelectionContextMenuAction = 'reply' | 'copy';
-
-interface DesktopConversationContextMenuRequest {
-  x: number;
-  y: number;
-  pinAction?: 'pin' | 'unpin' | null;
-  canArchive?: boolean;
-  canOpenInNewWindow?: boolean;
-  canDuplicate?: boolean;
-  canAttachToGateway?: boolean;
-  canCopyWorkingDirectory?: boolean;
-  canCopyId?: boolean;
-  canCopyDeeplink?: boolean;
-  busyAction?: 'duplicate' | 'summarize' | null;
-}
-
-interface DesktopConversationCwdGroupContextMenuRequest {
-  x: number;
-  y: number;
-  canOpenInFinder?: boolean;
-  canEditName?: boolean;
-  canArchiveThreads?: boolean;
-  canRemove?: boolean;
-}
-
-interface DesktopKnowledgeEntryContextMenuRequest {
-  x: number;
-  y: number;
-  canOpenInFinder?: boolean;
-  canCreateFile?: boolean;
-  canCreateFolder?: boolean;
-  canRename?: boolean;
-  canMove?: boolean;
-  canDelete?: boolean;
-}
-
 interface DesktopScreenshotCaptureResult {
   cancelled: boolean;
   image?: {
@@ -176,21 +124,6 @@ export interface PersonalAgentDesktopBridge {
   testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult>;
   openNewConversation(): Promise<void>;
   openConversationPopout(input: { conversationId: string }): Promise<void>;
-  showConversationContextMenu(
-    input: DesktopConversationContextMenuRequest,
-  ): Promise<{ action: DesktopConversationContextMenuAction | null }>;
-  showConversationCwdGroupContextMenu(
-    input: DesktopConversationCwdGroupContextMenuRequest,
-  ): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
-  showKnowledgeEntryContextMenu(
-    input: DesktopKnowledgeEntryContextMenuRequest,
-  ): Promise<{ action: DesktopKnowledgeEntryContextMenuAction | null }>;
-  showSelectionContextMenu(input: {
-    x: number;
-    y: number;
-    canReply?: boolean;
-    canCopy?: boolean;
-  }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   openExternalUrl(targetUrl: string): Promise<{ url: string; opened: boolean; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
@@ -568,10 +501,6 @@ export function isDesktopShell(): boolean {
 
 // App-owned context menus stay in-app on both web and desktop. The native
 // Electron menu path caused hangs and split the UX between surfaces.
-export function shouldUseNativeAppContextMenus(): boolean {
-  return false;
-}
-
 // Desktop environment reads cross the Electron bridge and can trigger daemon
 // status checks. Cache the in-flight result so route changes do not keep poking
 // the desktop runtime while the user clicks around the app.

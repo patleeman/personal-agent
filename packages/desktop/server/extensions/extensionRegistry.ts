@@ -196,6 +196,17 @@ export interface ExtensionConversationDecoratorRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionContextMenuRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  title: string;
+  action: string;
+  surface: 'message' | 'conversationList';
+  separator?: boolean;
+  when?: string;
+}
+
 export interface ExtensionMessageActionRegistration {
   extensionId: string;
   id: string;
@@ -723,6 +734,19 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.contextMenus !== undefined) {
+    for (const [index, menu] of assertRecordArray(contributes.contextMenus, 'contributes.contextMenus').entries()) {
+      requireString(menu.id, `contributes.contextMenus[${index}].id`);
+      requireString(menu.title, `contributes.contextMenus[${index}].title`);
+      requireString(menu.action, `contributes.contextMenus[${index}].action`);
+      validateEnum(menu.surface, ['message', 'conversationList'], `contributes.contextMenus[${index}].surface`);
+      if (menu.separator !== undefined && typeof menu.separator !== 'boolean') {
+        throw new Error(`Extension manifest contributes.contextMenus[${index}].separator must be a boolean.`);
+      }
+      validateOptionalString(menu.when, `contributes.contextMenus[${index}].when`);
+    }
+  }
+
   if (contributes.conversationDecorators !== undefined) {
     for (const [index, decorator] of assertRecordArray(contributes.conversationDecorators, 'contributes.conversationDecorators').entries()) {
       requireString(decorator.id, `contributes.conversationDecorators[${index}].id`);
@@ -953,6 +977,7 @@ export function readExtensionSchema() {
       'composerShelves',
       'toolbarActions',
       'conversationDecorators',
+      'contextMenus',
     ],
   };
 }
@@ -1158,6 +1183,29 @@ export function listExtensionToolbarActionRegistrations(stateRoot: string = getS
           action: resolvedAction,
           ...(action.when ? { when: action.when } : {}),
           ...(typeof action.priority === 'number' ? { priority: action.priority } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+export function listExtensionContextMenuRegistrations(stateRoot: string = getStateRoot()): ExtensionContextMenuRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.contextMenus ?? []).flatMap((menu): ExtensionContextMenuRegistration[] => {
+      const id = menu.id.trim();
+      const title = menu.title.trim();
+      const action = menu.action.trim();
+      if (!id || !title || !action) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          title,
+          action,
+          surface: menu.surface,
+          ...(menu.separator ? { separator: true } : {}),
+          ...(menu.when ? { when: menu.when } : {}),
         },
       ];
     }),

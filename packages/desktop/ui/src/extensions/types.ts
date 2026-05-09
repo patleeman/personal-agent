@@ -154,6 +154,15 @@ interface ExtensionToolbarActionContribution {
   priority?: number;
 }
 
+interface ExtensionContextMenuContribution {
+  id: string;
+  title: string;
+  action: string;
+  surface: 'message' | 'conversationList';
+  separator?: boolean;
+  when?: string;
+}
+
 interface ExtensionConversationDecoratorContribution {
   id: string;
   component: string;
@@ -178,6 +187,7 @@ interface ExtensionContributions {
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
+  contextMenus?: ExtensionContextMenuContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, unknown>;
 }

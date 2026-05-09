@@ -1529,32 +1529,7 @@ export function WorkspaceFileDocument({
       }
 
       event.preventDefault();
-
-      const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
-      if (desktopBridge?.showSelectionContextMenu) {
-        closeSelectionContextMenu();
-        void desktopBridge
-          .showSelectionContextMenu({
-            x: event.clientX,
-            y: event.clientY,
-            canReply: Boolean(onReplyWithSelection),
-            canCopy: true,
-          })
-          .then(({ action }) => {
-            if (action === 'reply') {
-              replyWithSelectedText(text);
-              return;
-            }
-            if (action === 'copy') {
-              void copySelectedText(text);
-            }
-          })
-          .catch(() => {
-            setSelectionContextMenu({ x: event.clientX, y: event.clientY, text });
-          });
-        return;
-      }
-
+      closeSelectionContextMenu();
       setSelectionContextMenu({ x: event.clientX, y: event.clientY, text });
     },
     [closeSelectionContextMenu, copySelectedText, onReplyWithSelection, replyWithSelectedText],

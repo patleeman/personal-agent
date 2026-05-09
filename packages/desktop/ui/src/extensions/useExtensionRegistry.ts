@@ -22,6 +22,16 @@ export interface ExtensionToolbarActionRegistration {
   priority?: number;
 }
 
+export interface ExtensionContextMenuRegistration {
+  extensionId: string;
+  id: string;
+  title: string;
+  action: string;
+  surface: 'message' | 'conversationList';
+  separator?: boolean;
+  when?: string;
+}
+
 export interface ExtensionConversationDecoratorRegistration {
   extensionId: string;
   id: string;
@@ -57,6 +67,7 @@ export interface ExtensionRegistryState {
   messageActions: ExtensionMessageActionRegistration[];
   composerShelves: ExtensionComposerShelfRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
+  contextMenus: ExtensionContextMenuRegistration[];
   conversationDecorators: ExtensionConversationDecoratorRegistration[];
   loading: boolean;
   error: string | null;
@@ -160,6 +171,26 @@ function normalizeConversationDecorators(extensions: ExtensionManifest[]): Exten
   return result;
 }
 
+function normalizeContextMenus(extensions: ExtensionManifest[]): ExtensionContextMenuRegistration[] {
+  const result: ExtensionContextMenuRegistration[] = [];
+  for (const extension of extensions) {
+    const menus = extension.contributes?.contextMenus;
+    if (!menus?.length) continue;
+    for (const menu of menus) {
+      result.push({
+        extensionId: extension.id,
+        id: menu.id,
+        title: menu.title,
+        action: menu.action,
+        surface: menu.surface,
+        ...(menu.separator ? { separator: true } : {}),
+        ...(menu.when ? { when: menu.when } : {}),
+      });
+    }
+  }
+  return result;
+}
+
 export function useExtensionRegistry(): ExtensionRegistryState {
   const [state, setState] = useState<ExtensionRegistryState>({
     extensions: [],
@@ -169,6 +200,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     messageActions: [],
     composerShelves: [],
     toolbarActions: [],
+    contextMenus: [],
     conversationDecorators: [],
     loading: true,
     error: null,
@@ -186,7 +218,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
         typeof api.extensionSurfaces !== 'function'
       ) {
         if (cancelled) return;
-        setState({ extensions: [], routes: [], surfaces: [], topBarElements: [], messageActions: [], composerShelves: [], toolbarActions: [], conversationDecorators: [], loading: false, error: null });
+        setState({ extensions: [], routes: [], surfaces: [], topBarElements: [], messageActions: [], composerShelves: [], toolbarActions: [], contextMenus: [], conversationDecorators: [], loading: false, error: null });
         return;
       }
 
@@ -201,6 +233,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             messageActions: normalizeMessageActions(extensions),
             composerShelves: normalizeComposerShelves(extensions),
             toolbarActions: normalizeToolbarActions(extensions),
+            contextMenus: normalizeContextMenus(extensions),
             conversationDecorators: normalizeConversationDecorators(extensions),
             loading: false,
             error: null,
@@ -216,6 +249,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             messageActions: [],
             composerShelves: [],
             toolbarActions: [],
+            contextMenus: [],
             conversationDecorators: [],
             loading: false,
             error: error.message,

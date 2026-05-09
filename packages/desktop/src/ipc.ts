@@ -1,13 +1,9 @@
 import { ipcMain, shell, type WebContents } from 'electron';
 
-import { showConversationContextMenu } from './conversation-context-menu.js';
-import { showConversationCwdGroupContextMenu } from './conversation-cwd-group-context-menu.js';
 import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 import type { HostManager } from './hosts/host-manager.js';
-import { showKnowledgeEntryContextMenu } from './knowledge-entry-context-menu.js';
 import { subscribeDesktopRemoteOperationStatus } from './remote-operation-events.js';
 import { captureDesktopScreenshot } from './screenshot.js';
-import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { DesktopWindowController } from './window.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
@@ -162,22 +158,6 @@ export function registerDesktopIpc(options: {
       hostId: options.windowController.getHostIdForWebContentsId(event.sender.id),
       conversationId,
     });
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-context-menu`, async (event, input) => {
-    return showConversationContextMenu(event.sender, input ?? {});
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-cwd-group-context-menu`, async (event, input) => {
-    return showConversationCwdGroupContextMenu(event.sender, input ?? {});
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:show-knowledge-entry-context-menu`, async (event, input) => {
-    return showKnowledgeEntryContextMenu(event.sender, input ?? {});
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:show-selection-context-menu`, async (event, input) => {
-    return showSelectionContextMenu(event.sender, input ?? {});
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:open-path`, async (_event, targetPath: unknown) => {
