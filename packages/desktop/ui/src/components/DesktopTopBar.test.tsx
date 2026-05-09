@@ -141,6 +141,19 @@ describe('DesktopTopBar', () => {
     expect(html.indexOf('View mode')).toBeLessThan(html.indexOf('Collapse right sidebar'));
   });
 
+  it('keeps the right sidebar toggle disabled when no right sidebar is available', () => {
+    const html = renderTopBar({
+      isElectron: true,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+      activeHostSummary: 'Local runtime is healthy.',
+    });
+
+    expect(html).toContain('Right sidebar unavailable');
+    expect(html).toContain('disabled=""');
+  });
+
   it('shows the view mode switcher in the top-right controls', () => {
     const html = renderTopBar(
       {
