@@ -2,7 +2,7 @@
 /* eslint-env node */
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -158,10 +158,22 @@ function tail(value, max = 8_000) {
   return value.length > max ? value.slice(value.length - max) : value;
 }
 
+function assertPackagedAgentReadableResources(appBundlePath) {
+  const resourcesPath = join(appBundlePath, 'Contents', 'Resources');
+  const requiredResources = ['docs/index.md', 'extensions/system-settings/README.md', 'extensions/system-runs/skills/runs/SKILL.md'];
+  const missing = requiredResources.filter((relativePath) => !existsSync(join(resourcesPath, relativePath)));
+
+  if (missing.length > 0) {
+    throw new Error(`Packaged app is missing agent-readable resources:\n${missing.map((path) => `- ${path}`).join('\n')}`);
+  }
+}
+
 async function main() {
   if (!appPath) {
     fail('Usage: node scripts/smoke-desktop-release.mjs <path-to-Personal Agent.app>');
   }
+
+  assertPackagedAgentReadableResources(appPath);
 
   const executablePath = join(appPath, 'Contents', 'MacOS', basename(appPath, '.app'));
   const tempRoot = mkdtempSync(join(tmpdir(), 'pa-release-smoke-'));

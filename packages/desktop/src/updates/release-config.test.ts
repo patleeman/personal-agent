@@ -26,6 +26,15 @@ describe('desktop release config', () => {
     });
   });
 
+  it('packages agent-readable docs and extension packages as filesystem resources', () => {
+    expect(electronBuilderConfig.extraResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'docs', to: 'docs' }),
+        expect.objectContaining({ from: 'extensions', to: 'extensions' }),
+      ]),
+    );
+  });
+
   it('unpacks native sqlite loader dependencies together', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining(['node_modules/better-sqlite3/**/*', 'node_modules/bindings/**/*', 'node_modules/file-uri-to-path/**/*']),

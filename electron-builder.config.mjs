@@ -79,6 +79,10 @@ const electronBuilderConfig = {
       to: 'extensions',
     },
     {
+      from: 'docs',
+      to: 'docs',
+    },
+    {
       from: 'prompt-catalog',
       to: 'prompt-catalog',
     },

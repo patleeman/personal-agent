@@ -41,8 +41,9 @@ The check verifies:
 1. The app process starts successfully
 2. The Electron renderer exposes a page over CDP
 3. The initial route renders non-empty UI without startup errors
-4. The Knowledge route renders
-5. A conversation route renders
+4. Agent-readable packaged resources exist (`docs/index.md`, system extension READMEs, and extension skill files)
+5. The Knowledge route renders
+6. A conversation route renders
 
 ### Manual smoke test
 
