@@ -4,37 +4,34 @@ description: Use when you have a goal to work toward across multiple turns, or w
 metadata:
   id: goal-mode
   title: Goal Mode
-  summary: Set a goal, track tasks, and let the system automatically continue until the objective is met.
+  summary: Set one objective and let the system automatically continue until it is met.
   status: active
 tools:
   - set_goal
   - update_goal
-  - get_goal
-  - update_tasks
 ---
 
 # Goal Mode
 
 Use this skill when you have a sustained objective that may span multiple turns.
 
-Goal mode replaces auto mode's nudge/mission/loop modes with a single concept: set an objective, work toward it, and the system will automatically schedule a continuation turn when you go idle with an active goal.
+Goal mode is a single active objective. The system injects the current objective into continuation turns and automatically schedules another turn while the goal is active.
 
 ## How it works
 
-1. **`set_goal`** — create a concrete objective. Optionally include a task list for tracking sub-steps. Fails if a goal is already active — mark it complete first.
-2. **`update_goal(status: "complete")`** — mark the goal achieved when the objective is met.
-3. **`get_goal`** — read the current goal, status, tasks, and progress.
-4. **`update_tasks`** — update task statuses as you work (in_progress, done, blocked, pending).
+1. **`set_goal`** — create the objective when goal mode is not already active.
+2. **`update_goal(objective: "...")`** — replace the active objective when the goal changes.
+3. **`update_goal(status: "complete")`** — mark the goal achieved when the objective is met.
 
 The system automatically schedules a continuation turn after each turn while the goal is active.
 
 ## Rules
 
 - Do not create a goal for every ordinary request — only for sustained multi-turn tasks.
-- Keep tasks current: mark them in_progress before starting, done as soon as finished.
+- Do not call `set_goal` when a goal is already active; update the objective instead.
 - Mark the goal complete with `update_goal` only when the objective is actually achieved.
-- The system's continuation prompt includes the objective and remaining tasks.
+- The system's continuation prompt already includes the current objective.
 
 ## No-tool suppression
 
-If a continuation turn produces no tool calls (just chat), the next automatic continuation is skipped. Starting or completing a goal resets this.
+If continuation turns produce no tool calls, automatic continuation is suppressed after two no-progress turns. Starting, updating, or completing a goal resets this.

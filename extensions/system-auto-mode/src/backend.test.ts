@@ -108,12 +108,12 @@ describe('system-goal-mode extension', () => {
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
-    await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'get_goal' }] }, ctx);
+    await turnEnd?.({ toolResults: [] }, ctx);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('treats non-get_goal tool turns as progress', async () => {
+  it('treats tool turns as progress', async () => {
     const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
     const sendMessage = vi.fn();
     const factory = createConversationAutoModeAgentExtension();
@@ -159,5 +159,23 @@ describe('system-goal-mode extension', () => {
     await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('registers only goal set and update tools', () => {
+    const registeredTools: Array<{ name: string }> = [];
+    const factory = createConversationAutoModeAgentExtension();
+    const pi = {
+      registerTool: vi.fn((tool: { name: string }) => registeredTools.push(tool)),
+      registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
+      setActiveTools: vi.fn(),
+      sendMessage: vi.fn(),
+      appendEntry: vi.fn(),
+      on: vi.fn(),
+    } as unknown as ExtensionAPI;
+
+    factory(pi);
+
+    expect(registeredTools.map((tool) => tool.name)).toEqual(['set_goal', 'update_goal']);
   });
 });

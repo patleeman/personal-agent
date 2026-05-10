@@ -8,21 +8,13 @@ const CONTINUATION_CUSTOM_TYPE = 'goal-continuation';
 
 const GOAL_SET_TOOL = 'set_goal';
 const GOAL_UPDATE_TOOL = 'update_goal';
-const GOAL_GET_TOOL = 'get_goal';
-const GOAL_UPDATE_TASKS_TOOL = 'update_tasks';
 
 // ── State types ──────────────────────────────────────────────────────────────
-
-interface Task {
-  id: string;
-  description: string;
-  status: 'pending' | 'in_progress' | 'done' | 'blocked';
-}
 
 interface GoalState {
   objective: string;
   status: 'active' | 'paused' | 'complete';
-  tasks: Task[];
+  tasks: [];
   stopReason: string | null;
   updatedAt: string | null;
 }
@@ -36,11 +28,6 @@ const DEFAULT_GOAL_STATE: GoalState = {
 };
 
 // ── State helpers ────────────────────────────────────────────────────────────
-
-function createTask(description: string, status?: Task['status']): Task {
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return { id, description, status: status ?? 'pending' };
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -61,23 +48,10 @@ function readGoalState(sessionManager: { getEntries: () => unknown[] }): GoalSta
       typeof data.status === 'string' && ['active', 'paused', 'complete'].includes(data.status)
         ? (data.status as GoalState['status'])
         : 'complete';
-    const tasks: Task[] = [];
-    if (Array.isArray(data.tasks)) {
-      for (const task of data.tasks) {
-        if (!isRecord(task) || typeof task.id !== 'string' || typeof task.description !== 'string') {
-          continue;
-        }
-        const taskStatus =
-          typeof task.status === 'string' && ['pending', 'in_progress', 'done', 'blocked'].includes(task.status)
-            ? (task.status as Task['status'])
-            : 'pending';
-        tasks.push({ id: task.id, description: task.description, status: taskStatus });
-      }
-    }
     return {
       objective: data.objective,
       status,
-      tasks,
+      tasks: [],
       stopReason: typeof data.stopReason === 'string' ? data.stopReason : null,
       updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
     };
@@ -89,26 +63,20 @@ function writeGoalState(pi: ExtensionAPI, state: GoalState): void {
   pi.appendEntry(GOAL_STATE_CUSTOM_TYPE, state);
 }
 
-const GOAL_ACTIVE_TOOLS = [GOAL_UPDATE_TOOL, GOAL_UPDATE_TASKS_TOOL];
+const GOAL_ACTIVE_TOOLS = [GOAL_UPDATE_TOOL];
+const GOAL_INACTIVE_TOOLS = [GOAL_SET_TOOL];
+const GOAL_TOOLS = [...GOAL_ACTIVE_TOOLS, ...GOAL_INACTIVE_TOOLS];
 
 function syncGoalTools(pi: ExtensionAPI, hasActiveGoal: boolean): void {
-  const current = pi.getActiveTools();
-  const hasTools = current.includes(GOAL_UPDATE_TOOL);
-  if (hasActiveGoal && !hasTools) {
-    pi.setActiveTools([...current, ...GOAL_ACTIVE_TOOLS]);
-  } else if (!hasActiveGoal && hasTools) {
-    pi.setActiveTools(current.filter((t) => !GOAL_ACTIVE_TOOLS.includes(t)));
-  }
+  const current = pi.getActiveTools().filter((tool) => !GOAL_TOOLS.includes(tool));
+  pi.setActiveTools([...current, ...(hasActiveGoal ? GOAL_ACTIVE_TOOLS : GOAL_INACTIVE_TOOLS)]);
 }
 
 function buildContinuationPrompt(state: GoalState): string {
-  const taskLines = state.tasks.filter((t) => t.status !== 'done').map((t, i) => `${i + 1}. ${t.description} (${t.status})`);
-  const taskSummary = taskLines.length > 0 ? `Remaining tasks:\n${taskLines.join('\n')}` : 'No remaining tasks.';
   return [
     'Goal continuation.',
     '',
     `Objective: ${state.objective}`,
-    taskSummary,
     '',
     'Continue working until the objective is fully achieved.',
     'Do not mark the goal complete or stop early.',
@@ -117,38 +85,22 @@ function buildContinuationPrompt(state: GoalState): string {
 }
 
 function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
-  return toolResults.length === 0 || toolResults.every((result) => result.toolName === GOAL_GET_TOOL);
+  return toolResults.length === 0;
 }
 
 // ── Tool parameter schemas ───────────────────────────────────────────────────
 
 const SetGoalParams = Type.Object({
   objective: Type.String({ description: 'The concrete objective to pursue.' }),
-  tasks: Type.Optional(
-    Type.Array(
-      Type.Object({
-        description: Type.String({ description: 'Task description.' }),
-      }),
-      { description: 'Optional list of sub-tasks for the goal.' },
-    ),
-  ),
 });
 
 const UpdateGoalParams = Type.Object({
-  status: Type.Union([Type.Literal('complete')], {
-    description: 'Mark the goal as complete only when the objective is achieved.',
-  }),
-});
-
-const UpdateTasksParams = Type.Object({
-  tasks: Type.Array(
-    Type.Object({
-      id: Type.String({ description: 'Task id.' }),
-      status: Type.Union([Type.Literal('pending'), Type.Literal('in_progress'), Type.Literal('done'), Type.Literal('blocked')], {
-        description: 'New task status.',
-      }),
+  status: Type.Optional(
+    Type.Union([Type.Literal('complete')], {
+      description: 'Mark the goal as complete only when the objective is achieved.',
     }),
   ),
+  objective: Type.Optional(Type.String({ description: 'Replace the active goal objective when the goal has changed.' })),
 });
 
 // ── Extension entry ──────────────────────────────────────────────────────────
@@ -163,12 +115,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     pi.registerTool({
       name: GOAL_SET_TOOL,
       label: 'Set goal',
-      description: 'Set a goal for this conversation. Fails if a goal is already active — mark it complete first with update_goal.',
+      description: 'Set a goal for this conversation when goal mode is not already active.',
       promptSnippet: 'Set a concrete objective to work toward.',
       promptGuidelines: [
-        'Use this tool when the user asks you to pursue a goal across multiple turns.',
-        'Create clear, actionable objectives and split complex goals into tasks.',
-        'If a goal already exists, use update_goal to mark it complete first.',
+        'Use this tool only when the user explicitly asks you to start goal mode from a normal conversation.',
+        'If a goal is already active, use update_goal to change the objective or mark it complete.',
         'Do not create a goal for every ordinary request — only for sustained multi-turn tasks.',
       ],
       parameters: SetGoalParams,
@@ -178,11 +129,15 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           throw new Error('A goal is already active. Mark it complete first with update_goal.');
         }
 
-        const tasks = (params.tasks ?? []).map((t) => createTask(t.description));
+        const objective = params.objective.trim();
+        if (!objective) {
+          throw new Error('Goal objective cannot be empty.');
+        }
+
         const newState: GoalState = {
-          objective: params.objective,
+          objective,
           status: 'active',
-          tasks,
+          tasks: [],
           stopReason: null,
           updatedAt: new Date().toISOString(),
         };
@@ -191,12 +146,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
 
-        const taskSummary = tasks.length > 0 ? `. Tasks: ${tasks.length}` : '';
         return {
           content: [
             {
               type: 'text' as const,
-              text: `Goal set: "${params.objective}"${taskSummary}`,
+              text: `Goal set: "${objective}"`,
             },
           ],
           details: { state: newState },
@@ -204,119 +158,50 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       },
     });
 
-    // ── Register update_goal tool (complete only) ───────────────────────
+    // ── Register update_goal tool ───────────────────────────────────────
     pi.registerTool({
       name: GOAL_UPDATE_TOOL,
-      label: 'Update goal status',
-      description: 'Mark the current goal as complete.',
-      promptSnippet: 'Mark the goal achieved when the objective is met.',
+      label: 'Update goal',
+      description: 'Update the current goal objective or mark it complete.',
+      promptSnippet: 'Update the goal when the objective changes, or mark it achieved when done.',
       promptGuidelines: [
-        'Only use this tool to mark the goal complete.',
-        'Do not mark it complete just because you are stopping work — only when the objective is actually achieved.',
+        'Use objective to replace the active goal text when the target changes.',
+        'Use status: "complete" only when the objective is actually achieved.',
+        'Do not mark it complete just because you are stopping work.',
       ],
       parameters: UpdateGoalParams,
-      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const state = readGoalState(ctx.sessionManager);
         if (state.status !== 'active') {
-          throw new Error('No active goal to complete.');
+          throw new Error('No active goal to update.');
+        }
+
+        const objective = typeof params.objective === 'string' ? params.objective.trim() : undefined;
+        if (params.status !== 'complete' && !objective) {
+          throw new Error('Provide objective to update the goal, or status: "complete" to finish it.');
         }
 
         const newState: GoalState = {
           ...state,
-          status: 'complete',
-          stopReason: 'goal achieved',
+          objective: objective || state.objective,
+          status: params.status === 'complete' ? 'complete' : 'active',
+          stopReason: params.status === 'complete' ? 'goal achieved' : null,
           updatedAt: new Date().toISOString(),
         };
         writeGoalState(pi, newState);
-        syncGoalTools(pi, false);
+        syncGoalTools(pi, newState.status === 'active');
         continuationSuppressed = false;
         consecutiveNoToolTurns = 0;
 
+        const text = newState.status === 'complete' ? 'Goal complete!' : `Goal updated: "${newState.objective}"`;
         return {
           content: [
             {
               type: 'text' as const,
-              text: 'Goal complete!',
+              text,
             },
           ],
           details: { state: newState },
-        };
-      },
-    });
-
-    // ── Register get_goal tool ──────────────────────────────────────────
-    pi.registerTool({
-      name: GOAL_GET_TOOL,
-      label: 'Get goal',
-      description: 'Read the current goal, status, and tasks.',
-      parameters: Type.Object({}),
-      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-        const state = readGoalState(ctx.sessionManager);
-        if (!state.objective) {
-          return {
-            content: [{ type: 'text' as const, text: 'No goal is set.' }],
-            details: { state: null },
-          };
-        }
-
-        const taskLines = state.tasks.map((t, i) => `${i + 1}. [${t.status === 'done' ? 'x' : ' '}] ${t.description} (${t.status})`);
-        const tasksText = taskLines.length > 0 ? `\nTasks:\n${taskLines.join('\n')}` : '';
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: [
-                `Objective: ${state.objective}`,
-                `Status: ${state.status}`,
-                state.tasks.length > 0 ? `Tasks: ${state.tasks.filter((t) => t.status === 'done').length}/${state.tasks.length} done` : '',
-                tasksText,
-              ]
-                .filter(Boolean)
-                .join('\n'),
-            },
-          ],
-          details: { state },
-        };
-      },
-    });
-
-    // ── Register update_tasks tool ──────────────────────────────────────
-    pi.registerTool({
-      name: GOAL_UPDATE_TASKS_TOOL,
-      label: 'Update tasks',
-      description: 'Update task statuses for the current goal.',
-      promptSnippet: 'Keep the task list current as work progresses.',
-      promptGuidelines: [
-        'Update task status immediately when starting or finishing a task.',
-        'Do not batch all updates at the end — keep the list current.',
-        'Mark tasks "done" as soon as they are complete.',
-      ],
-      parameters: UpdateTasksParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        const state = readGoalState(ctx.sessionManager);
-        if (state.status !== 'active') {
-          throw new Error('No active goal to update tasks for.');
-        }
-
-        const tasks = state.tasks.map((t) => {
-          const patch = params.tasks.find((p) => p.id === t.id);
-          if (patch) {
-            return { ...t, status: patch.status };
-          }
-          return t;
-        });
-
-        const newState: GoalState = { ...state, tasks, updatedAt: new Date().toISOString() };
-        writeGoalState(pi, newState);
-
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Updated tasks. ${tasks.filter((t) => t.status === 'done').length}/${tasks.length} done.`,
-            },
-          ],
-          details: { tasks: tasks.map((t) => ({ id: t.id, status: t.status })) },
         };
       },
     });
@@ -354,9 +239,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
             pi.sendUserMessage('No goal is set. Use /goal <objective> to set one.');
             return;
           }
-          const taskSummary =
-            state.tasks.length > 0 ? ` Tasks: ${state.tasks.filter((t) => t.status === 'done').length}/${state.tasks.length} done.` : '';
-          pi.sendUserMessage(`Current goal: ${state.objective} (${state.status})${taskSummary}`);
+          pi.sendUserMessage(`Current goal: ${state.objective} (${state.status})`);
           return;
         }
 
@@ -441,11 +324,13 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
 
     // ── Reactivate paused goal on resume ──────────────────────────────────
     pi.on('session_start', async (event, ctx) => {
+      const state = readGoalState(ctx.sessionManager);
+      syncGoalTools(pi, state.status === 'active');
+
       if (event.reason !== 'resume') {
         return;
       }
 
-      const state = readGoalState(ctx.sessionManager);
       if (state.status !== 'paused' || !state.objective) {
         return;
       }
