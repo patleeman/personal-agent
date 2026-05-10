@@ -22,17 +22,10 @@ export function SettingsField({ entry, value, onChange }: SettingsFieldProps) {
 
   return (
     <div className="space-y-2 py-3 first:pt-0">
-      <div>
-        <label className="block text-[13px] font-medium text-primary">
-          {label}
-          {entry.description ? <span className="ml-2 font-normal text-[12px] text-secondary">{entry.description}</span> : null}
-        </label>
-        {entry.extensionId ? (
-          <p className="mt-1 text-[12px] text-secondary">
-            Injected by extension <span className="font-mono text-primary">{entry.extensionId}</span>.
-          </p>
-        ) : null}
-      </div>
+      <label className="block text-[13px] font-medium text-primary">
+        {label}
+        {entry.description ? <span className="ml-2 font-normal text-[12px] text-secondary">{entry.description}</span> : null}
+      </label>
 
       {renderControl(entry, currentValue, handleChange)}
     </div>

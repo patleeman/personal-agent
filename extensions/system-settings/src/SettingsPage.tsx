@@ -1771,6 +1771,24 @@ export function DesktopConnectionsSettingsPanel() {
   );
 }
 
+function formatInjectedExtensionDescription(entries: UnifiedSettingsEntry[]): ReactNode {
+  const extensionIds = [...new Set(entries.map((entry) => entry.extensionId).filter(Boolean))];
+  if (extensionIds.length === 0) return null;
+
+  return (
+    <>
+      Injected by{' '}
+      {extensionIds.map((extensionId, index) => (
+        <span key={extensionId}>
+          {index > 0 ? ', ' : null}
+          <span className="font-mono text-primary">{extensionId}</span>
+        </span>
+      ))}
+      .
+    </>
+  );
+}
+
 function ExtensionSettingsSection() {
   const { data: values, loading, error } = useApi<Record<string, unknown>>(api.settings as never);
   const { data: schema, loading: schemaLoading, error: schemaError } = useApi<UnifiedSettingsEntry[]>(api.settingsSchema as never);
@@ -1837,7 +1855,7 @@ function ExtensionSettingsSection() {
   return (
     <div className="space-y-0">
       {[...grouped.entries()].map(([group, entries]) => (
-        <SettingsPanel key={group} title={group}>
+        <SettingsPanel key={group} title={group} description={formatInjectedExtensionDescription(entries)}>
           {entries.map((entry) => (
             <SettingsField
               key={entry.key}

@@ -296,7 +296,9 @@ describe('SettingsPage', () => {
     expect(html).toContain('Skill folders');
     expect(html).not.toContain('Knowledge base');
     expect(html).toContain('Sample manifest setting');
-    expect(html).toContain('Injected by extension <span class="font-mono text-primary">sample-extension</span>.');
+    expect(html).toContain('Injected by');
+    expect(html).toContain('<span class="font-mono text-primary">sample-extension</span>');
+    expect(html).not.toContain('Injected by extension <span');
     expect(html).not.toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
     expect(html).not.toContain('In sync · Last synced');
     expect(html).toContain('AGENTS.md files');
