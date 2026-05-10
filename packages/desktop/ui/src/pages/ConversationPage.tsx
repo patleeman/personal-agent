@@ -1382,25 +1382,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   });
 
   // Goal mode
-  const [draftGoalEnabled, setDraftGoalEnabled] = useState(false);
   const [composerGoalPending, setComposerGoalPending] = useState(false);
-  const goalEnabled = draft ? draftGoalEnabled : composerGoalPending || stream.goalState?.status === 'active';
+  const goalEnabled = composerGoalPending || stream.goalState?.status === 'active';
   const toggleGoalMode = useCallback(async () => {
-    if (draft) {
-      setDraftGoalEnabled((prev) => !prev);
-      return;
-    }
-    if (!id) return;
     const isEnabled = !goalEnabled;
     if (isEnabled) {
-      const text = input.trim();
       setComposerGoalPending(true);
-      await api.updateGoal(id, { objective: text });
-    } else {
-      setComposerGoalPending(false);
+      return;
+    }
+
+    setComposerGoalPending(false);
+    if (id) {
       await api.updateGoal(id, {});
     }
-  }, [draft, id, goalEnabled, input]);
+  }, [id, goalEnabled]);
   const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
   const [extensionMentionRegistrations, setExtensionMentionRegistrations] = useState<ExtensionMentionRegistration[]>([]);
   const [extensionMentionItems, setExtensionMentionItems] = useState<MentionItem[]>([]);
@@ -4418,8 +4413,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             rememberComposerInput(inputSnapshot, created.id);
             persistPendingConversationPrompt(created.id, initialPrompt);
             setPendingConversationPromptDispatching(created.id, true);
-            if (draftGoalEnabled && text) {
+            if (composerGoalPending && text) {
               await api.updateGoal(created.id, { objective: text }).catch(() => {});
+              setComposerGoalPending(false);
             }
 
             const sendResult = await api.promptSession(
@@ -4522,8 +4518,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           rememberComposerInput(inputSnapshot, newId);
           persistPendingConversationPrompt(newId, initialPrompt);
           setPendingConversationPromptDispatching(newId, true);
-          if (draftGoalEnabled && text) {
+          if (composerGoalPending && text) {
             await api.updateGoal(newId, { objective: text }).catch(() => {});
+            setComposerGoalPending(false);
           }
 
           const sendResult = await api.promptSession(
@@ -5631,13 +5628,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
               <ConversationGoalPanel
                 goal={
-                  draft
-                    ? draftGoalEnabled && input.trim()
-                      ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
-                      : null
-                    : composerGoalPending && input.trim()
-                      ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
-                      : stream.goalState
+                  composerGoalPending && input.trim()
+                    ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
+                    : stream.goalState
                 }
               />
 
