@@ -14,6 +14,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   closeTraceDbs,
   queryAgentLoop,
+  queryAutoMode,
   queryBashBreakdown,
   queryBashComplexity,
   queryCacheEfficiency,
@@ -30,6 +31,7 @@ import {
   queryTokensDaily,
   queryToolFlow,
   queryToolHealth,
+  writeTraceAutoMode,
   writeTraceCompaction,
   writeTraceContext,
   writeTraceStats,
@@ -124,6 +126,21 @@ describe('trace-db', () => {
 
     writeTraceCompaction({ sessionId, reason: 'overflow', tokensBefore: 120000, tokensAfter: 52000, tokensSaved: 68000 });
     writeTraceCompaction({ sessionId: 'session-2', reason: 'threshold', tokensBefore: 90000, tokensAfter: 45000, tokensSaved: 45000 });
+  });
+
+  it('queryAutoMode returns activity and latest active sessions', () => {
+    writeTraceAutoMode({ sessionId, enabled: true });
+    writeTraceAutoMode({ sessionId, enabled: false, stopReason: 'complete' });
+    writeTraceAutoMode({ sessionId: 'session-2', enabled: true });
+
+    const result = queryAutoMode(fiveHoursAgo);
+
+    expect(result.enabledCount).toBe(2);
+    expect(result.disabledCount).toBe(1);
+    expect(result.currentActive).toBe(1);
+    expect(result.topStopReasons).toEqual([{ reason: 'complete', count: 1 }]);
+    expect(result.recentEvents).toHaveLength(3);
+    expect(result.recentEvents[0]).toMatchObject({ sessionId: 'session-2', enabled: true, stopReason: null });
   });
 
   it('querySummary returns correct aggregates', () => {

@@ -576,6 +576,22 @@ export function writeTraceCompaction(params: {
   }
 }
 
+export function writeTraceAutoMode(params: { sessionId: string; enabled: boolean; stopReason?: string | null; profile?: string }): void {
+  try {
+    const db = getTraceDb();
+    db.prepare(`INSERT INTO trace_auto_mode (id, session_id, profile, ts, enabled, stop_reason) VALUES (?, ?, ?, ?, ?, ?)`).run(
+      generateId(),
+      params.sessionId,
+      params.profile ?? '',
+      timestamp(),
+      params.enabled ? 1 : 0,
+      params.stopReason ?? null,
+    );
+  } catch {
+    // Fire-and-forget
+  }
+}
+
 export function writeTraceSuggestedContext(params: { sessionId: string; pointerIds: string[]; profile?: string }): void {
   try {
     const db = getTraceDb();
@@ -599,19 +615,6 @@ export function writeTraceContextPointerInspect(params: {
       `INSERT INTO trace_context_pointer_inspect (id, session_id, profile, ts, inspected_conversation_id, was_suggested) VALUES (?, ?, ?, ?, ?, ?)`,
     ).run(generateId(), params.sessionId, params.profile ?? '', timestamp(), params.inspectedConversationId, params.wasSuggested ? 1 : 0);
   } catch {
-    // Fire-and-forget
-  }
-}
-
-export function writeTraceAutoMode(params: { sessionId: string; enabled: boolean; stopReason?: string | null; profile?: string }): void {
-  try {
-    const db = getTraceDb();
-    const stmt = db.prepare(`
-      INSERT INTO trace_auto_mode (id, session_id, profile, ts, enabled, stop_reason)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(generateId(), params.sessionId, params.profile ?? '', timestamp(), params.enabled ? 1 : 0, params.stopReason ?? null);
-  } catch (err) {
     // Fire-and-forget
   }
 }
@@ -1165,6 +1168,93 @@ export interface TokenDailyRow {
   cost: number;
 }
 
+export interface AutoModeEvent {
+  sessionId: string;
+  ts: string;
+  enabled: boolean;
+  stopReason: string | null;
+}
+
+export interface AutoModeSummary {
+  enabledCount: number;
+  disabledCount: number;
+  currentActive: number;
+  topStopReasons: Array<{ reason: string; count: number }>;
+  recentEvents: AutoModeEvent[];
+}
+
+export function queryAutoMode(since: string): AutoModeSummary {
+  const db = getTraceDb();
+
+  const counts = mapRow<{ enabledCount: number; disabledCount: number }>(
+    db
+      .prepare(
+        `SELECT
+          COALESCE(SUM(CASE WHEN enabled = 1 THEN 1 ELSE 0 END), 0) as enabled_count,
+          COALESCE(SUM(CASE WHEN enabled = 0 THEN 1 ELSE 0 END), 0) as disabled_count
+        FROM trace_auto_mode
+        WHERE ts >= ?`,
+      )
+      .get(since) as Record<string, unknown>,
+  );
+
+  const currentActive = mapRow<{ count: number }>(
+    db
+      .prepare(
+        `SELECT COUNT(*) as count
+        FROM trace_auto_mode latest
+        WHERE latest.ts >= ?
+          AND latest.enabled = 1
+          AND latest.rowid = (
+            SELECT inner_event.rowid
+            FROM trace_auto_mode inner_event
+            WHERE inner_event.session_id = latest.session_id
+            ORDER BY inner_event.ts DESC, inner_event.rowid DESC
+            LIMIT 1
+          )`,
+      )
+      .get(since) as Record<string, unknown>,
+  ).count;
+
+  const topStopReasons = mapRows<{ reason: string; count: number }>(
+    db
+      .prepare(
+        `SELECT COALESCE(NULLIF(stop_reason, ''), 'unknown') as reason, COUNT(*) as count
+        FROM trace_auto_mode
+        WHERE ts >= ? AND enabled = 0
+        GROUP BY COALESCE(NULLIF(stop_reason, ''), 'unknown')
+        ORDER BY count DESC, reason ASC
+        LIMIT 5`,
+      )
+      .all(since) as Record<string, unknown>[],
+  ).map((row) => ({ reason: row.reason, count: Number(row.count) }));
+
+  const recentEvents = mapRows<{ sessionId: string; ts: string; enabled: number; stopReason: string | null }>(
+    db
+      .prepare(
+        `SELECT session_id, ts, enabled, stop_reason
+        FROM trace_auto_mode
+        WHERE ts >= ?
+        ORDER BY ts DESC, rowid DESC
+        LIMIT 50`,
+      )
+      .all(since) as Record<string, unknown>[],
+  ).map((row) => ({
+    sessionId: row.sessionId,
+    ts: row.ts,
+    enabled: Boolean(row.enabled),
+    stopReason: row.stopReason,
+  }));
+
+  return {
+    enabledCount: Number(counts.enabledCount),
+    disabledCount: Number(counts.disabledCount),
+    currentActive: Number(currentActive),
+    topStopReasons,
+    recentEvents,
+  };
+}
+
 export function queryTokensDaily(since: string): TokenDailyRow[] {
   const db = getTraceDb();
   const rows = db
@@ -1369,69 +1459,6 @@ export function queryToolFlow(since: string): ToolFlowResult {
   failureTrajectories.sort((a, b) => b.ts.localeCompare(a.ts));
 
   return { transitions, coOccurrences, failureTrajectories };
-}
-
-export interface AutoModeEvent {
-  sessionId: string;
-  ts: string;
-  enabled: boolean;
-  stopReason: string | null;
-}
-
-export interface AutoModeSummary {
-  enabledCount: number;
-  disabledCount: number;
-  currentActive: number;
-  topStopReasons: Array<{ reason: string; count: number }>;
-  recentEvents: AutoModeEvent[];
-}
-
-export function queryAutoMode(since: string): AutoModeSummary {
-  const db = getTraceDb();
-  const events = db
-    .prepare(
-      `
-    SELECT session_id, ts, enabled, stop_reason
-    FROM trace_auto_mode
-    WHERE ts >= ?
-    ORDER BY ts DESC
-    LIMIT 50
-  `,
-    )
-    .all(since) as Record<string, unknown>[];
-  const mapped = mapRows<AutoModeEvent>(events);
-
-  const enabledCount = mapped.filter((e) => e.enabled).length;
-  const disabledCount = mapped.filter((e) => !e.enabled).length;
-
-  // Get distinct sessions with their latest state to count currently active
-  const latestBySession = new Map<string, AutoModeEvent>();
-  for (const event of mapped) {
-    if (!latestBySession.has(event.sessionId)) {
-      latestBySession.set(event.sessionId, event);
-    }
-  }
-  const currentActive = [...latestBySession.values()].filter((e) => e.enabled).length;
-
-  // Top stop reasons
-  const reasonCounts = new Map<string, number>();
-  for (const event of mapped) {
-    if (!event.enabled && event.stopReason) {
-      reasonCounts.set(event.stopReason, (reasonCounts.get(event.stopReason) ?? 0) + 1);
-    }
-  }
-  const topStopReasons = [...reasonCounts.entries()]
-    .map(([reason, count]) => ({ reason, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
-  return {
-    enabledCount,
-    disabledCount,
-    currentActive,
-    topStopReasons,
-    recentEvents: mapped.slice(0, 20),
-  };
 }
 
 export interface CacheEfficiencyPoint {
