@@ -5250,7 +5250,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <div className="max-w-4xl">
                 {isEditingTitle && !draft ? (
                   <form
-                    className="flex max-w-4xl items-center gap-2 pr-4"
+                    className="-ml-3 flex max-w-4xl items-center gap-2 pr-4"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void saveTitleEdit();
@@ -5267,7 +5267,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         }
                       }}
                       placeholder="Name this conversation"
-                      className="-mx-3 min-w-0 flex-1 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary outline-none transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 sm:text-[34px]"
+                      className="min-w-0 flex-1 rounded-2xl border border-transparent bg-transparent px-3 py-2 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary outline-none transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 sm:text-[34px]"
                       disabled={titleSaving}
                     />
                     <button
