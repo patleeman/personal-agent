@@ -1382,18 +1382,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   });
 
   // Goal mode
-  const goalEnabled = Boolean(stream.goalState?.objective && stream.goalState.status === 'active');
+  const [draftGoalEnabled, setDraftGoalEnabled] = useState(false);
+  const goalEnabled = draft ? draftGoalEnabled : stream.goalState?.status === 'active';
   const toggleGoalMode = useCallback(async () => {
+    if (draft) {
+      setDraftGoalEnabled((prev) => !prev);
+      return;
+    }
     if (!id) return;
     const isEnabled = !goalEnabled;
     if (isEnabled) {
       const text = input.trim();
-      if (!text) return;
       await api.updateGoal(id, { objective: text });
     } else {
       await api.updateGoal(id, {});
     }
-  }, [id, goalEnabled, input]);
+  }, [draft, id, goalEnabled, input]);
   const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
   const [extensionMentionRegistrations, setExtensionMentionRegistrations] = useState<ExtensionMentionRegistration[]>([]);
   const [extensionMentionItems, setExtensionMentionItems] = useState<MentionItem[]>([]);
@@ -4430,6 +4434,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }
             setPendingConversationPromptDispatching(created.id, false);
 
+            if (draftGoalEnabled && text) {
+              await api.updateGoal(created.id, { objective: text }).catch(() => {});
+            }
             clearDraftConversationAttachments();
             clearDraftConversationContextDocs();
             clearDraftConversationCwd();
@@ -4530,6 +4537,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           }
           setPendingConversationPromptDispatching(newId, false);
 
+          if (draftGoalEnabled && text) {
+            await api.updateGoal(newId, { objective: text }).catch(() => {});
+          }
           clearDraftConversationAttachments();
           clearDraftConversationContextDocs();
           clearDraftConversationCwd();
@@ -5608,7 +5618,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 <div className="px-4 py-3 text-center text-[12px] text-accent border-b border-accent/20">📎 Drop files to attach</div>
               )}
 
-              <ConversationGoalPanel goal={stream.goalState} />
+              <ConversationGoalPanel
+                goal={
+                  draft
+                    ? draftGoalEnabled && input.trim()
+                      ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
+                      : null
+                    : stream.goalState
+                }
+              />
 
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
