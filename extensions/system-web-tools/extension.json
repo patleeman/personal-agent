@@ -13,6 +13,15 @@
     ]
   },
   "contributes": {
+    "secrets": {
+      "exaApiKey": {
+        "label": "Exa API key",
+        "description": "Used by web_search for Exa-backed search.",
+        "env": "EXA_API_KEY",
+        "placeholder": "exa_…",
+        "order": 1
+      }
+    },
     "tools": [
       {
         "id": "web-fetch",
@@ -49,5 +58,5 @@
       }
     ]
   },
-  "permissions": ["network:read"]
+  "permissions": ["network:read", "secrets:read"]
 }

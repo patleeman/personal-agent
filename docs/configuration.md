@@ -84,10 +84,11 @@ Model/provider configuration is split on purpose:
 | ----------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Provider/model definitions    | `<config-root>/profiles/shared/models.json`                   | Custom providers, model overrides, context windows, costs, compatibility flags |
 | Active runtime model registry | `<state-root>/pi-agent-runtime/models.json`                   | Materialized model definitions read by the runtime                             |
-| Credentials                   | `<state-root>/pi-agent-runtime/auth.json`                     | API keys and OAuth tokens managed through Settings                             |
+| Legacy provider credentials   | `<state-root>/pi-agent-runtime/auth.json`                     | Existing API keys and OAuth tokens managed through Settings                    |
+| Extension secrets             | macOS Keychain, `<state-root>/secrets.json`, or env-only      | Extension-declared secrets such as integration API keys                        |
 | Environment credentials       | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, etc. | Runtime-only credential source; not persisted                                  |
 
-Provider credentials should be managed through Settings. Manual edits to `auth.json` are possible but discouraged.
+Provider credentials should be managed through Settings. Manual edits to `auth.json` are possible but discouraged. New extension secrets should use `contributes.secrets`; the active backend is configured by `secrets.provider` (`keychain`, `file`, or `env-only`). Environment variables declared by the extension take precedence over stored values.
 
 ## Knowledge vault resolution
 
@@ -112,6 +113,7 @@ Not every Settings-page control writes to the same JSON file:
 | Skills and extra instruction files                      | `<config-root>/config.json`                                         |
 | Provider/model definitions                              | `<config-root>/profiles/shared/models.json`                         |
 | Provider credentials                                    | `<state-root>/pi-agent-runtime/auth.json` and environment variables |
+| Extension secrets                                       | macOS Keychain, `<state-root>/secrets.json`, or environment only    |
 | Desktop update/startup/keyboard preferences             | `<state-root>/desktop/config.json`                                  |
 | Extension enablement and extension keybinding overrides | `<state-root>/extensions/registry.json`                             |
 | Extension scalar settings                               | `<state-root>/settings.json`                                        |

@@ -10,6 +10,16 @@
     "styles": []
   },
   "contributes": {
+    "settings": {
+      "secrets.provider": {
+        "type": "select",
+        "default": "keychain",
+        "enum": ["keychain", "file", "env-only"],
+        "description": "Secret storage backend. Keychain is recommended on macOS; file is for dev/headless; env-only disables writes.",
+        "group": "Security",
+        "order": 1
+      }
+    },
     "nav": [
       {
         "id": "settings-nav",

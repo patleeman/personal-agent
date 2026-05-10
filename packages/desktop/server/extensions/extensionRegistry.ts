@@ -6,6 +6,8 @@ import { getStateRoot } from '@personal-agent/core';
 import type {
   ExtensionManifest,
   ExtensionMentionContribution,
+  ExtensionSecretBackendContribution,
+  ExtensionSecretContribution,
   ExtensionSkillContribution,
   ExtensionSurface,
   ExtensionToolContribution,
@@ -294,6 +296,28 @@ export interface ExtensionSettingsRegistration {
   order: number;
 }
 
+export interface ExtensionSecretRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  id: string;
+  key: string;
+  label: string;
+  description?: string;
+  env?: string;
+  placeholder?: string;
+  order: number;
+}
+
+export interface ExtensionSecretBackendRegistration {
+  extensionId: string;
+  packageType: ExtensionManifest['packageType'];
+  id: string;
+  label: string;
+  description?: string;
+  handler: string;
+  order: number;
+}
+
 export interface ExtensionSettingsComponentRegistration {
   extensionId: string;
   id: string;
@@ -502,6 +526,51 @@ function buildExtensionSettingsRegistrations(entry: ExtensionRegistryEntry): Ext
       },
     ];
   });
+}
+
+function buildExtensionSecretRegistrations(entry: ExtensionRegistryEntry): ExtensionSecretRegistration[] {
+  const contributes = entry.manifest.contributes?.secrets;
+  if (!contributes) return [];
+  return Object.entries(contributes).flatMap(([id, secret]: [string, ExtensionSecretContribution]): ExtensionSecretRegistration[] => {
+    const normalizedId = id.trim();
+    const label = typeof secret.label === 'string' ? secret.label.trim() : '';
+    if (!normalizedId || !label) return [];
+    return [
+      {
+        extensionId: entry.manifest.id,
+        packageType: entry.manifest.packageType ?? 'user',
+        id: normalizedId,
+        key: `${entry.manifest.id}.${normalizedId}`,
+        label,
+        description: typeof secret.description === 'string' ? secret.description : undefined,
+        env: typeof secret.env === 'string' && secret.env.trim() ? secret.env.trim() : undefined,
+        placeholder: typeof secret.placeholder === 'string' ? secret.placeholder : undefined,
+        order: typeof secret.order === 'number' ? secret.order : 0,
+      },
+    ];
+  });
+}
+
+function buildExtensionSecretBackendRegistrations(entry: ExtensionRegistryEntry): ExtensionSecretBackendRegistration[] {
+  return (entry.manifest.contributes?.secretBackends ?? []).flatMap(
+    (backend: ExtensionSecretBackendContribution): ExtensionSecretBackendRegistration[] => {
+      const id = backend.id.trim();
+      const label = backend.label.trim();
+      const handler = backend.handler.trim();
+      if (!id || !label || !handler) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          packageType: entry.manifest.packageType ?? 'user',
+          id,
+          label,
+          description: typeof backend.description === 'string' ? backend.description : undefined,
+          handler,
+          order: typeof backend.order === 'number' ? backend.order : 0,
+        },
+      ];
+    },
+  );
 }
 
 function buildExtensionToolRegistrations(entry: ExtensionRegistryEntry): ExtensionToolRegistration[] {
@@ -975,6 +1044,42 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
         throw new Error(`Extension manifest contributes.settings.${key}.enum must be an array.`);
       }
     }
+  }
+
+  if (contributes.secrets !== undefined) {
+    if (!isRecord(contributes.secrets)) {
+      throw new Error('Extension manifest contributes.secrets must be an object.');
+    }
+    for (const [key, secret] of Object.entries(contributes.secrets)) {
+      if (!isRecord(secret)) {
+        throw new Error(`Extension manifest contributes.secrets.${key} must be an object.`);
+      }
+      requireString(secret.label, `contributes.secrets.${key}.label`);
+      validateOptionalString(secret.description, `contributes.secrets.${key}.description`);
+      validateOptionalString(secret.env, `contributes.secrets.${key}.env`);
+      validateOptionalString(secret.placeholder, `contributes.secrets.${key}.placeholder`);
+      if (secret.order !== undefined && !Number.isInteger(secret.order)) {
+        throw new Error(`Extension manifest contributes.secrets.${key}.order must be an integer.`);
+      }
+    }
+  }
+
+  if (contributes.secretBackends !== undefined) {
+    if (!Array.isArray(contributes.secretBackends)) {
+      throw new Error('Extension manifest contributes.secretBackends must be an array.');
+    }
+    contributes.secretBackends.forEach((backend, index) => {
+      if (!isRecord(backend)) {
+        throw new Error(`Extension manifest contributes.secretBackends[${index}] must be an object.`);
+      }
+      requireString(backend.id, `contributes.secretBackends[${index}].id`);
+      requireString(backend.label, `contributes.secretBackends[${index}].label`);
+      requireString(backend.handler, `contributes.secretBackends[${index}].handler`);
+      validateOptionalString(backend.description, `contributes.secretBackends[${index}].description`);
+      if (backend.order !== undefined && !Number.isInteger(backend.order)) {
+        throw new Error(`Extension manifest contributes.secretBackends[${index}].order must be an integer.`);
+      }
+    });
   }
 }
 
@@ -1616,6 +1721,14 @@ export function listExtensionAgentRegistrations(stateRoot: string = getStateRoot
 
 export function listExtensionSettingsRegistrations(stateRoot: string = getStateRoot()): ExtensionSettingsRegistration[] {
   return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionSettingsRegistrations);
+}
+
+export function listExtensionSecretRegistrations(stateRoot: string = getStateRoot()): ExtensionSecretRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionSecretRegistrations);
+}
+
+export function listExtensionSecretBackendRegistrations(stateRoot: string = getStateRoot()): ExtensionSecretBackendRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap(buildExtensionSecretBackendRegistrations);
 }
 
 export function listExtensionSettingsComponentRegistrations(stateRoot: string = getStateRoot()): ExtensionSettingsComponentRegistration[] {

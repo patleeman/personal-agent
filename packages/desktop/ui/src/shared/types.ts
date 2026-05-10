@@ -1643,6 +1643,23 @@ export interface ContextPointerUsageResult {
   daily: ContextPointerDailyRow[];
 }
 
+export interface SecretStatusEntry {
+  extensionId: string;
+  secretId: string;
+  key: string;
+  label: string;
+  description?: string;
+  env?: string;
+  configured: boolean;
+  source: 'env' | 'keychain' | 'file' | 'env-only' | null;
+  writable: boolean;
+}
+
+export interface SecretsState {
+  backend: 'keychain' | 'file' | 'env-only';
+  secrets: SecretStatusEntry[];
+}
+
 export interface UnifiedSettingsEntry {
   extensionId: string;
   key: string;

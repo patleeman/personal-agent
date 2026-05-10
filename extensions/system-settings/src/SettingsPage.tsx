@@ -37,6 +37,8 @@ import {
   type ProviderOAuthLoginStreamEvent,
   readDesktopConnections,
   readDesktopEnvironment,
+  type SecretsState,
+  type SecretStatusEntry,
   SettingsField,
   SettingsPanelHost,
   subscribeDesktopProviderOAuthLogin,
@@ -68,6 +70,7 @@ const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accen
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-general', label: 'General', summary: 'Appearance, workspace, and conversation defaults' },
   { id: 'settings-capabilities', label: 'Capabilities', summary: 'Skills, MCP wrappers, and extension settings' },
+  { id: 'settings-security', label: 'Security', summary: 'Secret storage and extension credentials' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior, remotes, and keyboard shortcuts' },
 ] as const;
@@ -1855,6 +1858,160 @@ function ExtensionSettingsSection() {
   );
 }
 
+function SecretSourceLabel({ source }: { source: SecretStatusEntry['source'] }) {
+  if (!source) return <span>Not configured</span>;
+  if (source === 'env') return <span>Environment variable</span>;
+  if (source === 'keychain') return <span>macOS Keychain</span>;
+  if (source === 'env-only') return <span>Environment only</span>;
+  return <span>Local secrets file</span>;
+}
+
+function ExtensionSecretsSection() {
+  const { data: secretsState, loading, error, replaceData } = useApi<SecretsState>(api.secrets as never);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, SecretStatusEntry[]>();
+    for (const secret of secretsState?.secrets ?? []) {
+      if (!groups.has(secret.extensionId)) groups.set(secret.extensionId, []);
+      groups.get(secret.extensionId)!.push(secret);
+    }
+    return groups;
+  }, [secretsState]);
+
+  const saveSecret = async (secret: SecretStatusEntry) => {
+    const value = drafts[secret.key]?.trim() ?? '';
+    if (!value) {
+      setErrorMessage('Enter a secret value before saving.');
+      return;
+    }
+    setSavingKey(secret.key);
+    setErrorMessage(null);
+    setNotice(null);
+    try {
+      const next = await api.setSecret(secret.extensionId, secret.secretId, value);
+      replaceData(next);
+      setDrafts((current) => ({ ...current, [secret.key]: '' }));
+      setNotice(`Saved ${secret.label}.`);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const removeSecret = async (secret: SecretStatusEntry) => {
+    setSavingKey(secret.key);
+    setErrorMessage(null);
+    setNotice(null);
+    try {
+      const next = await api.deleteSecret(secret.extensionId, secret.secretId);
+      replaceData(next);
+      setNotice(`Removed ${secret.label}.`);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  if (loading && !secretsState) return <p className="ui-card-meta">Loading secrets…</p>;
+  if (error && !secretsState) return <p className="text-[12px] text-danger">Failed to load secrets: {error}</p>;
+
+  return (
+    <div className="space-y-0">
+      <SettingsPanel
+        title="Secret storage"
+        description="Secrets are stored separately from settings and are never returned to the UI after save."
+      >
+        <p className="ui-card-meta">
+          Active backend:{' '}
+          <span className="font-medium text-primary">
+            {secretsState?.backend === 'keychain'
+              ? 'macOS Keychain'
+              : secretsState?.backend === 'env-only'
+                ? 'Environment only'
+                : 'Local file'}
+          </span>
+          {secretsState?.backend === 'file' ? ' · local file storage is intended for development and headless runtimes.' : null}
+        </p>
+      </SettingsPanel>
+
+      {grouped.size === 0 ? (
+        <SettingsPanel title="Extension secrets">
+          <p className="ui-card-meta">No installed extensions declare secrets.</p>
+        </SettingsPanel>
+      ) : (
+        [...grouped.entries()].map(([extensionId, secrets]) => (
+          <SettingsPanel key={extensionId} title={extensionId}>
+            <div className="space-y-4">
+              {secrets.map((secret) => (
+                <div key={secret.key} className="space-y-2 border-b border-border-subtle/60 pb-4 last:border-b-0 last:pb-0">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[13px] font-medium text-primary">{secret.label}</p>
+                      {secret.description ? <p className="ui-card-meta">{secret.description}</p> : null}
+                      {secret.env ? <p className="ui-card-meta">Environment override: {secret.env}</p> : null}
+                    </div>
+                    <p className="ui-card-meta">
+                      <SecretSourceLabel source={secret.source} />
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      type="password"
+                      value={drafts[secret.key] ?? ''}
+                      placeholder={secret.configured ? 'Enter a new value to replace the stored secret' : 'Enter secret value'}
+                      onChange={(event) => {
+                        setDrafts((current) => ({ ...current, [secret.key]: event.target.value }));
+                        setErrorMessage(null);
+                        setNotice(null);
+                      }}
+                      className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={!secret.writable || savingKey === secret.key}
+                    />
+                    <button
+                      type="button"
+                      className={ACTION_BUTTON_CLASS}
+                      disabled={!secret.writable || savingKey === secret.key || !(drafts[secret.key] ?? '').trim()}
+                      onClick={() => {
+                        void saveSecret(secret);
+                      }}
+                    >
+                      {savingKey === secret.key ? 'Saving…' : secret.configured ? 'Replace' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      className={ACTION_BUTTON_CLASS}
+                      disabled={!secret.writable || savingKey === secret.key || !secret.configured || secret.source === 'env'}
+                      onClick={() => {
+                        void removeSecret(secret);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {!secret.writable ? (
+                    <p className="ui-card-meta">The active backend is read-only. Set the environment variable instead.</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </SettingsPanel>
+        ))
+      )}
+
+      {notice ? <p className="text-[12px] text-accent">{notice}</p> : null}
+      {errorMessage ? <p className="text-[12px] text-danger">{errorMessage}</p> : null}
+    </div>
+  );
+}
+
 export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
   const { settingsComponent } = useExtensionRegistry();
   const { theme, themePreference, lightTheme, darkTheme, availableThemes, setThemePreference, setLightTheme, setDarkTheme } = useTheme();
@@ -3454,6 +3611,10 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               ) : null}
 
               <ExtensionSettingsSection />
+            </SettingsSection>
+
+            <SettingsSection id="settings-security" label="Security" description="Secret storage and extension credentials.">
+              <ExtensionSecretsSection />
             </SettingsSection>
 
             <SettingsSection

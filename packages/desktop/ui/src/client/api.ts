@@ -60,6 +60,7 @@ import type {
   ScheduledTaskDetail,
   ScheduledTaskSchedulerHealth,
   ScheduledTaskSummary,
+  SecretsState,
   SessionDetailResult,
   SessionMeta,
   SkillFoldersState,
@@ -1484,4 +1485,12 @@ export const api = {
       }>
     >('/settings/schema'),
   updateSettings: async (overrides: Record<string, unknown>) => patch<Record<string, unknown>>('/settings', overrides),
+
+  // ── Secrets ─────────────────────────────────────────────────────
+
+  secrets: async () => get<SecretsState>('/secrets'),
+  setSecret: async (extensionId: string, secretId: string, value: string) =>
+    put<SecretsState>(`/secrets/${encodeURIComponent(extensionId)}/${encodeURIComponent(secretId)}`, { value }),
+  deleteSecret: async (extensionId: string, secretId: string) =>
+    del<SecretsState>(`/secrets/${encodeURIComponent(extensionId)}/${encodeURIComponent(secretId)}`),
 };

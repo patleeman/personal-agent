@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../../packages/desktop/server/secrets/secretStore.js', () => ({
+  resolveSecret: () => process.env.EXA_API_KEY?.trim() || undefined,
+}));
+
 import { webFetch, webSearch } from './backend.js';
 
 describe('system-web-tools backend', () => {

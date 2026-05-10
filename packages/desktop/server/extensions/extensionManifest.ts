@@ -101,6 +101,8 @@ export interface ExtensionContributions {
   conversationHeaderElements?: ExtensionConversationHeaderContribution[];
   conversationDecorators?: ExtensionConversationDecoratorContribution[];
   settings?: Record<string, ExtensionSettingsContribution>;
+  secrets?: Record<string, ExtensionSecretContribution>;
+  secretBackends?: ExtensionSecretBackendContribution[];
   settingsComponent?: ExtensionSettingsComponentContribution;
 }
 
@@ -188,6 +190,22 @@ export interface ExtensionSettingsContribution {
   group?: string;
   enum?: string[];
   placeholder?: string;
+  order?: number;
+}
+
+export interface ExtensionSecretContribution {
+  label: string;
+  description?: string;
+  env?: string;
+  placeholder?: string;
+  order?: number;
+}
+
+export interface ExtensionSecretBackendContribution {
+  id: string;
+  label: string;
+  description?: string;
+  handler: string;
   order?: number;
 }
 

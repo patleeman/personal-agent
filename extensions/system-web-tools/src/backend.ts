@@ -1,5 +1,7 @@
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '@earendil-works/pi-coding-agent';
 
+import { resolveSecret } from '../../../packages/desktop/server/secrets/secretStore.js';
+
 interface ExaSearchResult {
   title?: string;
   url?: string;
@@ -21,7 +23,7 @@ function createRequestSignal(timeoutMs: number): AbortSignal {
 }
 
 function getExaApiKey(): string | undefined {
-  return process.env.EXA_API_KEY?.trim() || undefined;
+  return resolveSecret('system-web-tools', 'exaApiKey');
 }
 
 function formatTruncatedContent(content: string): { text: string; truncated: boolean } {
