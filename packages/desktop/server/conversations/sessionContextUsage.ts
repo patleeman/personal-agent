@@ -269,6 +269,10 @@ export function estimateSessionContextTokens(messages: ContextMessageList): numb
       continue;
     }
 
+    if (!assistant.usage) {
+      continue;
+    }
+
     let trailingTokens = 0;
     for (let trailingIndex = index + 1; trailingIndex < messages.length; trailingIndex += 1) {
       trailingTokens += estimateTokens(messages[trailingIndex]);

@@ -31,6 +31,18 @@ export function isLikelyUnsupportedImageInputError(error: unknown): boolean {
   return mentionsImageInput && indicatesUnsupported;
 }
 
+/** Ensure the last assistant message in agent state has usage data.
+ *  pi-coding-agent's _checkCompaction() crashes via calculateContextTokens(undefined)
+ *  when an assistant message with a valid stopReason lacks usage (e.g. imported sessions). */
+function sealLastAssistantUsage(session: AgentSession): void {
+  const msgs = (session as { messages?: Array<{ role: string; stopReason?: string; usage?: unknown }> }).messages;
+  if (!msgs || msgs.length === 0) return;
+  const last = msgs[msgs.length - 1];
+  if (last?.role === 'assistant' && last.stopReason !== 'aborted' && last.stopReason !== 'error' && !last.usage) {
+    (last as { usage: Record<string, unknown> }).usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 };
+  }
+}
+
 function liveSessionModelAcceptsImages(model: unknown): boolean {
   const input = (model as { input?: unknown } | undefined)?.input;
   return Array.isArray(input) && input.includes('image');
@@ -76,6 +88,11 @@ export async function runPromptOnLiveEntry<TEntry extends LiveSessionPromptHost>
   if (behavior === undefined) {
     callbacks.repairLiveSessionTranscriptTail(entry.sessionId);
   }
+
+  // Guard: pi-coding-agent's _checkCompaction() crashes when the last
+  // assistant message has stopReason but no usage. Pre-fill a zero usage
+  // so calculateContextTokens(undefined) doesn't throw.
+  sealLastAssistantUsage(session);
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {
     if (behavior === 'steer') {
