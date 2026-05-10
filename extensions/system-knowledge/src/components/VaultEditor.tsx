@@ -470,10 +470,18 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     return () => offs.forEach((off) => off());
   }, [loadEntries]);
 
+  // Cooldown to ignore external change events that are just our own save bouncing back
+  const EXTERNAL_CHANGE_COOLDOWN_MS = 1500;
+  const lastOwnSaveRef = useRef(0);
+
   // Reload the current file when it changes externally
   useEffect(() => {
     const off = onKBEvent<KBFileChangedExternallyDetail>('kb:file-changed-externally', ({ path }) => {
       if (path === fileIdRef.current && fileIdRef.current) {
+        // Ignore events that arrived shortly after our own save — they're our writes bouncing back
+        if (Date.now() - lastOwnSaveRef.current < EXTERNAL_CHANGE_COOLDOWN_MS) {
+          return;
+        }
         // Clear the cached document so the load effect re-fetches
         cachedVaultDocuments.delete(fileIdRef.current);
         pendingVaultDocumentReads.delete(fileIdRef.current);
@@ -490,7 +498,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: { HTMLAttributes: { class: 'kb-code-block' } } }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: { HTMLAttributes: { class: 'kb-code-block' } }, link: false }),
       Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: false }),
       Link.configure({ openOnClick: false }),
       TaskList,
@@ -664,6 +672,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     setDirty(false);
     setSaveError(null);
     setSavedAt(Date.now());
+    lastOwnSaveRef.current = Date.now();
     emitKBEvent('kb:content-saved');
   }, [editor, fileId]);
   useAutosave(fileId ?? null, getContent, dirty, revision, handleSaved, setSaveError);
