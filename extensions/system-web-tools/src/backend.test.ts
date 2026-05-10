@@ -1,3 +1,7 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { webFetch, webSearch } from './backend.js';
@@ -74,6 +78,8 @@ describe('system-web-tools backend', () => {
   describe('webSearch', () => {
     it('uses DuckDuckGo fallback when Exa API key is absent', async () => {
       const envBackup = process.env.EXA_API_KEY;
+      const stateRootBackup = process.env.PERSONAL_AGENT_STATE_ROOT;
+      process.env.PERSONAL_AGENT_STATE_ROOT = join(tmpdir(), `pa-web-tools-empty-${Date.now()}`);
       delete process.env.EXA_API_KEY;
 
       const mockHtml = `<html><body>
@@ -95,10 +101,40 @@ describe('system-web-tools backend', () => {
       expect(result.count).toBeGreaterThanOrEqual(0);
 
       if (envBackup) process.env.EXA_API_KEY = envBackup;
+      if (stateRootBackup) process.env.PERSONAL_AGENT_STATE_ROOT = stateRootBackup;
+      else delete process.env.PERSONAL_AGENT_STATE_ROOT;
+    });
+
+    it('uses the settings Exa API key when the environment key is absent', async () => {
+      const envBackup = process.env.EXA_API_KEY;
+      const stateRootBackup = process.env.PERSONAL_AGENT_STATE_ROOT;
+      const stateRoot = join(tmpdir(), `pa-web-tools-settings-${Date.now()}`);
+      mkdirSync(stateRoot, { recursive: true });
+      writeFileSync(join(stateRoot, 'settings.json'), JSON.stringify({ 'webTools.exaApiKey': 'settings-exa-key' }));
+      process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+      delete process.env.EXA_API_KEY;
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ results: [{ title: 'Example', url: 'https://example.com', text: 'Snippet' }] }),
+      } as unknown as Response);
+
+      const result = await webSearch({ query: 'test query' });
+      expect(result.source).toBe('exa');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        'https://api.exa.ai/search',
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer settings-exa-key' }) }),
+      );
+
+      if (envBackup) process.env.EXA_API_KEY = envBackup;
+      if (stateRootBackup) process.env.PERSONAL_AGENT_STATE_ROOT = stateRootBackup;
+      else delete process.env.PERSONAL_AGENT_STATE_ROOT;
     });
 
     it('handles DuckDuckGo fetch failure', async () => {
       const envBackup = process.env.EXA_API_KEY;
+      const stateRootBackup = process.env.PERSONAL_AGENT_STATE_ROOT;
+      process.env.PERSONAL_AGENT_STATE_ROOT = join(tmpdir(), `pa-web-tools-empty-${Date.now()}`);
       delete process.env.EXA_API_KEY;
 
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('DDG failed'));
@@ -106,10 +142,14 @@ describe('system-web-tools backend', () => {
       await expect(webSearch({ query: 'test' })).rejects.toThrow();
 
       if (envBackup) process.env.EXA_API_KEY = envBackup;
+      if (stateRootBackup) process.env.PERSONAL_AGENT_STATE_ROOT = stateRootBackup;
+      else delete process.env.PERSONAL_AGENT_STATE_ROOT;
     });
 
     it('uses sensible defaults for count and page', async () => {
       const envBackup = process.env.EXA_API_KEY;
+      const stateRootBackup = process.env.PERSONAL_AGENT_STATE_ROOT;
+      process.env.PERSONAL_AGENT_STATE_ROOT = join(tmpdir(), `pa-web-tools-empty-${Date.now()}`);
       delete process.env.EXA_API_KEY;
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -122,10 +162,14 @@ describe('system-web-tools backend', () => {
       expect(result.page).toBe(1);
 
       if (envBackup) process.env.EXA_API_KEY = envBackup;
+      if (stateRootBackup) process.env.PERSONAL_AGENT_STATE_ROOT = stateRootBackup;
+      else delete process.env.PERSONAL_AGENT_STATE_ROOT;
     });
 
     it('clamps count to maximum of 20', async () => {
       const envBackup = process.env.EXA_API_KEY;
+      const stateRootBackup = process.env.PERSONAL_AGENT_STATE_ROOT;
+      process.env.PERSONAL_AGENT_STATE_ROOT = join(tmpdir(), `pa-web-tools-empty-${Date.now()}`);
       delete process.env.EXA_API_KEY;
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -137,6 +181,8 @@ describe('system-web-tools backend', () => {
       expect(result.count).toBe(0); // no results found, but count was clamped
 
       if (envBackup) process.env.EXA_API_KEY = envBackup;
+      if (stateRootBackup) process.env.PERSONAL_AGENT_STATE_ROOT = stateRootBackup;
+      else delete process.env.PERSONAL_AGENT_STATE_ROOT;
     });
   });
 

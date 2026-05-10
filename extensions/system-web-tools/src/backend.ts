@@ -1,4 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from '@earendil-works/pi-coding-agent';
+import { getStateRoot } from '@personal-agent/core';
 
 interface ExaSearchResult {
   title?: string;
@@ -20,8 +24,22 @@ function createRequestSignal(timeoutMs: number): AbortSignal {
   return AbortSignal.timeout(timeoutMs);
 }
 
+function readSettingsExaApiKey(): string | undefined {
+  const settingsFile = join(getStateRoot(), 'settings.json');
+  if (!existsSync(settingsFile)) return undefined;
+
+  try {
+    const parsed = JSON.parse(readFileSync(settingsFile, 'utf-8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const value = (parsed as Record<string, unknown>)['webTools.exaApiKey'];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function getExaApiKey(): string | undefined {
-  return process.env.EXA_API_KEY?.trim() || undefined;
+  return process.env.EXA_API_KEY?.trim() || readSettingsExaApiKey();
 }
 
 function formatTruncatedContent(content: string): { text: string; truncated: boolean } {
