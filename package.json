@@ -38,7 +38,7 @@
     "release:desktop:patch": "npm run release:patch && npm run release:publish",
     "release:desktop:minor": "npm run release:minor && npm run release:publish",
     "release:desktop:major": "npm run release:major && npm run release:publish",
-    "version": "npm run release:sync-pi && node scripts/sync-workspace-versions.mjs && npm install --package-lock-only --ignore-scripts && git add package.json package-lock.json packages/*/package.json",
+    "version": "npm run release:sync-pi && node scripts/sync-workspace-versions.mjs && node scripts/update-changelog-for-release.mjs && npm install --package-lock-only --ignore-scripts && git add package.json package-lock.json packages/*/package.json CHANGELOG.md",
     "postinstall": "node -e \"console.log('Setting up gitleaks pre-commit hook...');require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'inherit'})\"",
     "lint": "eslint packages --ext .ts,.tsx",
     "lint:fix": "eslint packages --ext .ts,.tsx --fix",

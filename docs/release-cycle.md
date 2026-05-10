@@ -22,11 +22,12 @@ Each release command performs these steps in order:
 1. **Version bump** — `npm version` bumps the version following semver
 2. **Pi update** — refreshes the direct Pi runtime packages to the latest published version
 3. **Dependency sync** — updates workspace package versions and regenerates `package-lock.json`
-4. **Build** — builds signed desktop artifacts locally
-5. **Notarize** — submits the built `.app` for Apple notarization
-6. **Smoke test** — launches the built app in an isolated environment and verifies basic functionality
-7. **Git push** — pushes the version commit and tag to the remote
-8. **GitHub release** — creates or updates the matching release in the releases repository
+4. **Changelog update** — adds a dated `CHANGELOG.md` section for the new version from commits since the previous tag
+5. **Build** — builds signed desktop artifacts locally
+6. **Notarize** — submits the built `.app` for Apple notarization
+7. **Smoke test** — launches the built app in an isolated environment and verifies basic functionality
+8. **Git push** — pushes the version commit and tag to the remote
+9. **GitHub release** — creates or updates the matching release in the releases repository
 
 ## Automated Smoke Test
 
@@ -63,7 +64,7 @@ If the version bump and build succeeded but the publish step failed:
 npm run release:publish
 ```
 
-This runs the smoke test, push, and GitHub release creation without repeating the version bump and build steps.
+This runs the smoke test, push, and GitHub release creation without repeating the version bump, changelog update, and build steps.
 
 ## Prerequisites
 
