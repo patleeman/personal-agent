@@ -1374,6 +1374,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
   const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
 
+  // Input state
+  const [input, setInputState] = useReloadState<string>({
+    storageKey: composerDraftStorageKey,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
+
   // Goal mode
   const goalEnabled = Boolean(stream.goalState?.objective && stream.goalState.status === 'active');
   const toggleGoalMode = useCallback(async () => {
@@ -1387,13 +1394,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       await api.updateGoal(id, {});
     }
   }, [id, goalEnabled, input]);
-
-  // Input state
-  const [input, setInputState] = useReloadState<string>({
-    storageKey: composerDraftStorageKey,
-    initialValue: '',
-    shouldPersist: (value) => value.length > 0,
-  });
   const [extensionSlashCommands, setExtensionSlashCommands] = useState<ExtensionSlashCommandRegistration[]>([]);
   const [extensionMentionRegistrations, setExtensionMentionRegistrations] = useState<ExtensionMentionRegistration[]>([]);
   const [extensionMentionItems, setExtensionMentionItems] = useState<MentionItem[]>([]);
