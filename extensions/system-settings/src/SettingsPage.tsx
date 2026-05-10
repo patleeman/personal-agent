@@ -1819,6 +1819,7 @@ function ExtensionSettingsSection() {
     if (!schema) return new Map<string, UnifiedSettingsEntry[]>();
     const groups = new Map<string, UnifiedSettingsEntry[]>();
     for (const entry of schema) {
+      if (entry.key === 'secrets.provider') continue;
       const group = entry.group || 'General';
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group)!.push(entry);
@@ -1868,10 +1869,19 @@ function SecretSourceLabel({ source }: { source: SecretStatusEntry['source'] }) 
 
 function ExtensionSecretsSection() {
   const { data: secretsState, loading, error, replaceData } = useApi<SecretsState>(api.secrets as never);
+  const { data: settingsValues } = useApi<Record<string, unknown>>(api.settings as never);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savingBackend, setSavingBackend] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const activeBackend =
+    typeof settingsValues?.['secrets.provider'] === 'string'
+      ? settingsValues['secrets.provider']
+      : secretsState?.backend === 'env-only' || secretsState?.backend === 'file' || secretsState?.backend === 'keychain'
+        ? secretsState.backend
+        : 'keychain';
 
   const grouped = useMemo(() => {
     const groups = new Map<string, SecretStatusEntry[]>();
@@ -1903,6 +1913,20 @@ function ExtensionSecretsSection() {
     }
   };
 
+  const saveBackend = async (provider: string) => {
+    setSavingBackend(true);
+    setErrorMessage(null);
+    setNotice(null);
+    try {
+      await api.updateSettings({ 'secrets.provider': provider });
+      setNotice('Secret storage backend saved. Restart any active agents that need newly stored secrets.');
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingBackend(false);
+    }
+  };
+
   const removeSecret = async (secret: SecretStatusEntry) => {
     setSavingKey(secret.key);
     setErrorMessage(null);
@@ -1927,17 +1951,31 @@ function ExtensionSecretsSection() {
         title="Secret storage"
         description="Secrets are stored separately from settings and are never returned to the UI after save."
       >
-        <p className="ui-card-meta">
-          Active backend:{' '}
-          <span className="font-medium text-primary">
-            {secretsState?.backend === 'keychain'
-              ? 'macOS Keychain'
-              : secretsState?.backend === 'env-only'
-                ? 'Environment only'
-                : 'Local file'}
-          </span>
-          {secretsState?.backend === 'file' ? ' · local file storage is intended for development and headless runtimes.' : null}
-        </p>
+        <div className="space-y-3">
+          <label className="ui-card-meta" htmlFor="settings-secret-backend">
+            Backend
+          </label>
+          <select
+            id="settings-secret-backend"
+            value={activeBackend}
+            onChange={(event) => {
+              void saveBackend(event.target.value);
+            }}
+            className={INPUT_CLASS}
+            disabled={savingBackend}
+          >
+            <option value="keychain">macOS Keychain</option>
+            <option value="file">Local file</option>
+            <option value="env-only">Environment only</option>
+          </select>
+          <p className="ui-card-meta">
+            {activeBackend === 'keychain'
+              ? 'Recommended on macOS. Secrets are stored in the system Keychain.'
+              : activeBackend === 'env-only'
+                ? 'Read-only. Secrets must come from declared environment variables.'
+                : 'Development/headless fallback. Secrets are stored in a local file outside settings.json.'}
+          </p>
+        </div>
       </SettingsPanel>
 
       {grouped.size === 0 ? (
