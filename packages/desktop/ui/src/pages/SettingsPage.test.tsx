@@ -203,6 +203,24 @@ describe('SettingsPage', () => {
         return settingsSchemaResult;
       }
 
+      if (fetcher === api.secrets) {
+        return buildUseApiResult({
+          backend: 'keychain',
+          secrets: [
+            {
+              extensionId: 'system-web-tools',
+              secretId: 'exaApiKey',
+              key: 'extension:system-web-tools:exaApiKey',
+              label: 'Exa API key',
+              env: 'EXA_API_KEY',
+              configured: false,
+              source: null,
+              writable: true,
+            },
+          ],
+        });
+      }
+
       if (fetcher === api.status) {
         return buildUseApiResult({
           profile: 'assistant',
@@ -278,6 +296,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('Skill folders');
     expect(html).not.toContain('Knowledge base');
     expect(html).toContain('Sample manifest setting');
+    expect(html).toContain('Injected by extension <span class="font-mono text-primary">sample-extension</span>.');
     expect(html).not.toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
     expect(html).not.toContain('In sync · Last synced');
     expect(html).toContain('AGENTS.md files');
