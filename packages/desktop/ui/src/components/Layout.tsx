@@ -56,6 +56,7 @@ import { DesktopTopBar } from './DesktopTopBar';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
+import { WorkspaceExplorer } from './workspace/WorkspaceExplorer';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
@@ -1111,7 +1112,22 @@ function WorkbenchKnowledgeRail({
             </button>
           ))}
       </div>
-      {activeTool === 'artifacts' ? (
+      {activeTool === 'files' ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {systemFilesExtensionSurface ? (
+            <NativeExtensionSurfaceHost
+              surface={systemFilesExtensionSurface}
+              pathname={location.pathname}
+              search={location.search}
+              hash={location.hash}
+              conversationId={conversationId}
+              cwd={workspaceCwd}
+            />
+          ) : (
+            <WorkspaceExplorer cwd={workspaceCwd} onDraftPrompt={onWorkspaceFileClear} railOnly={true} />
+          )}
+        </div>
+      ) : activeTool === 'artifacts' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationArtifactRailContent
             artifacts={artifacts}
