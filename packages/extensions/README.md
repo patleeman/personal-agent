@@ -4,6 +4,14 @@ This package is the public import surface for native Personal Agent extensions. 
 
 This doc is written for agents building extensions. Read it before creating or editing an extension, then inspect the current schema/types and nearby system extensions for exact examples.
 
+## Platform rule
+
+Build new Personal Agent product features as extensions by default. Core is the small, stable platform: agent/conversation runtime, model and tool protocol, transcript/event stream, durable storage primitives, knowledge/system-prompt assembly, extension host/manifest/API/permissions, security boundaries, app shell/routing, install/update plumbing, and shared UI primitives.
+
+User-facing, domain-specific, and workflow-specific behavior belongs in extensions: pages, panels, tool renderers, commands, integrations, context providers, automations, import/export flows, diagnostics views, settings sections, and opinionated UX.
+
+If the SDK lacks a host primitive needed by a first-party extension, add a reusable API to `@personal-agent/extensions` instead of importing app internals or hardcoding the feature in the app shell. Core should make features possible; extensions should be where features live.
+
 ## Agent workflow
 
 When asked to build or modify an extension:
@@ -191,7 +199,7 @@ System backend extensions can also import deliberate backend primitives through 
 import { createScheduledTask } from '@personal-agent/extensions/backend';
 ```
 
-If a system extension needs a host primitive that is not exported here, add it deliberately to this package. Do not punch through into app internals.
+If a system extension needs a host primitive that is not exported here, add it deliberately to this package as a reusable SDK capability. Do not punch through into app internals, and do not hardcode one-off product behavior in the app shell.
 
 ## Frontend surfaces
 

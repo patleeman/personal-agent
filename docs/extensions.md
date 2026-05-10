@@ -5,6 +5,7 @@ covers how to create, structure, and publish extensions.
 
 ## Contents
 
+- [Core vs extensions](#core-vs-extensions)
 - [Extension Structure](#extension-structure)
 - [Manifest (`extension.json`)](#manifest-extensionjson)
 - [Frontend (UI)](#frontend-ui)
@@ -18,6 +19,14 @@ covers how to create, structure, and publish extensions.
 - [Permissions](#permissions)
 - [Development Workflow](#development-workflow)
 - [Examples](#examples)
+
+## Core vs extensions
+
+Personal Agent core is the small, stable platform: agent and conversation runtime, model/tool execution protocol, transcript/event stream, durable storage primitives, knowledge/system-prompt assembly, extension host/manifest/API/permissions, security boundaries, desktop/web shell, routing, install/update plumbing, and shared UI primitives.
+
+Everything user-facing, domain-specific, or workflow-specific should be an extension: pages, panels, tool renderers, slash/command surfaces, integrations, context providers, automations, import/export flows, diagnostics views, settings sections, and opinionated UX built on top of the platform.
+
+When a feature cannot be built cleanly as an extension, add a general-purpose extension API or SDK primitive to core rather than hardcoding a one-off app feature. Core should make features possible; extensions should be where features live.
 
 ## Extension Structure
 

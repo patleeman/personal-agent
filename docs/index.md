@@ -50,7 +50,7 @@ Feature-specific documentation lives beside the owning extension package:
 
 **View Modes** — Conversation and Workbench views, plus conversation context attachments.
 
-**Core Product Model** — conversations and projects. Feature packages own their own docs.
+**Core Product Model** — conversations and projects. Core stays a small stable platform; product features should live in system or user extensions.
 
 **Desktop App** — Electron shell and app-level behavior.
 
