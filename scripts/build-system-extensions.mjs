@@ -29,7 +29,7 @@ function listSystemExtensionDirs() {
 function assertManifestEntriesExist(extensionDir) {
   const manifestPath = join(extensionDir, 'extension.json');
   const manifest = readJson(manifestPath);
-  const requiredEntries = [manifest.frontend?.entry, manifest.backend?.entry].filter(
+  const requiredEntries = [manifest.frontend?.entry, ...(manifest.frontend?.styles ?? []), manifest.backend?.entry].filter(
     (entry) => typeof entry === 'string' && entry.trim().length > 0,
   );
   const missingEntries = requiredEntries.filter((entry) => !existsSync(join(extensionDir, entry)));

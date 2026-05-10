@@ -174,7 +174,7 @@ function assertPackagedAgentReadableResources(appBundlePath) {
       const manifestPath = join(extensionsRoot, entry.name, 'extension.json');
       if (!existsSync(manifestPath)) continue;
       const manifest = readJsonFile(manifestPath);
-      for (const builtEntry of [manifest.frontend?.entry, manifest.backend?.entry]) {
+      for (const builtEntry of [manifest.frontend?.entry, ...(manifest.frontend?.styles ?? []), manifest.backend?.entry]) {
         if (typeof builtEntry === 'string' && builtEntry.trim().length > 0 && !existsSync(join(extensionsRoot, entry.name, builtEntry))) {
           missing.push(`extensions/${entry.name}/${builtEntry}`);
         }
