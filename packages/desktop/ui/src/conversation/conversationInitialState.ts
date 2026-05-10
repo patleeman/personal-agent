@@ -15,7 +15,7 @@ export interface ConversationDraftHydrationState {
   conversationId: string;
 }
 
-export interface ConversationLocationState {
+interface ConversationLocationState {
   initialModelPreferenceState?: ConversationInitialModelPreferenceState;
   initialDeferredResumeState?: ConversationInitialDeferredResumeState;
   draftHydrationState?: ConversationDraftHydrationState;

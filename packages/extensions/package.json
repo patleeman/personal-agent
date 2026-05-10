@@ -43,5 +43,8 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1"
   }
 }

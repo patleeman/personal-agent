@@ -20,6 +20,7 @@
   ],
   "ignoreIssues": {
     "packages/desktop/ui/src/components/chat/ArtifactCheckpointToolBlocks.tsx": ["exports"],
+    "packages/desktop/ui/src/components/chat/AskUserQuestionToolBlock.tsx": ["exports"],
     "packages/desktop/ui/src/components/ui.tsx": ["exports", "types"],
     "packages/desktop/ui/src/extensions/data.ts": ["exports", "types"],
     "packages/desktop/ui/src/extensions/extensionRegistryEvents.ts": ["exports"],

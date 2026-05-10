@@ -150,7 +150,7 @@ export interface CompanionConversationCwdChangeInput {
   surfaceId?: string;
 }
 
-export interface CompanionConversationAutoModeUpdateInput {
+interface CompanionConversationAutoModeUpdateInput {
   conversationId: string;
   enabled: boolean;
   surfaceId?: string;
