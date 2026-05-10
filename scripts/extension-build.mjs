@@ -34,6 +34,13 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
     jsx: 'automatic',
     sourcemap: true,
     logLevel: 'info',
+    conditions: ['browser', 'production'],
+    loader: {
+      '.woff': 'dataurl',
+      '.woff2': 'dataurl',
+      '.ttf': 'dataurl',
+      '.otf': 'dataurl',
+    },
     external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
   });
 }

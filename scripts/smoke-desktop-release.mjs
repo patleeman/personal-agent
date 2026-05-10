@@ -2,7 +2,7 @@
 /* eslint-env node */
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -158,10 +158,29 @@ function tail(value, max = 8_000) {
   return value.length > max ? value.slice(value.length - max) : value;
 }
 
+function readJsonFile(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
 function assertPackagedAgentReadableResources(appBundlePath) {
   const resourcesPath = join(appBundlePath, 'Contents', 'Resources');
   const requiredResources = ['docs/index.md', 'extensions/system-settings/README.md', 'extensions/system-runs/skills/runs/SKILL.md'];
   const missing = requiredResources.filter((relativePath) => !existsSync(join(resourcesPath, relativePath)));
+
+  const extensionsRoot = join(resourcesPath, 'extensions');
+  if (existsSync(extensionsRoot)) {
+    for (const entry of readdirSync(extensionsRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const manifestPath = join(extensionsRoot, entry.name, 'extension.json');
+      if (!existsSync(manifestPath)) continue;
+      const manifest = readJsonFile(manifestPath);
+      for (const builtEntry of [manifest.frontend?.entry, manifest.backend?.entry]) {
+        if (typeof builtEntry === 'string' && builtEntry.trim().length > 0 && !existsSync(join(extensionsRoot, entry.name, builtEntry))) {
+          missing.push(`extensions/${entry.name}/${builtEntry}`);
+        }
+      }
+    }
+  }
 
   if (missing.length > 0) {
     throw new Error(`Packaged app is missing agent-readable resources:\n${missing.map((path) => `- ${path}`).join('\n')}`);
