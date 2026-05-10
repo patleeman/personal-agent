@@ -130,6 +130,7 @@ type ShortcutListItem = {
   description?: string;
   shortcuts: string[];
   editable: boolean;
+  conflictScope: 'global' | `surface:${string}`;
   extensionId?: string;
   keybindingId?: string;
   enabled?: boolean;
@@ -698,6 +699,7 @@ export function DesktopKeyboardShortcutsSettingsSection() {
       description: DESKTOP_KEYBOARD_SHORTCUT_LABELS[id].description,
       shortcuts: [draft[id]],
       editable: true,
+      conflictScope: 'global' as const,
     }));
     const extensionItems = extensionKeybindings.map((keybinding) => ({
       id: `${keybinding.extensionId}:${keybinding.surfaceId}`,
@@ -706,6 +708,7 @@ export function DesktopKeyboardShortcutsSettingsSection() {
       description: keybinding.scope === 'surface' ? 'Surface shortcut' : 'Extension shortcut',
       shortcuts: keybinding.enabled ? keybinding.keys : [],
       editable: true,
+      conflictScope: keybinding.scope === 'surface' ? (`surface:${keybinding.extensionId}` as const) : ('global' as const),
       extensionId: keybinding.extensionId,
       keybindingId: keybinding.surfaceId,
       enabled: keybinding.enabled,
@@ -718,7 +721,7 @@ export function DesktopKeyboardShortcutsSettingsSection() {
     const seen = new Map<string, ShortcutListItem>();
     for (const item of shortcutItems) {
       for (const shortcut of item.shortcuts) {
-        const normalized = normalizeShortcutForConflict(shortcut);
+        const normalized = `${item.conflictScope}:${normalizeShortcutForConflict(shortcut)}`;
         const previous = seen.get(normalized);
         if (previous) return { shortcut, first: previous, second: item };
         seen.set(normalized, item);
