@@ -116,10 +116,8 @@ function buildContinuationPrompt(state: GoalState): string {
   ].join('\n');
 }
 
-function isProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
-  return toolResults.some(
-    (result) => result.toolName === GOAL_SET_TOOL || result.toolName === GOAL_UPDATE_TOOL || result.toolName === GOAL_UPDATE_TASKS_TOOL,
-  );
+function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
+  return toolResults.length === 0 || toolResults.every((result) => result.toolName === GOAL_GET_TOOL);
 }
 
 // ── Tool parameter schemas ───────────────────────────────────────────────────
@@ -398,11 +396,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
-      if (isProgressGoalTurn(toolResults)) {
+      if (isNoProgressGoalTurn(toolResults)) {
+        consecutiveNoToolTurns += 1;
+      } else {
         consecutiveNoToolTurns = 0;
         continuationSuppressed = false;
-      } else {
-        consecutiveNoToolTurns += 1;
       }
 
       if (consecutiveNoToolTurns >= 2) {

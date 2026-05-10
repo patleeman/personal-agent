@@ -113,7 +113,7 @@ describe('system-goal-mode extension', () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('treats non-goal tool-only turns as no-progress continuations', async () => {
+  it('treats non-get_goal tool turns as progress', async () => {
     const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
     const sendMessage = vi.fn();
     const factory = createConversationAutoModeAgentExtension();
@@ -152,12 +152,12 @@ describe('system-goal-mode extension', () => {
       signal: { aborted: false },
     };
 
-    await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
+    await turnEnd?.({ toolResults: [] }, ctx);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
     await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
-    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 });
