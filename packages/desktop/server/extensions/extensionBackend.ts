@@ -488,6 +488,19 @@ export async function loadExtensionAgentFactory(extensionId: string, exportName 
   if (typeof candidate !== 'function') {
     throw new Error(`Extension agent factory export not found: ${exportName}`);
   }
+
+  // Agent extensions in manifests use two shapes in practice:
+  // - direct ExtensionFactory: export default function extension(pi) { ... }
+  // - factory builder: export function createExtension(): (pi) => void { ... }
+  // Normalize both so the SDK always receives the actual (pi) => void factory.
+  if (candidate.length === 0) {
+    const built = (candidate as () => unknown)();
+    if (typeof built !== 'function') {
+      throw new Error(`Extension agent factory builder did not return a function: ${exportName}`);
+    }
+    return built as ExtensionFactory;
+  }
+
   return candidate as ExtensionFactory;
 }
 
