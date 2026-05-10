@@ -144,7 +144,6 @@ export function registerTraceRoutes(router: Pick<Express, 'get' | 'post' | 'patc
     }
   });
 
-  // ── Auto mode ───────────────────────────────────────────────────────────
   router.get('/api/traces/cache-efficiency', async (req, res) => {
     try {
       const since = parseRangeParam(req.query.range);
