@@ -112,7 +112,7 @@ The manifest declares what your extension contributes:
 | `promptReferences`           | @-mention resolvers               |                                                                       |
 | `quickOpen`                  | Quick-open providers              |                                                                       |
 | `settings`                   | Settings schema contributions     | [See below](#settings)                                                |
-| `settingsPanels`             | Component panels in Settings      | [See below](#settings-panels-settingspanels)                          |
+| `settingsComponent`          | Component panel in Settings       | [See below](#settings-component-settingscomponent)                    |
 | `topBarElements`             | Top bar indicator icons           | [See below](#top-bar-elements-topbarelements)                         |
 | `conversationHeaderElements` | Badges in conversation header     | [See below](#conversation-header-elements-conversationheaderelements) |
 | `messageActions`             | Hover buttons on messages         | [See below](#message-actions-messageactions)                          |
@@ -189,9 +189,9 @@ Backend handler receives:
 }
 ```
 
-### Settings Panels (`settingsPanels`)
+### Settings Component (`settingsComponent`)
 
-Add component-backed sections to the main Settings page.
+Add one component-backed section to the main Settings page.
 
 ```json
 {

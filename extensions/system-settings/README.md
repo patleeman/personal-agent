@@ -1,27 +1,29 @@
 # Settings Extension
 
-This extension owns the core Settings UI in the desktop app. It renders
-hand-built panels for app-level configuration and mounts component-backed
-settings panels contributed by extensions.
+This extension owns the Settings page shell in the desktop app. It renders
+hand-built panels for app/runtime configuration, scalar settings declared by
+extensions, and component-backed settings sections contributed by extensions.
 
 ---
 
 # Settings
 
-The Settings panel is the desktop UI for all configuration. Open it from the app menu, `Cmd+,`, or navigate to `/settings`.
+The Settings page is the main desktop UI for configuration, but settings are not stored in one place. Open it from the app menu, `Cmd+,`, or navigate to `/settings`. See [`docs/configuration.md`](../../docs/configuration.md) for the full map of machine config, runtime settings, extension settings, credentials, desktop preferences, and daemon state.
 
 ## Architecture
 
-Settings are stored in a single `<stateRoot>/settings.json` file. Each
-extension can declare scalar settings in its `extension.json` under
-`contributes.settings`; those manifest-owned controls are edited from the
-Extension Manager detail view. Extensions that need richer UI can also
-contribute component-backed Settings sections with `contributes.settingsPanels`.
+The Settings page coordinates multiple stores:
+
+- Machine config in `<config-root>/config.json` for knowledge roots, extra instruction files, and skill folders.
+- Runtime agent settings in `<state-root>/pi-agent-runtime/settings.json` for model defaults, vision model, thinking level, service tier, default cwd, and UI/runtime preferences.
+- Extension scalar setting overrides in `<state-root>/settings.json`, backed by `contributes.settings` and `/api/settings`.
+- Extension component panels declared with `contributes.settingsComponent` for richer first-party configuration UI.
+- Provider definitions in `<config-root>/profiles/shared/models.json` and credentials in `<state-root>/pi-agent-runtime/auth.json`.
 
 ```
-Extension manifests ──► Schema registry ──► Extension Manager settings editor
+Extension manifests ──► Schema registry ──► Settings page extension settings
                           │
-                     settings.json
+                 <state-root>/settings.json
                           │
                    Backend actions / agent
 ```
@@ -46,7 +48,7 @@ In your `extension.json`:
 }
 ```
 
-The setting appears in that extension's Extension Manager detail view.
+The setting appears in the Settings page's Extension Settings section.
 No React code needed.
 
 ### API
@@ -67,19 +69,19 @@ await api.updateSettings({ 'myExt.timeout': 60 }); // updates + returns merged
 
 ## Sections
 
-| Section      | Source                                  |
-| ------------ | --------------------------------------- |
-| Appearance   | Built-in (theme picker)                 |
-| Conversation | Built-in (model, thinking)              |
-| Workspace    | Built-in (default working dir)          |
-| Skills       | Built-in (folders, AGENTS.md)           |
-| Tools        | Extension-contributed settings panels   |
-| Providers    | Built-in (model providers, credentials) |
-| Desktop      | Built-in (updates, SSH remotes)         |
-| Keyboard     | Built-in (shortcut editor)              |
+| Section      | Source                                    |
+| ------------ | ----------------------------------------- |
+| Appearance   | Built-in (theme picker)                   |
+| Conversation | Built-in (model, thinking)                |
+| Workspace    | Built-in (default working dir)            |
+| Skills       | Built-in (folders, AGENTS.md)             |
+| Tools        | Extension-contributed settings components |
+| Providers    | Built-in (model providers, credentials)   |
+| Desktop      | Built-in (updates, SSH remotes)           |
+| Keyboard     | Built-in (shortcut editor)                |
 
 Knowledge setup lives in the Knowledge extension. Manifest-declared
-extension settings live in Extension Manager, not the core Settings page.
+extension settings render in the Settings page's Extension Settings section.
 
 ## Usage
 
