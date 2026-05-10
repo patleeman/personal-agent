@@ -1100,7 +1100,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
 
   if (railOnly) {
     return (
-      <div className="flex h-full flex-col bg-base/96 text-sm">
+      <div className="flex h-full flex-col text-sm">
         <div className="max-h-[45%] shrink-0 overflow-hidden">
           <WorkspaceOpenFilesSection
             openFilePaths={openFilePaths}
