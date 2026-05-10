@@ -188,7 +188,7 @@ export function DictationButton({
   );
 }
 
-export function DictationSettingsPanel({ pa }: { pa: NativeExtensionClient }) {
+export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExtensionClient; settingsContext?: { extensionId?: string } }) {
   const [settings, setSettings] = useState<TranscriptionSettingsState | null>(null);
   const [provider, setProvider] = useState<TranscriptionProviderId | ''>('');
   const [model, setModel] = useState('base.en');
@@ -270,13 +270,18 @@ export function DictationSettingsPanel({ pa }: { pa: NativeExtensionClient }) {
 
   return (
     <div className="space-y-0">
-      <section className="scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
+      <section className="scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
         <div className="min-w-0 space-y-2">
           <div className="space-y-1.5">
             <h3 className="text-[15px] font-medium tracking-tight text-primary">Transcription provider</h3>
             <p className="max-w-sm text-[12px] leading-5 text-secondary">
               The composer records browser audio and sends it to this provider when dictation stops.
             </p>
+            {settingsContext?.extensionId ? (
+              <p className="max-w-sm text-[12px] leading-5 text-secondary">
+                Injected by <span className="font-mono text-primary">{settingsContext.extensionId}</span>.
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="min-w-0 space-y-3.5">

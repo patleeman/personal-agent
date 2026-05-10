@@ -9,6 +9,7 @@ import type { ExtensionSettingsComponentRegistration } from './useExtensionRegis
 
 interface ExtensionSettingsPanelContext {
   sectionId: string;
+  extensionId: string;
 }
 
 type ExtensionSettingsPanelComponent = ComponentType<{
@@ -45,7 +46,7 @@ export function SettingsPanelHost({ registration }: { registration: ExtensionSet
 
   return (
     <Suspense fallback={<LoadingState label="Loading extension settings…" />}>
-      <Component pa={pa} settingsContext={{ sectionId: registration.sectionId }} />
+      <Component pa={pa} settingsContext={{ sectionId: registration.sectionId, extensionId: registration.extensionId }} />
     </Suspense>
   );
 }
