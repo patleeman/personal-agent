@@ -65,7 +65,7 @@ describe('system-goal-mode extension', () => {
     );
   });
 
-  it('suppresses continuation after two consecutive no-tool active goal turns', async () => {
+  it('suppresses continuation after two consecutive no-progress active goal turns', async () => {
     const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
     const sendMessage = vi.fn();
     const factory = createConversationAutoModeAgentExtension();
@@ -108,7 +108,7 @@ describe('system-goal-mode extension', () => {
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
-    await turnEnd?.({ toolResults: [] }, ctx);
+    await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'get_goal' }] }, ctx);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });

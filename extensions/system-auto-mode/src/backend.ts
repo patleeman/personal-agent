@@ -116,6 +116,10 @@ function buildContinuationPrompt(state: GoalState): string {
   ].join('\n');
 }
 
+function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
+  return toolResults.length === 0 || toolResults.every((result) => result.toolName === GOAL_GET_TOOL);
+}
+
 // ── Tool parameter schemas ───────────────────────────────────────────────────
 
 const SetGoalParams = Type.Object({
@@ -392,7 +396,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
-      if (toolResults.length === 0) {
+      if (isNoProgressGoalTurn(toolResults)) {
         consecutiveNoToolTurns += 1;
       } else {
         consecutiveNoToolTurns = 0;
