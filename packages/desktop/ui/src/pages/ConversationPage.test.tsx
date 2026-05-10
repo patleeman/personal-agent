@@ -743,7 +743,7 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('Edit path');
     expect(html).not.toContain('set working directory');
     expect(html).not.toContain('Choose the initial working directory for this draft conversation');
-    expect(html).toContain('Run mode');
+    expect(html).toContain('Goal');
     expect(html).not.toContain('>draft<');
     expect(html).not.toContain('right rail');
   });

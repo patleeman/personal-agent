@@ -13,6 +13,7 @@ interface ConversationInitialDeferredResumeState {
 
 export interface ConversationDraftHydrationState {
   conversationId: string;
+  enableAutoModeOnLoad?: boolean;
 }
 
 interface ConversationLocationState {
@@ -146,5 +147,6 @@ export function resolveConversationDraftHydrationState(input: {
 
   return {
     conversationId: candidate.conversationId,
+    enableAutoModeOnLoad: candidate.enableAutoModeOnLoad,
   };
 }

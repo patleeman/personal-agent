@@ -35,11 +35,11 @@ export function broadcastSnapshot(
   },
 ): void {
   callbacks.ensureHiddenTurnState(entry);
-  const goalState = readGoalFromEntries(entry.session.sessionManager.getEntries());
+  const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
   for (const listener of entry.listeners) {
     listener.send({
       type: 'snapshot',
-      goalState,
+      ...(goalState ? { goalState } : {}),
       ...callbacks.buildLiveSessionSnapshot(entry, listener.tailBlocks),
     });
   }

@@ -73,9 +73,10 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   resolveTitle: (entry: TEntry) => string,
 ): void {
   ensureHiddenTurnState(entry);
+  const goalState = readGoalFromEntries(entry.session.sessionManager?.getEntries?.() ?? []);
   subscription.send({
     type: 'snapshot',
-    goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
+    ...(goalState ? { goalState } : {}),
     ...buildLiveSessionSnapshot(entry, options?.tailBlocks),
   });
   const title = resolveTitle(entry);
@@ -88,7 +89,10 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
     subscription.send({ type: 'presence_state', state: buildLiveSessionPresenceState(entry) });
   }
-  if (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) {
+  if (
+    entry.session.isStreaming &&
+    (!entry.activeHiddenTurnCustomType || entry.activeHiddenTurnCustomType === 'conversation_automation_post_turn_review')
+  ) {
     subscription.send({ type: 'agent_start' });
   }
 }

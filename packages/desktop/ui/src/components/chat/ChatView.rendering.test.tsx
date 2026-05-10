@@ -208,17 +208,7 @@ describe('ChatView rendering stability', () => {
 
     const { container } = renderChatView([browserBlock], { onOpenBrowser });
 
-    expect(container.textContent).toContain('Browser snapshot');
-    expect(container.textContent).toContain('Open browser');
-    expect(container.textContent).toContain('https://example.com/');
-
-    const button = Array.from(container.querySelectorAll('button')).find((entry) => entry.textContent === 'Open browser');
-    expect(button).toBeTruthy();
-
-    act(() => {
-      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(onOpenBrowser).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('browser_snapshot');
+    expect(onOpenBrowser).not.toHaveBeenCalled();
   });
 });

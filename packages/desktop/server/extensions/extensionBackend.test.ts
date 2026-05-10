@@ -26,7 +26,7 @@ describe('extension backend agent factory loading', () => {
 
     await factory(pi);
 
-    expect(registeredTools).toEqual(expect.arrayContaining(['set_goal', 'get_goal', 'update_goal', 'update_tasks']));
+    expect(registeredTools).toEqual(expect.arrayContaining(['set_goal', 'update_goal']));
     expect(registeredCommands).toContain('goal');
     expect(registeredEvents).toEqual(expect.arrayContaining(['turn_end', 'tool_execution_end', 'session_start']));
   });

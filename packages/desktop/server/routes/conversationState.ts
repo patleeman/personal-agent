@@ -3,6 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { type ExtensionFactory, SessionManager } from '@earendil-works/pi-coding-agent';
 import type { Express } from 'express';
 
+import { readConversationAutoModeStateFromSessionManager, writeConversationAutoModeState } from '../conversations/conversationAutoMode.js';
 import { isMissingConversationBootstrapState, readConversationBootstrapState } from '../conversations/conversationBootstrap.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { applyConversationModelPreferencesToSessionManager } from '../conversations/conversationModelPreferences.js';
@@ -18,9 +19,11 @@ import {
   destroySession,
   getAvailableModelObjects,
   isLive as isLocalLive,
+  readLiveSessionAutoModeState,
   registry as liveRegistry,
   renameSession,
   resumeSession,
+  setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
 import { appendConversationWorkspaceMetadata, readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
@@ -192,6 +195,67 @@ export function registerConversationStateRoutes(
         stack: err instanceof Error ? err.stack : undefined,
       });
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.get('/api/conversations/:id/auto-mode', async (req, res) => {
+    try {
+      if (isLocalLive(req.params.id)) {
+        res.json(readLiveSessionAutoModeState(req.params.id));
+        return;
+      }
+      const sessionFile = resolveConversationSessionFile(req.params.id);
+      if (!existsSync(sessionFile)) {
+        res.status(404).json({ error: 'Conversation not found' });
+        return;
+      }
+      res.json(readConversationAutoModeStateFromSessionManager(SessionManager.open(sessionFile)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.patch('/api/conversations/:id/auto-mode', async (req, res) => {
+    try {
+      const body = req.body as { enabled?: boolean; mode?: string; surfaceId?: string };
+      if (typeof body.enabled !== 'boolean' && typeof body.mode !== 'string') {
+        res.status(400).json({ error: 'mode or enabled required' });
+        return;
+      }
+      const input = typeof body.mode === 'string' ? { mode: body.mode as never } : { enabled: body.enabled };
+      if (isLocalLive(req.params.id)) {
+        ensureRequestControlsLocalLiveConversation(req.params.id, { enabled: body.enabled, surfaceId: body.surfaceId });
+        res.json(await setLiveSessionAutoModeState(req.params.id, input));
+        return;
+      }
+      const recovered =
+        body.enabled === true
+          ? await recoverConversationCapability(req.params.id, {
+              getCurrentProfile: getCurrentProfileFn,
+              buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
+              buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
+              flushLiveDeferredResumes: flushLiveDeferredResumesFn,
+            })
+          : { live: false };
+      if (recovered.live) {
+        ensureRequestControlsLocalLiveConversation(req.params.id, { enabled: body.enabled, surfaceId: body.surfaceId });
+        res.json(await setLiveSessionAutoModeState(req.params.id, input));
+        return;
+      }
+      const sessionFile = resolveConversationSessionFile(req.params.id);
+      if (!existsSync(sessionFile)) {
+        res.status(404).json({ error: 'Conversation not found' });
+        return;
+      }
+      const result = writeConversationAutoModeState(SessionManager.open(sessionFile), input);
+      publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(500).json({ error: message });
     }
   });
 

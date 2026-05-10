@@ -10,6 +10,11 @@ import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/cor
 
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { persistTraceStats } from '../traces/tracePersistence.js';
+import {
+  type ConversationAutoModeState,
+  readConversationAutoModeStateFromSessionManager,
+  writeConversationAutoModeState,
+} from './conversationAutoMode.js';
 import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
@@ -108,6 +113,7 @@ import { appendConversationWorkspaceMetadata, readSessionMetaByFile } from './se
 
 export { registerLiveSessionLifecycleHandler };
 
+export { readConversationAutoModeStateFromEntries } from './conversationAutoMode.js';
 export { type LiveContextUsage, type LiveContextUsageSegment, type SseEvent, toSse } from './liveSessionEvents.js';
 export { resolveLastCompletedConversationEntryId, resolveStableForkEntryId } from './liveSessionForking.js';
 export { clearPrewarmedLiveSessionLoaders, type LiveSessionLoaderOptions, prewarmLiveSessionLoader } from './liveSessionLoader.js';
@@ -555,6 +561,64 @@ export async function queuePromptContext(sessionId: string, customType: string, 
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await queueLiveSessionPromptContext(entry, customType, content);
+}
+
+export function readLiveSessionAutoModeState(sessionId: string): ConversationAutoModeState {
+  const entry = registry.get(sessionId);
+  if (!entry?.session.sessionManager?.getEntries) return { enabled: false, mode: 'manual', stopReason: null, updatedAt: null };
+  return readConversationAutoModeStateFromSessionManager(entry.session.sessionManager);
+}
+
+export async function setLiveSessionAutoModeState(
+  sessionId: string,
+  input: Partial<ConversationAutoModeState>,
+): Promise<ConversationAutoModeState> {
+  const entry = registry.get(sessionId);
+  if (!entry?.session.sessionManager?.appendCustomEntry) throw new Error(`Live session not found: ${sessionId}`);
+  const state = writeConversationAutoModeState(entry.session.sessionManager, input);
+  publishSessionMetaChanged(sessionId);
+  return state;
+}
+
+export function markConversationAutoModeContinueRequested(sessionId: string): void {
+  const entry = registry.get(sessionId);
+  if (entry) entry.pendingAutoModeContinuation = true;
+}
+
+export async function requestConversationAutoModeTurn(sessionId: string): Promise<boolean> {
+  const entry = registry.get(sessionId);
+  if (!entry || entry.running || entry.session.isStreaming) return false;
+  if (!readLiveSessionAutoModeState(sessionId).enabled) return false;
+  const messages = Array.isArray(entry.session.state?.messages) ? entry.session.state.messages : [];
+  if (!messages.some((message) => message?.role === 'assistant')) return false;
+  await entry.session.sendCustomMessage?.(
+    { customType: 'conversation_automation_post_turn_review', content: 'Review whether to continue working in auto mode.', display: false },
+    { deliverAs: 'followUp', triggerTurn: true },
+  );
+  return true;
+}
+
+export async function requestConversationAutoModeContinuationTurn(sessionId: string): Promise<boolean> {
+  const entry = registry.get(sessionId);
+  if (!entry || entry.running || entry.session.isStreaming) return false;
+  entry.pendingAutoModeContinuation = false;
+  const state = readLiveSessionAutoModeState(sessionId);
+  const content =
+    state.mode === 'mission'
+      ? `Mission continuation: ${state.mission?.goal ?? ''}\n${(state.mission?.tasks ?? []).map((task) => task.description).join('\n')}\nUse run_state to update task progress.`
+      : state.mode === 'loop'
+        ? `Loop continuation: ${state.loop?.prompt ?? ''}\n${state.loop?.iterationsUsed ?? 0}/${state.loop?.maxIterations ?? 0}`
+        : 'Continue working on the current user request.';
+  await entry.session.sendCustomMessage?.(
+    {
+      customType: 'conversation_automation_auto_continue',
+      content,
+      display: false,
+      details: { source: 'conversation-auto-mode', mode: state.mode },
+    },
+    { deliverAs: 'followUp', triggerTurn: true },
+  );
+  return true;
 }
 
 export async function appendDetachedUserMessage(sessionId: string, text: string): Promise<void> {

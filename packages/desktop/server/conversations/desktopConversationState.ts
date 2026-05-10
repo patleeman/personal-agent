@@ -229,7 +229,7 @@ function displayBlockToMessageBlock(block: {
 }
 
 export function createDesktopConversationStreamStateFromSnapshot(snapshot: LiveSessionStateSnapshot): DesktopConversationStreamState {
-  return {
+  const state = {
     blocks: snapshot.blocks.map((block) => displayBlockToMessageBlock(block)),
     blockOffset: snapshot.blockOffset,
     totalBlocks: snapshot.totalBlocks,
@@ -245,8 +245,10 @@ export function createDesktopConversationStreamStateFromSnapshot(snapshot: LiveS
     parallelJobs: snapshot.parallelJobs,
     presence: snapshot.presence,
     cwdChange: snapshot.cwdChange,
-    goalState: snapshot.goalState,
+    autoModeState: null,
+    ...(snapshot.goalState ? { goalState: snapshot.goalState } : {}),
   };
+  return state as DesktopConversationStreamState;
 }
 
 export function applyDesktopConversationStreamEvent(prev: DesktopConversationStreamState, event: SseEvent): DesktopConversationStreamState {
