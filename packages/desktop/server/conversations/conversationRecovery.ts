@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
-import { readMachineUiConfig } from '@personal-agent/core';
 import { parsePendingOperation } from '@personal-agent/daemon';
 
 import { getDurableRun } from '../automation/durableRuns.js';
@@ -21,8 +20,7 @@ import {
   repairLiveSessionTranscriptTail,
   resumeSession,
 } from './liveSessions.js';
-import { type DisplayBlock, readSessionBlocks } from './sessions.js';
-
+import { readSessionBlocks } from './sessions.js';
 interface RecoveryLoaderOptions {
   extensionFactories?: ExtensionFactory[];
   additionalExtensionPaths?: string[];
@@ -83,49 +81,16 @@ function readCheckpointString(payload: Record<string, unknown>, key: string): st
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function isSyntheticResumeFallbackOperation(
-  operation: WebLiveConversationPendingOperation | null | undefined,
-  resumeFallbackPrompt: string,
-): boolean {
-  const normalizedPrompt = resumeFallbackPrompt.trim();
-  if (!operation || operation.type !== 'prompt' || normalizedPrompt.length === 0) {
+function isLegacySyntheticResumeFallbackOperation(operation: WebLiveConversationPendingOperation | null | undefined): boolean {
+  if (!operation || operation.type !== 'prompt') {
     return false;
   }
 
   const hasImages = Array.isArray(operation.images) && operation.images.length > 0;
   const hasContextMessages = Array.isArray(operation.contextMessages) && operation.contextMessages.length > 0;
-  return operation.text.trim() === normalizedPrompt && operation.behavior === undefined && !hasImages && !hasContextMessages;
-}
-
-function isTerminalBashDisplayBlock(block: DisplayBlock | null | undefined): boolean {
-  if (!block || block.type !== 'tool_use' || block.tool !== 'bash') {
-    return false;
-  }
-
-  const details = block.details;
   return (
-    typeof details === 'object' &&
-    details !== null &&
-    !Array.isArray(details) &&
-    (details as { displayMode?: unknown }).displayMode === 'terminal'
+    operation.text.trim() === 'Continue from where you left off.' && operation.behavior === undefined && !hasImages && !hasContextMessages
   );
-}
-
-function displayBlockNeedsResumeFallback(block: DisplayBlock | null | undefined): boolean {
-  if (!block) {
-    return false;
-  }
-
-  switch (block.type) {
-    case 'error':
-      return true;
-    case 'thinking':
-      return true;
-    case 'tool_use':
-      return !isTerminalBashDisplayBlock(block);
-    default:
-      return false;
-  }
 }
 
 async function continueRecoveredConversation(input: {
@@ -135,25 +100,9 @@ async function continueRecoveredConversation(input: {
   title?: string;
   profile: string;
   recoveryOperation: WebLiveConversationPendingOperation | null;
-  lastBlock?: DisplayBlock | null;
 }): Promise<Pick<RecoverConversationResult, 'replayedPendingOperation' | 'usedFallbackPrompt'>> {
-  const repairedTail = repairLiveSessionTranscriptTail(input.conversationId);
-  const fallbackPrompt = readMachineUiConfig().resumeFallbackPrompt.trim();
-  const shouldUseFallbackPrompt =
-    !input.recoveryOperation &&
-    !autoModeEnabled &&
-    fallbackPrompt.length > 0 &&
-    (repairedTail.recoverable || displayBlockNeedsResumeFallback(input.lastBlock));
-
-  const promptOperation =
-    input.recoveryOperation ??
-    (shouldUseFallbackPrompt
-      ? {
-          type: 'prompt' as const,
-          text: fallbackPrompt,
-          enqueuedAt: new Date().toISOString(),
-        }
-      : null);
+  repairLiveSessionTranscriptTail(input.conversationId);
+  const promptOperation = input.recoveryOperation;
 
   const sessionFile = input.sessionFile?.trim();
   if (sessionFile) {
@@ -196,7 +145,7 @@ async function continueRecoveredConversation(input: {
 
   return {
     replayedPendingOperation: Boolean(input.recoveryOperation),
-    usedFallbackPrompt: shouldUseFallbackPrompt,
+    usedFallbackPrompt: false,
   };
 }
 
@@ -219,7 +168,6 @@ export async function recoverConversationCapability(
       title: liveEntry?.title ?? liveSessionDetail?.meta.title,
       profile: context.getCurrentProfile(),
       recoveryOperation: null,
-      lastBlock: liveSessionDetail?.blocks.at(-1) ?? null,
     });
 
     return {
@@ -269,7 +217,6 @@ export async function recoverConversationCapability(
     title: effectiveTitle,
     profile: effectiveProfile,
     recoveryOperation: pendingOperation ?? null,
-    lastBlock: sessionDetail?.blocks.at(-1) ?? null,
   });
 
   return {
@@ -285,15 +232,13 @@ export async function recoverDurableLiveConversations(
 ): Promise<RecoverDurableLiveConversationsResult> {
   const recovered: RecoverDurableLiveConversationsResult['recovered'] = [];
   const runs = await listRecoverableWebLiveConversationRuns();
-  const resumeFallbackPrompt = readMachineUiConfig().resumeFallbackPrompt;
-
   for (const run of runs) {
     if (dependencies.isLive(run.conversationId)) {
       continue;
     }
 
     try {
-      const pendingOperation = isSyntheticResumeFallbackOperation(run.pendingOperation, resumeFallbackPrompt) ? null : run.pendingOperation;
+      const pendingOperation = isLegacySyntheticResumeFallbackOperation(run.pendingOperation) ? null : run.pendingOperation;
 
       if (!pendingOperation) {
         continue;
