@@ -53,10 +53,14 @@ const VAULT_WATCH_DEBOUNCE_MS = 180;
 
 /**
  * Subscribe to file system changes in the vault root via SSE.
- * Calls onEvent (with debounce) whenever a 'vault' event is received.
+ * Calls onEvent (with debounce) with the set of changed paths whenever a 'vault' event is received.
  * Also calls onReady with the root path on connection.
  */
-export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) => void, options?: { enabled?: boolean }): void {
+export function useVaultWatcher(
+  onEvent: (paths: string[]) => void,
+  onReady?: (root: string) => void,
+  options?: { enabled?: boolean },
+): void {
   const enabled = options?.enabled ?? true;
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
@@ -67,12 +71,18 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
     if (!enabled || typeof window === 'undefined' || typeof EventSource === 'undefined') return;
     let timer: number | null = null;
     let source: EventSource | null = null;
+    /** Paths that changed during the current debounce window. */
+    const changedPaths = new Set<string>();
 
     source = new EventSource(buildApiPath('/vault/events'));
 
     const schedule = () => {
       if (timer !== null) window.clearTimeout(timer);
-      timer = window.setTimeout(() => onEventRef.current(), VAULT_WATCH_DEBOUNCE_MS);
+      timer = window.setTimeout(() => {
+        const paths = [...changedPaths];
+        changedPaths.clear();
+        onEventRef.current(paths);
+      }, VAULT_WATCH_DEBOUNCE_MS);
     };
 
     source.addEventListener('message', (event: MessageEvent<string>) => {
@@ -82,6 +92,11 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
           onReadyRef.current?.(payload.root);
           return;
         }
+
+        // Collect the changed path if available
+        if (typeof payload.path === 'string') {
+          changedPaths.add(payload.path);
+        }
       } catch {
         // ignore parse errors
       }
@@ -90,12 +105,15 @@ export function useVaultWatcher(onEvent: () => void, onReady?: (root: string) =>
 
     source.onerror = () => {
       source?.close();
-      schedule();
+      const paths = [...changedPaths];
+      changedPaths.clear();
+      onEventRef.current(paths);
     };
 
     return () => {
       if (timer !== null) window.clearTimeout(timer);
       source?.close();
+      changedPaths.clear();
     };
   }, [enabled]);
 }

@@ -1358,14 +1358,22 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
 
   // Watch for external file system changes to the vault root
   useVaultWatcher(
-    useCallback(() => {
-      const currentContent = activeFileIdRef.current;
-      if (currentContent) {
-        emitKBEvent('kb:file-changed-externally', { path: currentContent });
-      }
-      void loadSnapshot({ keepLoadingState: false });
-      void refetchKnowledgeBase({ resetLoading: false });
-    }, [loadSnapshot, refetchKnowledgeBase]),
+    useCallback(
+      (changedPaths: string[]) => {
+        const currentContent = activeFileIdRef.current;
+        if (currentContent) {
+          // Only emit the event if the current file was actually among the changed paths
+          const isAffected =
+            changedPaths.length === 0 || changedPaths.some((p) => currentContent.endsWith(p) || p.endsWith(currentContent));
+          if (isAffected) {
+            emitKBEvent('kb:file-changed-externally', { path: currentContent });
+          }
+        }
+        void loadSnapshot({ keepLoadingState: false });
+        void refetchKnowledgeBase({ resetLoading: false });
+      },
+      [loadSnapshot, refetchKnowledgeBase],
+    ),
     undefined,
     { enabled: Boolean(knowledgeBaseSnapshotKey && !knowledgeBaseError) },
   );
