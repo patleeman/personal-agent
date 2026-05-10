@@ -92,6 +92,7 @@ export interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  newConversationPanels?: ExtensionNewConversationPanelContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];
@@ -122,6 +123,13 @@ export interface ExtensionComposerShelfContribution {
   component: string;
   title?: string;
   placement?: 'top' | 'bottom';
+}
+
+export interface ExtensionNewConversationPanelContribution {
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
 }
 
 export interface ExtensionToolbarActionContribution {

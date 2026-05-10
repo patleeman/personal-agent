@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { listExtensionComposerShelfRegistrations } from './extensionRegistry.js';
+import { listExtensionComposerShelfRegistrations, listExtensionNewConversationPanelRegistrations } from './extensionRegistry.js';
 
 describe('extension composer shelves', () => {
-  it('surfaces suggested context as a system composer shelf', () => {
-    expect(listExtensionComposerShelfRegistrations()).toEqual(
+  it('surfaces suggested context as a new conversation panel, not a composer shelf', () => {
+    expect(listExtensionNewConversationPanelRegistrations()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           extensionId: 'system-suggested-context',
           id: 'suggested-context',
-          component: 'SuggestedContextShelf',
-          placement: 'top',
+          component: 'SuggestedContextPanel',
+          priority: 100,
         }),
       ]),
+    );
+    expect(listExtensionComposerShelfRegistrations()).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ extensionId: 'system-suggested-context' })]),
     );
   });
 

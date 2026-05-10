@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon } from './ConversationComposerChrome';
 
@@ -17,6 +19,7 @@ export function ConversationDraftEmptyAction({
   onClearDraftCwdSelection,
   onSelectDraftWorkspace,
   onPickDraftCwd,
+  extensionPanels,
 }: {
   hasDraftCwd: boolean;
   draftCwdValue: string;
@@ -27,6 +30,7 @@ export function ConversationDraftEmptyAction({
   onClearDraftCwdSelection: () => void;
   onSelectDraftWorkspace: (workspacePath: string) => void;
   onPickDraftCwd: () => void;
+  extensionPanels?: ReactNode;
 }) {
   return (
     <div className="mt-4 w-full space-y-3">
@@ -87,6 +91,7 @@ export function ConversationDraftEmptyAction({
       </div>
 
       {draftCwdError && <p className="text-[11px] text-danger/80">{draftCwdError}</p>}
+      {extensionPanels}
     </div>
   );
 }

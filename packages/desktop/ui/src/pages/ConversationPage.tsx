@@ -212,6 +212,7 @@ import { ComposerShelfHost } from '../extensions/ComposerShelfHost';
 import { ConversationHeaderHost } from '../extensions/ConversationHeaderHost';
 import { buildExtensionMentionItems } from '../extensions/extensionMentions';
 import { createNativeExtensionClient } from '../extensions/nativePaClient';
+import { NewConversationPanelHost } from '../extensions/NewConversationPanelHost';
 import type { ExtensionMentionRegistration, ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -5126,7 +5127,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const renameConversationDisabled = conversationNeedsTakeover || conversationCwdEditorOpen || conversationCwdBusy;
-  const { composerShelves, conversationHeaderElements } = useExtensionRegistry();
+  const { composerShelves, conversationHeaderElements, newConversationPanels } = useExtensionRegistry();
   const composerShelvesTop = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'top'), [composerShelves]);
   const composerShelvesBottom = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'bottom'), [composerShelves]);
   const suggestedContextShelfState = useMemo(
@@ -5158,9 +5159,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       conversationId: id ?? '',
       isStreaming: stream.isStreaming,
       isLive: isLiveSession,
+    }),
+    [id, isLiveSession, stream.isStreaming],
+  );
+  const newConversationPanelContext = useMemo(
+    () => ({
+      conversationId: id ?? '',
       suggestedContext: suggestedContextShelfState,
     }),
-    [id, isLiveSession, stream.isStreaming, suggestedContextShelfState],
+    [id, suggestedContextShelfState],
   );
   const hasComposerShelfContent =
     composerShelvesTop.length > 0 ||
@@ -5422,6 +5429,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     onPickDraftCwd={() => {
                       void pickDraftConversationCwd();
                     }}
+                    extensionPanels={newConversationPanels.map((panel) => (
+                      <NewConversationPanelHost
+                        key={`${panel.extensionId}:${panel.id}`}
+                        registration={panel}
+                        panelContext={newConversationPanelContext}
+                      />
+                    ))}
                   />
                 ) : undefined
               }
@@ -5453,7 +5467,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       draftCwdError,
       draftCwdPickBusy,
       draftCwdValue,
-      debouncedRelatedThreadsQuery,
       forkConversationFromMessage,
       focusComposerFromTranscriptBackground,
       hasRenderableMessages,
@@ -5508,12 +5521,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       visibleTranscriptMessageIndexOffset,
       visibleTranscriptMessages,
       visibleTranscriptState?.conversationId,
-      relatedThreadSearchError,
-      relatedThreadSearchLoading,
-      preparingRelatedThreadContext,
-      selectedRelatedThreadIds,
-      toggleRelatedThreadSelection,
-      visibleRelatedThreadResults,
+      newConversationPanelContext,
+      newConversationPanels,
     ],
   );
 

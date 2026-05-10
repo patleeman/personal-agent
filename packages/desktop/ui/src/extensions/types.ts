@@ -147,6 +147,13 @@ interface ExtensionComposerShelfContribution {
   placement?: 'top' | 'bottom';
 }
 
+interface ExtensionNewConversationPanelContribution {
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
+}
+
 interface ExtensionToolbarActionContribution {
   id: string;
   title: string;
@@ -228,6 +235,7 @@ interface ExtensionContributions {
   topBarElements?: ExtensionTopBarElementContribution[];
   messageActions?: ExtensionMessageActionContribution[];
   composerShelves?: ExtensionComposerShelfContribution[];
+  newConversationPanels?: ExtensionNewConversationPanelContribution[];
   composerButtons?: ExtensionComposerButtonContribution[];
   composerInputTools?: ExtensionComposerInputToolContribution[];
   toolbarActions?: ExtensionToolbarActionContribution[];

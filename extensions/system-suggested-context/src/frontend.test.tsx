@@ -2,15 +2,15 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SuggestedContextShelf } from './frontend';
+import { SuggestedContextPanel } from './frontend';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
-describe('SuggestedContextShelf', () => {
+describe('SuggestedContextPanel', () => {
   it('renders suggested context results from composer shelf state', () => {
     const html = renderToString(
-      <SuggestedContextShelf
-        shelfContext={{
+      <SuggestedContextPanel
+        panelContext={{
           suggestedContext: {
             query: 'architecture',
             results: [
@@ -46,11 +46,11 @@ describe('SuggestedContextShelf', () => {
   });
 
   it('stays hidden when there is no active query or state', () => {
-    expect(renderToString(<SuggestedContextShelf shelfContext={{}} />)).toBe('');
+    expect(renderToString(<SuggestedContextPanel panelContext={{}} />)).toBe('');
     expect(
       renderToString(
-        <SuggestedContextShelf
-          shelfContext={{
+        <SuggestedContextPanel
+          panelContext={{
             suggestedContext: {
               query: '',
               results: [],

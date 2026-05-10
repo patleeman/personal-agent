@@ -186,6 +186,16 @@ export interface ExtensionComposerShelfRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionNewConversationPanelRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  component: string;
+  title?: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionToolbarActionRegistration {
   extensionId: string;
   id: string;
@@ -831,6 +841,17 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
     }
   }
 
+  if (contributes.newConversationPanels !== undefined) {
+    for (const [index, panel] of assertRecordArray(contributes.newConversationPanels, 'contributes.newConversationPanels').entries()) {
+      requireString(panel.id, `contributes.newConversationPanels[${index}].id`);
+      requireString(panel.component, `contributes.newConversationPanels[${index}].component`);
+      validateOptionalString(panel.title, `contributes.newConversationPanels[${index}].title`);
+      if (panel.priority !== undefined && (typeof panel.priority !== 'number' || !Number.isInteger(panel.priority))) {
+        throw new Error(`Extension manifest contributes.newConversationPanels[${index}].priority must be an integer.`);
+      }
+    }
+  }
+
   if (contributes.composerButtons !== undefined) {
     for (const [index, button] of assertRecordArray(contributes.composerButtons, 'contributes.composerButtons').entries()) {
       requireString(button.id, `contributes.composerButtons[${index}].id`);
@@ -1172,6 +1193,7 @@ export function readExtensionSchema() {
       'topBarElements',
       'messageActions',
       'composerShelves',
+      'newConversationPanels',
       'composerButtons',
       'composerInputTools',
       'toolbarActions',
@@ -1364,6 +1386,31 @@ export function listExtensionComposerShelfRegistrations(stateRoot: string = getS
       ];
     }),
   );
+}
+
+export function listExtensionNewConversationPanelRegistrations(
+  stateRoot: string = getStateRoot(),
+): ExtensionNewConversationPanelRegistration[] {
+  return listEnabledExtensionEntries(stateRoot)
+    .flatMap((entry) =>
+      (entry.manifest.contributes?.newConversationPanels ?? []).flatMap((panel): ExtensionNewConversationPanelRegistration[] => {
+        const id = panel.id.trim();
+        const component = panel.component.trim();
+        if (!id || !component) return [];
+        return [
+          {
+            extensionId: entry.manifest.id,
+            id,
+            packageType: entry.manifest.packageType ?? 'user',
+            component,
+            ...(panel.title ? { title: panel.title } : {}),
+            ...(typeof panel.priority === 'number' ? { priority: panel.priority } : {}),
+            frontendEntry: entry.manifest.frontend?.entry,
+          },
+        ];
+      }),
+    )
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
 
 export function listExtensionComposerButtonRegistrations(stateRoot: string = getStateRoot()): ExtensionComposerButtonRegistration[] {

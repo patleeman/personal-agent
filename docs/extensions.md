@@ -97,32 +97,33 @@ The manifest declares what your extension contributes:
 
 ### Contribution Types
 
-| Field                        | Purpose                           | Docs                                                                  |
-| ---------------------------- | --------------------------------- | --------------------------------------------------------------------- |
-| `views`                      | UI surfaces (pages, panels)       | See `docs/views.md`                                                   |
-| `nav`                        | Left sidebar navigation items     |                                                                       |
-| `commands`                   | Command palette commands          |                                                                       |
-| `keybindings`                | Keyboard shortcuts                |                                                                       |
-| `slashCommands`              | `/command` in composer            |                                                                       |
-| `tools`                      | Agent-callable tools              |                                                                       |
-| `mentions`                   | @-mention providers               |                                                                       |
-| `skills`                     | Agent Skills (markdown)           |                                                                       |
-| `themes`                     | Color themes                      |                                                                       |
-| `transcriptRenderers`        | Custom tool result rendering      |                                                                       |
-| `promptReferences`           | @-mention resolvers               |                                                                       |
-| `quickOpen`                  | Quick-open providers              |                                                                       |
-| `settings`                   | Settings schema contributions     | [See below](#settings)                                                |
-| `settingsComponent`          | Component panel in Settings       | [See below](#settings-component-settingscomponent)                    |
-| `topBarElements`             | Top bar indicator icons           | [See below](#top-bar-elements-topbarelements)                         |
-| `conversationHeaderElements` | Badges in conversation header     | [See below](#conversation-header-elements-conversationheaderelements) |
-| `messageActions`             | Hover buttons on messages         | [See below](#message-actions-messageactions)                          |
-| `composerShelves`            | Sections above the composer       | [See below](#composer-shelves-composershelves)                        |
-| `composerButtons`            | Component buttons beside submit   | [See below](#composer-buttons-composerbuttons)                        |
-| `composerInputTools`         | Component tools beside attachment | [See below](#composer-input-tools-composerinputtools)                 |
-| `toolbarActions`             | Icon buttons in composer toolbar  | [See below](#toolbar-actions-toolbaractions)                          |
-| `conversationDecorators`     | Badges on conversation list items | [See below](#conversation-decorators-conversationdecorators)          |
-| `contextMenus`               | Right-click menu items            | [See below](#context-menus-contextmenus)                              |
-| `statusBarItems`             | Labels in the composer status bar | [See below](#status-bar-items-statusbaritems)                         |
+| Field                        | Purpose                             | Docs                                                                  |
+| ---------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| `views`                      | UI surfaces (pages, panels)         | See `docs/views.md`                                                   |
+| `nav`                        | Left sidebar navigation items       |                                                                       |
+| `commands`                   | Command palette commands            |                                                                       |
+| `keybindings`                | Keyboard shortcuts                  |                                                                       |
+| `slashCommands`              | `/command` in composer              |                                                                       |
+| `tools`                      | Agent-callable tools                |                                                                       |
+| `mentions`                   | @-mention providers                 |                                                                       |
+| `skills`                     | Agent Skills (markdown)             |                                                                       |
+| `themes`                     | Color themes                        |                                                                       |
+| `transcriptRenderers`        | Custom tool result rendering        |                                                                       |
+| `promptReferences`           | @-mention resolvers                 |                                                                       |
+| `quickOpen`                  | Quick-open providers                |                                                                       |
+| `settings`                   | Settings schema contributions       | [See below](#settings)                                                |
+| `settingsComponent`          | Component panel in Settings         | [See below](#settings-component-settingscomponent)                    |
+| `topBarElements`             | Top bar indicator icons             | [See below](#top-bar-elements-topbarelements)                         |
+| `conversationHeaderElements` | Badges in conversation header       | [See below](#conversation-header-elements-conversationheaderelements) |
+| `messageActions`             | Hover buttons on messages           | [See below](#message-actions-messageactions)                          |
+| `composerShelves`            | Sections above the composer         | [See below](#composer-shelves-composershelves)                        |
+| `newConversationPanels`      | Panels on the new conversation page | [See below](#new-conversation-panels-newconversationpanels)           |
+| `composerButtons`            | Component buttons beside submit     | [See below](#composer-buttons-composerbuttons)                        |
+| `composerInputTools`         | Component tools beside attachment   | [See below](#composer-input-tools-composerinputtools)                 |
+| `toolbarActions`             | Icon buttons in composer toolbar    | [See below](#toolbar-actions-toolbaractions)                          |
+| `conversationDecorators`     | Badges on conversation list items   | [See below](#conversation-decorators-conversationdecorators)          |
+| `contextMenus`               | Right-click menu items              | [See below](#context-menus-contextmenus)                              |
+| `statusBarItems`             | Labels in the composer status bar   | [See below](#status-bar-items-statusbaritems)                         |
 
 ### Views
 
@@ -285,6 +286,30 @@ The component receives:
     conversationId: string;
     isStreaming: boolean;
     isLive: boolean;
+  }
+}
+```
+
+### New Conversation Panels (`newConversationPanels`)
+
+Add panels to the new conversation empty state, below the workspace selector and above the composer. Use this for draft-only guidance or prompt preparation UI that should not live inside the composer chrome.
+
+```json
+{
+  "id": "suggested-context",
+  "component": "SuggestedContextPanel",
+  "title": "Suggested Context",
+  "priority": 100
+}
+```
+
+The component receives:
+
+```typescript
+{
+  pa: PersonalAgentClient;
+  panelContext: {
+    conversationId: string;
   }
 }
 ```

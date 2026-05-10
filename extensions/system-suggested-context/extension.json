@@ -9,12 +9,12 @@
     "entry": "dist/frontend.js"
   },
   "contributes": {
-    "composerShelves": [
+    "newConversationPanels": [
       {
         "id": "suggested-context",
-        "component": "SuggestedContextShelf",
+        "component": "SuggestedContextPanel",
         "title": "Suggested Context",
-        "placement": "top"
+        "priority": 100
       }
     ]
   }

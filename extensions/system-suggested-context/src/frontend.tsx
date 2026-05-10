@@ -19,7 +19,7 @@ interface SuggestedContextShelfState {
   onToggle: (sessionId: string) => void;
 }
 
-interface SuggestedContextShelfContext {
+interface SuggestedContextPanelContext {
   suggestedContext?: SuggestedContextShelfState;
 }
 
@@ -31,8 +31,8 @@ function formatRowHotkey(index: number, limit: number): string | null {
   return index >= 0 && index < limit ? `Ctrl+${index + 1}` : null;
 }
 
-export function SuggestedContextShelf({ shelfContext }: { shelfContext: SuggestedContextShelfContext }) {
-  const state = shelfContext.suggestedContext;
+export function SuggestedContextPanel({ panelContext }: { panelContext: SuggestedContextPanelContext }) {
+  const state = panelContext.suggestedContext;
   if (!state) return null;
 
   const {
@@ -66,8 +66,8 @@ export function SuggestedContextShelf({ shelfContext }: { shelfContext: Suggeste
             : '⌃1';
 
   return (
-    <section className="mx-auto border-b border-border-subtle/60 px-3 py-2 text-left">
-      <div className="mx-auto w-full max-w-[38rem]">
+    <section className="mt-3 w-full text-left">
+      <div className="w-full">
         <div className="flex items-center justify-between gap-3 text-[11px] text-dim/85">
           <p className="min-w-0 truncate">
             <span className="font-semibold uppercase tracking-[0.14em] text-dim/80">Suggested context</span>

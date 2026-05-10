@@ -89,6 +89,15 @@ export interface ExtensionComposerShelfRegistration {
   frontendEntry?: string;
 }
 
+export interface ExtensionNewConversationPanelRegistration {
+  extensionId: string;
+  id: string;
+  component: string;
+  title?: string;
+  priority?: number;
+  frontendEntry?: string;
+}
+
 export interface ExtensionSettingsComponentRegistration {
   extensionId: string;
   id: string;
@@ -116,6 +125,7 @@ export interface ExtensionRegistryState {
   topBarElements: ExtensionTopBarElementRegistration[];
   messageActions: ExtensionMessageActionRegistration[];
   composerShelves: ExtensionComposerShelfRegistration[];
+  newConversationPanels: ExtensionNewConversationPanelRegistration[];
   settingsComponent: ExtensionSettingsComponentRegistration | null;
   composerButtons: ExtensionComposerButtonRegistration[];
   composerInputTools: ExtensionComposerInputToolRegistration[];
@@ -182,6 +192,26 @@ function normalizeComposerShelves(extensions: ExtensionManifest[]): ExtensionCom
       });
     }
   }
+  return result;
+}
+
+function normalizeNewConversationPanels(extensions: ExtensionManifest[]): ExtensionNewConversationPanelRegistration[] {
+  const result: ExtensionNewConversationPanelRegistration[] = [];
+  for (const extension of extensions) {
+    const panels = extension.contributes?.newConversationPanels;
+    if (!panels?.length) continue;
+    for (const panel of panels) {
+      result.push({
+        extensionId: extension.id,
+        id: panel.id,
+        component: panel.component,
+        ...(panel.title ? { title: panel.title } : {}),
+        ...(typeof panel.priority === 'number' ? { priority: panel.priority } : {}),
+        frontendEntry: extension.frontend?.entry,
+      });
+    }
+  }
+  result.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
   return result;
 }
 
@@ -354,6 +384,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     topBarElements: [],
     messageActions: [],
     composerShelves: [],
+    newConversationPanels: [],
     settingsComponent: null,
     composerButtons: [],
     composerInputTools: [],
@@ -385,6 +416,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           topBarElements: [],
           messageActions: [],
           composerShelves: [],
+          newConversationPanels: [],
           settingsComponent: null,
           composerButtons: [],
           composerInputTools: [],
@@ -409,6 +441,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: normalizeTopBarElements(extensions),
             messageActions: normalizeMessageActions(extensions),
             composerShelves: normalizeComposerShelves(extensions),
+            newConversationPanels: normalizeNewConversationPanels(extensions),
             settingsComponent: normalizeSettingsComponent(extensions),
             composerButtons: normalizeComposerButtons(extensions),
             composerInputTools: normalizeComposerInputTools(extensions),
@@ -430,6 +463,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             topBarElements: [],
             messageActions: [],
             composerShelves: [],
+            newConversationPanels: [],
             settingsComponent: null,
             composerButtons: [],
             composerInputTools: [],
