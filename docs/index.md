@@ -24,7 +24,11 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Extension API types](../packages/extensions/README.md) — SDK package with exported types for frontend and backend code
 - [System extensions](../extensions) — feature-owned docs and implementation packages
 
-## System extension docs
+## Extension docs
+
+Personal Agent product features live in extensions. Agents should use this index as the map: read the owning extension's `README.md` before changing feature behavior, and read [Extension authoring](extensions.md) plus [Extension API types](../packages/extensions/README.md) before changing extension APIs.
+
+System extensions are bundled under `extensions/system-*`. User extensions live under `<state-root>/extensions/{extension-id}` by default and follow the same package contract.
 
 Feature-specific documentation lives beside the owning extension package:
 

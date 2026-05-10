@@ -243,6 +243,8 @@ description: Commit and push the agent's current work.
     expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
     expect(runtimePrompt).toContain('# Identity & Goal');
+    expect(runtimePrompt).toContain(`Docs index: ${join(repo, 'docs', 'index.md')}`);
+    expect(runtimePrompt).toContain(`System extension docs live under ${join(repo, 'extensions')}/*/README.md`);
     expect(runtimePrompt).toContain('shared append');
     expect(runtimePrompt).toContain('<available_skills>');
     expect(runtimePrompt).toContain(`  <skill id="checkpoint" location="${join(syncRoot, 'skills', 'checkpoint', 'SKILL.md')}">`);

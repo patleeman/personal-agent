@@ -62,6 +62,8 @@ Prefer durable runs for multi-step or long-running work — one run per task. Us
 ## Documentation
 - Docs folder: {{ docs_dir }}
 - Docs index: {{ docs_index }}
+- System extension docs live under {{ repo_root }}/extensions/*/README.md and are linked from the docs index.
+- Extension authoring/API docs live at {{ repo_root }}/docs/extensions.md and {{ repo_root }}/packages/extensions/README.md.
 - Extension skills are registered by extension manifests and appear in Available Skills.
 
 {% if available_skills %}
