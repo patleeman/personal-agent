@@ -1113,7 +1113,7 @@ function WorkbenchKnowledgeRail({
           ))}
       </div>
       {activeTool === 'files' ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden bg-surface [&>[data-extension-id]]:bg-surface">
           {systemFilesExtensionSurface ? (
             <NativeExtensionSurfaceHost
               surface={systemFilesExtensionSurface}
@@ -1329,6 +1329,10 @@ export function Layout() {
   );
   const systemKnowledgeExtensionSurface = useMemo(
     () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-knowledge') ?? null,
+    [extensionRightToolPanels],
+  );
+  const systemDiffsExtensionSurface = useMemo(
+    () => extensionRightToolPanels.find((surface) => surface.extensionId === 'system-diffs') ?? null,
     [extensionRightToolPanels],
   );
   const routePrimaryRailSurface = useMemo(() => {
@@ -1567,8 +1571,8 @@ export function Layout() {
       ...current,
       [activeConversationId]: activeWorkbenchCheckpointFromSearch,
     }));
-    setActiveConversationTool('diffs');
-  }, [activeConversationId, activeWorkbenchCheckpointFromSearch]);
+    setActiveConversationTool(systemDiffsExtensionSurface ? extensionToolPanelMode(systemDiffsExtensionSurface) : 'diffs');
+  }, [activeConversationId, activeWorkbenchCheckpointFromSearch, systemDiffsExtensionSurface]);
 
   useEffect(() => {
     if (!activeConversationId || !activeWorkbenchRunFromSearch) {
@@ -1580,6 +1584,13 @@ export function Layout() {
 
   useEffect(() => {
     if (!activeWorkbenchKnowledgeFileId) {
+      return;
+    }
+
+    // Don't override the current tool when the system-knowledge extension is
+    // active — it sets the ?file= param through its own file selection flow.
+    const parsed = parseExtensionToolPanelMode(activeWorkbenchTool);
+    if (parsed && parsed.extensionId === 'system-knowledge') {
       return;
     }
 
