@@ -2409,7 +2409,7 @@ export function readGoalFromEntries(entries: unknown[]): ThreadGoal | null {
       continue;
     }
     const data = entry.data;
-    if (!isRecord(data) || typeof data.objective !== 'string' || !data.objective) {
+    if (!isRecord(data) || typeof data.objective !== 'string') {
       continue;
     }
     const tasks: ThreadGoal['tasks'] = [];

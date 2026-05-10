@@ -264,6 +264,7 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
         isStreaming: false,
         isCompacting: false,
         error: null,
+        goalState: 'goalState' in event ? event.goalState : prev.goalState,
       };
     }
 

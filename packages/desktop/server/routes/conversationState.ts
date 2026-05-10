@@ -23,7 +23,6 @@ import {
   resumeSession,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
-import { readGoalFromEntries } from '../conversations/sessions.js';
 import { appendConversationWorkspaceMetadata, readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
 import { logError, logSlowConversationPerf, setServerTimingHeaders } from '../middleware/index.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
@@ -199,6 +198,31 @@ export function registerConversationStateRoutes(
   router.patch('/api/conversations/:id/goal', async (req, res) => {
     try {
       const { objective } = req.body as { objective?: string };
+      const hasObjective = 'objective' in req.body;
+
+      const setGoal = (sessionManager: SessionManager) => {
+        const trimmed = (objective ?? '').trim();
+        const goalState = {
+          objective: trimmed || '',
+          status: 'active' as const,
+          tasks: [] as Array<{ id: string; description: string; status: string }>,
+          stopReason: null,
+          updatedAt: new Date().toISOString(),
+        };
+        sessionManager.appendCustomEntry('conversation-goal', goalState);
+        return goalState;
+      };
+
+      const clearGoal = (sessionManager: SessionManager) => {
+        sessionManager.appendCustomEntry('conversation-goal', {
+          objective: '',
+          status: 'complete',
+          tasks: [],
+          stopReason: 'cleared',
+          updatedAt: new Date().toISOString(),
+        });
+        return { cleared: true };
+      };
 
       if (isLocalLive(req.params.id)) {
         const entry = liveRegistry.get(req.params.id);
@@ -207,33 +231,9 @@ export function registerConversationStateRoutes(
           return;
         }
         const sessionManager = entry.session.sessionManager;
-        const trimmed = objective?.trim() ?? '';
-
-        if (trimmed) {
-          // Set goal
-          const goalState = {
-            objective: trimmed,
-            status: 'active' as const,
-            tasks: [] as Array<{ id: string; description: string; status: string }>,
-            stopReason: null,
-            updatedAt: new Date().toISOString(),
-          };
-          sessionManager.appendCustomEntry('conversation-goal', goalState);
-          // Broadcast snapshot so UI updates immediately
-          publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
-          res.json(goalState);
-        } else {
-          // Clear goal
-          sessionManager.appendCustomEntry('conversation-goal', {
-            objective: '',
-            status: 'complete',
-            tasks: [],
-            stopReason: 'cleared',
-            updatedAt: new Date().toISOString(),
-          });
-          publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
-          res.json({ cleared: true });
-        }
+        const result = hasObjective ? setGoal(sessionManager) : clearGoal(sessionManager);
+        publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
+        res.json(result);
         return;
       }
 
@@ -244,27 +244,9 @@ export function registerConversationStateRoutes(
       }
 
       const sessionManager = SessionManager.open(sessionFile);
-      const trimmed = objective?.trim() ?? '';
-      if (trimmed) {
-        sessionManager.appendCustomEntry('conversation-goal', {
-          objective: trimmed,
-          status: 'active',
-          tasks: [],
-          stopReason: null,
-          updatedAt: new Date().toISOString(),
-        });
-        res.json(readGoalFromEntries(sessionManager.getEntries()));
-      } else {
-        sessionManager.appendCustomEntry('conversation-goal', {
-          objective: '',
-          status: 'complete',
-          tasks: [],
-          stopReason: 'cleared',
-          updatedAt: new Date().toISOString(),
-        });
-        res.json({ cleared: true });
-      }
+      const result = hasObjective ? setGoal(sessionManager) : clearGoal(sessionManager);
       publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
+      res.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
