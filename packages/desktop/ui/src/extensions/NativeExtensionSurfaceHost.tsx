@@ -81,7 +81,7 @@ export function NativeExtensionSurfaceHost({
 
   return (
     <section
-      className="h-full min-h-0 overflow-auto bg-base"
+      className="h-full min-h-0 overflow-auto bg-surface"
       data-extension-id={surface.extensionId}
       data-extension-surface-id={surface.id}
     >
