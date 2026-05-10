@@ -18,9 +18,9 @@ import {
   ConversationDraftEmptyAction,
   DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS,
 } from '../components/conversation/ConversationDraftEmptyAction';
+import { ConversationGoalPanel } from '../components/conversation/ConversationGoalPanel';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
-import { ConversationRunModePanel } from '../components/conversation/ConversationRunModePanel';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { AppPageEmptyState, cx, EmptyState, LoadingState, PageHeader, Pill } from '../components/ui';
 import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
@@ -58,7 +58,6 @@ import { formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   buildConversationInitialModelPreferenceState,
   buildConversationServiceTierPreferenceInput,
-  type ConversationLocationState,
   resolveConversationDraftHydrationState,
   resolveConversationInitialDeferredResumeState,
   resolveConversationInitialModelPreferenceState,
@@ -78,8 +77,6 @@ import {
   resolveDraftThinkingPreferenceUpdate,
 } from '../conversation/conversationModelPreferences';
 import {
-  buildConversationSessionSummaryNotice,
-  findLastCopyableAgentText,
   hasConversationLoadedHistoricalTailBlocks,
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
@@ -133,7 +130,6 @@ import {
   clearDraftConversationModelPreferences,
   clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
-  DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
   isDraftConversationAttachmentsMutationCurrent,
   persistConversationAttachments,
@@ -248,7 +244,6 @@ import {
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import type {
   ConversationAttachmentSummary,
-  ConversationAutoModeState,
   ConversationContextDocRef,
   DeferredResumeSummary,
   DurableRunRecord,
@@ -256,7 +251,6 @@ import type {
   MemoryData,
   MessageBlock,
   PromptAttachmentRefInput,
-  type TaskState,
 } from '../shared/types';
 import type { ConversationSummaryRecord } from '../shared/types';
 import {
@@ -475,27 +469,6 @@ export function shouldEnableMessageForkControls({
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
-
-export function createDraftMissionTask(description: string): TaskState {
-  return {
-    id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    description,
-    status: 'pending',
-  };
-}
-
-export function buildMissionAutoModeInputFromDraft(
-  draftMissionConfig: { goal: string },
-  latestState: ConversationAutoModeState | null,
-): { mode: 'mission'; mission: NonNullable<ConversationAutoModeState['mission']> } {
-  return {
-    mode: 'mission',
-    mission: {
-      goal: draftMissionConfig.goal || latestState?.mission?.goal || 'Mission',
-      tasks: latestState?.mission?.tasks ?? [],
-    },
-  };
-}
 
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { id: routeId } = useParams<{ id?: string }>();
@@ -1236,77 +1209,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }),
     [currentThinkingLevel, currentServiceTier, hasExplicitServiceTier, resolvedCurrentModelId],
   );
-  const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
-  const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
-  const [draftMissionConfig, setDraftMissionConfig] = useState<{ goal: string }>({ goal: '' });
-  const [draftLoopConfig, setDraftLoopConfig] = useState<{ prompt: string; maxIterations: number; delay: string }>({
-    prompt: '',
-    maxIterations: 5,
-    delay: 'After each turn',
-  });
-  const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
-  const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
-  const latestConversationAutoModeStateRef = useRef<ConversationAutoModeState | null>(null);
-  useEffect(() => {
-    latestConversationAutoModeStateRef.current = effectiveConversationAutoModeState ?? null;
-  }, [effectiveConversationAutoModeState]);
-
-  // Sync draft config to API when mission/loop mode is active and config changes
-  const lastSyncedMissionRef = useRef<string>('');
-  const lastSyncedLoopRef = useRef<string>('');
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!id || conversationAutoModeBusy) {
-      return;
-    }
-
-    const mode = effectiveConversationAutoModeState?.mode;
-    if (mode === 'mission') {
-      const serialized = JSON.stringify(draftMissionConfig);
-      if (serialized === lastSyncedMissionRef.current) {
-        return;
-      }
-      lastSyncedMissionRef.current = serialized;
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = setTimeout(() => {
-        syncTimerRef.current = null;
-        const latestState = latestConversationAutoModeStateRef.current;
-        if (!id || !latestState?.enabled) return;
-        void api
-          .updateConversationAutoMode(id, buildMissionAutoModeInputFromDraft(draftMissionConfig, latestState))
-          .then(setConversationAutoModeState)
-          .catch(() => undefined);
-      }, 500);
-    } else if (mode === 'loop') {
-      const serialized = JSON.stringify(draftLoopConfig);
-      if (serialized === lastSyncedLoopRef.current) {
-        return;
-      }
-      lastSyncedLoopRef.current = serialized;
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = setTimeout(() => {
-        syncTimerRef.current = null;
-        const latestState = latestConversationAutoModeStateRef.current;
-        if (!id || !latestState?.enabled) return;
-        void api
-          .updateConversationAutoMode(id, {
-            mode: 'loop',
-            loop: {
-              prompt: draftLoopConfig.prompt || latestState.loop?.prompt || 'Run loop iteration',
-              maxIterations: draftLoopConfig.maxIterations,
-              iterationsUsed: latestState.loop?.iterationsUsed ?? 0,
-              delay: draftLoopConfig.delay,
-            },
-          })
-          .then(setConversationAutoModeState)
-          .catch(() => undefined);
-      }, 500);
-    }
-
-    return () => {
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    };
-  }, [draftMissionConfig, draftLoopConfig, id, conversationAutoModeBusy, effectiveConversationAutoModeState?.mode]);
   const initialModelPreferenceState = useMemo(
     () =>
       resolveConversationInitialModelPreferenceState({
@@ -1340,7 +1242,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const appliedInitialModelPreferenceLocationKeyRef = useRef<string | null>(null);
   const skippedInitialDeferredResumeLocationKeyRef = useRef<string | null>(null);
   const attemptedDeferredResumeAutoResumeKeyRef = useRef<string | null>(null);
-  const appliedDraftAutoModeLocationKeyRef = useRef<string | null>(null);
   const [savedWorkspacePaths, setSavedWorkspacePaths] = useState<string[]>(() => readStoredWorkspacePaths());
   const [savedWorkspacePathsLoading, setSavedWorkspacePathsLoading] = useState(false);
   const [draftCwdValue, setDraftCwdValue] = useState('');
@@ -1462,42 +1363,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => {
     if (draft) {
-      setConversationAutoModeState(null);
-      setConversationAutoModeBusy(false);
       return;
     }
 
     if (!id) {
-      setConversationAutoModeState({ enabled: false, stopReason: null, updatedAt: null });
       return;
     }
-
-    if (initialDraftHydrationState?.autoModeState) {
-      setConversationAutoModeState(initialDraftHydrationState.autoModeState);
-      return;
-    }
-
-    let cancelled = false;
-    api
-      .conversationAutoMode(id)
-      .then((data) => {
-        if (!cancelled) {
-          setConversationAutoModeState(data);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setConversationAutoModeState({ enabled: false, stopReason: null, updatedAt: null });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
   }, [conversationEventVersion, draft, id, initialDraftHydrationState]);
 
   const composerDraftStorageKey = draft ? buildDraftConversationComposerStorageKey() : id ? buildConversationComposerStorageKey(id) : null;
   const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
+
+  // Goal mode
+  const goalEnabled = Boolean(stream.goalState?.objective && stream.goalState.status === 'active');
+  const toggleGoalMode = useCallback(async () => {
+    if (!id) return;
+    const isEnabled = !goalEnabled;
+    if (isEnabled) {
+      const text = input.trim();
+      if (!text) return;
+      await api.updateGoal(id, { objective: text });
+    } else {
+      await api.updateGoal(id, {});
+    }
+  }, [id, goalEnabled, input]);
 
   // Input state
   const [input, setInputState] = useReloadState<string>({
@@ -1566,30 +1455,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
-
-  useEffect(() => {
-    if (draft || !id || !initialDraftHydrationState?.enableAutoModeOnLoad) {
-      return;
-    }
-
-    if (appliedDraftAutoModeLocationKeyRef.current === location.key) {
-      return;
-    }
-
-    appliedDraftAutoModeLocationKeyRef.current = location.key;
-    setConversationAutoModeBusy(true);
-    api
-      .updateConversationAutoMode(id, { enabled: true }, currentSurfaceId)
-      .then((nextState) => {
-        setConversationAutoModeState(nextState);
-      })
-      .catch((error) => {
-        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      })
-      .finally(() => {
-        setConversationAutoModeBusy(false);
-      });
-  }, [currentSurfaceId, draft, id, initialDraftHydrationState, location.key, showNotice]);
 
   const ensureConversationCanControl = useCallback((_action: string): boolean => {
     return true;
@@ -2517,7 +2382,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const deferredResumeAutoResumeKey = deferredResumePresentation.autoResumeKey;
   const deferredResumeIndicatorText = deferredResumePresentation.indicatorText;
   const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
-  const lastCopyableAgentText = useMemo(() => findLastCopyableAgentText(realMessages), [realMessages]);
   const conversationResumeState = useMemo(
     () =>
       getConversationResumeState({
@@ -3521,231 +3385,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [id, isLiveSession, streamReconnect, streamTakeover],
   );
 
-  const materializeDraftConversation = useCallback(
-    async (options: { enableAutoModeOnLoad?: boolean; autoModeInput?: Record<string, unknown> } = {}) => {
-      if (!draft) {
-        if (!id) {
-          throw new Error('Conversation unavailable.');
-        }
-
-        return id;
-      }
-
-      const created = await api.createLiveSession(draftCwdValue || undefined, undefined, createLiveSessionPreferenceInput);
-      primeCreatedConversationOpenCaches(created, {
-        tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-        bootstrapVersionKey: conversationVersionKey,
-        sessionDetailVersion: conversationEventVersion,
-      });
-
-      const newId = created.id;
-      if (input.length > 0) {
-        persistForkPromptDraft(newId, input);
-      }
-
-      const initialAutoModeState = options.autoModeInput
-        ? await api.updateConversationAutoMode(newId, options.autoModeInput, currentSurfaceId)
-        : null;
-
-      clearDraftConversationComposer();
-      clearDraftConversationCwd();
-      clearDraftConversationModelPreferences();
-
-      ensureConversationTabOpen(newId);
-      navigate(`/conversations/${newId}`, {
-        replace: true,
-        state: {
-          initialModelPreferenceState: buildConversationInitialModelPreferenceState({
-            conversationId: newId,
-            currentModel,
-            currentThinkingLevel,
-            currentServiceTier,
-            hasExplicitServiceTier,
-            defaultModel,
-            defaultThinkingLevel,
-            defaultServiceTier,
-          }),
-          initialDeferredResumeState: {
-            conversationId: newId,
-            resumes: [],
-          },
-          draftHydrationState: {
-            conversationId: newId,
-            ...(options.enableAutoModeOnLoad ? { enableAutoModeOnLoad: true } : {}),
-            ...(initialAutoModeState ? { autoModeState: initialAutoModeState } : {}),
-          },
-        } satisfies ConversationLocationState,
-      });
-
-      return newId;
-    },
-    [
-      conversationEventVersion,
-      conversationVersionKey,
-      createLiveSessionPreferenceInput,
-      currentModel,
-      currentSurfaceId,
-      currentThinkingLevel,
-      currentServiceTier,
-      defaultModel,
-      defaultThinkingLevel,
-      defaultServiceTier,
-      draft,
-      draftCwdValue,
-      hasExplicitServiceTier,
-      id,
-      input,
-      navigate,
-    ],
-  );
-
-  const toggleConversationAutoMode = useCallback(async () => {
-    if (conversationAutoModeBusy) {
-      return;
-    }
-
-    const nextEnabled = !conversationAutoModeEnabled;
-    setConversationAutoModeBusy(true);
-
-    try {
-      if (draft) {
-        if (!nextEnabled) {
-          return;
-        }
-
-        await materializeDraftConversation({ enableAutoModeOnLoad: true });
-        return;
-      }
-
-      if (!id) {
-        return;
-      }
-
-      const targetConversationId = nextEnabled ? await ensureConversationIsLive('enable auto mode') : id;
-      const nextState = await api.updateConversationAutoMode(targetConversationId, { enabled: nextEnabled }, currentSurfaceId);
-
-      if (targetConversationId === id) {
-        setConversationAutoModeState(nextState);
-      }
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setConversationAutoModeBusy(false);
-    }
-  }, [
-    conversationAutoModeBusy,
-    conversationAutoModeEnabled,
-    currentSurfaceId,
-    draft,
-    ensureConversationIsLive,
-    id,
-    materializeDraftConversation,
-    showNotice,
-  ]);
-
-  const selectConversationAutoMode = useCallback(
-    async (nextMode: import('../shared/types').RunMode) => {
-      if (conversationAutoModeBusy) {
-        return;
-      }
-
-      setConversationAutoModeBusy(true);
-
-      try {
-        const input: Record<string, unknown> = { mode: nextMode };
-        if (nextMode === 'mission') {
-          const goal = draftMissionConfig.goal.trim();
-          input.mission = {
-            goal: goal || 'Mission',
-            tasks: [],
-          };
-        } else if (nextMode === 'loop') {
-          input.loop = {
-            prompt: draftLoopConfig.prompt || 'Run loop iteration',
-            maxIterations: draftLoopConfig.maxIterations,
-            iterationsUsed: 0,
-            delay: draftLoopConfig.delay,
-          };
-        }
-
-        if (draft) {
-          if (nextMode === 'manual') {
-            return;
-          }
-
-          await materializeDraftConversation({ autoModeInput: input });
-          return;
-        }
-
-        if (!id) {
-          return;
-        }
-
-        const needsLive = nextMode !== 'manual';
-        const targetConversationId = needsLive ? await ensureConversationIsLive('set run mode') : id;
-
-        const nextState = await api.updateConversationAutoMode(targetConversationId, input, currentSurfaceId);
-
-        if (targetConversationId === id) {
-          setConversationAutoModeState(nextState);
-        }
-      } catch (error) {
-        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      } finally {
-        setConversationAutoModeBusy(false);
-      }
-    },
-    [
-      conversationAutoModeBusy,
-      currentSurfaceId,
-      draft,
-      ensureConversationIsLive,
-      id,
-      materializeDraftConversation,
-      showNotice,
-      draftMissionConfig,
-      draftLoopConfig,
-    ],
-  );
-
-  const addMissionTask = useCallback(
-    async (description: string) => {
-      const trimmed = description.trim();
-      const latestState = latestConversationAutoModeStateRef.current;
-      if (!trimmed || !id || latestState?.mode !== 'mission') {
-        return;
-      }
-
-      const currentMission = latestState.mission ?? {
-        goal: draftMissionConfig.goal || 'Mission',
-        tasks: [],
-      };
-      const nextMission = {
-        ...currentMission,
-        tasks: [...currentMission.tasks, createDraftMissionTask(trimmed)],
-      };
-      const optimisticState: ConversationAutoModeState = {
-        ...latestState,
-        enabled: true,
-        mode: 'mission',
-        mission: nextMission,
-      };
-
-      latestConversationAutoModeStateRef.current = optimisticState;
-      setConversationAutoModeState(optimisticState);
-
-      try {
-        const nextState = await api.updateConversationAutoMode(id, { mode: 'mission', mission: nextMission }, currentSurfaceId);
-        setConversationAutoModeState(nextState);
-      } catch (error) {
-        latestConversationAutoModeStateRef.current = latestState;
-        setConversationAutoModeState(latestState);
-        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      }
-    },
-    [currentSurfaceId, draftMissionConfig.goal, id, showNotice],
-  );
-
   const rewindConversationFromMessage = useCallback(
     async (messageIndex: number) => {
       if (!id || !realMessages) {
@@ -3994,49 +3633,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setModelIdx(0);
     textareaRef.current?.focus();
     void saveModelPreference(modelId);
-  }
-
-  // /clear — destroy current session, create new one in same cwd
-  async function handleClear() {
-    if (!id) return;
-    if (!ensureConversationCanControl('clear it')) {
-      return;
-    }
-
-    try {
-      if (stream.isStreaming) {
-        await stream.abort();
-      }
-      await api.destroySession(id, currentSurfaceId).catch(() => {});
-      const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-      const created = await api.createLiveSession(cwd, undefined, createLiveSessionPreferenceInput);
-      primeCreatedConversationOpenCaches(created, {
-        tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-        bootstrapVersionKey: conversationVersionKey,
-        sessionDetailVersion: conversationEventVersion,
-      });
-      ensureConversationTabOpen(created.id);
-      navigate(`/conversations/${created.id}`, {
-        state: {
-          initialModelPreferenceState: buildConversationInitialModelPreferenceState({
-            conversationId: created.id,
-            currentModel,
-            currentThinkingLevel,
-            currentServiceTier,
-            hasExplicitServiceTier,
-            defaultModel,
-            defaultThinkingLevel,
-            defaultServiceTier,
-          }),
-          initialDeferredResumeState: {
-            conversationId: created.id,
-            resumes: [],
-          },
-        },
-      });
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    }
   }
 
   function addImageAttachments(files: File[]) {
@@ -4396,31 +3992,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  function resetDraftConversationState() {
-    clearDraftConversationAttachments();
-    clearDraftConversationComposer();
-    clearDraftConversationCwd();
-    clearDraftConversationModelPreferences();
-    setCurrentModel(defaultModel);
-    setCurrentThinkingLevel(defaultThinkingLevel);
-    setCurrentServiceTier(defaultServiceTier);
-    setHasExplicitServiceTier(false);
-    setDraftCwdValue('');
-    setDraftCwdPickBusy(false);
-    setDraftCwdError(null);
-    setInput('');
-    setAttachments([]);
-    setDrawingAttachments([]);
-    setDrawingsError(null);
-  }
-
-  function startNewConversation() {
-    resetDraftConversationState();
-    if (location.pathname !== DRAFT_CONVERSATION_ROUTE) {
-      navigate(DRAFT_CONVERSATION_ROUTE);
-    }
-  }
-
   const setDraftConversationCwd = useCallback((nextCwd: string) => {
     const normalizedCwd = nextCwd.trim();
     if (normalizedCwd) {
@@ -4487,43 +4058,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     beginConversationCwdEdit,
     pickDraftConversationCwd,
   });
-
-  function showSessionSummary() {
-    showNotice(
-      'accent',
-      buildConversationSessionSummaryNotice({
-        draft,
-        title,
-        isLiveSession,
-        currentModel,
-        fallbackModel: model,
-        cwd: currentSessionMeta?.cwd,
-        draftCwd: draftCwdValue,
-        messageCount,
-        contextUsage: sessionTokens,
-      }),
-      5000,
-    );
-  }
-
-  async function copyLastAgentMessage() {
-    if (!lastCopyableAgentText) {
-      showNotice('danger', 'No assistant message is available to copy right now.', 4000);
-      return;
-    }
-
-    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
-      showNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(lastCopyableAgentText);
-      showNotice('accent', 'Copied the last assistant message.');
-    } catch {
-      showNotice('danger', 'Copy to clipboard failed.', 4000);
-    }
-  }
 
   function findExtensionSlashCommand(text: string): { command: ExtensionSlashCommandRegistration; argument: string } | null {
     const parsed = parseSlashInput(text.trim());
@@ -4616,20 +4150,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
         return { kind: 'handled' };
       }
-      case 'run':
-        return {
-          kind: 'send',
-          text: `Run this shell command and show me the output:\n\`\`\`\n${command.command}\n\`\`\``,
-        };
-      case 'search':
-        return { kind: 'send', text: `Search the web for: ${command.query}` };
-      case 'think':
-        return {
-          kind: 'send',
-          text: command.topic
-            ? `Think step-by-step about: ${command.topic}`
-            : 'Think step-by-step about our conversation so far and share your reasoning.',
-        };
     }
   }
 
@@ -6078,8 +5598,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 resolveConversationComposerShellStateClassName({
                   dragOver,
                   hasInteractiveOverlay: showModelPicker || showSlash || showMention,
-                  autoModeEnabled: conversationAutoModeEnabled,
-                  runMode: effectiveConversationAutoModeState?.mode,
                   streamIsStreaming: stream.isStreaming,
                 }),
               )}
@@ -6090,22 +5608,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 <div className="px-4 py-3 text-center text-[12px] text-accent border-b border-accent/20">📎 Drop files to attach</div>
               )}
 
-              <ConversationRunModePanel
-                mode={effectiveConversationAutoModeState?.mode ?? 'manual'}
-                running={
-                  conversationAutoModeEnabled &&
-                  (effectiveConversationAutoModeState?.mode === 'mission' || effectiveConversationAutoModeState?.mode === 'loop')
-                }
-                mission={effectiveConversationAutoModeState?.mission ?? null}
-                loop={effectiveConversationAutoModeState?.loop ?? null}
-                draftMission={draftMissionConfig}
-                draftLoop={draftLoopConfig}
-                onDraftMissionChange={setDraftMissionConfig}
-                onDraftLoopChange={setDraftLoopConfig}
-                onAddMissionTask={(description) => {
-                  void addMissionTask(description);
-                }}
-              />
+              <ConversationGoalPanel goal={stream.goalState} />
 
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
@@ -6264,10 +5767,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 currentThinkingLevel={currentThinkingLevel}
                 currentServiceTier={currentServiceTier}
                 savingPreference={savingPreference}
-                showAutoModeToggle={Boolean(draft || id)}
-                conversationAutoModeEnabled={conversationAutoModeEnabled}
-                conversationAutoModeBusy={conversationAutoModeBusy}
-                conversationAutoMode={effectiveConversationAutoModeState}
+                goalEnabled={goalEnabled}
                 conversationNeedsTakeover={conversationNeedsTakeover}
                 composerHasContent={composerHasContent}
                 composerShowsQuestionSubmit={composerShowsQuestionSubmit}
@@ -6293,20 +5793,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onUpsertDrawingAttachment={(payload) => {
                   upsertDrawingAttachment(payload as ExcalidrawEditorSavePayload);
                 }}
-                onSelectModel={(modelId) => {
-                  void saveModelPreference(modelId);
-                }}
                 onSelectThinkingLevel={(thinkingLevel) => {
                   void saveThinkingLevelPreference(thinkingLevel);
                 }}
                 onSelectServiceTier={(enableFastMode) => {
                   void saveServiceTierPreference(enableFastMode);
                 }}
-                onToggleAutoMode={() => {
-                  void toggleConversationAutoMode();
-                }}
-                onSelectMode={(nextMode) => {
-                  void selectConversationAutoMode(nextMode);
+                onToggleGoal={() => {
+                  void toggleGoalMode();
                 }}
                 onInsertComposerText={insertTextIntoComposer}
                 onSubmitComposerQuestion={() => {

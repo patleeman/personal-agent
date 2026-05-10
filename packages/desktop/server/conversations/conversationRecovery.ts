@@ -6,7 +6,6 @@ import { parsePendingOperation } from '@personal-agent/daemon';
 
 import { getDurableRun } from '../automation/durableRuns.js';
 import { logError } from '../middleware/index.js';
-import { readConversationAutoModeStateFromSessionManager } from './conversationAutoMode.js';
 import {
   createWebLiveConversationRunId,
   listRecoverableWebLiveConversationRuns,
@@ -20,7 +19,6 @@ import {
   queuePromptContext,
   registry as liveRegistry,
   repairLiveSessionTranscriptTail,
-  requestConversationAutoModeTurn,
   resumeSession,
 } from './liveSessions.js';
 import { type DisplayBlock, readSessionBlocks } from './sessions.js';
@@ -140,11 +138,6 @@ async function continueRecoveredConversation(input: {
   lastBlock?: DisplayBlock | null;
 }): Promise<Pick<RecoverConversationResult, 'replayedPendingOperation' | 'usedFallbackPrompt'>> {
   const repairedTail = repairLiveSessionTranscriptTail(input.conversationId);
-  const liveEntry = liveRegistry.get(input.conversationId);
-  const autoModeEnabled = Boolean(
-    liveEntry?.session.sessionManager && readConversationAutoModeStateFromSessionManager(liveEntry.session.sessionManager).enabled,
-  );
-
   const fallbackPrompt = readMachineUiConfig().resumeFallbackPrompt.trim();
   const shouldUseFallbackPrompt =
     !input.recoveryOperation &&
@@ -197,16 +190,6 @@ async function continueRecoveredConversation(input: {
         sessionId: input.conversationId,
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-      });
-    });
-  } else if (autoModeEnabled) {
-    queueMicrotask(() => {
-      void Promise.resolve(requestConversationAutoModeTurn(input.conversationId)).catch((error) => {
-        logError('conversation recovery auto mode request failed', {
-          sessionId: input.conversationId,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
       });
     });
   }

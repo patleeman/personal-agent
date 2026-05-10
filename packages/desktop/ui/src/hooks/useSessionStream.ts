@@ -7,8 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import { parseSkillBlock } from '../markdown/markdownExtensions';
+import type { ThreadGoal } from '../shared/types';
 import type {
-  ConversationAutoModeState,
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
   MessageBlock,
@@ -38,7 +38,7 @@ export interface StreamState {
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
-  autoModeState: ConversationAutoModeState | null;
+  goalState: ThreadGoal | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -72,7 +72,6 @@ const INITIAL_STREAM_STATE: StreamState = {
   pendingQueue: { steering: [], followUp: [] },
   parallelJobs: [],
   presence: createEmptyLiveSessionPresenceState(),
-  autoModeState: null,
   cwdChange: null,
 };
 
@@ -871,6 +870,7 @@ export function applyEvent(
         isStreaming: snapshotIsStreaming,
         isCompacting: false,
         error: null,
+        goalState: 'goalState' in event ? event.goalState : prev.goalState,
       };
     }
 
@@ -932,7 +932,7 @@ export function applyEvent(
     }
 
     case 'auto_mode_state': {
-      return { ...prev, autoModeState: event.state };
+      return prev;
     }
 
     case 'text_delta': {

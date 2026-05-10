@@ -1,9 +1,7 @@
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-import { logWarn } from '../shared/logging.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { persistTraceCompaction, persistTraceToolCall } from '../traces/tracePersistence.js';
-import { CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE } from './conversationAutoMode.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import { type SseEvent, toSse } from './liveSessionEvents.js';
 import {
@@ -11,12 +9,9 @@ import {
   clearActiveHiddenTurnAfterTerminalEvent,
   shouldSuppressLiveEventForHiddenTurn,
 } from './liveSessionHiddenTurns.js';
-import { readConversationAutoModeState } from './liveSessionStateBroadcasts.js';
 import { buildFallbackTitleFromContent, isPlaceholderConversationTitle } from './liveSessionTitle.js';
 import { resolveCompactionSummaryTitle } from './liveSessionTranscript.js';
 import { getAssistantErrorDisplayMessage } from './sessions.js';
-
-const AUTO_MODE_CONTROLLER_RETRY_MAX = 2;
 
 const toolStartTimes = new WeakMap<AgentSession, Map<string, number>>();
 const toolStartInputs = new WeakMap<AgentSession, Map<string, unknown>>();
@@ -111,8 +106,6 @@ export interface LiveSessionEventHost {
   title: string;
   currentTurnError?: string | null;
   activeHiddenTurnCustomType?: string | null;
-  pendingAutoModeContinuation?: boolean;
-  autoModeControllerRetryCount?: number;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
@@ -419,65 +412,4 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
   if (event.type === 'turn_end' || event.type === 'agent_end') {
     void callbacks.tryImportReadyParallelJobs(entry);
   }
-}
-
-function handleHiddenAutoReviewTurnEnd<TEntry extends LiveSessionEventHost>(
-  entry: TEntry,
-  activeHiddenTurnCustomType: string | null | undefined,
-  callbacks: LiveSessionEventCallbacks<TEntry>,
-): void {
-  if (activeHiddenTurnCustomType !== CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
-    return;
-  }
-
-  const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
-  entry.pendingAutoModeContinuation = false;
-
-  if (shouldContinueAutoMode) {
-    entry.autoModeControllerRetryCount = 0;
-    queueMicrotask(() => {
-      void Promise.resolve(callbacks.requestConversationAutoModeContinuationTurn(entry.sessionId)).catch((error) => {
-        logWarn('conversation auto mode continuation request failed', {
-          sessionId: entry.sessionId,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      });
-    });
-    return;
-  }
-
-  // Agent did not call conversation_auto_control, or called "stop".
-  // If auto mode is still enabled (tool was ignored, not "stop"), retry.
-  const state = readConversationAutoModeState(entry);
-  if (!state.enabled) {
-    return;
-  }
-
-  const retryCount = (entry.autoModeControllerRetryCount ?? 0) + 1;
-  entry.autoModeControllerRetryCount = retryCount;
-
-  if (retryCount > AUTO_MODE_CONTROLLER_RETRY_MAX) {
-    logWarn('auto mode controller tool not invoked after max retries, stopping auto mode', {
-      sessionId: entry.sessionId,
-      retryCount: retryCount - 1,
-    });
-    return;
-  }
-
-  logWarn('auto mode controller tool was not invoked, retrying', {
-    sessionId: entry.sessionId,
-    retryCount,
-    maxRetries: AUTO_MODE_CONTROLLER_RETRY_MAX,
-  });
-
-  queueMicrotask(() => {
-    void Promise.resolve(callbacks.requestConversationAutoModeTurn(entry.sessionId)).catch((error) => {
-      logWarn('conversation auto mode controller retry failed', {
-        sessionId: entry.sessionId,
-        retryCount,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    });
-  });
 }

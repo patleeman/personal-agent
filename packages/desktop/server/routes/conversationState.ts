@@ -3,14 +3,6 @@ import { existsSync, statSync } from 'node:fs';
 import { type ExtensionFactory, SessionManager } from '@earendil-works/pi-coding-agent';
 import type { Express } from 'express';
 
-import {
-  buildModeContextMessage,
-  normalizeLoopState,
-  normalizeMissionState,
-  normalizeRunMode,
-  readConversationAutoModeStateFromSessionManager,
-  writeConversationAutoModeState,
-} from '../conversations/conversationAutoMode.js';
 import { isMissingConversationBootstrapState, readConversationBootstrapState } from '../conversations/conversationBootstrap.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { applyConversationModelPreferencesToSessionManager } from '../conversations/conversationModelPreferences.js';
@@ -26,14 +18,12 @@ import {
   destroySession,
   getAvailableModelObjects,
   isLive as isLocalLive,
-  queuePromptContext,
-  readLiveSessionAutoModeState,
   registry as liveRegistry,
   renameSession,
   resumeSession,
-  setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
+import { readGoalFromEntries } from '../conversations/sessions.js';
 import { appendConversationWorkspaceMetadata, readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
 import { logError, logSlowConversationPerf, setServerTimingHeaders } from '../middleware/index.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
@@ -206,94 +196,44 @@ export function registerConversationStateRoutes(
     }
   });
 
-  router.get('/api/conversations/:id/auto-mode', async (req, res) => {
+  router.patch('/api/conversations/:id/goal', async (req, res) => {
     try {
+      const { objective } = req.body as { objective?: string };
+
       if (isLocalLive(req.params.id)) {
-        res.json(readLiveSessionAutoModeState(req.params.id));
-        return;
-      }
-
-      const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!sessionFile || !existsSync(sessionFile)) {
-        res.status(404).json({ error: 'Conversation not found' });
-        return;
-      }
-
-      const sessionManager = SessionManager.open(sessionFile);
-      res.json(readConversationAutoModeStateFromSessionManager(sessionManager));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.patch('/api/conversations/:id/auto-mode', async (req, res) => {
-    try {
-      const body = req.body as {
-        mode?: string;
-        enabled?: boolean;
-        mission?: unknown;
-        loop?: unknown;
-        surfaceId?: string;
-      };
-
-      let input: ConversationAutoModeStateInput;
-
-      if (body.mode) {
-        // Mode-based update (mission, loop, nudge, manual)
-        const mode = normalizeRunMode(body.mode);
-        if (mode === 'mission' && body.mission) {
-          const mission = normalizeMissionState(body.mission);
-          if (!mission) {
-            res.status(400).json({ error: 'Invalid mission state' });
-            return;
-          }
-          input = { enabled: true, mode: 'mission', mission };
-        } else if (mode === 'loop' && body.loop) {
-          const loop = normalizeLoopState(body.loop);
-          if (!loop) {
-            res.status(400).json({ error: 'Invalid loop state' });
-            return;
-          }
-          input = { enabled: true, mode: 'loop', loop };
-        } else if (mode === 'nudge') {
-          input = { enabled: true, mode: 'nudge' };
-        } else if (mode === 'manual') {
-          input = { enabled: false, mode: 'manual' };
-        } else {
-          res.status(400).json({ error: 'Unknown mode or missing state' });
+        const entry = liveRegistry.get(req.params.id);
+        if (!entry) {
+          res.status(404).json({ error: 'Session not live' });
           return;
         }
-      } else if (typeof body.enabled === 'boolean') {
-        // Legacy boolean toggle
-        input = { enabled: body.enabled };
-      } else {
-        res.status(400).json({ error: 'mode or enabled required' });
-        return;
-      }
+        const sessionManager = entry.session.sessionManager;
+        const trimmed = objective?.trim() ?? '';
 
-      if (isLocalLive(req.params.id)) {
-        ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-        const state = await setLiveSessionAutoModeState(req.params.id, input);
-        injectModeContext(req.params.id, state);
-        res.json(state);
-        return;
-      }
-
-      if (input.enabled) {
-        const recovered = await recoverConversationCapability(req.params.id, {
-          getCurrentProfile: getCurrentProfileFn,
-          buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
-          buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
-          flushLiveDeferredResumes: flushLiveDeferredResumesFn,
-        });
-        ensureRequestControlsLocalLiveConversation(recovered.conversationId, req.body);
-        const state = await setLiveSessionAutoModeState(recovered.conversationId, input);
-        injectModeContext(recovered.conversationId, state);
-        res.json(state);
+        if (trimmed) {
+          // Set goal
+          const goalState = {
+            objective: trimmed,
+            status: 'active' as const,
+            tasks: [] as Array<{ id: string; description: string; status: string }>,
+            stopReason: null,
+            updatedAt: new Date().toISOString(),
+          };
+          sessionManager.appendCustomEntry('conversation-goal', goalState);
+          // Broadcast snapshot so UI updates immediately
+          publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
+          res.json(goalState);
+        } else {
+          // Clear goal
+          sessionManager.appendCustomEntry('conversation-goal', {
+            objective: '',
+            status: 'complete',
+            tasks: [],
+            stopReason: 'cleared',
+            updatedAt: new Date().toISOString(),
+          });
+          publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
+          res.json({ cleared: true });
+        }
         return;
       }
 
@@ -304,18 +244,30 @@ export function registerConversationStateRoutes(
       }
 
       const sessionManager = SessionManager.open(sessionFile);
-      const state = writeConversationAutoModeState(sessionManager, input);
+      const trimmed = objective?.trim() ?? '';
+      if (trimmed) {
+        sessionManager.appendCustomEntry('conversation-goal', {
+          objective: trimmed,
+          status: 'active',
+          tasks: [],
+          stopReason: null,
+          updatedAt: new Date().toISOString(),
+        });
+        res.json(readGoalFromEntries(sessionManager.getEntries()));
+      } else {
+        sessionManager.appendCustomEntry('conversation-goal', {
+          objective: '',
+          status: 'complete',
+          tasks: [],
+          stopReason: 'cleared',
+          updatedAt: new Date().toISOString(),
+        });
+        res.json({ cleared: true });
+      }
       publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
-      res.json(state);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logError('request handler error', {
-        message,
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (writeLiveConversationControlError(res, err)) {
-        return;
-      }
+      logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(500).json({ error: message });
     }
   });
@@ -546,15 +498,5 @@ export function registerConversationStateRoutes(
       });
       res.status(500).json({ error: String(err) });
     }
-  });
-}
-
-function injectModeContext(sessionId: string, state: import('../conversations/conversationAutoMode.js').ConversationAutoModeState): void {
-  const message = buildModeContextMessage(state);
-  if (!message) {
-    return;
-  }
-  queuePromptContext(sessionId, 'system-mode-context', message).catch(() => {
-    // Best-effort — mode state is already persisted
   });
 }
