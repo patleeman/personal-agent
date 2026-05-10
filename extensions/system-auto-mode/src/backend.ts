@@ -395,6 +395,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       const prompt = buildContinuationPrompt(state);
+      const continuationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       queueMicrotask(() => {
         pi.sendMessage(
