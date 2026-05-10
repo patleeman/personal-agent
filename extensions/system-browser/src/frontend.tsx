@@ -5,6 +5,7 @@ import {
   getAdjacentTabId,
   getDesktopBridge,
   getTabSessionKey,
+  readBrowserTabsState,
   WorkbenchBrowserTab,
   writeBrowserTabsState,
 } from '@personal-agent/extensions/workbench';
