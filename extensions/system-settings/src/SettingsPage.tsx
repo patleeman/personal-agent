@@ -4,6 +4,7 @@ import {
   AppPageLayout,
   AppPageSection,
   AppPageToc,
+  type ColorTheme,
   createDesktopAwareEventSource,
   createModelEditorDraft,
   createProviderEditorDraft,
@@ -296,6 +297,44 @@ function ThemeButton({
     >
       {label}
     </button>
+  );
+}
+
+function ThemeDefaultSelect({
+  label,
+  value,
+  themes,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  themes: ColorTheme[];
+  onChange: (theme: string) => void;
+}) {
+  return (
+    <label className="space-y-1.5 text-xs font-medium text-secondary">
+      <span>{label}</span>
+      <span className="relative block">
+        <select
+          className="h-9 w-full min-w-0 appearance-none truncate rounded-lg border border-border-subtle bg-surface/70 px-3 pr-9 text-[12px] font-medium text-primary outline-none transition-colors hover:border-border-default hover:bg-surface focus-visible:border-accent/50 focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-accent/20"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {themes.map((theme) => (
+            <option key={theme.id} value={theme.id}>
+              {theme.label}
+            </option>
+          ))}
+        </select>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-dim"
+        >
+          <path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+        </svg>
+      </span>
+    </label>
   );
 }
 
@@ -3044,30 +3083,18 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                       </span>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
-                      <label className="space-y-1.5 text-xs font-medium text-secondary">
-                        <span>Light default</span>
-                        <select className="ui-input" value={lightTheme} onChange={(event) => setLightTheme(event.target.value)}>
-                          {availableThemes
-                            .filter((availableTheme) => availableTheme.appearance === 'light')
-                            .map((availableTheme) => (
-                              <option key={availableTheme.id} value={availableTheme.id}>
-                                {availableTheme.label}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <label className="space-y-1.5 text-xs font-medium text-secondary">
-                        <span>Dark default</span>
-                        <select className="ui-input" value={darkTheme} onChange={(event) => setDarkTheme(event.target.value)}>
-                          {availableThemes
-                            .filter((availableTheme) => availableTheme.appearance === 'dark')
-                            .map((availableTheme) => (
-                              <option key={availableTheme.id} value={availableTheme.id}>
-                                {availableTheme.label}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
+                      <ThemeDefaultSelect
+                        label="Light default"
+                        value={lightTheme}
+                        themes={availableThemes.filter((availableTheme) => availableTheme.appearance === 'light')}
+                        onChange={setLightTheme}
+                      />
+                      <ThemeDefaultSelect
+                        label="Dark default"
+                        value={darkTheme}
+                        themes={availableThemes.filter((availableTheme) => availableTheme.appearance === 'dark')}
+                        onChange={setDarkTheme}
+                      />
                     </div>
                   </div>
                 </SettingsPanel>
