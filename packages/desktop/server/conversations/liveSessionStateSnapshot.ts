@@ -2,15 +2,15 @@ import { existsSync } from 'node:fs';
 
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
-import type { ConversationAutoModeState } from './conversationAutoMode.js';
 import type { LiveContextUsage } from './liveSessionEvents.js';
 import { hasQueuedOrActiveHiddenTurn } from './liveSessionHiddenTurns.js';
 import { type ParallelPromptJob, type ParallelPromptPreview, readParallelState } from './liveSessionParallelJobs.js';
 import { buildLiveSessionPresenceState, type LiveSessionPresenceHost, type LiveSessionPresenceState } from './liveSessionPresence.js';
 import { type QueuedPromptPreview, readQueueState } from './liveSessionQueue.js';
-import { readConversationAutoModeState, readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
+import { readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
 import { applyLatestCompactionSummaryTitle, buildLiveStateBlocks, mergeConversationHistoryBlocks } from './liveSessionTranscript.js';
-import { type DisplayBlock, readSessionBlocksByFile } from './sessions.js';
+import type { ThreadGoal } from './sessions.js';
+import { type DisplayBlock, readGoalFromEntries, readSessionBlocksByFile } from './sessions.js';
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
 const MAX_LIVE_SNAPSHOT_TAIL_BLOCKS = 1000;
@@ -42,8 +42,8 @@ export interface LiveSessionStateSnapshot {
   contextUsage: LiveContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   parallelJobs: ParallelPromptPreview[];
+  goalState: ThreadGoal | null;
   presence: LiveSessionPresenceState;
-  autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -127,6 +127,7 @@ export function readLiveSessionStateSnapshotFromEntry(
     isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
     isCompacting: entry.isCompacting === true,
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
+    goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
     error: entry.currentTurnError ?? null,
     title,
     tokens,
@@ -135,7 +136,6 @@ export function readLiveSessionStateSnapshotFromEntry(
     pendingQueue: readQueueState(entry.session),
     parallelJobs: readParallelState(entry.parallelJobs),
     presence: buildLiveSessionPresenceState(entry),
-    autoModeState: readConversationAutoModeState(entry),
     cwdChange: null,
   };
 }

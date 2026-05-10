@@ -1,4 +1,3 @@
-import type { ConversationAutoModeState } from './conversationAutoMode.js';
 import { readSessionDetailForRoute } from './conversationService.js';
 import { inlineConversationSessionDetailAssetsCapability } from './conversationSessionAssetCapability.js';
 import { readConversationSessionMetaCapability } from './conversationSessionCapability.js';
@@ -64,7 +63,7 @@ export interface DesktopConversationStreamState {
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
-  autoModeState: ConversationAutoModeState | null;
+  goalState: import('./sessions.js').ThreadGoal | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -113,8 +112,8 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
       controllerSurfaceType: null,
       controllerAcquiredAt: null,
     },
-    autoModeState: null,
     cwdChange: null,
+    goalState: null,
   };
 }
 
@@ -245,8 +244,8 @@ export function createDesktopConversationStreamStateFromSnapshot(snapshot: LiveS
     pendingQueue: snapshot.pendingQueue,
     parallelJobs: snapshot.parallelJobs,
     presence: snapshot.presence,
-    autoModeState: snapshot.autoModeState,
     cwdChange: snapshot.cwdChange,
+    goalState: snapshot.goalState,
   };
 }
 
@@ -316,9 +315,6 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
 
     case 'presence_state':
       return { ...prev, presence: event.state };
-
-    case 'auto_mode_state':
-      return { ...prev, autoModeState: event.state };
 
     case 'text_delta': {
       const last = blocks.at(-1);

@@ -4,6 +4,8 @@ import type { MessageBlock } from '../../shared/types';
 import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
+  type AskUserQuestionState,
+  describeAskUserQuestionState,
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
   resolveAskUserQuestionDefaultOptionIndex,
@@ -13,33 +15,7 @@ import {
 } from '../../transcript/askUserQuestions';
 import { cx, Pill, SurfacePanel } from '../ui';
 
-export interface AskUserQuestionState {
-  status: 'pending' | 'answered' | 'superseded';
-  answerBlock?: Extract<MessageBlock, { type: 'user' }>;
-}
-
-export function describeAskUserQuestionState(messages: MessageBlock[] | undefined, messageIndex: number | undefined): AskUserQuestionState {
-  if (!messages || typeof messageIndex !== 'number') {
-    return { status: 'pending' };
-  }
-
-  for (let index = messageIndex + 1; index < messages.length; index += 1) {
-    const candidate = messages[index];
-    if (!candidate) {
-      continue;
-    }
-
-    if (candidate.type === 'user') {
-      return { status: 'answered', answerBlock: candidate };
-    }
-
-    if (candidate.type === 'tool_use' && candidate.tool === 'ask_user_question') {
-      return { status: 'superseded' };
-    }
-  }
-
-  return { status: 'pending' };
-}
+export { describeAskUserQuestionState };
 
 export function summarizeAskUserQuestionAnswer(block: Extract<MessageBlock, { type: 'user' }> | undefined): string | null {
   if (!block) {

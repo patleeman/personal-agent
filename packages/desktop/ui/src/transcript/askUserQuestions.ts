@@ -21,6 +21,11 @@ export interface AskUserQuestionPresentation {
   questions: AskUserQuestionPrompt[];
 }
 
+export interface AskUserQuestionState {
+  status: 'pending' | 'answered' | 'superseded';
+  answerBlock?: Extract<MessageBlock, { type: 'user' }>;
+}
+
 interface PendingAskUserQuestion {
   block: Extract<MessageBlock, { type: 'tool_use' }>;
   messageIndex: number;
@@ -204,6 +209,29 @@ export function readAskUserQuestionPresentation(block: Extract<MessageBlock, { t
   }
 
   return isRecord(block.input) ? (normalizeStructuredQuestions(block.input) ?? normalizeLegacyQuestion(block.input)) : null;
+}
+
+export function describeAskUserQuestionState(messages: MessageBlock[] | undefined, messageIndex: number | undefined): AskUserQuestionState {
+  if (!messages || typeof messageIndex !== 'number') {
+    return { status: 'pending' };
+  }
+
+  for (let index = messageIndex + 1; index < messages.length; index += 1) {
+    const candidate = messages[index];
+    if (!candidate) {
+      continue;
+    }
+
+    if (candidate.type === 'user') {
+      return { status: 'answered', answerBlock: candidate };
+    }
+
+    if (candidate.type === 'tool_use' && candidate.tool === 'ask_user_question') {
+      return { status: 'superseded' };
+    }
+  }
+
+  return { status: 'pending' };
 }
 
 export function isAskUserQuestionComplete(presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers): boolean {

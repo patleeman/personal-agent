@@ -1,21 +1,21 @@
-import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-
 import type { ExtensionSurfaceProps } from '@personal-agent/extensions';
 import {
-  ArtifactToolBlock,
   ConversationArtifactRailContent,
   ConversationArtifactWorkbenchPane,
   readArtifactPresentation,
   setConversationArtifactIdInSearch,
   useConversationArtifactSummaries,
 } from '@personal-agent/extensions/workbench';
+import { useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+
+import { ArtifactToolBlock } from './ArtifactToolBlock.js';
 
 export function ArtifactTranscriptRenderer({
   block,
   context,
 }: {
-  block: Parameters<typeof readArtifactPresentation>[0];
+  block: never;
   context: { onOpenArtifact?: (artifactId: string) => void; activeArtifactId?: string | null };
 }) {
   const artifact = readArtifactPresentation(block);

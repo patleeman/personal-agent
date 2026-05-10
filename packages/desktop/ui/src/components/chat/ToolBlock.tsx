@@ -79,8 +79,6 @@ export function ToolBlock({
     );
   }
 
-
-
   // Normalise tool state across streamed and persisted entries.
   const isRunning = block.status === 'running' || !!block.running;
   const isError = block.status === 'error' || !!block.error;

@@ -1,5 +1,6 @@
 import React, { memo, type RefObject, useEffect, useMemo, useState } from 'react';
 
+import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import type { MessageBlock } from '../../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import { ChatRenderItemView } from './ChatRenderItemView.js';
@@ -13,7 +14,6 @@ import {
 } from './chatWindowing.js';
 import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
 import { getStreamingStatusLabel } from './toolPresentation.js';
-import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
 import { useChatReplySelection } from './useChatReplySelection.js';
 import { useChatWindowing } from './useChatWindowing.js';

@@ -12,8 +12,6 @@ import type {
 } from '../extensions/types';
 import type {
   AppStatus,
-  AutoModeSummary,
-  AutoModeSummary,
   CacheEfficiencyAggregate,
   CacheEfficiencyPoint,
   ContextPointerUsageResult,
@@ -23,7 +21,6 @@ import type {
   ConversationAttachmentRecord,
   ConversationAttachmentSummary,
   ConversationAutomationWorkspaceState,
-  ConversationAutoModeState,
   ConversationBootstrapState,
   ConversationCheckpointReviewContext,
   ConversationCommitCheckpointRecord,
@@ -1110,23 +1107,8 @@ export const api = {
       ...(surfaceId ? { surfaceId } : {}),
     });
   },
-  conversationAutoMode: async (id: string) => {
-    return get<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`);
-  },
-  updateConversationAutoMode: async (
-    id: string,
-    input: {
-      enabled?: boolean;
-      mode?: 'manual' | 'nudge' | 'mission' | 'loop';
-      mission?: import('../shared/types').MissionState;
-      loop?: import('../shared/types').LoopState;
-    },
-    surfaceId?: string,
-  ) => {
-    return patch<ConversationAutoModeState>(`/conversations/${encodeURIComponent(id)}/auto-mode`, {
-      ...input,
-      ...(surfaceId ? { surfaceId } : {}),
-    });
+  updateGoal: async (id: string, input: { objective?: string }) => {
+    return patch<{ objective?: string; status?: string; cleared?: boolean }>(`/conversations/${encodeURIComponent(id)}/goal`, input);
   },
   conversationModelPreferences: async (id: string) => {
     const desktopBridge = getDesktopBridge();

@@ -744,33 +744,26 @@ export interface DeferredResumeSummary {
   };
 }
 
-export type RunMode = 'manual' | 'nudge' | 'mission' | 'loop';
-
 export interface TaskState {
   id: string;
   description: string;
   status: 'pending' | 'in_progress' | 'done' | 'blocked';
 }
 
-export interface MissionState {
-  goal: string;
-  tasks: TaskState[];
-}
-
-export interface LoopState {
-  prompt: string;
-  maxIterations: number;
-  iterationsUsed: number;
-  delay: string;
-}
-
-export interface ConversationAutoModeState {
-  enabled: boolean;
-  mode: RunMode;
+export interface ThreadGoal {
+  objective: string;
+  status: 'active' | 'paused' | 'complete';
+  tasks: Array<{ id: string; description: string; status: 'pending' | 'in_progress' | 'done' | 'blocked' }>;
   stopReason: string | null;
   updatedAt: string | null;
-  mission?: MissionState | null;
-  loop?: LoopState | null;
+}
+
+export interface GoalState {
+  objective: string;
+  status: 'active' | 'paused' | 'complete';
+  tasks: TaskState[];
+  stopReason: string | null;
+  updatedAt: string | null;
 }
 
 export interface ConversationCwdChangeResult {
@@ -960,7 +953,6 @@ interface DesktopConversationStreamState {
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
-  autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -974,7 +966,7 @@ export interface DesktopConversationState {
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =
-  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
+  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; goalState?: ThreadGoal | null }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
@@ -983,7 +975,6 @@ export type SseEvent =
   | { type: 'queue_state'; steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'parallel_state'; jobs: ParallelPromptPreview[] }
   | { type: 'presence_state'; state: LiveSessionPresenceState }
-  | { type: 'auto_mode_state'; state: ConversationAutoModeState }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: Record<string, unknown> }

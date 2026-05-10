@@ -19,11 +19,9 @@ export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTur
   lastContextUsageJson: string | null;
   lastQueueStateJson: string | null;
   lastParallelStateJson?: string | null;
-  lastAutoModeStateJson?: string | null;
   currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
-  pendingAutoModeContinuation?: boolean;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;

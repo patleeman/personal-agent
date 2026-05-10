@@ -1,6 +1,5 @@
-import { memo } from 'react';
-
 import { cx, Pill, SurfacePanel } from '@personal-agent/extensions/ui';
+import { memo } from 'react';
 
 const BROWSER_TOOL_LABELS: Record<string, string> = {
   browser_snapshot: 'Browser snapshot',
@@ -32,7 +31,15 @@ export const BrowserToolBlock = memo(function BrowserToolBlock({
   block,
   onOpenBrowser,
 }: {
-  block: { tool: string; status?: string; running?: boolean; error?: boolean | string; output?: string; input?: unknown; details?: unknown };
+  block: {
+    tool: string;
+    status?: string;
+    running?: boolean;
+    error?: boolean | string;
+    output?: string;
+    input?: unknown;
+    details?: unknown;
+  };
   onOpenBrowser?: () => void;
 }) {
   const isRunning = block.status === 'running' || !!block.running;

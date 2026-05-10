@@ -36,6 +36,7 @@ import {
   type ProviderOAuthLoginStreamEvent,
   readDesktopConnections,
   readDesktopEnvironment,
+  SettingsField,
   SettingsPanelHost,
   subscribeDesktopProviderOAuthLogin,
   type ThemePreference,
@@ -1801,74 +1802,18 @@ function ExtensionSettingsSection() {
       <div className="space-y-0">
         {[...grouped.entries()].map(([group, entries]) => (
           <SettingsPanel key={group} title={group}>
-            {entries.map((entry) => {
-              const currentValue = draft[entry.key] ?? entry.default;
-              return (
-                <div key={entry.key} className="space-y-2 py-3 first:pt-0">
-                  <label className="block text-[13px] font-medium text-primary">
-                    {entry.key.split('.').pop() ?? entry.key}
-                    {entry.description ? <span className="ml-2 font-normal text-[12px] text-secondary">{entry.description}</span> : null}
-                  </label>
-                  {entry.type === 'boolean' ? (
-                    <label className="inline-flex items-center gap-3 text-[14px] text-primary">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(currentValue)}
-                        onChange={(e) => {
-                          setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
-                          setSaveNotice(null);
-                          setSaveError(null);
-                        }}
-                        className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
-                      />
-                      <span>Enabled</span>
-                    </label>
-                  ) : entry.type === 'select' && entry.enum ? (
-                    <select
-                      value={String(currentValue)}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                        setSaveNotice(null);
-                        setSaveError(null);
-                      }}
-                      className={INPUT_CLASS}
-                    >
-                      {entry.enum.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : entry.type === 'number' ? (
-                    <input
-                      type="number"
-                      value={currentValue as number}
-                      placeholder={entry.placeholder}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
-                        setSaveNotice(null);
-                        setSaveError(null);
-                      }}
-                      className={INPUT_CLASS}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={String(currentValue)}
-                      placeholder={entry.placeholder}
-                      onChange={(e) => {
-                        setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                        setSaveNotice(null);
-                        setSaveError(null);
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {entries.map((entry) => (
+              <SettingsField
+                key={entry.key}
+                entry={entry}
+                value={draft[entry.key]}
+                onChange={(key, val) => {
+                  setDraft((prev) => ({ ...prev, [key]: val }));
+                  setSaveNotice(null);
+                  setSaveError(null);
+                }}
+              />
+            ))}
             {saving ? <p className="ui-card-meta">Saving…</p> : null}
             {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
             {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}

@@ -1,5 +1,3 @@
-import type { ConversationAutoModeState, DeferredResumeSummary } from '../shared/types';
-
 export interface ConversationInitialModelPreferenceState {
   conversationId: string;
   currentModel: string;
@@ -15,8 +13,6 @@ interface ConversationInitialDeferredResumeState {
 
 export interface ConversationDraftHydrationState {
   conversationId: string;
-  enableAutoModeOnLoad?: boolean;
-  autoModeState?: ConversationAutoModeState;
 }
 
 export interface ConversationLocationState {
@@ -150,7 +146,5 @@ export function resolveConversationDraftHydrationState(input: {
 
   return {
     conversationId: candidate.conversationId,
-    ...(candidate.enableAutoModeOnLoad === true ? { enableAutoModeOnLoad: true } : {}),
-    ...(candidate.autoModeState ? { autoModeState: candidate.autoModeState } : {}),
   };
 }

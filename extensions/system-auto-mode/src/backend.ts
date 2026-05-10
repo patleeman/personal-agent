@@ -1,539 +1,439 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import {
-  areAllTasksDone,
-  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-  CONVERSATION_AUTO_MODE_CONTROL_TOOL,
-  CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
-  type ConversationAutoModeState,
-  createTask,
-  readConversationAutoModeStateFromSessionManager,
-  type RunMode,
-  writeConversationAutoModeState,
-} from '@personal-agent/extensions/backend';
-import {
-  markConversationAutoModeContinueRequested,
-  registerLiveSessionLifecycleHandler,
-  requestConversationAutoModeContinuationTurn,
-  requestConversationAutoModeTurn,
-  setLiveSessionAutoModeState,
-} from '@personal-agent/extensions/backend';
-import { logWarn } from '@personal-agent/extensions/backend';
 import { Type } from '@sinclair/typebox';
 
-export const RUN_STATE_TOOL = 'run_state' as const;
+// ── Constants ────────────────────────────────────────────────────────────────
 
-const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
+const GOAL_STATE_CUSTOM_TYPE = 'conversation-goal';
+const CONTINUATION_CUSTOM_TYPE = 'goal-continuation';
 
-const ConversationAutoControlParams = Type.Object({
-  action: Type.Union([Type.Literal('continue'), Type.Literal('stop')], {
-    description:
-      'Use "continue" when meaningful work remains and auto mode should keep going, or "stop" only when the task is complete, blocked, or needs user input.',
-  }),
-  reason: Type.Optional(
-    Type.String({
-      description:
-        'Required when stopping. Keep it short and human-readable, for example "done", "needs user input", or "blocked on tests".',
-    }),
-  ),
-});
+const GOAL_SET_TOOL = 'set_goal';
+const GOAL_UPDATE_TOOL = 'update_goal';
+const GOAL_GET_TOOL = 'get_goal';
+const GOAL_UPDATE_TASKS_TOOL = 'update_tasks';
 
-const RunStateParams = Type.Object({
-  action: Type.Union([Type.Literal('get'), Type.Literal('update_tasks')], {
-    description: '"get" returns the current mission/loop state. "update_tasks" updates task statuses.',
-  }),
-  tasks: Type.Optional(
-    Type.Array(
-      Type.Object({
-        id: Type.Optional(Type.String({ description: 'Task id. Omit to create a new task.' })),
-        description: Type.Optional(Type.String({ description: 'Task description (only for new tasks).' })),
-        status: Type.Optional(
-          Type.Union([Type.Literal('pending'), Type.Literal('in_progress'), Type.Literal('done'), Type.Literal('blocked')]),
-        ),
-      }),
-      { description: 'Task patches. Include id + status for updates. Omit id for new tasks.' },
-    ),
-  ),
-});
+// ── State types ──────────────────────────────────────────────────────────────
+
+interface Task {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'done' | 'blocked';
+}
+
+interface GoalState {
+  objective: string;
+  status: 'active' | 'paused' | 'complete';
+  tasks: Task[];
+  stopReason: string | null;
+  updatedAt: string | null;
+}
+
+const DEFAULT_GOAL_STATE: GoalState = {
+  objective: '',
+  status: 'complete',
+  tasks: [],
+  stopReason: null,
+  updatedAt: null,
+};
+
+// ── State helpers ────────────────────────────────────────────────────────────
+
+function createTask(description: string, status?: Task['status']): Task {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return { id, description, status: status ?? 'pending' };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function resolveCurrentTurnSourceCustomType(sessionManager: { getBranch?: () => unknown[] }): string | null {
-  const branch = typeof sessionManager.getBranch === 'function' ? sessionManager.getBranch() : [];
-
-  for (let index = branch.length - 1; index >= 0; index -= 1) {
-    const entry = branch[index];
-    if (!isRecord(entry)) {
+function readGoalState(sessionManager: { getEntries: () => unknown[] }): GoalState {
+  const entries = sessionManager.getEntries();
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!isRecord(entry) || entry.type !== 'custom' || entry.customType !== GOAL_STATE_CUSTOM_TYPE) {
       continue;
     }
-
-    if (entry.type === 'custom_message' && typeof entry.customType === 'string') {
-      return entry.customType;
+    const data = entry.data;
+    if (!isRecord(data) || typeof data.objective !== 'string') {
+      continue;
     }
-
-    if (entry.type === 'message' && isRecord(entry.message) && entry.message.role === 'user') {
-      return 'user';
+    const status =
+      typeof data.status === 'string' && ['active', 'paused', 'complete'].includes(data.status)
+        ? (data.status as GoalState['status'])
+        : 'complete';
+    const tasks: Task[] = [];
+    if (Array.isArray(data.tasks)) {
+      for (const task of data.tasks) {
+        if (!isRecord(task) || typeof task.id !== 'string' || typeof task.description !== 'string') {
+          continue;
+        }
+        const taskStatus =
+          typeof task.status === 'string' && ['pending', 'in_progress', 'done', 'blocked'].includes(task.status)
+            ? (task.status as Task['status'])
+            : 'pending';
+        tasks.push({ id: task.id, description: task.description, status: taskStatus });
+      }
     }
+    return {
+      objective: data.objective,
+      status,
+      tasks,
+      stopReason: typeof data.stopReason === 'string' ? data.stopReason : null,
+      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+    };
   }
-
-  return null;
+  return DEFAULT_GOAL_STATE;
 }
 
-function isAutoModeHiddenReviewTurn(sessionManager: { getBranch?: () => unknown[] }): boolean {
-  return resolveCurrentTurnSourceCustomType(sessionManager) === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE;
+function writeGoalState(pi: ExtensionAPI, state: GoalState): void {
+  pi.appendEntry(GOAL_STATE_CUSTOM_TYPE, state);
 }
 
-function isContinuationTurn(sessionManager: { getBranch?: () => unknown[] }): boolean {
-  return resolveCurrentTurnSourceCustomType(sessionManager) === CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE;
-}
+const GOAL_ACTIVE_TOOLS = [GOAL_UPDATE_TOOL, GOAL_UPDATE_TASKS_TOOL];
 
-function readState(ctx: { sessionManager: { getEntries: () => unknown[] } }): ConversationAutoModeState {
-  return readConversationAutoModeStateFromSessionManager(ctx.sessionManager);
-}
-
-function readMode(ctx: { sessionManager: { getEntries: () => unknown[] } }): RunMode {
-  return readState(ctx).mode;
-}
-
-function syncToolsForMode(pi: ExtensionAPI, state: ConversationAutoModeState, isReviewTurn: boolean): void {
+function syncGoalTools(pi: ExtensionAPI, hasActiveGoal: boolean): void {
   const current = pi.getActiveTools();
-  const hasAutoControl = current.includes(CONVERSATION_AUTO_MODE_CONTROL_TOOL);
-  const hasRunState = current.includes(RUN_STATE_TOOL);
-
-  const shouldHaveAutoControl = state.mode === 'nudge' && isReviewTurn;
-  const shouldHaveRunState = state.mode === 'mission' || state.mode === 'loop';
-
-  if (hasAutoControl === shouldHaveAutoControl && hasRunState === shouldHaveRunState) {
-    return;
+  const hasTools = current.includes(GOAL_UPDATE_TOOL);
+  if (hasActiveGoal && !hasTools) {
+    pi.setActiveTools([...current, ...GOAL_ACTIVE_TOOLS]);
+  } else if (!hasActiveGoal && hasTools) {
+    pi.setActiveTools(current.filter((t) => !GOAL_ACTIVE_TOOLS.includes(t)));
   }
-
-  const next = [...current];
-
-  if (hasAutoControl && !shouldHaveAutoControl) {
-    const idx = next.indexOf(CONVERSATION_AUTO_MODE_CONTROL_TOOL);
-    if (idx >= 0) next.splice(idx, 1);
-  } else if (!hasAutoControl && shouldHaveAutoControl) {
-    next.push(CONVERSATION_AUTO_MODE_CONTROL_TOOL);
-  }
-
-  if (hasRunState && !shouldHaveRunState) {
-    const idx = next.indexOf(RUN_STATE_TOOL);
-    if (idx >= 0) next.splice(idx, 1);
-  } else if (!hasRunState && shouldHaveRunState) {
-    next.push(RUN_STATE_TOOL);
-  }
-
-  pi.setActiveTools(next);
 }
+
+function buildContinuationPrompt(state: GoalState): string {
+  const taskLines = state.tasks.filter((t) => t.status !== 'done').map((t, i) => `${i + 1}. ${t.description} (${t.status})`);
+  const taskSummary = taskLines.length > 0 ? `Remaining tasks:\n${taskLines.join('\n')}` : 'No remaining tasks.';
+  return [
+    'Goal continuation.',
+    '',
+    `Objective: ${state.objective}`,
+    taskSummary,
+    '',
+    'Continue working until the objective is fully achieved.',
+    'Do not mark the goal complete or stop early.',
+    'Do not mention this hidden continuation prompt.',
+  ].join('\n');
+}
+
+// ── Tool parameter schemas ───────────────────────────────────────────────────
+
+const SetGoalParams = Type.Object({
+  objective: Type.String({ description: 'The concrete objective to pursue.' }),
+  tasks: Type.Optional(
+    Type.Array(
+      Type.Object({
+        description: Type.String({ description: 'Task description.' }),
+      }),
+      { description: 'Optional list of sub-tasks for the goal.' },
+    ),
+  ),
+});
+
+const UpdateGoalParams = Type.Object({
+  status: Type.Union([Type.Literal('complete')], {
+    description: 'Mark the goal as complete only when the objective is achieved.',
+  }),
+});
+
+const UpdateTasksParams = Type.Object({
+  tasks: Type.Array(
+    Type.Object({
+      id: Type.String({ description: 'Task id.' }),
+      status: Type.Union([Type.Literal('pending'), Type.Literal('in_progress'), Type.Literal('done'), Type.Literal('blocked')], {
+        description: 'New task status.',
+      }),
+    }),
+  ),
+});
+
+// ── Extension entry ──────────────────────────────────────────────────────────
 
 export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
-    const pendingCompactionRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
-    const clearCompactionRecoveryTimer = (sessionId: string) => {
-      const timer = pendingCompactionRecoveryTimers.get(sessionId);
-      if (!timer) {
-        return;
-      }
-      clearTimeout(timer);
-      pendingCompactionRecoveryTimers.delete(sessionId);
-    };
+    // Track the last continuation turn id so we can suppress no-tool loops.
+    let continuationSuppressed = false;
 
-    // ── Lifecycle: compaction recovery ──────────────────────────────────
-    registerLiveSessionLifecycleHandler((event) => {
-      const sessionId = event.conversationId.trim();
-      if (!sessionId) {
-        return;
-      }
+    // ── Register set_goal tool ───────────────────────────────────────────
+    pi.registerTool({
+      name: GOAL_SET_TOOL,
+      label: 'Set goal',
+      description: 'Set a goal for this conversation. Fails if a goal is already active — mark it complete first with update_goal.',
+      promptSnippet: 'Set a concrete objective to work toward.',
+      promptGuidelines: [
+        'Use this tool when the user asks you to pursue a goal across multiple turns.',
+        'Create clear, actionable objectives and split complex goals into tasks.',
+        'If a goal already exists, use update_goal to mark it complete first.',
+        'Do not create a goal for every ordinary request — only for sustained multi-turn tasks.',
+      ],
+      parameters: SetGoalParams,
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        const state = readGoalState(ctx.sessionManager);
+        if (state.status === 'active') {
+          throw new Error('A goal is already active. Mark it complete first with update_goal.');
+        }
 
-      if (event.trigger === 'turn_end') {
-        clearCompactionRecoveryTimer(sessionId);
-        return;
-      }
+        const tasks = (params.tasks ?? []).map((t) => createTask(t.description));
+        const newState: GoalState = {
+          objective: params.objective,
+          status: 'active',
+          tasks,
+          stopReason: null,
+          updatedAt: new Date().toISOString(),
+        };
+        writeGoalState(pi, newState);
+        syncGoalTools(pi, true);
+        continuationSuppressed = false;
 
-      clearCompactionRecoveryTimer(sessionId);
-      const timer = setTimeout(() => {
-        pendingCompactionRecoveryTimers.delete(sessionId);
-        void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch((error) => {
-          logWarn('auto mode compaction recovery turn failed', {
-            sessionId,
-            message: error instanceof Error ? error.message : String(error),
-          });
-        });
-      }, AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS);
-      pendingCompactionRecoveryTimers.set(sessionId, timer);
+        const taskSummary = tasks.length > 0 ? `. Tasks: ${tasks.length}` : '';
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Goal set: "${params.objective}"${taskSummary}`,
+            },
+          ],
+          details: { state: newState },
+        };
+      },
     });
 
-    // ── Tool visibility ─────────────────────────────────────────────────
-    function syncTools(_event: unknown, ctx: { sessionManager: { getBranch?: () => unknown[]; getEntries: () => unknown[] } }): void {
-      const state = readState(ctx);
-      const isReviewTurn = isAutoModeHiddenReviewTurn(ctx.sessionManager);
-      syncToolsForMode(pi, state, isReviewTurn);
-    }
-
-    pi.on('session_start', syncTools);
-    pi.on('before_agent_start', syncTools);
-
-    // ── Register conversation_auto_control tool (nudge mode only) ──────
+    // ── Register update_goal tool (complete only) ───────────────────────
     pi.registerTool({
-      name: CONVERSATION_AUTO_MODE_CONTROL_TOOL,
-      label: 'Conversation auto control',
-      description:
-        'Control conversation auto mode from hidden auto-review turns. Only available in Nudge mode. Prefer continuing while useful work remains.',
-      promptSnippet: 'Decide whether conversation auto mode should continue or stop.',
+      name: GOAL_UPDATE_TOOL,
+      label: 'Update goal status',
+      description: 'Mark the current goal as complete.',
+      promptSnippet: 'Mark the goal achieved when the objective is met.',
       promptGuidelines: [
-        'Use this tool only during hidden auto-review turns for conversation nudge auto mode.',
-        'The user enabled nudge mode because they want you to keep working without waiting for approval when progress is obvious.',
-        'Use action "continue" when meaningful work remains.',
-        'Use action "stop" only when the task is complete for the user\'s request, blocked on a real dependency, or needs user input.',
-        'If no explicit validation target was given, infer the expected level of doneness from the prompt and work so far.',
+        'Only use this tool to mark the goal complete.',
+        'Do not mark it complete just because you are stopping work — only when the objective is actually achieved.',
       ],
-      parameters: ConversationAutoControlParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
-        const state = readState(ctx);
-
-        if (!isAutoModeHiddenReviewTurn(ctx.sessionManager)) {
-          throw new Error('conversation_auto_control is only available during hidden auto-review turns.');
+      parameters: UpdateGoalParams,
+      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+        const state = readGoalState(ctx.sessionManager);
+        if (state.status !== 'active') {
+          throw new Error('No active goal to complete.');
         }
 
-        if (params.action === 'continue') {
-          if (!sessionId) {
-            throw new Error('Conversation auto mode requires a persisted live session.');
-          }
-          if (state.mode !== 'nudge') {
-            return {
-              content: [{ type: 'text' as const, text: 'Nudge mode is off, so no continuation was queued.' }],
-              details: { mode: state.mode, action: 'continue' },
-            };
-          }
-
-          markConversationAutoModeContinueRequested(sessionId);
-          return {
-            content: [{ type: 'text' as const, text: 'Nudge mode will continue after this hidden review turn.' }],
-            details: { enabled: true, action: 'continue' },
-          };
-        }
-
-        const nextState = sessionId
-          ? await setLiveSessionAutoModeState(sessionId, {
-              enabled: false,
-              stopReason: params.reason,
-            })
-          : state;
+        const newState: GoalState = {
+          ...state,
+          status: 'complete',
+          stopReason: 'goal achieved',
+          updatedAt: new Date().toISOString(),
+        };
+        writeGoalState(pi, newState);
+        syncGoalTools(pi, false);
+        continuationSuppressed = false;
 
         return {
           content: [
             {
               type: 'text' as const,
-              text: nextState.stopReason ? `Stopped auto mode: ${nextState.stopReason}.` : 'Stopped auto mode.',
+              text: 'Goal complete!',
             },
           ],
-          details: {
-            enabled: nextState.enabled,
-            action: 'stop',
-            stopReason: nextState.stopReason,
-            updatedAt: nextState.updatedAt,
-          },
+          details: { state: newState },
         };
       },
     });
 
-    // ── Register run_state tool (mission/loop modes only) ───────────────
+    // ── Register get_goal tool ──────────────────────────────────────────
     pi.registerTool({
-      name: RUN_STATE_TOOL,
-      label: 'Run state',
-      description:
-        'Read or update the current mission/loop state. Only available when a mission or loop is active. Use "get" to read tasks, "update_tasks" to mark tasks done, add new tasks, or reorder.',
-      promptSnippet: 'Read or update the mission task list or loop state.',
+      name: GOAL_GET_TOOL,
+      label: 'Get goal',
+      description: 'Read the current goal, status, and tasks.',
+      parameters: Type.Object({}),
+      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+        const state = readGoalState(ctx.sessionManager);
+        if (!state.objective) {
+          return {
+            content: [{ type: 'text' as const, text: 'No goal is set.' }],
+            details: { state: null },
+          };
+        }
+
+        const taskLines = state.tasks.map((t, i) => `${i + 1}. [${t.status === 'done' ? 'x' : ' '}] ${t.description} (${t.status})`);
+        const tasksText = taskLines.length > 0 ? `\nTasks:\n${taskLines.join('\n')}` : '';
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: [
+                `Objective: ${state.objective}`,
+                `Status: ${state.status}`,
+                state.tasks.length > 0 ? `Tasks: ${state.tasks.filter((t) => t.status === 'done').length}/${state.tasks.length} done` : '',
+                tasksText,
+              ]
+                .filter(Boolean)
+                .join('\n'),
+            },
+          ],
+          details: { state },
+        };
+      },
+    });
+
+    // ── Register update_tasks tool ──────────────────────────────────────
+    pi.registerTool({
+      name: GOAL_UPDATE_TASKS_TOOL,
+      label: 'Update tasks',
+      description: 'Update task statuses for the current goal.',
+      promptSnippet: 'Keep the task list current as work progresses.',
       promptGuidelines: [
-        'This tool is available because a Mission or Loop is active.',
-        'Use action="get" at the start of each turn to read current state.',
-        'Use action="update_tasks" immediately when starting or finishing a task so the visible mission checklist stays current.',
-        'Mark the active task "in_progress" before doing it, then mark it "done" as soon as it is complete. Do not batch all updates at the end.',
-        'Do not remove tasks unless they are genuinely irrelevant. Prefer marking them "done" or "blocked".',
-        'When adding tasks, include a clear description so the user can understand the task list.',
+        'Update task status immediately when starting or finishing a task.',
+        'Do not batch all updates at the end — keep the list current.',
+        'Mark tasks "done" as soon as they are complete.',
       ],
-      parameters: RunStateParams,
+      parameters: UpdateTasksParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        const mode = readMode(ctx);
-        const state = readState(ctx);
-
-        if (params.action === 'get') {
-          if (mode !== 'mission' && mode !== 'loop') {
-            return {
-              content: [{ type: 'text' as const, text: 'No active mission or loop.' }],
-              details: { mode },
-            };
-          }
-          if (mode === 'mission' && state.mission) {
-            const tasksText = state.mission.tasks
-              .map((t, i) => `${i + 1}. [${t.status === 'done' ? 'x' : ' '}] ${t.description} (${t.status})`)
-              .join('\n');
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: [
-                    `Mission: ${state.mission.goal}`,
-                    `Tasks: ${state.mission.tasks.filter((t) => t.status === 'done').length}/${state.mission.tasks.length}`,
-                    '',
-                    tasksText,
-                  ].join('\n'),
-                },
-              ],
-              details: { mode, mission: state.mission },
-            };
-          }
-
-          if (mode === 'loop' && state.loop) {
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: [
-                    `Loop: ${state.loop.prompt}`,
-                    `Iterations: ${state.loop.iterationsUsed}/${state.loop.maxIterations}`,
-                    `Delay: ${state.loop.delay}`,
-                  ].join('\n'),
-                },
-              ],
-              details: { mode, loop: state.loop },
-            };
-          }
-
-          return {
-            content: [{ type: 'text' as const, text: 'No active mission or loop.' }],
-            details: { mode },
-          };
+        const state = readGoalState(ctx.sessionManager);
+        if (state.status !== 'active') {
+          throw new Error('No active goal to update tasks for.');
         }
 
-        if (params.action === 'update_tasks') {
-          if (mode !== 'mission') {
-            throw new Error('update_tasks is only available in Mission mode.');
+        const tasks = state.tasks.map((t) => {
+          const patch = params.tasks.find((p) => p.id === t.id);
+          if (patch) {
+            return { ...t, status: patch.status };
           }
-          if (!state.mission) {
-            throw new Error('No active mission to update tasks on.');
-          }
+          return t;
+        });
 
-          const patches = params.tasks ?? [];
-          const tasks = [...state.mission.tasks];
-
-          for (const patch of patches) {
-            if (patch.id) {
-              const existing = tasks.find((t) => t.id === patch.id);
-              if (existing) {
-                if (patch.status) existing.status = patch.status;
-                if (patch.description) existing.description = patch.description;
-              }
-            } else if (patch.description) {
-              tasks.push(createTask(patch.description, patch.status));
-            }
-          }
-
-          const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
-          if (sessionId) {
-            await setLiveSessionAutoModeState(sessionId, {
-              enabled: true,
-              mode: 'mission',
-              mission: { ...state.mission, tasks },
-            });
-          } else {
-            writeConversationAutoModeState(ctx.sessionManager, {
-              enabled: true,
-              mode: 'mission',
-              mission: { ...state.mission, tasks },
-            });
-          }
-
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `Updated task list. ${tasks.filter((t) => t.status === 'done').length}/${tasks.length} tasks done.`,
-              },
-            ],
-            details: { mode: 'mission', tasks: tasks.map((t) => ({ id: t.id, status: t.status })) },
-          };
-        }
+        const newState: GoalState = { ...state, tasks, updatedAt: new Date().toISOString() };
+        writeGoalState(pi, newState);
 
         return {
-          content: [{ type: 'text' as const, text: 'Unknown action.' }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Updated tasks. ${tasks.filter((t) => t.status === 'done').length}/${tasks.length} done.`,
+            },
+          ],
+          details: { tasks: tasks.map((t) => ({ id: t.id, status: t.status })) },
         };
       },
     });
 
-    // ── Turn end: schedule next continuation per mode ───────────────────
+    // ── Register /goal slash command ────────────────────────────────────
+    pi.registerCommand('goal', {
+      description: 'Set, view, or clear the current goal. Usage: /goal <objective>, /goal, or /goal clear',
+      async handler(args, ctx) {
+        const trimmed = args.trim();
+
+        if (trimmed.toLowerCase() === 'clear' || trimmed.toLowerCase() === 'c') {
+          const state = readGoalState(ctx.sessionManager);
+          if (!state.objective) {
+            pi.sendUserMessage('No goal to clear.');
+            return;
+          }
+          const cleared: GoalState = {
+            objective: '',
+            status: 'complete',
+            tasks: [],
+            stopReason: 'cleared',
+            updatedAt: new Date().toISOString(),
+          };
+          writeGoalState(pi, cleared);
+          syncGoalTools(pi, false);
+          continuationSuppressed = false;
+          pi.sendUserMessage(`Goal cleared. Previous objective: ${state.objective}`);
+          return;
+        }
+
+        if (!trimmed) {
+          const state = readGoalState(ctx.sessionManager);
+          if (!state.objective) {
+            pi.sendUserMessage('No goal is set. Use /goal <objective> to set one.');
+            return;
+          }
+          const taskSummary =
+            state.tasks.length > 0 ? ` Tasks: ${state.tasks.filter((t) => t.status === 'done').length}/${state.tasks.length} done.` : '';
+          pi.sendUserMessage(`Current goal: ${state.objective} (${state.status})${taskSummary}`);
+          return;
+        }
+
+        // Set a new goal
+        const newState: GoalState = {
+          objective: trimmed,
+          status: 'active',
+          tasks: [],
+          stopReason: null,
+          updatedAt: new Date().toISOString(),
+        };
+        writeGoalState(pi, newState);
+        syncGoalTools(pi, true);
+        continuationSuppressed = false;
+        pi.sendUserMessage(`Goal set: ${trimmed}`);
+      },
+    });
+
+    // ── Turn end: schedule continuation if goal is active ──────────────
     pi.on('turn_end', async (_event, ctx) => {
-      const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
-      const sessionFile = ctx.sessionManager.getSessionFile?.()?.trim();
-
-      if (!sessionId && !sessionFile) {
+      const state = readGoalState(ctx.sessionManager);
+      if (state.status !== 'active') {
+        continuationSuppressed = false;
         return;
       }
 
-      const state = readState(ctx);
-      if (!state.enabled) {
+      // Pause goal on interrupt (user hit stop mid-stream)
+      if (ctx.signal?.aborted) {
+        const paused: GoalState = { ...state, status: 'paused', updatedAt: new Date().toISOString() };
+        writeGoalState(pi, paused);
+        syncGoalTools(pi, false);
+        continuationSuppressed = false;
         return;
       }
 
-      // Never schedule continuation from inside a hidden turn
-      if (isAutoModeHiddenReviewTurn(ctx.sessionManager)) {
+      // No-tool suppression: if last continuation did nothing, skip next
+      if (continuationSuppressed) {
         return;
       }
 
-      const mode = state.mode;
-
-      if (mode === 'nudge' && isContinuationTurn(ctx.sessionManager)) {
+      // Check if model has pending messages (user or system input waiting)
+      if (ctx.hasPendingMessages()) {
         return;
       }
 
-      if (mode === 'mission') {
-        handleMissionTurnEnd(ctx, state, sessionId);
-      } else if (mode === 'loop') {
-        handleLoopTurnEnd(ctx, state, sessionId);
-      } else if (mode === 'nudge') {
-        handleNudgeTurnEnd(state, sessionId, sessionFile);
+      const prompt = buildContinuationPrompt(state);
+
+      queueMicrotask(() => {
+        pi.sendMessage(
+          {
+            customType: CONTINUATION_CUSTOM_TYPE,
+            content: prompt,
+            display: false,
+            details: { source: 'goal-mode', continuationId },
+          },
+          { deliverAs: 'followUp', triggerTurn: true },
+        );
+      });
+    });
+
+    // After a continuation turn, track whether it produced tool calls.
+    pi.on('tool_execution_end', () => {
+      continuationSuppressed = false;
+    });
+
+    // ── Reactivate paused goal on resume ──────────────────────────────────
+    pi.on('session_start', async (event, ctx) => {
+      if (event.reason !== 'resume') {
+        return;
       }
+
+      const state = readGoalState(ctx.sessionManager);
+      if (state.status !== 'paused' || !state.objective) {
+        return;
+      }
+
+      // Reactivate the paused goal
+      const newState: GoalState = {
+        ...state,
+        status: 'active',
+        updatedAt: new Date().toISOString(),
+      };
+      writeGoalState(pi, newState);
+      syncGoalTools(pi, true);
+      continuationSuppressed = false;
     });
   };
-}
-
-// ── Mode-specific handlers ────────────────────────────────────────────────────
-
-function handleNudgeTurnEnd(state: ConversationAutoModeState, sessionId: string | undefined, sessionFile: string | undefined): void {
-  if (!state.enabled) {
-    return;
-  }
-
-  queueMicrotask(() => {
-    void Promise.resolve(
-      sessionId
-        ? requestConversationAutoModeTurn(sessionId, sessionFile)
-        : sessionFile
-          ? requestConversationAutoModeTurn(sessionFile, sessionFile)
-          : Promise.resolve(false),
-    ).catch((error) => {
-      logWarn('nudge mode turn_end request failed', {
-        sessionId,
-        sessionFile,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    });
-  });
-}
-
-function handleMissionTurnEnd(
-  ctx: { sessionManager: { appendCustomEntry: (type: string, data: unknown) => string; getEntries: () => unknown[] } },
-  state: ConversationAutoModeState,
-  sessionId: string | undefined,
-): void {
-  const mission = state.mission;
-  if (!mission) {
-    return;
-  }
-
-  // Structural check: are all tasks done?
-  if (areAllTasksDone(mission.tasks)) {
-    if (sessionId) {
-      queueMicrotask(() => {
-        void Promise.resolve(
-          setLiveSessionAutoModeState(sessionId, {
-            enabled: false,
-            stopReason: 'mission complete',
-          }),
-        ).catch((error) => {
-          logWarn('mission mode completion stop failed', {
-            sessionId,
-            message: error instanceof Error ? error.message : String(error),
-          });
-        });
-      });
-    } else {
-      writeConversationAutoModeState(ctx.sessionManager, {
-        enabled: false,
-        stopReason: 'mission complete',
-      });
-    }
-    return;
-  }
-
-  // Signal continuation via direct call (bypasses pendingAutoModeContinuation flag)
-  if (sessionId) {
-    queueMicrotask(() => {
-      void requestConversationAutoModeContinuationTurn(sessionId).catch((error) => {
-        logWarn('mission mode direct continuation failed', {
-          sessionId,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      });
-    });
-  }
-}
-
-function parseLoopDelayMs(delay: string): number {
-  const trimmed = delay.trim().toLowerCase();
-  if (!trimmed || trimmed === 'after each turn' || trimmed === 'immediate') {
-    return 0;
-  }
-
-  const match =
-    /^(\d+(?:\.\d+)?)\s*(ms|millisecond|milliseconds|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)$/.exec(
-      trimmed,
-    );
-  if (!match) {
-    return 0;
-  }
-
-  const value = Number(match[1]);
-  const unit = match[2];
-  if (!Number.isFinite(value) || value < 0) {
-    return 0;
-  }
-
-  if (unit.startsWith('ms') || unit.startsWith('millisecond')) return value;
-  if (unit === 's' || unit.startsWith('sec')) return value * 1000;
-  if (unit === 'm' || unit.startsWith('min')) return value * 60_000;
-  return value * 60 * 60_000;
-}
-
-function handleLoopTurnEnd(
-  ctx: { sessionManager: { appendCustomEntry: (type: string, data: unknown) => string; getEntries: () => unknown[] } },
-  state: ConversationAutoModeState,
-  sessionId: string | undefined,
-): void {
-  const loop = state.loop;
-  if (!loop) {
-    return;
-  }
-
-  // Counter check
-  if (loop.iterationsUsed >= loop.maxIterations) {
-    return;
-  }
-
-  // Increment and update state
-  const nextIterationsUsed = loop.iterationsUsed + 1;
-  writeConversationAutoModeState(ctx.sessionManager, {
-    ...state,
-    loop: { ...loop, iterationsUsed: nextIterationsUsed },
-  });
-
-  // Signal continuation via direct call (bypasses pendingAutoModeContinuation flag)
-  if (sessionId) {
-    const requestContinuation = () => {
-      void requestConversationAutoModeContinuationTurn(sessionId).catch((error) => {
-        logWarn('loop mode direct continuation failed', {
-          sessionId,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      });
-    };
-    const delayMs = parseLoopDelayMs(loop.delay);
-    if (delayMs > 0) {
-      setTimeout(requestContinuation, delayMs);
-    } else {
-      queueMicrotask(requestContinuation);
-    }
-  }
 }

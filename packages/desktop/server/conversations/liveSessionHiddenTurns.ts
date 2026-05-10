@@ -1,10 +1,5 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-import {
-  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-  CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
-} from './conversationAutoMode.js';
-
 export interface LiveSessionHiddenTurnState {
   pendingHiddenTurnCustomTypes: string[];
   activeHiddenTurnCustomType: string | null;
@@ -39,19 +34,9 @@ export function activateNextHiddenTurn(entry: Partial<LiveSessionHiddenTurnState
   return entry.activeHiddenTurnCustomType;
 }
 
-export function shouldExposeHiddenTurnInTranscript(customType: string | null | undefined): boolean {
-  return (
-    customType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE || customType === CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE
-  );
-}
-
 export function shouldSuppressLiveEventForHiddenTurn(entry: Partial<LiveSessionHiddenTurnState>, event: AgentSessionEvent): boolean {
   ensureHiddenTurnState(entry);
   if (!entry.activeHiddenTurnCustomType) {
-    return false;
-  }
-
-  if (shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType)) {
     return false;
   }
 

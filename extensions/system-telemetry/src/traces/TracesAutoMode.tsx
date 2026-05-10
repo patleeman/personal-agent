@@ -2,8 +2,6 @@
  * Auto Mode tracking display
  */
 
-import type { AutoModeSummary } from '@personal-agent/extensions/data';
-
 export function TracesAutoMode({ data }: { data: AutoModeSummary | null }) {
   if (!data || data.recentEvents.length === 0) {
     return (

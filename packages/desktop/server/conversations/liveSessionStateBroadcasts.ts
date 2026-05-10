@@ -1,8 +1,6 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
-import type { ConversationAutoModeState } from './conversationAutoMode.js';
-import { readLiveSessionAutoModeHostState } from './liveSessionAutoModeOps.js';
 import type { LiveContextUsage, SseEvent } from './liveSessionEvents.js';
 import { type ParallelPromptJob, readParallelState } from './liveSessionParallelJobs.js';
 import { readQueueState } from './liveSessionQueue.js';
@@ -22,11 +20,6 @@ export interface LiveSessionQueueStateHost {
 export interface LiveSessionParallelStateHost {
   parallelJobs?: ParallelPromptJob[];
   lastParallelStateJson?: string | null;
-}
-
-export interface LiveSessionAutoModeStateHost {
-  session: AgentSession;
-  lastAutoModeStateJson?: string | null;
 }
 
 export function readLiveSessionContextUsage(session: AgentSession): LiveContextUsage | null {
@@ -75,10 +68,6 @@ export function readLiveSessionContextUsage(session: AgentSession): LiveContextU
   }
 }
 
-export function readConversationAutoModeState(entry: LiveSessionAutoModeStateHost): ConversationAutoModeState {
-  return readLiveSessionAutoModeHostState(entry);
-}
-
 export function broadcastLiveSessionContextUsage(entry: LiveSessionContextUsageHost, send: (event: SseEvent) => void, force = false): void {
   const usage = readLiveSessionContextUsage(entry.session);
   const nextJson = JSON.stringify(usage);
@@ -114,21 +103,6 @@ export function broadcastLiveSessionParallelState(
 
   entry.lastParallelStateJson = nextJson;
   send({ type: 'parallel_state', jobs });
-}
-
-export function broadcastLiveSessionAutoModeState(
-  entry: LiveSessionAutoModeStateHost,
-  send: (event: SseEvent) => void,
-  force = false,
-): void {
-  const state = readConversationAutoModeState(entry);
-  const nextJson = JSON.stringify(state);
-  if (!force && entry.lastAutoModeStateJson === nextJson) {
-    return;
-  }
-
-  entry.lastAutoModeStateJson = nextJson;
-  send({ type: 'auto_mode_state', state });
 }
 
 export function scheduleLiveSessionContextUsage(entry: LiveSessionContextUsageHost, send: (event: SseEvent) => void, delayMs = 400): void {

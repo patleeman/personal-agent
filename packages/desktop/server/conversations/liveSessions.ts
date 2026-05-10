@@ -10,23 +10,13 @@ import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/cor
 
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { persistTraceStats } from '../traces/tracePersistence.js';
-import { type ConversationAutoModeState, type ConversationAutoModeStateInput } from './conversationAutoMode.js';
 import { type ConversationModelPreferenceInput, type ConversationModelPreferenceState } from './conversationModelPreferences.js';
-import {
-  broadcastConversationAutoModeState as broadcastConversationAutoModeStateForEntry,
-  markConversationAutoModeContinueRequested as markConversationAutoModeContinueRequestedForEntry,
-  readLiveSessionAutoModeState as readLiveSessionAutoModeStateForEntry,
-  requestConversationAutoModeContinuationTurn as requestConversationAutoModeContinuationTurnForEntry,
-  requestConversationAutoModeTurn as requestConversationAutoModeTurnForEntry,
-  setLiveSessionAutoModeState as setLiveSessionAutoModeStateForEntry,
-} from './liveSessionAutoModeFacade.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
 import { branchLiveSession, forkLiveSession } from './liveSessionBranching.js';
 import {
   applySessionTitle,
   broadcast,
-  broadcastAutoModeState,
   broadcastContextUsage,
   broadcastParallelState,
   broadcastPresenceState,
@@ -305,7 +295,6 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
     currentTurnError: null,
     tracePersistedTokens: initialPersistedTokens,
     ...createLiveSessionHiddenTurnState(),
-    pendingAutoModeContinuation: false,
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
     isCompacting: false,
@@ -327,8 +316,6 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
 
   session.subscribe((event) =>
     handleLiveSessionEvent(entry, event, {
-      requestConversationAutoModeContinuationTurn,
-      requestConversationAutoModeTurn,
       syncDurableConversationRun,
       notifyLifecycleHandlers: notifyEntryLifecycleHandlers,
       applyPendingConversationWorkingDirectoryChange,
@@ -560,79 +547,6 @@ export function subscribe(
   return subscribeLiveSession(entry, listener, options, {
     resolveTitle: resolveEntryTitle,
     broadcastPresenceState,
-  });
-}
-
-export function readLiveSessionAutoModeState(sessionId: string): ConversationAutoModeState {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    throw new Error(`Session ${sessionId} is not live`);
-  }
-
-  return readLiveSessionAutoModeStateForEntry(entry);
-}
-
-export function broadcastConversationAutoModeState(sessionId: string, force = true): void {
-  broadcastConversationAutoModeStateForEntry(registry.get(sessionId), force, {
-    broadcastAutoModeState,
-  });
-}
-
-export async function requestConversationAutoModeTurn(sessionId: string, sessionFile?: string): Promise<boolean> {
-  let entry = registry.get(sessionId);
-
-  // If not found by session ID, try finding by session file path.
-  // This handles cases where the Pi session was recreated (e.g. after a fork)
-  // and the session ID changed but the file path stayed the same.
-  if (!entry && sessionFile) {
-    for (const [, candidate] of registry.entries()) {
-      const candidateFile = resolveLiveSessionFile(candidate.session);
-      if (candidateFile === sessionFile) {
-        entry = candidate;
-        break;
-      }
-    }
-  }
-
-  if (!entry) {
-    throw new Error(`Session ${sessionId} is not live`);
-  }
-
-  return requestConversationAutoModeTurnForEntry(entry, {
-    publishSessionMetaChanged,
-  });
-}
-
-export function markConversationAutoModeContinueRequested(sessionId: string): void {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    throw new Error(`Session ${sessionId} is not live`);
-  }
-
-  markConversationAutoModeContinueRequestedForEntry(entry);
-}
-
-export async function requestConversationAutoModeContinuationTurn(sessionId: string): Promise<boolean> {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    throw new Error(`Session ${sessionId} is not live`);
-  }
-
-  return requestConversationAutoModeContinuationTurnForEntry(entry);
-}
-
-export async function setLiveSessionAutoModeState(
-  sessionId: string,
-  input: ConversationAutoModeStateInput,
-): Promise<ConversationAutoModeState> {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    throw new Error(`Session ${sessionId} is not live`);
-  }
-
-  return setLiveSessionAutoModeStateForEntry(entry, input, {
-    broadcastAutoModeState,
-    publishSessionMetaChanged,
   });
 }
 

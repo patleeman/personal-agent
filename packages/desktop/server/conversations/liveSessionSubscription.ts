@@ -1,7 +1,7 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 import type { SseEvent } from './liveSessionEvents.js';
-import { ensureHiddenTurnState, type LiveSessionHiddenTurnState, shouldExposeHiddenTurnInTranscript } from './liveSessionHiddenTurns.js';
+import { ensureHiddenTurnState, type LiveSessionHiddenTurnState } from './liveSessionHiddenTurns.js';
 import { type ParallelPromptJob, readParallelState } from './liveSessionParallelJobs.js';
 import {
   buildLiveSessionPresenceState,
@@ -13,6 +13,7 @@ import {
 import { readQueueState } from './liveSessionQueue.js';
 import { readLiveSessionContextUsage } from './liveSessionStateBroadcasts.js';
 import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
+import { readGoalFromEntries } from './sessions.js';
 
 export interface LiveSessionSubscriptionListener {
   send: (event: SseEvent) => void;
@@ -72,7 +73,11 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   resolveTitle: (entry: TEntry) => string,
 ): void {
   ensureHiddenTurnState(entry);
-  subscription.send({ type: 'snapshot', ...buildLiveSessionSnapshot(entry, options?.tailBlocks) });
+  subscription.send({
+    type: 'snapshot',
+    goalState: readGoalFromEntries(entry.session.sessionManager.getEntries()),
+    ...buildLiveSessionSnapshot(entry, options?.tailBlocks),
+  });
   const title = resolveTitle(entry);
   if (title) {
     subscription.send({ type: 'title_update', title });
@@ -83,10 +88,7 @@ function replayLiveSessionState<TEntry extends LiveSessionSubscriptionHost>(
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
     subscription.send({ type: 'presence_state', state: buildLiveSessionPresenceState(entry) });
   }
-  if (
-    entry.session.isStreaming &&
-    (!entry.activeHiddenTurnCustomType || shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType))
-  ) {
+  if (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) {
     subscription.send({ type: 'agent_start' });
   }
 }

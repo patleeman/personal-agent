@@ -8,7 +8,6 @@ import type { LiveContextUsage, SseEvent } from './liveSessionEvents.js';
 import { broadcastLiveSessionPresenceState } from './liveSessionPresenceFacade.js';
 import { computeLiveSessionRunning } from './liveSessionReadApi.js';
 import {
-  broadcastLiveSessionAutoModeState,
   broadcastLiveSessionContextUsage,
   broadcastLiveSessionParallelState,
   broadcastLiveSessionQueueState,
@@ -16,6 +15,7 @@ import {
   scheduleLiveSessionContextUsage,
 } from './liveSessionStateBroadcasts.js';
 import { type LiveEntry, type LiveListener } from './liveSessionTypes.js';
+import { readGoalFromEntries } from './sessions.js';
 
 /** Send an SSE event to every listener subscribed to this live session. */
 export function broadcast(entry: LiveEntry, event: SseEvent, options?: { exclude?: LiveListener }): void {
@@ -35,9 +35,11 @@ export function broadcastSnapshot(
   },
 ): void {
   callbacks.ensureHiddenTurnState(entry);
+  const goalState = readGoalFromEntries(entry.session.sessionManager.getEntries());
   for (const listener of entry.listeners) {
     listener.send({
       type: 'snapshot',
+      goalState,
       ...callbacks.buildLiveSessionSnapshot(entry, listener.tailBlocks),
     });
   }
@@ -134,10 +136,6 @@ export function broadcastQueueState(entry: LiveEntry, force = false): void {
 
 export function broadcastParallelState(entry: LiveEntry, force = false): void {
   broadcastLiveSessionParallelState(entry, (event) => broadcast(entry, event), force);
-}
-
-export function broadcastAutoModeState(entry: LiveEntry, force = false): void {
-  broadcastLiveSessionAutoModeState(entry, (event) => broadcast(entry, event), force);
 }
 
 export function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {

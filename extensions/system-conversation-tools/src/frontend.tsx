@@ -1,8 +1,4 @@
-import {
-  describeAskUserQuestionState,
-  readAskUserQuestionPresentation,
-  TerminalToolBlock,
-} from '@personal-agent/extensions/workbench';
+import { describeAskUserQuestionState, readAskUserQuestionPresentation, TerminalToolBlock } from '@personal-agent/extensions/workbench';
 
 import { AskUserQuestionToolBlock } from './AskUserQuestionToolBlock.js';
 

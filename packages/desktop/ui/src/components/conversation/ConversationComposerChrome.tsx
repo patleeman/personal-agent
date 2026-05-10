@@ -152,14 +152,10 @@ export function ComposerActionIcon({ label, className }: { label: 'Steer' | 'Fol
 export function resolveConversationComposerShellStateClassName({
   dragOver,
   hasInteractiveOverlay,
-  autoModeEnabled,
-  runMode,
   streamIsStreaming,
 }: {
   dragOver: boolean;
   hasInteractiveOverlay: boolean;
-  autoModeEnabled: boolean;
-  runMode?: string;
   streamIsStreaming?: boolean;
 }): string {
   if (dragOver) {
@@ -168,18 +164,6 @@ export function resolveConversationComposerShellStateClassName({
 
   if (hasInteractiveOverlay) {
     return 'border-accent/40 ring-1 ring-accent/15';
-  }
-
-  if (runMode === 'mission') {
-    return 'border-accent/35 ring-1 ring-accent/10 ui-input-shell-mission';
-  }
-
-  if (runMode === 'loop') {
-    return 'border-teal/35 ring-1 ring-teal/10 ui-input-shell-loop';
-  }
-
-  if (autoModeEnabled) {
-    return 'border-warning/30 ring-1 ring-warning/15 ui-input-shell-auto-mode';
   }
 
   if (streamIsStreaming) {

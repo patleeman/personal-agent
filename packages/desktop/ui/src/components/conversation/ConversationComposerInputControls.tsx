@@ -3,7 +3,7 @@ import { type ClipboardEventHandler, type KeyboardEventHandler, type RefObject, 
 import type { ComposerDrawingAttachment } from '../../conversation/promptAttachments';
 import { ComposerInputToolHost } from '../../extensions/ComposerInputToolHost';
 import { useExtensionRegistry } from '../../extensions/useExtensionRegistry';
-import type { ConversationAutoModeState, ModelInfo } from '../../shared/types';
+import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
 
@@ -23,10 +23,7 @@ export function ConversationComposerInputControls({
   currentThinkingLevel,
   currentServiceTier,
   savingPreference,
-  showAutoModeToggle,
-  conversationAutoModeEnabled,
-  conversationAutoModeBusy,
-  conversationAutoMode,
+  goalEnabled,
   conversationNeedsTakeover,
   composerHasContent,
   composerShowsQuestionSubmit,
@@ -47,8 +44,7 @@ export function ConversationComposerInputControls({
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
-  onToggleAutoMode,
-  onSelectMode,
+  onToggleGoal,
   onInsertComposerText,
   onSubmitComposerQuestion,
   onSubmitComposerActionForModifiers,
@@ -67,10 +63,6 @@ export function ConversationComposerInputControls({
   currentThinkingLevel: string;
   currentServiceTier: string;
   savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
-  showAutoModeToggle: boolean;
-  conversationAutoModeEnabled: boolean;
-  conversationAutoModeBusy: boolean;
-  conversationAutoMode: ConversationAutoModeState | null;
   conversationNeedsTakeover: boolean;
   composerHasContent: boolean;
   composerShowsQuestionSubmit: boolean;
@@ -91,8 +83,6 @@ export function ConversationComposerInputControls({
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
-  onToggleAutoMode: () => void;
-  onSelectMode: (mode: import('../../shared/types').RunMode) => void;
   onInsertComposerText: (text: string) => void;
   onSubmitComposerQuestion: () => void;
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
@@ -217,15 +207,11 @@ export function ConversationComposerInputControls({
               currentThinkingLevel={currentThinkingLevel}
               currentServiceTier={currentServiceTier}
               savingPreference={savingPreference}
-              showAutoModeToggle={showAutoModeToggle}
-              autoModeEnabled={conversationAutoModeEnabled}
-              autoModeBusy={conversationAutoModeBusy}
-              mode={conversationAutoMode?.mode ?? 'manual'}
+              goalEnabled={goalEnabled}
               onSelectModel={onSelectModel}
               onSelectThinkingLevel={onSelectThinkingLevel}
               onSelectServiceTier={onSelectServiceTier}
-              onToggleAutoMode={onToggleAutoMode}
-              onSelectMode={onSelectMode}
+              onToggleGoal={onToggleGoal}
               compact={(composerShellWidth ?? Number.POSITIVE_INFINITY) < COMPOSER_PREFERENCES_MENU_WIDTH_PX}
             />
           </div>

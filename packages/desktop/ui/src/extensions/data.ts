@@ -9,7 +9,6 @@ export {
 export type { ExtensionInstallSummary } from '../extensions/types';
 export { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 export type {
-  AutoModeSummary,
   CacheEfficiencyAggregate,
   ContextPointerUsageResult,
   GatewayConnection,
@@ -43,3 +42,12 @@ export type {
   VaultTreeResult,
 } from '../shared/types';
 export { timeAgo, timeAgoCompact } from '../shared/utils';
+export type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../transcript/askUserQuestions';
+export {
+  isAskUserQuestionComplete,
+  moveAskUserQuestionIndex,
+  resolveAskUserQuestionDefaultOptionIndex,
+  resolveAskUserQuestionNavigationHotkey,
+  resolveAskUserQuestionOptionHotkey,
+  shouldAdvanceAskUserQuestionAfterSelection,
+} from '../transcript/askUserQuestions';

@@ -1,6 +1,5 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-import type { ConversationAutoModeState } from './conversationAutoMode.js';
 import type { ParallelPromptPreview } from './liveSessionParallelJobs.js';
 import type { LiveSessionPresenceState } from './liveSessionPresence.js';
 import type { QueuedPromptPreview } from './liveSessionQueue.js';
@@ -30,7 +29,6 @@ export type SseEvent =
   | { type: 'queue_state'; steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'parallel_state'; jobs: ParallelPromptPreview[] }
   | { type: 'presence_state'; state: LiveSessionPresenceState }
-  | { type: 'auto_mode_state'; state: ConversationAutoModeState }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown }

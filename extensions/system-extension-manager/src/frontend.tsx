@@ -1,6 +1,6 @@
 import type { ExtensionInstallSummary } from '@personal-agent/extensions/data';
 import { api, EXTENSION_REGISTRY_CHANGED_EVENT, notifyExtensionRegistryChanged } from '@personal-agent/extensions/data';
-import type { UnifiedSettingsEntry } from '@personal-agent/extensions/settings';
+import { SettingsField, type UnifiedSettingsEntry, useApi } from '@personal-agent/extensions/settings';
 import {
   AppPageIntro,
   AppPageLayout,
@@ -916,75 +916,18 @@ function ExtensionSettingsBlock({ extension }: { extension: ExtensionInstallSumm
 
   return (
     <div className="space-y-4">
-      {entries.map((entry) => {
-        const currentValue = draft[entry.key] ?? entry.default;
-        return (
-          <div key={entry.key} className="space-y-1.5">
-            <label className="block text-[13px] font-medium text-primary">
-              {entry.key.split('.').pop() ?? entry.key}
-              {entry.description ? <span className="ml-2 font-normal text-[12px] text-secondary">{entry.description}</span> : null}
-            </label>
-
-            {entry.type === 'boolean' ? (
-              <label className="inline-flex items-center gap-2 text-[13px] text-primary">
-                <input
-                  type="checkbox"
-                  checked={Boolean(currentValue)}
-                  onChange={(e) => {
-                    setDraft((prev) => ({ ...prev, [entry.key]: e.target.checked }));
-                    setSaveNotice(null);
-                    setSaveError(null);
-                  }}
-                  className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
-                />
-                <span>Enabled</span>
-              </label>
-            ) : entry.type === 'select' && entry.enum ? (
-              <select
-                value={String(currentValue)}
-                onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                  setSaveNotice(null);
-                  setSaveError(null);
-                }}
-                className="w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none"
-              >
-                {entry.enum.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            ) : entry.type === 'number' ? (
-              <input
-                type="number"
-                value={currentValue as number}
-                placeholder={entry.placeholder}
-                onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, [entry.key]: Number(e.target.value) }));
-                  setSaveNotice(null);
-                  setSaveError(null);
-                }}
-                className="w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none"
-              />
-            ) : (
-              <input
-                type="text"
-                value={String(currentValue)}
-                placeholder={entry.placeholder}
-                onChange={(e) => {
-                  setDraft((prev) => ({ ...prev, [entry.key]: e.target.value }));
-                  setSaveNotice(null);
-                  setSaveError(null);
-                }}
-                className="w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] font-mono text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            )}
-          </div>
-        );
-      })}
+      {entries.map((entry) => (
+        <SettingsField
+          key={entry.key}
+          entry={entry}
+          value={draft[entry.key]}
+          onChange={(key, val) => {
+            setDraft((prev) => ({ ...prev, [key]: val }));
+            setSaveNotice(null);
+            setSaveError(null);
+          }}
+        />
+      ))}
       {saving ? <p className="text-[12px] text-dim">Saving…</p> : null}
       {saveNotice ? <p className="text-[12px] text-success">{saveNotice}</p> : null}
       {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}

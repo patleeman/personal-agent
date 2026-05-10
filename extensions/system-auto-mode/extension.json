@@ -1,37 +1,21 @@
 {
   "schemaVersion": 2,
   "id": "system-auto-mode",
-  "name": "Auto Mode",
+  "name": "Goal Mode",
   "packageType": "system",
-  "description": "Conversation run modes for nudge, mission, and loop continuation.",
-  "version": "0.1.0",
+  "description": "Persisted goal tracking with automatic continuation across turns.",
+  "version": "0.2.0",
   "backend": {
     "entry": "src/backend.ts",
     "agentExtension": "createConversationAutoModeAgentExtension"
   },
   "permissions": ["conversations:readwrite"],
   "contributes": {
-    "settings": {
-      "autoMode.maxIterations": {
-        "type": "number",
-        "default": 10,
-        "description": "Maximum loop iterations before auto-stop",
-        "group": "Auto Mode",
-        "order": 1
-      },
-      "autoMode.defaultDelay": {
-        "type": "number",
-        "default": 300,
-        "description": "Default delay in seconds between loop iterations",
-        "group": "Auto Mode",
-        "order": 2
-      }
-    },
     "skills": [
       {
-        "id": "auto-mode",
-        "title": "Auto Mode",
-        "description": "Built-in guide for autonomous conversation continuation, validation, durable runs, and disciplined follow-through.",
+        "id": "goal-mode",
+        "title": "Goal Mode",
+        "description": "Set and track goals across turns with automatic continuation.",
         "path": "skills/auto-mode/SKILL.md"
       }
     ]
