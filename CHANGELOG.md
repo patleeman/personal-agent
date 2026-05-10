@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9-rc.1 — 2026-05-10
+
+- fix: declare typebox dependency for release builds
+
 ## 0.7.9-rc.0 — 2026-05-10
 
 - fix: restore release-blocking tests
