@@ -102,7 +102,7 @@ function ensureTelegramRuntime(): TelegramGatewayRuntime {
     stateRoot: context.getStateRoot(),
     profile: context.getCurrentProfile(),
     authFile: context.getAuthFile(),
-    readBotToken: () => readTelegramBotToken(context.getAuthFile()),
+    readBotToken: () => readTelegramBotToken(context.getAuthFile(), context.getStateRoot()),
     createConversation: async (input) => {
       const created = await createLiveSessionCapability({}, liveSessionContext(context));
       renameSession(created.id, input.title);
@@ -211,7 +211,7 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
   const initialTelegramState = readGatewayState(currentGatewayContext()).connections.find(
     (connection) => connection.provider === 'telegram',
   );
-  if (initialTelegramState?.enabled && readTelegramBotToken(getAuthFileFn())) {
+  if (initialTelegramState?.enabled && readTelegramBotToken(getAuthFileFn(), getStateRootFn())) {
     ensureTelegramRuntime().start();
   }
   const initialSlackState = readGatewayState(currentGatewayContext()).connections.find((connection) => connection.provider === 'slack_mcp');
@@ -274,7 +274,7 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
 
   router.get('/api/gateways/telegram/token', (_req, res) => {
     try {
-      res.json({ configured: readTelegramBotToken(getAuthFileFn()) !== null });
+      res.json({ configured: readTelegramBotToken(getAuthFileFn(), getStateRootFn()) !== null });
     } catch (err) {
       handleGatewayError(res, err);
     }
@@ -287,7 +287,7 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         res.status(400).json({ error: 'token required' });
         return;
       }
-      writeTelegramBotToken(getAuthFileFn(), token);
+      writeTelegramBotToken(getAuthFileFn(), getStateRootFn(), token);
       ensureGatewayConnection({ ...currentGatewayContext(), provider: 'telegram' });
       const state = updateGatewayConnectionStatus({ ...currentGatewayContext(), provider: 'telegram', status: 'active', enabled: true });
       ensureTelegramRuntime().start();
@@ -299,7 +299,7 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
 
   router.delete('/api/gateways/telegram/token', (_req, res) => {
     try {
-      removeTelegramBotToken(getAuthFileFn());
+      removeTelegramBotToken(getAuthFileFn(), getStateRootFn());
       ensureTelegramRuntime().stop();
       const state = updateGatewayConnectionStatus({
         ...currentGatewayContext(),

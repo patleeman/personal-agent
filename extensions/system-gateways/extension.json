@@ -30,6 +30,15 @@
         "icon": "database"
       }
     ],
+    "secrets": {
+      "telegramBotToken": {
+        "label": "Telegram bot token",
+        "description": "Used by the Telegram gateway to receive messages and send replies.",
+        "env": "TELEGRAM_BOT_TOKEN",
+        "placeholder": "123456:ABC-DEF…",
+        "order": 1
+      }
+    },
     "contextMenus": [
       {
         "id": "attach-conversation",
@@ -39,5 +48,5 @@
       }
     ]
   },
-  "permissions": ["gateways:read", "gateways:write"]
+  "permissions": ["gateways:read", "gateways:write", "secrets:read", "secrets:write"]
 }

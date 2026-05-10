@@ -78,6 +78,7 @@ const BUILT_IN_API_KEY_PROVIDERS: string[] = [
 ];
 
 const BUILT_IN_API_KEY_PROVIDER_SET = new Set<string>(BUILT_IN_API_KEY_PROVIDERS);
+const NON_MODEL_SECRET_PROVIDERS = new Set(['telegram']);
 const OAUTH_LOGIN_RETENTION_MS = 30 * 60_000;
 const oauthLoginRuns = new Map<string, ProviderOAuthLoginRun>();
 const oauthLoginListeners = new Map<string, Set<(state: ProviderOAuthLoginState) => void>>();
@@ -198,6 +199,7 @@ export function readProviderAuthState(authFile: string): ProviderAuthState {
   ]);
 
   const summaries = [...providers]
+    .filter((provider) => !NON_MODEL_SECRET_PROVIDERS.has(provider))
     .sort((left, right) => left.localeCompare(right))
     .map((provider) => {
       const oauthProvider = oauthProvidersById.get(provider);

@@ -325,6 +325,10 @@ describe('SettingsPage provider model editor', () => {
         return providerAuthResult;
       }
 
+      if (fetcher === api.secrets) {
+        return buildUseApiResult({ backend: 'file', secrets: [] });
+      }
+
       if (fetcher === api.telegramGatewayToken) {
         return buildUseApiResult({ configured: false });
       }

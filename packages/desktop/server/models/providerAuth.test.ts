@@ -40,6 +40,7 @@ describe('readProviderAuthState', () => {
     expect(state.providers.some((entry) => entry.id === 'anthropic')).toBe(true);
     expect(state.providers.some((entry) => entry.id === 'openrouter')).toBe(true);
     expect(state.providers.some((entry) => entry.id === 'exa')).toBe(true);
+    expect(state.providers.some((entry) => entry.id === 'telegram')).toBe(false);
 
     const exa = state.providers.find((entry) => entry.id === 'exa');
     expect(exa).toMatchObject({
@@ -72,6 +73,17 @@ describe('setProviderApiKey', () => {
       apiKeySupported: false,
       modelCount: 0,
     });
+  });
+
+  it('hides legacy Telegram credentials because the gateway token is managed as an extension secret', () => {
+    const dir = createTempDir();
+    const authFile = join(dir, 'auth.json');
+
+    setProviderApiKey(authFile, 'telegram', 'legacy-token');
+
+    const state = readProviderAuthState(authFile);
+
+    expect(state.providers.some((entry) => entry.id === 'telegram')).toBe(false);
   });
 
   it('preserves existing provider credentials when adding another key', () => {
