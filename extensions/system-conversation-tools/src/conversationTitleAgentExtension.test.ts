@@ -6,19 +6,21 @@ import { createConversationTitleAgentExtension } from './conversationTitleAgentE
 type RegisteredTool = Parameters<ExtensionAPI['registerTool']>[0];
 type ExecuteContext = Parameters<NonNullable<RegisteredTool['execute']>>[4];
 
-function registerConversationTitleTool(setConversationTitle = vi.fn()) {
+function registerConversationTitleTool() {
   let registeredTool: RegisteredTool | undefined;
-  createConversationTitleAgentExtension({ setConversationTitle })({
+  const setSessionName = vi.fn();
+  createConversationTitleAgentExtension()({
     registerTool: (tool: RegisteredTool) => {
       registeredTool = tool;
     },
+    setSessionName,
   } as never);
 
   if (!registeredTool) {
     throw new Error('Conversation title tool was not registered.');
   }
 
-  return { registeredTool, setConversationTitle };
+  return { registeredTool, setSessionName };
 }
 
 function createToolContext(conversationId = 'conv-123'): ExecuteContext {
@@ -41,7 +43,7 @@ describe('conversation title agent extension', () => {
   });
 
   it('sets the normalized current conversation title', async () => {
-    const { registeredTool, setConversationTitle } = registerConversationTitleTool();
+    const { registeredTool, setSessionName } = registerConversationTitleTool();
 
     const result = await registeredTool.execute(
       'tool-1',
@@ -51,7 +53,7 @@ describe('conversation title agent extension', () => {
       createToolContext('conv-title'),
     );
 
-    expect(setConversationTitle).toHaveBeenCalledWith('conv-title', 'Fix diff screen layout');
+    expect(setSessionName).toHaveBeenCalledWith('Fix diff screen layout');
     expect(result.details).toEqual({
       conversationId: 'conv-title',
       title: 'Fix diff screen layout',
@@ -59,12 +61,12 @@ describe('conversation title agent extension', () => {
   });
 
   it('rejects blank titles', async () => {
-    const { registeredTool, setConversationTitle } = registerConversationTitleTool();
+    const { registeredTool, setSessionName } = registerConversationTitleTool();
 
     await expect(registeredTool.execute('tool-1', { title: '   \n  ' }, undefined, undefined, createToolContext())).rejects.toThrow(
       'Conversation title must not be empty.',
     );
 
-    expect(setConversationTitle).not.toHaveBeenCalled();
+    expect(setSessionName).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,6 @@ import type { ExtensionBackendContext } from '@personal-agent/extensions/backend
 import {
   buildLiveSessionExtensionFactoriesForRuntime,
   buildLiveSessionResourceOptionsForRuntime,
-  renameSession,
   requestConversationWorkingDirectoryChange,
 } from '@personal-agent/extensions/backend';
 
@@ -50,7 +49,7 @@ export function createConversationToolsAgentExtension(): (pi: ExtensionAPI) => v
   return (pi) => {
     createAskUserQuestionAgentExtension()(pi);
     createConversationInspectAgentExtension()(pi);
-    createConversationTitleAgentExtension({ setConversationTitle: renameSession })(pi);
+    createConversationTitleAgentExtension()(pi);
     createChangeWorkingDirectoryAgentExtension({
       requestConversationWorkingDirectoryChange: (input) =>
         requestConversationWorkingDirectoryChange(input, {

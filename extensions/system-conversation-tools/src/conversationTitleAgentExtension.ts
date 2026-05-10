@@ -6,8 +6,8 @@ const ConversationTitleToolParams = Type.Object({
   title: Type.String({ description: 'Short, specific conversation title. Aim for 3-7 words and keep it under 80 characters.' }),
 });
 
-export function createConversationTitleAgentExtension(options: {
-  setConversationTitle: (conversationId: string, title: string) => void;
+export function createConversationTitleAgentExtension(_options?: {
+  setConversationTitle?: (conversationId: string, title: string) => void;
 }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
@@ -31,7 +31,7 @@ export function createConversationTitleAgentExtension(options: {
         }
 
         const conversationId = ctx.sessionManager.getSessionId();
-        options.setConversationTitle(conversationId, title);
+        pi.setSessionName(title);
 
         return {
           content: [{ type: 'text' as const, text: `Conversation title set to "${title}".` }],
