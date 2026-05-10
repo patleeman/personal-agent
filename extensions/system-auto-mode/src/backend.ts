@@ -151,8 +151,9 @@ const UpdateTasksParams = Type.Object({
 
 export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
-    // Track the last continuation turn id so we can suppress no-tool loops.
+    // Track consecutive turns that did not use tools so goal mode cannot spin forever on chat-only continuations.
     let continuationSuppressed = false;
+    let consecutiveNoToolTurns = 0;
 
     // ── Register set_goal tool ───────────────────────────────────────────
     pi.registerTool({
@@ -184,6 +185,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         writeGoalState(pi, newState);
         syncGoalTools(pi, true);
         continuationSuppressed = false;
+        consecutiveNoToolTurns = 0;
 
         const taskSummary = tasks.length > 0 ? `. Tasks: ${tasks.length}` : '';
         return {
@@ -224,6 +226,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         writeGoalState(pi, newState);
         syncGoalTools(pi, false);
         continuationSuppressed = false;
+        consecutiveNoToolTurns = 0;
 
         return {
           content: [
@@ -336,6 +339,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           writeGoalState(pi, cleared);
           syncGoalTools(pi, false);
           continuationSuppressed = false;
+          consecutiveNoToolTurns = 0;
           pi.sendUserMessage(`Goal cleared. Previous objective: ${state.objective}`);
           return;
         }
@@ -363,15 +367,17 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         writeGoalState(pi, newState);
         syncGoalTools(pi, true);
         continuationSuppressed = false;
+        consecutiveNoToolTurns = 0;
         pi.sendUserMessage(`Goal set: ${trimmed}`);
       },
     });
 
     // ── Turn end: schedule continuation if goal is active ──────────────
-    pi.on('turn_end', async (_event, ctx) => {
+    pi.on('turn_end', async (event, ctx) => {
       const state = readGoalState(ctx.sessionManager);
       if (state.status !== 'active') {
         continuationSuppressed = false;
+        consecutiveNoToolTurns = 0;
         return;
       }
 
@@ -381,10 +387,24 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         writeGoalState(pi, paused);
         syncGoalTools(pi, false);
         continuationSuppressed = false;
+        consecutiveNoToolTurns = 0;
         return;
       }
 
-      // No-tool suppression: if last continuation did nothing, skip next
+      const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
+      if (toolResults.length === 0) {
+        consecutiveNoToolTurns += 1;
+      } else {
+        consecutiveNoToolTurns = 0;
+        continuationSuppressed = false;
+      }
+
+      if (consecutiveNoToolTurns >= 2) {
+        continuationSuppressed = true;
+        return;
+      }
+
+      // No-tool suppression: if recent continuation turns did nothing, skip next
       if (continuationSuppressed) {
         return;
       }
@@ -413,6 +433,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     // After a continuation turn, track whether it produced tool calls.
     pi.on('tool_execution_end', () => {
       continuationSuppressed = false;
+      consecutiveNoToolTurns = 0;
     });
 
     // ── Reactivate paused goal on resume ──────────────────────────────────
@@ -435,6 +456,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       writeGoalState(pi, newState);
       syncGoalTools(pi, true);
       continuationSuppressed = false;
+      consecutiveNoToolTurns = 0;
     });
   };
 }
