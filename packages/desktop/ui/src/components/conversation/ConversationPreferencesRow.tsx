@@ -276,21 +276,15 @@ export function ConversationPreferencesRow({
       )}
 
       {!compact && (
-        <button
-          type="button"
-          onClick={onToggleGoal}
-          className={cx(
-            'flex h-8 items-center gap-1.5 rounded-md border px-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25',
-            goalEnabled
-              ? 'border-accent/30 bg-accent/8 text-accent'
-              : 'border-transparent text-dim hover:bg-surface/35 hover:text-secondary',
-          )}
+        <ConversationPreferenceToggle
+          label="Goal"
+          enabled={goalEnabled}
+          disabled={savingPreference !== null}
+          tone="accent"
           title={goalEnabled ? 'Disable goal mode' : 'Enable goal mode'}
-          aria-label="Toggle goal mode"
-        >
-          <span className={cx('inline-block h-2 w-2 rounded-full', goalEnabled ? 'bg-accent' : 'bg-border-default')} />
-          Goal
-        </button>
+          layout="inline"
+          onToggle={onToggleGoal}
+        />
       )}
 
       <div ref={menuRef} className="relative">
@@ -343,6 +337,20 @@ export function ConversationPreferencesRow({
                   }}
                 />
               </div>
+              {compact && (
+                <ConversationPreferenceToggle
+                  label="Goal mode"
+                  enabled={goalEnabled}
+                  disabled={savingPreference !== null}
+                  tone="accent"
+                  title={goalEnabled ? 'Disable goal mode' : 'Enable goal mode'}
+                  layout="menu"
+                  onToggle={() => {
+                    onToggleGoal();
+                    setMenuOpen(false);
+                  }}
+                />
+              )}
               {supportsFastMode && (
                 <ConversationPreferenceToggle
                   label="Fast mode"
