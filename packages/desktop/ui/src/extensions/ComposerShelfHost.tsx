@@ -10,6 +10,7 @@ export interface ComposerShelfContext {
   conversationId: string;
   isStreaming: boolean;
   isLive: boolean;
+  [key: string]: unknown;
 }
 
 type ComposerShelfComponent = ComponentType<{

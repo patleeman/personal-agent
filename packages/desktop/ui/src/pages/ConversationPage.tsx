@@ -5129,6 +5129,39 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { composerShelves, conversationHeaderElements } = useExtensionRegistry();
   const composerShelvesTop = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'top'), [composerShelves]);
   const composerShelvesBottom = useMemo(() => composerShelves.filter((shelf) => shelf.placement === 'bottom'), [composerShelves]);
+  const suggestedContextShelfState = useMemo(
+    () => ({
+      query: debouncedRelatedThreadsQuery,
+      results: visibleRelatedThreadResults,
+      selectedSessionIds: selectedRelatedThreadIds,
+      autoSelectedSessionIds: autoSelectedRelatedThreadIds,
+      loading: relatedThreadSearchLoading,
+      busy: preparingRelatedThreadContext,
+      error: relatedThreadSearchError,
+      maxSelections: MAX_RELATED_THREAD_SELECTIONS,
+      hotkeyLimit: MAX_RELATED_THREAD_HOTKEYS,
+      onToggle: toggleRelatedThreadSelection,
+    }),
+    [
+      autoSelectedRelatedThreadIds,
+      debouncedRelatedThreadsQuery,
+      preparingRelatedThreadContext,
+      relatedThreadSearchError,
+      relatedThreadSearchLoading,
+      selectedRelatedThreadIds,
+      toggleRelatedThreadSelection,
+      visibleRelatedThreadResults,
+    ],
+  );
+  const composerShelfContext = useMemo(
+    () => ({
+      conversationId: id ?? '',
+      isStreaming: stream.isStreaming,
+      isLive: isLiveSession,
+      suggestedContext: suggestedContextShelfState,
+    }),
+    [id, isLiveSession, stream.isStreaming, suggestedContextShelfState],
+  );
   const hasComposerShelfContent =
     composerShelvesTop.length > 0 ||
     composerShelvesBottom.length > 0 ||
@@ -5384,21 +5417,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     draftCwdPickBusy={draftCwdPickBusy}
                     savedWorkspacePathsLoading={savedWorkspacePathsLoading}
                     availableDraftWorkspacePaths={availableDraftWorkspacePaths}
-                    relatedThreadQuery={debouncedRelatedThreadsQuery}
-                    relatedThreadResults={visibleRelatedThreadResults}
-                    selectedRelatedThreadIds={selectedRelatedThreadIds}
-                    autoSelectedRelatedThreadIds={autoSelectedRelatedThreadIds}
-                    relatedThreadSearchLoading={relatedThreadSearchLoading}
-                    preparingRelatedThreadContext={preparingRelatedThreadContext}
-                    relatedThreadSearchError={relatedThreadSearchError}
-                    maxRelatedThreadSelections={MAX_RELATED_THREAD_SELECTIONS}
-                    relatedThreadHotkeyLimit={MAX_RELATED_THREAD_HOTKEYS}
                     onClearDraftCwdSelection={clearDraftConversationCwdSelection}
                     onSelectDraftWorkspace={selectDraftConversationWorkspace}
                     onPickDraftCwd={() => {
                       void pickDraftConversationCwd();
                     }}
-                    onToggleRelatedThread={toggleRelatedThreadSelection}
                   />
                 ) : undefined
               }
@@ -5637,11 +5660,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               {hasComposerShelfContent && (
                 <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
                   {composerShelvesTop.map((shelf) => (
-                    <ComposerShelfHost
-                      key={`${shelf.extensionId}:${shelf.id}`}
-                      registration={shelf}
-                      shelfContext={{ conversationId: id ?? '', isStreaming: stream.isStreaming, isLive: isLiveSession }}
-                    />
+                    <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} shelfContext={composerShelfContext} />
                   ))}
                   {stream.isStreaming &&
                     !pendingBrowserComments.length &&
@@ -5769,11 +5788,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     />
                   )}
                   {composerShelvesBottom.map((shelf) => (
-                    <ComposerShelfHost
-                      key={`${shelf.extensionId}:${shelf.id}`}
-                      registration={shelf}
-                      shelfContext={{ conversationId: id ?? '', isStreaming: stream.isStreaming, isLive: isLiveSession }}
-                    />
+                    <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} shelfContext={composerShelfContext} />
                   ))}
                 </div>
               )}

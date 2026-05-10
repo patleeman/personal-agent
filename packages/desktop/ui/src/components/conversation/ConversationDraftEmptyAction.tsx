@@ -1,5 +1,3 @@
-import type { RelatedConversationSearchResult } from '../../conversation/relatedConversationSearch';
-import { DraftRelatedThreadsPanel } from '../DraftRelatedThreadsPanel';
 import { cx } from '../ui';
 import { BrowsePathButton, ChatBubbleIcon, FolderIcon } from './ConversationComposerChrome';
 
@@ -16,19 +14,9 @@ export function ConversationDraftEmptyAction({
   draftCwdPickBusy,
   savedWorkspacePathsLoading,
   availableDraftWorkspacePaths,
-  relatedThreadQuery,
-  relatedThreadResults,
-  selectedRelatedThreadIds,
-  autoSelectedRelatedThreadIds,
-  relatedThreadSearchLoading,
-  preparingRelatedThreadContext,
-  relatedThreadSearchError,
-  maxRelatedThreadSelections,
-  relatedThreadHotkeyLimit,
   onClearDraftCwdSelection,
   onSelectDraftWorkspace,
   onPickDraftCwd,
-  onToggleRelatedThread,
 }: {
   hasDraftCwd: boolean;
   draftCwdValue: string;
@@ -36,19 +24,9 @@ export function ConversationDraftEmptyAction({
   draftCwdPickBusy: boolean;
   savedWorkspacePathsLoading: boolean;
   availableDraftWorkspacePaths: string[];
-  relatedThreadQuery: string;
-  relatedThreadResults: RelatedConversationSearchResult[];
-  selectedRelatedThreadIds: string[];
-  autoSelectedRelatedThreadIds: string[];
-  relatedThreadSearchLoading: boolean;
-  preparingRelatedThreadContext: boolean;
-  relatedThreadSearchError: string | null;
-  maxRelatedThreadSelections: number;
-  relatedThreadHotkeyLimit: number;
   onClearDraftCwdSelection: () => void;
   onSelectDraftWorkspace: (workspacePath: string) => void;
   onPickDraftCwd: () => void;
-  onToggleRelatedThread: (sessionId: string) => void;
 }) {
   return (
     <div className="mt-4 w-full space-y-3">
@@ -109,20 +87,6 @@ export function ConversationDraftEmptyAction({
       </div>
 
       {draftCwdError && <p className="text-[11px] text-danger/80">{draftCwdError}</p>}
-
-      <DraftRelatedThreadsPanel
-        query={relatedThreadQuery}
-        results={relatedThreadResults}
-        selectedSessionIds={selectedRelatedThreadIds}
-        autoSelectedSessionIds={autoSelectedRelatedThreadIds}
-        selectedCount={selectedRelatedThreadIds.length}
-        loading={relatedThreadSearchLoading}
-        busy={preparingRelatedThreadContext}
-        error={relatedThreadSearchError}
-        maxSelections={maxRelatedThreadSelections}
-        hotkeyLimit={relatedThreadHotkeyLimit}
-        onToggle={onToggleRelatedThread}
-      />
     </div>
   );
 }

@@ -14,15 +14,6 @@ const baseProps: React.ComponentProps<typeof ConversationDraftEmptyAction> = {
   draftCwdPickBusy: false,
   savedWorkspacePathsLoading: false,
   availableDraftWorkspacePaths: ['/repo'],
-  relatedThreadQuery: '',
-  relatedThreadResults: [],
-  selectedRelatedThreadIds: [],
-  autoSelectedRelatedThreadIds: [],
-  relatedThreadSearchLoading: false,
-  preparingRelatedThreadContext: false,
-  relatedThreadSearchError: null,
-  maxRelatedThreadSelections: 3,
-  relatedThreadHotkeyLimit: 5,
   onClearDraftCwdSelection: vi.fn(),
   onSelectDraftWorkspace: vi.fn(),
   onPickDraftCwd: vi.fn(),
@@ -56,28 +47,5 @@ describe('ConversationDraftEmptyAction', () => {
 
     expect(html).toContain('bad path');
     expect(html).toContain('Saved workspace');
-  });
-
-  it('renders related thread panel state', () => {
-    const html = renderAction({
-      relatedThreadQuery: 'architecture',
-      relatedThreadResults: [
-        {
-          sessionId: 'conv-1',
-          title: 'Architecture pass',
-          cwd: '/repo',
-          timestamp: '2026-04-01T00:00:00.000Z',
-          snippet: 'Split the page',
-          matchedTerms: ['architecture'],
-          score: 10,
-          sameWorkspace: true,
-        },
-      ],
-      selectedRelatedThreadIds: ['conv-1'],
-    });
-
-    expect(html).toContain('Suggested context');
-    expect(html).toContain('Architecture pass');
-    expect(html).toContain('Split the page');
   });
 });

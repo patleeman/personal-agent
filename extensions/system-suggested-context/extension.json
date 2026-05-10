@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "id": "system-suggested-context",
+  "name": "Suggested Context",
+  "description": "Suggests related conversations as pointer context for new prompts.",
+  "version": "0.1.0",
+  "packageType": "system",
+  "frontend": {
+    "entry": "dist/frontend.js"
+  },
+  "contributes": {
+    "composerShelves": [
+      {
+        "id": "suggested-context",
+        "component": "SuggestedContextShelf",
+        "title": "Suggested Context",
+        "placement": "top"
+      }
+    ]
+  }
+}
