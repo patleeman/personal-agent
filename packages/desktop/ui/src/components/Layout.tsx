@@ -93,10 +93,27 @@ export function resolveWorkbenchRailMode(
   return surface ? extensionToolPanelMode(surface) : builtInMode;
 }
 
+export function resolveDefaultDiffCheckpointId({
+  activeCheckpointId,
+  firstCheckpointId,
+  hasUncommittedDiff,
+}: {
+  activeCheckpointId: string | null;
+  firstCheckpointId: string | null;
+  hasUncommittedDiff: boolean;
+}): string | null {
+  return hasUncommittedDiff ? UNCOMMITTED_SENTINEL : (activeCheckpointId ?? firstCheckpointId);
+}
+
 function parseExtensionToolPanelMode(mode: WorkbenchRailMode): { extensionId: string; surfaceId: string } | null {
   if (!mode.startsWith('extension:')) return null;
   const [, extensionId, surfaceId] = mode.split(':');
   return extensionId && surfaceId ? { extensionId, surfaceId } : null;
+}
+
+function isDiffsRailMode(mode: WorkbenchRailMode): boolean {
+  const parsed = parseExtensionToolPanelMode(mode);
+  return mode === 'diffs' || parsed?.extensionId === 'system-diffs';
 }
 
 function labelForExtensionToolPanel(surface: { title?: string; label?: string }): string {
@@ -760,7 +777,11 @@ function WorkbenchKnowledgeRail({
     });
   }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams, systemFilesExtensionSurface]);
   const handleDiffsModeSelect = useCallback(() => {
-    const nextCheckpointId = activeCheckpointId ?? checkpoints[0]?.id ?? (uncommittedResult ? UNCOMMITTED_SENTINEL : null);
+    const nextCheckpointId = resolveDefaultDiffCheckpointId({
+      activeCheckpointId,
+      firstCheckpointId: checkpoints[0]?.id ?? null,
+      hasUncommittedDiff: Boolean(uncommittedResult),
+    });
     onActiveToolChange(systemDiffsExtensionSurface ? extensionToolPanelMode(systemDiffsExtensionSurface) : 'diffs');
     onWorkspaceFileClear();
     onCheckpointSelect(nextCheckpointId);
@@ -945,8 +966,25 @@ function WorkbenchKnowledgeRail({
   }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams]);
 
   useEffect(() => {
+    if (isDiffsRailMode(activeTool) && !activeCheckpointId && uncommittedResult) {
+      onCheckpointSelect(UNCOMMITTED_SENTINEL);
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete('file');
+          next.delete('artifact');
+          next.delete('run');
+          next.set('checkpoint', UNCOMMITTED_SENTINEL);
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [activeCheckpointId, activeTool, onCheckpointSelect, setSearchParams, uncommittedResult]);
+
+  useEffect(() => {
     if (
-      activeTool === 'diffs' &&
+      isDiffsRailMode(activeTool) &&
       !activeCheckpointId &&
       !checkpointsLoading &&
       !uncommittedLoading &&

@@ -6,6 +6,7 @@ import {
   readStoredPanelWidth,
   readStoredWorkbenchExplorerOpen,
   resolveActiveWorkspaceCwd,
+  resolveDefaultDiffCheckpointId,
   resolveWorkbenchRailMode,
   shouldResetWorkbenchRunsOnConversationChange,
   shouldShowConversationRunsTab,
@@ -95,6 +96,19 @@ describe('Layout workbench rail state', () => {
     expect(resolveWorkbenchRailMode('runs', { extensionId: 'system-runs', id: 'runs-tool' } as never)).toBe(
       'extension:system-runs:runs-tool',
     );
+  });
+
+  it('defaults the diffs rail to uncommitted changes when present', () => {
+    expect(
+      resolveDefaultDiffCheckpointId({
+        activeCheckpointId: 'saved-checkpoint',
+        firstCheckpointId: 'newest-checkpoint',
+        hasUncommittedDiff: true,
+      }),
+    ).toBe('__uncommitted__');
+    expect(
+      resolveDefaultDiffCheckpointId({ activeCheckpointId: null, firstCheckpointId: 'newest-checkpoint', hasUncommittedDiff: false }),
+    ).toBe('newest-checkpoint');
   });
 
   it('clears workbench-only diff and run params when switching to compact mode', () => {
