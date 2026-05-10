@@ -6,19 +6,48 @@ import { listExtensionAgentRegistrations } from './extensionRegistry.js';
 export function createManifestAgentExtensions(
   options: { onError?: (message: string, fields?: Record<string, unknown>) => void } = {},
 ): ExtensionFactory[] {
-  return listExtensionAgentRegistrations().map((registration): ExtensionFactory => {
-    let loaded: Promise<ExtensionFactory> | null = null;
-    return (pi) => {
-      loaded ??= loadExtensionAgentFactory(registration.extensionId, registration.exportName);
-      loaded
-        .then((factory) => factory(pi))
-        .catch((error) => {
+  const registrations = listExtensionAgentRegistrations();
+
+  // Eagerly preload all agent extension backends so tool registration is
+  // synchronous when the factory is invoked. Without preloading the factory
+  // must await import() via .then(), which registers tools on a later
+  // microtask — after the model has already queried the tool registry.
+  const preloaded = new Array<ExtensionFactory | null>(registrations.length);
+  for (const [index, reg] of registrations.entries()) {
+    loadExtensionAgentFactory(reg.extensionId, reg.exportName)
+      .then((factory) => {
+        preloaded[index] = factory;
+      })
+      .catch((error) => {
+        options.onError?.('failed to load extension agent factory', {
+          extensionId: reg.extensionId,
+          exportName: reg.exportName,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }
+
+  return registrations.map((reg, index): ExtensionFactory => {
+    return async (pi) => {
+      const factory = preloaded[index];
+      if (factory) {
+        // Preloaded — call synchronously. Since this function is async,
+        // await factory(api) in the SDK will still await the returned
+        // promise, which resolves on the next microtask.
+        factory(pi);
+      } else {
+        // Edge case: session starts before preload finishes.
+        try {
+          const f = await loadExtensionAgentFactory(reg.extensionId, reg.exportName);
+          f(pi);
+        } catch (error) {
           options.onError?.('failed to load extension agent factory', {
-            extensionId: registration.extensionId,
-            exportName: registration.exportName,
+            extensionId: reg.extensionId,
+            exportName: reg.exportName,
             message: error instanceof Error ? error.message : String(error),
           });
-        });
+        }
+      }
     };
   });
 }
