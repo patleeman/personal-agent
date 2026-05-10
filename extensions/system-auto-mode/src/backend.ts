@@ -116,8 +116,10 @@ function buildContinuationPrompt(state: GoalState): string {
   ].join('\n');
 }
 
-function isNoProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
-  return toolResults.length === 0 || toolResults.every((result) => result.toolName === GOAL_GET_TOOL);
+function isProgressGoalTurn(toolResults: Array<{ toolName?: string }>): boolean {
+  return toolResults.some(
+    (result) => result.toolName === GOAL_SET_TOOL || result.toolName === GOAL_UPDATE_TOOL || result.toolName === GOAL_UPDATE_TASKS_TOOL,
+  );
 }
 
 // ── Tool parameter schemas ───────────────────────────────────────────────────
@@ -396,11 +398,11 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       }
 
       const toolResults = Array.isArray(event.toolResults) ? event.toolResults : [];
-      if (isNoProgressGoalTurn(toolResults)) {
-        consecutiveNoToolTurns += 1;
-      } else {
+      if (isProgressGoalTurn(toolResults)) {
         consecutiveNoToolTurns = 0;
         continuationSuppressed = false;
+      } else {
+        consecutiveNoToolTurns += 1;
       }
 
       if (consecutiveNoToolTurns >= 2) {
@@ -434,10 +436,9 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       });
     });
 
-    // After a continuation turn, track whether it produced tool calls.
+    // Keep the event registered for diagnostics/compatibility; turn_end decides whether the full turn made progress.
     pi.on('tool_execution_end', () => {
       continuationSuppressed = false;
-      consecutiveNoToolTurns = 0;
     });
 
     // ── Reactivate paused goal on resume ──────────────────────────────────

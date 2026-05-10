@@ -112,4 +112,52 @@ describe('system-goal-mode extension', () => {
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
+
+  it('treats non-goal tool-only turns as no-progress continuations', async () => {
+    const handlers = new Map<string, Array<(event: unknown, ctx: any) => void | Promise<void>>>();
+    const sendMessage = vi.fn();
+    const factory = createConversationAutoModeAgentExtension();
+    const pi = {
+      registerTool: vi.fn(),
+      registerCommand: vi.fn(),
+      getActiveTools: vi.fn(() => []),
+      setActiveTools: vi.fn(),
+      sendMessage,
+      appendEntry: vi.fn(),
+      on: vi.fn((name: string, handler: (event: unknown, ctx: any) => void | Promise<void>) => {
+        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+      }),
+    } as unknown as ExtensionAPI;
+
+    factory(pi);
+
+    const turnEnd = handlers.get('turn_end')?.[0];
+    const ctx = {
+      sessionManager: {
+        getEntries: () => [
+          {
+            type: 'custom',
+            customType: 'conversation-goal',
+            data: {
+              objective: 'ship goal mode',
+              status: 'active',
+              tasks: [],
+              stopReason: null,
+              updatedAt: '2026-05-09T00:00:00.000Z',
+            },
+          },
+        ],
+      },
+      hasPendingMessages: () => false,
+      signal: { aborted: false },
+    };
+
+    await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
 });
