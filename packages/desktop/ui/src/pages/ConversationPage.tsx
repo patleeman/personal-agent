@@ -5664,6 +5664,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
                     : stream.goalState
                 }
+                workingLabel={goalEnabled && stream.isStreaming ? 'Working…' : null}
               />
 
               {hasComposerShelfContent && (
@@ -5672,6 +5673,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     <ComposerShelfHost key={`${shelf.extensionId}:${shelf.id}`} registration={shelf} shelfContext={composerShelfContext} />
                   ))}
                   {stream.isStreaming &&
+                    !goalEnabled &&
                     !pendingBrowserComments.length &&
                     attachedContextDocs.length === 0 &&
                     pendingQueue.length === 0 &&
