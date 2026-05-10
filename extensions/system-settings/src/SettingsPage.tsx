@@ -1855,7 +1855,12 @@ function ExtensionSettingsSection() {
   return (
     <div className="space-y-0">
       {[...grouped.entries()].map(([group, entries]) => (
-        <SettingsPanel key={group} title={group} description={formatInjectedExtensionDescription(entries)}>
+        <SettingsPanel
+          key={group}
+          title={group}
+          description={formatInjectedExtensionDescription(entries)}
+          className="first:border-t first:pt-6"
+        >
           {entries.map((entry) => (
             <SettingsField
               key={entry.key}
