@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9-rc.2 — 2026-05-10
+
+- fix: package esbuild for desktop runtime
+
 ## 0.7.9-rc.1 — 2026-05-10
 
 - fix: declare typebox dependency for release builds
