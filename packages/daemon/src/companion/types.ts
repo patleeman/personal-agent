@@ -150,6 +150,12 @@ export interface CompanionConversationCwdChangeInput {
   surfaceId?: string;
 }
 
+export interface CompanionConversationAutoModeUpdateInput {
+  conversationId: string;
+  enabled: boolean;
+  surfaceId?: string;
+}
+
 export interface CompanionConversationModelPreferencesUpdateInput {
   conversationId: string;
   model?: string | null;
@@ -284,6 +290,8 @@ export interface CompanionKnowledgeImageAssetInput {
 
 export interface CompanionRuntime {
   listConversations(): Promise<unknown>;
+  readConversationAutoMode(conversationId: string): Promise<unknown>;
+  updateConversationAutoMode(input: CompanionConversationAutoModeUpdateInput): Promise<unknown>;
   updateConversationTabs(input: CompanionConversationTabsUpdateInput): Promise<unknown>;
   duplicateConversation(input: CompanionConversationDuplicateInput): Promise<unknown>;
   readModels(): Promise<unknown>;
@@ -305,8 +313,6 @@ export interface CompanionRuntime {
   takeOverConversation(input: CompanionConversationTakeoverInput): Promise<unknown>;
   renameConversation(input: CompanionConversationRenameInput): Promise<unknown>;
   changeConversationCwd(input: CompanionConversationCwdChangeInput): Promise<unknown>;
-  readConversationAutoMode(conversationId: string): Promise<unknown>;
-  updateConversationAutoMode(input: { conversationId: string; enabled: boolean; surfaceId?: string }): Promise<unknown>;
   readConversationModelPreferences(conversationId: string): Promise<unknown>;
   updateConversationModelPreferences(input: CompanionConversationModelPreferencesUpdateInput): Promise<unknown>;
   createConversationCheckpoint(input: CompanionConversationCheckpointCreateInput): Promise<unknown>;
