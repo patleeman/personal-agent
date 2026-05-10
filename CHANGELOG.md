@@ -1,5 +1,334 @@
 # Changelog
 
+## 0.7.9-rc.0 — 2026-05-10
+
+- fix: restore release-blocking tests
+- chore: clean dead code check issues
+- fix: preserve conversation goal clearing
+- fix: manage Telegram gateway token as secret
+- docs: backfill changelog releases
+- chore: update release changelog process
+- fix: keep divider above first extension setting group
+- fix: label dictation settings as extension injected
+- fix: show extension setting source per group
+- fix: move secret backend selector
+- feat: add extension secret storage
+- feat: show extension source on injected settings
+- fix: remove synthetic conversation resume prompt
+- fix: default diffs to uncommitted changes
+- revert: remove web tools Exa setting
+- fix: add frontmatter field creation
+- feat: add web tools Exa setting
+- fix: prevent title edit icon overlap
+- fix: set conversation title through active session
+- refactor: simplify goal mode tools
+- fix: count real tools as goal progress
+- fix: inline conversation title edit actions
+- fix: stop goal mode on non-progress tools
+- fix: treat get_goal-only turns as idle
+- fix: show goal working status inline
+- fix: suppress idle goal continuations
+- fix: place suggested context on new conversation page
+- refactor: extract suggested context shelf extension
+- Unify composer goal state handling
+- Keep pending goal panel synced with composer input
+- Fix goal continuation id crash
+- Add regression test for agent extension factory builders
+- Normalize agent extension factory exports
+- fix: guard against calculateContextTokens crash when assistant usage is missing
+- Make agent extension factory async so SDK awaits tool registration
+- fix: scope shortcut conflict detection
+- Fix formatting in ConversationPage.tsx
+- fix: include goal mode in compact composer menu
+- Revert NativeExtensionSurfaceHost to bg-base
+- Fix extension surface host background to bg-surface
+- Fix right rail file explorer background mismatch
+- Fix right rail file explorer background mismatch
+- Fix knowledge file editor reload loop from vault watcher noise
+- Fix knowledge file editor infinite reload loop
+- Fix File Explorer tab not loading file tree on initial click
+- Consolidate settings page from 9 sections to 4
+- fix: style theme default selectors
+- feat: add conversation goal mode
+- fix: register trace cache efficiency route
+- fix: import browser tabs state reader
+- fix: restore auto mode trace exports
+- fix: initialize composer input before goal mode
+- Fix duplicate isRecord function in sessions.ts breaking esbuild bundle
+- Fix missing auto-mode types in CompanionRuntime interface
+- fix: verify packaged extension style assets
+- Fix all build errors: unused imports/vars, empty switch case, and missing break
+- fix: build system extension bundles before packaging
+- fix: package agent-readable docs with releases
+- docs: point agents at extension docs index
+- docs: update configuration and settings system map
+- docs: clarify extension-first platform boundary
+- docs: define PA core versus extensions
+- docs: require extension-first feature development
+- refactor: remove built-in /run, /search, /think slash commands
+- refactor: remove built-in slash commands, add build error surfacing
+- feat: auto-build extensions after create/import in extension manager
+- refactor: replace hardcoded standalone tool logic with declarative renderer flag
+- refactor: remove built-in slash commands and orphaned ArtifactCheckpointToolBlocks
+- Unify settings: remove settingsPanels, replace with settingsComponent
+- refactor: move AskUserQuestionToolBlock and CheckpointToolBlock into owning extensions
+- Consolidate settings: unified settings render in Settings page + quick link
+- refactor: move BrowserToolBlock component into system-browser extension
+- fix: restore deleted companion types and fix build errors
+- refactor: move terminal/bash transcript renderer into system-conversation-tools extension
+- refactor: finish extension surface cleanup
+- refactor: share Excalidraw extension utilities
+- refactor: remove remote session metadata
+- Add settings declarations to browser, auto-mode, images, and diffs extensions
+- refactor: move transcript renderers into extensions
+- feat: extract Excalidraw composer input extension
+- refactor: remove remote execution backend
+- fix: register gateway attach menu from extension
+- fix: unify message action shelves
+- Clean up orphaned UnifiedSettingsEntry interface and lint fixes
+- refactor: fully own MCP settings in extension
+- fix: remove stray conversation log action
+- refactor: remove composer gateway popup
+- refactor: remove remote workspace run picker
+- fix: keep context usage visible before session tokens
+- fix: remove scheduled task composer shelf
+- feat: move context usage into extension
+- feat: move MCP settings into extension
+- refactor: remove caffinate feature
+- feat: move git status into extension
+- fix: standardize settings and extensions pages
+- docs: move dictation docs into extension
+- feat: register dictation settings panel
+- refactor: remove built-in dictation code
+- refactor: extract dictation extension
+- fix: route runs rail through extension surface
+- fix: harden release readiness surfaces
+- fix: standardize extension page layout
+- fix: use theme appearance for diff viewer
+- fix: keep extension registry header elements defined
+- Extension surface area: conversationHeaderElements, modal dialogs, events.subscribe, getStatus
+- Add extensions.getStatus for availability checks
+- Add frontend events.subscribe and wire up cross-extension API
+- Update docs with conversationHeaderElements and modal dialog API
+- Add conversationHeaderElements slot and extension modal dialog API
+- Prettier fix for docs
+- Fix lint in test file
+- Update SDK README with new surface slots
+- Update extension authoring guide with new surface slots
+- Prettier fix for settingsStore.ts
+- Wire messageActions, conversationDecorators, and contextMenus into system extensions
+- Wire system-runs and system-automations into composerShelves slot
+- Standardize extension surface usage across system extensions
+- Standardize system-caffinate with toolbarActions and statusBarItems slots
+- Add statusBarItems extension slot
+- Remove native Electron context menus, add contextMenus extension slot
+- Add toolbarActions and conversationDecorators extension slots
+- Add composerShelves extension slot for shelf sections above composer
+- Center extension details modal and replace Details button with icon button
+- Add settings nav section for extension-contributed nav items
+- Add messageActions extension surface slot with inline rendering
+- Restore getExtensionRegistryRevision import in NativeExtensionSurfaceHost
+- Add topBarElements extension point, move caffeine indicator into system-caffinate frontend
+- Fix extension toggle flash: stable module key, keep old surface during registry re-fetch
+- Remove dead server extension files and clean up dependencies
+- Lock Extension Manager from being disabled to prevent bootstrap paradox
+- Move caffinate feature into system-caffinate extension
+- Clean up extension system: remove zen docs, back-end API barrel, systemFactory types, and finalize surface placement model
+- Backfill tests for all 11 system extension packages
+- fix: load native extension styles
+- fix: size knowledge tree panel correctly
+- Move extension details from right rail to modal with a Details button per row
+- fix: stabilize knowledge tree loading
+- fix: cache extension backend modules
+- fix: revert simulated dictation streaming
+- fix: rebuild extension backends with host runtime imports
+- fix: use right sidebar for extension details
+- fix: restore extension list scrolling
+- fix: close extension actions menu on outside click
+- fix: align extension manager toggles
+- fix: keep disabled right rail toggle visible
+- fix: show knowledge tree on knowledge page
+- fix: include extension sources in tailwind scan
+- fix: remove browser from left sidebar
+- fix: remove deleted summary fork feature
+- fix: type summary fork host capability
+- fix: restore extension workbench tools
+- fix: remove stale summary fork reset
+- refactor: simplify extension surface placement
+- Remove Summarize & New context menu feature
+- fix: keep esbuild external in desktop server
+- fix: restore telemetry layout and workspace toggle
+- refactor: add extension view placement policy
+- fix: clean up telemetry page layout
+- fix: use right rail for knowledge files
+- fix: stabilize knowledge and settings navigation
+- test: remove stale knowledge api coverage
+- refactor: remove migrated core pages
+- refactor: expose browser tool host through backend api
+- fix: stabilize settings extension surface
+- refactor: route settings through extension surface
+- refactor: remove knowledge extension host facade
+- refactor: finish moving knowledge page into extension
+- refactor: remove knowledge api host import
+- refactor: move knowledge mentions behind extension provider
+- feat: split theme mode from color defaults
+- refactor: remove knowledge workbench fallback imports
+- refactor: remove special knowledge sidebar mode
+- chore: remove stale knowledge sidebar imports
+- refactor: serve knowledge page as extension surface
+- chore: expose empty state UI primitive
+- feat: add extension contribution providers
+- refactor: trim knowledge extension host facade
+- docs: consolidate extension authoring guide
+- refactor: route knowledge prompt context through backend seam
+- docs: expand extension authoring guide
+- refactor: resolve prompt references through extensions
+- docs: document extension dependencies
+- refactor: discover system extension frontend modules
+- fix: keep primary nav on workbench pages
+- fix: guard extension renderer manifests
+- refactor: route settings page through extension facade
+- refactor: route knowledge UI through extension facade
+- fix: resolve knowledge extension imports
+- test: mock knowledge editor extension actions
+- test: mock knowledge extension actions
+- refactor: route knowledge host access through extension API
+- chore: expose knowledge host package seam
+- refactor: route extension frontend imports through host API
+- fix: rewind user messages by entry id
+- refactor: remove core imports from extensions
+- refactor: route knowledge vault operations through extension backend
+- refactor: route extension backend data through host seam
+- feat: simulate streaming dictation
+- refactor: move knowledge settings panel into extension
+- chore: stabilize extension extraction checks
+- test: cover materialized skill prompt entries
+- feat: validate and surface extension skills
+- refactor: move knowledge UI primitives into extension
+- refactor: remove codex dictation bridge
+- refactor: add backend extension import seam
+- fix: conform extension skills to agent skill format
+- feat: register built-in guidance as extension skills
+- feat: move knowledge sync ownership into extension
+- feat: copy extension diagnostics
+- fix: refresh extension runtime after reloads
+- feat: surface invalid extension diagnostics
+- feat: validate extension manifest contract
+- docs: remove moved feature doc stubs
+- docs: add missing extension readmes
+- docs: move feature docs into extensions
+- refactor: generate menu accelerators from shortcut registry
+- refactor: declare core keyboard shortcuts
+- refactor: route shortcuts through extension keybindings
+- feat: support extension shortcut overrides
+- feat: show extension shortcuts in settings
+- feat: register extension keybindings
+- refactor: clarify extension manager capabilities
+- refactor: split extension backend API surface
+- refactor: route extension imports through backend api
+- refactor: move conversation tools into extension
+- refactor: move agent hooks into product extensions
+- refactor: discover extension agent hooks
+- refactor: package native compaction as extension
+- refactor: add extension backend API surface
+- fix: restore extension manager scrolling
+- feat: add extension manager search filters
+- fix: unify transcript history and windowing chrome
+- refactor: simplify extension manager layout
+- refactor: dogfood extension manager and automations
+- fix: keep extension host compatibility buildable
+- refactor: move gateways and telemetry into extensions
+- refactor: move workbench panels into extensions
+- refactor: split extension host frontend APIs
+- refactor: add host extension frontend API
+- feat: add extension mention providers
+- refactor: centralize system extension module loading
+- docs: clarify skill-bundled MCP preference
+- refactor: move settings implementation into system extension
+- refactor: scope extension settings panels
+- refactor: move settings route wrappers into system extension
+- refactor: move file explorer frontend into system extension
+- refactor: move knowledge frontend into system extension
+- refactor: move browser frontend into system extension
+- refactor: move tool backends into system extensions
+- fix: keep viewport inset helper private
+- fix: track bare composer modifier keys
+- feat: move image tools to extension backend
+- feat: move run and scheduled task tools to extension backends
+- feat: move conversation queue to extension backend
+- feat: move checkpoint and reminders to extension backends
+- feat: make checkpoint native extension backend
+- feat: make artifacts native extension backend
+- feat: add extension transcript renderers
+- feat: make web tools native extension backend
+- feat: expose extension capabilities
+- feat: migrate tool families to system extensions
+- feat: add extension skills and tools
+- fix: align sidebar background with base
+- fix: promote compact panels into workbench
+- fix: restore extension browser launch
+- fix: restore queued prompts when stopping agent
+- docs: document desktop QA cleanup
+- feat: let extensions declare route capabilities
+- refactor: centralize route capabilities
+- feat: generalize extension pathing
+- feat: migrate knowledge workbench to extension
+- feat: migrate artifacts workbench to extension
+- refactor: remove browser state from layout
+- feat: migrate browser workbench to extension
+- feat: expose workbench browser primitives
+- feat: validate paired extension surfaces
+- feat: add extension starter templates
+- feat: migrate file explorer to workbench extension
+- feat: group paired extension surfaces
+- feat: migrate diffs to workbench extension
+- feat: migrate runs to workbench extension
+- feat: add coordinated workbench extension surfaces
+- docs: document extension surface choices
+- fix: keep runs as core workbench pane
+- fix: keep diffs in workbench pane
+- feat: add extension build and workspace APIs
+- feat: migrate core surfaces to native extensions
+- fix: wait for scheduled run creation
+- fix: redesign automation editor form
+- fix: align automations page redesign
+- fix: clean up automations page layout
+- fix: keep mission state synced in UI
+- test: harden native extension follow-up
+- feat: add native extension runtime
+- fix: inject mode context after auto mode changes
+- docs: define native extension architecture
+- fix: align extension iframe theme styles
+- Fix window drag region by making top bar center div self-stretch
+- Remove turn limit from mission mode
+- Restore running status indicators in composer: shelf glow, tools spinner, Working shelf, send button ping
+- Add pulsing glow animations for mission and loop modes
+- chore: remove legacy apps surface
+- Merge branch 'docs/extensions-architecture'
+- docs: add extension styling guidance
+- feat: port automations to system extension
+- feat: wire extension right rail panels
+- fix: simplify extensions page layout
+- feat: expose extension launch context
+- feat: import and export extension bundles
+- feat: cache extension backend builds
+- feat: add extension lifecycle actions
+- feat: show extension commands in palette
+- feat: execute extension slash commands
+- feat: show extension slash commands
+- feat: register extension commands
+- feat: expose conversations to extensions
+- feat: add extension public types package
+- feat: expose vault to extensions
+- feat: expose runs to extensions
+- feat: add sqlite extension storage
+- feat: expose automations to extension backends
+- feat: invoke extension backend actions
+- feat: add extension manager
+- feat: load runtime extension pages
+- feat: add extension runtime skeleton
+- docs: specify extension runtime architecture
+
 ## 0.7.8 — 2026-05-07
 
 - Stabilized live conversation running state and repaired related test regressions
