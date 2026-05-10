@@ -1383,7 +1383,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Goal mode
   const [draftGoalEnabled, setDraftGoalEnabled] = useState(false);
-  const goalEnabled = draft ? draftGoalEnabled : stream.goalState?.status === 'active';
+  const [composerGoalPending, setComposerGoalPending] = useState(false);
+  const goalEnabled = draft ? draftGoalEnabled : composerGoalPending || stream.goalState?.status === 'active';
   const toggleGoalMode = useCallback(async () => {
     if (draft) {
       setDraftGoalEnabled((prev) => !prev);
@@ -1393,8 +1394,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const isEnabled = !goalEnabled;
     if (isEnabled) {
       const text = input.trim();
+      setComposerGoalPending(true);
       await api.updateGoal(id, { objective: text });
     } else {
+      setComposerGoalPending(false);
       await api.updateGoal(id, {});
     }
   }, [draft, id, goalEnabled, input]);
@@ -4415,6 +4418,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             rememberComposerInput(inputSnapshot, created.id);
             persistPendingConversationPrompt(created.id, initialPrompt);
             setPendingConversationPromptDispatching(created.id, true);
+            if (draftGoalEnabled && text) {
+              await api.updateGoal(created.id, { objective: text }).catch(() => {});
+            }
 
             const sendResult = await api.promptSession(
               created.id,
@@ -4434,9 +4440,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }
             setPendingConversationPromptDispatching(created.id, false);
 
-            if (draftGoalEnabled && text) {
-              await api.updateGoal(created.id, { objective: text }).catch(() => {});
-            }
             clearDraftConversationAttachments();
             clearDraftConversationContextDocs();
             clearDraftConversationCwd();
@@ -4519,6 +4522,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           rememberComposerInput(inputSnapshot, newId);
           persistPendingConversationPrompt(newId, initialPrompt);
           setPendingConversationPromptDispatching(newId, true);
+          if (draftGoalEnabled && text) {
+            await api.updateGoal(newId, { objective: text }).catch(() => {});
+          }
 
           const sendResult = await api.promptSession(
             newId,
@@ -4537,9 +4543,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           }
           setPendingConversationPromptDispatching(newId, false);
 
-          if (draftGoalEnabled && text) {
-            await api.updateGoal(newId, { objective: text }).catch(() => {});
-          }
           clearDraftConversationAttachments();
           clearDraftConversationContextDocs();
           clearDraftConversationCwd();
@@ -4605,6 +4608,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         );
 
         try {
+          if (composerGoalPending && text) {
+            await api.updateGoal(id, { objective: text });
+            setComposerGoalPending(false);
+          }
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserContextMessages);
         } catch (error) {
           if (!isConversationSessionNotLiveError(error)) {
@@ -4648,6 +4655,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setPendingAssistantStatusLabel('Working…');
+          if (composerGoalPending && text) {
+            await api.updateGoal(id, { objective: text });
+            setComposerGoalPending(false);
+          }
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserContextMessages);
           await refetchConversationAttachments();
           window.setTimeout(() => {
@@ -5624,7 +5635,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     ? draftGoalEnabled && input.trim()
                       ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
                       : null
-                    : stream.goalState
+                    : composerGoalPending && input.trim()
+                      ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
+                      : stream.goalState
                 }
               />
 
