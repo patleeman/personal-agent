@@ -20,13 +20,11 @@ The primary search backend. Provides high-quality search results with snippets, 
 
 **API key setup:**
 
-Set `Web tools → Exa API key` in Settings, or export it for the process:
-
 ```bash
 export EXA_API_KEY=your-key-here
 ```
 
-When both are set, the environment variable takes precedence.
+Or store in auth.json under the `exa` key via Settings. When both are set, the environment variable takes precedence.
 
 ### DuckDuckGo fallback
 

@@ -13,15 +13,6 @@
     ]
   },
   "contributes": {
-    "settings": {
-      "webTools.exaApiKey": {
-        "type": "string",
-        "description": "Exa API key for web_search. EXA_API_KEY still takes precedence when set.",
-        "group": "Web tools",
-        "placeholder": "exa_…",
-        "order": 1
-      }
-    },
     "tools": [
       {
         "id": "web-fetch",
@@ -58,5 +49,5 @@
       }
     ]
   },
-  "permissions": ["network:read", "settings:read"]
+  "permissions": ["network:read"]
 }
