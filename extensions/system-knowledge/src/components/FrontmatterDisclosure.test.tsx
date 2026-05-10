@@ -29,6 +29,15 @@ describe('FrontmatterDisclosure', () => {
     expect(html).toContain('beta');
   });
 
+  it('shows an add-field row when frontmatter is editable', () => {
+    const html = renderToStaticMarkup(<FrontmatterDisclosure frontmatter={{}} onChange={() => undefined} defaultOpen />);
+
+    expect(html).toContain('New frontmatter field name');
+    expect(html).toContain('New frontmatter field value');
+    expect(html).toContain('Add field');
+    expect(html).toContain('No tags yet…');
+  });
+
   it('shows raw frontmatter when yaml parsing fails', () => {
     const html = renderToStaticMarkup(
       <FrontmatterDisclosure frontmatter={{}} rawFrontmatter={'title: [oops'} parseError={'Unexpected ]'} defaultOpen />,

@@ -72,6 +72,8 @@ export function FrontmatterDisclosure({
   const contentId = useId();
   const [open, setOpen] = useState(defaultOpen || Boolean(parseError));
   const [tagInput, setTagInput] = useState('');
+  const [newFieldKey, setNewFieldKey] = useState('');
+  const [newFieldValue, setNewFieldValue] = useState('');
   const fieldCount = countMarkdownFrontmatterFields(frontmatter);
   const tags = normalizeTags(frontmatter.tags);
   const entries = useMemo(
@@ -82,6 +84,22 @@ export function FrontmatterDisclosure({
   const summary = parseError ? 'Invalid YAML' : fieldCount === 0 ? 'No fields' : `${fieldCount} field${fieldCount === 1 ? '' : 's'}`;
 
   const showTagEditor = Boolean(onChange) || tags.length > 0;
+  const trimmedNewFieldKey = newFieldKey.trim();
+  const canAddField =
+    Boolean(onChange) && trimmedNewFieldKey.length > 0 && trimmedNewFieldKey !== 'tags' && !(trimmedNewFieldKey in frontmatter);
+
+  const addField = () => {
+    if (!onChange || !canAddField) {
+      return;
+    }
+
+    onChange({
+      ...frontmatter,
+      [trimmedNewFieldKey]: newFieldValue.trim(),
+    });
+    setNewFieldKey('');
+    setNewFieldValue('');
+  };
 
   return (
     <div className={open ? 'kb-fm-panel kb-fm-panel-open' : 'kb-fm-panel'}>
@@ -181,7 +199,48 @@ export function FrontmatterDisclosure({
                     </tr>
                   );
                 })}
-                {!showTagEditor && entries.length === 0 ? (
+                {onChange ? (
+                  <tr>
+                    <th scope="row" className="kb-fm-key">
+                      <input
+                        type="text"
+                        className="kb-fm-field-input kb-fm-field-key-input"
+                        aria-label="New frontmatter field name"
+                        placeholder="field"
+                        value={newFieldKey}
+                        onChange={(event) => setNewFieldKey(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            addField();
+                          }
+                        }}
+                      />
+                    </th>
+                    <td className="kb-fm-value">
+                      <div className="kb-fm-field-add-row">
+                        <input
+                          type="text"
+                          className="kb-fm-field-input"
+                          aria-label="New frontmatter field value"
+                          placeholder="value"
+                          value={newFieldValue}
+                          onChange={(event) => setNewFieldValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              addField();
+                            }
+                          }}
+                        />
+                        <button type="button" className="kb-fm-add-field" disabled={!canAddField} onClick={addField}>
+                          Add field
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                {!onChange && !showTagEditor && entries.length === 0 ? (
                   <tr>
                     <th scope="row" className="kb-fm-key">
                       —
