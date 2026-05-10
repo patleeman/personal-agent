@@ -505,34 +505,47 @@ export function ExtensionManagerPage() {
     }
   }, [load]);
 
+  const [importWarningZip, setImportWarningZip] = useState<string | null>(null);
+
   const importExtension = useCallback(async () => {
     const zipPath = window.prompt('Path to extension .zip bundle');
     if (!zipPath?.trim()) return;
+    setImportWarningZip(zipPath.trim());
+  }, []);
 
-    setNotice(null);
-    try {
-      const result = await api.importExtension({ zipPath: zipPath.trim() });
-      setNotice(`Imported ${result.packageRoot}`);
-      notifyExtensionRegistryChanged();
-      await load();
-      // Auto-build the imported extension.
+  const confirmImport = useCallback(
+    async (zipPath: string) => {
+      setImportWarningZip(null);
+      setNotice(null);
       try {
-        const extId = result.extension?.id;
-        if (extId) {
-          const buildResult = await api.buildExtension(extId);
-          if (buildResult.outputs.length > 0) {
-            await api.reloadExtension(extId).catch(() => undefined);
-            notifyExtensionRegistryChanged();
-            await load();
+        const result = await api.importExtension({ zipPath });
+        setNotice(`Imported ${result.packageRoot}`);
+        notifyExtensionRegistryChanged();
+        await load();
+        // Auto-build the imported extension.
+        try {
+          const extId = result.extension?.id;
+          if (extId) {
+            const buildResult = await api.buildExtension(extId);
+            if (buildResult.outputs.length > 0) {
+              await api.reloadExtension(extId).catch(() => undefined);
+              notifyExtensionRegistryChanged();
+              await load();
+            }
           }
+        } catch {
+          // Imported extension may already have built outputs — that's fine.
         }
-      } catch {
-        // Imported extension may already have built outputs — that's fine.
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [load]);
+    },
+    [load],
+  );
+
+  const cancelImport = useCallback(() => {
+    setImportWarningZip(null);
+  }, []);
 
   const toggleExtension = useCallback(
     (extension: ExtensionInstallSummary) => {
@@ -840,6 +853,7 @@ export function ExtensionManagerPage() {
       </div>
 
       {detailsExtensionId ? <ExtensionDetailsModal extensionId={detailsExtensionId} onClose={() => setDetailsExtensionId(null)} /> : null}
+      {importWarningZip ? <ImportWarningModal zipPath={importWarningZip} onConfirm={confirmImport} onCancel={cancelImport} /> : null}
     </>
   );
 }
@@ -1192,6 +1206,113 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-dim">{label}</dt>
       <dd className="mt-0.5 break-words text-secondary">{value}</dd>
+    </div>
+  );
+}
+
+function ImportWarningModal({
+  zipPath,
+  onConfirm,
+  onCancel,
+}: {
+  zipPath: string;
+  onConfirm: (zipPath: string) => void;
+  onCancel: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState('');
+  const confirmed = confirmText === 'I UNDERSTAND THE RISKS';
+
+  const handleBackdropClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (event.target === event.currentTarget) {
+        onCancel();
+      }
+    },
+    [onCancel],
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-10 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Dangerous import warning"
+        className="relative w-full max-w-lg rounded-3xl border-2 border-danger/60 bg-base shadow-2xl shadow-danger/10"
+      >
+        {/* Top danger bar */}
+        <div className="flex items-center gap-2.5 rounded-t-3xl border-b border-danger/30 bg-danger/15 px-6 py-4">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-danger/20 text-[15px] font-bold text-danger">!</span>
+          <h2 className="text-[16px] font-bold tracking-tight text-danger">DANGEROUS OPERATION</h2>
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="space-y-3">
+            <p className="text-[13px] font-semibold leading-6 text-primary">
+              You are about to import a pre-built extension from:{' '}
+              <code className="break-all font-mono text-[12px] text-secondary">{zipPath}</code>
+            </p>
+
+            <div className="rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3">
+              <p className="text-[13px] font-semibold leading-6 text-danger">Why this is dangerous</p>
+              <ul className="mt-2 space-y-1.5 text-[12px] leading-5 text-secondary">
+                <li>
+                  Extensions have full access to your agent&apos;s tools, including file system read/write, shell execution, network access,
+                  and AI model invocation.
+                </li>
+                <li>
+                  An imported extension could exfiltrate data, modify your knowledge base, inject prompts, or spawn background processes —
+                  all without your knowledge.
+                </li>
+                <li>There is no sandbox. The code runs with the same privileges as your agent runtime.</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-3">
+              <p className="text-[13px] font-semibold leading-6 text-accent">Recommended alternative</p>
+              <p className="mt-1.5 text-[12px] leading-5 text-secondary">
+                Instead of importing an untrusted binary bundle, ask an agent to do a <strong>clean-room re-implementation</strong>. A
+                stripped-down agent with only web tools can fetch the plugin&apos;s repository, generate a specification from the source,
+                and scan that spec for vulnerabilities. The sanitized spec can then be handed to a full agent for implementation — no blind
+                code execution.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-danger">
+              Type <span className="font-mono">I UNDERSTAND THE RISKS</span> to confirm
+            </label>
+            <input
+              value={confirmText}
+              onChange={(event) => setConfirmText(event.target.value)}
+              placeholder="Type I UNDERSTAND THE RISKS to enable import"
+              className="w-full rounded-xl border border-danger/40 bg-base px-4 py-2.5 text-[13px] text-primary outline-none transition-colors placeholder:text-dim focus:border-danger"
+              autoFocus
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-4">
+            <button
+              type="button"
+              className="rounded-xl px-4 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-surface hover:text-primary"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-danger/60 bg-danger/15 px-5 py-2 text-[13px] font-semibold text-danger transition-colors hover:bg-danger/25 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!confirmed}
+              onClick={() => onConfirm(zipPath)}
+            >
+              {confirmed ? 'Import anyway' : 'Confirm to enable'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
