@@ -271,17 +271,13 @@ describe('SettingsPage', () => {
 
     expect(html).toContain('>Settings</h1>');
     expect(html).toContain('aria-label="Settings sections"');
-    expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-conversation"'));
-    expect(html.indexOf('href="#settings-conversation"')).toBeLessThan(html.indexOf('href="#settings-workspace"'));
-    expect(html.indexOf('href="#settings-workspace"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
-    expect(html.indexOf('href="#settings-skills"')).toBeLessThan(html.indexOf('href="#settings-tools"'));
-    expect(html.indexOf('href="#settings-tools"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
+    expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-capabilities"'));
+    expect(html.indexOf('href="#settings-capabilities"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');
     expect(html).toContain('Skills');
     expect(html).toContain('Skill folders');
     expect(html).not.toContain('Knowledge base');
-    expect(html).not.toContain('Extensions');
-    expect(html).not.toContain('Sample manifest setting');
+    expect(html).toContain('Sample manifest setting');
     expect(html).not.toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
     expect(html).not.toContain('In sync · Last synced');
     expect(html).toContain('AGENTS.md files');
@@ -292,11 +288,8 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
     expect(html).not.toContain('Loading daemon settings');
-    expect(html).toContain('Theme and other visual preferences for the desktop app.');
-    expect(html).toContain('Default model, vision model, thinking level, and fast mode for new conversations.');
-    expect(html).toContain('Default working directory for project context.');
-    expect(html).toContain('Skill discovery folders and extra runtime AGENTS.md instructions.');
-    expect(html).toContain('MCP wrappers and runtime tool config');
+    expect(html).toContain('Appearance, workspace defaults, and conversation behavior for new chats.');
+    expect(html).toContain('Skill discovery, MCP wrappers, and extension settings.');
     expect(html).toContain('Load extra skill folders alongside the root skills directory.');
     expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');
@@ -305,8 +298,6 @@ describe('SettingsPage', () => {
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
     expect(html).not.toContain('↻ Refresh');
-    expect(html).not.toContain('Appearance, workspace defaults, providers, and local browser state in one place.');
-    expect(html).not.toContain('Workspace defaults, knowledge base, and conversation behavior.');
   });
 
   it('renders a fast mode toggle for models that support priority tier', () => {
@@ -347,6 +338,5 @@ describe('SettingsPage', () => {
     const html = renderPage('/settings');
 
     expect(html).toContain('Desktop');
-    expect(html).toContain('Desktop bridge unavailable. Restart the desktop app and try again.');
   });
 });

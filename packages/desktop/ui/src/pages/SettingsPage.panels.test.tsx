@@ -106,10 +106,10 @@ describe('SettingsPage — untested panel rendering', () => {
     expect(html).toContain('Skill folders');
   });
 
-  it('renders the tools/MCP quick link', () => {
+  it('renders the capabilities/MCP quick link', () => {
     const html = renderPage('/settings');
-    expect(html).toContain('Tools');
-    expect(html).toContain('MCP wrappers and runtime tool config');
+    expect(html).toContain('Capabilities');
+    expect(html).toContain('Skill discovery, MCP wrappers, and extension settings.');
   });
 
   it('does not render interface reset controls in core settings', () => {

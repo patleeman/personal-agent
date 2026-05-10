@@ -66,15 +66,10 @@ const INPUT_CLASS =
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
-  { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
-  { id: 'settings-conversation', label: 'Conversation', summary: 'Default model, vision, and thinking' },
-  { id: 'settings-workspace', label: 'Workspace', summary: 'Default working directory' },
-  { id: 'settings-skills', label: 'Skills', summary: 'Folders and AGENTS.md instructions' },
-  { id: 'settings-tools', label: 'Tools', summary: 'MCP wrappers and runtime tool config' },
+  { id: 'settings-general', label: 'General', summary: 'Appearance, workspace, and conversation defaults' },
+  { id: 'settings-capabilities', label: 'Capabilities', summary: 'Skills, MCP wrappers, and extension settings' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
-  { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
-  { id: 'settings-extensions', label: 'Extensions', summary: 'Extension-declared settings' },
-  { id: 'settings-keyboard', label: 'Keyboard', summary: 'Desktop shortcuts' },
+  { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior, remotes, and keyboard shortcuts' },
 ] as const;
 
 type SettingsQuickLink = (typeof SETTINGS_QUICK_LINKS)[number];
@@ -801,7 +796,7 @@ export function DesktopKeyboardShortcutsSettingsSection() {
   }
 
   return (
-    <SettingsSection id="settings-keyboard" label="Keyboard" description="Configure desktop app shortcuts.">
+    <div className="space-y-0">
       <SettingsPanel title="Keyboard shortcuts" description="Every desktop menu shortcut is configurable and auto-saves immediately.">
         {loading ? <p className="ui-card-meta">Loading keyboard shortcuts…</p> : null}
         {!loading && !preferencesState ? <p className="ui-card-meta">Keyboard shortcuts are available in the desktop app.</p> : null}
@@ -895,7 +890,7 @@ export function DesktopKeyboardShortcutsSettingsSection() {
           </div>
         ) : null}
       </SettingsPanel>
-    </SettingsSection>
+    </div>
   );
 }
 
@@ -1515,7 +1510,7 @@ export function DesktopConnectionsSettingsPanel() {
   }
 
   return (
-    <SettingsSection id="settings-desktop" label="Desktop" description="Manage local app behavior and SSH remotes.">
+    <div className="space-y-0">
       <SettingsPanel title="App behavior" description="Control how the menu bar app starts and how downloaded updates install.">
         {!getDesktopBridge() && isDesktopShell() ? (
           <p className="text-[12px] text-danger">Desktop bridge unavailable. Restart the desktop app and try again.</p>
@@ -1766,7 +1761,7 @@ export function DesktopConnectionsSettingsPanel() {
           </div>
         ) : null}
       </SettingsPanel>
-    </SettingsSection>
+    </div>
   );
 }
 
@@ -1833,33 +1828,27 @@ function ExtensionSettingsSection() {
   if (grouped.size === 0) return null;
 
   return (
-    <SettingsSection
-      id="settings-extensions"
-      label="Extension Settings"
-      description="User-facing settings declared by extensions. Changes save to the unified settings store."
-    >
-      <div className="space-y-0">
-        {[...grouped.entries()].map(([group, entries]) => (
-          <SettingsPanel key={group} title={group}>
-            {entries.map((entry) => (
-              <SettingsField
-                key={entry.key}
-                entry={entry}
-                value={draft[entry.key]}
-                onChange={(key, val) => {
-                  setDraft((prev) => ({ ...prev, [key]: val }));
-                  setSaveNotice(null);
-                  setSaveError(null);
-                }}
-              />
-            ))}
-            {saving ? <p className="ui-card-meta">Saving…</p> : null}
-            {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
-            {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
-          </SettingsPanel>
-        ))}
-      </div>
-    </SettingsSection>
+    <div className="space-y-0">
+      {[...grouped.entries()].map(([group, entries]) => (
+        <SettingsPanel key={group} title={group}>
+          {entries.map((entry) => (
+            <SettingsField
+              key={entry.key}
+              entry={entry}
+              value={draft[entry.key]}
+              onChange={(key, val) => {
+                setDraft((prev) => ({ ...prev, [key]: val }));
+                setSaveNotice(null);
+                setSaveError(null);
+              }}
+            />
+          ))}
+          {saving ? <p className="ui-card-meta">Saving…</p> : null}
+          {saveNotice ? <p className="text-[12px] text-accent">{saveNotice}</p> : null}
+          {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
+        </SettingsPanel>
+      ))}
+    </div>
   );
 }
 
@@ -1937,14 +1926,12 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
 
   const visibleSectionIds = useMemo(() => (sectionIds ? new Set(sectionIds) : null), [sectionIds]);
   const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(() => {
-    const extensionSectionIds = settingsComponent ? new Set([settingsComponent.sectionId]) : new Set();
     const shellFiltered =
       desktopEnvironment?.isElectron || isDesktopShell()
         ? SETTINGS_QUICK_LINKS
-        : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop' && item.id !== 'settings-keyboard');
-    const extensionFiltered = shellFiltered.filter((item) => item.id !== 'settings-dictation' || extensionSectionIds.has(item.id));
-    return visibleSectionIds ? extensionFiltered.filter((item) => visibleSectionIds.has(item.id)) : extensionFiltered;
-  }, [desktopEnvironment?.isElectron, settingsComponent, visibleSectionIds]);
+        : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop');
+    return visibleSectionIds ? shellFiltered.filter((item) => visibleSectionIds.has(item.id)) : shellFiltered;
+  }, [desktopEnvironment?.isElectron, visibleSectionIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3060,13 +3047,13 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
             ) : undefined
           }
         >
-          <AppPageIntro title="Settings" summary="Appearance, conversation defaults, workspace, skills, providers, and runtime behavior." />
+          <AppPageIntro title="Settings" summary="Appearance, conversation defaults, workspace, skills, providers, and desktop behavior." />
 
           <div className="flex flex-col gap-12">
             <SettingsSection
-              id="settings-appearance"
-              label="Appearance"
-              description="Theme and other visual preferences for the desktop app."
+              id="settings-general"
+              label="General"
+              description="Appearance, workspace defaults, and conversation behavior for new chats."
             >
               <div className="space-y-0">
                 <SettingsPanel title="Theme" description="Choose Auto to follow the OS.">
@@ -3098,12 +3085,208 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                     </div>
                   </div>
                 </SettingsPanel>
+
+                <SettingsPanel title="Default model" description="Used for new chats and runs unless a model is picked explicitly.">
+                  {modelsLoading && !modelState ? (
+                    <p className="ui-card-meta">Loading models…</p>
+                  ) : modelsError && !modelState ? (
+                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                  ) : modelState ? (
+                    <>
+                      <label className="ui-card-meta" htmlFor="settings-model">
+                        Model
+                      </label>
+                      <select
+                        id="settings-model"
+                        value={modelState.currentModel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ model: event.target.value }, 'model');
+                        }}
+                        disabled={savingPreference !== null || modelState.models.length === 0}
+                        className={INPUT_CLASS}
+                      >
+                        {groupedModels.map(([provider, models]) => (
+                          <optgroup key={provider} label={provider}>
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.name} · {formatContextWindowLabel(model.context)} ctx
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'model' ? 'Saving default model...' : formatModelSummary(selectedModel, 'No model selected.')}
+                      </p>
+
+                      <label className="ui-card-meta pt-1" htmlFor="settings-vision-model">
+                        Vision model for text-only chats
+                      </label>
+                      <select
+                        id="settings-vision-model"
+                        value={modelState.currentVisionModel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ visionModel: event.target.value }, 'visionModel');
+                        }}
+                        disabled={savingPreference !== null || imageCapableModels.length === 0}
+                        className={INPUT_CLASS}
+                      >
+                        <option value="">Not configured</option>
+                        {groupedImageCapableModels.map(([provider, models]) => (
+                          <optgroup key={provider} label={provider}>
+                            {models.map((model) => (
+                              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                                {model.name} · {formatContextWindowLabel(model.context)} ctx
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'visionModel'
+                          ? 'Saving vision model…'
+                          : modelState.currentVisionModel
+                            ? `Text-only image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
+                            : 'Required before text-only models can inspect uploaded images.'}
+                      </p>
+
+                      <label className="ui-card-meta pt-1" htmlFor="settings-thinking">
+                        Thinking level
+                      </label>
+                      <select
+                        id="settings-thinking"
+                        value={modelState.currentThinkingLevel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
+                        }}
+                        disabled={savingPreference !== null}
+                        className={INPUT_CLASS}
+                      >
+                        {THINKING_LEVEL_OPTIONS.map((option) => (
+                          <option key={option.value || 'unset'} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'thinking'
+                          ? 'Saving thinking level…'
+                          : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
+                      </p>
+
+                      {selectedModelSupportsFastMode && (
+                        <>
+                          <label className="inline-flex items-center gap-3 pt-1 text-[14px] text-primary" htmlFor="settings-fast-mode">
+                            <input
+                              id="settings-fast-mode"
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
+                              checked={modelState.currentServiceTier === 'priority'}
+                              onChange={(event) => {
+                                void handleModelPreferenceChange({ serviceTier: event.target.checked ? 'priority' : '' }, 'serviceTier');
+                              }}
+                              disabled={savingPreference !== null}
+                            />
+                            <span>Fast mode</span>
+                          </label>
+                          <p className="ui-card-meta">
+                            {savingPreference === 'serviceTier'
+                              ? 'Saving fast mode…'
+                              : modelState.currentServiceTier === 'priority'
+                                ? 'Fast mode is on (service tier: priority).'
+                                : 'Fast mode is off.'}
+                          </p>
+                        </>
+                      )}
+                    </>
+                  ) : null}
+
+                  {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
+                </SettingsPanel>
+
+                <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
+                  {defaultCwdLoading && !defaultCwdState ? (
+                    <p className="ui-card-meta">Loading default working directory…</p>
+                  ) : defaultCwdLoadError && !defaultCwdState ? (
+                    <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
+                  ) : defaultCwdState ? (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleDefaultCwdSave();
+                      }}
+                    >
+                      <label className="ui-card-meta" htmlFor="settings-default-cwd">
+                        Path
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          id="settings-default-cwd"
+                          value={defaultCwdDraft}
+                          onChange={(event) => {
+                            setDefaultCwdDraft(event.target.value);
+                            if (defaultCwdSaveError) {
+                              setDefaultCwdSaveError(null);
+                            }
+                          }}
+                          className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                          placeholder="~/workingdir/repo"
+                          autoComplete="off"
+                          spellCheck={false}
+                          disabled={savingDefaultCwd || pickingDefaultCwd}
+                        />
+                        <ToolbarButton
+                          type="button"
+                          onClick={() => {
+                            void handleDefaultCwdPick();
+                          }}
+                          disabled={savingDefaultCwd || pickingDefaultCwd}
+                          className="shrink-0 text-accent"
+                          title="Choose default working directory"
+                          aria-label="Choose default working directory"
+                        >
+                          {pickingDefaultCwd ? 'Choosing…' : 'Choose…'}
+                        </ToolbarButton>
+                      </div>
+                      <p className="ui-card-meta break-all">
+                        {savingDefaultCwd
+                          ? 'Saving default working directory…'
+                          : defaultCwdState.currentCwd
+                            ? `Default cwd · ${defaultCwdState.effectiveCwd}`
+                            : `Process cwd · ${defaultCwdState.effectiveCwd}`}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="ui-card-meta">
+                          {savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleDefaultCwdSave('');
+                          }}
+                          disabled={savingDefaultCwd || pickingDefaultCwd || defaultCwdState.currentCwd.length === 0}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          Use process cwd
+                        </button>
+                      </div>
+                      <p className="ui-card-meta">
+                        Absolute, <span className="font-mono text-[11px]">~/…</span>, or relative. Leave blank to use the runtime process
+                        cwd.
+                      </p>
+                    </form>
+                  ) : null}
+
+                  {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
+                </SettingsPanel>
               </div>
             </SettingsSection>
+
             <SettingsSection
-              id="settings-skills"
-              label="Skills"
-              description="Skill discovery folders and extra runtime AGENTS.md instructions."
+              id="settings-capabilities"
+              label="Capabilities"
+              description="Skill discovery, MCP wrappers, and extension settings."
             >
               <div className="space-y-0">
                 <SettingsPanel title="Skill folders" description="Load extra skill folders alongside the root skills directory.">
@@ -3260,225 +3443,15 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                   {instructionFilesSaveError && <p className="text-[12px] text-danger">{instructionFilesSaveError}</p>}
                 </SettingsPanel>
               </div>
+
+              {settingsComponent ? (
+                <div className="space-y-0">
+                  <SettingsPanelHost registration={settingsComponent} />
+                </div>
+              ) : null}
+
+              <ExtensionSettingsSection />
             </SettingsSection>
-
-            <SettingsSection
-              id="settings-conversation"
-              label="Conversation"
-              description="Default model, vision model, thinking level, and fast mode for new conversations."
-            >
-              <div className="space-y-0">
-                <SettingsPanel title="Default model" description="Used for new chats and runs unless a model is picked explicitly.">
-                  {modelsLoading && !modelState ? (
-                    <p className="ui-card-meta">Loading models…</p>
-                  ) : modelsError && !modelState ? (
-                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                  ) : modelState ? (
-                    <>
-                      <label className="ui-card-meta" htmlFor="settings-model">
-                        Model
-                      </label>
-                      <select
-                        id="settings-model"
-                        value={modelState.currentModel}
-                        onChange={(event) => {
-                          void handleModelPreferenceChange({ model: event.target.value }, 'model');
-                        }}
-                        disabled={savingPreference !== null || modelState.models.length === 0}
-                        className={INPUT_CLASS}
-                      >
-                        {groupedModels.map(([provider, models]) => (
-                          <optgroup key={provider} label={provider}>
-                            {models.map((model) => (
-                              <option key={model.id} value={model.id}>
-                                {model.name} · {formatContextWindowLabel(model.context)} ctx
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {savingPreference === 'model' ? 'Saving default model...' : formatModelSummary(selectedModel, 'No model selected.')}
-                      </p>
-
-                      <label className="ui-card-meta pt-1" htmlFor="settings-vision-model">
-                        Vision model for text-only chats
-                      </label>
-                      <select
-                        id="settings-vision-model"
-                        value={modelState.currentVisionModel}
-                        onChange={(event) => {
-                          void handleModelPreferenceChange({ visionModel: event.target.value }, 'visionModel');
-                        }}
-                        disabled={savingPreference !== null || imageCapableModels.length === 0}
-                        className={INPUT_CLASS}
-                      >
-                        <option value="">Not configured</option>
-                        {groupedImageCapableModels.map(([provider, models]) => (
-                          <optgroup key={provider} label={provider}>
-                            {models.map((model) => (
-                              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                                {model.name} · {formatContextWindowLabel(model.context)} ctx
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {savingPreference === 'visionModel'
-                          ? 'Saving vision model…'
-                          : modelState.currentVisionModel
-                            ? `Text-only image probing uses ${formatModelSummary(selectedVisionModel, modelState.currentVisionModel)}.`
-                            : 'Required before text-only models can inspect uploaded images.'}
-                      </p>
-
-                      <label className="ui-card-meta pt-1" htmlFor="settings-thinking">
-                        Thinking level
-                      </label>
-                      <select
-                        id="settings-thinking"
-                        value={modelState.currentThinkingLevel}
-                        onChange={(event) => {
-                          void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
-                        }}
-                        disabled={savingPreference !== null}
-                        className={INPUT_CLASS}
-                      >
-                        {THINKING_LEVEL_OPTIONS.map((option) => (
-                          <option key={option.value || 'unset'} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {savingPreference === 'thinking'
-                          ? 'Saving thinking level…'
-                          : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
-                      </p>
-
-                      {selectedModelSupportsFastMode && (
-                        <>
-                          <label className="inline-flex items-center gap-3 pt-1 text-[14px] text-primary" htmlFor="settings-fast-mode">
-                            <input
-                              id="settings-fast-mode"
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
-                              checked={modelState.currentServiceTier === 'priority'}
-                              onChange={(event) => {
-                                void handleModelPreferenceChange({ serviceTier: event.target.checked ? 'priority' : '' }, 'serviceTier');
-                              }}
-                              disabled={savingPreference !== null}
-                            />
-                            <span>Fast mode</span>
-                          </label>
-                          <p className="ui-card-meta">
-                            {savingPreference === 'serviceTier'
-                              ? 'Saving fast mode…'
-                              : modelState.currentServiceTier === 'priority'
-                                ? 'Fast mode is on (service tier: priority).'
-                                : 'Fast mode is off.'}
-                          </p>
-                        </>
-                      )}
-                    </>
-                  ) : null}
-
-                  {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
-                </SettingsPanel>
-              </div>
-            </SettingsSection>
-
-            <SettingsSection id="settings-workspace" label="Workspace" description="Default working directory for project context.">
-              <div className="space-y-0">
-                <SettingsPanel title="Working directory" description="Fallback cwd for new chats and web actions.">
-                  {defaultCwdLoading && !defaultCwdState ? (
-                    <p className="ui-card-meta">Loading default working directory…</p>
-                  ) : defaultCwdLoadError && !defaultCwdState ? (
-                    <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
-                  ) : defaultCwdState ? (
-                    <form
-                      className="space-y-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleDefaultCwdSave();
-                      }}
-                    >
-                      <label className="ui-card-meta" htmlFor="settings-default-cwd">
-                        Path
-                      </label>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <input
-                          id="settings-default-cwd"
-                          value={defaultCwdDraft}
-                          onChange={(event) => {
-                            setDefaultCwdDraft(event.target.value);
-                            if (defaultCwdSaveError) {
-                              setDefaultCwdSaveError(null);
-                            }
-                          }}
-                          className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                          placeholder="~/workingdir/repo"
-                          autoComplete="off"
-                          spellCheck={false}
-                          disabled={savingDefaultCwd || pickingDefaultCwd}
-                        />
-                        <ToolbarButton
-                          type="button"
-                          onClick={() => {
-                            void handleDefaultCwdPick();
-                          }}
-                          disabled={savingDefaultCwd || pickingDefaultCwd}
-                          className="shrink-0 text-accent"
-                          title="Choose default working directory"
-                          aria-label="Choose default working directory"
-                        >
-                          {pickingDefaultCwd ? 'Choosing…' : 'Choose…'}
-                        </ToolbarButton>
-                      </div>
-                      <p className="ui-card-meta break-all">
-                        {savingDefaultCwd
-                          ? 'Saving default working directory…'
-                          : defaultCwdState.currentCwd
-                            ? `Default cwd · ${defaultCwdState.effectiveCwd}`
-                            : `Process cwd · ${defaultCwdState.effectiveCwd}`}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="ui-card-meta">
-                          {savingDefaultCwd ? 'Saving…' : defaultCwdDirty ? 'Auto-save pending…' : 'Auto-saved'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleDefaultCwdSave('');
-                          }}
-                          disabled={savingDefaultCwd || pickingDefaultCwd || defaultCwdState.currentCwd.length === 0}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Use process cwd
-                        </button>
-                      </div>
-                      <p className="ui-card-meta">
-                        Absolute, <span className="font-mono text-[11px]">~/…</span>, or relative. Leave blank to use the runtime process
-                        cwd.
-                      </p>
-                    </form>
-                  ) : null}
-
-                  {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
-                </SettingsPanel>
-              </div>
-            </SettingsSection>
-
-            {settingsComponent ? (
-              <SettingsSection
-                key={`${settingsComponent.extensionId}:${settingsComponent.id}`}
-                id={settingsComponent.sectionId as SettingsQuickLinkId}
-                label={settingsComponent.label}
-                description={settingsComponent.description}
-              >
-                <SettingsPanelHost registration={settingsComponent} />
-              </SettingsSection>
-            ) : null}
 
             <SettingsSection
               id="settings-providers"
@@ -4470,11 +4443,15 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               </div>
             </SettingsSection>
 
-            <DesktopConnectionsSettingsPanel />
+            <SettingsSection
+              id="settings-desktop"
+              label="Desktop"
+              description="App behavior, remote connections, and keyboard shortcuts for the desktop app."
+            >
+              <DesktopConnectionsSettingsPanel />
 
-            {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
-
-            <ExtensionSettingsSection />
+              {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}
+            </SettingsSection>
           </div>
         </AppPageLayout>
       </div>
