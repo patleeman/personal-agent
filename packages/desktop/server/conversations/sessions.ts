@@ -308,9 +308,46 @@ interface PersistentSessionIndexDocument {
   entries: PersistentSessionIndexEntry[];
 }
 
-const sessionMetaCache = new Map<string, CachedSessionMeta>();
+const MAX_SESSION_META_CACHE_ENTRIES = 500;
+const MAX_SESSION_SEARCH_TEXT_CACHE_ENTRIES = 500;
+
+/**
+ * Simple LRU map that evicts the oldest entry when `maxSize` is exceeded.
+ * Uses insertion-order semantics of Map — get() re-inserts to mark as recently used.
+ */
+class LRUMap<K, V> extends Map<K, V> {
+  constructor(private readonly maxSize: number) {
+    super();
+  }
+
+  get(key: K): V | undefined {
+    const value = super.get(key);
+    if (value !== undefined) {
+      // Promote to most-recently-used by re-inserting
+      super.delete(key);
+      super.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): this {
+    if (super.has(key)) {
+      super.delete(key);
+    }
+    super.set(key, value);
+    if (this.size > this.maxSize) {
+      const firstKey = this.keys().next().value;
+      if (firstKey !== undefined) {
+        super.delete(firstKey);
+      }
+    }
+    return this;
+  }
+}
+
+const sessionMetaCache = new LRUMap<string, CachedSessionMeta>(MAX_SESSION_META_CACHE_ENTRIES);
 const sessionDetailCache = new Map<string, CachedSessionDetail>();
-const sessionSearchTextCache = new Map<string, CachedSessionSearchText>();
+const sessionSearchTextCache = new LRUMap<string, CachedSessionSearchText>(MAX_SESSION_SEARCH_TEXT_CACHE_ENTRIES);
 let sessionFileById = new Map<string, string>();
 let loadedPersistentIndexKey: string | null = null;
 let persistedIndexJson: string | null = null;
@@ -1875,7 +1912,23 @@ function readCachedSessionMeta(filePath: string, cwdSlug: string): SessionMeta |
   return meta;
 }
 
+let lastScanTime = 0;
+const SCAN_THROTTLE_MS = 500;
+
 function scanSessionMetas(): SessionMeta[] {
+  const now = Date.now();
+  if (now - lastScanTime < SCAN_THROTTLE_MS) {
+    // Return the most recent cached result from sessionMetaCache
+    ensurePersistentIndexLoaded();
+    const cached: SessionMeta[] = [];
+    for (const [, entry] of sessionMetaCache) {
+      cached.push(entry.meta);
+    }
+    cached.sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+    return cached;
+  }
+  lastScanTime = now;
+
   ensurePersistentIndexLoaded();
 
   const sessionsDir = resolveSessionsDir();
