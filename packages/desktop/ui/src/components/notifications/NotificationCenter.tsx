@@ -1,5 +1,5 @@
 /**
- * NotificationCenter — slide-out overlay panel from the right.
+ * NotificationCenter — compact top-bar dropdown.
  *
  * Shows notification history with type filtering, expandable details, and
  * bulk actions (dismiss all, mark all read).
@@ -134,7 +134,7 @@ export function NotificationCenter({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex justify-end"
+      className="fixed inset-0 z-[130]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -142,14 +142,10 @@ export function NotificationCenter({ onClose }: { onClose: () => void }) {
         if (e.key === 'Escape') onClose();
       }}
       role="dialog"
-      aria-modal="true"
+      aria-modal="false"
       aria-label="Notifications"
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-
-      {/* Panel */}
-      <div className="relative z-10 flex h-full w-[340px] max-w-[85vw] flex-col bg-surface shadow-2xl border-l border-border-subtle animate-slide-in-from-right">
+      <div className="absolute right-3 top-9 flex max-h-[min(440px,calc(100vh-56px))] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border-default bg-surface shadow-2xl animate-notification-dropdown-in">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-3 py-2">
           <div className="flex items-center gap-2">

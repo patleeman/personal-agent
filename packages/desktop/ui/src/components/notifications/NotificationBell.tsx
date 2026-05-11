@@ -1,7 +1,7 @@
 /**
  * NotificationBell — top-bar bell icon with unread count badge.
  *
- * Opens the NotificationCenter panel on click.
+ * Opens the NotificationCenter dropdown on click.
  */
 import { ToolbarButton } from '../ui';
 import { useNotificationStore } from './notificationStore';

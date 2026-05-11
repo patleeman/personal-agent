@@ -1441,15 +1441,18 @@ body {
   overflow-anchor: auto;
 }
 
-@keyframes notification-slide-in-from-right {
+@keyframes notification-dropdown-in {
   from {
-    transform: translateX(100%);
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
   }
   to {
-    transform: translateX(0);
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-.animate-slide-in-from-right {
-  animation: notification-slide-in-from-right 0.2s ease-out;
+.animate-notification-dropdown-in {
+  animation: notification-dropdown-in 0.14s ease-out;
+  transform-origin: top right;
 }

@@ -1706,7 +1706,7 @@ export function Layout() {
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
             onLayoutModeChange={handleAppLayoutModeChange}
-            trailingExtra={<NotificationBell onClick={() => setNotificationCenterOpen(true)} />}
+            trailingExtra={<NotificationBell onClick={() => setNotificationCenterOpen((open) => !open)} />}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
             {effectiveSidebarOpen ? (
