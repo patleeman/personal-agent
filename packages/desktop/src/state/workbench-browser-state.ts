@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
@@ -87,23 +88,75 @@ function normalizeState(value: unknown): StoredWorkbenchBrowserState {
   return { version: 1, entries };
 }
 
+let cachedState: { file: string; state: StoredWorkbenchBrowserState } | null = null;
+let pendingWriteTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWrite: { file: string; state: StoredWorkbenchBrowserState } | null = null;
+let pendingWritePromise: Promise<void> | null = null;
+
 function readState(): StoredWorkbenchBrowserState {
   const stateFile = resolveStateFile();
+  if (cachedState?.file === stateFile) {
+    return cachedState.state;
+  }
+
   if (!existsSync(stateFile)) {
-    return { version: 1, entries: [] };
+    const state = { version: 1, entries: [] } satisfies StoredWorkbenchBrowserState;
+    cachedState = { file: stateFile, state };
+    return state;
   }
 
   try {
-    return normalizeState(JSON.parse(readFileSync(stateFile, 'utf-8')) as unknown);
+    const state = normalizeState(JSON.parse(readFileSync(stateFile, 'utf-8')) as unknown);
+    cachedState = { file: stateFile, state };
+    return state;
   } catch {
-    return { version: 1, entries: [] };
+    const state = { version: 1, entries: [] } satisfies StoredWorkbenchBrowserState;
+    cachedState = { file: stateFile, state };
+    return state;
   }
 }
 
-function writeState(state: StoredWorkbenchBrowserState): void {
-  const stateFile = resolveStateFile();
+function writePendingStateNow(): Promise<void> {
+  const pending = pendingWrite;
+  pendingWrite = null;
+  if (!pending) {
+    return pendingWritePromise ?? Promise.resolve();
+  }
+
   mkdirSync(resolveDesktopRuntimePaths().desktopStateDir, { recursive: true, mode: 0o700 });
-  writeFileSync(stateFile, `${JSON.stringify(normalizeState(state), null, 2)}\n`, 'utf-8');
+  pendingWritePromise = writeFile(pending.file, `${JSON.stringify(pending.state, null, 2)}\n`, 'utf-8')
+    .catch(() => {
+      // Browser URL persistence is best-effort.
+    })
+    .finally(() => {
+      pendingWritePromise = null;
+    });
+  return pendingWritePromise;
+}
+
+function scheduleWriteState(state: StoredWorkbenchBrowserState): void {
+  const stateFile = resolveStateFile();
+  const normalized = normalizeState(state);
+  cachedState = { file: stateFile, state: normalized };
+  pendingWrite = { file: stateFile, state: normalized };
+
+  if (pendingWriteTimer) {
+    clearTimeout(pendingWriteTimer);
+  }
+
+  pendingWriteTimer = setTimeout(() => {
+    pendingWriteTimer = null;
+    void writePendingStateNow();
+  }, 500);
+}
+
+export function flushStoredWorkbenchBrowserState(): Promise<void> {
+  if (pendingWriteTimer) {
+    clearTimeout(pendingWriteTimer);
+    pendingWriteTimer = null;
+  }
+
+  return writePendingStateNow();
 }
 
 export function readStoredWorkbenchBrowserUrl(sessionKey?: string | null): string | null {
@@ -123,5 +176,5 @@ export function writeStoredWorkbenchBrowserUrl(sessionKey: string | null | undef
     { sessionKey: normalizedSessionKey, url: normalizedUrl, updatedAt: new Date().toISOString() },
     ...state.entries.filter((entry) => entry.sessionKey !== normalizedSessionKey),
   ].slice(0, MAX_BROWSER_STATE_ENTRIES);
-  writeState({ version: 1, entries });
+  scheduleWriteState({ version: 1, entries });
 }

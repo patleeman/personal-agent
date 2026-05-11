@@ -519,6 +519,7 @@ async function prepareForQuit(): Promise<void> {
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
+  await windowController?.prepareForQuit();
   await hostManager?.dispose();
   await closeDesktopMainLog();
 }

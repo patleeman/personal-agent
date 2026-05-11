@@ -13,6 +13,7 @@ import type { DesktopHostRecord } from './hosts/types.js';
 import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
+import { flushStoredWorkbenchBrowserState } from './state/workbench-browser-state.js';
 import { normalizeWorkbenchBrowserBounds, WorkbenchBrowserViewController } from './workbench-browser.js';
 
 function logDesktopEvent(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -271,6 +272,10 @@ export class DesktopWindowController {
         tracked.window.webContents.reload();
       }
     }, 1_500);
+  }
+
+  async prepareForQuit(): Promise<void> {
+    await flushStoredWorkbenchBrowserState();
   }
 
   setQuitting(value: boolean): void {

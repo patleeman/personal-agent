@@ -26,6 +26,8 @@ describe('workbench browser state', () => {
 
     expect(mod.readStoredWorkbenchBrowserUrl('conversation-1')).toBe('https://example.com/path');
     expect(mod.readStoredWorkbenchBrowserUrl('conversation-2')).toBe('https://other.example/');
+
+    await mod.flushStoredWorkbenchBrowserState();
     expect(JSON.parse(readFileSync(join(dir, 'workbench-browser-state.json'), 'utf-8')).entries).toHaveLength(2);
   });
 
