@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 import { clearTaskCallbackBinding } from '@personal-agent/core';
+import type { AutomationActivityEntry } from '@personal-agent/daemon';
 import {
   createStoredAutomation,
   deleteStoredAutomation,
@@ -38,7 +39,11 @@ interface AutomationMutationInput {
   threadConversationId?: string | null;
 }
 
-function buildTaskDetailResponse(task: Parameters<typeof toScheduledTaskMetadata>[0], runtime?: TaskRuntimeEntry, activity = []) {
+function buildTaskDetailResponse(
+  task: Parameters<typeof toScheduledTaskMetadata>[0],
+  runtime?: TaskRuntimeEntry,
+  activity: AutomationActivityEntry[] = [],
+) {
   const metadata = toScheduledTaskMetadata(task);
   const schedulerHealth = readScheduledTaskSchedulerHealth(task.profile);
   return {

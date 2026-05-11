@@ -10,6 +10,14 @@ export type LiveListener = LiveSessionSubscriptionListener;
 
 import type { LiveSessionLifecycleHandler } from './liveSessionLifecycle.js';
 
+export interface PersistedTokensSnapshot {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+}
+
 export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
   sessionId: string;
   session: AgentSession;
@@ -26,6 +34,8 @@ export interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTur
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
   running: boolean;
+  tracePersistedTokens?: PersistedTokensSnapshot;
+  pendingAutoModeContinuation?: boolean;
   traceRunId?: string | null;
   traceRunStartedAtMs?: number | null;
   traceRunTurnCount?: number;

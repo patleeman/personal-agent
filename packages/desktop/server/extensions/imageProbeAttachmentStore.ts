@@ -94,7 +94,12 @@ function normalizePersistedAttachment(value: unknown): PersistedImageProbeAttach
   if (typeof candidate.mimeType !== 'string' || !candidate.mimeType.toLowerCase().startsWith('image/')) {
     return null;
   }
-  if (!Number.isSafeInteger(candidate.sizeBytes) || candidate.sizeBytes < 0 || candidate.sizeBytes > MAX_IMAGE_PROBE_IMAGE_BYTES) {
+  if (
+    candidate.sizeBytes === undefined ||
+    !Number.isSafeInteger(candidate.sizeBytes) ||
+    candidate.sizeBytes < 0 ||
+    candidate.sizeBytes > MAX_IMAGE_PROBE_IMAGE_BYTES
+  ) {
     return null;
   }
   return {

@@ -62,6 +62,7 @@ export async function resolveExtensionPromptReferences(input: { text: string }):
   const references: ExtensionPromptReferenceItem[] = [];
   for (const resolver of listExtensionPromptReferenceRegistrations()) {
     const result = await invokeExtensionAction(resolver.extensionId, resolver.handler, { text: input.text, mentionIds });
+    if (!result.ok) continue;
     const normalized = normalizeResolution(result.result);
     contextBlocks.push(...(normalized.contextBlocks ?? []).map((block) => block.content));
     references.push(...(normalized.references ?? []));

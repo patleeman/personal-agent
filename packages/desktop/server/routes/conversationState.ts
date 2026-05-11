@@ -205,7 +205,7 @@ export function registerConversationStateRoutes(
         return;
       }
       const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!existsSync(sessionFile)) {
+      if (!sessionFile || !existsSync(sessionFile)) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
       }
@@ -245,7 +245,7 @@ export function registerConversationStateRoutes(
         return;
       }
       const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!existsSync(sessionFile)) {
+      if (!sessionFile || !existsSync(sessionFile)) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
       }

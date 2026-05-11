@@ -549,13 +549,17 @@ async function buildPromptContextMessagesForSubmit(input: {
   await Promise.allSettled(
     providers.map(async (provider) => {
       try {
-        const result = await invokeExtensionAction(provider.extensionId, provider.handler, {
+        const invokeResult = await invokeExtensionAction(provider.extensionId, provider.handler, {
           prompt: input.prompt,
           conversationId: input.conversationId,
           currentCwd: input.currentCwd,
           relatedConversationIds: input.selectedSessionIds,
         });
-        const { contextMessages: providerMessages, warnings: providerWarnings } = result.result as {
+        if (!invokeResult.ok) {
+          allWarnings.push(`${provider.title ?? provider.id} context failed; sent without it.`);
+          return;
+        }
+        const { contextMessages: providerMessages, warnings: providerWarnings } = invokeResult.result as {
           contextMessages: Array<{ customType: string; content: string }>;
           warnings?: string[];
         };
@@ -618,7 +622,7 @@ async function prepareLiveSessionPrompt(
         description: doc.description ?? '',
       }))
     : [];
-  const promptReferences = hasPromptMentions
+  const promptReferences: import('../knowledge/promptReferences.js').ResolvedPromptReferences = hasPromptMentions
     ? resolvePromptReferences({
         text,
         availableProjectIds: [],
@@ -759,7 +763,7 @@ export async function submitLiveSessionPromptCapability(
       promptLength: prepared.text.length,
       imageCount: prepared.promptImages?.length ?? 0,
       contextMessageCount: promptContextMessages.length,
-      relatedConversationCount: input.relatedConversationIds?.length ?? 0,
+      relatedConversationCount: (input.relatedConversationIds as string[] | undefined)?.length ?? 0,
       referencedTaskCount: prepared.promptReferences.taskIds.length,
       referencedMemoryDocCount: prepared.promptReferences.memoryDocIds.length,
       referencedVaultFileCount: prepared.referencedVaultFiles.length,

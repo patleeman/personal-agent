@@ -106,6 +106,7 @@ export interface LiveSessionEventHost {
   title: string;
   currentTurnError?: string | null;
   activeHiddenTurnCustomType?: string | null;
+  pendingAutoModeContinuation?: boolean;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
@@ -385,10 +386,6 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
         sessionId: entry.sessionId,
         reason: event.reason,
         tokensBefore: event.result.tokensBefore ?? 0,
-        tokensAfter: event.result.tokensAfter ?? 0,
-        tokensSaved:
-          event.result.tokensSaved ??
-          Math.max(0, (event.result.tokensBefore ?? 0) - (event.result.tokensAfter ?? event.result.tokensBefore ?? 0)),
       });
 
       if (compactionReason && !event.aborted && event.result) {

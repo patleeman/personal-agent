@@ -185,8 +185,12 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
       } catch {
         entry.title = title;
       }
-      broadcastTitle(entry);
-      invalidateAppTopics('sessions');
+      broadcastTitle(entry, {
+        resolveEntryTitle: (e) => resolveStableSessionTitle(e.session),
+        publishSessionMetaChanged: () => {
+          invalidateAppTopics('sessions');
+        },
+      });
       return { ok: true };
     },
 

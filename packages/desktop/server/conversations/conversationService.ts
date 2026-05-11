@@ -345,8 +345,9 @@ function buildSyntheticLiveSessionSnapshot(
 function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[number] | null | undefined): boolean {
   // Prefer the pre-computed `running` field from listLiveSessions.
   // Fall back to re-deriving for callers (or mocks) that bypass listLiveSessions.
-  if (liveEntry && 'running' in liveEntry) {
-    return liveEntry.running;
+  const anyEntry = liveEntry as Record<string, unknown> | null | undefined;
+  if (anyEntry && 'running' in anyEntry) {
+    return Boolean(anyEntry.running);
   }
   return Boolean(
     liveEntry?.isStreaming ||

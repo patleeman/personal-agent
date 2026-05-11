@@ -347,7 +347,7 @@ export function registerExtensionRoutes(
 
   router.get('/api/extensions/:id/state/*', (req, res) => {
     try {
-      const document = readExtensionState(req.params.id, req.params[0]);
+      const document = readExtensionState(req.params.id, (req.params as Record<string, string>)['0']);
       if (!document) {
         res.status(404).json({ error: 'Extension state document not found.' });
         return;
@@ -363,7 +363,7 @@ export function registerExtensionRoutes(
       const body = req.body as { value?: unknown; expectedVersion?: unknown };
       const expectedVersion =
         typeof body.expectedVersion === 'number' && Number.isSafeInteger(body.expectedVersion) ? body.expectedVersion : undefined;
-      res.json(writeExtensionState(req.params.id, req.params[0], body.value, { expectedVersion }));
+      res.json(writeExtensionState(req.params.id, (req.params as Record<string, string>)['0'], body.value, { expectedVersion }));
     } catch (err) {
       const conflict = err instanceof Error && err.message === 'Extension state version conflict.';
       if (conflict) {
@@ -376,7 +376,7 @@ export function registerExtensionRoutes(
 
   router.delete('/api/extensions/:id/state/*', (req, res) => {
     try {
-      res.json(deleteExtensionState(req.params.id, req.params[0]));
+      res.json(deleteExtensionState(req.params.id, (req.params as Record<string, string>)['0']));
     } catch (err) {
       sendRouteError(res, 'extension state delete error', err);
     }
@@ -510,11 +510,11 @@ export function registerExtensionRoutes(
   router.get('/api/extensions/actions', (_req, res) => {
     try {
       const summaries = listExtensionInstallSummaries()
-        .filter((extension) => extension.status === 'enabled' && extension.backendActions.length > 0)
+        .filter((extension) => extension.status === 'enabled' && (extension.backendActions?.length ?? 0) > 0)
         .map((extension) => ({
           extensionId: extension.id,
           extensionName: extension.name,
-          actions: extension.backendActions.map((action) => ({
+          actions: (extension.backendActions ?? []).map((action) => ({
             id: action.id,
             title: action.title,
             description: action.description,

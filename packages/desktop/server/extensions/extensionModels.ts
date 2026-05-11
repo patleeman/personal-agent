@@ -23,7 +23,14 @@ export function createExtensionModelsCapability() {
 
         const state = readModelState(settingsFile);
         return (state.models ?? []).map(
-          (m: { id?: string; name?: string; provider?: string; contextWindow?: number; reasoning?: boolean; input?: string[] }) => ({
+          (m: {
+            id?: string;
+            name?: string;
+            provider?: string;
+            contextWindow?: number;
+            reasoning?: boolean;
+            input?: readonly string[];
+          }) => ({
             id: m.id ?? '',
             name: m.name ?? m.id ?? '',
             provider: m.provider ?? '',

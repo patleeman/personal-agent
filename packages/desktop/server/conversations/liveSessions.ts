@@ -323,6 +323,8 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
   session.subscribe((event) =>
     handleLiveSessionEvent(entry, event, {
       syncDurableConversationRun,
+      requestConversationAutoModeContinuationTurn: async () => false,
+      requestConversationAutoModeTurn: async () => false,
       notifyLifecycleHandlers: notifyEntryLifecycleHandlers,
       applyPendingConversationWorkingDirectoryChange,
       scheduleContextUsage,
@@ -362,7 +364,14 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
       },
       clearContextUsageTimer,
       broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
-      broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
+      broadcastSnapshot: (entry) =>
+        broadcastSnapshot(entry, {
+          buildLiveSessionSnapshot: (() => {
+            const fn = buildLiveSessionSnapshot;
+            return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+          })(),
+          ensureHiddenTurnState,
+        }),
       broadcast,
       tryImportReadyParallelJobs,
     }),
@@ -634,7 +643,14 @@ export async function appendVisibleCustomMessage(sessionId: string, customType: 
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   await appendVisibleLiveSessionCustomMessage(entry, customType, content, details, {
-    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
+    broadcastSnapshot: (entry) =>
+      broadcastSnapshot(entry, {
+        buildLiveSessionSnapshot: (() => {
+          const fn = buildLiveSessionSnapshot;
+          return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+        })(),
+        ensureHiddenTurnState,
+      }),
     publishSessionMetaChanged,
   });
 }
@@ -652,7 +668,14 @@ async function appendParallelImportedMessage(
         broadcastTitle: (entry) => broadcastTitle(entry, { resolveEntryTitle, publishSessionMetaChanged }),
         publishSessionMetaChanged,
       }),
-    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
+    broadcastSnapshot: (entry) =>
+      broadcastSnapshot(entry, {
+        buildLiveSessionSnapshot: (() => {
+          const fn = buildLiveSessionSnapshot;
+          return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+        })(),
+        ensureHiddenTurnState,
+      }),
     publishSessionMetaChanged,
   });
 }
@@ -746,7 +769,14 @@ export function repairLiveSessionTranscriptTail(sessionId: string): {
     throw new Error(`Session ${sessionId} is not live`);
   }
   return repairLiveSessionTranscriptTailWithCallbacks(entry, {
-    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
+    broadcastSnapshot: (entry) =>
+      broadcastSnapshot(entry, {
+        buildLiveSessionSnapshot: (() => {
+          const fn = buildLiveSessionSnapshot;
+          return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+        })(),
+        ensureHiddenTurnState,
+      }),
     clearContextUsageTimer,
     broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
     publishSessionMetaChanged: () => publishSessionMetaChanged(sessionId),
@@ -816,7 +846,14 @@ export async function executeSessionBash(
     broadcast,
     clearContextUsageTimer,
     broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
-    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
+    broadcastSnapshot: (entry) =>
+      broadcastSnapshot(entry, {
+        buildLiveSessionSnapshot: (() => {
+          const fn = buildLiveSessionSnapshot;
+          return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+        })(),
+        ensureHiddenTurnState,
+      }),
     publishSessionMetaChanged,
   });
 
@@ -855,7 +892,14 @@ export async function compactSession(sessionId: string, customInstructions?: str
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   return compactLiveSession(entry, customInstructions, {
-    broadcastSnapshot: (entry) => broadcastSnapshot(entry, { buildLiveSessionSnapshot, ensureHiddenTurnState }),
+    broadcastSnapshot: (entry) =>
+      broadcastSnapshot(entry, {
+        buildLiveSessionSnapshot: (() => {
+          const fn = buildLiveSessionSnapshot;
+          return (e: Parameters<typeof fn>[0], t?: number) => fn(e, t) as unknown as Record<string, unknown>;
+        })(),
+        ensureHiddenTurnState,
+      }),
     clearContextUsageTimer,
     broadcastContextUsage: (entry, force) => broadcastContextUsage(entry, { readLiveSessionContextUsageForEntry }, force),
     publishSessionMetaChanged,

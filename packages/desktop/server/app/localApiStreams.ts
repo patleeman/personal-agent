@@ -330,7 +330,7 @@ async function subscribeDesktopProviderOAuthStream(url: URL, onEvent: (event: De
   return close;
 }
 
-async function subscribeDesktopVaultEventsStream(url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
+async function subscribeDesktopVaultEventsStream(_url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
   const vaultRoot = getVaultRoot().trim();
   if (!vaultRoot) {
     throw new Error('Vault root is not configured');

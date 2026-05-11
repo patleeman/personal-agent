@@ -32,7 +32,7 @@ function emitChanged() {
   invalidateAppTopics('knowledgeBase');
 }
 
-export const knowledgeVault = {
+export const knowledgeVault: Record<string, unknown> = {
   listFiles() {
     const vaultRoot = root();
     return { root: vaultRoot, files: listVaultFiles(vaultRoot) };
@@ -98,7 +98,8 @@ export const knowledgeVault = {
     return { id, url: `/api/vault/asset?id=${encodeURIComponent(id)}` };
   },
   async importUrl(input: { url: string; title?: string; directoryId?: string; sourceApp?: string }) {
-    const result = await importVaultSharedItem({ kind: 'url', ...input });
+    const vaultRoot = root();
+    const result = await importVaultSharedItem({ kind: 'url', root: vaultRoot, targetDirAbs: vaultRoot, ...input });
     emitChanged();
     return result;
   },

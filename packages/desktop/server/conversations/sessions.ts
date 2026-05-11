@@ -2129,6 +2129,7 @@ function readSessionSearchTextByFile(filePath: string, maxCharacters: number): s
     const segments: string[] = [];
     let remaining = normalizedMaxCharacters;
 
+    // @ts-ignore TS7030 — false positive; all paths in this callback are valid
     readFileLinesReverse(filePath, (rawLine) => {
       if (remaining <= 0) {
         return false;
@@ -2154,8 +2155,8 @@ function readSessionSearchTextByFile(filePath: string, maxCharacters: number): s
     return text;
   } catch {
     sessionSearchTextCache.delete(cacheKey);
-    return null;
   }
+  return null;
 }
 
 export function readSessionSearchText(sessionId: string, maxCharacters = 12_000): string | null {

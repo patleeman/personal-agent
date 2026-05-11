@@ -270,7 +270,7 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
         isStreaming: 'isStreaming' in event ? event.isStreaming === true : prev.isStreaming,
         isCompacting: false,
         error: null,
-        goalState: 'goalState' in event ? event.goalState : prev.goalState,
+        goalState: 'goalState' in event ? (event.goalState as import('./sessions.js').ThreadGoal | null) : prev.goalState,
       };
     }
 

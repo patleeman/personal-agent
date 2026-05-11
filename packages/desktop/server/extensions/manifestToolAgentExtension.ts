@@ -44,7 +44,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             : `Use this extension-provided tool when the task needs ${tool.extensionId}/${tool.id}.`,
         ],
         parameters: tool.inputSchema,
-        async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+        async execute(_toolCallId, params, _signal, onUpdate: any, ctx: any) {
           const invokeResult = await invokeExtensionAction(
             tool.extensionId,
             tool.action,
@@ -80,19 +80,19 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
                 error: invokeResult.error,
               },
               isError: true,
-            };
+            } as any;
           }
 
           const extensionResult = invokeResult.result as
             | { content?: unknown; text?: unknown; details?: unknown; isError?: unknown }
             | null
             | undefined;
-          const content =
+          const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> =
             extensionResult &&
             typeof extensionResult === 'object' &&
             Array.isArray(extensionResult.content) &&
             extensionResult.content.every((item) => item && typeof item === 'object' && 'type' in item)
-              ? (extensionResult.content as Array<{ type: string }>)
+              ? (extensionResult.content as Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>)
               : [
                   {
                     type: 'text' as const,
@@ -110,8 +110,8 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
               action: tool.action,
               result: extensionResult?.details ?? invokeResult.result,
             },
-            ...(extensionResult?.isError === true ? { isError: true } : {}),
-          };
+            ...(extensionResult?.isError === true ? ({ isError: true } as const) : {}),
+          } as any;
         },
       });
     };

@@ -41,7 +41,7 @@ export function broadcastSnapshot(
       type: 'snapshot',
       ...(goalState ? { goalState } : {}),
       ...callbacks.buildLiveSessionSnapshot(entry, listener.tailBlocks),
-    });
+    } as SseEvent);
   }
 }
 
@@ -112,7 +112,9 @@ export function broadcastContextUsage(
     const summarySeg = usage.segments?.find((s) => s.key === 'summary');
     const systemPromptText = entry.session.systemPrompt ?? '';
     const systemPromptTokens =
-      systemPromptText.length > 0 ? estimateTokens({ role: 'user', content: [{ type: 'text', text: systemPromptText }] }) : 0;
+      systemPromptText.length > 0
+        ? estimateTokens({ role: 'user', content: [{ type: 'text', text: systemPromptText }], timestamp: Date.now() })
+        : 0;
     persistTraceContext({
       sessionId: entry.sessionId,
       modelId: usage.modelId ?? entry.session.model?.id,

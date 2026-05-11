@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { AuthStorage, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
+import { AuthStorage, type ExtensionAPI, type ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import { materializeRuntimeResourcesToAgentDir, resolveRuntimeResources } from '@personal-agent/core';
 
@@ -54,7 +54,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function materializeRuntimeResources(): void {
     const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
-      profilesRoot: getProfilesRoot(),
     });
     materializeRuntimeResourcesToAgentDir(resolved, agentDir);
     const materializedMcpConfigPath = join(agentDir, 'mcp_servers.json');
@@ -181,7 +180,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function buildLiveSessionResourceOptions(): LiveSessionResourceOptions {
     const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
-      profilesRoot: getProfilesRoot(),
     });
 
     return {
@@ -195,7 +193,6 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   function withTemporaryRuntimeAgentDir<T>(run: (runtimeAgentDir: string) => Promise<T>): Promise<T> {
     const resolved = resolveRuntimeResources(runtimeScope, {
       repoRoot,
-      profilesRoot: getProfilesRoot(),
     });
     const runtimeAgentDir = mkdtempSync(join(tmpdir(), 'pa-web-runtime-inspect-'));
     materializeRuntimeResourcesToAgentDir(resolved, runtimeAgentDir);
