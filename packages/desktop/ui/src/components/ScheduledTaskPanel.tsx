@@ -24,6 +24,7 @@ import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import type { ProjectRecord, ScheduledTaskDetail, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 import { MentionTextarea } from './MentionTextarea';
+import { addNotification } from './notifications/notificationStore';
 import { cx, ErrorState, LoadingState, ToolbarButton } from './ui';
 
 const TITLE_INPUT_CLASS = 'w-full min-w-0 bg-transparent text-[16px] font-medium text-primary placeholder:text-dim/75 outline-none';
@@ -1068,7 +1069,9 @@ export function ScheduledTaskCreatePanel({ onCancel }: { onCancel?: () => void }
       await refreshTaskSnapshot(setTasks);
       navigate(`/automations/${encodeURIComponent(response.task.id)}`);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
+      const msg = error instanceof Error ? error.message : String(error);
+      setSaveError(msg);
+      addNotification({ type: 'error', message: `Failed to save task: ${msg}`, source: 'core' });
     } finally {
       setSaving(false);
     }
@@ -1159,7 +1162,9 @@ export function ScheduledTaskPanel({
       setDraft(null);
       onClose?.();
     } catch (nextError) {
-      setSaveError(nextError instanceof Error ? nextError.message : String(nextError));
+      const msg = nextError instanceof Error ? nextError.message : String(nextError);
+      setSaveError(msg);
+      addNotification({ type: 'error', message: `Failed to save task: ${msg}`, source: 'core' });
     } finally {
       setSaving(false);
     }

@@ -1,3 +1,4 @@
+import { addNotification } from '../components/notifications/notificationStore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface RefetchOptions {
@@ -72,6 +73,7 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
       const message = err instanceof Error ? err.message : String(err);
       if (!hasData || resetLoading) {
         setError(message);
+        addNotification({ type: 'error', message, details: err instanceof Error ? err.stack : undefined, source: 'core' });
       }
       setLoading(false);
       setRefreshing(false);

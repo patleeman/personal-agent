@@ -1471,6 +1471,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const noticeTimeoutRef = useRef<number | null>(null);
   const showNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
     setNotice({ tone, text });
+    if (tone === 'danger') {
+      addNotification({ type: 'warning', message: text, source: 'core' });
+    }
     if (noticeTimeoutRef.current !== null) {
       window.clearTimeout(noticeTimeoutRef.current);
     }

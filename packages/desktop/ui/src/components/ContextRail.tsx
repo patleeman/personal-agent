@@ -46,6 +46,7 @@ import type { AgentToolInfo, DurableRunDetailResult, ScheduledTaskSummary } from
 import { timeAgo } from '../shared/utils';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
+import { addNotification } from './notifications/notificationStore';
 import { cx, ErrorState, IconButton, LoadingState, Pill } from './ui';
 
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
@@ -775,7 +776,9 @@ function DraftConversationContextPanel() {
       setRequestedCwd(result.path);
       setChangingCwd(false);
     } catch (error) {
-      setChangeCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
+      const msg = error instanceof Error ? error.message : 'Could not choose a folder.';
+      setChangeCwdError(msg);
+      addNotification({ type: 'warning', message: msg, source: 'core' });
     } finally {
       setPickCwdBusy(false);
     }
