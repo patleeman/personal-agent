@@ -3,55 +3,52 @@
 ## 0.7.9-rc.9 — 2026-05-11
 
 - fix: add missing async to extension enable route handler
-- 0.7.9-rc.8
-- idk
+- fix: align system extension backend builds
+- fix: avoid duplicate desktop runtime setup
+- fix: avoid recursive workspace watch on desktop startup
+- fix: avoid redundant login-item writes on startup
+- fix: batch desktop subscription IPC events
+- fix: bridge workspace event stream in desktop
 - fix: broadcast session title tool updates
-- fix: run extension enable actions
-- fix: rely on onboarding bootstrap when enabled
-- fix: open onboarding when enabled
-- fix: always open onboarding before disabling
+- fix: cache desktop config reads
+- fix: cache desktop runtime paths
+- fix: center notification toasts at top
+- fix: debounce workbench browser state writes
+- fix: dedupe related conversation pointer context
+- fix: defer desktop about metadata reads
+- fix: defer desktop app event subscription after startup
+- fix: defer desktop backend startup until after first paint
+- fix: defer katex css off desktop startup
+- fix: defer renderer startup work
+- fix: defer workbench data reads until active
+- fix: delay automatic update checks after startup
 - fix: disable onboarding after first run
+- fix: forward desktop launch args
+- fix: hide completed composer goals
+- fix: keep desktop navigation off startup critical path
+- fix: lazy-load command palette after startup
+- fix: offload desktop list reads to worker
+- fix: offload workspace reads from desktop main
+- fix: open onboarding when enabled
+- fix: preserve goal state updates
+- fix: reduce desktop startup pressure
+- fix: rely on onboarding bootstrap when enabled
+- fix: remove stale extension source outputs
+- fix: render steer control during streaming
+- fix: route settings reads through local api worker
+- fix: run extension enable actions
+- fix: serve cached desktop assets as uint8 arrays
+- fix: skip missing optional release resources
+- fix: split desktop main startup chunks
+- fix: split workbench panes out of startup bundle
+- fix: start desktop backend after renderer settles
+- fix: update iOS dev build paths
+- fix: warm desktop shell assets on startup
+- fix(desktop): cast Uint8Array to BodyInit in app-protocol Response constructor
+- chore: log desktop window load milestones
+- docs: document desktop startup boundaries
 - feat: add first-run onboarding extension
 - feat: improve knowledge onboarding
-- fix: route settings reads through local api worker
-- fix: preserve goal state updates
-- fix: skip missing optional release resources
-- fix: update iOS dev build paths
-- fix: remove stale extension source outputs
-- fix: forward desktop launch args
-- fix: align system extension backend builds
-- fix: center notification toasts at top
-- docs: document desktop startup boundaries
-- fix: defer desktop app event subscription after startup
-- fix: serve cached desktop assets as uint8 arrays
-- fix: defer katex css off desktop startup
-- fix: warm desktop shell assets on startup
-- fix: start desktop backend after renderer settles
-- fix: split desktop main startup chunks
-- fix: hide completed composer goals
-- fix: split workbench panes out of startup bundle
-- fix: defer workbench data reads until active
-- fix: lazy-load command palette after startup
-- fix: delay automatic update checks after startup
-- chore: log desktop window load milestones
-- fix: defer renderer startup work
-- fix: defer desktop backend startup until after first paint
-- fix: avoid duplicate desktop runtime setup
-- fix: defer desktop about metadata reads
-- fix: offload desktop list reads to worker
-- fix: avoid redundant login-item writes on startup
-- fix: debounce workbench browser state writes
-- fix: cache desktop runtime paths
-- fix: batch desktop subscription IPC events
-- fix: cache desktop config reads
-- fix: offload workspace reads from desktop main
-- fix: keep desktop navigation off startup critical path
-- fix: dedupe related conversation pointer context
-- fix: reduce desktop startup pressure
-- fix: render steer control during streaming
-- fix: avoid recursive workspace watch on desktop startup
-- fix(desktop): cast Uint8Array to BodyInit in app-protocol Response constructor
-- fix: bridge workspace event stream in desktop
 
 ## 0.7.9-rc.8 — 2026-05-11
 
