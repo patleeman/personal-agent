@@ -143,6 +143,26 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
       });
     }
 
+    // TODO: Remove this stub once the unified error display is wired up.
+    // This simulates what a real extension loading error looks like through
+    // the diagnostics pipeline. Replace with actual extension load-error
+    // collection from the resource loader's extensionsResult.errors.
+    {
+      const stubErrors = [
+        {
+          extensionId: 'system-conversation-tools',
+          message: 'Backend build failed — source files not found in bundled app (stub)',
+        },
+        {
+          extensionId: 'system-images',
+          message: 'Backend build failed — dependency @sinclair/typebox could not be resolved (stub)',
+        },
+      ];
+      for (const err of stubErrors) {
+        logger.warn('extension load error', err);
+      }
+    }
+
     return [
       ...createManifestToolAgentExtensions({
         getCurrentProfile: getRuntimeScope,
