@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
+const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
+  /^(@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageRoot = resolve(process.argv[2] || process.cwd());
 const manifestPath = join(packageRoot, 'extension.json');
 if (!existsSync(manifestPath)) {
@@ -61,8 +65,10 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     target: 'node20',
     sourcemap: true,
     logLevel: 'info',
+    banner: {
+      js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
+    },
     external: [
-      '@personal-agent/extensions',
       '@personal-agent/extensions/host',
       '@personal-agent/extensions/ui',
       '@personal-agent/extensions/workbench',
@@ -73,7 +79,28 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
       'fsevents',
     ],
     nodePaths: findAppNodeModules(),
+    plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
   });
+}
+
+function createExtensionBackendApiPlugin() {
+  return {
+    name: 'personal-agent-extension-backend-api',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^@personal-agent\/extensions\/backend$/ }, () => ({
+        path: join(repoRoot, 'packages/desktop/server/extensions/backendApi/index.ts'),
+      }));
+    },
+  };
+}
+
+function createHostRuntimeExternalPlugin() {
+  return {
+    name: 'personal-agent-extension-host-runtime-externals',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: HOST_RUNTIME_EXTERNAL_IMPORT_RE }, (args) => ({ path: args.path, external: true }));
+    },
+  };
 }
 
 function findAppNodeModules() {

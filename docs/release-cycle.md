@@ -46,6 +46,8 @@ The check verifies:
 5. The Knowledge route renders
 6. A conversation route renders
 
+`npm run build` also verifies the current daemon output under `packages/desktop/dist/server/daemon/` and rebuilds system extension backends with the same backend API alias used by the runtime loader. If a tool extension fails with missing `@personal-agent/extensions/backend` exports, rerun the full build before cutting the release.
+
 ### Manual smoke test
 
 If the automated check is unavailable, set:
