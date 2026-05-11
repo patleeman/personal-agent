@@ -379,8 +379,6 @@ async function bootstrapDesktopApp(): Promise<void> {
     logBootstrapError(error);
   }
 
-  applyDesktopAboutPanelOptions();
-
   const shellActions = {
     onOpen: () => {
       void openMainRoute('/');
@@ -489,6 +487,14 @@ async function bootstrapDesktopApp(): Promise<void> {
   });
 
   updateManager.start();
+
+  setImmediate(() => {
+    try {
+      applyDesktopAboutPanelOptions();
+    } catch (error) {
+      logBootstrapError(error);
+    }
+  });
 
   if (hostManager.getConfig().openWindowOnLaunch) {
     await openMainRoute(readInitialDesktopRoute());
