@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.9-rc.3 — 2026-05-11
+
+- fix: bump testing codex port to 3846, 3844 already taken by production
+- fix: build missing artifacts and resolve port conflict for dev app
+- fix notification center UI: compact sizing, visible backgrounds, reposition toasts to bottom-right
+- fix: set PERSONAL_AGENT_REPO_ROOT in dev app launch env
+- Fix daemon entry file path after daemon→desktop collapse
+- chore: checkpoint all uncommitted changes across multiple conversations
+- Fix duplicate createRequire declaration in Electron main process
+- Fix Dynamic require of process error in Electron main process
+- Fix build: resolve daemon→desktop collapse errors, extension builds, and tsc issues
+- formatting: fix import ordering and line wrapping from prettier run
+
 ## 0.7.9-rc.2 — 2026-05-10
 
 - fix: package esbuild for desktop runtime
