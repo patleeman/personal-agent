@@ -29,6 +29,7 @@ let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let updateManager: DesktopUpdateManager | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
+let scheduledBackendStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
 
@@ -243,6 +244,11 @@ function configureDesktopRuntimeEnvironment(): void {
 }
 
 async function ensureDesktopBackendAvailable(): Promise<boolean> {
+  if (scheduledBackendStartupTimer) {
+    clearTimeout(scheduledBackendStartupTimer);
+    scheduledBackendStartupTimer = null;
+  }
+
   if (!hostManager) {
     return false;
   }
@@ -273,6 +279,19 @@ async function ensureDesktopBackendAvailable(): Promise<boolean> {
   })();
 
   return backendStartupPromise;
+}
+
+function scheduleDesktopBackendStartup(onReady?: (ready: boolean) => void): void {
+  if (scheduledBackendStartupTimer || backendStartupPromise) {
+    return;
+  }
+
+  scheduledBackendStartupTimer = setTimeout(() => {
+    scheduledBackendStartupTimer = null;
+    void ensureDesktopBackendAvailable()
+      .then((ready) => onReady?.(ready))
+      .catch((error) => logBootstrapError(error));
+  }, 1_500);
 }
 
 async function withDesktopBackend(action: () => Promise<void>): Promise<void> {
@@ -500,24 +519,22 @@ async function bootstrapDesktopApp(): Promise<void> {
     logStartupMilestone('main-window-open-requested');
   }
 
-  void ensureDesktopBackendAvailable()
-    .then((ready) => {
-      logStartupMilestone(ready ? 'backend-ready' : 'backend-unavailable');
-      if (ready) {
-        void loadLocalApiModule()
-          .then((module) => {
-            module.setDesktopWorkbenchBrowserToolHost?.({
-              isActive: () => Promise.resolve(windowController!.isWorkbenchBrowserActive()),
-              listTabs: () => Promise.resolve(windowController!.listBrowserTabs()),
-              snapshot: (_conversationId, tabId) => windowController!.snapshotWorkbenchBrowser(tabId),
-              screenshot: (_conversationId, tabId) => windowController!.screenshotWorkbenchBrowser(tabId),
-              cdp: (input) => windowController!.cdpWorkbenchBrowser(input),
-            });
-          })
-          .catch((error) => logBootstrapError(error));
-      }
-    })
-    .catch((error) => logBootstrapError(error));
+  scheduleDesktopBackendStartup((ready) => {
+    logStartupMilestone(ready ? 'backend-ready' : 'backend-unavailable');
+    if (ready) {
+      void loadLocalApiModule()
+        .then((module) => {
+          module.setDesktopWorkbenchBrowserToolHost?.({
+            isActive: () => Promise.resolve(windowController!.isWorkbenchBrowserActive()),
+            listTabs: () => Promise.resolve(windowController!.listBrowserTabs()),
+            snapshot: (_conversationId, tabId) => windowController!.snapshotWorkbenchBrowser(tabId),
+            screenshot: (_conversationId, tabId) => windowController!.screenshotWorkbenchBrowser(tabId),
+            cdp: (input) => windowController!.cdpWorkbenchBrowser(input),
+          });
+        })
+        .catch((error) => logBootstrapError(error));
+    }
+  });
 }
 
 async function prepareForQuit(): Promise<void> {
@@ -526,6 +543,11 @@ async function prepareForQuit(): Promise<void> {
   }
 
   quitting = true;
+  if (scheduledBackendStartupTimer) {
+    clearTimeout(scheduledBackendStartupTimer);
+    scheduledBackendStartupTimer = null;
+  }
+
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
