@@ -49,11 +49,11 @@ Electron main process
 ```
 
 - Electron owns the UI surface through the `personal-agent://app/` protocol
+- Keep the startup path tiny: the main-process hot bundle should only create the window, register protocol/IPC, and schedule deferred work
 - Freeze-prone local API work runs behind worker-thread RPC; do not import or execute heavy desktop server capabilities directly on the Electron main thread
 - Avoid `spawnSync`/`execSync` in desktop main-process flows
-- The daemon owns durable background behavior
-- The desktop app consumes server-pushed events for sessions, runs, tasks, and daemon status
-- API snapshots serve as the fallback when the event stream is unavailable
+- The daemon owns durable background behavior and starts after the renderer has had a chance to paint; user actions that need it can force-start it immediately
+- The desktop app loads initial readonly snapshots first, then connects to server-pushed events for sessions, runs, tasks, and daemon status after startup settles
 
 ## Layout Modes
 
@@ -76,7 +76,7 @@ In Workbench mode, the right rail provides configurable tabs:
 | Artifacts     | Rendered HTML, Mermaid, LaTeX     |
 | Browser       | Embedded webview                  |
 
-Tabs are context-sensitive — Diffs and Artifacts only appear when the conversation has checkpoint or artifact data.
+Tabs are context-sensitive — Diffs and Artifacts only appear when the conversation has checkpoint or artifact data. Heavy workbench panels are lazy-loaded so they do not inflate the initial renderer bundle.
 
 ## Keyboard Shortcuts
 
