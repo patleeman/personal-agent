@@ -1,6 +1,7 @@
 import katex from 'katex';
 import { useEffect, useMemo, useState } from 'react';
 
+import { addNotification } from './notifications/notificationStore';
 import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from '../content/latexArtifacts';
 import type { ConversationArtifactRecord } from '../shared/types';
 import { ErrorState, LoadingState } from './ui';
@@ -70,7 +71,9 @@ function MermaidArtifactViewer({ artifact }: { artifact: ConversationArtifactRec
           return;
         }
 
-        setError(err instanceof Error ? err.message : 'Could not render this Mermaid diagram.');
+        const msg = err instanceof Error ? err.message : 'Could not render this Mermaid diagram.';
+        setError(msg);
+        addNotification({ type: 'warning', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
       });
 
     return () => {

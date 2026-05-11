@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { addNotification } from './notifications/notificationStore';
 import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import type { ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, UncommittedDiffResult } from '../shared/types';
@@ -81,7 +82,9 @@ export function useUncommittedDiff(cwd: string | null | undefined) {
       .catch((err: unknown) => {
         if (!cancelled) {
           setResult(null);
-          setError(err instanceof Error ? err.message : 'Failed to load uncommitted changes.');
+          const msg = err instanceof Error ? err.message : 'Failed to load uncommitted changes.';
+          setError(msg);
+          addNotification({ type: 'error', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
         }
       })
       .finally(() => {
@@ -126,7 +129,9 @@ export function useConversationCheckpointSummaries(conversationId: string | null
       .catch((err: unknown) => {
         if (!cancelled) {
           setCheckpoints([]);
-          setError(err instanceof Error ? err.message : 'Failed to load diffs.');
+          const msg = err instanceof Error ? err.message : 'Failed to load diffs.';
+          setError(msg);
+          addNotification({ type: 'error', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
         }
       })
       .finally(() => {
@@ -510,7 +515,9 @@ export function ConversationCheckpointWorkbenchPane({
       .catch((err: unknown) => {
         if (!cancelled) {
           setCheckpoint(null);
-          setError(err instanceof Error ? err.message : 'Diff not found.');
+          const msg = err instanceof Error ? err.message : 'Diff not found.';
+          setError(msg);
+          addNotification({ type: 'warning', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
           onMissingCheckpoint?.();
         }
       })

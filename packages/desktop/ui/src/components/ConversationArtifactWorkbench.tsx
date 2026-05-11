@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { addNotification } from './notifications/notificationStore';
 import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import type { ConversationArtifactRecord, ConversationArtifactSummary } from '../shared/types';
@@ -35,7 +36,9 @@ export function useConversationArtifactSummaries(conversationId: string | null |
       .catch((err: unknown) => {
         if (!cancelled) {
           setArtifacts([]);
-          setError(err instanceof Error ? err.message : 'Failed to load artifacts.');
+          const msg = err instanceof Error ? err.message : 'Failed to load artifacts.';
+          setError(msg);
+          addNotification({ type: 'error', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
         }
       })
       .finally(() => {
@@ -134,7 +137,9 @@ export function ConversationArtifactWorkbenchPane({ conversationId, artifactId }
       .catch((err: unknown) => {
         if (!cancelled) {
           setArtifact(null);
-          setError(err instanceof Error ? err.message : 'Failed to load artifact.');
+          const msg = err instanceof Error ? err.message : 'Failed to load artifact.';
+          setError(msg);
+          addNotification({ type: 'error', message: msg, details: err instanceof Error ? err.stack : undefined, source: 'core' });
         }
       })
       .finally(() => {

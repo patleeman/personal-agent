@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { addNotification } from '../components/notifications/notificationStore';
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import type { DurableRunDetailResult, DurableRunSseEvent } from '../shared/types';
@@ -63,12 +64,9 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
         setState({ detail, log, loading: false, error: null });
       } catch (error) {
         if (!closed) {
-          setState({
-            detail: null,
-            log: null,
-            loading: false,
-            error: error instanceof Error ? error.message : 'Could not load run.',
-          });
+          const msg = error instanceof Error ? error.message : 'Could not load run.';
+          setState({ detail: null, log: null, loading: false, error: msg });
+          addNotification({ type: 'error', message: `Failed to load run: ${msg}`, details: error instanceof Error ? error.stack : undefined, source: 'core' });
         }
         return;
       }
@@ -126,6 +124,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
 
         if (payload.type === 'error') {
           setState((current) => ({ ...current, loading: false, error: payload.message }));
+          addNotification({ type: 'warning', message: `Run stream error: ${payload.message}`, source: 'core' });
         }
       };
 
