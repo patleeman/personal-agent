@@ -317,15 +317,16 @@ interface ExcalidrawEditorSavePayload {
   previewUrl: string;
 }
 
-const INITIAL_HISTORICAL_TAIL_BLOCKS = 120;
-const HISTORICAL_TAIL_BLOCKS_STEP = 400;
+const INITIAL_HISTORICAL_TAIL_BLOCKS = 60;
+const HISTORICAL_TAIL_BLOCKS_STEP = 200;
 const MAX_RELATED_THREAD_SELECTIONS = 5;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
 const RELATED_THREAD_RECENT_WINDOW_DAYS = 3;
 const MAX_RELATED_THREAD_CANDIDATES = 24;
 
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
-const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
+const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 200;
+const MAX_RENDERED_BLOCKS = 300;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 const EMPTY_ASK_USER_QUESTION_ANSWERS: AskUserQuestionAnswers = {};
@@ -945,7 +946,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
-  const computedMessages = useMemo<MessageBlock[] | undefined>(() => {
+  const computedMessagesRaw = useMemo<MessageBlock[] | undefined>(() => {
     if (draft) {
       return appendPendingInitialPromptBlock(undefined, draftPendingPrompt);
     }
@@ -970,10 +971,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     visibleSessionDetail,
     visibleStreamBlocks,
   ]);
-  const computedHistoricalBlockOffset = stream.hasSnapshot ? stream.blockOffset : (visibleSessionDetail?.blockOffset ?? 0);
-  const computedHistoricalTotalBlocks = stream.hasSnapshot
+  const computedHistoricalBlockOffsetRaw = stream.hasSnapshot ? stream.blockOffset : (visibleSessionDetail?.blockOffset ?? 0);
+  const computedHistoricalTotalBlocksRaw = stream.hasSnapshot
     ? stream.totalBlocks
-    : (visibleSessionDetail?.totalBlocks ?? computedMessages?.length ?? 0);
+    : (visibleSessionDetail?.totalBlocks ?? computedMessagesRaw?.length ?? 0);
+
+  // Prune old transcript blocks above MAX_RENDERED_BLOCKS so the renderer doesn't
+  // accumulate thousands of blocks in memory. Dropped blocks are still on disk and
+  // re-fetched if the user scrolls back up.
+  const { computedMessages, computedHistoricalBlockOffset, computedHistoricalTotalBlocks } = useMemo(() => {
+    const msgs = computedMessagesRaw;
+    if (!msgs || msgs.length <= MAX_RENDERED_BLOCKS) {
+      return {
+        computedMessages: msgs,
+        computedHistoricalBlockOffset: computedHistoricalBlockOffsetRaw,
+        computedHistoricalTotalBlocks: computedHistoricalTotalBlocksRaw,
+      };
+    }
+
+    const excess = msgs.length - MAX_RENDERED_BLOCKS;
+    return {
+      computedMessages: msgs.slice(excess),
+      computedHistoricalBlockOffset: computedHistoricalBlockOffsetRaw + excess,
+      computedHistoricalTotalBlocks: computedHistoricalTotalBlocksRaw,
+    };
+  }, [computedHistoricalBlockOffsetRaw, computedHistoricalTotalBlocksRaw, computedMessagesRaw]);
+
   const [stableTranscriptState, setStableTranscriptState] = useState<{
     conversationId: string;
     messages: MessageBlock[];
