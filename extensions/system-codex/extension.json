@@ -6,7 +6,7 @@
   "description": "Codex App Server JSON-RPC 2.0 protocol over WebSocket. Allows Codex-compatible clients like Litter to connect and interact with conversations.",
   "version": "0.1.0",
   "frontend": {
-    "entry": "src/frontend.tsx",
+    "entry": "dist/frontend.js",
     "styles": []
   },
   "backend": {
