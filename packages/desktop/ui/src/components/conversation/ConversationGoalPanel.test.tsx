@@ -19,4 +19,12 @@ describe('ConversationGoalPanel', () => {
     expect(html).toContain('Working…');
     expect(html.indexOf('Active')).toBeLessThan(html.indexOf('Working…'));
   });
+
+  it('does not render completed goals in the composer', () => {
+    const html = renderToStaticMarkup(
+      <ConversationGoalPanel goal={{ objective: 'Ship goal mode', status: 'complete', tasks: [], stopReason: null, updatedAt: null }} />,
+    );
+
+    expect(html).toBe('');
+  });
 });

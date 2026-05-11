@@ -13,7 +13,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 };
 
 export function ConversationGoalPanel({ goal, workingLabel }: GoalPanelProps) {
-  if (!goal || !goal.objective) {
+  if (!goal || !goal.objective || goal.status === 'complete') {
     return null;
   }
 
