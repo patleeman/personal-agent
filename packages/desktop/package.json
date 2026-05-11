@@ -16,8 +16,8 @@
     "build:main": "node scripts/build-main.mjs",
     "build": "npm run clean && npm run build:deps && npm run build:main && tsc --build --force",
     "launch": "node scripts/launch-dev-app.mjs",
-    "start": "npm run build && npm run launch",
-    "dev": "npm run clean && npm run build:deps && npm run build:main && npm run launch",
+    "start": "npm run build && npm run launch --",
+    "dev": "npm run clean && npm run build:deps && npm run build:main && npm run launch --",
     "clean": "rm -rf dist ui/dist server/dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
