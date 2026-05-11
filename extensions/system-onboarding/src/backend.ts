@@ -1,5 +1,7 @@
 import type { ExtensionBackendContext } from '@personal-agent/extensions/backend';
 
+import { setExtensionEnabled } from '../../../packages/desktop/server/extensions/extensionRegistry.js';
+
 const ONBOARDING_STATE_KEY = 'onboarding:v1';
 
 interface OnboardingState {
@@ -32,12 +34,18 @@ Start here:
 
 Recommended first move: configure your provider, then come back and ask “what can you do in this repo?”`;
 
+function disableOnboarding(ctx: ExtensionBackendContext): void {
+  setExtensionEnabled(ctx.extensionId, false);
+  ctx.ui.invalidate(['extensions']);
+}
+
 export async function ensure(
   _input: unknown,
   ctx: ExtensionBackendContext,
 ): Promise<{ created: boolean; conversationId?: string; skipped?: string }> {
   const existingState = await ctx.storage.get<OnboardingState>(ONBOARDING_STATE_KEY);
   if (existingState?.completed) {
+    disableOnboarding(ctx);
     return { created: false, conversationId: existingState.conversationId, skipped: 'already-completed' };
   }
 
@@ -48,6 +56,7 @@ export async function ensure(
       completedAt: new Date().toISOString(),
       reason: 'existing-conversations',
     } satisfies OnboardingState);
+    disableOnboarding(ctx);
     return { created: false, skipped: 'existing-conversations' };
   }
 
@@ -61,6 +70,7 @@ export async function ensure(
     completedAt: new Date().toISOString(),
     reason: 'created',
   } satisfies OnboardingState);
+  disableOnboarding(ctx);
 
   return { created: true, conversationId: created.id };
 }
