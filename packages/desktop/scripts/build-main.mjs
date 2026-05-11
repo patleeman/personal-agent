@@ -9,13 +9,16 @@ const dir = resolve(fileURLToPath(import.meta.url), '..', '..');
 // Build main process bundle
 await build({
   entryPoints: [resolve(dir, 'src', 'main.ts')],
-  outfile: resolve(dir, 'dist', 'main.js'),
+  outdir: resolve(dir, 'dist'),
+  entryNames: '[name]',
+  chunkNames: 'chunks/[name]-[hash]',
   bundle: true,
+  splitting: true,
   platform: 'node',
   format: 'esm',
   target: 'node20',
   banner: {
-    js: `import process from 'node:process';import { createRequire as __paCreateRequire } from 'node:module';var require=__paCreateRequire(import.meta.url);`,
+    js: `import { createRequire as __paCreateRequire } from 'node:module';var require=__paCreateRequire(import.meta.url);`,
   },
   external: ['electron', 'fsevents'],
   logLevel: 'info',

@@ -1,6 +1,5 @@
 import { resolve } from 'node:path';
 
-import { setCompanionRuntimeProvider } from '@personal-agent/daemon';
 import { app, clipboard, dialog, Notification, shell } from 'electron';
 
 import { applyDesktopAboutPanelOptions } from './about.js';
@@ -380,7 +379,11 @@ async function bootstrapDesktopApp(): Promise<void> {
 
   logStartupMilestone('environment-ready');
   hostManager = new HostManager();
-  setCompanionRuntimeProvider(() => createDesktopCompanionRuntime(hostManager as HostManager));
+  void import('../server/daemon/companion/runtime.js')
+    .then((module) => {
+      module.setCompanionRuntimeProvider(() => createDesktopCompanionRuntime(hostManager as HostManager));
+    })
+    .catch((error) => logBootstrapError(error));
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
   logStartupMilestone('protocol-ready');

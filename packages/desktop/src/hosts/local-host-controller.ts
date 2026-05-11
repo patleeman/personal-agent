@@ -1,5 +1,4 @@
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
-import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
 import type {
   DesktopApiStreamEvent,
@@ -37,6 +36,50 @@ import type {
   HostStatus,
 } from './types.js';
 
+interface LocalBackendStatus {
+  daemonHealthy: boolean;
+}
+
+interface LocalBackendController {
+  ensureStarted(): Promise<void>;
+  getStatus(): Promise<LocalBackendStatus>;
+  restart(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+class LazyLocalBackendProcesses implements LocalBackendController {
+  private backendPromise: Promise<LocalBackendController> | null = null;
+
+  async ensureStarted(): Promise<void> {
+    await (await this.load()).ensureStarted();
+  }
+
+  async getStatus(): Promise<LocalBackendStatus> {
+    if (!this.backendPromise) {
+      return { daemonHealthy: false };
+    }
+
+    return (await this.backendPromise).getStatus();
+  }
+
+  async restart(): Promise<void> {
+    await (await this.load()).restart();
+  }
+
+  async stop(): Promise<void> {
+    if (!this.backendPromise) {
+      return;
+    }
+
+    await (await this.backendPromise).stop();
+  }
+
+  private async load(): Promise<LocalBackendController> {
+    this.backendPromise ??= import('../backend/local-backend-processes.js').then((module) => new module.LocalBackendProcesses());
+    return this.backendPromise;
+  }
+}
+
 export class LocalHostController implements HostController {
   readonly id: string;
   readonly label: string;
@@ -44,7 +87,7 @@ export class LocalHostController implements HostController {
 
   constructor(
     record: Extract<DesktopHostRecord, { kind: 'local' }>,
-    private readonly backend = new LocalBackendProcesses(),
+    private readonly backend: LocalBackendController = new LazyLocalBackendProcesses(),
     private readonly loadLocalApi = loadLocalApiModule as LocalApiModuleLoader,
   ) {
     this.id = record.id;
