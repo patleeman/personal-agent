@@ -3,6 +3,7 @@ import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import { readConversationSessionsCapability } from '../conversations/conversationSessionCapability.js';
 import { broadcastTitle } from '../conversations/liveSessionBroadcasts.js';
 import {
+  appendVisibleCustomMessage as appendVisibleLiveSessionCustomMessage,
   createSession,
   createSessionFromExisting,
   registry as liveSessionRegistry,
@@ -173,6 +174,20 @@ export function createExtensionConversationsCapability(serverContext?: Pick<Serv
       } catch (error) {
         throw new Error(`Failed to send message: ${(error as Error).message}`);
       }
+    },
+
+    /**
+     * Append a visible system/custom message without starting an agent turn.
+     */
+    async appendVisibleCustomMessage(
+      conversationId: string,
+      customType: string,
+      content: string,
+      details?: unknown,
+    ): Promise<{ ok: true }> {
+      await appendVisibleLiveSessionCustomMessage(conversationId, customType, content, details);
+      invalidateAppTopics('sessions');
+      return { ok: true };
     },
 
     /**
