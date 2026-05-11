@@ -2,6 +2,7 @@
 /* eslint-env node */
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
@@ -42,6 +43,7 @@ if (manifest.frontend?.entry && existsSync(frontendSource)) {
       '.otf': 'dataurl',
     },
     external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
+    nodePaths: findAppNodeModules(),
   });
 }
 
@@ -69,5 +71,18 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
       '@personal-agent/extensions/excalidraw',
       'electron',
     ],
+    nodePaths: findAppNodeModules(),
   });
+}
+
+function findAppNodeModules() {
+  const paths = [resolve(process.cwd(), 'node_modules')];
+  if (typeof process.resourcesPath === 'string') {
+    paths.push(resolve(process.resourcesPath, 'app.asar.unpacked/node_modules'));
+  }
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 2; depth <= 5; depth++) {
+    paths.push(resolve(currentDir, ...Array(depth).fill('..'), 'node_modules'));
+  }
+  return paths;
 }

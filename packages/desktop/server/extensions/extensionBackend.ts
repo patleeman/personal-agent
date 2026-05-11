@@ -127,17 +127,22 @@ const backendModuleCache = new Map<string, { cacheKey: string; module: Promise<E
 const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
   /^(@personal-agent\/(core|daemon)|@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
 
-interface ExtensionBackendBuildResult {
-  path: string;
-  hash: string;
-  rebuilt: boolean;
-  stale: boolean;
+export class ExtensionLoadError extends Error {
+  readonly extensionId: string;
+  readonly code: 'build_failure' | 'load_failure' | 'handler_not_found' | 'module_not_found';
+
+  constructor(opts: { extensionId: string; code: ExtensionLoadError['code']; message: string; cause?: unknown }) {
+    super(opts.message);
+    this.name = 'ExtensionLoadError';
+    this.extensionId = opts.extensionId;
+    this.code = opts.code;
+    if (opts.cause instanceof Error) {
+      this.cause = opts.cause;
+    }
+  }
 }
 
-export interface ExtensionActionInvokeResult {
-  ok: true;
-  result: unknown;
-}
+export type ExtensionActionInvokeResult = { ok: true; result: unknown } | { ok: false; error: string };
 
 function getExtensionCacheRoot(stateRoot: string = getStateRoot()): string {
   return join(stateRoot, 'extension-cache');
@@ -397,6 +402,18 @@ function createExtensionBackendApiPlugin(): Plugin {
   };
 }
 
+function findAppNodeModules(): string[] {
+  const paths: string[] = [resolve(process.cwd(), 'node_modules')];
+  if (typeof process.resourcesPath === 'string') {
+    paths.push(resolve(process.resourcesPath, 'app.asar.unpacked/node_modules'));
+  }
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 2; depth <= 5; depth++) {
+    paths.push(resolve(currentDir, ...Array(depth).fill('..'), 'node_modules'));
+  }
+  return paths;
+}
+
 function createHostRuntimeExternalPlugin(): Plugin {
   return {
     name: 'personal-agent-extension-host-runtime-externals',
@@ -442,6 +459,7 @@ async function buildExtensionBackend(
         js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
       },
       external: ['electron'],
+      nodePaths: findAppNodeModules(),
       plugins: [createExtensionBackendApiPlugin(), createHostRuntimeExternalPlugin()],
     });
     renameSync(candidate, outfile);
@@ -460,14 +478,26 @@ async function buildExtensionBackend(
 export async function loadExtensionBackend(extensionId: string): Promise<ExtensionBackendModule> {
   const entry = findExtensionEntry(extensionId);
   if (!entry) {
-    throw new Error('Extension not found.');
+    throw new ExtensionLoadError({
+      extensionId,
+      code: 'module_not_found',
+      message: `Extension "${extensionId}" is not installed or has been removed.`,
+    });
   }
   if (!entry.packageRoot) {
-    throw new Error('Extension backend code is only available for runtime extensions.');
+    throw new ExtensionLoadError({
+      extensionId,
+      code: 'module_not_found',
+      message: `Extension "${extensionId}" has no package root and cannot be loaded.`,
+    });
   }
   const backendEntry = entry.manifest.backend?.entry;
   if (!backendEntry) {
-    throw new Error('Extension has no backend entry.');
+    throw new ExtensionLoadError({
+      extensionId,
+      code: 'handler_not_found',
+      message: `Extension "${extensionId}" has no backend entry in its manifest.`,
+    });
   }
 
   const packageRoot = resolve(entry.packageRoot);
@@ -487,7 +517,13 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
       console.warn(`[extension:${extensionId}] backend rebuild failed; falling back to pre-built dist/backend.mjs`);
       compiled = { path: preBuiltEntry, hash: `prebuilt-${Date.now()}`, rebuilt: false, stale: false };
     } else {
-      throw buildError;
+      const causeMsg = buildError instanceof Error ? buildError.message : String(buildError);
+      throw new ExtensionLoadError({
+        extensionId,
+        code: 'build_failure',
+        message: `Extension "${extensionId}" failed to compile. This is usually because its source files or dependencies are missing. Error: ${causeMsg}`,
+        cause: buildError,
+      });
     }
   }
 
@@ -532,23 +568,39 @@ export async function invokeExtensionAction(
   toolContext?: ExtensionBackendContext['toolContext'],
   agentToolContext?: unknown,
 ): Promise<ExtensionActionInvokeResult> {
-  const entry = findExtensionEntry(extensionId);
-  if (!entry) {
-    throw new Error('Extension not found.');
-  }
-  const action = entry.manifest.backend?.actions?.find((candidate) => candidate.id === actionId);
-  const handlerName = action?.handler ?? actionId;
-  const backend = await loadExtensionBackend(extensionId);
-  const handler = backend[handlerName];
-  if (typeof handler !== 'function') {
-    throw new Error(`Extension action handler not found: ${handlerName}`);
-  }
+  try {
+    const entry = findExtensionEntry(extensionId);
+    if (!entry) {
+      throw new ExtensionLoadError({
+        extensionId,
+        code: 'module_not_found',
+        message: `Cannot invoke action "${actionId}": extension "${extensionId}" is not installed.`,
+      });
+    }
+    const action = entry.manifest.backend?.actions?.find((candidate) => candidate.id === actionId);
+    const handlerName = action?.handler ?? actionId;
+    const backend = await loadExtensionBackend(extensionId);
+    const handler = backend[handlerName];
+    if (typeof handler !== 'function') {
+      throw new ExtensionLoadError({
+        extensionId,
+        code: 'handler_not_found',
+        message: `Extension "${extensionId}" backend does not export action handler "${handlerName}".`,
+      });
+    }
 
-  const result = await (handler as (input: unknown, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
-    input,
-    createBackendContext(extensionId, serverContext, toolContext, agentToolContext),
-  );
-  return { ok: true, result };
+    const result = await (handler as (input: unknown, ctx: ExtensionBackendContext) => unknown | Promise<unknown>)(
+      input,
+      createBackendContext(extensionId, serverContext, toolContext, agentToolContext),
+    );
+    return { ok: true, result };
+  } catch (error) {
+    if (error instanceof ExtensionLoadError) {
+      return { ok: false, error: error.message };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `Extension "${extensionId}" action "${actionId}" failed: ${message}` };
+  }
 }
 
 /**

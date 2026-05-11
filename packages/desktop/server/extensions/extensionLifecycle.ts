@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { getStateRoot } from '@personal-agent/core';
 
@@ -265,6 +266,7 @@ export async function buildRuntimeExtension(extensionId: string) {
       jsx: 'automatic',
       sourcemap: true,
       external: ['@personal-agent/extensions', '@personal-agent/extensions/*'],
+      nodePaths: findAppNodeModules(),
     });
     outputs.push(outfile);
   }
@@ -283,6 +285,7 @@ export async function buildRuntimeExtension(extensionId: string) {
       target: 'node20',
       sourcemap: true,
       external: ['@personal-agent/*', 'electron'],
+      nodePaths: findAppNodeModules(),
     });
     outputs.push(outfile);
   }
@@ -343,6 +346,18 @@ function findExtractedManifestRoot(extractRoot: string): string {
   }
 
   return candidates[0] as string;
+}
+
+function findAppNodeModules(): string[] {
+  const paths: string[] = [resolve(process.cwd(), 'node_modules')];
+  if (typeof process.resourcesPath === 'string') {
+    paths.push(resolve(process.resourcesPath, 'app.asar.unpacked/node_modules'));
+  }
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 2; depth <= 5; depth++) {
+    paths.push(resolve(currentDir, ...Array(depth).fill('..'), 'node_modules'));
+  }
+  return paths;
 }
 
 export function importRuntimeExtensionBundle(input: { zipPath?: unknown }, stateRoot: string = getStateRoot()) {

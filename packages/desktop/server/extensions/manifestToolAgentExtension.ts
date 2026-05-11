@@ -45,7 +45,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
         ],
         parameters: tool.inputSchema,
         async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-          const result = await invokeExtensionAction(
+          const invokeResult = await invokeExtensionAction(
             tool.extensionId,
             tool.action,
             params,
@@ -68,7 +68,22 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
             // send progress updates during tool execution.
             { onUpdate } satisfies { onUpdate?: AgentToolUpdateCallback },
           );
-          const extensionResult = result.result as
+
+          // Handle backend invocation error (build failure, not found, etc.)
+          if (!invokeResult.ok) {
+            return {
+              content: [{ type: 'text' as const, text: invokeResult.error }],
+              details: {
+                extensionId: tool.extensionId,
+                toolId: tool.id,
+                action: tool.action,
+                error: invokeResult.error,
+              },
+              isError: true,
+            };
+          }
+
+          const extensionResult = invokeResult.result as
             | { content?: unknown; text?: unknown; details?: unknown; isError?: unknown }
             | null
             | undefined;
@@ -84,7 +99,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
                     text:
                       extensionResult && typeof extensionResult === 'object' && typeof extensionResult.text === 'string'
                         ? extensionResult.text
-                        : JSON.stringify(result.result, null, 2),
+                        : JSON.stringify(invokeResult.result, null, 2),
                   },
                 ];
           return {
@@ -93,7 +108,7 @@ export function createManifestToolAgentExtensions(options: ManifestToolFactoryOp
               extensionId: tool.extensionId,
               toolId: tool.id,
               action: tool.action,
-              result: extensionResult?.details ?? result.result,
+              result: extensionResult?.details ?? invokeResult.result,
             },
             ...(extensionResult?.isError === true ? { isError: true } : {}),
           };
