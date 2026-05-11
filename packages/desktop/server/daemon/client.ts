@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { createConnection } from 'net';
 
+import { publishAppEvent } from '../shared/appEvents.js';
 import type { DaemonConfig } from './config.js';
 import { loadDaemonConfig } from './config.js';
 import { createDaemonEvent } from './events.js';
@@ -383,8 +384,15 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
     const accepted = await emitDaemonEvent(input, config);
     if (!accepted) {
       console.warn(`daemon queue is full; dropped event type=${input.type}`);
+      publishAppEvent({ type: 'notification', extensionId: 'core', message: `Daemon queue dropped event: ${input.type}`, type: 'warning' });
     }
   } catch (error) {
     console.warn(formatDaemonUnavailableWarning(error, config));
+    publishAppEvent({
+      type: 'notification',
+      extensionId: 'core',
+      message: `Daemon unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      type: 'warning',
+    });
   }
 }

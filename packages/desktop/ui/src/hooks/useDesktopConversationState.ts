@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../client/api';
 import { DESKTOP_CONVERSATION_STATE_EVENT, getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import type { DesktopConversationState, PromptAttachmentRefInput, PromptImageInput } from '../shared/types';
-import { detectConversationSurfaceType, getOrCreateConversationSurfaceId } from './useSessionStream';
+import { detectConversationSurfaceType, getOrCreateConversationSurfaceId } from './sessionStream';
 
 type DesktopConversationStateEnvelope = {
   subscriptionId: string;

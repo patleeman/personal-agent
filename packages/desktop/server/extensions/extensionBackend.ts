@@ -632,6 +632,7 @@ export async function startExtensionStartupActions(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[extension:${summary.id}] startup action "${startupActionId}" failed: ${message}`);
+      publishAppEvent({ type: 'notification', extensionId: summary.id, message: `Startup action failed: ${message}`, type: 'error' });
       results.push({ extensionId: summary.id, ok: false, error: message });
     }
   }

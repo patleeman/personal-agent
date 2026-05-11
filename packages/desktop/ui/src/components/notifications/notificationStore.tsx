@@ -130,15 +130,33 @@ type AddFn = (payload: AddNotificationPayload) => string;
 let externalAdd: AddFn | null = null;
 
 /**
+ * Pre-mount notification buffer.
+ * Notifications dispatched before the NotificationProvider mounts are
+ * queued here and replayed once the provider registers.
+ */
+let preMountBuffer: AddNotificationPayload[] = [];
+
+export function flushPreMountBuffer(dispatch: (payload: AddNotificationPayload) => void): void {
+  const pending = preMountBuffer;
+  preMountBuffer = [];
+  for (const payload of pending) {
+    dispatch(payload);
+  }
+}
+
+/**
  * Add a notification from outside a React component (e.g. error boundaries).
- * Falls back to dispatching a CustomEvent on window if the store isn't mounted.
+ * Falls back to buffering if the store isn't mounted yet.
  */
 export function addNotification(payload: AddNotificationPayload): string {
   if (externalAdd) {
     return externalAdd(payload);
   }
 
-  // Fallback: fire a CustomEvent that the provider listens for.
+  // Store hasn't mounted yet — buffer for replay.
+  preMountBuffer.push(payload);
+
+  // Also fire a CustomEvent as a belt-and-suspenders fallback.
   const id = generateId();
   window.dispatchEvent(
     new CustomEvent('pa-notification', {
@@ -163,6 +181,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
     externalAddRef.current = handler;
     externalAdd = handler;
+
+    // Replay any notifications that arrived before the store mounted.
+    flushPreMountBuffer(handler);
 
     return () => {
       if (externalAdd === handler) {

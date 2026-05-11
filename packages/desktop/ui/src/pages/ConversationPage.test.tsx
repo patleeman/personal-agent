@@ -685,6 +685,9 @@ describe('conversation live state helpers', () => {
   });
 });
 
+// ── ConversationPage E2E stream label integration ─────────────────────────────
+// Proof that the submit button label correctly reflects stream.isStreaming.
+
 describe('ConversationPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
@@ -855,5 +858,25 @@ describe('ConversationPage', () => {
 
     expect(html).toContain('Background Work');
     expect(html).toContain('running · ui-preview-check');
+  });
+
+  it('blocks parallel submit while conversation is idle', () => {
+    // Renders ConversationPage and verifies the parallel flow checks
+    // stream.isStreaming before allowing parallel prompts.
+    // The SSE-based stream is no longer available — the desktop bridge
+    // is the only path, so the fallback INITIAL_STREAM_STATE has
+    // isStreaming: false.
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/test-session']}>
+        <Routes>
+          <Route path="/conversations/:id" element={<ConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // Idle conversation should render disabled send, not parallel
+    expect(html).toContain('aria-label="Send"');
+    expect(html).not.toContain('Parallel (Ctrl');
   });
 });

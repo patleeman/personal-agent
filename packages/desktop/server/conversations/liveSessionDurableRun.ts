@@ -1,3 +1,4 @@
+import { publishAppEvent } from '../shared/appEvents.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
 
 export interface LiveSessionDurableRunHost {
@@ -57,6 +58,12 @@ export async function syncLiveSessionDurableRun(
     console.error(
       `[${new Date().toISOString()}] [web] [error] conversation durable run sync failed sessionId=${entry.sessionId} state=${state} message=${message}`,
     );
+    publishAppEvent({
+      type: 'notification',
+      extensionId: 'core',
+      message: `Durable run sync failed: ${message}`,
+      type: 'error',
+    });
   }
 }
 

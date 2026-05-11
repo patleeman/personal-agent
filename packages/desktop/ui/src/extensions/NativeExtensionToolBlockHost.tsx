@@ -1,6 +1,7 @@
 import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
+import { addNotification } from '../components/notifications/notificationStore';
 import { ErrorState, LoadingState } from '../components/ui';
 import type { MessageBlock } from '../shared/types';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../transcript/askUserQuestions';
@@ -75,17 +76,29 @@ export function NativeExtensionToolBlockHost({
   );
   return (
     <Suspense fallback={<LoadingState label="Loading tool…" className="py-3" />}>
-      <ExtensionToolBlockErrorBoundary>
+      <ExtensionToolBlockErrorBoundary extensionId={extension.id}>
         <Component block={block} renderer={renderer} context={context} />
       </ExtensionToolBlockErrorBoundary>
     </Suspense>
   );
 }
 
-class ExtensionToolBlockErrorBoundary extends React.Component<{ children: React.ReactNode }, { message: string | null }> {
+class ExtensionToolBlockErrorBoundary extends React.Component<
+  { children: React.ReactNode; extensionId: string },
+  { message: string | null }
+> {
   state = { message: null };
   static getDerivedStateFromError(error: unknown) {
     return { message: error instanceof Error ? error.message : String(error) };
+  }
+  componentDidCatch(error: unknown, _errorInfo: { componentStack?: string }) {
+    const message = error instanceof Error ? error.message : String(error);
+    addNotification({
+      type: 'error',
+      message: `Extension tool block error: ${message}`,
+      details: error instanceof Error ? error.stack : undefined,
+      source: this.props.extensionId,
+    });
   }
   render() {
     return this.state.message ? <ErrorState message={this.state.message} /> : this.props.children;

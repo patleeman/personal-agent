@@ -259,15 +259,25 @@ describe('desktopConversationState reducer — streaming lifecycle', () => {
     expect(state.isStreaming).toBe(false);
   });
 
-  it('snapshot resets isStreaming and isCompacting regardless of prior state', async () => {
+  it('snapshot uses the server streaming state instead of hardcoding false', async () => {
     const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
       await import('./desktopConversationState.js');
-    let state = createEmptyDesktopConversationStreamState();
-    state = applyDesktopConversationStreamEvent(state, { type: 'agent_start' } as never);
-    state = applyDesktopConversationStreamEvent(state, { type: 'compaction_start', mode: 'auto' } as never);
-    expect(state.isStreaming).toBe(true);
-    expect(state.isCompacting).toBe(true);
 
+    // Snapshot with isStreaming: true preserves the streaming state
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'snapshot',
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 3,
+      isStreaming: true,
+    } as never);
+    expect(state.isStreaming).toBe(true);
+    expect(state.isCompacting).toBe(false);
+    expect(state.hasSnapshot).toBe(true);
+    expect(state.totalBlocks).toBe(3);
+
+    // Snapshot with isStreaming: false clears the streaming state
     state = applyDesktopConversationStreamEvent(state, {
       type: 'snapshot',
       blocks: [],
@@ -277,8 +287,20 @@ describe('desktopConversationState reducer — streaming lifecycle', () => {
     } as never);
     expect(state.isStreaming).toBe(false);
     expect(state.isCompacting).toBe(false);
-    expect(state.hasSnapshot).toBe(true);
-    expect(state.totalBlocks).toBe(3);
+
+    // Snapshot without isStreaming preserves the previous streaming state
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'agent_start',
+    } as never);
+    expect(state.isStreaming).toBe(true);
+
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'snapshot',
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 3,
+    } as never);
+    expect(state.isStreaming).toBe(true);
   });
 
   it('error event appends error block and clears isStreaming', async () => {

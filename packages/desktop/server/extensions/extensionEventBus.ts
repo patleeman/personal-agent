@@ -9,6 +9,8 @@
  * run concurrently.  A failing handler never blocks other subscribers.
  */
 
+import { publishAppEvent } from '../shared/appEvents.js';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ExtensionEvent {
@@ -97,6 +99,12 @@ export async function publishExtensionEvent(sourceExtensionId: string, event: st
             `[extension-event-bus] error in "${entry.extensionId}" handler ` +
               `for event "${event}" (pattern "${entry.pattern}"): ${(error as Error).message}`,
           );
+          publishAppEvent({
+            type: 'notification',
+            extensionId: entry.extensionId,
+            message: `Event handler error: ${(error as Error).message}`,
+            type: 'error',
+          });
         }),
       ),
   );

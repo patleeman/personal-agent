@@ -22,6 +22,7 @@ import { ConversationGoalPanel } from '../components/conversation/ConversationGo
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
+import { addNotification } from '../components/notifications/notificationStore';
 import { AppPageEmptyState, cx, EmptyState, LoadingState, PageHeader, Pill } from '../components/ui';
 import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
@@ -92,7 +93,6 @@ import {
   resolveConversationVisibleScrollBinding,
   resolveDisplayedConversationPendingStatusLabel,
   shouldDeferConversationFileRefresh,
-  shouldEnableConversationLiveStream,
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
@@ -215,13 +215,13 @@ import { createNativeExtensionClient } from '../extensions/nativePaClient';
 import { NewConversationPanelHost } from '../extensions/NewConversationPanelHost';
 import type { ExtensionMentionRegistration, ExtensionSlashCommandRegistration } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
+import { INITIAL_STREAM_STATE, retryLiveSessionActionAfterTakeover } from '../hooks/sessionStream';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
-import { retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { useReloadState } from '../local/reloadState';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { filterModelPickerItems } from '../model/modelPicker';
@@ -700,8 +700,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       ? true
       : webConversationBootstrapLoading;
   const confirmedLiveValue = useDesktopConversation ? (visibleConversationBootstrap?.liveSession.live ?? null) : null;
-  const shouldSubscribeToLiveStream =
-    !useDesktopConversation && !desktopConversationChecking && shouldEnableConversationLiveStream(id, confirmedLive);
 
   useEffect(() => {
     if (draft || !id || deferConversationFileRefresh) {
@@ -714,11 +712,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [conversationEventVersion, deferConversationFileRefresh, draft, id]);
 
-  // ── Pi SDK stream — stay subscribed until we know the conversation is not live ─
-  const webStream = useSessionStream(id ?? null, {
-    tailBlocks: historicalTailBlocks,
-    enabled: shouldSubscribeToLiveStream,
-  });
+  // ── Desktop bridge is the only stream path. If the bridge is unavailable
+  // the conversation is read-only — no live streaming is possible.
   const stream =
     useDesktopConversation && visibleDesktopConversationState
       ? {
@@ -731,7 +726,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           abort: desktopConversation.abort,
           takeover: desktopConversation.takeover,
         }
-      : webStream;
+      : {
+          ...INITIAL_STREAM_STATE,
+          surfaceId: '',
+          reconnect: async () => {},
+          send: async () => undefined,
+          parallel: async () => {},
+          manageParallelJob: async () => {},
+          abort: async () => {},
+          takeover: async () => {},
+        };
   const streamSend = stream.send;
   const streamParallel = stream.parallel;
   const streamManageParallelJob = stream.manageParallelJob;
@@ -911,6 +915,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }));
       } catch (error) {
         console.error('Failed to hydrate historical block', error);
+        addNotification({
+          type: 'warning',
+          message: 'Failed to load message details',
+          details: error instanceof Error ? error.message : String(error),
+          source: 'core',
+        });
       } finally {
         setHydratingHistoricalBlockIds((current) => removeHydratingHistoricalBlockId(current, normalizedBlockId));
       }
@@ -2653,6 +2663,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     void resumeDeferredConversation().catch((error) => {
       console.error('Deferred resume auto-resume failed:', error);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      addNotification({
+        type: 'error',
+        message: 'Auto-resume failed',
+        details: error instanceof Error ? error.message : String(error),
+        source: 'core',
+      });
     });
   }, [
     deferredResumeAutoResumeKey,
@@ -3360,6 +3376,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         persistForkPromptDraft(conversationId, preparedInitialPrompt.text);
         console.error('Initial prompt failed:', error);
         showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+        addNotification({
+          type: 'error',
+          message: 'Initial prompt failed',
+          details: error instanceof Error ? error.message : String(error),
+          source: 'core',
+        });
       }
     })();
   }, [
@@ -4679,6 +4701,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
           setPendingBrowserComments(pendingBrowserCommentsSnapshot);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+          addNotification({
+            type: 'error',
+            message: 'Auto-resume failed',
+            details: error instanceof Error ? error.message : String(error),
+            source: 'core',
+          });
         }
       }
     } catch (error) {
@@ -4687,6 +4715,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
       setPendingBrowserComments(pendingBrowserCommentsSnapshot);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      addNotification({
+        type: 'warning',
+        message: 'Failed to prepare attachments',
+        details: error instanceof Error ? error.message : String(error),
+        source: 'core',
+      });
     }
   }
 

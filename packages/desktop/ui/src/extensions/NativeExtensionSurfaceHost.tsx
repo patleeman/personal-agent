@@ -1,6 +1,7 @@
 import React, { type ComponentType, lazy, Suspense, useMemo } from 'react';
 
 import { buildApiPath } from '../client/apiBase';
+import { addNotification } from '../components/notifications/notificationStore';
 import { ErrorState, LoadingState } from '../components/ui';
 import { getExtensionRegistryRevision } from './extensionRegistryEvents';
 import { createNativeExtensionClient, type NativeExtensionClient } from './nativePaClient';
@@ -86,7 +87,7 @@ export function NativeExtensionSurfaceHost({
       data-extension-surface-id={surface.id}
     >
       <Suspense fallback={<LoadingState label="Loading extension…" className="h-full justify-center" />}>
-        <ExtensionErrorBoundary>
+        <ExtensionErrorBoundary extensionId={surface.extensionId}>
           <Component pa={pa} context={context} surface={surface} params={{}} />
         </ExtensionErrorBoundary>
       </Suspense>
@@ -94,11 +95,21 @@ export function NativeExtensionSurfaceHost({
   );
 }
 
-class ExtensionErrorBoundary extends React.Component<{ children: React.ReactNode }, { message: string | null }> {
+class ExtensionErrorBoundary extends React.Component<{ children: React.ReactNode; extensionId: string }, { message: string | null }> {
   state = { message: null };
 
   static getDerivedStateFromError(error: unknown) {
     return { message: error instanceof Error ? error.message : String(error) };
+  }
+
+  componentDidCatch(error: unknown, _errorInfo: { componentStack?: string }) {
+    const message = error instanceof Error ? error.message : String(error);
+    addNotification({
+      type: 'error',
+      message: `Extension surface error: ${message}`,
+      details: error instanceof Error ? error.stack : undefined,
+      source: this.props.extensionId,
+    });
   }
 
   render() {

@@ -1,3 +1,5 @@
+import { publishAppEvent } from '../shared/appEvents.js';
+
 export interface LiveSessionLifecycleEvent {
   conversationId: string;
   sessionFile?: string;
@@ -43,6 +45,12 @@ export function notifyLiveSessionLifecycleHandlers(
       console.error(
         `[${new Date().toISOString()}] [web] [error] live session lifecycle handler failed conversationId=${event.conversationId} trigger=${event.trigger} message=${message}`,
       );
+      publishAppEvent({
+        type: 'notification',
+        extensionId: 'core',
+        message: `Lifecycle handler error: ${message}`,
+        type: 'error',
+      });
     });
   }
 }

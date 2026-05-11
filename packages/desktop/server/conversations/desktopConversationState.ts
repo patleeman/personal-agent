@@ -263,7 +263,11 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
         blockOffset: event.blockOffset,
         totalBlocks: event.totalBlocks,
         hasSnapshot: true,
-        isStreaming: false,
+        // Use the server's streaming state — snapshot events include
+        // isStreaming from the live session. Previously this was
+        // hardcoded to false, which caused the submit button to flip
+        // from Steer to Send/Follow up on every reconnection cycle.
+        isStreaming: 'isStreaming' in event ? event.isStreaming === true : prev.isStreaming,
         isCompacting: false,
         error: null,
         goalState: 'goalState' in event ? event.goalState : prev.goalState,

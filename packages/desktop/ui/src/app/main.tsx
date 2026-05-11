@@ -7,6 +7,7 @@ import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { addNotification } from '../components/notifications/notificationStore';
 import { recordRendererTelemetry } from '../telemetry/appTelemetry';
 import { App } from './App';
 
@@ -15,42 +16,42 @@ import { App } from './App';
 // renderer process. They pipe to the main process log via the desktop bridge.
 
 window.addEventListener('error', (event) => {
-  try {
-    const bridge = window.personalAgentDesktop;
-    if (bridge && typeof bridge.getEnvironment === 'function') {
-      // Best-effort: the bridge is available in the desktop shell.
-      // Actual log writing is done through the main process via IPC.
-    }
-  } catch {
-    // Ignore bridge access errors.
-  }
+  const message = event.error instanceof Error ? event.error.message : event.message || 'Script error';
+  const stack = event.error instanceof Error ? event.error.stack : undefined;
 
   console.error('[renderer] uncaught error', event.error ?? event.message);
   recordRendererTelemetry({
     category: 'renderer',
     name: 'uncaught_error',
     route: `${window.location.pathname}${window.location.search}`,
-    metadata: {
-      message: event.message,
-      stack: event.error instanceof Error ? event.error.stack : undefined,
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-    },
+    metadata: { message, stack, filename: event.filename, lineno: event.lineno, colno: event.colno },
+  });
+
+  addNotification({
+    type: 'error',
+    message: `Uncaught error: ${message}`,
+    details: stack,
+    source: 'core',
   });
 });
 
 window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason instanceof Error ? event.reason.message : String(event.reason ?? 'unknown');
+  const stack = event.reason instanceof Error ? event.reason.stack : undefined;
+
   console.error('[renderer] unhandled rejection', reason);
   recordRendererTelemetry({
     category: 'renderer',
     name: 'unhandled_rejection',
     route: `${window.location.pathname}${window.location.search}`,
-    metadata: {
-      reason,
-      stack: event.reason instanceof Error ? event.reason.stack : undefined,
-    },
+    metadata: { reason, stack },
+  });
+
+  addNotification({
+    type: 'warning',
+    message: `Unhandled rejection: ${reason}`,
+    details: stack,
+    source: 'core',
   });
 });
 

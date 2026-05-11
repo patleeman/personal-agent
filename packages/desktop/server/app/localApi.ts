@@ -133,8 +133,8 @@ import {
   readSessionMeta,
   renameStoredSession,
 } from '../conversations/sessions.js';
-import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserToolHost.js';
 import { startExtensionStartupActions } from '../extensions/extensionBackend.js';
+import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserToolHost.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import { readModelState } from '../models/modelState.js';
@@ -563,6 +563,12 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
   // don't block routes from being returned.
   startExtensionStartupActions(context).catch((error) => {
     console.error(`[extensions] startup action dispatch failed: ${(error as Error).message}`);
+    publishAppEvent({
+      type: 'notification',
+      extensionId: 'core',
+      message: `Startup action dispatch failed: ${(error as Error).message}`,
+      type: 'error',
+    });
   });
 
   return routes;

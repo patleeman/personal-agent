@@ -18,6 +18,8 @@ import {
 } from '@pierre/trees';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import { addNotification } from '../notifications/notificationStore';
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -118,7 +120,15 @@ export function useFileTreeModel({
               dragAndDrop: {
                 canDrop: (event) => canDropRef.current(event),
                 onDropComplete: (event) => dropCompleteRef.current(event),
-                onDropError: (error) => console.error('tree drop failed', error),
+                onDropError: (error) => {
+                  console.error('tree drop failed', error);
+                  addNotification({
+                    type: 'warning',
+                    message: 'File move failed',
+                    details: error instanceof Error ? error.message : String(error),
+                    source: 'core',
+                  });
+                },
                 ...(typeof dragAndDrop === 'object' ? dragAndDrop : {}),
               },
             }
