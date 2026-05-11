@@ -1706,6 +1706,7 @@ export async function readDesktopConversationAttachmentAsset(input: {
 }
 
 export async function readDesktopConversationDeferredResumes(conversationId: string) {
+  await getLocalServerRouteContext();
   return readConversationDeferredResumesCapability(conversationId);
 }
 
@@ -1715,10 +1716,12 @@ export async function scheduleDesktopConversationDeferredResume(input: {
   prompt?: string;
   behavior?: 'steer' | 'followUp';
 }) {
+  await getLocalServerRouteContext();
   return scheduleConversationDeferredResumeCapability(input);
 }
 
 export async function cancelDesktopConversationDeferredResume(input: { conversationId: string; resumeId: string }) {
+  await getLocalServerRouteContext();
   return cancelConversationDeferredResumeCapability(input);
 }
 
