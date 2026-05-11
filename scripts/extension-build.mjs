@@ -70,6 +70,7 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
       '@personal-agent/extensions/data',
       '@personal-agent/extensions/excalidraw',
       'electron',
+      'fsevents',
     ],
     nodePaths: findAppNodeModules(),
   });
