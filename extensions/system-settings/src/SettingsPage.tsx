@@ -615,6 +615,10 @@ export function DesktopKeyboardShortcutsSettingsSection() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (error) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: error, source: 'system-settings' } }));
+  }, [error]);
+
   const dirty = useMemo(() => {
     if (!preferencesState) return false;
     return DESKTOP_KEYBOARD_SHORTCUT_IDS.some((id) => draft[id] !== preferencesState.keyboardShortcuts[id]);
@@ -950,6 +954,10 @@ export function DesktopCompanionSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (error) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: error, source: 'system-settings' } }));
+  }, [error]);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -1215,6 +1223,10 @@ export function DesktopConnectionsSettingsPanel() {
   const [appPreferencesError, setAppPreferencesError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (appPreferencesError) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: appPreferencesError, source: 'system-settings' } }));
+  }, [appPreferencesError]);
+
+  useEffect(() => {
     const bridge = getDesktopBridge();
     if (!bridge) {
       setAppPreferencesState(null);
@@ -1349,6 +1361,10 @@ function ExtensionSettingsSection() {
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    if (saveError) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: saveError, source: 'system-settings' } }));
+  }, [saveError]);
+
+  useEffect(() => {
     if (values) {
       setDraft((prev) => {
         const merged = { ...values };
@@ -1449,6 +1465,14 @@ function ExtensionSecretsSection() {
   const [savingBackend, setSavingBackend] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (error) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: `Failed to load secrets: ${error}`, source: 'system-settings' } }));
+  }, [error]);
+
+  useEffect(() => {
+    if (errorMessage) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: errorMessage, source: 'system-settings' } }));
+  }, [errorMessage]);
 
   const activeBackend =
     typeof settingsValues?.['secrets.provider'] === 'string'
