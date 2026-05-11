@@ -72,8 +72,8 @@ async function importBuiltModule(relativePath) {
 function ensureBuildArtifacts() {
   const required = [
     'packages/core/dist/index.js',
-    'packages/daemon/dist/index.js',
-    'packages/web/dist-server/app/localApi.js',
+    'packages/desktop/dist/server/daemon/index.js',
+    'packages/desktop/server/dist/app/localApi.js',
   ];
   const missing = required.filter((relativePath) => !existsSync(resolve(repoRoot, relativePath)));
   if (missing.length > 0) {
@@ -291,7 +291,7 @@ async function buildDeviceDemoSnapshot() {
   ensureBuildArtifacts();
 
   const core = await importBuiltModule('packages/core/dist/index.js');
-  const localApi = await importBuiltModule('packages/web/dist-server/app/localApi.js');
+  const localApi = await importBuiltModule('packages/desktop/server/dist/app/localApi.js');
   await core.hydrateProcessEnvFromShell?.();
 
   const sessions = await localApi.readDesktopSessions();
@@ -717,8 +717,8 @@ async function hostCommand() {
   process.env.PERSONAL_AGENT_DESKTOP_VARIANT = process.env.PERSONAL_AGENT_DESKTOP_VARIANT || 'testing';
 
   const core = await importBuiltModule('packages/core/dist/index.js');
-  const daemonModule = await importBuiltModule('packages/daemon/dist/index.js');
-  const localApi = await importBuiltModule('packages/web/dist-server/app/localApi.js');
+  const daemonModule = await importBuiltModule('packages/desktop/dist/server/daemon/index.js');
+  const localApi = await importBuiltModule('packages/desktop/server/dist/app/localApi.js');
 
   await core.hydrateProcessEnvFromShell?.();
 
@@ -903,10 +903,7 @@ async function demoRunningCommand() {
 
 async function prepareCommand() {
   loadDevEnvDefaults();
-  runChecked('npm', ['--prefix', 'packages/core', 'run', 'build']);
-  runChecked('npm', ['--prefix', 'packages/daemon', 'run', 'build']);
-  runChecked('npm', ['--prefix', 'packages/desktop', 'run', 'build:ui']);
-  runChecked('npm', ['--prefix', 'packages/desktop', 'run', 'build:server']);
+  runChecked('npm', ['--prefix', 'packages/desktop', 'run', 'build']);
 }
 
 async function devCommand() {
