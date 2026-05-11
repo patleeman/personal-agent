@@ -6,11 +6,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 import { getStateRoot } from '@personal-agent/core';
-import { build, type Plugin } from 'esbuild';
+import type { Plugin } from 'esbuild';
 
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
+import { resolvePrebuiltSystemExtensionBackend } from './extensionBackendLoadTarget.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
 import { createExtensionModelsCapability } from './extensionModels.js';
@@ -459,6 +460,7 @@ async function buildExtensionBackend(
   const candidate = join(cacheDir, `backend.${packageHash}.candidate.mjs`);
   try {
     rmSync(candidate, { force: true });
+    const { build } = await import('esbuild');
     await build({
       entryPoints: [entryPath],
       outfile: candidate,
@@ -511,6 +513,20 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
       code: 'handler_not_found',
       message: `Extension "${extensionId}" has no backend entry in its manifest.`,
     });
+  }
+
+  const prebuilt = resolvePrebuiltSystemExtensionBackend(entry);
+  if (prebuilt) {
+    const compiled: ExtensionBackendBuildResult = { ...prebuilt, rebuilt: false, stale: false };
+    const cacheKey = `${compiled.path}:${compiled.hash}`;
+    const cached = backendModuleCache.get(extensionId);
+    if (cached?.cacheKey === cacheKey) {
+      return cached.module;
+    }
+
+    const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
+    backendModuleCache.set(extensionId, { cacheKey, module });
+    return module;
   }
 
   const packageRoot = resolve(entry.packageRoot);

@@ -1,33 +1,63 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { describe, expect, it, vi } from 'vitest';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { loadExtensionAgentFactory } from './extensionBackend.js';
+import { describe, expect, it } from 'vitest';
 
-describe('extension backend agent factory loading', () => {
-  it('normalizes factory-builder agent extension exports before registering tools', async () => {
-    const factory = await loadExtensionAgentFactory('system-auto-mode', 'createConversationAutoModeAgentExtension');
-    const registeredTools: string[] = [];
-    const registeredCommands: string[] = [];
-    const registeredEvents: string[] = [];
+import { resolvePrebuiltSystemExtensionBackend, shouldPreferPrebuiltSystemExtensionBackend } from './extensionBackendLoadTarget.js';
 
-    const pi = {
-      registerTool: vi.fn((tool: { name: string }) => {
-        registeredTools.push(tool.name);
+const TEST_EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../extensions/system-auto-mode');
+
+describe('extension backend packaged load targeting', () => {
+  it('only prefers prebuilt bundled backends when running a packaged desktop app', () => {
+    expect(shouldPreferPrebuiltSystemExtensionBackend({ resourcesPath: undefined, env: {} })).toBe(false);
+    expect(
+      shouldPreferPrebuiltSystemExtensionBackend({
+        resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
+        env: { PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1' },
       }),
-      registerCommand: vi.fn((name: string) => {
-        registeredCommands.push(name);
+    ).toBe(false);
+    expect(
+      shouldPreferPrebuiltSystemExtensionBackend({
+        resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
+        env: {},
       }),
-      on: vi.fn((name: string) => {
-        registeredEvents.push(name);
-      }),
-      getActiveTools: vi.fn(() => []),
-      setActiveTools: vi.fn(),
-    } as unknown as ExtensionAPI;
+    ).toBe(true);
+  });
 
-    await factory(pi);
+  it('resolves prebuilt dist/backend.mjs for packaged bundled system extensions', () => {
+    const target = resolvePrebuiltSystemExtensionBackend(
+      { source: 'system', packageRoot: TEST_EXTENSION_ROOT },
+      {
+        resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
+        env: {},
+      },
+    );
 
-    expect(registeredTools).toEqual(expect.arrayContaining(['set_goal', 'update_goal']));
-    expect(registeredCommands).toContain('goal');
-    expect(registeredEvents).toEqual(expect.arrayContaining(['turn_end', 'tool_execution_end', 'session_start']));
+    expect(target).toMatchObject({
+      path: resolve(TEST_EXTENSION_ROOT, 'dist/backend.mjs'),
+    });
+    expect(target?.hash).toMatch(/^prebuilt:/);
+  });
+
+  it('does not bypass source rebuilds for runtime extensions or dev desktop bundles', () => {
+    expect(
+      resolvePrebuiltSystemExtensionBackend(
+        { source: 'runtime', packageRoot: TEST_EXTENSION_ROOT },
+        {
+          resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
+          env: {},
+        },
+      ),
+    ).toBeNull();
+
+    expect(
+      resolvePrebuiltSystemExtensionBackend(
+        { source: 'system', packageRoot: TEST_EXTENSION_ROOT },
+        {
+          resourcesPath: '/Applications/Personal Agent.app/Contents/Resources',
+          env: { PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1' },
+        },
+      ),
+    ).toBeNull();
   });
 });
