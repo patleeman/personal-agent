@@ -252,7 +252,7 @@ Configure providers in Settings. Each provider entry specifies:
 
 # Dictation
 
-Dictation now lives in the bundled `system-dictation` extension. See `docs/dictation.md`.
+Dictation now lives in the bundled `system-local-dictation` extension.
 
 ---
 

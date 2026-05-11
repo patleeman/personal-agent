@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "id": "system-dictation",
-  "name": "Dictation",
+  "id": "system-local-dictation",
+  "name": "Local Dictation",
   "packageType": "system",
-  "description": "Composer dictation button, local Whisper transcription, and dictation settings.",
+  "description": "Local dictation via Whisper.cpp — composer mic button, model management, and settings.",
   "version": "0.1.0",
   "frontend": {
     "entry": "dist/frontend.js",
@@ -33,7 +33,7 @@
       "component": "DictationSettingsPanel",
       "sectionId": "settings-dictation",
       "label": "Dictation",
-      "description": "Choose the transcription backend used by the composer mic button. No automatic fallback is applied.",
+      "description": "Enable local dictation via Whisper.cpp for the composer mic button.",
       "order": 30
     }
   },

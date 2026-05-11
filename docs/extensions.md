@@ -200,7 +200,7 @@ Add one component-backed section to the main Settings page.
   "component": "DictationSettingsPanel",
   "sectionId": "settings-dictation",
   "label": "Dictation",
-  "description": "Choose the transcription backend used by the composer mic button.",
+  "description": "Enable local dictation via Whisper.cpp for the composer mic button.",
   "order": 30
 }
 ```

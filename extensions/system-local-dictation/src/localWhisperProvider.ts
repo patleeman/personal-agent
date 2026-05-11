@@ -9,7 +9,6 @@ import type {
   TranscriptionInstallResult,
   TranscriptionModelStatus,
   TranscriptionOptions,
-  TranscriptionProvider,
   TranscriptionResult,
 } from './types.js';
 
@@ -176,10 +175,9 @@ async function getModelFileSize(modelRootPath: string, model: string): Promise<n
   }
 }
 
-export class LocalWhisperTranscriptionProvider implements TranscriptionProvider {
-  readonly id = 'local-whisper' as const;
+export class LocalWhisperTranscriptionProvider {
+  readonly provider = 'local-whisper';
   readonly label = 'Local Whisper';
-  readonly transports: Array<'file'> = ['file'];
   private readonly model: string;
   private readonly modelRootPath: string;
 
@@ -195,7 +193,7 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
   async installModel(): Promise<TranscriptionInstallResult> {
     await downloadModel(this.modelRootPath, this.model);
     return {
-      provider: this.id,
+      provider: this.provider,
       model: this.model,
       cacheDir: this.modelRootPath,
     };
@@ -204,7 +202,7 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
   async getModelStatus(): Promise<TranscriptionModelStatus> {
     const sizeBytes = await getModelFileSize(this.modelRootPath, this.model);
     return {
-      provider: this.id,
+      provider: this.provider,
       model: this.model,
       cacheDir: this.modelRootPath,
       installed: sizeBytes !== null && sizeBytes > 0,
@@ -239,7 +237,7 @@ export class LocalWhisperTranscriptionProvider implements TranscriptionProvider 
 
     return {
       text,
-      provider: this.id,
+      provider: this.provider,
       model: this.model,
       ...(options.language ? { language: options.language } : {}),
       durationMs: Math.round((audio.length / PCM_SAMPLE_RATE) * 1000),

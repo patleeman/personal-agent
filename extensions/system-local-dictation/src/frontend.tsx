@@ -9,13 +9,14 @@ const INPUT_CLASS =
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
 const TRANSCRIPTION_MODEL_OPTIONS = ['tiny.en', 'base.en', 'small.en', 'medium.en'];
 
-type TranscriptionProviderId = 'local-whisper';
-interface TranscriptionSettingsState {
-  settings: { provider: TranscriptionProviderId | null; model: string };
-  providers: Array<{ id: TranscriptionProviderId; label: string; status: 'implemented' | 'planned'; transports: Array<'file' | 'stream'> }>;
+interface DictationSettings {
+  enabled: boolean;
+  model: string;
 }
-interface TranscriptionModelStatus {
-  provider: TranscriptionProviderId;
+interface DictationSettingsState {
+  settings: DictationSettings;
+}
+interface DictationModelStatus {
   model: string;
   installed: boolean;
   sizeBytes?: number;
@@ -116,9 +117,9 @@ export function DictationButton({
   const start = useCallback(async () => {
     if (buttonContext.composerDisabled || captureRef.current || state === 'transcribing') return;
     try {
-      const settings = (await pa.extension.invoke('readSettings')) as TranscriptionSettingsState;
-      if (!settings.settings.provider) {
-        pa.ui.toast('Choose a dictation provider in Settings first.');
+      const settings = (await pa.extension.invoke('readSettings')) as DictationSettingsState;
+      if (!settings.settings.enabled) {
+        pa.ui.toast('Enable dictation in Settings first.');
         return;
       }
       setSamples([]);
@@ -189,17 +190,17 @@ export function DictationButton({
 }
 
 export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExtensionClient; settingsContext?: { extensionId?: string } }) {
-  const [settings, setSettings] = useState<TranscriptionSettingsState | null>(null);
-  const [provider, setProvider] = useState<TranscriptionProviderId | ''>('');
+  const [settings, setSettings] = useState<DictationSettings | null>(null);
+  const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState('base.en');
-  const [status, setStatus] = useState<TranscriptionModelStatus | null>(null);
+  const [status, setStatus] = useState<DictationModelStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const state = (await pa.extension.invoke('readSettings')) as TranscriptionSettingsState;
-    setSettings(state);
-    setProvider(state.settings.provider ?? '');
+    const state = (await pa.extension.invoke('readSettings')) as DictationSettingsState;
+    setSettings(state.settings);
+    setEnabled(state.settings.enabled);
     setModel(state.settings.model);
   }, [pa]);
 
@@ -208,15 +209,15 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
   }, [load]);
 
   useEffect(() => {
-    if (!provider || !model.trim()) {
+    if (!enabled || !model.trim()) {
       setStatus(null);
       return;
     }
     let cancelled = false;
     void pa.extension
-      .invoke('modelStatus', { provider, model: model.trim() })
+      .invoke('modelStatus', { model: model.trim() })
       .then((value) => {
-        if (!cancelled) setStatus(value as TranscriptionModelStatus);
+        if (!cancelled) setStatus(value as DictationModelStatus);
       })
       .catch(() => {
         if (!cancelled) setStatus(null);
@@ -224,17 +225,17 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
     return () => {
       cancelled = true;
     };
-  }, [model, pa, provider]);
+  }, [model, enabled, pa]);
 
-  async function save(nextProvider = provider, nextModel = model) {
+  async function saveFields(nextEnabled = enabled, nextModel = model) {
     setBusy('Saving…');
     setMessage(null);
     try {
       const saved = (await pa.extension.invoke('updateSettings', {
-        provider: nextProvider || null,
+        enabled: nextEnabled,
         model: nextModel.trim(),
-      })) as TranscriptionSettingsState;
-      setSettings(saved);
+      })) as DictationSettingsState;
+      setSettings(saved.settings);
       setMessage('Saved.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -244,16 +245,16 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
   }
 
   async function install() {
-    if (!provider || !model.trim()) return;
+    if (!enabled || !model.trim()) return;
     setBusy('Installing…');
     setMessage(null);
     try {
-      const installed = (await pa.extension.invoke('installModel', { provider, model: model.trim() })) as {
+      const installed = (await pa.extension.invoke('installModel', { model: model.trim() })) as {
         model: string;
         cacheDir: string;
       };
       setMessage(`Installed ${installed.model} in ${installed.cacheDir}.`);
-      setStatus((await pa.extension.invoke('modelStatus', { provider, model: model.trim() })) as TranscriptionModelStatus);
+      setStatus((await pa.extension.invoke('modelStatus', { model: model.trim() })) as DictationModelStatus);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -262,20 +263,20 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
   }
 
   const statusLabel =
-    provider && model.trim()
+    enabled && model.trim()
       ? status?.installed
         ? `Installed locally${status.sizeBytes ? ` · ${formatBytes(status.sizeBytes)}` : ''}`
         : 'Not installed yet'
-      : 'Select a provider and model to check install status.';
+      : 'Enable dictation to check model install status.';
 
   return (
     <div className="space-y-0">
       <section className="scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
         <div className="min-w-0 space-y-2">
           <div className="space-y-1.5">
-            <h3 className="text-[15px] font-medium tracking-tight text-primary">Transcription provider</h3>
+            <h3 className="text-[15px] font-medium tracking-tight text-primary">Local Dictation</h3>
             <p className="max-w-sm text-[12px] leading-5 text-secondary">
-              The composer records browser audio and sends it to this provider when dictation stops.
+              Record audio from the composer mic button and transcribe it locally via Whisper.cpp.
             </p>
             {settingsContext?.extensionId ? (
               <p className="max-w-sm text-[12px] leading-5 text-secondary">
@@ -288,43 +289,37 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
           {!settings ? <p className="ui-card-meta">Loading dictation settings…</p> : null}
           {settings ? (
             <div className="space-y-3">
-              <label className="ui-card-meta" htmlFor="settings-transcription-provider">
-                Provider
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="settings-dictation-enabled"
+                  checked={enabled}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    setEnabled(next);
+                    void saveFields(next, model);
+                  }}
+                  className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-accent/30"
+                />
+                <span className="text-[13px] text-primary select-none">Enable local dictation</span>
               </label>
-              <select
-                id="settings-transcription-provider"
-                value={provider}
-                onChange={(event) => {
-                  const next = event.target.value as TranscriptionProviderId | '';
-                  setProvider(next);
-                  void save(next, model);
-                }}
-                className={INPUT_CLASS}
-              >
-                <option value="">Disabled</option>
-                {settings.providers.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              {provider ? (
+              {enabled ? (
                 <>
-                  <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">
+                  <label className="ui-card-meta pt-1" htmlFor="settings-dictation-model">
                     Model
                   </label>
                   <input
-                    id="settings-transcription-model"
-                    list="settings-transcription-model-options"
+                    id="settings-dictation-model"
+                    list="settings-dictation-model-options"
                     value={model}
                     onChange={(event) => setModel(event.target.value)}
-                    onBlur={() => void save()}
+                    onBlur={() => void saveFields(enabled)}
                     className={`${INPUT_CLASS} font-mono text-[13px]`}
                     placeholder="base.en"
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <datalist id="settings-transcription-model-options">
+                  <datalist id="settings-dictation-model-options">
                     {TRANSCRIPTION_MODEL_OPTIONS.map((option) => (
                       <option key={option} value={option} />
                     ))}
@@ -340,7 +335,7 @@ export function DictationSettingsPanel({ pa, settingsContext }: { pa: NativeExte
                   </ToolbarButton>
                 </>
               ) : (
-                <p className="ui-card-meta">Dictation is disabled until a provider is selected.</p>
+                <p className="ui-card-meta">Dictation is disabled.</p>
               )}
               {busy === 'Saving…' ? <p className="ui-card-meta">Saving…</p> : null}
               {message ? <p className="text-[12px] text-secondary">{message}</p> : null}

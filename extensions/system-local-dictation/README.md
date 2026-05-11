@@ -1,6 +1,6 @@
-# Dictation
+# Local Dictation
 
-Dictation is implemented by the bundled `system-dictation` extension.
+Dictation is implemented by the bundled `system-local-dictation` extension.
 
 The extension contributes the composer mic button through `contributes.composerButtons`, contributes its panel to the main Settings page through `contributes.settingsPanels`, and exposes backend actions for reading/updating settings, installing local Whisper models, checking model status, and transcribing captured PCM audio.
 
