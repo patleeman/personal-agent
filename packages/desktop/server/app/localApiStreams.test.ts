@@ -8,6 +8,7 @@ const {
   readWorkspaceRootSnapshotMock,
   subscribeLiveSessionMock,
   subscribeProviderOAuthLoginMock,
+  existsSyncMock,
   watchMock,
 } = vi.hoisted(() => ({
   getDurableRunLogCursorMock: vi.fn(),
@@ -15,12 +16,14 @@ const {
   inlineConversationSessionSnapshotAssetsCapabilityMock: vi.fn((_: string, event: unknown) => event),
   readDurableRunLogDeltaMock: vi.fn(),
   readWorkspaceRootSnapshotMock: vi.fn(),
+  existsSyncMock: vi.fn(),
   subscribeLiveSessionMock: vi.fn(),
   subscribeProviderOAuthLoginMock: vi.fn(),
   watchMock: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
+  existsSync: existsSyncMock,
   watch: watchMock,
 }));
 
@@ -51,6 +54,7 @@ import { subscribeDesktopLocalApiStreamByUrl } from './localApiStreams.js';
 describe('localApiStreams', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    existsSyncMock.mockReturnValue(false);
   });
 
   it('ignores malformed live stream tailBlocks instead of partially parsing them', async () => {
@@ -98,30 +102,39 @@ describe('localApiStreams', () => {
     expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), { tailBlocks: 1000 });
   });
 
-  it('streams workspace file changes through the desktop local API bridge', async () => {
-    const close = vi.fn();
-    let watcher: ((eventType: string, filename: string) => void) | null = null;
-    readWorkspaceRootSnapshotMock.mockReturnValue({ root: '/repo' });
-    watchMock.mockImplementation((_path, _options, listener) => {
-      watcher = listener;
-      return { close };
-    });
-    const events: unknown[] = [];
+  it('streams debounced workspace changes through the desktop local API bridge without recursive repo watches', async () => {
+    vi.useFakeTimers();
+    try {
+      const close = vi.fn();
+      let watcher: (() => void) | null = null;
+      readWorkspaceRootSnapshotMock.mockReturnValue({ root: '/repo' });
+      watchMock.mockImplementation((_path, listener) => {
+        watcher = listener;
+        return { close };
+      });
+      const events: unknown[] = [];
 
-    const unsubscribe = await subscribeDesktopLocalApiStreamByUrl(new URL('http://local.test/api/workspace/events?cwd=%2Frepo'), (event) =>
-      events.push(event),
-    );
-    watcher?.('change', 'README.md');
-    unsubscribe();
+      const unsubscribe = await subscribeDesktopLocalApiStreamByUrl(
+        new URL('http://local.test/api/workspace/events?cwd=%2Frepo'),
+        (event) => events.push(event),
+      );
+      watcher?.();
+      watcher?.();
+      await vi.advanceTimersByTimeAsync(250);
+      unsubscribe();
 
-    expect(readWorkspaceRootSnapshotMock).toHaveBeenCalledWith('/repo');
-    expect(watchMock).toHaveBeenCalledWith('/repo', { recursive: true }, expect.any(Function));
-    expect(events).toEqual([
-      { type: 'open' },
-      { type: 'message', data: JSON.stringify({ type: 'ready', root: '/repo' }) },
-      { type: 'message', data: JSON.stringify({ type: 'workspace', eventType: 'change', path: 'README.md' }) },
-      { type: 'close' },
-    ]);
-    expect(close).toHaveBeenCalledOnce();
+      expect(readWorkspaceRootSnapshotMock).toHaveBeenCalledWith('/repo');
+      expect(watchMock).toHaveBeenCalledWith('/repo', expect.any(Function));
+      expect(watchMock).not.toHaveBeenCalledWith('/repo', { recursive: true }, expect.any(Function));
+      expect(events).toEqual([
+        { type: 'open' },
+        { type: 'message', data: JSON.stringify({ type: 'ready', root: '/repo' }) },
+        { type: 'message', data: JSON.stringify({ type: 'workspace' }) },
+        { type: 'close' },
+      ]);
+      expect(close).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,4 +1,5 @@
-import { watch } from 'node:fs';
+import { existsSync, watch } from 'node:fs';
+import { join } from 'node:path';
 
 import { getVaultRoot } from '@personal-agent/core';
 
@@ -338,31 +339,48 @@ async function subscribeDesktopWorkspaceEventsStream(url: URL, onEvent: (event: 
   }
 
   const snapshot = readWorkspaceRootSnapshot(cwd);
-  let watcher: ReturnType<typeof watch> | null = null;
+  const watchers: Array<ReturnType<typeof watch>> = [];
   let closed = false;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const close = () => {
     if (closed) return;
     closed = true;
-    watcher?.close();
-    watcher = null;
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    for (const watcher of watchers.splice(0)) {
+      watcher.close();
+    }
     onEvent({ type: 'close' });
+  };
+
+  const emitWorkspaceChange = () => {
+    if (closed) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      if (closed) return;
+      emitStreamMessage(onEvent, { type: 'workspace' });
+    }, 250);
   };
 
   onEvent({ type: 'open' });
   emitStreamMessage(onEvent, { type: 'ready', root: snapshot.root });
 
   try {
-    watcher = watch(snapshot.root, { recursive: true }, (eventType, filename) => {
-      if (closed) return;
-      emitStreamMessage(onEvent, {
-        type: 'workspace',
-        eventType,
-        path: typeof filename === 'string' ? filename : null,
-      });
-    });
+    // Avoid recursive repo watches here. In packaged Electron on large repos they can
+    // create a startup event storm big enough to freeze the renderer. A shallow root
+    // watch plus .git watch is enough to invalidate workspace/git status cheaply.
+    watchers.push(watch(snapshot.root, emitWorkspaceChange));
+    const gitDir = join(snapshot.root, '.git');
+    if (existsSync(gitDir)) {
+      watchers.push(watch(gitDir, emitWorkspaceChange));
+    }
   } catch (error) {
-    watcher?.close();
-    watcher = null;
+    for (const watcher of watchers.splice(0)) {
+      watcher.close();
+    }
     const message = error instanceof Error ? error.message : String(error);
     onEvent({ type: 'error', message });
     close();
