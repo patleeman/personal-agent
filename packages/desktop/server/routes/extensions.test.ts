@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { registerExtensionRoutes } from './extensions.js';
 
+const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+
 type Handler = (
   req: { params?: Record<string, string>; body?: unknown; query?: Record<string, string> },
   res: ReturnType<typeof createResponse>,
@@ -45,8 +47,23 @@ function createHarness() {
   };
 }
 
+function setPackagedResourcesPath(value = '/Applications/Personal Agent.app/Contents/Resources') {
+  Object.defineProperty(process, 'resourcesPath', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+}
+
 afterEach(() => {
   delete process.env.PERSONAL_AGENT_STATE_ROOT;
+  delete process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE;
+  if (originalResourcesPathDescriptor) {
+    Object.defineProperty(process, 'resourcesPath', originalResourcesPathDescriptor);
+  } else {
+    Reflect.deleteProperty(process, 'resourcesPath');
+  }
 });
 
 describe('registerExtensionRoutes', () => {
@@ -478,6 +495,64 @@ describe('registerExtensionRoutes', () => {
     expect(staleRes.json).toHaveBeenCalledWith({
       ok: true,
       result: expect.objectContaining({ saved: { title: 'Still works from cache' } }),
+    });
+  });
+
+  it('rejects runtime extension builds in packaged desktop mode', async () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'src'), { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'agent-board',
+        name: 'Agent Board',
+        frontend: { entry: 'dist/frontend.js', styles: [] },
+        backend: { entry: 'dist/backend.mjs', actions: [{ id: 'ping', handler: 'ping' }] },
+      }),
+    );
+    writeFileSync(join(extensionRoot, 'src', 'frontend.tsx'), 'export function AgentBoard() { return null; }');
+    writeFileSync(join(extensionRoot, 'src', 'backend.ts'), 'export async function ping() { return { ok: true }; }');
+    setPackagedResourcesPath();
+
+    const harness = createHarness();
+    const res = createResponse();
+    await harness.postHandler('/api/extensions/:id/build')({ params: { id: 'agent-board' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringContaining('Packaged desktop builds do not compile extensions at runtime.'),
+    });
+  });
+
+  it('reloads prebuilt runtime extension backends without rebuilding in packaged desktop mode', async () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-route-'));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
+    mkdirSync(join(extensionRoot, 'dist'), { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'agent-board',
+        name: 'Agent Board',
+        backend: { entry: 'dist/backend.mjs', actions: [{ id: 'ping', handler: 'ping' }] },
+      }),
+    );
+    writeFileSync(join(extensionRoot, 'dist', 'backend.mjs'), 'export async function ping() { return { ok: true }; }');
+    setPackagedResourcesPath();
+
+    const harness = createHarness();
+    const res = createResponse();
+    await harness.postHandler('/api/extensions/:id/reload')({ params: { id: 'agent-board' } }, res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      id: 'agent-board',
+      reloaded: true,
+      message: 'Extension backend reloaded.',
     });
   });
 

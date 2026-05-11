@@ -11,7 +11,7 @@ import type { Plugin } from 'esbuild';
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
-import { resolvePrebuiltSystemExtensionBackend } from './extensionBackendLoadTarget.js';
+import { isPrebuiltOnlyExtensionRuntime, resolvePackagedExtensionBackendLoadTarget } from './extensionBackendLoadTarget.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
 import { createExtensionModelsCapability } from './extensionModels.js';
@@ -441,6 +441,51 @@ interface ExtensionBackendBuildResult {
   stale: boolean;
 }
 
+function loadCompiledExtensionBackendModule(
+  extensionId: string,
+  compiled: Pick<ExtensionBackendBuildResult, 'path' | 'hash'>,
+): Promise<ExtensionBackendModule> {
+  const cacheKey = `${compiled.path}:${compiled.hash}`;
+  const cached = backendModuleCache.get(extensionId);
+  if (cached?.cacheKey === cacheKey) {
+    return cached.module;
+  }
+
+  const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
+  backendModuleCache.set(extensionId, { cacheKey, module });
+  return module;
+}
+
+function renderPackagedExtensionBackendExpectation(
+  entry: { source: 'system' | 'runtime'; packageRoot: string },
+  backendEntry: string,
+): string {
+  if (entry.source === 'system' && backendEntry.startsWith('src/')) {
+    return resolve(entry.packageRoot, 'dist', 'backend.mjs');
+  }
+
+  if (backendEntry.startsWith('src/') || backendEntry.endsWith('.ts')) {
+    return resolve(entry.packageRoot, 'dist', 'backend.mjs');
+  }
+
+  return resolve(entry.packageRoot, backendEntry);
+}
+
+function createPackagedPrebuiltBackendError(
+  extensionId: string,
+  entry: { source: 'system' | 'runtime'; packageRoot: string },
+  backendEntry: string,
+): ExtensionLoadError {
+  const expectedPath = renderPackagedExtensionBackendExpectation(entry, backendEntry);
+  return new ExtensionLoadError({
+    extensionId,
+    code: 'build_failure',
+    message:
+      `Packaged desktop builds do not compile extensions at runtime. ` +
+      `Extension "${extensionId}" must ship a prebuilt backend bundle at ${expectedPath}.`,
+  });
+}
+
 async function buildExtensionBackend(
   extensionId: string,
   packageRoot: string,
@@ -515,18 +560,12 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
     });
   }
 
-  const prebuilt = resolvePrebuiltSystemExtensionBackend(entry);
-  if (prebuilt) {
-    const compiled: ExtensionBackendBuildResult = { ...prebuilt, rebuilt: false, stale: false };
-    const cacheKey = `${compiled.path}:${compiled.hash}`;
-    const cached = backendModuleCache.get(extensionId);
-    if (cached?.cacheKey === cacheKey) {
-      return cached.module;
-    }
-
-    const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
-    backendModuleCache.set(extensionId, { cacheKey, module });
-    return module;
+  const packagedPrebuilt = resolvePackagedExtensionBackendLoadTarget(entry, backendEntry);
+  if (packagedPrebuilt) {
+    return loadCompiledExtensionBackendModule(extensionId, packagedPrebuilt);
+  }
+  if (isPrebuiltOnlyExtensionRuntime()) {
+    throw createPackagedPrebuiltBackendError(extensionId, { source: entry.source, packageRoot: entry.packageRoot }, backendEntry);
   }
 
   const packageRoot = resolve(entry.packageRoot);
@@ -556,15 +595,7 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
     }
   }
 
-  const cacheKey = `${compiled.path}:${compiled.hash}`;
-  const cached = backendModuleCache.get(extensionId);
-  if (cached?.cacheKey === cacheKey) {
-    return cached.module;
-  }
-
-  const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
-  backendModuleCache.set(extensionId, { cacheKey, module });
-  return module;
+  return loadCompiledExtensionBackendModule(extensionId, compiled);
 }
 
 export async function loadExtensionAgentFactory(extensionId: string, exportName = 'default'): Promise<ExtensionFactory> {
@@ -681,13 +712,19 @@ export async function reloadExtensionBackend(extensionId: string): Promise<{ ok:
     throw new Error('Extension has no backend entry.');
   }
 
+  const packagedPrebuilt = resolvePackagedExtensionBackendLoadTarget(entry, backendEntry);
+  if (packagedPrebuilt) {
+    await loadCompiledExtensionBackendModule(extensionId, packagedPrebuilt);
+    return { ok: true, extensionId, rebuilt: false };
+  }
+  if (isPrebuiltOnlyExtensionRuntime()) {
+    throw createPackagedPrebuiltBackendError(extensionId, { source: entry.source, packageRoot: entry.packageRoot }, backendEntry);
+  }
+
   const packageRoot = resolve(entry.packageRoot);
   const entryPath = resolve(packageRoot, backendEntry);
   assertInside(packageRoot, entryPath);
   const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: false });
-  const cacheKey = `${compiled.path}:${compiled.hash}`;
-  const module = import(`${pathToFileURL(compiled.path).href}?v=${encodeURIComponent(compiled.hash)}`) as Promise<ExtensionBackendModule>;
-  backendModuleCache.set(extensionId, { cacheKey, module });
-  await module;
+  await loadCompiledExtensionBackendModule(extensionId, compiled);
   return { ok: true, extensionId, rebuilt: compiled.rebuilt };
 }

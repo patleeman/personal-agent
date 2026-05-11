@@ -69,6 +69,8 @@ npm run extension:build -- ~/.local/state/personal-agent/extensions/agent-board
 
 The builder compiles frontend React to `dist/frontend.js`, backend Node code to `dist/backend.mjs`, and bundles normal third-party dependencies. Host packages such as `react`, `react-dom`, and `@personal-agent/extensions` are treated as provided by the app.
 
+Packaged desktop releases only load prebuilt `dist/` files. They do not run esbuild for extensions at runtime, so imported/user extensions must already include their built frontend/backend bundles.
+
 After building, reload extensions from the Extension Manager or the app reload path. If you changed UI, open the declared route or right-rail surface and visually inspect it.
 
 ## Manifest contract

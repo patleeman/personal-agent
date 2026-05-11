@@ -26,16 +26,26 @@ function listSystemExtensionDirs() {
     .sort((left, right) => left.localeCompare(right));
 }
 
-function assertManifestEntriesExist(extensionDir) {
+function assertBuiltEntriesExist(extensionDir) {
   const manifestPath = join(extensionDir, 'extension.json');
   const manifest = readJson(manifestPath);
-  const requiredEntries = [manifest.frontend?.entry, ...(manifest.frontend?.styles ?? []), manifest.backend?.entry].filter(
-    (entry) => typeof entry === 'string' && entry.trim().length > 0,
-  );
-  const missingEntries = requiredEntries.filter((entry) => !existsSync(join(extensionDir, entry)));
+  const requiredEntries = [];
 
+  if (typeof manifest.frontend?.entry === 'string' && manifest.frontend.entry.trim().length > 0) {
+    requiredEntries.push(manifest.frontend.entry);
+  }
+  for (const styleEntry of manifest.frontend?.styles ?? []) {
+    if (typeof styleEntry === 'string' && styleEntry.trim().length > 0) {
+      requiredEntries.push(styleEntry);
+    }
+  }
+  if (typeof manifest.backend?.entry === 'string' && manifest.backend.entry.trim().length > 0) {
+    requiredEntries.push(manifest.backend.entry.startsWith('src/') ? 'dist/backend.mjs' : manifest.backend.entry);
+  }
+
+  const missingEntries = requiredEntries.filter((entry) => !existsSync(join(extensionDir, entry)));
   if (missingEntries.length > 0) {
-    throw new Error(`${manifest.id ?? extensionDir} manifest points at missing built entries: ${missingEntries.join(', ')}`);
+    throw new Error(`${manifest.id ?? extensionDir} is missing built extension outputs: ${missingEntries.join(', ')}`);
   }
 }
 
@@ -44,7 +54,7 @@ const extensionDirs = listSystemExtensionDirs();
 for (const extensionDir of extensionDirs) {
   console.log(`Building ${extensionDir.replace(`${repoRoot}/`, '')}`);
   execFileSync(process.execPath, [extensionBuildScript, extensionDir], { cwd: repoRoot, stdio: 'inherit' });
-  assertManifestEntriesExist(extensionDir);
+  assertBuiltEntriesExist(extensionDir);
 }
 
 console.log(`Built and verified ${extensionDirs.length} system extensions.`);

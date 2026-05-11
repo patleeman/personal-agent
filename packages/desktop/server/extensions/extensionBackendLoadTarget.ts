@@ -11,7 +11,19 @@ export interface PrebuiltExtensionBackendLoadTarget {
   hash: string;
 }
 
-export function shouldPreferPrebuiltSystemExtensionBackend(
+function buildPrebuiltExtensionBackendLoadTarget(path: string): PrebuiltExtensionBackendLoadTarget | null {
+  if (!existsSync(path) || !statSync(path).isFile()) {
+    return null;
+  }
+
+  const stats = statSync(path);
+  return {
+    path,
+    hash: `prebuilt:${stats.size}:${stats.mtimeMs}`,
+  };
+}
+
+export function isPrebuiltOnlyExtensionRuntime(
   options: {
     resourcesPath?: string;
     env?: NodeJS.ProcessEnv;
@@ -20,6 +32,43 @@ export function shouldPreferPrebuiltSystemExtensionBackend(
   const resourcesPath = options.resourcesPath ?? process.resourcesPath;
   const env = options.env ?? process.env;
   return typeof resourcesPath === 'string' && resourcesPath.trim().length > 0 && env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE !== '1';
+}
+
+export function shouldPreferPrebuiltSystemExtensionBackend(
+  options: {
+    resourcesPath?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): boolean {
+  return isPrebuiltOnlyExtensionRuntime(options);
+}
+
+export function resolvePackagedExtensionBackendLoadTarget(
+  entry: ExtensionBackendLoadTargetEntry,
+  backendEntry: string,
+  options: {
+    resourcesPath?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): PrebuiltExtensionBackendLoadTarget | null {
+  if (!isPrebuiltOnlyExtensionRuntime(options) || !entry.packageRoot) {
+    return null;
+  }
+
+  const normalizedBackendEntry = backendEntry.trim();
+  if (normalizedBackendEntry.length === 0) {
+    return null;
+  }
+
+  if (entry.source === 'system' && normalizedBackendEntry.startsWith('src/')) {
+    return buildPrebuiltExtensionBackendLoadTarget(resolve(entry.packageRoot, 'dist', 'backend.mjs'));
+  }
+
+  if (normalizedBackendEntry.startsWith('src/') || normalizedBackendEntry.endsWith('.ts')) {
+    return null;
+  }
+
+  return buildPrebuiltExtensionBackendLoadTarget(resolve(entry.packageRoot, normalizedBackendEntry));
 }
 
 export function resolvePrebuiltSystemExtensionBackend(
@@ -33,14 +82,5 @@ export function resolvePrebuiltSystemExtensionBackend(
     return null;
   }
 
-  const path = resolve(entry.packageRoot, 'dist', 'backend.mjs');
-  if (!existsSync(path)) {
-    return null;
-  }
-
-  const stats = statSync(path);
-  return {
-    path,
-    hash: `prebuilt:${stats.size}:${stats.mtimeMs}`,
-  };
+  return buildPrebuiltExtensionBackendLoadTarget(resolve(entry.packageRoot, 'dist', 'backend.mjs'));
 }

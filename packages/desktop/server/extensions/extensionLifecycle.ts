@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { getStateRoot } from '@personal-agent/core';
 
+import { isPrebuiltOnlyExtensionRuntime } from './extensionBackendLoadTarget.js';
 import {
   findExtensionEntry,
   getRuntimeExtensionsRoot,
@@ -71,6 +72,16 @@ function assertInside(root: string, candidate: string): void {
 
 function createSafeTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function assertRuntimeExtensionBuildSupported(): void {
+  if (!isPrebuiltOnlyExtensionRuntime()) {
+    return;
+  }
+
+  throw new Error(
+    'Packaged desktop builds do not compile extensions at runtime. Prebuild dist/frontend.js and dist/backend.mjs before importing or enabling the extension.',
+  );
 }
 
 function starterHelpText(): string {
@@ -247,6 +258,8 @@ export async function buildRuntimeExtension(extensionId: string) {
   if (entry.manifest.schemaVersion !== 2) {
     throw new Error('Only native extension manifest schemaVersion 2 can be built.');
   }
+
+  assertRuntimeExtensionBuildSupported();
 
   const packageRoot = resolve(entry.packageRoot);
   const { build } = await import('esbuild');

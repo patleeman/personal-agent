@@ -35,7 +35,7 @@ Bundled first-party extensions live in the repo/app bundle under `extensions/` a
 
 The loader also accepts package roots through `PERSONAL_AGENT_EXTENSION_PATHS`. Each path can point directly at a folder with `extension.json`, or at a parent folder containing many extension packages.
 
-Extension Manager can build runtime extensions in-app. Use the per-extension **Build** action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** to refresh backend modules and registry surfaces. Starter creation supports three templates: `main-page`, `right-rail`, and `workbench-detail`.
+Extension Manager can build runtime extensions in-app when running from an unpackaged/dev desktop bundle. Use the per-extension **Build** action to compile `src/frontend.tsx` and `src/backend.ts` into manifest-declared `dist/*` entries, then **Reload** to refresh backend modules and registry surfaces. Packaged desktop releases are prebuilt-only: they load existing `dist/` bundles and reject runtime compilation. Starter creation supports three templates: `main-page`, `right-rail`, and `workbench-detail`.
 
 ## Agent workflow for this extension
 

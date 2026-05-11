@@ -467,7 +467,9 @@ export function registerExtensionRoutes(
       setBuildError(req.params.id, message);
       const status = /not found/i.test(message)
         ? 404
-        : /package root|schemaVersion|manifest|contributes|frontend|backend|surfaces|permissions/i.test(message)
+        : /package root|schemaVersion|manifest|contributes|frontend|backend|surfaces|permissions|compile extensions at runtime|prebuild dist\/frontend\.js and dist\/backend\.mjs/i.test(
+              message,
+            )
           ? 400
           : 500;
       logError('extension build error', { message, stack: err instanceof Error ? err.stack : undefined });
@@ -488,10 +490,18 @@ export function registerExtensionRoutes(
         res.json({ ok: true, id: req.params.id, reloaded: false, message: 'Runtime manifests are read on demand.' });
         return;
       }
-      await reloadExtensionBackend(req.params.id);
-      res.json({ ok: true, id: req.params.id, reloaded: true, message: 'Extension backend rebuilt.' });
+      const result = await reloadExtensionBackend(req.params.id);
+      res.json({
+        ok: true,
+        id: req.params.id,
+        reloaded: true,
+        message: result.rebuilt ? 'Extension backend rebuilt.' : 'Extension backend reloaded.',
+      });
     } catch (err) {
-      sendRouteError(res, 'extension reload error', err);
+      const message = err instanceof Error ? err.message : String(err);
+      const status = /compile extensions at runtime|prebuilt backend bundle/i.test(message) ? 400 : 500;
+      logError('extension reload error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(status).json({ error: message });
     }
   });
 

@@ -55,6 +55,8 @@ const electronBuilderConfig = {
     '!node_modules/@personal-agent/*/vite.config.ts',
     '!node_modules/@personal-agent/*/postcss.config.js',
     '!node_modules/@personal-agent/*/tailwind.config.js',
+    '!node_modules/esbuild{,/**/*}',
+    '!node_modules/@esbuild{,/**/*}',
     '!node_modules/**/*.map',
     '!node_modules/koffi/{doc,src,vendor,lib/native}{,/**/*}',
     '!node_modules/koffi/build/koffi/{darwin_x64,freebsd_arm64,freebsd_ia32,freebsd_x64,linux_arm64,linux_armhf,linux_ia32,linux_loong64,linux_riscv64d,linux_x64,musl_arm64,musl_x64,openbsd_ia32,openbsd_x64,win32_arm64,win32_ia32,win32_x64}{,/**/*}',
@@ -77,6 +79,7 @@ const electronBuilderConfig = {
     {
       from: 'extensions',
       to: 'extensions',
+      filter: ['**/*', '!**/src{,/**/*}'],
     },
     {
       from: 'docs',
