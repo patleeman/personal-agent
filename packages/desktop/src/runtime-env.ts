@@ -111,5 +111,11 @@ export function applyDesktopRuntimeEnvironmentOverrides(env: NodeJS.ProcessEnv =
     env.PERSONAL_AGENT_STATE_ROOT = overrides.stateRoot;
   }
 
+  // Use a separate codex port for the testing variant to avoid conflicts
+  // with the production app's codex protocol server (default port 3843).
+  if (!env.CODEX_PORT && resolveDesktopLaunchPresentation(env).mode === 'testing') {
+    env.CODEX_PORT = '3844';
+  }
+
   seedTestingRuntimeState(env);
 }

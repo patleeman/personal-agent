@@ -22,7 +22,6 @@ const sharedEsbuildOptions = {
   logLevel: 'info',
   external: [
     '@personal-agent/core',
-    '@personal-agent/daemon',
     '@earendil-works/pi-coding-agent',
     '@xenova/transformers',
     'better-sqlite3',

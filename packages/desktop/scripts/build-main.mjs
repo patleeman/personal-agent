@@ -5,12 +5,11 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dir = resolve(fileURLToPath(import.meta.url), '..', '..');
-const entry = resolve(dir, 'src', 'main.ts');
-const outfile = resolve(dir, 'dist', 'main.js');
 
+// Build main process bundle
 await build({
-  entryPoints: [entry],
-  outfile,
+  entryPoints: [resolve(dir, 'src', 'main.ts')],
+  outfile: resolve(dir, 'dist', 'main.js'),
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -19,6 +18,43 @@ await build({
     js: `import process from 'node:process';import { createRequire as __paCreateRequire } from 'node:module';var require=__paCreateRequire(import.meta.url);`,
   },
   external: ['electron', 'fsevents'],
+  logLevel: 'info',
+  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+});
+
+// Build preload script (must be CommonJS for Electron sandbox)
+await build({
+  entryPoints: [resolve(dir, 'src', 'preload.cts')],
+  outfile: resolve(dir, 'dist', 'preload.cjs'),
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node20',
+  external: ['electron'],
+  logLevel: 'info',
+  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+});
+
+// Build local API workers (runs the server bundle in worker threads)
+await build({
+  entryPoints: [resolve(dir, 'src', 'local-api-worker.ts')],
+  outfile: resolve(dir, 'dist', 'local-api-worker.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node20',
+  external: ['electron'],
+  logLevel: 'info',
+  nodePaths: [resolve(dir, '..', '..', 'node_modules')],
+});
+await build({
+  entryPoints: [resolve(dir, 'src', 'readonly-local-api-worker.ts')],
+  outfile: resolve(dir, 'dist', 'readonly-local-api-worker.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node20',
+  external: ['electron'],
   logLevel: 'info',
   nodePaths: [resolve(dir, '..', '..', 'node_modules')],
 });

@@ -56,6 +56,7 @@ function buildDesktopLaunchEnv(baseEnv = process.env, args = []) {
     PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
     PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR: readElectronNativeModulesDir(),
     PERSONAL_AGENT_REPO_ROOT: repoRoot,
+    CODEX_PORT: '3844',
     ...(baseEnv.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim() || !shouldSkipQuitConfirmationForLaunch(args)
       ? {}
       : { PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' }),
