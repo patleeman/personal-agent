@@ -28,6 +28,8 @@ let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let updateManager: DesktopUpdateManager | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
+const DEFERRED_BACKEND_STARTUP_DELAY_MS = 5_000;
+
 let scheduledBackendStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
@@ -290,7 +292,7 @@ function scheduleDesktopBackendStartup(onReady?: (ready: boolean) => void): void
     void ensureDesktopBackendAvailable()
       .then((ready) => onReady?.(ready))
       .catch((error) => logBootstrapError(error));
-  }, 1_500);
+  }, DEFERRED_BACKEND_STARTUP_DELAY_MS);
 }
 
 async function withDesktopBackend(action: () => Promise<void>): Promise<void> {
