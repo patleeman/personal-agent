@@ -269,10 +269,21 @@ export function useConversationScroll({
     // Any pointer interaction in the transcript (clicking a tool call,
     // selecting text, tapping a link) should pause auto-scroll so the user
     // can read or interact without being pushed to the bottom.
-    const handlePointerDown = () => {
-      if (scrollPinnedToBottomRef.current) {
-        detachFromBottom();
+    //
+    // Skip clicks on the scrollbar — the browser needs exclusive pointer
+    // access for scrollbar drag to work. Even with { passive: true },
+    // intercepting pointerdown on the scroll container can prevent Chrome
+    // from initiating scrollbar drag.
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!scrollPinnedToBottomRef.current) {
+        return;
       }
+
+      if (event.clientX >= el.getBoundingClientRect().left + el.clientWidth) {
+        return;
+      }
+
+      detachFromBottom();
     };
 
     el.addEventListener('wheel', handleWheel, { passive: true });
