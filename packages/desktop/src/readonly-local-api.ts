@@ -16,6 +16,8 @@ const WORKER_SAFE_LOCAL_API_ROUTES: Array<{
   { methods: new Set(['POST']), pattern: /^\/api\/sessions\/search$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/skill-folders$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/instructions$/ },
+  { methods: new Set(['GET']), pattern: /^\/api\/settings$/ },
+  { methods: new Set(['GET']), pattern: /^\/api\/settings\/schema$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/models$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/model-providers$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/provider-auth$/ },
