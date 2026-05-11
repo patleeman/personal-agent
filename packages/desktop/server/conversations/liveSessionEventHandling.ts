@@ -311,6 +311,11 @@ export function handleLiveSessionEvent<TEntry extends LiveSessionEventHost>(
     callbacks.broadcastQueueState(entry, true);
   }
 
+  if (event.type === 'session_info_changed') {
+    entry.title = event.name;
+    callbacks.broadcastTitle(entry);
+  }
+
   if (event.type === 'message_start' && event.message.role === 'user') {
     if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
       const fallbackTitle = buildFallbackTitleFromContent(event.message.content);

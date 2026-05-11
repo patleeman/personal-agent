@@ -89,6 +89,16 @@ describe('streaming lifecycle callbacks', () => {
     expect(cbs.clearContextUsageTimer).toHaveBeenCalled();
   });
 
+  it('broadcasts session info title changes', () => {
+    const entry = makeEntry({ title: 'Old title' });
+    const cbs = makeCallbacks();
+
+    handleLiveSessionEvent(entry, { type: 'session_info_changed', name: 'New title' } as any, cbs);
+
+    expect(entry.title).toBe('New title');
+    expect(cbs.broadcastTitle).toHaveBeenCalledWith(entry);
+  });
+
   it('calls syncRunningState on every event, not just agent_start/turn_end', () => {
     const entry = makeEntry();
     const cbs = makeCallbacks();
