@@ -38,21 +38,40 @@ export function registerDesktopIpc(options: {
       const pendingEvents: T[] = [];
       let deliveryEnabled = false;
       let active = true;
+      let flushScheduled = false;
+
+      const flushPendingEvents = () => {
+        flushScheduled = false;
+        if (!active || input.sender.isDestroyed()) {
+          pendingEvents.length = 0;
+          return;
+        }
+
+        const events = pendingEvents.splice(0);
+        for (const pendingEvent of events) {
+          input.sender.send(input.channel, {
+            subscriptionId: input.subscriptionId,
+            event: pendingEvent,
+          });
+        }
+      };
+
+      const scheduleFlush = () => {
+        if (!deliveryEnabled || flushScheduled) {
+          return;
+        }
+
+        flushScheduled = true;
+        setImmediate(flushPendingEvents);
+      };
 
       const deliver = (nextEvent: T) => {
         if (!active || input.sender.isDestroyed()) {
           return;
         }
 
-        if (!deliveryEnabled) {
-          pendingEvents.push(nextEvent);
-          return;
-        }
-
-        input.sender.send(input.channel, {
-          subscriptionId: input.subscriptionId,
-          event: nextEvent,
-        });
+        pendingEvents.push(nextEvent);
+        scheduleFlush();
       };
 
       const unsubscribe = await input.subscribe(deliver);
@@ -70,19 +89,7 @@ export function registerDesktopIpc(options: {
       input.store.set(input.subscriptionId, cleanup);
       input.sender.once('destroyed', cleanup);
       deliveryEnabled = true;
-      setImmediate(() => {
-        if (!active || input.sender.isDestroyed()) {
-          return;
-        }
-
-        for (const pendingEvent of pendingEvents) {
-          input.sender.send(input.channel, {
-            subscriptionId: input.subscriptionId,
-            event: pendingEvent,
-          });
-        }
-        pendingEvents.length = 0;
-      });
+      scheduleFlush();
     })();
 
   ipcMain.handle(`${CHANNEL_PREFIX}:get-environment`, async (event) => {
