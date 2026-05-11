@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@personal-agent/core': resolve(process.cwd(), 'packages/core/src/index.ts'),
-      '@personal-agent/daemon': resolve(process.cwd(), 'packages/daemon/src/index.ts'),
+      '@personal-agent/daemon': resolve(process.cwd(), 'packages/desktop/server/daemon/index.ts'),
       '@personal-agent/extensions/host': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/host.ts'),
       '@personal-agent/extensions/ui': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/ui.ts'),
       '@personal-agent/extensions/workbench': resolve(process.cwd(), 'packages/desktop/ui/src/extensions/workbench.ts'),
