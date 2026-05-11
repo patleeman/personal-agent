@@ -420,7 +420,9 @@ function RunContextPanel({
       setRuns(await api.runs());
       reconnect();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not mark the run as reviewed.');
+      const msg = error instanceof Error ? error.message : 'Could not mark the run as reviewed.';
+      setActionError(msg);
+      window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'warning', message: msg, source: 'core' } }));
     } finally {
       setMarkingReviewed(false);
     }
