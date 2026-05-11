@@ -67,7 +67,11 @@ export function GatewaysPage() {
         if (!cancelled) setState(next);
       })
       .catch((err) => {
-        if (!cancelled) setError(formatGatewayError(err));
+        if (!cancelled) {
+          const msg = formatGatewayError(err);
+          setError(msg);
+          window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: `Failed to load gateways: ${msg}`, source: 'system-gateways' } }));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

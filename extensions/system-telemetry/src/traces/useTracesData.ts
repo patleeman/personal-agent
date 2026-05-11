@@ -23,6 +23,10 @@ import type {
 import { api } from '@personal-agent/extensions/data';
 import { useCallback, useEffect, useState } from 'react';
 
+function notifyError(message: string) {
+  window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message, source: 'system-telemetry' } }));
+}
+
 export type TraceRange = '1h' | '6h' | '24h' | '7d' | '30d';
 
 export interface TracesData {
@@ -124,6 +128,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         loading: false,
         error: err instanceof Error ? err.message : 'Failed to load trace data',
       }));
+      notifyError(err instanceof Error ? err.message : 'Failed to load trace data');
     }
   }, [range]);
 
