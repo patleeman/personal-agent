@@ -433,8 +433,10 @@ export function ExtensionManagerPage() {
   const navigate = useNavigate();
   const [detailsExtensionId, setDetailsExtensionId] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const load = useCallback((options: { showLoading?: boolean } = {}) => {
+    if (options.showLoading) {
+      setLoading(true);
+    }
     setError(null);
     api
       .extensionInstallations()
@@ -449,9 +451,10 @@ export function ExtensionManagerPage() {
   }, []);
 
   useEffect(() => {
-    load();
-    window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
-    return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, load);
+    load({ showLoading: true });
+    const refresh = () => load({ showLoading: false });
+    window.addEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(EXTENSION_REGISTRY_CHANGED_EVENT, refresh);
   }, [load]);
 
   const reload = useCallback(() => {
@@ -556,9 +559,17 @@ export function ExtensionManagerPage() {
       }
       setBusyId(extension.id);
       const nextEnabled = !extension.enabled;
+      setExtensions((items) =>
+        items.map((item) =>
+          item.id === extension.id ? { ...item, enabled: nextEnabled, status: nextEnabled ? 'enabled' : 'disabled' } : item,
+        ),
+      );
       api
         .updateExtension(extension.id, { enabled: nextEnabled })
-        .then(() => {
+        .then((result) => {
+          if (result.extension) {
+            setExtensions((items) => items.map((item) => (item.id === result.extension?.id ? result.extension : item)));
+          }
           notifyExtensionRegistryChanged();
           if (
             !nextEnabled &&
@@ -566,9 +577,12 @@ export function ExtensionManagerPage() {
           ) {
             navigate('/extensions', { replace: true });
           }
-          return load();
+          return load({ showLoading: false });
         })
-        .catch((err: Error) => setError(err.message))
+        .catch((err: Error) => {
+          setExtensions((items) => items.map((item) => (item.id === extension.id ? extension : item)));
+          setError(err.message);
+        })
         .finally(() => setBusyId(null));
     },
     [load, location.pathname, navigate],

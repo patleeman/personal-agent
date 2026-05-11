@@ -17,7 +17,7 @@ The Extension Manager should make that loop boring:
 - show manifest, surfaces, commands, routes, build status, and permissions
 - build/rebuild an extension
 - reload extension registry/runtime
-- enable/disable user extensions
+- enable/disable user extensions without replacing the Extension Manager page; registry-backed navigation and surfaces refresh in place
 - export/import extension packages
 - snapshot a user extension before agent edits
 - open an extension folder in Finder/editor
