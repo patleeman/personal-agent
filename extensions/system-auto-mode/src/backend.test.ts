@@ -53,7 +53,7 @@ describe('system-goal-mode extension', () => {
       },
     );
 
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -105,11 +105,11 @@ describe('system-goal-mode extension', () => {
     };
 
     await turnEnd?.({ toolResults: [] }, ctx);
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
     await turnEnd?.({ toolResults: [] }, ctx);
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -153,11 +153,11 @@ describe('system-goal-mode extension', () => {
     };
 
     await turnEnd?.({ toolResults: [] }, ctx);
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
     await turnEnd?.({ toolResults: [{ role: 'toolResult', toolName: 'bash' }] }, ctx);
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 

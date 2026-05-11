@@ -304,7 +304,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       const prompt = buildContinuationPrompt(state);
       const continuationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-      queueMicrotask(() => {
+      setTimeout(() => {
         pi.sendMessage(
           {
             customType: CONTINUATION_CUSTOM_TYPE,
@@ -314,7 +314,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           },
           { deliverAs: 'followUp', triggerTurn: true },
         );
-      });
+      }, 0);
     });
 
     // Keep the event registered for diagnostics/compatibility; turn_end decides whether the full turn made progress.
