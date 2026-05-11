@@ -842,6 +842,7 @@ export function queryAgentLoop(since) {
       COUNT(*) as total_runs,
       COALESCE(SUM(CASE WHEN turn_count > 20 THEN 1 ELSE 0 END), 0) as runs_over_20,
       AVG(duration_ms) as avg_duration_ms,
+      COALESCE(SUM(tokens_input + tokens_output + tokens_cached_input + tokens_cached_write), 0) as total_tokens,
       COALESCE(SUM(CASE WHEN duration_ms > 600000 THEN 1 ELSE 0 END), 0) as stuck_runs
     FROM trace_stats WHERE ts >= ? AND ((run_id IS NOT NULL AND run_id != '') OR turn_count > 0 OR step_count > 0 OR duration_ms > 0)
   `,
@@ -852,26 +853,52 @@ export function queryAgentLoop(since) {
   if (totalRuns === 0) {
     return null;
   }
-  const rawSub = db
+  const rawToolStats = db
     .prepare(
       `
-    SELECT COUNT(*) as subagent_calls
-    FROM trace_tool_calls WHERE ts >= ? AND tool_name = 'subagent' AND run_id IS NOT NULL AND run_id != ''
+    SELECT
+      COUNT(*) as tool_calls,
+      COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as tool_errors,
+      COALESCE(SUM(CASE WHEN tool_name = 'subagent' THEN 1 ELSE 0 END), 0) as subagent_calls
+    FROM trace_tool_calls WHERE ts >= ?
   `,
     )
     .get(since);
-  const sub = mapRow(rawSub);
+  const toolStats = mapRow(rawToolStats);
   return {
     turnsPerRun: stats.avgTurns ? Math.round(Number(stats.avgTurns) * 10) / 10 : 0,
     stepsPerTurn: stats.avgSteps ? Math.round(Number(stats.avgSteps) * 10) / 10 : 0,
-    runsOver20Turns: Number(stats.runsOver20),
-    subagentsPerRun: Math.round((Number(sub.subagentCalls) / totalRuns) * 10) / 10,
+    runsOver20Turns: Number(stats.runsOver20) || 0,
+    subagentsPerRun: Math.round((Number(toolStats.subagentCalls) / totalRuns) * 10) / 10,
+    toolCallsPerRun: Math.round((Number(toolStats.toolCalls) / totalRuns) * 10) / 10,
+    toolCallsP95: queryToolCallsPerRunPercentile(since, 0.95),
+    toolErrorRatePct:
+      Number(toolStats.toolCalls) > 0 ? Math.round((Number(toolStats.toolErrors) / Number(toolStats.toolCalls)) * 1000) / 10 : 0,
+    avgTokensPerRun: Math.round(Number(stats.totalTokens) / totalRuns),
+    stuckRunPct: Math.round((Number(stats.stuckRuns) / totalRuns) * 1000) / 10,
     avgDurationMs: Math.round(Number(stats.avgDurationMs) || 0),
     durationP50Ms: queryRunDurationPercentile(since, 0.5),
     durationP95Ms: queryRunDurationPercentile(since, 0.95),
     durationP99Ms: queryRunDurationPercentile(since, 0.99),
     stuckRuns: Number(stats.stuckRuns),
   };
+}
+function queryToolCallsPerRunPercentile(since, percentile) {
+  const db = getTraceDb();
+  const rows = db
+    .prepare(
+      `
+    SELECT COUNT(*) as call_count
+    FROM trace_tool_calls
+    WHERE ts >= ?
+    GROUP BY COALESCE(NULLIF(run_id, ''), session_id)
+    ORDER BY call_count ASC
+  `,
+    )
+    .all(since);
+  if (rows.length === 0) return 0;
+  const index = Math.ceil(rows.length * percentile) - 1;
+  return Number(rows[Math.max(0, Math.min(index, rows.length - 1))].call_count) || 0;
 }
 function queryRunDurationPercentile(since, percentile) {
   const db = getTraceDb();

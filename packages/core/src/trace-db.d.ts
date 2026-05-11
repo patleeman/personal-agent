@@ -173,6 +173,11 @@ export interface AgentLoopRow {
   stepsPerTurn: number;
   runsOver20Turns: number;
   subagentsPerRun: number;
+  toolCallsPerRun: number;
+  toolCallsP95: number;
+  toolErrorRatePct: number;
+  avgTokensPerRun: number;
+  stuckRunPct: number;
   avgDurationMs: number;
   durationP50Ms: number;
   durationP95Ms: number;

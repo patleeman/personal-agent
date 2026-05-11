@@ -110,6 +110,7 @@ describe('trace-db', () => {
     });
     writeTraceToolCall({ sessionId, toolName: 'read', status: 'error', errorMessage: 'File not found' });
     writeTraceToolCall({ sessionId, toolName: 'read', status: 'ok', durationMs: 400 });
+    writeTraceToolCall({ sessionId: 'session-2', runId: 'run-1', toolName: 'subagent', status: 'ok', durationMs: 2000 });
 
     writeTraceContext({
       sessionId,
@@ -149,7 +150,7 @@ describe('trace-db', () => {
     expect(result.totalCost).toBeGreaterThan(0);
     expect(result.tokensTotal).toBeGreaterThan(0);
     expect(result.tokensTotal).toBe(result.tokensInput + result.tokensCached + result.tokensOutput);
-    expect(result.toolCalls).toBe(4);
+    expect(result.toolCalls).toBe(5);
     expect(result.toolErrors).toBe(1);
   });
 
@@ -163,7 +164,7 @@ describe('trace-db', () => {
 
   it('queryToolHealth returns per-tool stats', () => {
     const result = queryToolHealth(fiveHoursAgo);
-    expect(result.length).toBe(2);
+    expect(result.length).toBe(3);
     const bash = result.find((t) => t.toolName === 'bash');
     expect(bash).toBeDefined();
     expect(bash!.calls).toBe(2);
@@ -279,6 +280,12 @@ describe('trace-db', () => {
     expect(result.turnsPerRun).toBeGreaterThan(0);
     expect(result.stepsPerTurn).toBeGreaterThan(0);
     expect(result.avgDurationMs).toBeGreaterThan(0);
+    expect(result.toolCallsPerRun).toBe(1.7);
+    expect(result.toolCallsP95).toBe(4);
+    expect(result.toolErrorRatePct).toBe(20);
+    expect(result.avgTokensPerRun).toBe(2083);
+    expect(result.subagentsPerRun).toBe(0.3);
+    expect(result.stuckRunPct).toBe(33.3);
     expect(result.durationP50Ms).toBeGreaterThan(0);
     expect(result.durationP95Ms).toBeGreaterThan(0);
     expect(result.durationP99Ms).toBeGreaterThan(0);

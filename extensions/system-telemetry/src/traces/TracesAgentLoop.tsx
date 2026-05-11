@@ -25,17 +25,34 @@ export function TracesAgentLoop({ loop }: { loop: TraceAgentLoop | null }) {
       </div>
       <div className="p-4">
         {/* Loop stats grid */}
-        <div className="grid grid-cols-3 gap-2.5 mb-4">
-          <LoopStat value={String(loop.turnsPerRun)} label="Avg Turns / Run" cls="text-accent" />
-          <LoopStat value={String(loop.stepsPerTurn)} label="Avg Steps / Turn" cls="text-accent" />
+        <div className="grid grid-cols-4 gap-2.5 mb-4">
+          <LoopStat value={formatNumber(loop.turnsPerRun)} label="Avg Turns / Run" cls="text-accent" />
+          <LoopStat value={formatNumber(loop.stepsPerTurn)} label="Avg Steps / Turn" cls="text-accent" />
+          <LoopStat value={formatNumber(loop.toolCallsPerRun)} label="Tool Calls / Run" cls="text-accent" />
+          <LoopStat value={formatNumber(loop.toolCallsP95)} label="P95 Tool Calls" cls="text-warning" />
           <LoopStat
-            value={String(loop.runsOver20Turns)}
+            value={formatPercent(loop.toolErrorRatePct)}
+            label="Tool Error Rate"
+            cls={loop.toolErrorRatePct > 0 ? 'text-danger' : 'text-dim'}
+          />
+          <LoopStat value={formatTokens(loop.avgTokensPerRun)} label="Avg Tokens / Run" cls="text-secondary" />
+          <LoopStat value={formatNumber(loop.subagentsPerRun)} label="Subagents / Run" cls="text-accent" />
+          <LoopStat value={formatDuration(loop.avgDurationMs)} label="Avg Run Duration" cls="text-success" />
+          <LoopStat
+            value={formatNumber(loop.runsOver20Turns)}
             label="Runs &gt; 20 Turns"
             cls={loop.runsOver20Turns > 0 ? 'text-warning' : 'text-dim'}
           />
-          <LoopStat value={String(loop.subagentsPerRun)} label="Subagents / Run" cls="text-accent" />
-          <LoopStat value={formatDuration(loop.avgDurationMs)} label="Avg Run Duration" cls="text-success" />
-          <LoopStat value={String(loop.stuckRuns)} label="Stuck Runs (&gt;10m)" cls={loop.stuckRuns > 0 ? 'text-danger' : 'text-dim'} />
+          <LoopStat
+            value={formatNumber(loop.stuckRuns)}
+            label="Stuck Runs (&gt;10m)"
+            cls={loop.stuckRuns > 0 ? 'text-danger' : 'text-dim'}
+          />
+          <LoopStat
+            value={formatPercent(loop.stuckRunPct)}
+            label="Stuck Run Rate"
+            cls={loop.stuckRunPct > 0 ? 'text-danger' : 'text-dim'}
+          />
         </div>
 
         <div className="pt-3 border-t border-border-subtle">
@@ -86,6 +103,23 @@ function DurBar({ label, pct, val, color }: { label: string; pct: number; val: s
       <span className="w-[55px] text-right font-mono text-[11px] text-secondary shrink-0">{val}</span>
     </div>
   );
+}
+
+function formatNumber(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '0';
+  return String(value);
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '0%';
+  return `${value}%`;
+}
+
+function formatTokens(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return '0';
+  if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`;
+  if (value >= 1_000) return `${Math.round(value / 100) / 10}K`;
+  return String(value);
 }
 
 function formatDuration(ms: number): string {
