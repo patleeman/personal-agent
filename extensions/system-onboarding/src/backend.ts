@@ -8,19 +8,6 @@ interface OnboardingState {
   completed: boolean;
   conversationId?: string;
   completedAt: string;
-  reason: 'created' | 'existing-conversations';
-}
-
-function isSessionList(value: unknown): value is unknown[] {
-  return Array.isArray(value);
-}
-
-function hasExistingConversations(value: unknown): boolean {
-  if (isSessionList(value)) return value.length > 0;
-  if (value && typeof value === 'object' && Array.isArray((value as { sessions?: unknown }).sessions)) {
-    return (value as { sessions: unknown[] }).sessions.length > 0;
-  }
-  return false;
 }
 
 const onboardingMessage = `Welcome to Personal Agent. This first conversation is here to get you unstuck before the app becomes a very expensive blank text box.
@@ -49,17 +36,6 @@ export async function ensure(
     return { created: false, conversationId: existingState.conversationId, skipped: 'already-completed' };
   }
 
-  const conversations = await ctx.conversations.list();
-  if (hasExistingConversations(conversations)) {
-    await ctx.storage.put(ONBOARDING_STATE_KEY, {
-      completed: true,
-      completedAt: new Date().toISOString(),
-      reason: 'existing-conversations',
-    } satisfies OnboardingState);
-    disableOnboarding(ctx);
-    return { created: false, skipped: 'existing-conversations' };
-  }
-
   const created = (await ctx.conversations.create({ cwd: ctx.runtime.getRepoRoot() })) as { id: string };
   await ctx.conversations.setTitle(created.id, 'Welcome to Personal Agent');
   await ctx.conversations.appendVisibleCustomMessage(created.id, 'onboarding_intro', onboardingMessage, { source: ctx.extensionId });
@@ -68,7 +44,6 @@ export async function ensure(
     completed: true,
     conversationId: created.id,
     completedAt: new Date().toISOString(),
-    reason: 'created',
   } satisfies OnboardingState);
   disableOnboarding(ctx);
 

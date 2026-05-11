@@ -14,7 +14,7 @@ export function OnboardingBootstrap({ pa }: { pa: PersonalAgentClient }) {
       .then((result) => {
         if (cancelled) return;
         const ensureResult = result as EnsureResult;
-        if (ensureResult.created && ensureResult.conversationId && window.location.pathname === '/') {
+        if (ensureResult.conversationId) {
           window.location.assign(`/conversations/${encodeURIComponent(ensureResult.conversationId)}`);
         }
       })
