@@ -5953,6 +5953,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onUpsertDrawingAttachment={(payload) => {
                   upsertDrawingAttachment(payload as ExcalidrawEditorSavePayload);
                 }}
+                onSelectModel={selectModel}
                 onSelectThinkingLevel={(thinkingLevel) => {
                   void saveThinkingLevelPreference(thinkingLevel);
                 }}

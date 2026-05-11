@@ -63,6 +63,7 @@ export function ConversationComposerInputControls({
   currentThinkingLevel: string;
   currentServiceTier: string;
   savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
+  goalEnabled: boolean;
   conversationNeedsTakeover: boolean;
   composerHasContent: boolean;
   composerShowsQuestionSubmit: boolean;
@@ -83,6 +84,7 @@ export function ConversationComposerInputControls({
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
+  onToggleGoal: () => void;
   onInsertComposerText: (text: string) => void;
   onSubmitComposerQuestion: () => void;
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
