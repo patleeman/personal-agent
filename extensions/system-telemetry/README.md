@@ -24,6 +24,10 @@ Tool health groups calls by tool name and tracks call count, errors, success rat
 
 The UI shows the normal per-tool card for `bash`, then a Bash breakdown with the top command families for the selected time range. Each command family includes call count, command-level error rate, and P95 latency so noisy commands stand out without opening raw traces. Existing rows without command metadata are grouped as `unknown`.
 
+## Agent loop health
+
+Agent loop health combines run stats and tool-call traces for the selected range. It tracks average turns and steps, average/P95 tool calls per run, tool error rate, average tokens per run, subagents per run, runs over 20 turns, stuck runs over 10 minutes, stuck-run rate, and duration percentiles.
+
 ## Bash complexity
 
 Bash complexity is computed from the recorded command text at query time. It tracks an average and max complexity score, command count, character count, and how often commands use pipelines, chained operators, redirects, multiline scripts, shell control flow, or command substitution. The score is intentionally blunt: more command segments, pipes, redirects, shell control flow, substitutions, and long commands push it up. This makes it easy to see when Pi is using bash as a tiny command runner versus a pocket-sized deployment script in a trench coat.
