@@ -21,6 +21,7 @@ interface ToastDisplay {
   type: NotificationType;
   message: string;
   source?: string;
+  count: number;
   leaving: boolean;
 }
 
@@ -39,7 +40,15 @@ const TYPE_BG_CLASS: Record<NotificationType, string> = {
 export function NotificationToaster() {
   const { notifications, markRead } = useNotificationStore();
   const [toasts, setToasts] = useState<ToastDisplay[]>([]);
-  const dismissedIds = useRef(new Set<string>());
+  const seenCounts = useRef(new Map<string, number>());
+  const autoDismissTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const clearAutoDismissTimer = useCallback((id: string) => {
+    const timer = autoDismissTimers.current.get(id);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    autoDismissTimers.current.delete(id);
+  }, []);
 
   const removeToast = useCallback((id: string) => {
     setToasts((current) => current.filter((t) => t.id !== id));
@@ -47,42 +56,91 @@ export function NotificationToaster() {
 
   const dismissToast = useCallback(
     (id: string) => {
+      clearAutoDismissTimer(id);
       setToasts((current) => current.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
       setTimeout(() => removeToast(id), LEAVE_ANIMATION_MS);
     },
-    [removeToast],
+    [clearAutoDismissTimer, removeToast],
   );
 
-  // Sync new non-dismissed error/warning notifications into the toast display
-  useEffect(() => {
-    const newToasts: ToastDisplay[] = [];
-    for (const notif of notifications) {
-      if (notif.dismissed || notif.read) continue;
-      if (notif.type === 'info') continue; // Info only shows in the panel, not as popup
-      if (dismissedIds.current.has(notif.id)) continue;
-
-      dismissedIds.current.add(notif.id);
-      newToasts.push({
-        id: notif.id,
-        type: notif.type,
-        message: notif.message,
-        source: notif.source,
-        leaving: false,
-      });
-    }
-
-    if (newToasts.length === 0) return;
-
-    setToasts((current) => [...current, ...newToasts]);
-
-    for (const toast of newToasts) {
-      const duration = TOAST_DURATION_MS[toast.type];
-      setTimeout(() => {
-        dismissToast(toast.id);
-        markRead(toast.id);
+  const scheduleAutoDismiss = useCallback(
+    (id: string, duration: number) => {
+      clearAutoDismissTimer(id);
+      const timer = setTimeout(() => {
+        autoDismissTimers.current.delete(id);
+        dismissToast(id);
+        markRead(id);
       }, duration);
+      autoDismissTimers.current.set(id, timer);
+    },
+    [clearAutoDismissTimer, dismissToast, markRead],
+  );
+
+  // Sync non-dismissed error/warning notifications into the toast display.
+  useEffect(() => {
+    const activeNotifications = notifications.filter((notif) => !notif.dismissed && !notif.read && notif.type !== 'info');
+    const activeById = new Map(activeNotifications.map((notif) => [notif.id, notif]));
+    const activeIds = new Set(activeById.keys());
+
+    for (const id of autoDismissTimers.current.keys()) {
+      if (!activeIds.has(id)) {
+        clearAutoDismissTimer(id);
+      }
     }
-  }, [notifications, dismissToast, markRead]);
+    for (const id of seenCounts.current.keys()) {
+      if (!activeIds.has(id)) {
+        seenCounts.current.delete(id);
+      }
+    }
+
+    setToasts((current) => {
+      const next = current
+        .filter((toast) => toast.leaving || activeById.has(toast.id))
+        .map((toast) => {
+          const notif = activeById.get(toast.id);
+          if (!notif) return toast;
+          return {
+            ...toast,
+            type: notif.type,
+            message: notif.message,
+            source: notif.source,
+            count: notif.count,
+          };
+        });
+      const existingIds = new Set(next.map((toast) => toast.id));
+
+      for (const notif of activeNotifications) {
+        if (existingIds.has(notif.id)) continue;
+        next.push({
+          id: notif.id,
+          type: notif.type,
+          message: notif.message,
+          source: notif.source,
+          count: notif.count,
+          leaving: false,
+        });
+      }
+
+      return next;
+    });
+
+    for (const notif of activeNotifications) {
+      const previousCount = seenCounts.current.get(notif.id);
+      if (previousCount === notif.count) continue;
+      seenCounts.current.set(notif.id, notif.count);
+      scheduleAutoDismiss(notif.id, TOAST_DURATION_MS[notif.type]);
+    }
+  }, [clearAutoDismissTimer, notifications, scheduleAutoDismiss]);
+
+  useEffect(
+    () => () => {
+      for (const timer of autoDismissTimers.current.values()) {
+        clearTimeout(timer);
+      }
+      autoDismissTimers.current.clear();
+    },
+    [],
+  );
 
   if (toasts.length === 0) return null;
 
