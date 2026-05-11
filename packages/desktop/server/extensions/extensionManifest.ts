@@ -63,6 +63,8 @@ export interface ExtensionManifest {
   id: string;
   name: string;
   packageType?: ExtensionPackageType;
+  /** If false, the extension starts disabled until explicitly enabled. */
+  defaultEnabled?: boolean;
   description?: string;
   version?: string;
   frontend?: ExtensionFrontend;

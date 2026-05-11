@@ -1,19 +1,12 @@
-import { authenticateMcpServerDirect, clearMcpServerAuthDirect, hasStoredMcpServerTokens } from '@personal-agent/core';
 import type { Express, Request, Response } from 'express';
 
 import {
-  abortLiveSessionCapability,
   compactLiveSessionCapability,
   createLiveSessionCapability,
   submitLiveSessionPromptCapability,
 } from '../conversations/liveSessionCapability.js';
 import { registerLiveSessionLifecycleHandler } from '../conversations/liveSessionLifecycle.js';
-import {
-  getAvailableModelObjects,
-  getLiveSessions,
-  renameSession,
-  updateLiveSessionModelPreferences,
-} from '../conversations/liveSessions.js';
+import { getAvailableModelObjects, renameSession, updateLiveSessionModelPreferences } from '../conversations/liveSessions.js';
 import { readSessionBlocks } from '../conversations/sessions.js';
 import {
   attachGatewayConversation,
@@ -25,7 +18,6 @@ import {
   updateGatewayConnectionStatus,
   upsertGatewayChatTarget,
 } from '../gateways/gatewayState.js';
-import { SLACK_MCP_SERVER_CONFIG, SlackMcpGatewayRuntime } from '../gateways/slackMcpGateway.js';
 import { readTelegramBotToken, removeTelegramBotToken, writeTelegramBotToken } from '../gateways/telegramAuth.js';
 import { TelegramGatewayRuntime } from '../gateways/telegramGateway.js';
 import { logError } from '../middleware/index.js';
@@ -43,10 +35,8 @@ let getAuthFileFn: () => string = () => {
 };
 let routeContext: ServerRouteContext | null = null;
 let telegramRuntime: TelegramGatewayRuntime | null = null;
-let slackMcpRuntime: SlackMcpGatewayRuntime | null = null;
 let lifecycleRegistered = false;
 const lastTelegramDeliveryByConversation = new Map<string, string>();
-const lastSlackDeliveryByConversation = new Map<string, string>();
 
 function initializeGatewayRoutesContext(context: ServerRouteContext): void {
   getCurrentProfileFn = context.getCurrentProfile;
@@ -63,11 +53,6 @@ function initializeGatewayRoutesContext(context: ServerRouteContext): void {
         if (delivered) {
           lastTelegramDeliveryByConversation.set(event.conversationId, text);
         }
-      }
-      const slackText = text && lastSlackDeliveryByConversation.get(event.conversationId) !== text ? text : null;
-      const slackDelivered = await ensureSlackMcpRuntime().handleTurnEnd(event.conversationId, slackText);
-      if (slackDelivered && text) {
-        lastSlackDeliveryByConversation.set(event.conversationId, text);
       }
     });
   }
@@ -137,46 +122,6 @@ function ensureTelegramRuntime(): TelegramGatewayRuntime {
   return telegramRuntime;
 }
 
-function ensureSlackMcpRuntime(): SlackMcpGatewayRuntime {
-  if (!routeContext) {
-    throw new Error('Gateway routes are not initialized');
-  }
-  if (slackMcpRuntime) {
-    return slackMcpRuntime;
-  }
-  const context = routeContext;
-  slackMcpRuntime = new SlackMcpGatewayRuntime({
-    stateRoot: context.getStateRoot(),
-    profile: context.getCurrentProfile(),
-    createConversation: async (input) => {
-      const created = await createLiveSessionCapability({}, liveSessionContext(context));
-      renameSession(created.id, input.title);
-      return { id: created.id };
-    },
-    notifyNewConversation: (conversationId) => {
-      publishAppEvent({ type: 'open_session', sessionId: conversationId });
-    },
-    submitPrompt: async (input) =>
-      submitLiveSessionPromptCapability(
-        { conversationId: input.conversationId, text: input.text, ...(input.behavior ? { behavior: input.behavior } : {}) },
-        liveSessionContext(context),
-      ),
-    abortConversation: async (conversationId) => {
-      await abortLiveSessionCapability({ conversationId });
-    },
-    compactConversation: async (conversationId) => {
-      await compactLiveSessionCapability({ conversationId });
-    },
-    renameConversation: (conversationId, title) => renameSession(conversationId, title),
-    getCurrentModel: () => null,
-    setModel: async (conversationId, model) => {
-      await updateLiveSessionModelPreferences(conversationId, { model }, getAvailableModelObjects());
-    },
-    isConversationBusy: (conversationId) => getLiveSessions().some((session) => session.id === conversationId && session.isStreaming),
-  });
-  return slackMcpRuntime;
-}
-
 function readProvider(value: unknown): GatewayProviderId | null {
   return value === 'telegram' || value === 'slack_mcp' ? value : null;
 }
@@ -214,11 +159,6 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
   if (initialTelegramState?.enabled && readTelegramBotToken(getAuthFileFn(), getStateRootFn())) {
     ensureTelegramRuntime().start();
   }
-  const initialSlackState = readGatewayState(currentGatewayContext()).connections.find((connection) => connection.provider === 'slack_mcp');
-  if (initialSlackState?.enabled) {
-    ensureSlackMcpRuntime().start();
-  }
-
   router.get('/api/gateways', (_req, res) => {
     try {
       res.json(readGatewayState(currentGatewayContext()));
@@ -258,12 +198,6 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
           ensureTelegramRuntime().stop();
         } else {
           ensureTelegramRuntime().start();
-        }
-      } else if (provider === 'slack_mcp') {
-        if (enabled === false || status === 'paused') {
-          ensureSlackMcpRuntime().stop();
-        } else {
-          ensureSlackMcpRuntime().start();
         }
       }
       res.json(state);
@@ -331,89 +265,6 @@ export function registerGatewayRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         conversationTitle: '',
         repliesEnabled: false,
       });
-      res.json(readGatewayState(currentGatewayContext()));
-    } catch (err) {
-      handleGatewayError(res, err);
-    }
-  });
-
-  router.get('/api/gateways/slack-mcp/auth', (_req, res) => {
-    try {
-      res.json({ authenticated: hasStoredMcpServerTokens(SLACK_MCP_SERVER_CONFIG) });
-    } catch (err) {
-      handleGatewayError(res, err);
-    }
-  });
-
-  router.post('/api/gateways/slack-mcp/auth', async (_req, res) => {
-    try {
-      const result = await authenticateMcpServerDirect(SLACK_MCP_SERVER_CONFIG, { timeoutMs: 120_000 });
-      if (result.error) {
-        res.status(500).json({ error: result.error });
-        return;
-      }
-      ensureGatewayConnection({ ...currentGatewayContext(), provider: 'slack_mcp' });
-      const state = updateGatewayConnectionStatus({
-        ...currentGatewayContext(),
-        provider: 'slack_mcp',
-        status: 'connected',
-        enabled: true,
-      });
-      res.json({ authenticated: true, state });
-    } catch (err) {
-      handleGatewayError(res, err);
-    }
-  });
-
-  router.delete('/api/gateways/slack-mcp/auth', async (_req, res) => {
-    try {
-      await clearMcpServerAuthDirect(SLACK_MCP_SERVER_CONFIG);
-      ensureSlackMcpRuntime().stop();
-      const state = updateGatewayConnectionStatus({
-        ...currentGatewayContext(),
-        provider: 'slack_mcp',
-        status: 'needs_config',
-        enabled: false,
-        statusMessage: 'Slack disconnected',
-      });
-      res.json({ authenticated: false, state });
-    } catch (err) {
-      handleGatewayError(res, err);
-    }
-  });
-
-  // Save the channel target (like Telegram's /chat endpoint — no thread attached yet)
-  router.post('/api/gateways/slack-mcp/channel', async (req: Request, res: Response) => {
-    try {
-      const channelId = readOptionalString(req.body?.channelId);
-      if (!channelId) {
-        res.status(400).json({ error: 'channelId required' });
-        return;
-      }
-      ensureGatewayConnection({ ...currentGatewayContext(), provider: 'slack_mcp' });
-      ensureSlackMcpRuntime().saveChannel({ channelId, channelLabel: readOptionalString(req.body?.channelLabel) });
-      res.json(readGatewayState(currentGatewayContext()));
-    } catch (err) {
-      handleGatewayError(res, err);
-    }
-  });
-
-  // Attach the saved channel to a specific conversation thread
-  router.post('/api/gateways/slack-mcp/attach', async (req: Request, res: Response) => {
-    try {
-      const conversationId = readOptionalString(req.body?.conversationId);
-      const externalChatId = readOptionalString(req.body?.externalChatId);
-      if (!conversationId || !externalChatId) {
-        res.status(400).json({ error: 'conversationId and externalChatId required' });
-        return;
-      }
-      await ensureSlackMcpRuntime().attachChannelToConversation({
-        conversationId,
-        conversationTitle: readOptionalString(req.body?.conversationTitle) ?? conversationId,
-        externalChatId,
-        externalChatLabel: readOptionalString(req.body?.externalChatLabel),
-      });
-      invalidateAppTopics('sessions');
       res.json(readGatewayState(currentGatewayContext()));
     } catch (err) {
       handleGatewayError(res, err);

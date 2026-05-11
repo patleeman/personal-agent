@@ -47,6 +47,7 @@ Feature-specific documentation lives beside the owning extension package:
 - [OpenAI Native Compaction](../extensions/system-openai-native-compaction/README.md)
 - [Runs](../extensions/system-runs/README.md)
 - [Settings](../extensions/system-settings/README.md)
+- [Slack MCP Gateway](../extensions/system-slack-mcp-gateway/README.md)
 - [Telemetry](../extensions/system-telemetry/README.md)
 - [Web Tools](../extensions/system-web-tools/README.md)
 

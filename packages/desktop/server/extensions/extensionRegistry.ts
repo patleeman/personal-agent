@@ -340,6 +340,7 @@ export interface ExtensionSettingsComponentRegistration {
 
 interface ExtensionRegistryConfig {
   disabledIds?: string[];
+  enabledIds?: string[];
   disabledKeybindings?: string[];
   keybindingOverrides?: Record<string, string[]>;
 }
@@ -368,6 +369,7 @@ function readExtensionRegistryConfig(stateRoot: string = getStateRoot()): Extens
       return {};
     }
     const disabledIds = Array.isArray(parsed.disabledIds) ? parsed.disabledIds.filter((id): id is string => typeof id === 'string') : [];
+    const enabledIds = Array.isArray(parsed.enabledIds) ? parsed.enabledIds.filter((id): id is string => typeof id === 'string') : [];
     const disabledKeybindings = Array.isArray(parsed.disabledKeybindings)
       ? parsed.disabledKeybindings.filter((id): id is string => typeof id === 'string')
       : [];
@@ -378,7 +380,7 @@ function readExtensionRegistryConfig(stateRoot: string = getStateRoot()): Extens
           ),
         )
       : {};
-    return { disabledIds, disabledKeybindings, keybindingOverrides };
+    return { disabledIds, enabledIds, disabledKeybindings, keybindingOverrides };
   } catch {
     return {};
   }
@@ -621,6 +623,7 @@ function writeExtensionRegistryConfig(config: ExtensionRegistryConfig, stateRoot
     `${JSON.stringify(
       {
         disabledIds: config.disabledIds ?? [],
+        enabledIds: config.enabledIds ?? [],
         disabledKeybindings: config.disabledKeybindings ?? [],
         keybindingOverrides: config.keybindingOverrides ?? {},
       },
@@ -631,7 +634,13 @@ function writeExtensionRegistryConfig(config: ExtensionRegistryConfig, stateRoot
 }
 
 export function isExtensionEnabled(extensionId: string, stateRoot: string = getStateRoot()): boolean {
-  return !(readExtensionRegistryConfig(stateRoot).disabledIds ?? []).includes(extensionId);
+  const config = readExtensionRegistryConfig(stateRoot);
+  if ((config.disabledIds ?? []).includes(extensionId)) return false;
+  const entry = listExtensionEntries(stateRoot).find((candidate) => candidate.manifest.id === extensionId);
+  if (entry?.manifest.defaultEnabled === false) {
+    return (config.enabledIds ?? []).includes(extensionId);
+  }
+  return true;
 }
 
 const LOCKED_EXTENSION_IDS = ['system-extension-manager'];
@@ -642,12 +651,22 @@ export function setExtensionEnabled(extensionId: string, enabled: boolean, state
   }
   const config = readExtensionRegistryConfig(stateRoot);
   const disabledIds = new Set(config.disabledIds ?? []);
+  const enabledIds = new Set(config.enabledIds ?? []);
   if (enabled) {
     disabledIds.delete(extensionId);
+    enabledIds.add(extensionId);
   } else {
     disabledIds.add(extensionId);
+    enabledIds.delete(extensionId);
   }
-  writeExtensionRegistryConfig({ ...config, disabledIds: [...disabledIds].sort((left, right) => left.localeCompare(right)) }, stateRoot);
+  writeExtensionRegistryConfig(
+    {
+      ...config,
+      disabledIds: [...disabledIds].sort((left, right) => left.localeCompare(right)),
+      enabledIds: [...enabledIds].sort((left, right) => left.localeCompare(right)),
+    },
+    stateRoot,
+  );
 }
 
 export function setExtensionKeybinding(input: {
@@ -1126,6 +1145,9 @@ export function parseExtensionManifest(value: unknown): ExtensionManifest {
   requireString(value.id, 'id');
   requireString(value.name, 'name');
   if (value.packageType !== undefined) validateEnum(value.packageType, EXTENSION_PACKAGE_TYPES, 'packageType');
+  if (value.defaultEnabled !== undefined && typeof value.defaultEnabled !== 'boolean') {
+    throw new Error('Extension manifest defaultEnabled must be a boolean.');
+  }
   validateOptionalString(value.description, 'description');
   validateOptionalString(value.version, 'version');
   if (value.frontend !== undefined) {

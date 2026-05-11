@@ -93,6 +93,8 @@ The manifest declares what your extension contributes:
 
 **`packageType`**: `"user"` (your own extension) or `"system"` (bundled with the app).
 
+**`defaultEnabled`**: set to `false` for experimental extensions that should ship installed but disabled until the user explicitly enables them.
+
 **`permissions`**: See [Permissions](#permissions).
 
 ### Contribution Types

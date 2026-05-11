@@ -230,6 +230,27 @@ describe('extension registry', () => {
     expect(listExtensionInstallSummaries(stateRoot).find((extension) => extension.id === 'agent-board')?.enabled).toBe(false);
   });
 
+  it('keeps default-disabled extensions off until explicitly enabled', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-registry-'));
+    const extensionRoot = join(stateRoot, 'extensions', 'slack-mcp-gateway');
+    mkdirSync(extensionRoot, { recursive: true });
+    writeFileSync(
+      join(extensionRoot, 'extension.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        id: 'slack-mcp-gateway',
+        name: 'Slack MCP Gateway',
+        defaultEnabled: false,
+      }),
+    );
+
+    expect(isExtensionEnabled('slack-mcp-gateway', stateRoot)).toBe(false);
+    expect(listExtensionInstallSummaries(stateRoot).find((extension) => extension.id === 'slack-mcp-gateway')?.enabled).toBe(false);
+
+    setExtensionEnabled('slack-mcp-gateway', true, stateRoot);
+    expect(isExtensionEnabled('slack-mcp-gateway', stateRoot)).toBe(true);
+  });
+
   it('indexes enabled extension skills and tools', () => {
     const stateRoot = mkdtempSync(join(tmpdir(), 'pa-ext-registry-'));
     const extensionRoot = join(stateRoot, 'extensions', 'agent-board');
