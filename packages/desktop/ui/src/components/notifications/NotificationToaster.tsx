@@ -145,7 +145,7 @@ export function NotificationToaster() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-28 right-4 z-[9999] flex flex-col items-end gap-1.5 pointer-events-none">
+    <div className="fixed left-1/2 top-4 z-[9999] flex -translate-x-1/2 flex-col items-center gap-1.5 pointer-events-none">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -154,7 +154,7 @@ export function NotificationToaster() {
             TYPE_BORDER_CLASS[toast.type],
             TYPE_BG_CLASS[toast.type],
             toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-primary',
-            toast.leaving ? 'translate-x-2 opacity-0' : 'translate-x-0 opacity-100',
+            toast.leaving ? '-translate-y-2 opacity-0' : 'translate-y-0 opacity-100',
           )}
           onClick={() => {
             dismissToast(toast.id);
