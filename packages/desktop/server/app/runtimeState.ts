@@ -133,6 +133,16 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
   }
 
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
+    const agentExtensions = createManifestAgentExtensions({ onError: logger.warn });
+
+    // Surface agent extension loading errors as session-level diagnostics
+    for (const err of agentExtensions.errors) {
+      logger.warn('extension agent factory failed to load', {
+        extensionId: err.extensionId,
+        message: err.message,
+      });
+    }
+
     return [
       ...createManifestToolAgentExtensions({
         getCurrentProfile: getRuntimeScope,
@@ -144,7 +154,7 @@ export function createRuntimeState(options: CreateRuntimeStateOptions): RuntimeS
         serverContext: { getCurrentProfile: getRuntimeScope },
       }),
 
-      ...createManifestAgentExtensions({ onError: logger.warn }),
+      ...agentExtensions.factories,
     ].map(guardSystemPromptOverride);
   }
 

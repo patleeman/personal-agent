@@ -165,9 +165,26 @@ The built-in themes are `tokyo-night-light` and `tokyo-night-dark`. Legacy store
 
 ## Dependencies
 
-Extensions declare Node dependencies in their own `package.json`, not in `extension.json`. The manifest describes host contributions and capability intent; package installation and module resolution use normal npm metadata.
+Extensions declare Node dependencies in their own `package.json`, not in `extension.json`. The manifest describes host contributions and capability intent.
 
-Use `dependencies` for runtime libraries the frontend or backend imports:
+### Dependency resolution during build
+
+The build system uses esbuild to bundle extension code. Third-party dependencies are **bundled into the output** at build time — they are not resolved at runtime.
+
+Resolution order:
+
+1. The extension's own `node_modules/` (`npm install` in the extension directory)
+2. The app's own `node_modules/` (fallback — any dep the app already has is available)
+3. Custom build (if you need a different build setup, build the dist files yourself)
+
+This means:
+
+- **Host packages** (`@personal-agent/extensions`, subpath imports, `react`) are always available — marked external in the esbuild config, resolved from the host at runtime.
+- **If a dep is already in the app** (like `zod`, `date-fns`, `nanoid`), you can import it without any setup — it resolves through the fallback path.
+- **If you need a dep the app doesn't have**, run `npm install <pkg>` in the extension directory before building.
+- **If you need a custom build** (different bundler, plugins, externals), build `dist/` yourself. The app loads whatever `dist/frontend.js` and `dist/backend.mjs` exist.
+
+### package.json
 
 ```json
 {
@@ -179,7 +196,20 @@ Use `dependencies` for runtime libraries the frontend or backend imports:
 }
 ```
 
-`@personal-agent/extensions` is the host SDK dependency. Third-party libraries should be regular package dependencies so local builds and imported extension bundles can resolve them before bundling.
+`@personal-agent/extensions` is the host SDK — listed as a reminder of the contract, not for npm resolution.
+
+### Agent workflow for extensions with deps
+
+```bash
+# 1. Create the extension (or place it in ~/.local/state/personal-agent/extensions/{id}/)
+# 2. If you need a dep the app doesn't already ship:
+npm install --prefix ~/.local/state/personal-agent/extensions/my-ext zod
+# 3. Build
+npm run extension:build -- ~/.local/state/personal-agent/extensions/my-ext
+# 4. Reload (from Extension Manager UI or app restart)
+```
+
+If you omit `npm install`, esbuild falls back to the app's `node_modules/`. If the dep isn't there either, the build fails — add it with `npm install`.
 
 ## Public imports
 
