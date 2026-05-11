@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9-rc.5 — 2026-05-11
+
+- fix: add build:main to desktop build script so electron-builder finds main.js
+
 ## 0.7.9-rc.4 — 2026-05-11
 
 - fmt: prettier
