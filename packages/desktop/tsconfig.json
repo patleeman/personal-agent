@@ -3,14 +3,15 @@
   "compilerOptions": {
     "outDir": "./dist",
     "composite": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmitOnError": false,
     "paths": {
       "@personal-agent/core": ["../core/src"],
       "@personal-agent/daemon": ["./server/daemon"]
     }
   },
-  "include": ["src/**/*", "server/daemon/**/*.ts", "server/daemon/**/*.tsx"],
-  "exclude": ["dist", "node_modules", "server/daemon/**/*.test.ts"],
+  "include": ["src/**/*.ts", "server/**/*.ts", "server/**/*.tsx"],
+  "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.d.ts", "**/*.smoke.test.ts", "**/*.integration.test.ts"],
   "references": [{ "path": "../core" }]
 }

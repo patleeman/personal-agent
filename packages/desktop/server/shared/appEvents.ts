@@ -222,6 +222,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     ],
     workspace: [],
     knowledgeBase: [],
+    notifications: [],
   };
 }
 

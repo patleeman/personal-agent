@@ -13,6 +13,7 @@ import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
+import { createExtensionModelsCapability } from './extensionModels.js';
 import { isSystemNotificationAvailable, sendNotifyAsSystemNotification, setExtensionBadge } from './extensionNotifications.js';
 import { findExtensionEntry, listExtensionInstallSummaries } from './extensionRegistry.js';
 import { createExtensionRunsCapability } from './extensionRuns.js';
@@ -231,16 +232,17 @@ function createBackendContext(
         if (!entry) throw new Error(`Extension "${targetExtensionId}" not found.`);
         const action = entry.manifest.backend?.actions?.find((candidate) => candidate.id === actionId);
         if (!action) throw new Error(`Action "${actionId}" not found on extension "${targetExtensionId}".`);
-        const result = await invokeExtensionAction(targetExtensionId, actionId, input, serverContext, toolContext, agentToolContext);
-        return result.result;
+        const actionResult = await invokeExtensionAction(targetExtensionId, actionId, input, serverContext, toolContext, agentToolContext);
+        if (!actionResult.ok) throw new Error(actionResult.error);
+        return actionResult.result;
       },
       listActions: () =>
         listExtensionInstallSummaries()
-          .filter((summary) => summary.status === 'enabled' && summary.backendActions.length > 0)
+          .filter((summary) => summary.status === 'enabled' && (summary.backendActions?.length ?? 0) > 0)
           .map((summary) => ({
             extensionId: summary.id,
             extensionName: summary.name,
-            actions: summary.backendActions!.map((action) => ({
+            actions: (summary.backendActions ?? []).map((action) => ({
               id: action.id,
               title: action.title,
               description: action.description,
@@ -258,7 +260,10 @@ function createBackendContext(
       },
     },
     ui: {
-      invalidate: (topics) => invalidateAppTopics(...(Array.isArray(topics) ? topics : [topics])),
+      invalidate: (topics) => {
+        const items = Array.isArray(topics) ? topics : [topics];
+        invalidateAppTopics(...(items as import('../shared/appEvents.js').AppEventTopic[]));
+      },
     },
     log: {
       info: (message, fields) => console.log(`[extension:${extensionId}] ${message}`, fields ?? {}),
@@ -426,6 +431,13 @@ function createHostRuntimeExternalPlugin(): Plugin {
       });
     },
   };
+}
+
+interface ExtensionBackendBuildResult {
+  path: string;
+  hash: string;
+  rebuilt: boolean;
+  stale: boolean;
 }
 
 async function buildExtensionBackend(

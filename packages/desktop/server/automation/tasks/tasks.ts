@@ -10,19 +10,6 @@ import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 
-import {
-  appendAutomationActivityEntry,
-  deleteStoredAutomation,
-  ensureLegacyTaskImports,
-  getStoredAutomation,
-  listStoredAutomations,
-  loadAutomationRuntimeStateMap,
-  loadAutomationSchedulerState,
-  saveAutomationRuntimeStateMap,
-  saveAutomationSchedulerState,
-  type StoredAutomation,
-} from '../store.js';
-import { ensureAutomationThread } from '../threads.js';
 import type { TasksModuleConfig } from '../../config.js';
 import { surfaceReadyDeferredResume } from '../../daemon/conversation-wakeups.js';
 import { markDeferredResumeConversationRunReady } from '../../runs/deferred-resume-conversations.js';
@@ -38,10 +25,23 @@ import {
   saveDurableRunStatus,
   scanDurableRun,
 } from '../../runs/store.js';
+import {
+  appendAutomationActivityEntry,
+  deleteStoredAutomation,
+  ensureLegacyTaskImports,
+  getStoredAutomation,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
+  loadAutomationSchedulerState,
+  saveAutomationRuntimeStateMap,
+  saveAutomationSchedulerState,
+  type StoredAutomation,
+} from '../store.js';
+import { ensureAutomationThread } from '../threads.js';
 import { cronMatches, type ParsedCronExpression, type ParsedTaskDefinition } from './tasks-parser.js';
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
 import { createEmptyTaskState, type TaskRuntimeState, type TaskStateFile } from './tasks-store.js';
-import type { DaemonModule } from '../daemon/types.js';
+import type { DaemonModule } from './types.js';
 
 const MISSED_RUN_EXAMPLE_LIMIT = 5;
 interface MissedTaskRunSummary {

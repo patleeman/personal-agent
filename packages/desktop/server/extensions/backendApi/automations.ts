@@ -1,25 +1,17 @@
 export {
-  buildDeferredResumeSummary,
-  cancelDeferredResume,
   cancelDeferredResumeForSessionFile,
   DEFAULT_DEFERRED_RESUME_PROMPT,
-  enqueueDeferredResume,
-  listDeferredResumes,
+  listDeferredResumesForSessionFile,
   scheduleDeferredResumeForSessionFile,
 } from '../../automation/deferredResumes.js';
 export { parseFutureHumanDateTime } from '../../automation/humanDateTime.js';
 export {
-  createScheduledTask,
-  deleteScheduledTask,
-  getScheduledTask,
   type LoadedScheduledTasksForProfile,
   loadScheduledTasksForProfile,
   resolveScheduledTaskForProfile,
-  runScheduledTaskNow,
   type TaskRuntimeEntry,
   toScheduledTaskMetadata,
-  updateScheduledTask,
-  validateScheduledTaskInput,
+  validateScheduledTaskDefinition,
 } from '../../automation/scheduledTasks.js';
 export {
   applyScheduledTaskThreadBinding,

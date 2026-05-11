@@ -157,7 +157,7 @@ import {
 import type { ServerRouteContext } from '../routes/context.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
-import { invalidateAppTopics, subscribeAppEvents } from '../shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent, subscribeAppEvents } from '../shared/appEvents.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';

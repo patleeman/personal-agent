@@ -2,7 +2,7 @@ import { readdirSync, rmSync, statSync } from 'fs';
 import { join } from 'path';
 
 import type { MaintenanceModuleConfig } from '../../config.js';
-import type { DaemonModule } from '../daemon/types.js';
+import type { DaemonModule } from './types.js';
 
 interface MaintenanceModuleState {
   cleanedFiles: number;

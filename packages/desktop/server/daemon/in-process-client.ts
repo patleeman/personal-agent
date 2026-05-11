@@ -1,4 +1,4 @@
-import type { DaemonConfig } from './config.js';
+import type { DaemonConfig } from '../config.js';
 import type { PersonalAgentDaemon } from './server.js';
 import type {
   CancelDurableRunResult,

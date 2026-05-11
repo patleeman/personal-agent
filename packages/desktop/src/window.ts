@@ -138,7 +138,7 @@ export function shouldOpenNavigationExternally(currentUrl: string, targetUrl: st
   return shouldOpenWindowExternally(targetUrl) && !canNavigateWindowInApp(currentUrl, targetUrl);
 }
 
-export function buildWindowTitle(host: DesktopHostRecord): string {
+export function buildWindowTitle(_host: DesktopHostRecord): string {
   const appName = typeof app.name === 'string' && app.name.trim().length > 0 ? app.name.trim() : 'Personal Agent';
   return appName;
 }

@@ -1,0 +1,6 @@
+{
+  "name": "@personal-agent/daemon",
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts"
+}

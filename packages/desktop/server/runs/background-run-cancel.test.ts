@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { DaemonConfig } from '../config.js';
+import { PersonalAgentDaemon } from '../daemon/server.js';
 import { resolveDaemonPaths } from '../paths.js';
-import { PersonalAgentDaemon } from '../server.js';
 import { createBackgroundRunRecord } from './background-runs.js';
 import { loadDurableRunStatus, resolveDurableRunsRoot } from './store.js';
 

@@ -3,12 +3,8 @@ import { type ChildProcess, spawn } from 'child_process';
 import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
 
-import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
-import { type DaemonConfig, loadDaemonConfig, type LogLevel } from '../config.js';
-import { EventBus } from './event-bus.js';
-import { createDaemonEvent, isDaemonEvent } from './events.js';
-import { type DaemonRequest, type DaemonResponse, parseRequest, serializeResponse } from './ipc-protocol.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from '../automation/tasks/index.js';
+import { type DaemonConfig, loadDaemonConfig, type LogLevel } from '../config.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from '../paths.js';
 import { deliverBackgroundRunCallbackWakeup } from '../runs/background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from '../runs/background-run-deferred-resumes.js';
@@ -30,6 +26,10 @@ import {
   summarizeScannedDurableRuns,
 } from '../runs/store.js';
 import { listRecoverableWebLiveConversationRuns, saveWebLiveConversationRunState } from '../runs/web-live-conversations.js';
+import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
+import { EventBus } from './event-bus.js';
+import { createDaemonEvent, isDaemonEvent } from './events.js';
+import { type DaemonRequest, type DaemonResponse, parseRequest, serializeResponse } from './ipc-protocol.js';
 import type {
   CancelDurableRunResult,
   DaemonEvent,
@@ -257,8 +257,6 @@ export class PersonalAgentDaemon {
       });
     });
 
-
-
     this.running = true;
     this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
   }
@@ -329,8 +327,6 @@ export class PersonalAgentDaemon {
     };
   }
 
-
-
   private prepareSocket(): void {
     if (existsSync(this.paths.socketPath)) {
       rmSync(this.paths.socketPath, { force: true });
@@ -353,10 +349,10 @@ export class PersonalAgentDaemon {
         return this.bus.publish(event);
       },
       logger: {
-        debug: (message) => this.log('debug', `${logPrefix} ${message}`),
-        info: (message) => this.log('info', `${logPrefix} ${message}`),
-        warn: (message) => this.log('warn', `${logPrefix} ${message}`),
-        error: (message) => this.log('error', `${logPrefix} ${message}`),
+        debug: (message: string) => this.log('debug', `${logPrefix} ${message}`),
+        info: (message: string) => this.log('info', `${logPrefix} ${message}`),
+        warn: (message: string) => this.log('warn', `${logPrefix} ${message}`),
+        error: (message: string) => this.log('error', `${logPrefix} ${message}`),
       },
     };
   }

@@ -1,10 +1,10 @@
-import type { BackgroundRunAgentSpec } from './background-run-agent.js';
-import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
+import type { ScannedDurableRun, ScannedDurableRunsSummary } from '../runs/store.js';
 import type {
   RecoverableWebLiveConversationRun,
   WebLiveConversationPendingOperation,
   WebLiveConversationRunState,
-} from './runs/web-live-conversations.js';
+} from '../runs/web-live-conversations.js';
+import type { BackgroundRunAgentSpec } from './background-run-agent.js';
 
 export type EventPayload = Record<string, unknown>;
 

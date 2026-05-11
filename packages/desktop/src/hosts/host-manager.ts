@@ -101,14 +101,4 @@ export class HostManager {
   async dispose(): Promise<void> {
     await Promise.all([...this.controllers.values()].map((controller) => controller.dispose()));
   }
-
-  private async disposeController(hostId: string): Promise<void> {
-    const controller = this.controllers.get(hostId);
-    if (!controller) {
-      return;
-    }
-
-    await controller.dispose();
-    this.controllers.delete(hostId);
-  }
 }

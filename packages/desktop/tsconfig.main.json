@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@personal-agent/core": ["../core/src"],
+      "@personal-agent/daemon": ["./server/daemon"],
+      "@personal-agent/extensions": ["../extensions/src"],
+      "@personal-agent/extensions/host": ["./ui/src/extensions/host"],
+      "@personal-agent/extensions/ui": ["./ui/src/extensions/ui"],
+      "@personal-agent/extensions/workbench": ["./ui/src/extensions/workbench"],
+      "@personal-agent/extensions/data": ["./ui/src/extensions/data"],
+      "@personal-agent/extensions/settings": ["./ui/src/extensions/settings"],
+      "@personal-agent/extensions/excalidraw": ["../extensions/src/excalidraw"],
+      "@personal-agent/extensions/backend": ["./server/extensions/backendApi"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

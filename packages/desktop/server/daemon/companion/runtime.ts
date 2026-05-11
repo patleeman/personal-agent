@@ -1,4 +1,4 @@
-import type { DaemonConfig } from '../config.js';
+import type { DaemonConfig } from '../../config.js';
 import type { CompanionRuntime, CompanionRuntimeProvider } from './types.js';
 
 let companionRuntimeProvider: CompanionRuntimeProvider | undefined;
