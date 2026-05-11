@@ -62,7 +62,7 @@ export async function syncLiveSessionDurableRun(
       type: 'notification',
       extensionId: 'core',
       message: `Durable run sync failed: ${message}`,
-      type: 'error',
+      severity: 'error',
     });
   }
 }

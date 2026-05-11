@@ -49,7 +49,7 @@ export function notifyLiveSessionLifecycleHandlers(
         type: 'notification',
         extensionId: 'core',
         message: `Lifecycle handler error: ${message}`,
-        type: 'error',
+        severity: 'error',
       });
     });
   }

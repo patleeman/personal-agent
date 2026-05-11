@@ -15,7 +15,6 @@ import {
   resolveConversationVisibleScrollBinding,
   resolveDisplayedConversationPendingStatusLabel,
   shouldDeferConversationFileRefresh,
-  shouldEnableConversationLiveStream,
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
@@ -245,8 +244,6 @@ describe('conversation page state helpers', () => {
   });
 
   it('keeps live-stream and transcript loading decisions explicit', () => {
-    expect(shouldEnableConversationLiveStream('conv-1', null)).toBe(true);
-    expect(shouldEnableConversationLiveStream('conv-1', false)).toBe(false);
     expect(
       resolveConversationLiveSession({
         streamBlockCount: 0,

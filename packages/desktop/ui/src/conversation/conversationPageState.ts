@@ -12,10 +12,6 @@ import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversat
 
 const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
 
-export function shouldEnableConversationLiveStream(conversationId: string | null | undefined, confirmedLive: boolean | null): boolean {
-  return Boolean(conversationId) && confirmedLive !== false;
-}
-
 export function resolveConversationLiveSession(input: {
   streamBlockCount: number;
   isStreaming: boolean;

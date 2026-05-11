@@ -1,12 +1,12 @@
 import { randomUUID } from 'crypto';
 import { createConnection } from 'net';
 
+import type { DaemonConfig } from '../config.js';
+import { loadDaemonConfig } from '../config.js';
+import { resolveDaemonPaths } from '../paths.js';
 import { publishAppEvent } from '../shared/appEvents.js';
-import type { DaemonConfig } from './config.js';
-import { loadDaemonConfig } from './config.js';
 import { createDaemonEvent } from './events.js';
 import { getDaemonClientTransportOverride } from './in-process-client.js';
-import { resolveDaemonPaths } from './paths.js';
 import type {
   CancelDurableRunResult,
   DaemonEvent,
@@ -384,7 +384,12 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
     const accepted = await emitDaemonEvent(input, config);
     if (!accepted) {
       console.warn(`daemon queue is full; dropped event type=${input.type}`);
-      publishAppEvent({ type: 'notification', extensionId: 'core', message: `Daemon queue dropped event: ${input.type}`, severity: 'warning' });
+      publishAppEvent({
+        type: 'notification',
+        extensionId: 'core',
+        message: `Daemon queue dropped event: ${input.type}`,
+        severity: 'warning',
+      });
     }
   } catch (error) {
     console.warn(formatDaemonUnavailableWarning(error, config));
