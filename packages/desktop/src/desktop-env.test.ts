@@ -16,7 +16,8 @@ function seedDevRepo(repoRoot: string): void {
   mkdirSync(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'), { recursive: true });
   mkdirSync(join(repoRoot, 'packages', 'desktop', 'assets'), { recursive: true });
   writeFileSync(join(repoRoot, 'package.json'), '{"name":"personal-agent"}\n');
-  writeFileSync(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
+  mkdirSync(join(repoRoot, 'packages', 'desktop', 'server', 'daemon'), { recursive: true });
+  writeFileSync(join(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json'), '{"name":"@personal-agent/daemon"}\n');
   writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'), 'png\n');
   writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'), 'png\n');
 }
@@ -122,7 +123,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.repoRoot).toBe(repoRoot);
     expect(result.nodeCommand).toBe('node');
     expect(result.useElectronRunAsNode).toBe(false);
-    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
+    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json'));
     expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
   });
 
@@ -145,7 +146,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     });
 
     expect(result.repoRoot).toBe(repoRoot);
-    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
+    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json'));
     expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'desktop', 'ui', 'dist'));
   });
 });

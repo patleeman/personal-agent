@@ -102,7 +102,7 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
     'daemon entry file',
     isPackaged
       ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
-      : [resolve(repoRoot, 'packages', 'daemon', 'dist', 'index.js')],
+      : [resolve(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json')],
   );
   const webDistDir = resolveExistingFile(
     'desktop renderer dist directory',
