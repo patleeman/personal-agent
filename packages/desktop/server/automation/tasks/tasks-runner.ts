@@ -1,9 +1,9 @@
 import { createWriteStream, mkdirSync, type WriteStream } from 'fs';
 import { join } from 'path';
 
+import { loadDaemonConfig } from '../../config.js';
 import { resolveCompanionRuntime } from '../../daemon/companion/runtime.js';
 import type { CompanionRuntime } from '../../daemon/companion/types.js';
-import { loadDaemonConfig } from '../../config.js';
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
 interface TaskRunThreadBinding {

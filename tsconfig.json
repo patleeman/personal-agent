@@ -26,11 +26,7 @@
       "@personal-agent/extensions/backend": ["./packages/desktop/server/extensions/backendApi"]
     }
   },
-  "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/extensions" },
-    { "path": "./packages/desktop" }
-  ],
+  "references": [{ "path": "./packages/core" }, { "path": "./packages/extensions" }, { "path": "./packages/desktop" }],
   "files": [],
   "exclude": ["node_modules", "dist"]
 }

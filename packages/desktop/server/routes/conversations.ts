@@ -41,9 +41,8 @@ import {
   readConversationSessionSearchIndexCapability,
 } from '../conversations/conversationSessionCapability.js';
 import { readConversationSummaryIndexCapability, startConversationSummaryBackfillLoop } from '../conversations/conversationSummaries.js';
-
 import { buildAppendOnlySessionDetailResponse, readSessionBlock, readSessionImageAsset } from '../conversations/sessions.js';
-import { invalidateAppTopics, logError, logSlowConversationPerf, logWarn, setServerTimingHeaders } from '../middleware/index.js';
+import { invalidateAppTopics, logError, logSlowConversationPerf, setServerTimingHeaders } from '../middleware/index.js';
 import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
 import type { ServerRouteContext } from './context.js';
 

@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-
 import { app, protocol, type Session as ElectronSession, session } from 'electron';
 
 import type { HostManager } from './hosts/host-manager.js';
@@ -115,8 +114,6 @@ async function readDesktopProtocolRequestBody(request: Request): Promise<unknown
 
   return bodyText;
 }
-
-
 
 function buildDesktopProtocolErrorResponse(error: unknown): Response {
   const message = error instanceof Error ? error.message : String(error);

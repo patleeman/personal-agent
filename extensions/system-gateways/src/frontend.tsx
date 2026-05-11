@@ -70,7 +70,11 @@ export function GatewaysPage() {
         if (!cancelled) {
           const msg = formatGatewayError(err);
           setError(msg);
-          window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: `Failed to load gateways: ${msg}`, source: 'system-gateways' } }));
+          window.dispatchEvent(
+            new CustomEvent('pa-notification', {
+              detail: { type: 'error', message: `Failed to load gateways: ${msg}`, source: 'system-gateways' },
+            }),
+          );
         }
       })
       .finally(() => {

@@ -90,14 +90,14 @@ export declare function getLocalProfileDir(): string;
  * Runtime state paths configuration
  */
 export interface RuntimeStatePaths {
-    /** Base state directory */
-    root: string;
-    /** Auth data directory (tokens, credentials) */
-    auth: string;
-    /** Session data directory (active sessions, state) */
-    session: string;
-    /** Cache directory (temporary computed data) */
-    cache: string;
+  /** Base state directory */
+  root: string;
+  /** Auth data directory (tokens, credentials) */
+  auth: string;
+  /** Session data directory (active sessions, state) */
+  session: string;
+  /** Cache directory (temporary computed data) */
+  cache: string;
 }
 /**
  * Resolve runtime state paths

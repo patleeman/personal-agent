@@ -211,7 +211,6 @@ describe('LocalHostController', () => {
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
-
   it('routes desktop layout settings through the local API module without loopback proxying', async () => {
     const readDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
       sessionIds: ['conversation-1'],

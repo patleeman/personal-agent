@@ -36,98 +36,110 @@ CREATE INDEX IF NOT EXISTS idx_app_telemetry_route ON app_telemetry_events(route
 const APP_TELEMETRY_MIGRATIONS = [];
 const dbCache = new Map();
 export function closeAppTelemetryDbs() {
-    for (const db of dbCache.values()) {
-        db.close();
-    }
-    dbCache.clear();
+  for (const db of dbCache.values()) {
+    db.close();
+  }
+  dbCache.clear();
 }
 function resolveAppTelemetryDbDir(stateRoot) {
-    return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace');
+  return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace');
 }
 function resolveAppTelemetryDbPath(stateRoot) {
-    return join(resolveAppTelemetryDbDir(stateRoot), 'app-telemetry.db');
+  return join(resolveAppTelemetryDbDir(stateRoot), 'app-telemetry.db');
 }
 function getAppTelemetryDb(stateRoot) {
-    const path = resolveAppTelemetryDbPath(stateRoot);
-    const cached = dbCache.get(path);
-    if (cached)
-        return cached;
-    const dir = resolveAppTelemetryDbDir(stateRoot);
-    if (!existsSync(dir))
-        mkdirSync(dir, { recursive: true });
-    const db = openSqliteDatabase(path);
-    db.exec(SCHEMA);
-    applyMigrations(db, 'app-telemetry-db', APP_TELEMETRY_MIGRATIONS);
-    dbCache.set(path, db);
-    return db;
+  const path = resolveAppTelemetryDbPath(stateRoot);
+  const cached = dbCache.get(path);
+  if (cached) return cached;
+  const dir = resolveAppTelemetryDbDir(stateRoot);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const db = openSqliteDatabase(path);
+  db.exec(SCHEMA);
+  applyMigrations(db, 'app-telemetry-db', APP_TELEMETRY_MIGRATIONS);
+  dbCache.set(path, db);
+  return db;
 }
 function nowIso() {
-    return new Date().toISOString();
+  return new Date().toISOString();
 }
 function truncate(value, max = 2000) {
-    return value.length > max ? `${value.slice(0, max)}…` : value;
+  return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 function normalizeString(value, max = 240) {
-    const trimmed = value?.trim();
-    return trimmed ? truncate(trimmed, max) : null;
+  const trimmed = value?.trim();
+  return trimmed ? truncate(trimmed, max) : null;
 }
 function normalizeFiniteNumber(value) {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 function stringifyMetadata(metadata) {
-    if (!metadata)
-        return null;
-    try {
-        return truncate(JSON.stringify(metadata), 4000);
-    }
-    catch {
-        return null;
-    }
+  if (!metadata) return null;
+  try {
+    return truncate(JSON.stringify(metadata), 4000);
+  } catch {
+    return null;
+  }
 }
 export function writeAppTelemetryEvent(input) {
-    try {
-        const category = normalizeString(input.category, 120);
-        const name = normalizeString(input.name, 160);
-        if (!category || !name)
-            return;
-        getAppTelemetryDb(input.stateRoot)
-            .prepare(`
+  try {
+    const category = normalizeString(input.category, 120);
+    const name = normalizeString(input.name, 160);
+    if (!category || !name) return;
+    getAppTelemetryDb(input.stateRoot)
+      .prepare(
+        `
       INSERT INTO app_telemetry_events (
         id, ts, source, category, name, session_id, run_id, route, status, duration_ms, count, value, metadata_json
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-            .run(randomUUID(), nowIso(), input.source, category, name, normalizeString(input.sessionId, 160), normalizeString(input.runId, 200), normalizeString(input.route, 500), Number.isInteger(input.status) ? input.status : null, normalizeFiniteNumber(input.durationMs), Number.isInteger(input.count) ? input.count : null, normalizeFiniteNumber(input.value), stringifyMetadata(input.metadata));
-    }
-    catch {
-        // Telemetry must never affect app behavior.
-    }
+    `,
+      )
+      .run(
+        randomUUID(),
+        nowIso(),
+        input.source,
+        category,
+        name,
+        normalizeString(input.sessionId, 160),
+        normalizeString(input.runId, 200),
+        normalizeString(input.route, 500),
+        Number.isInteger(input.status) ? input.status : null,
+        normalizeFiniteNumber(input.durationMs),
+        Number.isInteger(input.count) ? input.count : null,
+        normalizeFiniteNumber(input.value),
+        stringifyMetadata(input.metadata),
+      );
+  } catch {
+    // Telemetry must never affect app behavior.
+  }
 }
 function mapEventRow(row) {
-    return {
-        id: String(row.id),
-        ts: String(row.ts),
-        source: row.source,
-        category: String(row.category),
-        name: String(row.name),
-        sessionId: row.session_id == null ? null : String(row.session_id),
-        runId: row.run_id == null ? null : String(row.run_id),
-        route: row.route == null ? null : String(row.route),
-        status: row.status == null ? null : Number(row.status),
-        durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
-        count: row.count == null ? null : Number(row.count),
-        value: row.value == null ? null : Number(row.value),
-        metadataJson: row.metadata_json == null ? null : String(row.metadata_json),
-    };
+  return {
+    id: String(row.id),
+    ts: String(row.ts),
+    source: row.source,
+    category: String(row.category),
+    name: String(row.name),
+    sessionId: row.session_id == null ? null : String(row.session_id),
+    runId: row.run_id == null ? null : String(row.run_id),
+    route: row.route == null ? null : String(row.route),
+    status: row.status == null ? null : Number(row.status),
+    durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
+    count: row.count == null ? null : Number(row.count),
+    value: row.value == null ? null : Number(row.value),
+    metadataJson: row.metadata_json == null ? null : String(row.metadata_json),
+  };
 }
 export function queryAppTelemetryEvents(input) {
-    const limit = Math.max(1, Math.min(input.limit ?? 200, 1000));
-    const rows = getAppTelemetryDb(input.stateRoot)
-        .prepare(`
+  const limit = Math.max(1, Math.min(input.limit ?? 200, 1000));
+  const rows = getAppTelemetryDb(input.stateRoot)
+    .prepare(
+      `
     SELECT * FROM app_telemetry_events
     WHERE ts >= ?
     ORDER BY ts DESC
     LIMIT ?
-  `)
-        .all(input.since, limit);
-    return rows.map(mapEventRow);
+  `,
+    )
+    .all(input.since, limit);
+  return rows.map(mapEventRow);
 }

@@ -78,19 +78,19 @@ Freeform markdown files live anywhere under the vault root — read them when th
 - vault_root: {{ vault_root }}
 `;
 function normalizeVariables(variables) {
-    const entries = Object.entries(variables).map(([key, value]) => {
-        if (value === undefined || value === null || value === false) {
-            return [key, ''];
-        }
-        return [key, value];
-    });
-    return Object.fromEntries(entries);
+  const entries = Object.entries(variables).map(([key, value]) => {
+    if (value === undefined || value === null || value === false) {
+      return [key, ''];
+    }
+    return [key, value];
+  });
+  return Object.fromEntries(entries);
 }
 export function renderSystemPromptTemplate(variables = {}) {
-    const env = new nunjucks.Environment(undefined, { autoescape: false });
-    const rendered = env.renderString(SYSTEM_PROMPT_TEMPLATE, normalizeVariables(variables));
-    return rendered
-        .replace(/[ \t]+\n/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+  const env = new nunjucks.Environment(undefined, { autoescape: false });
+  const rendered = env.renderString(SYSTEM_PROMPT_TEMPLATE, normalizeVariables(variables));
+  return rendered
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

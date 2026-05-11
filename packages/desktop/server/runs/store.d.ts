@@ -3,95 +3,95 @@ export type DurableRunStatus = 'queued' | 'running' | 'recovering' | 'waiting' |
 export type DurableRunResumePolicy = 'rerun' | 'continue' | 'manual';
 export type DurableRunRecoveryAction = 'none' | 'resume' | 'rerun' | 'attention' | 'invalid';
 export interface DurableRunManifest {
-    version: 1;
-    id: string;
-    kind: DurableRunKind;
-    resumePolicy: DurableRunResumePolicy;
-    createdAt: string;
-    spec: Record<string, unknown>;
-    parentId?: string;
-    rootId?: string;
-    source?: {
-        type: string;
-        id?: string;
-        filePath?: string;
-    };
+  version: 1;
+  id: string;
+  kind: DurableRunKind;
+  resumePolicy: DurableRunResumePolicy;
+  createdAt: string;
+  spec: Record<string, unknown>;
+  parentId?: string;
+  rootId?: string;
+  source?: {
+    type: string;
+    id?: string;
+    filePath?: string;
+  };
 }
 export interface DurableRunStatusFile {
-    version: 1;
-    runId: string;
-    status: DurableRunStatus;
-    createdAt: string;
-    updatedAt: string;
-    activeAttempt: number;
-    startedAt?: string;
-    completedAt?: string;
-    checkpointKey?: string;
-    lastError?: string;
+  version: 1;
+  runId: string;
+  status: DurableRunStatus;
+  createdAt: string;
+  updatedAt: string;
+  activeAttempt: number;
+  startedAt?: string;
+  completedAt?: string;
+  checkpointKey?: string;
+  lastError?: string;
 }
 export interface DurableRunCheckpointFile {
-    version: 1;
-    runId: string;
-    updatedAt: string;
-    step?: string;
-    cursor?: string;
-    payload?: Record<string, unknown>;
+  version: 1;
+  runId: string;
+  updatedAt: string;
+  step?: string;
+  cursor?: string;
+  payload?: Record<string, unknown>;
 }
 export interface DurableRunEvent {
-    version: 1;
-    runId: string;
-    timestamp: string;
-    type: string;
-    attempt?: number;
-    payload?: Record<string, unknown>;
+  version: 1;
+  runId: string;
+  timestamp: string;
+  type: string;
+  attempt?: number;
+  payload?: Record<string, unknown>;
 }
 export interface DurableRunPaths {
-    root: string;
-    manifestPath: string;
-    statusPath: string;
-    checkpointPath: string;
-    eventsPath: string;
-    outputLogPath: string;
-    resultPath: string;
+  root: string;
+  manifestPath: string;
+  statusPath: string;
+  checkpointPath: string;
+  eventsPath: string;
+  outputLogPath: string;
+  resultPath: string;
 }
 export interface ScannedDurableRun {
-    runId: string;
-    paths: DurableRunPaths;
-    manifest?: DurableRunManifest;
-    status?: DurableRunStatusFile;
-    checkpoint?: DurableRunCheckpointFile;
-    result?: Record<string, unknown>;
-    problems: string[];
-    recoveryAction: DurableRunRecoveryAction;
+  runId: string;
+  paths: DurableRunPaths;
+  manifest?: DurableRunManifest;
+  status?: DurableRunStatusFile;
+  checkpoint?: DurableRunCheckpointFile;
+  result?: Record<string, unknown>;
+  problems: string[];
+  recoveryAction: DurableRunRecoveryAction;
 }
 export interface ScannedDurableRunsSummary {
-    total: number;
-    recoveryActions: Record<DurableRunRecoveryAction, number>;
-    statuses: Partial<Record<DurableRunStatus, number>>;
+  total: number;
+  recoveryActions: Record<DurableRunRecoveryAction, number>;
+  statuses: Partial<Record<DurableRunStatus, number>>;
 }
 export declare function resolveDurableRunsRoot(daemonRoot: string): string;
 export declare function resolveRuntimeDbPath(daemonRoot: string): string;
 export declare function resolveDurableRunPaths(runsRoot: string, runId: string): DurableRunPaths;
 export declare function createDurableRunManifest(input: {
-    id: string;
-    kind: DurableRunKind;
-    resumePolicy: DurableRunResumePolicy;
-    createdAt?: string;
-    spec?: Record<string, unknown>;
-    parentId?: string;
-    rootId?: string;
-    source?: DurableRunManifest['source'];
+  id: string;
+  kind: DurableRunKind;
+  resumePolicy: DurableRunResumePolicy;
+  createdAt?: string;
+  spec?: Record<string, unknown>;
+  parentId?: string;
+  rootId?: string;
+  source?: DurableRunManifest['source'];
 }): DurableRunManifest;
 export declare function createInitialDurableRunStatus(input: {
-    runId: string;
-    status?: DurableRunStatus;
-    createdAt?: string;
-    updatedAt?: string;
-    activeAttempt?: number;
-    startedAt?: string;
-    completedAt?: string;
-    checkpointKey?: string;
-    lastError?: string;
+  runId: string;
+  status?: DurableRunStatus;
+  createdAt?: string;
+  updatedAt?: string;
+  activeAttempt?: number;
+  startedAt?: string;
+  completedAt?: string;
+  checkpointKey?: string;
+  lastError?: string;
 }): DurableRunStatusFile;
 export declare function saveDurableRunManifest(path: string, manifest: DurableRunManifest): void;
 export declare function loadDurableRunManifest(path: string): DurableRunManifest | undefined;

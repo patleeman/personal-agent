@@ -45,7 +45,7 @@ Personal Agent is a native macOS app that runs a capable AI agent with durable m
 | **Knowledge vault**     | Browse/edit durable docs, URL import, git-synced across machines                        |
 | **Automations**         | Scheduled recurring or one-time tasks, durable background runs, reminders               |
 | **Desktop UI**          | Workbench layout with rails for knowledge, files, diffs, artifacts, and browser         |
-| **Background daemon**   | Runs, scheduled tasks, wakeups, reminders, companion API                               |
+| **Background daemon**   | Runs, scheduled tasks, wakeups, reminders, companion API                                |
 | **iOS companion**       | Native phone client paired via QR code — chat, knowledge, share extension               |
 | **Agent tools**         | Web search, web fetch, apply patch, conversation inspection, checkpoints, browser tools |
 | **Skills system**       | Reusable agent workflow packages stored in the vault                                    |

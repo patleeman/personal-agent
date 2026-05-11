@@ -5,155 +5,153 @@ import { getStateRoot } from './runtime/paths.js';
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const CONVERSATION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/;
 function getConversationLinkStateRoot(stateRoot) {
-    return resolve(stateRoot ?? getStateRoot());
+  return resolve(stateRoot ?? getStateRoot());
 }
 function validateProfileName(profile) {
-    if (!PROFILE_NAME_PATTERN.test(profile)) {
-        throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
-    }
+  if (!PROFILE_NAME_PATTERN.test(profile)) {
+    throw new Error(`Invalid profile name "${profile}". Profile names may only include letters, numbers, dashes, and underscores.`);
+  }
 }
 export function validateConversationId(conversationId) {
-    if (!CONVERSATION_ID_PATTERN.test(conversationId)) {
-        throw new Error(`Invalid conversation id "${conversationId}". Conversation ids may only include letters, numbers, dots, colons, dashes, and underscores.`);
-    }
+  if (!CONVERSATION_ID_PATTERN.test(conversationId)) {
+    throw new Error(
+      `Invalid conversation id "${conversationId}". Conversation ids may only include letters, numbers, dots, colons, dashes, and underscores.`,
+    );
+  }
 }
 export function resolveProfileConversationLinksDir(options) {
-    validateProfileName(options.profile);
-    return join(getConversationLinkStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-project-links', options.profile);
+  validateProfileName(options.profile);
+  return join(getConversationLinkStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-project-links', options.profile);
 }
 export function resolveConversationLinkPath(options) {
-    validateProfileName(options.profile);
-    validateConversationId(options.conversationId);
-    return join(resolveProfileConversationLinksDir(options), `${options.conversationId}.json`);
+  validateProfileName(options.profile);
+  validateConversationId(options.conversationId);
+  return join(resolveProfileConversationLinksDir(options), `${options.conversationId}.json`);
 }
 function normalizeRelatedProjectIds(projectIds) {
-    const unique = [];
-    const seen = new Set();
-    for (const projectId of projectIds) {
-        validateProjectId(projectId);
-        if (seen.has(projectId)) {
-            continue;
-        }
-        seen.add(projectId);
-        unique.push(projectId);
+  const unique = [];
+  const seen = new Set();
+  for (const projectId of projectIds) {
+    validateProjectId(projectId);
+    if (seen.has(projectId)) {
+      continue;
     }
-    return unique;
+    seen.add(projectId);
+    unique.push(projectId);
+  }
+  return unique;
 }
 export function readConversationProjectLink(path) {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
-    const conversationId = typeof parsed.conversationId === 'string' ? parsed.conversationId.trim() : '';
-    const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt.trim() : '';
-    const relatedProjectIds = Array.isArray(parsed.relatedProjectIds)
-        ? parsed.relatedProjectIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
-        : [];
-    validateConversationId(conversationId);
-    if (updatedAt.length === 0 || !Number.isFinite(Date.parse(updatedAt))) {
-        throw new Error(`Invalid conversation link updatedAt in ${path}`);
-    }
-    return {
-        conversationId,
-        updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
-        relatedProjectIds: normalizeRelatedProjectIds(relatedProjectIds),
-    };
+  const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+  const conversationId = typeof parsed.conversationId === 'string' ? parsed.conversationId.trim() : '';
+  const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt.trim() : '';
+  const relatedProjectIds = Array.isArray(parsed.relatedProjectIds)
+    ? parsed.relatedProjectIds.filter((value) => typeof value === 'string' && value.trim().length > 0)
+    : [];
+  validateConversationId(conversationId);
+  if (updatedAt.length === 0 || !Number.isFinite(Date.parse(updatedAt))) {
+    throw new Error(`Invalid conversation link updatedAt in ${path}`);
+  }
+  return {
+    conversationId,
+    updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
+    relatedProjectIds: normalizeRelatedProjectIds(relatedProjectIds),
+  };
 }
 export function listConversationProjectLinks(options) {
-    const dir = resolveProfileConversationLinksDir(options);
-    if (!existsSync(dir)) {
-        return [];
-    }
-    return readdirSync(dir)
-        .filter((entry) => entry.endsWith('.json'))
-        .map((entry) => {
-        try {
-            return readConversationProjectLink(join(dir, entry));
-        }
-        catch {
-            return null;
-        }
+  const dir = resolveProfileConversationLinksDir(options);
+  if (!existsSync(dir)) {
+    return [];
+  }
+  return readdirSync(dir)
+    .filter((entry) => entry.endsWith('.json'))
+    .map((entry) => {
+      try {
+        return readConversationProjectLink(join(dir, entry));
+      } catch {
+        return null;
+      }
     })
-        .filter((document) => document !== null)
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    .filter((document) => document !== null)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 export function listConversationIdsForProject(options) {
-    validateProjectId(options.projectId);
-    return listConversationProjectLinks(options)
-        .filter((document) => document.relatedProjectIds.includes(options.projectId))
-        .map((document) => document.conversationId);
+  validateProjectId(options.projectId);
+  return listConversationProjectLinks(options)
+    .filter((document) => document.relatedProjectIds.includes(options.projectId))
+    .map((document) => document.conversationId);
 }
 export function getConversationProjectLink(options) {
-    const path = resolveConversationLinkPath(options);
-    if (!existsSync(path)) {
-        return null;
-    }
-    try {
-        return readConversationProjectLink(path);
-    }
-    catch {
-        return null;
-    }
+  const path = resolveConversationLinkPath(options);
+  if (!existsSync(path)) {
+    return null;
+  }
+  try {
+    return readConversationProjectLink(path);
+  } catch {
+    return null;
+  }
 }
 export function writeConversationProjectLink(options) {
-    validateProfileName(options.profile);
-    validateConversationId(options.document.conversationId);
-    const path = resolveConversationLinkPath({
-        stateRoot: options.stateRoot,
-        profile: options.profile,
-        conversationId: options.document.conversationId,
-    });
-    const normalized = {
-        conversationId: options.document.conversationId,
-        updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
-        relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
-    };
-    const dir = resolveProfileConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile });
-    const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-    mkdirSync(dir, { recursive: true });
+  validateProfileName(options.profile);
+  validateConversationId(options.document.conversationId);
+  const path = resolveConversationLinkPath({
+    stateRoot: options.stateRoot,
+    profile: options.profile,
+    conversationId: options.document.conversationId,
+  });
+  const normalized = {
+    conversationId: options.document.conversationId,
+    updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
+    relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
+  };
+  const dir = resolveProfileConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile });
+  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  mkdirSync(dir, { recursive: true });
+  try {
+    writeFileSync(tempPath, JSON.stringify(normalized, null, 2) + '\n');
+    renameSync(tempPath, path);
+  } catch (error) {
     try {
-        writeFileSync(tempPath, JSON.stringify(normalized, null, 2) + '\n');
-        renameSync(tempPath, path);
+      unlinkSync(tempPath);
+    } catch {
+      // Ignore temp cleanup errors.
     }
-    catch (error) {
-        try {
-            unlinkSync(tempPath);
-        }
-        catch {
-            // Ignore temp cleanup errors.
-        }
-        throw error;
-    }
-    return path;
+    throw error;
+  }
+  return path;
 }
 export function setConversationProjectLinks(options) {
-    const document = {
-        conversationId: options.conversationId,
-        updatedAt: options.updatedAt ?? new Date().toISOString(),
-        relatedProjectIds: normalizeRelatedProjectIds(options.relatedProjectIds),
-    };
-    writeConversationProjectLink({
-        stateRoot: options.stateRoot,
-        profile: options.profile,
-        document,
-    });
-    return document;
+  const document = {
+    conversationId: options.conversationId,
+    updatedAt: options.updatedAt ?? new Date().toISOString(),
+    relatedProjectIds: normalizeRelatedProjectIds(options.relatedProjectIds),
+  };
+  writeConversationProjectLink({
+    stateRoot: options.stateRoot,
+    profile: options.profile,
+    document,
+  });
+  return document;
 }
 export function addConversationProjectLink(options) {
-    const existing = getConversationProjectLink(options);
-    return setConversationProjectLinks({
-        stateRoot: options.stateRoot,
-        profile: options.profile,
-        conversationId: options.conversationId,
-        relatedProjectIds: [...(existing?.relatedProjectIds ?? []), options.projectId],
-        updatedAt: options.updatedAt,
-    });
+  const existing = getConversationProjectLink(options);
+  return setConversationProjectLinks({
+    stateRoot: options.stateRoot,
+    profile: options.profile,
+    conversationId: options.conversationId,
+    relatedProjectIds: [...(existing?.relatedProjectIds ?? []), options.projectId],
+    updatedAt: options.updatedAt,
+  });
 }
 export function removeConversationProjectLink(options) {
-    validateProjectId(options.projectId);
-    const existing = getConversationProjectLink(options);
-    return setConversationProjectLinks({
-        stateRoot: options.stateRoot,
-        profile: options.profile,
-        conversationId: options.conversationId,
-        relatedProjectIds: (existing?.relatedProjectIds ?? []).filter((id) => id !== options.projectId),
-        updatedAt: options.updatedAt,
-    });
+  validateProjectId(options.projectId);
+  const existing = getConversationProjectLink(options);
+  return setConversationProjectLinks({
+    stateRoot: options.stateRoot,
+    profile: options.profile,
+    conversationId: options.conversationId,
+    relatedProjectIds: (existing?.relatedProjectIds ?? []).filter((id) => id !== options.projectId),
+    updatedAt: options.updatedAt,
+  });
 }

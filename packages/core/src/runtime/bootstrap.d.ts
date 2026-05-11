@@ -10,16 +10,16 @@ import type { RuntimeStatePaths } from './paths.js';
  * Bootstrap check result
  */
 export interface BootstrapResult {
-    success: boolean;
-    errors: BootstrapError[];
+  success: boolean;
+  errors: BootstrapError[];
 }
 /**
  * Bootstrap error with actionable message
  */
 export interface BootstrapError {
-    path: string;
-    type: 'creation' | 'writable' | 'permission';
-    message: string;
+  path: string;
+  type: 'creation' | 'writable' | 'permission';
+  message: string;
 }
 /**
  * Bootstrap runtime state directories

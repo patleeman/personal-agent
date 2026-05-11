@@ -4,13 +4,13 @@ The daemon is a long-lived background process that owns durable runtime behavior
 
 ## What the Daemon Owns
 
-| Component             | Description                                                               |
-| --------------------- | ------------------------------------------------------------------------- |
-| Runs                  | Detached agent work, started from conversations, inspected later          |
-| Scheduled tasks       | Recurring or one-time automations with cron or natural-language schedules |
-| Wakeups               | Conversation callbacks triggered by completed runs and tasks              |
-| Companion API         | HTTP/WebSocket endpoint for iOS app and remote clients                    |
-| Reminders             | Tell-me-later wakeups that resume a specific conversation                 |
+| Component       | Description                                                               |
+| --------------- | ------------------------------------------------------------------------- |
+| Runs            | Detached agent work, started from conversations, inspected later          |
+| Scheduled tasks | Recurring or one-time automations with cron or natural-language schedules |
+| Wakeups         | Conversation callbacks triggered by completed runs and tasks              |
+| Companion API   | HTTP/WebSocket endpoint for iOS app and remote clients                    |
+| Reminders       | Tell-me-later wakeups that resume a specific conversation                 |
 
 ## Lifecycle
 

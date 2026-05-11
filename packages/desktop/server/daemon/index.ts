@@ -5,12 +5,7 @@
 // re-exports from the new locations.
 
 // Config / paths — now at packages/desktop/server/
-export {
-  type DaemonConfig,
-  getDaemonConfigFilePath,
-  getDefaultDaemonConfig,
-  loadDaemonConfig,
-} from '../config.js';
+export { type DaemonConfig, getDaemonConfigFilePath, getDefaultDaemonConfig, loadDaemonConfig } from '../config.js';
 export { resolveDaemonPaths } from '../paths.js';
 
 // Automation — now at packages/desktop/server/automation/
@@ -44,11 +39,7 @@ export {
   setStoredAutomationThreadBinding,
   updateStoredAutomation,
 } from '../automation/store.js';
-export {
-  ensureAutomationThread,
-  normalizeAutomationThreadModeForSelection,
-  resolveAutomationThreadTitle,
-} from '../automation/threads.js';
+export { ensureAutomationThread, normalizeAutomationThreadModeForSelection, resolveAutomationThreadTitle } from '../automation/threads.js';
 
 // Tasks (previously daemon/modules/) — now at packages/desktop/server/automation/tasks/
 export type { ParsedTaskDefinition } from '../automation/tasks/tasks-parser.js';
@@ -125,8 +116,11 @@ export {
 } from '../runs/web-live-conversations.js';
 
 // Still in daemon/ (process infrastructure that hasn't been moved)
-export { buildBackgroundAgentArgv, type BackgroundRunAgentSpec, looksLikePersonalAgentCliEntryPath } from '../daemon/background-run-agent.js';
-export { surfaceReadyDeferredResume } from '../daemon/conversation-wakeups.js';
+export {
+  type BackgroundRunAgentSpec,
+  buildBackgroundAgentArgv,
+  looksLikePersonalAgentCliEntryPath,
+} from '../daemon/background-run-agent.js';
 export {
   cancelDurableRun,
   emitDaemonEvent,
@@ -143,6 +137,9 @@ export {
   stopDaemon,
   syncWebLiveConversationRunState,
 } from '../daemon/client.js';
+export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from '../daemon/companion/runtime.js';
+export type { CompanionRuntime, CompanionRuntimeProvider } from '../daemon/companion/types.js';
+export { surfaceReadyDeferredResume } from '../daemon/conversation-wakeups.js';
 export {
   bindInProcessDaemonClient,
   clearDaemonClientTransportOverride,
@@ -152,8 +149,6 @@ export {
   setDaemonClientTransportOverride,
 } from '../daemon/in-process-client.js';
 export { type DaemonStopRequestBehavior, PersonalAgentDaemon, type PersonalAgentDaemonOptions } from '../daemon/server.js';
-export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from '../daemon/companion/runtime.js';
-export type { CompanionRuntime, CompanionRuntimeProvider } from '../daemon/companion/types.js';
 export type {
   CancelDurableRunResult,
   DaemonEvent,

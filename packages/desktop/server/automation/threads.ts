@@ -3,12 +3,7 @@ import { existsSync } from 'node:fs';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { getDurableSessionsDir, listStoredSessions, resolveNeutralChatCwd } from '@personal-agent/core';
 
-import {
-  type AutomationThreadMode,
-  getStoredAutomation,
-  setStoredAutomationThreadBinding,
-  type StoredAutomation,
-} from './store.js';
+import { type AutomationThreadMode, getStoredAutomation, setStoredAutomationThreadBinding, type StoredAutomation } from './store.js';
 
 function readOptionalString(value: string | undefined | null): string | undefined {
   const normalized = value?.trim();

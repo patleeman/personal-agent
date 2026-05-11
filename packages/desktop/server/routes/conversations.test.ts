@@ -152,8 +152,6 @@ vi.mock('../middleware/index.js', () => ({
   setServerTimingHeaders: setServerTimingHeadersMock,
 }));
 
-
-
 vi.mock('../shared/appEvents.js', () => ({
   invalidateAppTopics: invalidateAppTopicsMock,
 }));
@@ -524,8 +522,6 @@ describe('conversation routes', () => {
       matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }],
     });
   });
-
-
 
   it('handles deferred resumes, artifacts, attachments, attention toggles, and plan state routes', async () => {
     const flushLiveDeferredResumes = vi.fn(async () => {});

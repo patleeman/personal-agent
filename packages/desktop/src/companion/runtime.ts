@@ -1,4 +1,5 @@
 import type { CompanionRuntime } from '@personal-agent/daemon';
+
 import type { HostManager } from '../hosts/host-manager.js';
 
 /** Minimal companion runtime for task-runner callback delivery. */
@@ -6,13 +7,17 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
   return {
     async createConversation(input) {
       return hostManager.getHostController('local').dispatchApiRequest({
-        method: 'POST', path: '/api/live-sessions', body: input,
+        method: 'POST',
+        path: '/api/live-sessions',
+        body: input,
       } as never);
     },
 
     async resumeConversation(input) {
       return hostManager.getHostController('local').dispatchApiRequest({
-        method: 'POST', path: '/api/live-sessions/resume', body: input,
+        method: 'POST',
+        path: '/api/live-sessions/resume',
+        body: input,
       } as never);
     },
 
@@ -28,7 +33,11 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       const path = `/api/live-sessions/${encodeURIComponent(input.conversationId)}/events`;
       return hostManager.getHostController('local').subscribeApiStream(path, (event) => {
         if (event.type === 'message') {
-          try { onEvent(JSON.parse(event.data || 'null')); } catch { /* ignore */ }
+          try {
+            onEvent(JSON.parse(event.data || 'null'));
+          } catch {
+            /* ignore */
+          }
         }
       });
     },

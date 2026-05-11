@@ -10,6 +10,8 @@ import {
   resolveDurableRunsRoot,
 } from '@personal-agent/daemon';
 
+import { invokeExtensionAction } from '../extensions/extensionBackend.js';
+import { listExtensionPromptContextProviderRegistrations } from '../extensions/extensionRegistry.js';
 import { resolveExtensionPromptReferences } from '../extensions/promptReferenceResolvers.js';
 import {
   buildReferencedMemoryDocsContext,
@@ -45,8 +47,6 @@ import {
   submitPromptSession as submitLocalPromptSession,
   takeOverSessionControl,
 } from './liveSessions.js';
-import { invokeExtensionAction } from '../extensions/extensionBackend.js';
-import { listExtensionPromptContextProviderRegistrations } from '../extensions/extensionRegistry.js';
 import { readSessionBlocks, readSessionMeta } from './sessions.js';
 import { appendConversationWorkspaceMetadata } from './sessions.js';
 

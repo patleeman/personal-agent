@@ -964,7 +964,16 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
       })
       .catch((err: unknown) => {
         setLoading(false);
-        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Failed to load extensions', details: err instanceof Error ? err.message : String(err), source: 'system-extension-manager' } }));
+        window.dispatchEvent(
+          new CustomEvent('pa-notification', {
+            detail: {
+              type: 'error',
+              message: 'Failed to load extensions',
+              details: err instanceof Error ? err.message : String(err),
+              source: 'system-extension-manager',
+            },
+          }),
+        );
       });
   }, []);
 

@@ -616,7 +616,8 @@ export function DesktopKeyboardShortcutsSettingsSection() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (error) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: error, source: 'system-settings' } }));
+    if (error)
+      window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: error, source: 'system-settings' } }));
   }, [error]);
 
   const dirty = useMemo(() => {
@@ -955,7 +956,8 @@ export function DesktopCompanionSettingsPanel() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (error) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: error, source: 'system-settings' } }));
+    if (error)
+      window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: error, source: 'system-settings' } }));
   }, [error]);
 
   const refresh = useCallback(async () => {
@@ -1223,7 +1225,10 @@ export function DesktopConnectionsSettingsPanel() {
   const [appPreferencesError, setAppPreferencesError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (appPreferencesError) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: appPreferencesError, source: 'system-settings' } }));
+    if (appPreferencesError)
+      window.dispatchEvent(
+        new CustomEvent('pa-notification', { detail: { type: 'error', message: appPreferencesError, source: 'system-settings' } }),
+      );
   }, [appPreferencesError]);
 
   useEffect(() => {
@@ -1361,7 +1366,10 @@ function ExtensionSettingsSection() {
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (saveError) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: saveError, source: 'system-settings' } }));
+    if (saveError)
+      window.dispatchEvent(
+        new CustomEvent('pa-notification', { detail: { type: 'error', message: saveError, source: 'system-settings' } }),
+      );
   }, [saveError]);
 
   useEffect(() => {
@@ -1467,11 +1475,19 @@ function ExtensionSecretsSection() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (error) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: `Failed to load secrets: ${error}`, source: 'system-settings' } }));
+    if (error)
+      window.dispatchEvent(
+        new CustomEvent('pa-notification', {
+          detail: { type: 'error', message: `Failed to load secrets: ${error}`, source: 'system-settings' },
+        }),
+      );
   }, [error]);
 
   useEffect(() => {
-    if (errorMessage) window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: errorMessage, source: 'system-settings' } }));
+    if (errorMessage)
+      window.dispatchEvent(
+        new CustomEvent('pa-notification', { detail: { type: 'error', message: errorMessage, source: 'system-settings' } }),
+      );
   }, [errorMessage]);
 
   const activeBackend =
