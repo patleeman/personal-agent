@@ -55,7 +55,12 @@ function NotificationRow({
 
   return (
     <div
-      className={cx('group -mx-2 rounded-lg px-2.5 py-2 transition-colors', item.read ? 'opacity-60' : 'bg-steel/5')}
+      className={cx(
+        'group -mx-1.5 rounded-md px-2 py-1.5 transition-colors cursor-pointer',
+        item.read
+          ? 'opacity-50'
+          : 'bg-steel/8 hover:bg-steel/12',
+      )}
       onClick={() => {
         if (!item.read) onMarkRead(item.id);
         setExpanded(!expanded);
@@ -70,25 +75,25 @@ function NotificationRow({
         }
       }}
     >
-      <div className="flex items-start gap-2.5">
-        <span className={cx('mt-1 h-2 w-2 shrink-0 rounded-full', TYPE_DOT_CLASS[item.type])} aria-hidden="true" />
+      <div className="flex items-start gap-2">
+        <span className={cx('mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full', TYPE_DOT_CLASS[item.type])} aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-dim">{TYPE_LABEL[item.type]}</span>
-            {item.source ? <span className="text-[10px] text-steel/60">[{item.source}]</span> : null}
-            <span className="ml-auto text-[10px] text-steel/50">{formatTimestamp(item.timestamp)}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-dim">{TYPE_LABEL[item.type]}</span>
+            {item.source ? <span className="text-[9px] text-steel/50">[{item.source}]</span> : null}
+            <span className="ml-auto text-[9px] text-steel/45">{formatTimestamp(item.timestamp)}</span>
           </div>
-          <p className="mt-0.5 text-[12px] leading-5 text-primary">{item.message}</p>
-          {item.count > 1 ? <span className="mt-0.5 text-[10px] text-steel/60">Repeated {item.count} times</span> : null}
+          <p className="mt-0.5 text-[11px] leading-[18px] text-primary">{item.message}</p>
+          {item.count > 1 ? <span className="text-[9px] text-steel/50">Repeated {item.count}x</span> : null}
           {item.details && expanded ? (
-            <pre className="mt-1.5 overflow-x-auto rounded-md bg-base/60 px-2 py-1.5 text-[11px] leading-5 text-secondary whitespace-pre-wrap break-words">
+            <pre className="mt-1 overflow-x-auto rounded bg-base/70 px-1.5 py-1 text-[10px] leading-[16px] text-secondary whitespace-pre-wrap break-words">
               {item.details}
             </pre>
           ) : null}
         </div>
         <button
           type="button"
-          className="shrink-0 rounded p-0.5 text-steel/50 opacity-0 transition-opacity hover:text-secondary group-hover:opacity-100 focus-visible:opacity-100"
+          className="shrink-0 rounded p-0.5 text-steel/40 opacity-0 transition-opacity hover:text-secondary group-hover:opacity-100 focus-visible:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onDismiss(item.id);
@@ -97,8 +102,8 @@ function NotificationRow({
           title="Dismiss"
         >
           <svg
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -146,19 +151,23 @@ export function NotificationCenter({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
       {/* Panel */}
-      <div className="relative z-10 flex h-full w-[380px] max-w-[90vw] flex-col bg-surface shadow-2xl animate-slide-in-from-right">
+      <div className="relative z-10 flex h-full w-[340px] max-w-[85vw] flex-col bg-surface shadow-2xl border-l border-border-subtle animate-slide-in-from-right">
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3">
-          <div>
-            <h2 className="text-[13px] font-semibold text-primary">Notifications</h2>
-            {hasUnread ? <p className="text-[11px] text-secondary">{unreadCount} unread</p> : null}
+        <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-3 py-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[12px] font-semibold text-primary">Notifications</h2>
+            {hasUnread ? (
+              <span className="rounded-full bg-red-500 px-1.5 py-[1px] text-[9px] font-semibold text-white">
+                {unreadCount}
+              </span>
+            ) : null}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             {hasNotifications && (
               <>
                 <button
                   type="button"
-                  className="rounded-md px-2 py-1 text-[10px] font-medium text-dim transition-colors hover:bg-steel/10 hover:text-secondary"
+                  className="rounded px-1.5 py-0.5 text-[9px] font-medium text-dim transition-colors hover:bg-steel/10 hover:text-secondary"
                   onClick={dismissAll}
                 >
                   Dismiss all
@@ -166,23 +175,23 @@ export function NotificationCenter({ onClose }: { onClose: () => void }) {
                 {hasUnread && (
                   <button
                     type="button"
-                    className="rounded-md px-2 py-1 text-[10px] font-medium text-dim transition-colors hover:bg-steel/10 hover:text-secondary"
+                    className="rounded px-1.5 py-0.5 text-[9px] font-medium text-dim transition-colors hover:bg-steel/10 hover:text-secondary"
                     onClick={markAllRead}
                   >
-                    Mark all read
+                    Mark read
                   </button>
                 )}
               </>
             )}
             <button
               type="button"
-              className="ml-1 rounded-md p-1 text-secondary transition-colors hover:bg-steel/10 hover:text-primary"
+              className="rounded p-0.5 text-secondary transition-colors hover:bg-steel/10 hover:text-primary"
               onClick={onClose}
               aria-label="Close notifications"
             >
               <svg
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -198,7 +207,7 @@ export function NotificationCenter({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex shrink-0 gap-1 border-b border-border-subtle px-3 py-2">
+        <div className="flex shrink-0 gap-0.5 border-b border-border-subtle px-2 py-1.5">
           {filterModes.map((mode) => {
             const count =
               mode === 'all'
@@ -209,43 +218,43 @@ export function NotificationCenter({ onClose }: { onClose: () => void }) {
                 key={mode}
                 type="button"
                 className={cx(
-                  'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+                  'rounded px-2 py-0.5 text-[10px] font-medium transition-colors',
                   filter === mode ? 'bg-steel/15 text-primary' : 'text-dim hover:bg-steel/8 hover:text-secondary',
                 )}
                 onClick={() => setFilter(mode)}
               >
                 {FILTER_LABELS[mode]}
-                {count > 0 ? <span className="ml-1 text-[10px] opacity-60">({count})</span> : null}
+                {count > 0 ? <span className="ml-0.5 text-[9px] opacity-60">({count})</span> : null}
               </button>
             );
           })}
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto px-3 py-2">
+        <div className="flex-1 overflow-y-auto px-2 py-1.5">
           {filtered.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-6 text-center">
+            <div className="flex h-full items-center justify-center px-4 text-center">
               <div>
                 <svg
-                  width="20"
-                  height="20"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="mx-auto text-steel/30"
+                  className="mx-auto text-steel/25"
                   aria-hidden="true"
                 >
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
-                <p className="mt-3 text-[12px] text-dim">No {filter === 'all' ? '' : filter} notifications</p>
+                <p className="mt-2 text-[11px] text-dim">No {filter === 'all' ? '' : filter} notifications</p>
               </div>
             </div>
           ) : (
-            <div className="space-y-0.5">
+            <div className="space-y-px">
               {filtered.map((item) => (
                 <NotificationRow key={item.id} item={item} onDismiss={dismiss} onMarkRead={markRead} />
               ))}

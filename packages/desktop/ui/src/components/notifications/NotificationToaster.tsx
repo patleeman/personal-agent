@@ -32,8 +32,8 @@ const TYPE_BORDER_CLASS: Record<NotificationType, string> = {
 
 const TYPE_BG_CLASS: Record<NotificationType, string> = {
   info: 'bg-surface',
-  warning: 'bg-amber-500/8',
-  error: 'bg-red-500/8',
+  warning: 'bg-amber-50 dark:bg-amber-950/40',
+  error: 'bg-red-50 dark:bg-red-950/40',
 };
 
 export function NotificationToaster() {
@@ -87,16 +87,16 @@ export function NotificationToaster() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-20 left-1/2 z-[9999] flex -translate-x-1/2 flex-col items-center gap-2 pointer-events-none">
+    <div className="fixed bottom-28 right-4 z-[9999] flex flex-col items-end gap-1.5 pointer-events-none">
       {toasts.map((toast) => (
         <div
           key={toast.id}
           className={cx(
-            'pointer-events-auto cursor-pointer whitespace-nowrap rounded-lg border px-3.5 py-2 text-[13px] shadow-xl transition-all duration-300',
+            'pointer-events-auto cursor-pointer max-w-sm rounded-lg border px-3 py-1.5 text-[12px] shadow-lg transition-all duration-300',
             TYPE_BORDER_CLASS[toast.type],
             TYPE_BG_CLASS[toast.type],
-            toast.type === 'error' ? 'text-red-600' : 'text-primary',
-            toast.leaving ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100',
+            toast.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-primary',
+            toast.leaving ? 'translate-x-2 opacity-0' : 'translate-x-0 opacity-100',
           )}
           onClick={() => {
             dismissToast(toast.id);
@@ -104,9 +104,9 @@ export function NotificationToaster() {
           }}
           role="alert"
         >
-          {toast.source ? <span className="mr-1.5 opacity-50 text-[11px]">[{toast.source}]</span> : null}
+          {toast.source ? <span className="mr-1 opacity-50 text-[10px]">[{toast.source}]</span> : null}
           {toast.message}
-          {toast.count > 1 ? <span className="ml-1.5 opacity-50">({toast.count})</span> : null}
+          {toast.count > 1 ? <span className="ml-1 opacity-50">({toast.count})</span> : null}
         </div>
       ))}
     </div>
