@@ -54,13 +54,15 @@ import { NotificationToaster } from './notifications/NotificationToaster';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
-import { WorkspaceExplorer } from './workspace/WorkspaceExplorer';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
 const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
   import('./ContextRail').then((module) => ({ default: module.ContextRail })),
+);
+const WorkspaceExplorer = lazyRouteWithRecovery('layout-workspace-explorer', () =>
+  import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })),
 );
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
@@ -1007,7 +1009,9 @@ function WorkbenchKnowledgeRail({
               cwd={workspaceCwd}
             />
           ) : (
-            <WorkspaceExplorer cwd={workspaceCwd} onDraftPrompt={onWorkspaceFileClear} railOnly={true} />
+            <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading files…</div>}>
+              <WorkspaceExplorer cwd={workspaceCwd} onDraftPrompt={onWorkspaceFileClear} railOnly={true} />
+            </Suspense>
           )}
         </div>
       ) : activeTool === 'artifacts' ? (

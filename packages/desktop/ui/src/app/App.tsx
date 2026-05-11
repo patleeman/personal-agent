@@ -443,7 +443,15 @@ export function App() {
   }, [bootstrapSnapshots, handleDesktopAppEvent]);
 
   useEffect(() => {
-    return subscribe();
+    let cleanup = () => {};
+    const timer = window.setTimeout(() => {
+      cleanup = subscribe();
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      cleanup();
+    };
   }, [subscribe]);
 
   return (
