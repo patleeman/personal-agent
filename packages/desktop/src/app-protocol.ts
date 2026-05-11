@@ -354,7 +354,7 @@ function createDesktopProtocolHandler(options?: {
 
     try {
       const body = await readStaticFileCached(targetPath);
-      return new Response(body, {
+      return new Response(new Uint8Array(body), {
         status: 200,
         headers: {
           'Content-Type': getMimeType(targetPath),
