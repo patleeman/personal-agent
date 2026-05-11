@@ -51,6 +51,7 @@ export function CodexSettingsPanel({ pa }: CodexSettingsPanelProps) {
       setStatus((s) => (s ? { ...s, token: result.token } : s));
     } catch (err) {
       console.error('Failed to rotate token:', err);
+      pa.ui.notify({ type: 'error', message: 'Failed to rotate token', details: err instanceof Error ? err.message : String(err), source: 'system-codex' });
     }
   };
 

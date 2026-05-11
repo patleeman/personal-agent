@@ -48,6 +48,7 @@ class ExcalidrawErrorBoundary extends Component<{ children: ReactNode }, Excalid
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('Excalidraw failed to render:', error, info);
+    window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Drawing editor crashed', details: error instanceof Error ? error.message : String(error), source: 'system-excalidraw-input' } }));
   }
 
   render() {

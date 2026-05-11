@@ -962,7 +962,10 @@ function ExtensionDetailsModal({ extensionId, onClose }: { extensionId: string; 
         setExtensions(items);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err: unknown) => {
+        setLoading(false);
+        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Failed to load extensions', details: err instanceof Error ? err.message : String(err), source: 'system-extension-manager' } }));
+      });
   }, []);
 
   useEffect(() => {

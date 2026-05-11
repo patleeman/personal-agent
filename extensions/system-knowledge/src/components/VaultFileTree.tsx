@@ -819,6 +819,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
         );
       } catch (error) {
         console.error('failed to load knowledge base snapshot', error);
+        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Failed to load knowledge base', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
         setEntries([]);
         resetTree([]);
       } finally {
@@ -836,6 +837,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
         emitKBEvent('kb:file-renamed', { oldId: sourcePath, newId: updated.id });
       } catch (error) {
         console.error('rename failed', error);
+        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Failed to rename file', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
         await loadSnapshot({ keepLoadingState: false });
       }
     },
@@ -854,6 +856,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
         }
       } catch (error) {
         console.error('move failed', error);
+        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Failed to move file', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
         await loadSnapshot({ keepLoadingState: false });
         return;
       }
@@ -903,6 +906,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
       await Promise.all([refetchKnowledgeBase({ resetLoading: false }), loadSnapshot({ keepLoadingState: false })]);
     } catch (error) {
       console.error('knowledge base sync failed', error);
+      window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Knowledge base sync failed', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
       await refetchKnowledgeBase({ resetLoading: false });
     } finally {
       setSyncingKnowledgeBase(false);
@@ -974,6 +978,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
           }
         } catch (error) {
           console.error('delete failed', error);
+          window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Failed to delete file', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
         }
       }
 
@@ -994,9 +999,11 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
         const result = await desktopBridge.openPath(targetPath);
         if (!result.opened) {
           console.error('open in Finder failed', result.error ?? 'Unknown error');
+          window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'warning', message: 'Failed to open in Finder', details: result.error ?? 'Unknown error', source: 'system-knowledge' } }));
         }
       } catch (error) {
         console.error('open in Finder failed', error);
+        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'warning', message: 'Failed to open in Finder', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
       }
     },
     [knowledgeBaseState?.effectiveRoot],

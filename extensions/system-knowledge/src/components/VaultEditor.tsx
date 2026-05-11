@@ -104,6 +104,7 @@ function useAutosave(
       } catch (error) {
         console.error('vault autosave failed', error);
         onError(error instanceof Error ? error.message : String(error));
+        window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'warning', message: 'Vault autosave failed', details: error instanceof Error ? error.message : String(error), source: 'system-knowledge' } }));
       } finally {
         saving.current = false;
       }
@@ -527,6 +528,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
             editor?.commands.setImage({ src: result.url });
           } catch (err) {
             console.error('image upload failed', err);
+            window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Image upload failed', details: err instanceof Error ? err.message : String(err), source: 'system-knowledge' } }));
           }
         };
         reader.readAsDataURL(blob);
@@ -547,6 +549,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
               editor?.commands.setImage({ src: result.url });
             } catch (err) {
               console.error('image upload failed', err);
+              window.dispatchEvent(new CustomEvent('pa-notification', { detail: { type: 'error', message: 'Image upload failed', details: err instanceof Error ? err.message : String(err), source: 'system-knowledge' } }));
             }
           };
           reader.readAsDataURL(file);

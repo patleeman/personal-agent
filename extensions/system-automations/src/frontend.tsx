@@ -196,6 +196,7 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
     void load().catch((err: Error) => {
       setError(err.message);
       setLoading(false);
+      pa.ui.notify({ type: 'error', message: `Failed to load automations: ${err.message}`, source: 'system-automations' });
     });
   }, [load]);
 
@@ -222,7 +223,9 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         setForm(emptyForm);
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        pa.ui.notify({ type: 'error', message: `Failed to save automation: ${msg}`, source: 'system-automations' });
       } finally {
         setBusy(null);
       }
@@ -238,7 +241,9 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
         setNotice('Automation run started.');
         await load();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        pa.ui.notify({ type: 'error', message: `Failed to run automation: ${msg}`, source: 'system-automations' });
       } finally {
         setBusy(null);
       }
@@ -257,7 +262,9 @@ export function AutomationsPage({ pa }: { pa: NativeExtensionClient }) {
       setForm(emptyForm);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      pa.ui.notify({ type: 'error', message: `Failed to delete automation: ${msg}`, source: 'system-automations' });
     } finally {
       setBusy(null);
     }
