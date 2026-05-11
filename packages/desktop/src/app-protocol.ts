@@ -140,7 +140,7 @@ function createBinaryProtocolResponse(response: {
   headers: Record<string, string> | Headers;
   body: Uint8Array;
 }): Response {
-  const body = response.body.byteLength > 0 ? Uint8Array.from(response.body) : null;
+  const body = response.body.byteLength > 0 ? (response.body as unknown as BodyInit) : null;
   return new Response(body, {
     status: response.statusCode,
     headers: response.headers,
