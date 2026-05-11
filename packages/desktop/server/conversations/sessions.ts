@@ -13,7 +13,7 @@
  *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data, mimeType}]
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   appendFileSync,
   closeSync,
@@ -31,6 +31,7 @@ import { basename, dirname, join, relative, sep } from 'node:path';
 import { type SessionEntry, SessionManager } from '@earendil-works/pi-coding-agent';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 
+import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
 import { readSessionContextUsageFromEntries, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
 
 const DEFAULT_SESSIONS_DIR = getDurableSessionsDir();
@@ -235,6 +236,8 @@ export interface SessionDetailReadTelemetry {
   totalBlocks: number;
   blockOffset: number;
   contextUsageIncluded: boolean;
+  /** True when a cache miss was caused by file modification (not just append). */
+  modificationDetected?: boolean;
 }
 
 interface DisplayImage {
@@ -284,6 +287,7 @@ interface CachedSessionMeta {
 
 interface CachedSessionDetail {
   signature: string;
+  contentHash: string;
   detail: SessionDetail;
 }
 
@@ -1338,6 +1342,58 @@ function getFileSignature(filePath: string): string | null {
   }
 }
 
+/** Parse file size from a signature string (size:mtime). Returns null on invalid input. */
+function parseSignatureSize(signature: string): number | null {
+  const colon = signature.indexOf(':');
+  if (colon <= 0) return null;
+  const size = Number(signature.slice(0, colon));
+  return Number.isSafeInteger(size) && size >= 0 ? size : null;
+}
+
+/** Compute a sha256 hex hash of a file's first byteCount bytes. */
+function computeFilePrefixHash(filePath: string, byteCount: number): string | null {
+  try {
+    const hash = createHash('sha256');
+    const buffer = Buffer.alloc(Math.min(byteCount, 64 * 1024));
+    const fd = openSync(filePath, 'r');
+    try {
+      let remaining = byteCount;
+      while (remaining > 0) {
+        const chunkSize = Math.min(remaining, 64 * 1024);
+        const bytesRead = readSync(fd, buffer, 0, chunkSize, null);
+        if (bytesRead <= 0) break;
+        hash.update(buffer.subarray(0, bytesRead));
+        remaining -= bytesRead;
+      }
+    } finally {
+      closeSync(fd);
+    }
+    return hash.digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+/** Compute a sha256 hex hash of an entire file. */
+function computeFileContentHash(filePath: string): string | null {
+  try {
+    const hash = createHash('sha256');
+    const buffer = Buffer.alloc(64 * 1024);
+    const fd = openSync(filePath, 'r');
+    try {
+      let bytesRead: number;
+      while ((bytesRead = readSync(fd, buffer, 0, 64 * 1024, null)) > 0) {
+        hash.update(buffer.subarray(0, bytesRead));
+      }
+    } finally {
+      closeSync(fd);
+    }
+    return hash.digest('hex');
+  } catch {
+    return null;
+  }
+}
+
 function normalizeOptionalPath(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
@@ -2149,6 +2205,8 @@ export function readSessionBlocksByFileWithTelemetry(
   const requestedTailBlocks = normalizeTailBlockRequest(options?.tailBlocks);
   const cacheKey = buildSessionDetailCacheKey(filePath, requestedTailBlocks);
   const cachedDetail = sessionDetailCache.get(cacheKey);
+
+  // ── Cache hit ────────────────────────────────────────────────────────────────
   if (cachedDetail?.signature === signature) {
     sessionDetailCache.delete(cacheKey);
     sessionDetailCache.set(cacheKey, cachedDetail);
@@ -2166,6 +2224,46 @@ export function readSessionBlocksByFileWithTelemetry(
     };
   }
 
+  // ── Cache miss — detect modification ─────────────────────────────────────────
+  let telemetryModificationDetected = false;
+  if (cachedDetail?.contentHash) {
+    const oldSize = parseSignatureSize(cachedDetail.signature);
+    const newSize = parseSignatureSize(signature);
+    if (oldSize !== null && newSize !== null) {
+      if (newSize < oldSize) {
+        // File was truncated (shorter than before) — definite modification.
+        telemetryModificationDetected = true;
+      } else if (newSize === oldSize) {
+        // Same size but mtime changed — content was rewritten in place.
+        telemetryModificationDetected = true;
+      } else {
+        // File grew — verify prefix integrity via content hash.
+        const prefixHash = computeFilePrefixHash(filePath, oldSize);
+        if (prefixHash !== null && prefixHash !== cachedDetail.contentHash) {
+          telemetryModificationDetected = true;
+        }
+      }
+
+      if (telemetryModificationDetected) {
+        persistAppTelemetryEvent({
+          source: 'server',
+          category: 'session_integrity',
+          name: 'prompt_cache_miss',
+          metadata: {
+            filePath,
+            oldSignature: cachedDetail.signature,
+            newSignature: signature,
+            oldSize,
+            newSize,
+            oldMtime: Number(cachedDetail.signature.split(':')[1] ?? 0),
+            newMtime: Number(signature.split(':')[1] ?? 0),
+            cacheLoader: typeof requestedTailBlocks === 'number' ? 'fast-tail' : 'full',
+          },
+        });
+      }
+    }
+  }
+
   const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
   if (!meta) return { detail: null, telemetry: null };
 
@@ -2174,11 +2272,12 @@ export function readSessionBlocksByFileWithTelemetry(
       ? tryReadSessionTailBlocksByFile(meta.file, meta, requestedTailBlocks)
       : null;
   if (fastTailDetail) {
+    const contentHash = computeFileContentHash(filePath) ?? '';
     const detail = {
       ...fastTailDetail,
       signature,
     } satisfies SessionDetail;
-    sessionDetailCache.set(cacheKey, { signature, detail });
+    sessionDetailCache.set(cacheKey, { signature, contentHash, detail });
     trimSessionDetailCache();
     return {
       detail,
@@ -2190,6 +2289,7 @@ export function readSessionBlocksByFileWithTelemetry(
         totalBlocks: detail.totalBlocks,
         blockOffset: detail.blockOffset,
         contextUsageIncluded: false,
+        ...(telemetryModificationDetected ? { modificationDetected: true } : {}),
       },
     };
   }
@@ -2203,6 +2303,7 @@ export function readSessionBlocksByFileWithTelemetry(
   const slicedBlocks = blockOffset > 0 ? allBlocks.slice(blockOffset) : allBlocks;
   const blocks = blockOffset > 0 ? deferHeavyBlockContent(slicedBlocks, blockOffset, totalBlocks) : slicedBlocks;
 
+  const contentHash = computeFileContentHash(filePath) ?? '';
   const detail = {
     meta,
     blocks,
@@ -2212,7 +2313,7 @@ export function readSessionBlocksByFileWithTelemetry(
     signature,
   } satisfies SessionDetail;
 
-  sessionDetailCache.set(cacheKey, { signature, detail });
+  sessionDetailCache.set(cacheKey, { signature, contentHash, detail });
   trimSessionDetailCache();
   return {
     detail,
@@ -2224,6 +2325,7 @@ export function readSessionBlocksByFileWithTelemetry(
       totalBlocks: detail.totalBlocks,
       blockOffset: detail.blockOffset,
       contextUsageIncluded: true,
+      ...(telemetryModificationDetected ? { modificationDetected: true } : {}),
     },
   };
 }
