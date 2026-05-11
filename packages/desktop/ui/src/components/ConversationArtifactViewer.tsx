@@ -1,3 +1,5 @@
+import 'katex/dist/katex.min.css';
+
 import katex from 'katex';
 import { useEffect, useMemo, useState } from 'react';
 
