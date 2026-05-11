@@ -119,7 +119,7 @@ function NotificationRow({
 }
 
 export function NotificationCenter({ onClose }: { onClose: () => void }) {
-  const { notifications, unreadCount, dismiss, dismissAll, markAllRead } = useNotificationStore();
+  const { notifications, unreadCount, dismiss, dismissAll, markRead, markAllRead } = useNotificationStore();
   const [filter, setFilter] = useState<FilterMode>('all');
 
   const filtered = useMemo(() => {
