@@ -587,11 +587,22 @@ function WorkbenchKnowledgeRail({
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
   const { runs, sessions, tasks } = useAppData();
-  const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
-  const { checkpoints, loading: checkpointsLoading, error: checkpointsError } = useConversationCheckpointSummaries(conversationId);
-  const { result: uncommittedResult, loading: uncommittedLoading } = useUncommittedDiff(workspaceCwd);
+  const artifactsEnabled = activeTool === 'artifacts' || activeArtifactId !== null;
+  const diffsEnabled = activeTool === 'diffs' || activeCheckpointId !== null;
+  const runsEnabled = activeTool === 'runs' || activeRunId !== null;
+  const {
+    artifacts,
+    loading: artifactsLoading,
+    error: artifactsError,
+  } = useConversationArtifactSummaries(artifactsEnabled ? conversationId : null);
+  const {
+    checkpoints,
+    loading: checkpointsLoading,
+    error: checkpointsError,
+  } = useConversationCheckpointSummaries(diffsEnabled ? conversationId : null);
+  const { result: uncommittedResult, loading: uncommittedLoading } = useUncommittedDiff(diffsEnabled ? workspaceCwd : null);
   const runLookups = useMemo(() => ({ sessions, tasks }), [sessions, tasks]);
-  const connectedRuns = useConversationRunList(conversationId, runs, runLookups);
+  const connectedRuns = useConversationRunList(runsEnabled ? conversationId : null, runs, runLookups);
   const activeRunConnected = activeRunId !== null && connectedRuns.some((run) => run.runId === activeRunId);
   const showRunsTab = shouldShowConversationRunsTab({
     runCount: connectedRuns.length,
