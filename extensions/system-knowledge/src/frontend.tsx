@@ -92,22 +92,38 @@ export function KnowledgePageSurface() {
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="flex min-h-full flex-col gap-10">
           <AppPageIntro title="Knowledge" summary="Durable notes, skills, and project context for the agent." />
-          <AppPageEmptyState
-            align="start"
-            title="Connect a git repo to start using Knowledge"
-            body={
-              <div className="space-y-4">
-                <p className="text-[13px] leading-6 text-secondary">
-                  Knowledge stores durable docs, skills, and instruction files in a git repository. Enter the clone URL below and PA will
-                  clone it, watch for local edits, and sync changes automatically. Private repos work too — PA uses git credential helpers
-                  from the environment.
-                </p>
-                <div className="rounded-2xl border border-border-subtle bg-surface px-5 py-5">
-                  <KnowledgeSettingsPanel />
+          <section className="mx-auto flex w-full max-w-3xl flex-col gap-7 pt-[12vh] text-left">
+            <div className="space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Set Up Knowledge</p>
+              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-primary text-balance">Give the agent a durable memory.</h2>
+              <p className="max-w-2xl text-[14px] leading-7 text-secondary">
+                Knowledge is a git-backed folder for notes, skills, project context, and instructions. PA clones the repo locally, watches
+                for edits, and syncs changes in the background. Less ceremony, more brain.
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-2xl border border-border-subtle bg-elevated/60 p-5 shadow-sm">
+                <KnowledgeSettingsPanel variant="onboarding" />
+              </div>
+              <div className="space-y-4 py-1 text-[13px] leading-6 text-secondary">
+                <div>
+                  <h3 className="text-[13px] font-semibold text-primary">What Goes In Here</h3>
+                  <p className="mt-1">Reusable skills, durable notes, project docs, and instructions the agent should actually remember.</p>
+                </div>
+                <div>
+                  <h3 className="text-[13px] font-semibold text-primary">How Sync Works</h3>
+                  <p className="mt-1">
+                    Git is the backing store. PA keeps a local mirror under runtime state and reads files from that mirror.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-[13px] font-semibold text-primary">Already Have One?</h3>
+                  <p className="mt-1">Paste the clone URL. Empty repo is fine too — PA will populate it as you build memory.</p>
                 </div>
               </div>
-            }
-          />
+            </div>
+          </section>
         </AppPageLayout>
       </div>
     );

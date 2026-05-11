@@ -8,7 +8,7 @@ const INPUT_CLASS =
   'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
 
-export function KnowledgeSettingsPanel() {
+export function KnowledgeSettingsPanel({ variant = 'settings' }: { variant?: 'settings' | 'onboarding' } = {}) {
   const {
     data: knowledgeBaseState,
     loading: knowledgeBaseLoading,
@@ -23,6 +23,7 @@ export function KnowledgeSettingsPanel() {
   const dirty = knowledgeBaseState
     ? repoUrlDraft.trim() !== knowledgeBaseState.repoUrl || branchDraft.trim() !== knowledgeBaseState.branch
     : false;
+  const isOnboarding = variant === 'onboarding';
   const syncPresentation = useMemo(
     () => getKnowledgeBaseSyncPresentation(knowledgeBaseState, { includeLastSyncAt: true }),
     [knowledgeBaseState],
@@ -84,7 +85,7 @@ export function KnowledgeSettingsPanel() {
   }
 
   useEffect(() => {
-    if (!knowledgeBaseState || !dirty || action !== null) {
+    if (isOnboarding || !knowledgeBaseState || !dirty || action !== null) {
       return undefined;
     }
 
@@ -95,7 +96,7 @@ export function KnowledgeSettingsPanel() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [action, branchDraft, dirty, knowledgeBaseState, repoUrlDraft]);
+  }, [action, branchDraft, dirty, isOnboarding, knowledgeBaseState, repoUrlDraft]);
 
   if (knowledgeBaseLoading && !knowledgeBaseState) {
     return <p className="ui-card-meta">Loading knowledge base…</p>;
@@ -112,83 +113,121 @@ export function KnowledgeSettingsPanel() {
   return (
     <>
       <form
-        className="space-y-3"
+        className={isOnboarding ? 'space-y-4' : 'space-y-3'}
         onSubmit={(event) => {
           event.preventDefault();
           void save();
         }}
       >
-        <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">
-          Repo URL
-        </label>
-        <input
-          id="settings-knowledge-base-repo"
-          value={repoUrlDraft}
-          onChange={(event) => {
-            setRepoUrlDraft(event.target.value);
-            if (saveError) setSaveError(null);
-          }}
-          className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-          placeholder="https://github.com/you/knowledge-base.git"
-          autoComplete="off"
-          spellCheck={false}
-          disabled={action !== null}
-        />
-        <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">
-          Branch
-        </label>
-        <input
-          id="settings-knowledge-base-branch"
-          value={branchDraft}
-          onChange={(event) => {
-            setBranchDraft(event.target.value);
-            if (saveError) setSaveError(null);
-          }}
-          className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-          placeholder="main"
-          autoComplete="off"
-          spellCheck={false}
-          disabled={action !== null}
-        />
-        <p className="ui-card-meta break-all">
-          Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
-        </p>
-        <p className={cx('ui-card-meta break-all', action === null && syncPresentation.toneClass)}>
-          {action === 'save' ? 'Saving knowledge base…' : action === 'sync' ? 'Syncing knowledge base…' : syncPresentation.text}
-        </p>
-        <p className="ui-card-meta break-all">
-          Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
-          {knowledgeBaseState.recoveredEntryCount} saved
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="ui-card-meta">{action === 'save' ? 'Saving…' : dirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
-          <button
-            type="button"
-            onClick={() => {
-              void sync();
-            }}
-            disabled={action !== null || !knowledgeBaseState.configured}
-            className={ACTION_BUTTON_CLASS}
+        <div className="space-y-1.5">
+          <label
+            className={isOnboarding ? 'text-[12px] font-semibold text-secondary' : 'ui-card-meta'}
+            htmlFor="settings-knowledge-base-repo"
           >
-            {action === 'sync' ? 'Syncing…' : 'Sync now'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRepoUrlDraft('');
-              setBranchDraft('main');
-              void save({ repoUrl: '', branch: 'main' });
+            Repository URL
+          </label>
+          <input
+            id="settings-knowledge-base-repo"
+            name="knowledge-base-repo-url"
+            type="url"
+            inputMode="url"
+            value={repoUrlDraft}
+            onChange={(event) => {
+              setRepoUrlDraft(event.target.value);
+              if (saveError) setSaveError(null);
             }}
-            disabled={action !== null || !knowledgeBaseState.configured}
-            className={ACTION_BUTTON_CLASS}
-          >
-            Disable managed sync
-          </button>
+            className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+            placeholder="https://github.com/you/knowledge-base.git…"
+            autoComplete="off"
+            spellCheck={false}
+            disabled={action !== null}
+          />
+          {isOnboarding ? (
+            <p className="text-[12px] leading-5 text-dim">
+              Use any empty or existing git repo. Private repos use your local git credentials.
+            </p>
+          ) : null}
         </div>
-        <p className="ui-card-meta">
-          PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder and file @
-          mentions read from that local mirror.
-        </p>
+        <div className="space-y-1.5">
+          <label
+            className={isOnboarding ? 'text-[12px] font-semibold text-secondary' : 'ui-card-meta'}
+            htmlFor="settings-knowledge-base-branch"
+          >
+            Branch
+          </label>
+          <input
+            id="settings-knowledge-base-branch"
+            name="knowledge-base-branch"
+            value={branchDraft}
+            onChange={(event) => {
+              setBranchDraft(event.target.value);
+              if (saveError) setSaveError(null);
+            }}
+            className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+            placeholder="main"
+            autoComplete="off"
+            spellCheck={false}
+            disabled={action !== null}
+          />
+        </div>
+        {isOnboarding ? null : (
+          <>
+            <p className="ui-card-meta break-all">
+              Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span>
+            </p>
+            <p className={cx('ui-card-meta break-all', action === null && syncPresentation.toneClass)}>
+              {action === 'save' ? 'Saving knowledge base…' : action === 'sync' ? 'Syncing knowledge base…' : syncPresentation.text}
+            </p>
+            <p className="ui-card-meta break-all">
+              Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> ·{' '}
+              {knowledgeBaseState.recoveredEntryCount} saved
+            </p>
+          </>
+        )}
+        {isOnboarding ? (
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={action !== null || repoUrlDraft.trim().length === 0}
+              className="rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 disabled:cursor-not-allowed disabled:bg-dim/45 disabled:text-white/80"
+            >
+              {action === 'save' ? 'Connecting…' : 'Connect Repository'}
+            </button>
+            <span className="text-[12px] text-dim">You can change this later in Settings.</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="ui-card-meta">{action === 'save' ? 'Saving…' : dirty ? 'Auto-save pending…' : 'Auto-saved'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void sync();
+              }}
+              disabled={action !== null || !knowledgeBaseState.configured}
+              className={ACTION_BUTTON_CLASS}
+            >
+              {action === 'sync' ? 'Syncing…' : 'Sync now'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRepoUrlDraft('');
+                setBranchDraft('main');
+                void save({ repoUrl: '', branch: 'main' });
+              }}
+              disabled={action !== null || !knowledgeBaseState.configured}
+              className={ACTION_BUTTON_CLASS}
+            >
+              Disable managed sync
+            </button>
+          </div>
+        )}
+        {isOnboarding ? null : (
+          <p className="ui-card-meta">
+            PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder and file @
+            mentions read from that local mirror.
+          </p>
+        )}
       </form>
 
       {saveError && <p className="text-[12px] text-danger">{saveError}</p>}
