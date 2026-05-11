@@ -27,6 +27,7 @@ export interface ReadConversationBootstrapStateResult {
     sessionDetailUnchanged?: boolean;
     sessionDetailAppendOnly?: ReturnType<typeof buildAppendOnlySessionDetailResponse>;
     liveSession: ({ live: true } & ReturnType<typeof toPublicLiveSessionMeta>) | { live: false };
+    integrityWarning?: boolean;
   };
   telemetry: {
     sessionRead: ConversationBootstrapSessionReadTelemetry;
@@ -79,6 +80,7 @@ export async function readConversationBootstrapState(
       sessionDetailSignature: sessionDetailAppendOnly?.signature ?? sessionResult.sessionRead.detail?.signature ?? sessionSignature,
       ...(sessionDetailReused ? { sessionDetailUnchanged: true } : {}),
       ...(sessionDetailAppendOnly ? { sessionDetailAppendOnly } : {}),
+      ...(sessionResult.sessionRead.telemetry?.modificationDetected ? { integrityWarning: true } : {}),
       liveSession: liveSession ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) } : { live: false as const },
     },
     telemetry: {

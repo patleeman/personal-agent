@@ -724,6 +724,8 @@ export interface ConversationBootstrapState {
   sessionDetailUnchanged?: boolean;
   sessionDetailAppendOnly?: SessionDetailAppendOnlyResponse | null;
   liveSession: ConversationBootstrapLiveState;
+  /** True when the session file was modified (not just appended to) since last read. */
+  integrityWarning?: boolean;
 }
 
 export interface DeferredResumeSummary {
