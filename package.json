@@ -1,6 +1,6 @@
 {
   "name": "personal-agent",
-  "version": "0.7.9-rc.3",
+  "version": "0.7.9-rc.4",
   "private": false,
   "license": "MIT",
   "description": "Personal agent monorepo",

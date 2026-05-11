@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.9-rc.4 — 2026-05-11
+
+- fmt: prettier
+- fix: prune transcript blocks in renderer to max 300, reduce default historical tail window to 60/200
+- surface session integrity warning in conversation header UI
+- fix: cap session meta/search-text caches with LRU eviction (max 500) and throttle scanSessionMetas to 500ms
+- detect prompt cache misses on session detail reads with content hash verification
+- docs: add v0.7.9-rc.3 release info and dev app instructions to AGENTS.md
+
 ## 0.7.9-rc.3 — 2026-05-11
 
 - fix: bump testing codex port to 3846, 3844 already taken by production
