@@ -1220,6 +1220,9 @@ function ImportWarningModal({
   onCancel: () => void;
 }) {
   const [confirmText, setConfirmText] = useState('');
+  const [cleanRoomStatus, setCleanRoomStatus] = useState<'idle' | 'starting' | 'started' | 'error'>('idle');
+  const [cleanRoomRunId, setCleanRoomRunId] = useState<string | null>(null);
+  const [cleanRoomError, setCleanRoomError] = useState<string | null>(null);
   const confirmed = confirmText === 'I UNDERSTAND THE RISKS';
 
   const handleBackdropClick = useCallback(
@@ -1230,6 +1233,19 @@ function ImportWarningModal({
     },
     [onCancel],
   );
+
+  const startCleanRoomAnalysis = useCallback(async () => {
+    setCleanRoomStatus('starting');
+    setCleanRoomError(null);
+    try {
+      const result = await api.cleanRoomImport({ zipPath });
+      setCleanRoomRunId(result.runId);
+      setCleanRoomStatus('started');
+    } catch (err) {
+      setCleanRoomError(err instanceof Error ? err.message : String(err));
+      setCleanRoomStatus('error');
+    }
+  }, [zipPath]);
 
   return (
     <div
@@ -1281,6 +1297,27 @@ function ImportWarningModal({
             </div>
           </div>
 
+          {cleanRoomStatus === 'starting' ? (
+            <div className="rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-3">
+              <p className="text-[13px] text-accent">Starting clean-room analysis…</p>
+            </div>
+          ) : cleanRoomStatus === 'started' ? (
+            <div className="rounded-xl border border-success/30 bg-success/[0.06] px-4 py-3">
+              <p className="text-[13px] font-medium text-success">Clean-room analysis started</p>
+              <p className="mt-1 text-[12px] text-secondary">
+                Run ID: <code className="font-mono">{cleanRoomRunId}</code>
+              </p>
+              <p className="mt-1 text-[12px] text-secondary">
+                Track progress in the Runs panel. The analysis agent will generate a specification withsecurity findings.
+              </p>
+            </div>
+          ) : cleanRoomStatus === 'error' ? (
+            <div className="rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3">
+              <p className="text-[13px] font-semibold text-danger">Failed to start analysis</p>
+              <p className="mt-1 text-[12px] text-secondary">{cleanRoomError}</p>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <label className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-danger">
               Type <span className="font-mono">I UNDERSTAND THE RISKS</span> to confirm
@@ -1301,6 +1338,14 @@ function ImportWarningModal({
               onClick={onCancel}
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-accent/60 bg-accent/15 px-4 py-2 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={cleanRoomStatus === 'starting' || cleanRoomStatus === 'started'}
+              onClick={startCleanRoomAnalysis}
+            >
+              {cleanRoomStatus === 'starting' ? 'Starting…' : cleanRoomStatus === 'started' ? 'Analysis running' : 'Clean-room analysis'}
             </button>
             <button
               type="button"

@@ -116,7 +116,7 @@ export function registerRunAppRoutes(
   // POST /api/runs — create a durable agent run from an assembled prompt.
   router.post('/api/runs', async (req, res) => {
     try {
-      const { prompt, source } = req.body;
+      const { prompt, source, model, allowedTools, taskSlug } = req.body;
 
       if (!prompt || typeof prompt !== 'string') {
         res.status(400).json({ error: 'prompt is required' });
@@ -130,11 +130,13 @@ export function registerRunAppRoutes(
 
       const appName = typeof source === 'string' && source.startsWith('app:') ? source.slice(4) : 'custom';
       const result = await startBackgroundRun({
-        taskSlug: `app-${appName}`,
+        taskSlug: taskSlug ?? `app-${appName}`,
         cwd: process.cwd(),
         agent: {
           prompt,
           noSession: true,
+          ...(model ? { model } : {}),
+          ...(Array.isArray(allowedTools) && allowedTools.length > 0 ? { allowedTools } : {}),
         },
         source: {
           type: 'app',

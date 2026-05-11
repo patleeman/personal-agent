@@ -265,6 +265,8 @@ export const api = {
   }) => post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions', input),
   importExtension: async (input: { zipPath: string }) =>
     post<{ ok: true; extension?: ExtensionInstallSummary; packageRoot: string }>('/extensions/import', input),
+  cleanRoomImport: async (input: { zipPath: string }) =>
+    post<{ ok: true; runId: string; logPath: string; prompt: string }>('/extensions/clean-room-import', input),
   extensionRoutes: async () => get<ExtensionRouteSummary[]>('/extensions/routes'),
   extensionSurfaces: async () => get<ExtensionSurfaceSummary[]>('/extensions/surfaces'),
   extensionCommands: async () => get<ExtensionCommandRegistration[]>('/extensions/commands'),

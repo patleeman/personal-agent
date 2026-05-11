@@ -3,6 +3,7 @@ import { resolve, sep } from 'node:path';
 
 import type { Express, Request, Response } from 'express';
 
+import { pingDaemon, startBackgroundRun } from '../daemon/index.js';
 import { invokeExtensionAction, reloadExtensionBackend } from '../extensions/extensionBackend.js';
 import { listExtensionEventSubscriptions } from '../extensions/extensionEventBus.js';
 import {
@@ -139,6 +140,102 @@ export function registerExtensionRoutes(
       const status = /required|not found|unsafe|must|already exists|empty/i.test(message) ? 400 : 500;
       logError('extension import error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(status).json({ error: message });
+    }
+  });
+
+  router.post('/api/extensions/clean-room-import', async (req, res) => {
+    try {
+      const body = req.body as { zipPath?: unknown };
+      const zipPath = typeof body.zipPath === 'string' && body.zipPath.trim().length > 0 ? body.zipPath.trim() : undefined;
+      if (!zipPath) {
+        res.status(400).json({ error: 'zipPath is required.' });
+        return;
+      }
+
+      if (!(await pingDaemon())) {
+        res.status(503).json({ error: 'Daemon is not responding. Ensure the desktop app is running.' });
+        return;
+      }
+
+      const cwd =
+        typeof req.body !== 'undefined' && typeof (req.body as Record<string, unknown>).cwd === 'string'
+          ? ((req.body as Record<string, unknown>).cwd as string)
+          : process.cwd();
+      const zipName = zipPath.split(/[\\/]/).pop() ?? zipPath;
+      const prompt = [
+        'You are a clean-room analysis agent. Your only job is to safely analyze a third-party plugin bundle.',
+        '',
+        'RULES:',
+        '- You ONLY have access to web_fetch and web_search. DO NOT use any other tools.',
+        '- Do NOT read, write, or execute any local files.',
+        '- Do NOT run any shell commands.',
+        '- If you cannot complete the analysis with web tools alone, report what you found and what is missing.',
+        '',
+        'TASK: Analyze the extension bundle at `' +
+          zipPath +
+          '` (or the repository it came from) and produce a detailed specification document.',
+        '',
+        '1. First, try to find the source repository by searching for the bundle name or any identifying metadata.',
+        '2. Fetch the repository README, source files, and extension manifest to understand:',
+        '   - What the extension does',
+        '   - What surfaces/hooks/tools it registers',
+        '   - What permissions it requires',
+        '   - What external services it calls',
+        '3. Scan for security concerns:',
+        '   - Suspicious permissions (filesystem, shell, network access)',
+        '   - Hardcoded secrets or API keys',
+        '   - Network exfiltration patterns',
+        '   - Prompt injection vectors',
+        '   - Backdoor functionality',
+        '4. Generate a clean-room specification that a full agent can use to re-implement the extension from scratch.',
+        '',
+        'OUTPUT FORMAT:',
+        '---SPEC---',
+        '[Extension name]',
+        '',
+        '## Description',
+        '[What it does]',
+        '',
+        '## Surfaces',
+        '[Pages, panels, tools, etc.]',
+        '',
+        '## Permissions required',
+        '[List of permissions]',
+        '',
+        '## Security concerns found',
+        "[List of concerns, or 'None identified']",
+        '',
+        '## Clean-room implementation notes',
+        '[What a full agent needs to re-implement this]',
+        '',
+        '---END SPEC---',
+      ].join('\n');
+
+      const result = await startBackgroundRun({
+        taskSlug:
+          'clean-room-analysis-' +
+          zipName
+            .replace(/[^a-zA-Z0-9._-]/g, '-')
+            .toLowerCase()
+            .slice(0, 48),
+        cwd,
+        agent: { prompt, noSession: true, allowedTools: ['web_fetch', 'web_search'] },
+        source: { type: 'app', id: 'extension-manager', filePath: '' },
+      });
+
+      if (!result.accepted) {
+        res.status(500).json({ error: result.reason ?? 'Could not start clean-room analysis run.' });
+        return;
+      }
+
+      res.status(201).json({
+        ok: true,
+        runId: result.runId,
+        logPath: result.logPath,
+        prompt,
+      });
+    } catch (err) {
+      sendRouteError(res, 'clean-room import error', err);
     }
   });
 

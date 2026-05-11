@@ -17,6 +17,8 @@ export interface LiveSessionLoaderOptions {
   initialModel?: string | null;
   initialThinkingLevel?: string | null;
   initialServiceTier?: string | null;
+  /** When set, only these tool names are exposed to the agent session. */
+  allowedToolNames?: string[];
 }
 
 interface PrewarmedLiveSessionLoaderEntry {

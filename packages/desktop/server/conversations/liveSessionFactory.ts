@@ -82,6 +82,7 @@ export async function createPreparedLiveAgentSession(input: {
     modelRegistry,
     resourceLoader,
     sessionManager: input.sessionManager,
+    ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
   });
 
   patchConversationBashTool(session, input.cwd, session.sessionId, resolveLiveSessionFile(session));

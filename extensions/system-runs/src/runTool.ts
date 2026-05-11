@@ -46,6 +46,15 @@ const RunToolParams = Type.Object({
     Type.String({ description: 'Default delay between loop iterations, for example 1h. Use with start_agent and loop=true.' }),
   ),
   loopMaxIterations: Type.Optional(Type.Number({ description: 'Maximum number of loop iterations. Use with start_agent and loop=true.' })),
+  allowedTools: Type.Optional(
+    Type.Union(
+      [
+        Type.String({ description: 'Comma-separated list of tool names to allow, e.g. "web_fetch,web_search".' }),
+        Type.Array(Type.String(), { description: 'Array of tool names to allow.' }),
+      ],
+      { description: 'When set, only these tool names are exposed to the subagent. All other tools are unavailable.' },
+    ),
+  ),
 });
 
 function readOptionalString(value: string | undefined): string | undefined {
@@ -80,6 +89,19 @@ function readOptionalPositiveInteger(value: unknown, label: string): number | un
   }
 
   return value;
+}
+
+function normalizeAllowedTools(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (Array.isArray(value)) {
+    const tools = value.map((t) => String(t).trim()).filter((t) => t.length > 0);
+    return tools.length > 0 ? tools : undefined;
+  }
+  const tools = String(value)
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  return tools.length > 0 ? tools : undefined;
 }
 
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?(Z|[+-]\d{2}:\d{2})$/;
@@ -360,6 +382,7 @@ export function createRunAgentExtension(options: {
               const loop = params.loop === true;
               const loopDelay = readOptionalString(params.loopDelay);
               const loopMaxIterations = readOptionalPositiveInteger(params.loopMaxIterations, 'loopMaxIterations');
+              const allowedTools = normalizeAllowedTools(params.allowedTools);
               const scheduleCount = Number(Boolean(defer)) + Number(Boolean(cron)) + Number(Boolean(at));
 
               if (scheduleCount > 1) {
@@ -465,6 +488,7 @@ export function createRunAgentExtension(options: {
                 agent: {
                   prompt,
                   ...(model ? { model } : {}),
+                  ...(allowedTools ? { allowedTools } : {}),
                 },
                 source: {
                   type: 'tool',
