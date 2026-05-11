@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent';
 
 function resolveDesktopReleaseRepoSlug(value = process.env.PERSONAL_AGENT_RELEASE_REPO) {
@@ -15,6 +17,10 @@ function resolveDesktopReleaseRepoSlug(value = process.env.PERSONAL_AGENT_RELEAS
 
 export const DESKTOP_RELEASE_REPO_SLUG = resolveDesktopReleaseRepoSlug();
 const [DESKTOP_RELEASE_REPO_OWNER, DESKTOP_RELEASE_REPO_NAME] = DESKTOP_RELEASE_REPO_SLUG.split('/', 2);
+
+function optionalExtraResource(resource) {
+  return existsSync(resource.from) ? [resource] : [];
+}
 
 export const desktopReleasePublishConfig = {
   provider: 'github',
@@ -72,10 +78,10 @@ const electronBuilderConfig = {
   publish: desktopReleasePublishConfig,
   icon: 'packages/desktop/assets/icon.png',
   extraResources: [
-    {
+    ...optionalExtraResource({
       from: 'defaults',
       to: 'defaults',
-    },
+    }),
     {
       from: 'extensions',
       to: 'extensions',
@@ -85,10 +91,10 @@ const electronBuilderConfig = {
       from: 'docs',
       to: 'docs',
     },
-    {
+    ...optionalExtraResource({
       from: 'prompt-catalog',
       to: 'prompt-catalog',
-    },
+    }),
   ],
   mac: {
     category: 'public.app-category.developer-tools',
