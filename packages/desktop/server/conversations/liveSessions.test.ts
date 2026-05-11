@@ -3114,6 +3114,40 @@ describe('queuePromptContext', () => {
 
     expect(sendCustomMessage).not.toHaveBeenCalled();
   });
+
+  it('does not enqueue duplicate related conversation pointers for a conversation', async () => {
+    const pointerContext = 'Potentially related previous conversations are available as pointers only.';
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-duplicate-related-pointers', {
+      sessionId: 'session-duplicate-related-pointers',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Duplicate related pointers',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: {
+          messages: [
+            {
+              role: 'custom',
+              customType: 'related_conversation_pointers',
+              content: pointerContext,
+            },
+          ],
+          streamingMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await queuePromptContext('session-duplicate-related-pointers', 'related_conversation_pointers', pointerContext);
+
+    expect(sendCustomMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe('conversation auto mode', () => {

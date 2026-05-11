@@ -8,13 +8,28 @@ export interface LiveSessionMessageAppendHost {
   title: string;
 }
 
+const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function hasQueuedPromptContext(entry: LiveSessionMessageAppendHost, customType: string): boolean {
+  if (customType !== RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE) {
+    return false;
+  }
+
+  const messages = Array.isArray(entry.session.state?.messages) ? entry.session.state.messages : [];
+  return messages.some((message) => isRecord(message) && message.role === 'custom' && message.customType === customType);
+}
+
 export async function queueLiveSessionPromptContext(
   entry: LiveSessionMessageAppendHost,
   customType: string,
   content: string,
 ): Promise<void> {
   const message = content.trim();
-  if (!message) {
+  if (!message || hasQueuedPromptContext(entry, customType)) {
     return;
   }
 

@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { createWriteStream, type WriteStream } from 'node:fs';
 
 import { bindInProcessDaemonClient, PersonalAgentDaemon } from '@personal-agent/daemon';
 
@@ -12,6 +12,7 @@ export class LocalBackendProcesses {
   private daemon?: PersonalAgentDaemon;
   private clearInProcessClientBinding?: () => void;
   private startPromise?: Promise<void>;
+  private logStream?: WriteStream;
 
   async ensureStarted(): Promise<void> {
     if (this.startPromise) {
@@ -60,6 +61,12 @@ export class LocalBackendProcesses {
       await this.daemon.stop();
       this.daemon = undefined;
     }
+
+    if (this.logStream) {
+      const stream = this.logStream;
+      this.logStream = undefined;
+      await new Promise<void>((resolve) => stream.end(resolve));
+    }
   }
 
   private hasOwnedRuntime(): boolean {
@@ -83,10 +90,11 @@ export class LocalBackendProcesses {
   private async startInternal(): Promise<void> {
     const runtime = resolveDesktopRuntimePaths();
     const logPath = `${runtime.desktopLogsDir}/daemon.log`;
+    const logStream = createWriteStream(logPath, { flags: 'a', encoding: 'utf-8' });
     const daemon = new PersonalAgentDaemon({
       stopRequestBehavior: 'reject',
       logSink: (line) => {
-        appendFileSync(logPath, `${line}\n`, 'utf-8');
+        logStream.write(`${line}\n`);
       },
     });
 
@@ -94,11 +102,14 @@ export class LocalBackendProcesses {
       await daemon.start();
     } catch (error) {
       await daemon.stop().catch(() => undefined);
+      await new Promise<void>((resolve) => logStream.end(resolve));
       throw error;
     }
 
     this.clearInProcessClientBinding?.();
+    this.logStream?.end();
     this.clearInProcessClientBinding = bindInProcessDaemonClient(daemon);
+    this.logStream = logStream;
     this.daemon = daemon;
   }
 }

@@ -56,7 +56,6 @@ export class LocalHostController implements HostController {
   }
 
   async getBaseUrl(): Promise<string> {
-    await this.backend.ensureStarted();
     return getDesktopAppBaseUrl();
   }
 

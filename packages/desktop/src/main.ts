@@ -1,7 +1,7 @@
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { getStateRoot, hydrateProcessEnvFromShell } from '@personal-agent/core';
+import { getStateRoot } from '@personal-agent/core';
 import { setCompanionRuntimeProvider } from '@personal-agent/daemon';
 import { app, clipboard, dialog, Notification, shell } from 'electron';
 
@@ -145,16 +145,18 @@ function renderDesktopErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function logBootstrapError(error: unknown): void {
-  const rendered = error instanceof Error ? (error.stack ?? error.message) : String(error);
-
+function logDesktopMainMessage(level: 'info' | 'error', message: string): void {
   try {
     const mainLogPath = resolve(getStateRoot(), 'desktop', 'logs', 'main.log');
-    appendFileSync(mainLogPath, `[${new Date().toISOString()}] [error] ${rendered}\n`, 'utf-8');
+    appendFileSync(mainLogPath, `[${new Date().toISOString()}] [${level}] ${message}\n`, 'utf-8');
   } catch {
     // Fall back to stderr only when the desktop log path is unavailable.
   }
+}
 
+function logBootstrapError(error: unknown): void {
+  const rendered = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  logDesktopMainMessage('error', rendered);
   console.error(rendered);
 }
 
@@ -227,7 +229,9 @@ async function openDesktopLogs(): Promise<void> {
 }
 
 function configureDesktopRuntimeEnvironment(): void {
-  hydrateProcessEnvFromShell();
+  // Do not hydrate the shell environment here. That runs an interactive shell
+  // synchronously and can burn multiple seconds before the first window exists.
+  // Child-process launch paths resolve shell env lazily when they actually need it.
   applyDesktopRuntimeEnvironmentOverrides();
 
   const runtime = resolveDesktopRuntimePaths();
@@ -290,9 +294,15 @@ async function withDesktopBackend(action: () => Promise<void>): Promise<void> {
 }
 
 async function openMainRoute(pathname = '/'): Promise<void> {
-  await withDesktopBackend(async () => {
-    await windowController!.openMainWindow(pathname);
-  });
+  if (!windowController) {
+    return;
+  }
+
+  try {
+    await windowController.openMainWindow(pathname);
+  } catch (error) {
+    reportDesktopError(error);
+  }
 }
 
 async function openNewWindow(): Promise<void> {
@@ -344,22 +354,19 @@ async function checkForDesktopUpdates(): Promise<void> {
 }
 
 async function bootstrapDesktopApp(): Promise<void> {
+  const startupStartedAt = process.hrtime.bigint();
+  const logStartupMilestone = (label: string) => {
+    const elapsedMs = Number(process.hrtime.bigint() - startupStartedAt) / 1_000_000;
+    logDesktopMainMessage('info', `desktop startup ${label} elapsedMs=${elapsedMs.toFixed(1)}`);
+  };
+
   configureDesktopRuntimeEnvironment();
+  logStartupMilestone('environment-ready');
   hostManager = new HostManager();
   setCompanionRuntimeProvider(() => createDesktopCompanionRuntime(hostManager as HostManager));
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
-  void loadLocalApiModule()
-    .then((module) => {
-      module.setDesktopWorkbenchBrowserToolHost?.({
-        isActive: () => Promise.resolve(windowController!.isWorkbenchBrowserActive()),
-        listTabs: () => Promise.resolve(windowController!.listBrowserTabs()),
-        snapshot: (_conversationId, tabId) => windowController!.snapshotWorkbenchBrowser(tabId),
-        screenshot: (_conversationId, tabId) => windowController!.screenshotWorkbenchBrowser(tabId),
-        cdp: (input) => windowController!.cdpWorkbenchBrowser(input),
-      });
-    })
-    .catch((error) => logBootstrapError(error));
+  logStartupMilestone('protocol-ready');
   updateManager = new DesktopUpdateManager({
     onBeforeQuitForUpdate: async () => {
       await prepareForQuit();
@@ -484,10 +491,29 @@ async function bootstrapDesktopApp(): Promise<void> {
 
   updateManager.start();
 
-  const ready = await ensureDesktopBackendAvailable();
-  if (ready && hostManager.getConfig().openWindowOnLaunch) {
+  if (hostManager.getConfig().openWindowOnLaunch) {
     await openMainRoute(readInitialDesktopRoute());
+    logStartupMilestone('main-window-open-requested');
   }
+
+  void ensureDesktopBackendAvailable()
+    .then((ready) => {
+      logStartupMilestone(ready ? 'backend-ready' : 'backend-unavailable');
+      if (ready) {
+        void loadLocalApiModule()
+          .then((module) => {
+            module.setDesktopWorkbenchBrowserToolHost?.({
+              isActive: () => Promise.resolve(windowController!.isWorkbenchBrowserActive()),
+              listTabs: () => Promise.resolve(windowController!.listBrowserTabs()),
+              snapshot: (_conversationId, tabId) => windowController!.snapshotWorkbenchBrowser(tabId),
+              screenshot: (_conversationId, tabId) => windowController!.screenshotWorkbenchBrowser(tabId),
+              cdp: (input) => windowController!.cdpWorkbenchBrowser(input),
+            });
+          })
+          .catch((error) => logBootstrapError(error));
+      }
+    })
+    .catch((error) => logBootstrapError(error));
 }
 
 async function prepareForQuit(): Promise<void> {

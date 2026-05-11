@@ -117,6 +117,15 @@ function createBackendMock(): LocalBackendProcesses {
 }
 
 describe('LocalHostController', () => {
+  it('returns the app base URL without blocking on backend startup', async () => {
+    const backend = createBackendMock();
+    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend);
+
+    await expect(controller.getBaseUrl()).resolves.toBe('personal-agent://app/');
+
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
   it('reports healthy status when daemon is running', async () => {
     const backend = createBackendMock();
     backend.getStatus = vi.fn().mockResolvedValue({
