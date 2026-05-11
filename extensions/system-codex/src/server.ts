@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
 import { type WebSocket, WebSocketServer } from 'ws';
@@ -198,6 +199,7 @@ export interface CodexServerOptions {
   ctx: ExtensionBackendContext;
   /** Bind address. Default: '0.0.0.0' */
   bindAddress?: string;
+  fallbackToEphemeralPortOnConflict?: boolean;
 }
 
 export interface CodexServerHandle {
@@ -205,8 +207,19 @@ export interface CodexServerHandle {
   stop: () => void;
 }
 
+async function canBindPort(port: number, bindAddress: string): Promise<boolean> {
+  const server = createNetServer();
+  return await new Promise<boolean>((resolve) => {
+    server.once('error', () => resolve(false));
+    server.listen(port, bindAddress, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
 export async function createCodexServer(options: CodexServerOptions): Promise<CodexServerHandle> {
-  const { port, auth, ctx } = options;
+  let { port } = options;
+  const { auth, ctx } = options;
 
   let handlers: Record<string, MethodHandler> | null = null;
 
@@ -216,6 +229,12 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
     handlers = m.REGISTERED_HANDLERS;
     return handlers;
   };
+
+  const bindAddress = options.bindAddress ?? '0.0.0.0';
+  if (options.fallbackToEphemeralPortOnConflict && port !== 0 && !(await canBindPort(port, bindAddress))) {
+    ctx.log.warn(`codex protocol port ${port} is already in use; falling back to an ephemeral port`);
+    port = 0;
+  }
 
   const httpServer = createServer((_req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -317,9 +336,10 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
   });
 
   return new Promise((resolve, reject) => {
-    httpServer.once('error', reject);
-    httpServer.listen(port, options.bindAddress ?? '0.0.0.0', () => {
-      httpServer.off('error', reject);
+    let attemptedFallback = false;
+
+    const onListening = () => {
+      httpServer.off('error', onError);
       const addr = httpServer.address();
       const actualPort = typeof addr === 'object' && addr ? addr.port : port;
       resolve({
@@ -335,7 +355,22 @@ export async function createCodexServer(options: CodexServerOptions): Promise<Co
           threadSubscribers.clear();
         },
       });
-    });
+    };
+
+    const onError = (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE' && options.fallbackToEphemeralPortOnConflict && port !== 0 && !attemptedFallback) {
+        attemptedFallback = true;
+        ctx.log.warn(`codex protocol port ${port} is already in use; falling back to an ephemeral port`);
+        httpServer.close(() => {
+          httpServer.listen(0, bindAddress, onListening);
+        });
+        return;
+      }
+      reject(error);
+    };
+
+    httpServer.on('error', onError);
+    httpServer.listen(port, bindAddress, onListening);
   });
 }
 

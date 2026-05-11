@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
+import { createServer as createNetServer, type Server as NetServer } from 'node:net';
+
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
@@ -155,6 +157,20 @@ function makeMockContext(conversations: ReturnType<typeof makeMockConversations>
   };
 }
 
+async function occupyPort(): Promise<{ port: number; server: NetServer }> {
+  const server = createNetServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, BIND, () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Failed to occupy test port');
+  return { port: address.port, server };
+}
+
 function createTestServer(options?: Partial<{ port: number; bindAddress: string }>) {
   const port = options?.port ?? 0;
   const bindAddress = options?.bindAddress ?? BIND;
@@ -219,6 +235,26 @@ describe('Codex Protocol Server', () => {
       bindAddress: BIND,
     });
     expect(() => created!.stop()).not.toThrow();
+  });
+
+  it('falls back to an ephemeral port when the requested port is occupied', async () => {
+    const occupied = await occupyPort();
+    const mod = await import('../server.js');
+
+    try {
+      created = await mod.createCodexServer({
+        port: occupied.port,
+        auth: makeMockAuth(),
+        ctx: makeMockContext(makeMockConversations()),
+        bindAddress: BIND,
+        fallbackToEphemeralPortOnConflict: true,
+      });
+    } finally {
+      occupied.server.close();
+    }
+
+    expect(created.port).toBeGreaterThan(0);
+    expect(created.port).not.toBe(occupied.port);
   });
 
   describe('protocol flow', () => {

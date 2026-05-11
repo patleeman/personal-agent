@@ -16,12 +16,12 @@ export async function start(_input: unknown, ctx: ExtensionBackendContext): Prom
     const port = Number(process.env.CODEX_PORT) || 3843;
 
     serverAuth = auth;
-    server = await createCodexServer({ port, auth, ctx, bindAddress: '0.0.0.0' });
+    server = await createCodexServer({ port, auth, ctx, bindAddress: '0.0.0.0', fallbackToEphemeralPortOnConflict: true });
 
     await auth.ensurePairing();
 
-    ctx.log.info(`codex protocol server listening on ws://0.0.0.0:${port}`);
-    return { ok: true, port };
+    ctx.log.info(`codex protocol server listening on ws://0.0.0.0:${server.port}`);
+    return { ok: true, port: server.port };
   } catch (error) {
     ctx.log.error(`failed to start codex server`, { error: (error as Error).message });
     throw error;
