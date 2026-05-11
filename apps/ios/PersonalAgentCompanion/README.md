@@ -23,7 +23,7 @@ apps/ios/PersonalAgentCompanion
 - save shared text, URLs, and images from iOS into the host knowledge base through the companion share extension; URL shares are imported as markdown notes with extracted readable content + frontmatter metadata, and image shares become markdown notes backed by vault assets
 - browse saved drawing attachments, inspect revisions, and create/update drawing assets with a native PencilKit editor that exports Excalidraw-compatible source + preview assets
 - manage automations from the phone, including background-agent callback delivery controls, with durable-run details still reachable from the companion surfaces
-- manage paired devices, setup state, and SSH targets from iOS
+- manage paired devices and setup state from iOS
 
 The share flow is knowledge-first right now: the share extension hands text, web URLs, and images to the main app, and the main app imports them into `Inbox/` in the host vault.
 

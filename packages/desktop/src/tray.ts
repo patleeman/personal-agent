@@ -56,12 +56,7 @@ export function buildDesktopTrayMenuTemplate(options: {
   const controlsReady = startupState.kind === 'ready';
   const canRetry = startupState.kind !== 'starting';
 
-  const template: MenuItemConstructorOptions[] = [
-    {
-      label: 'Remote execution: SSH-only',
-      enabled: false,
-    },
-  ];
+  const template: MenuItemConstructorOptions[] = [];
 
   if (startupState.kind === 'starting') {
     template.push({
