@@ -143,10 +143,16 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
   };
 }
 
+let cachedDesktopRuntimePaths: DesktopRuntimePaths | null = null;
+
 export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
+  if (cachedDesktopRuntimePaths) {
+    return cachedDesktopRuntimePaths;
+  }
+
   const forceDevBundle = process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE === '1';
 
-  return resolveDesktopRuntimePathsForContext({
+  cachedDesktopRuntimePaths = resolveDesktopRuntimePathsForContext({
     currentDir: dirname(fileURLToPath(import.meta.url)),
     cwd: process.cwd(),
     env: process.env,
@@ -163,4 +169,5 @@ export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
         })(),
     resourcesPath: forceDevBundle ? undefined : process.resourcesPath,
   });
+  return cachedDesktopRuntimePaths;
 }
