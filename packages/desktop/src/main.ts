@@ -5,7 +5,7 @@ import { app, clipboard, dialog, Notification, shell } from 'electron';
 import { applyDesktopAboutPanelOptions } from './about.js';
 import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
-import { registerDesktopAppProtocol } from './app-protocol.js';
+import { registerDesktopAppProtocol, warmDesktopShellStaticAssets } from './app-protocol.js';
 import { createDesktopCompanionRuntime } from './companion/runtime.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { closeDesktopMainLog, writeDesktopMainLogLine } from './desktop-main-log.js';
@@ -387,6 +387,7 @@ async function bootstrapDesktopApp(): Promise<void> {
     })
     .catch((error) => logBootstrapError(error));
   registerDesktopAppProtocol(hostManager);
+  warmDesktopShellStaticAssets();
   windowController = new DesktopWindowController(hostManager);
   logStartupMilestone('protocol-ready');
   updateManager = new DesktopUpdateManager({

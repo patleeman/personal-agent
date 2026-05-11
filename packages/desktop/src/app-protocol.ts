@@ -106,6 +106,39 @@ function resolveStaticFilePath(requestPath: string): string {
   return candidate;
 }
 
+const staticFileCache = new Map<string, Promise<Buffer>>();
+
+function readStaticFileCached(filePath: string): Promise<Buffer> {
+  let cached = staticFileCache.get(filePath);
+  if (!cached) {
+    cached = readFile(filePath).catch((error) => {
+      staticFileCache.delete(filePath);
+      throw error;
+    });
+    staticFileCache.set(filePath, cached);
+  }
+  return cached;
+}
+
+export function warmDesktopShellStaticAssets(): void {
+  const indexPath = resolveStaticFilePath('/index.html');
+  void readStaticFileCached(indexPath)
+    .then((indexHtml) => {
+      const html = indexHtml.toString('utf-8');
+      const assetPaths = new Set<string>();
+      for (const match of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
+        const assetPath = match[1];
+        if (assetPath?.startsWith('/assets/')) {
+          assetPaths.add(assetPath);
+        }
+      }
+      for (const assetPath of assetPaths) {
+        void readStaticFileCached(resolveStaticFilePath(assetPath)).catch(() => undefined);
+      }
+    })
+    .catch(() => undefined);
+}
+
 async function readDesktopProtocolRequestBody(request: Request): Promise<unknown> {
   if (request.method === 'GET' || request.method === 'HEAD') {
     return undefined;
@@ -320,7 +353,7 @@ function createDesktopProtocolHandler(options?: {
     const targetPath = url.pathname.startsWith('/assets/') || url.pathname === '/favicon.ico' ? filePath : fallbackPath;
 
     try {
-      const body = await readFile(targetPath);
+      const body = await readStaticFileCached(targetPath);
       return new Response(body, {
         status: 200,
         headers: {
