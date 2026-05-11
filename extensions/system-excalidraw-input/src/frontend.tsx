@@ -112,7 +112,7 @@ export function ExcalidrawInputTool({
           pa.ui.toast('Drawing saved to composer.');
         }
       }}
-      disabled={toolContext.composerDisabled || toolContext.streamIsStreaming}
+      disabled={toolContext.composerDisabled}
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
       title="Create drawing"
       aria-label="Create drawing"

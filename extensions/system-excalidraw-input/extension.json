@@ -15,7 +15,6 @@
         "id": "excalidraw",
         "component": "ExcalidrawInputTool",
         "title": "Create drawing",
-        "when": "!streamIsStreaming",
         "priority": 100
       }
     ]

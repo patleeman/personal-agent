@@ -178,23 +178,27 @@ describe('applyEvent — streaming lifecycle', () => {
   });
 });
 
-// ── SSE error clears streaming flag ──────────────────────────────────────────
+// ── SSE error does NOT clear streaming flag ───────────────────────────────────
+// The es.onerror handler used to immediately clear isStreaming so the
+// cursor wouldn't stay frozen during reconnection. This caused the submit
+// button to flip from Steer to Send/Follow up, making the input area
+// unusable during the reconnect window. Now the snapshot on reconnect
+// restores the real state and the previous isStreaming value is preserved.
 
-describe('applyEvent — SSE reconnect guard', () => {
-  it('applying isStreaming: false manually models onerror behaviour', () => {
-    // This mirrors what useSessionStream does in es.onerror:
-    //   setState((prev) => (prev.isStreaming ? { ...prev, isStreaming: false } : prev))
+describe('applyEvent — SSE reconnect preserves isStreaming', () => {
+  it('preserves isStreaming when SSE drops while streaming', () => {
+    // The onerror handler no longer touches isStreaming — it stays as-is
+    // until the next snapshot restores the correct server-side state.
     const prev = createStreamState({ isStreaming: true });
-    const next = prev.isStreaming ? { ...prev, isStreaming: false } : prev;
-    expect(next.isStreaming).toBe(false);
-    // Blocks are preserved — the cursor disappears but content stays
-    expect(next.blocks).toBe(prev.blocks);
+    // No state change on error — keep isStreaming as-is
+    expect(prev.isStreaming).toBe(true);
+    expect(prev.blocks).toBe(prev.blocks);
   });
 
-  it('onerror guard is a no-op when isStreaming is already false', () => {
+  it('preserves isStreaming=false when SSE drops while idle', () => {
     const prev = createStreamState({ isStreaming: false });
-    const next = prev.isStreaming ? { ...prev, isStreaming: false } : prev;
-    expect(next).toBe(prev); // same reference — no unnecessary re-render
+    // No state change on error
+    expect(prev.isStreaming).toBe(false);
   });
 });
 

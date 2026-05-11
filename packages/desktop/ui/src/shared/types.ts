@@ -943,7 +943,7 @@ export interface DesktopConversationState {
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =
-  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; goalState?: ThreadGoal | null }
+  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; isStreaming: boolean; goalState?: ThreadGoal | null }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }

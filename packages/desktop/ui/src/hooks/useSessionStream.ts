@@ -342,14 +342,6 @@ function resolveEffectiveSessionStreamSubscriptionId(
   return forcedSessionId?.trim() === normalizedSessionId ? normalizedSessionId : null;
 }
 
-function shouldRetrySessionStreamAfterError(status?: number): boolean {
-  if (typeof status !== 'number') {
-    return true;
-  }
-
-  return status >= 500;
-}
-
 function shouldPersistWarmLiveSessionState(state: StreamState): boolean {
   return (
     state.hasSnapshot ||
@@ -791,10 +783,15 @@ export function useSessionStream(
           durationMs: Math.round(performance.now() - connectStartedAt),
           count: reconnectCount,
         });
-        // Clear streaming state immediately so the cursor doesn't stay frozen
-        // during the reconnect window. The snapshot on reconnect will restore
-        // the real state.
-        setState((prev) => (prev.isStreaming ? { ...prev, isStreaming: false } : prev));
+        // Don't clear isStreaming here — the snapshot on reconnect will
+        // restore the real state. Clearing it immediately flips the submit
+        // button from Steer to Send/Follow up, making the input area
+        // unusable during the reconnection window.
+
+        // Check the session health to decide whether to keep retrying.
+        // Unlike the old code this doesn't *gate* the reconnect — we
+        // always try at least once so transient errors don't permanently
+        // break the connection.
         api
           .liveSession(requestedSessionId)
           .then(() => {
@@ -803,14 +800,22 @@ export function useSessionStream(
             }
           })
           .catch((error) => {
+            if (closed) {
+              return;
+            }
+
             const message = error instanceof Error ? error.message : String(error);
             const statusMatch = message.match(/^(\d{3})\b/);
             const status = statusMatch ? Number.parseInt(statusMatch[1] ?? '', 10) : undefined;
-            if (!closed && shouldRetrySessionStreamAfterError(status)) {
+
+            if (typeof status !== 'number' || status >= 500) {
+              // Transient network / server error — retry with backoff
               setTimeout(connect, 2_000);
               return;
             }
 
+            // 4xx — session likely gone, stop retrying but preserve
+            // the UI state so the user sees the correct submit options.
             clearWarmLiveSessionState(requestedSessionId);
           });
       };
