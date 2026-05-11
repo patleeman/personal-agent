@@ -53,6 +53,11 @@ function applyStartOnSystemStart(enabled: boolean): boolean {
     throw new Error('Start on system start is only available in packaged desktop builds.');
   }
 
+  const current = readStartOnSystemStartFromSystem();
+  if (current === enabled) {
+    return current;
+  }
+
   app.setLoginItemSettings({
     openAtLogin: enabled,
     openAsHidden: enabled,
