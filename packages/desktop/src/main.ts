@@ -359,7 +359,6 @@ async function bootstrapDesktopApp(): Promise<void> {
     logDesktopMainMessage('info', `desktop startup ${label} elapsedMs=${elapsedMs.toFixed(1)}`);
   };
 
-  configureDesktopRuntimeEnvironment();
   logStartupMilestone('environment-ready');
   hostManager = new HostManager();
   setCompanionRuntimeProvider(() => createDesktopCompanionRuntime(hostManager as HostManager));
