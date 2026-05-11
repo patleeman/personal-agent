@@ -3258,7 +3258,9 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
 
               {settingsComponent ? (
                 <div className="space-y-0">
-                  <SettingsPanelHost registration={settingsComponent} />
+                  <SettingsPanel title={settingsComponent.label} description={settingsComponent.description}>
+                    <SettingsPanelHost registration={settingsComponent} />
+                  </SettingsPanel>
                 </div>
               ) : null}
 
