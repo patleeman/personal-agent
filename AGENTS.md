@@ -38,6 +38,26 @@ pipeline.
 - Ensure consistency across pages, don't design in isolation!
 - If you modify anything in the web ui, you MUST perform a visual check before signing off on the work! Make sure there is no jank and the output looks good.
 
+## Current release
+
+**v0.7.9-rc.3** — published 2026-05-11.
+
+Release page: https://github.com/patleeman/personal-agent/releases/tag/v0.7.9-rc.3
+
+### Highlights
+
+- Fixed dev app startup: repo root resolution, missing preload/worker bundles, daemon inlining, codex port conflict.
+- `npm run dev` in `packages/desktop` now works end-to-end: builds, launches the testing app bundle, and loads the UI with all API endpoints responding.
+- The signed `.app` build (`desktop:dist`) is blocked by ~40 pre-existing TypeScript errors in the server code that cause `tsc --build --force` to exit non-zero. These are baseline issues, not introduced by these changes.
+
+### How to run the dev app
+
+```bash
+cd packages/desktop && npm run dev
+# or:
+npm run desktop:dev
+```
+
 ## Release flow
 
 If the goal is to publish a downloadable installable macOS app on GitHub Releases, use the local signed release flow.
@@ -50,6 +70,17 @@ If the goal is to publish a downloadable installable macOS app on GitHub Release
 6. Release assets must include the Electron updater metadata (`latest-mac.yml`) plus the signed macOS `.zip` / `.zip.blockmap`, and optionally the `.dmg` / `.dmg.blockmap`.
 
 Important: pushing commits or tags to `master` does not create a GitHub release by itself anymore. Release artifacts are built locally with the local `Developer ID Application` certificate from Keychain, then uploaded to the same repo's GitHub Releases for in-app auto-updates.
+
+### Release gotchas
+
+- `npm version prerelease --preid=rc` bumps the RC version and creates a git tag but does **not** build or upload artifacts. Run `npm run release:publish` for the full signed build.
+- `desktop:dist` runs `tsc --build --force` as part of the desktop package `build` script. There are ~40 pre-existing TypeScript errors in `packages/desktop/server/` — they don't block the esbuild-produced bundled output but do cause `tsc` to exit non-zero, which halts the build chain. To work around this, run the esbuild steps directly:
+  ```bash
+  cd packages/desktop
+  npm run build:deps     # ui, server bundle, extensions
+  node scripts/build-main.mjs  # main process + preload + workers
+  npx electron-builder --config electron-builder.config.mjs --publish never
+  ```
 
 See `docs/release-cycle.md` for the fuller release notes.
 
