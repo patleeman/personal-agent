@@ -53,6 +53,18 @@ describe('ConversationComposerActions', () => {
     expect(html).toContain('aria-label="Stop"');
   });
 
+  it('falls back to steer instead of rendering an empty streaming submit button', () => {
+    const html = renderActions({
+      streamIsStreaming: true,
+      composerHasContent: true,
+      composerSubmitLabel: 'Send',
+    });
+
+    expect(html).toContain('aria-label="Steer"');
+    expect(html).toContain('steer');
+    expect(html).toContain('aria-label="Stop"');
+  });
+
   it('renders stop button only when streaming with no content', () => {
     const html = renderActions({
       streamIsStreaming: true,

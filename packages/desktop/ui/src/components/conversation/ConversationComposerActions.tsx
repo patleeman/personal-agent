@@ -77,6 +77,9 @@ export function ConversationComposerActions({
     [composerButtons, composerHasContent, streamIsStreaming],
   );
 
+  const streamingSubmitLabel: Exclude<ConversationComposerSubmitLabel, 'Send'> =
+    composerSubmitLabel === 'Follow up' || composerSubmitLabel === 'Parallel' ? composerSubmitLabel : 'Steer';
+
   const paClientByExtension = useRef<Map<string, ReturnType<typeof createNativeExtensionClient>>>(new Map());
   function getPaClient(extensionId: string) {
     let client = paClientByExtension.current.get(extensionId);
@@ -126,21 +129,17 @@ export function ConversationComposerActions({
               disabled={composerDisabled}
               className={cx(
                 'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
-                composerSubmitLabel === 'Parallel'
+                streamingSubmitLabel === 'Parallel'
                   ? 'bg-steel/12 text-steel hover:bg-steel/20'
-                  : composerSubmitLabel === 'Follow up'
+                  : streamingSubmitLabel === 'Follow up'
                     ? 'bg-elevated text-primary hover:bg-elevated/80'
                     : 'bg-warning/15 text-warning hover:bg-warning/25',
               )}
-              title={composerSubmitLabel === 'Parallel' ? 'Parallel (Ctrl/⌘+Enter)' : composerSubmitLabel}
-              aria-label={composerSubmitLabel}
+              title={streamingSubmitLabel === 'Parallel' ? 'Parallel (Ctrl/⌘+Enter)' : streamingSubmitLabel}
+              aria-label={streamingSubmitLabel}
             >
-              {composerSubmitLabel !== 'Send' ? (
-                <>
-                  <ComposerActionIcon label={composerSubmitLabel} className="shrink-0" />
-                  <span>{formatComposerActionLabel(composerSubmitLabel)}</span>
-                </>
-              ) : null}
+              <ComposerActionIcon label={streamingSubmitLabel} className="shrink-0" />
+              <span>{formatComposerActionLabel(streamingSubmitLabel)}</span>
             </button>
           ) : null}
           <button
