@@ -16,7 +16,7 @@ await build({
   format: 'esm',
   target: 'node20',
   banner: {
-    js: `import process from 'node:process';import { createRequire } from 'node:module';const require=createRequire(import.meta.url);`,
+    js: `import process from 'node:process';`,
   },
   external: ['electron', 'fsevents'],
   logLevel: 'info',
