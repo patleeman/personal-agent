@@ -444,15 +444,19 @@ export function App() {
 
   useEffect(() => {
     let cleanup = () => {};
-    const timer = window.setTimeout(() => {
+    const bootstrapTimer = window.setTimeout(() => {
+      void bootstrapSnapshots();
+    }, 500);
+    const subscribeTimer = window.setTimeout(() => {
       cleanup = subscribe();
-    }, 250);
+    }, 5_000);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(bootstrapTimer);
+      window.clearTimeout(subscribeTimer);
       cleanup();
     };
-  }, [subscribe]);
+  }, [bootstrapSnapshots, subscribe]);
 
   return (
     <AppErrorBoundary>
