@@ -680,6 +680,12 @@ export class DesktopWindowController {
     );
     const runtime = resolveDesktopRuntimePaths();
 
+    const createdAt = process.hrtime.bigint();
+    const logWindowMilestone = (label: string) => {
+      const elapsedMs = Number(process.hrtime.bigint() - createdAt) / 1_000_000;
+      logDesktopEvent(`Window ${role} ${label} elapsedMs=${elapsedMs.toFixed(1)}`);
+    };
+
     const window = new BrowserWindow({
       show: false,
       ...savedWindowState,
@@ -732,13 +738,19 @@ export class DesktopWindowController {
 
     const showFallbackTimer = setTimeout(() => {
       if (!window.isDestroyed() && !window.isVisible()) {
+        logWindowMilestone('show-fallback');
         window.show();
       }
     }, WINDOW_SHOW_FALLBACK_MS);
 
     window.once('ready-to-show', () => {
+      logWindowMilestone('ready-to-show');
       clearTimeout(showFallbackTimer);
       window.show();
+    });
+
+    window.webContents.once('did-finish-load', () => {
+      logWindowMilestone('did-finish-load');
     });
 
     window.once('closed', () => {
