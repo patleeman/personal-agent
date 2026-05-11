@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import type { DesktopAppPreferences, DesktopConfig } from '../hosts/types.js';
@@ -76,9 +76,24 @@ function createDefaultDesktopConfig(): DesktopConfig {
   };
 }
 
+let cachedDesktopConfig: { file: string; mtimeMs: number; config: DesktopConfig } | null = null;
+
+function cacheDesktopConfig(file: string, config: DesktopConfig): DesktopConfig {
+  const mtimeMs = existsSync(file) ? statSync(file).mtimeMs : -1;
+  cachedDesktopConfig = { file, mtimeMs, config };
+  return config;
+}
+
 export function loadDesktopConfig(): DesktopConfig {
   const { desktopConfigFile, desktopStateDir } = resolveDesktopRuntimePaths();
   mkdirSync(desktopStateDir, { recursive: true, mode: 0o700 });
+
+  if (existsSync(desktopConfigFile)) {
+    const mtimeMs = statSync(desktopConfigFile).mtimeMs;
+    if (cachedDesktopConfig?.file === desktopConfigFile && cachedDesktopConfig.mtimeMs === mtimeMs) {
+      return cachedDesktopConfig.config;
+    }
+  }
 
   if (!existsSync(desktopConfigFile)) {
     const config = createDefaultDesktopConfig();
@@ -88,9 +103,7 @@ export function loadDesktopConfig(): DesktopConfig {
 
   try {
     const parsed = JSON.parse(readFileSync(desktopConfigFile, 'utf-8')) as unknown;
-    const config = normalizeDesktopConfig(parsed);
-    saveDesktopConfig(config);
-    return config;
+    return cacheDesktopConfig(desktopConfigFile, normalizeDesktopConfig(parsed));
   } catch {
     const config = createDefaultDesktopConfig();
     saveDesktopConfig(config);
@@ -101,7 +114,9 @@ export function loadDesktopConfig(): DesktopConfig {
 export function saveDesktopConfig(config: DesktopConfig): void {
   const { desktopConfigFile, desktopStateDir } = resolveDesktopRuntimePaths();
   mkdirSync(desktopStateDir, { recursive: true, mode: 0o700 });
-  writeFileSync(desktopConfigFile, `${JSON.stringify(normalizeDesktopConfig(config), null, 2)}\n`, 'utf-8');
+  const normalized = normalizeDesktopConfig(config);
+  writeFileSync(desktopConfigFile, `${JSON.stringify(normalized, null, 2)}\n`, 'utf-8');
+  cacheDesktopConfig(desktopConfigFile, normalized);
 }
 
 export function readDesktopAppPreferences(config = loadDesktopConfig()): DesktopAppPreferences {

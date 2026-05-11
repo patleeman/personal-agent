@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -83,6 +83,18 @@ describe('desktop-config', () => {
       width: 1440,
       height: 960,
     });
+  });
+
+  it('loads unchanged desktop config from memory without rewriting it', () => {
+    const configFile = join(dir, 'config.json');
+    writeFileSync(configFile, `${JSON.stringify({ version: 2, openWindowOnLaunch: true }, null, 2)}\n`, 'utf-8');
+
+    const first = loadDesktopConfig();
+    const contentsAfterFirstRead = readFileSync(configFile, 'utf-8');
+    const second = loadDesktopConfig();
+
+    expect(second).toBe(first);
+    expect(readFileSync(configFile, 'utf-8')).toBe(contentsAfterFirstRead);
   });
 
   it('defaults desktop app preferences and persists updates', () => {
