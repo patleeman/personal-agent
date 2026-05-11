@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9-rc.6 — 2026-05-11
+
+- fix: make daemonEntryFile resolution tolerant so packaged build doesn't crash
+
 ## 0.7.9-rc.5 — 2026-05-11
 
 - fix: add build:main to desktop build script so electron-builder finds main.js
