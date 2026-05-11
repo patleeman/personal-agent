@@ -142,6 +142,44 @@ describe('desktopConversationState reducer', () => {
     ]);
   });
 
+  it('updates goal state from goal tool completions', async () => {
+    const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
+      await import('./desktopConversationState.js');
+
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'tool_start',
+      toolName: 'set_goal',
+      args: { objective: 'Ship the thing' },
+      toolCallId: 'goal-1',
+    } as never);
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'tool_end',
+      toolName: 'set_goal',
+      toolCallId: 'goal-1',
+      output: 'Goal set: "Ship the thing"',
+      isError: false,
+      durationMs: 7,
+      details: {
+        state: {
+          objective: 'Ship the thing',
+          status: 'active',
+          tasks: [],
+          stopReason: null,
+          updatedAt: '2026-05-11T12:00:00.000Z',
+        },
+      },
+    } as never);
+
+    expect(state.goalState).toEqual({
+      objective: 'Ship the thing',
+      status: 'active',
+      tasks: [],
+      stopReason: null,
+      updatedAt: '2026-05-11T12:00:00.000Z',
+    });
+  });
+
   it('preserves terminal-style metadata for direct bang bash runs', async () => {
     const { applyDesktopConversationStreamEvent, createEmptyDesktopConversationStreamState } =
       await import('./desktopConversationState.js');

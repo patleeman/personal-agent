@@ -118,6 +118,35 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
 }
 
 const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
+const GOAL_TOOL_NAMES = new Set(['set_goal', 'update_goal']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeGoalStatus(value: unknown): import('./sessions.js').ThreadGoal['status'] {
+  if (typeof value === 'string' && ['active', 'paused', 'complete'].includes(value)) {
+    return value as import('./sessions.js').ThreadGoal['status'];
+  }
+  return 'complete';
+}
+
+function readGoalStateFromToolDetails(toolName: string | undefined, details: unknown): import('./sessions.js').ThreadGoal | null {
+  if (!toolName || !GOAL_TOOL_NAMES.has(toolName) || !isRecord(details) || !isRecord(details.state)) {
+    return null;
+  }
+  const state = details.state;
+  if (typeof state.objective !== 'string') {
+    return null;
+  }
+  return {
+    objective: state.objective,
+    status: normalizeGoalStatus(state.status),
+    tasks: [],
+    stopReason: typeof state.stopReason === 'string' ? state.stopReason : null,
+    updatedAt: typeof state.updatedAt === 'string' ? state.updatedAt : null,
+  };
+}
 
 function findLastToolUseIndex(blocks: DesktopConversationMessageBlock[], toolCallId: string): number {
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
@@ -401,10 +430,12 @@ export function applyDesktopConversationStreamEvent(prev: DesktopConversationStr
           details: event.details ?? block.details,
         };
       }
+      const goalState = readGoalStateFromToolDetails(event.toolName, event.details);
       return {
         ...prev,
         blocks,
         totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length),
+        ...(goalState ? { goalState } : {}),
       };
     }
 

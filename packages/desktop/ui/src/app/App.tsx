@@ -12,6 +12,7 @@ import {
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
 import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
+import { ExtensionPage } from '../extensions/ExtensionPage';
 import { useConversations } from '../hooks/useConversations';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import {
@@ -125,10 +126,6 @@ function ConversationsRouteRedirect() {
 const ConversationPage = lazyRouteWithRecovery('conversation-page', () =>
   import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })),
 );
-const ExtensionPage = lazyRouteWithRecovery('extension-page', () =>
-  import('../extensions/ExtensionPage').then((module) => ({ default: module.ExtensionPage })),
-);
-
 function suspendRoute(element: React.ReactNode) {
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center px-6 text-[12px] text-dim">Loading…</div>}>
