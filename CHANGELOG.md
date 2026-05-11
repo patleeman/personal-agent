@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.9-rc.7 — 2026-05-11
+
+- fix: reflect running sessions on conversation page
+- fix: keep stale running threads steerable
+- docs: document agent loop health metrics
+- fix: avoid codex port conflict crash
+- fix: initialize local deferred resume context
+- feat: add agent loop health metrics
+- fix: make notifications a top-bar dropdown
+- fix: avoid extension toggle page reload
+- feat: extract slack mcp gateway extension
+- fix: route sidebar errors to notifications
+- fix: wrap extension settings panels
+- Require prebuilt extension bundles in packaged desktop builds
+- fix: sync repeated notification toast counts
+- fix: wire conversation model picker handler
+- fix: clear blank conversation goal updates
+- fix: wire notification center mark-read handler
+- fix: remove composer working shelf
+- fix: avoid runtime esbuild for packaged system extensions
+
 ## 0.7.9-rc.6 — 2026-05-11
 
 - fix: make daemonEntryFile resolution tolerant so packaged build doesn't crash
