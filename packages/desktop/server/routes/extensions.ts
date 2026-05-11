@@ -425,7 +425,7 @@ export function registerExtensionRoutes(
     }
   });
 
-  router.patch('/api/extensions/:id', (req, res) => {
+  router.patch('/api/extensions/:id', async (req, res) => {
     try {
       const entry = findExtensionEntry(req.params.id);
       const summary = listExtensionInstallSummaries().find((extension) => extension.id === req.params.id);
