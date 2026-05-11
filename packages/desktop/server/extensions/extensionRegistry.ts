@@ -1113,6 +1113,8 @@ function validateExtensionContributions(contributes: Record<string, unknown>): v
 function validateExtensionBackend(backend: Record<string, unknown>): void {
   requireString(backend.entry, 'backend.entry');
   validateOptionalString(backend.agentExtension, 'backend.agentExtension');
+  validateOptionalString(backend.startupAction, 'backend.startupAction');
+  validateOptionalString(backend.onEnableAction, 'backend.onEnableAction');
   if (backend.actions !== undefined) {
     for (const [index, action] of assertRecordArray(backend.actions, 'backend.actions').entries()) {
       requireString(action.id, `backend.actions[${index}].id`);
