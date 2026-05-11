@@ -20,6 +20,26 @@ export function resolveConversationLiveSession(input: {
   return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
 }
 
+export function resolveConversationComposerRunState(input: {
+  streamIsStreaming: boolean;
+  sessionIsRunning?: boolean | null;
+  bootstrapLiveSessionIsStreaming?: boolean | null;
+  desktopLiveSessionIsStreaming?: boolean | null;
+  hasPendingHiddenTurn: boolean;
+}): { allowQueuedPrompts: boolean; defaultComposerBehavior: 'steer' | 'followUp' | undefined; streamControlsActive: boolean } {
+  const streamControlsActive =
+    input.streamIsStreaming ||
+    input.bootstrapLiveSessionIsStreaming === true ||
+    input.desktopLiveSessionIsStreaming === true ||
+    (input.sessionIsRunning === true && !input.hasPendingHiddenTurn);
+
+  return {
+    allowQueuedPrompts: streamControlsActive || input.hasPendingHiddenTurn,
+    defaultComposerBehavior: streamControlsActive ? 'steer' : input.hasPendingHiddenTurn ? 'followUp' : undefined,
+    streamControlsActive,
+  };
+}
+
 export function resolveConversationPendingStatusLabel(input: { isLiveSession: boolean; hasVisibleSessionDetail: boolean }): string {
   if (input.isLiveSession) {
     return 'Working…';

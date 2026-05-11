@@ -83,6 +83,7 @@ import {
   replaceConversationMetaInSessionList,
   replaceConversationTitleInSessionList,
   resolveConversationBackgroundRunState,
+  resolveConversationComposerRunState,
   resolveConversationCwdChangeAction,
   resolveConversationInitialHistoricalWarmupTarget,
   resolveConversationLiveSession,
@@ -281,6 +282,7 @@ import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, w
 
 export {
   replaceConversationMetaInSessionList,
+  resolveConversationComposerRunState,
   resolveConversationCwdChangeAction,
   resolveConversationPerformanceMode,
   resolveDisplayedConversationPendingStatusLabel,
@@ -849,8 +851,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     sessionSnapshot?.isLive ??
     (useDesktopConversation ? confirmedLiveValue : confirmedLive);
   const conversationNeedsTakeover = false;
-  const allowQueuedPrompts = stream.isStreaming || liveSessionHasPendingHiddenTurn;
-  const defaultComposerBehavior = stream.isStreaming ? 'steer' : liveSessionHasPendingHiddenTurn ? 'followUp' : undefined;
+  const composerRunState = resolveConversationComposerRunState({
+    streamIsStreaming: stream.isStreaming,
+    sessionIsRunning: sessionSnapshot?.isRunning,
+    bootstrapLiveSessionIsStreaming:
+      visibleConversationBootstrap?.liveSession.live === true ? visibleConversationBootstrap.liveSession.isStreaming : false,
+    desktopLiveSessionIsStreaming:
+      visibleDesktopConversationState?.liveSession.live === true ? visibleDesktopConversationState.liveSession.isStreaming : false,
+    hasPendingHiddenTurn: liveSessionHasPendingHiddenTurn,
+  });
+  const allowQueuedPrompts = composerRunState.allowQueuedPrompts;
+  const defaultComposerBehavior = composerRunState.defaultComposerBehavior;
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
@@ -5774,7 +5785,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 resolveConversationComposerShellStateClassName({
                   dragOver,
                   hasInteractiveOverlay: showModelPicker || showSlash || showMention,
-                  streamIsStreaming: stream.isStreaming,
+                  streamIsStreaming: composerRunState.streamControlsActive,
                 }),
               )}
               ref={composerShellRef}
@@ -5921,7 +5932,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 pendingAskUserQuestion={Boolean(pendingAskUserQuestion)}
                 composerDisabled={composerDisabled}
                 composerShellWidth={composerShellWidth}
-                streamIsStreaming={stream.isStreaming}
+                streamIsStreaming={composerRunState.streamControlsActive}
                 models={models}
                 currentModel={currentModel || model || defaultModel}
                 currentThinkingLevel={currentThinkingLevel}

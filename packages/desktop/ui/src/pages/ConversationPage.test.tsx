@@ -12,6 +12,7 @@ import {
   createDraftMissionTask,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   replaceConversationMetaInSessionList,
+  resolveConversationComposerRunState,
   resolveConversationCwdChangeAction,
   resolveConversationPerformanceMode,
   resolveDisplayedConversationPendingStatusLabel,
@@ -126,6 +127,30 @@ describe('desktop conversation state fallback', () => {
       { id: 't1', description: 'Create task list', status: 'done' },
       { id: 't2', description: 'Persist task list', status: 'pending' },
     ]);
+  });
+
+  it('treats running session metadata as steerable when the stream snapshot is stale', () => {
+    expect(
+      resolveConversationComposerRunState({
+        streamIsStreaming: false,
+        sessionIsRunning: true,
+        bootstrapLiveSessionIsStreaming: false,
+        desktopLiveSessionIsStreaming: false,
+        hasPendingHiddenTurn: false,
+      }),
+    ).toEqual({ allowQueuedPrompts: true, defaultComposerBehavior: 'steer', streamControlsActive: true });
+  });
+
+  it('uses follow-up behavior for hidden turns instead of exposing steer controls', () => {
+    expect(
+      resolveConversationComposerRunState({
+        streamIsStreaming: false,
+        sessionIsRunning: true,
+        bootstrapLiveSessionIsStreaming: false,
+        desktopLiveSessionIsStreaming: false,
+        hasPendingHiddenTurn: true,
+      }),
+    ).toEqual({ allowQueuedPrompts: true, defaultComposerBehavior: 'followUp', streamControlsActive: false });
   });
 
   it('syncs active conversation meta back into the session list', () => {
