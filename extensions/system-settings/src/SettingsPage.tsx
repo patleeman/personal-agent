@@ -10,10 +10,7 @@ import {
   createProviderEditorDraft,
   cx,
   type DesktopAppPreferencesState,
-  type DesktopConnectionsState,
   type DesktopEnvironmentState,
-  type DesktopHostRecord,
-  type DesktopSshConnectionTestResult,
   type ExtensionKeybindingRegistration,
   formatContextWindowLabel,
   formatThinkingLevelLabel,
@@ -35,7 +32,6 @@ import {
   type ProviderEditorDraft,
   type ProviderOAuthLoginState,
   type ProviderOAuthLoginStreamEvent,
-  readDesktopConnections,
   readDesktopEnvironment,
   type SecretsState,
   type SecretStatusEntry,
@@ -395,76 +391,6 @@ function SettingsPanel({
       <div className="min-w-0 space-y-3.5">{children}</div>
     </section>
   );
-}
-
-interface DesktopHostDraft {
-  id: string;
-  label: string;
-  sshTarget: string;
-}
-
-function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'ssh' }>): DesktopHostDraft {
-  return {
-    id: host?.id ?? '',
-    label: host?.label ?? '',
-    sshTarget: host?.sshTarget ?? '',
-  };
-}
-
-function formatDesktopHostDetails(host: Extract<DesktopHostRecord, { kind: 'ssh' }>): string {
-  return host.sshTarget;
-}
-
-function DesktopRuntimeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="4" y="5" width="16" height="10" rx="2.5" />
-      <path d="M8 19h8" />
-      <path d="M12 15v4" />
-    </svg>
-  );
-}
-
-function SshRemoteIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="4" y="5" width="7" height="6" rx="1.5" />
-      <rect x="13" y="13" width="7" height="6" rx="1.5" />
-      <path d="M11 8h2a3 3 0 0 1 3 3v2" />
-      <path d="m13 11 3 0 0-3" />
-    </svg>
-  );
-}
-
-function formatSshTestPlatformLabel(result: DesktopSshConnectionTestResult): string {
-  const osLabel = result.os === 'darwin' ? 'macOS' : result.os === 'linux' ? 'Linux' : result.os;
-  return `${osLabel} ${result.arch}`;
-}
-
-function formatSshTestSummary(result: DesktopSshConnectionTestResult): string {
-  return `${result.message} · cache ${result.cacheDirectory}`;
 }
 
 function formatDesktopUpdateSummary(state: DesktopAppPreferencesState | null): string {
@@ -1284,51 +1210,10 @@ function SettingsTableOfContents({
 }
 
 export function DesktopConnectionsSettingsPanel() {
-  const [environment, setEnvironment] = useState<DesktopEnvironmentState | null>(null);
-  const [connections, setConnections] = useState<DesktopConnectionsState | null>(null);
-  const [selectedHostId, setSelectedHostId] = useState<string>('');
-  const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
   const [appPreferencesState, setAppPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'save' | 'delete' | 'save-app-preferences' | 'test-ssh' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [action, setAction] = useState<'save-app-preferences' | null>(null);
   const [appPreferencesError, setAppPreferencesError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [sshTestResult, setSshTestResult] = useState<DesktopSshConnectionTestResult | null>(null);
-
-  const selectedHost = useMemo(() => connections?.hosts.find((host) => host.id === selectedHostId) ?? null, [connections, selectedHostId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([readDesktopEnvironment(), readDesktopConnections()])
-      .then(([nextEnvironment, nextConnections]) => {
-        if (cancelled) {
-          return;
-        }
-
-        setEnvironment(nextEnvironment);
-        setConnections(nextConnections);
-        const firstHost = nextConnections?.hosts[0];
-        if (firstHost) {
-          setSelectedHostId(firstHost.id);
-          setDraft(createDesktopHostDraft(firstHost));
-        }
-        setLoading(false);
-      })
-      .catch((nextError) => {
-        if (cancelled) {
-          return;
-        }
-
-        setError(nextError instanceof Error ? nextError.message : String(nextError));
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -1366,44 +1251,6 @@ export function DesktopConnectionsSettingsPanel() {
     setAppPreferencesState(state as DesktopAppPreferencesState);
   };
 
-  const refreshConnections = async () => {
-    const nextConnections = await readDesktopConnections();
-    setConnections(nextConnections);
-    const firstHost = nextConnections?.hosts[0] ?? null;
-    if (!firstHost || !nextConnections) {
-      setSelectedHostId('');
-      setDraft(createDesktopHostDraft());
-      return;
-    }
-
-    const nextSelectedHost = nextConnections.hosts.find((host) => host.id === selectedHostId) ?? firstHost;
-    setSelectedHostId(nextSelectedHost.id);
-    setDraft(createDesktopHostDraft(nextSelectedHost));
-  };
-
-  function beginNewRemote() {
-    setSelectedHostId('');
-    setDraft(createDesktopHostDraft());
-    setError(null);
-    setNotice(null);
-    setSshTestResult(null);
-  }
-
-  function selectRemote(host: Extract<DesktopHostRecord, { kind: 'ssh' }>) {
-    setSelectedHostId(host.id);
-    setDraft(createDesktopHostDraft(host));
-    setError(null);
-    setNotice(null);
-    setSshTestResult(null);
-  }
-
-  function updateDraft(nextDraft: DesktopHostDraft | ((current: DesktopHostDraft) => DesktopHostDraft)) {
-    setDraft((current) => (typeof nextDraft === 'function' ? nextDraft(current) : nextDraft));
-    setSshTestResult(null);
-    setError(null);
-    setNotice(null);
-  }
-
   async function handleUpdateAppPreferences(nextPreferences: {
     autoInstallUpdates?: boolean;
     startOnSystemStart?: boolean;
@@ -1423,93 +1270,6 @@ export function DesktopConnectionsSettingsPanel() {
       setNotice('Desktop app settings saved.');
     } catch (nextError) {
       setAppPreferencesError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function handleSave() {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      setError('Desktop bridge unavailable. Restart the desktop app and try again.');
-      return;
-    }
-
-    const id = draft.id.trim();
-    const label = draft.label.trim();
-    const sshTarget = draft.sshTarget.trim();
-    if (!id || !label || !sshTarget) {
-      setError('Host id, label, and SSH target are required.');
-      return;
-    }
-
-    setAction('save');
-    setError(null);
-    setNotice(null);
-    try {
-      await bridge.saveHost({
-        id,
-        label,
-        kind: 'ssh',
-        sshTarget,
-      });
-      await refreshConnections();
-      setSelectedHostId(id);
-      setDraft({ id, label, sshTarget });
-      setNotice(selectedHostId ? 'SSH remote saved.' : 'SSH remote added.');
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function handleDelete(hostId: string) {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      setError('Desktop bridge unavailable. Restart the desktop app and try again.');
-      return;
-    }
-
-    setAction('delete');
-    setError(null);
-    setNotice(null);
-    setSshTestResult(null);
-    try {
-      await bridge.deleteHost(hostId);
-      await refreshConnections();
-      setNotice('SSH remote deleted.');
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function handleTestSshConnection() {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      setError('Desktop bridge unavailable. Restart the desktop app and try again.');
-      return;
-    }
-
-    const sshTarget = draft.sshTarget.trim();
-    if (!sshTarget) {
-      setError('Enter an SSH target before testing the connection.');
-      setSshTestResult(null);
-      return;
-    }
-
-    setAction('test-ssh');
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await bridge.testSshConnection({ sshTarget });
-      setSshTestResult(result);
-      setNotice('SSH connection works.');
-    } catch (nextError) {
-      setSshTestResult(null);
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setAction(null);
     }
@@ -1560,213 +1320,6 @@ export function DesktopConnectionsSettingsPanel() {
       </SettingsPanel>
 
       <DesktopCompanionSettingsPanel />
-
-      <SettingsPanel
-        id="desktop-connections"
-        title="SSH remotes"
-        description="Saved SSH targets for remote conversations. Personal Agent copies the matching Pi release binary and a transient helper when a conversation targets one."
-      >
-        {loading ? <p className="ui-card-meta">Loading SSH remotes…</p> : null}
-        {environment ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-secondary">
-            <div className="inline-flex min-w-0 items-center gap-2">
-              <DesktopRuntimeIcon className="shrink-0 text-dim/80" />
-              <span className="truncate">
-                Desktop runtime <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
-              </span>
-            </div>
-            <span className="text-dim">{connections?.hosts.length ?? 0} saved</span>
-          </div>
-        ) : null}
-        {notice ? <p className="text-[12px] text-accent">{notice}</p> : null}
-        {error ? <p className="text-[12px] text-danger">{error}</p> : null}
-        {connections ? (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] xl:items-start">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[14px] font-medium text-primary">Saved remotes</h3>
-                  <p className="mt-1 text-[12px] text-secondary">
-                    Use SSH aliases from <span className="font-mono text-[11px]">~/.ssh/config</span> or full targets.
-                  </p>
-                </div>
-                <button type="button" onClick={beginNewRemote} disabled={action !== null} className={ACTION_BUTTON_CLASS}>
-                  New remote
-                </button>
-              </div>
-
-              {connections.hosts.length > 0 ? (
-                <div className="space-y-1.5">
-                  {connections.hosts.map((host) => {
-                    const selected = host.id === selectedHostId;
-                    return (
-                      <button
-                        key={host.id}
-                        type="button"
-                        onClick={() => {
-                          selectRemote(host);
-                        }}
-                        disabled={action !== null}
-                        className={cx(
-                          'group flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-                          selected
-                            ? 'bg-accent/6 text-primary ring-1 ring-accent/15'
-                            : 'text-secondary hover:bg-surface hover:text-primary',
-                        )}
-                      >
-                        <SshRemoteIcon
-                          className={cx('mt-0.5 shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="truncate text-[13px] font-medium text-primary">{host.label}</span>
-                            {selected ? <span className="text-[11px] text-accent">Editing</span> : null}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
-                            <span className="font-mono text-dim">{host.id}</span>
-                            <span className="text-dim/70">·</span>
-                            <span className="min-w-0 truncate font-mono text-primary/90">{formatDesktopHostDetails(host)}</span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-2xl bg-surface/70 px-4 py-4">
-                  <p className="text-[13px] font-medium text-primary">No remotes yet</p>
-                  <p className="mt-1 text-[12px] leading-5 text-secondary">
-                    Add an SSH target here, then pick it per conversation from the footer.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <h3 className="text-[15px] font-medium text-primary">{selectedHost ? selectedHost.label : 'New SSH remote'}</h3>
-                  <p className="text-[12px] text-secondary">
-                    {selectedHost
-                      ? `${selectedHost.id} · ${selectedHost.sshTarget}`
-                      : 'The desktop UI stays local. Remote execution happens per conversation over SSH.'}
-                  </p>
-                </div>
-                {selectedHost ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleDelete(selectedHost.id);
-                    }}
-                    disabled={action !== null}
-                    className={ACTION_BUTTON_CLASS}
-                  >
-                    {action === 'delete' ? 'Deleting…' : 'Delete remote'}
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2 min-w-0">
-                  <label className="ui-card-meta" htmlFor="desktop-host-id">
-                    Host id
-                  </label>
-                  <input
-                    id="desktop-host-id"
-                    value={draft.id}
-                    onChange={(event) => updateDraft((current) => ({ ...current, id: event.target.value }))}
-                    disabled={action !== null || Boolean(selectedHost)}
-                    className={`${INPUT_CLASS} font-mono text-[13px]`}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="bender"
-                  />
-                  <p className="text-[11px] text-dim">Stable id used by saved conversations.</p>
-                </div>
-                <div className="space-y-2 min-w-0">
-                  <label className="ui-card-meta" htmlFor="desktop-host-label">
-                    Label
-                  </label>
-                  <input
-                    id="desktop-host-label"
-                    value={draft.label}
-                    onChange={(event) => updateDraft((current) => ({ ...current, label: event.target.value }))}
-                    disabled={action !== null}
-                    className={INPUT_CLASS}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="Bender"
-                  />
-                  <p className="text-[11px] text-dim">Shown in the conversation target picker.</p>
-                </div>
-                <div className="space-y-2 min-w-0 md:col-span-2">
-                  <label className="ui-card-meta" htmlFor="desktop-host-ssh-target">
-                    SSH target
-                  </label>
-                  <input
-                    id="desktop-host-ssh-target"
-                    value={draft.sshTarget}
-                    onChange={(event) => updateDraft((current) => ({ ...current, sshTarget: event.target.value }))}
-                    disabled={action !== null}
-                    className={`${INPUT_CLASS} font-mono text-[13px]`}
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="user@desktop"
-                  />
-                  <p className="text-[11px] text-dim">
-                    Use a host alias or any target that works with your normal <span className="font-mono">ssh</span> command.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-[12px] text-secondary">
-                <p>First use copies the exact local Pi release and a transient helper to the remote cache.</p>
-                <p>Remote threads run in detached per-conversation runtimes, and the footer directory browser picks the real remote cwd.</p>
-              </div>
-
-              {sshTestResult && sshTestResult.sshTarget === draft.sshTarget.trim() ? (
-                <div className="rounded-2xl bg-surface/70 px-4 py-4 text-[12px] text-secondary">
-                  <p className="font-medium text-primary">{formatSshTestPlatformLabel(sshTestResult)}</p>
-                  <p className="mt-1 break-words">{formatSshTestSummary(sshTestResult)}</p>
-                  <div className="mt-2 space-y-1 font-mono text-[11px] text-dim">
-                    <p>home {sshTestResult.homeDirectory}</p>
-                    <p>tmp {sshTestResult.tempDirectory}</p>
-                    <p>cache {sshTestResult.cacheDirectory}</p>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleTestSshConnection();
-                  }}
-                  disabled={action !== null}
-                  className={ACTION_BUTTON_CLASS}
-                >
-                  {action === 'test-ssh' ? 'Testing…' : 'Test SSH'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleSave();
-                  }}
-                  disabled={action !== null}
-                  className={ACTION_BUTTON_CLASS}
-                >
-                  {action === 'save' ? 'Saving…' : selectedHost ? 'Save changes' : 'Add remote'}
-                </button>
-                {selectedHost ? (
-                  <button type="button" onClick={beginNewRemote} disabled={action !== null} className={ACTION_BUTTON_CLASS}>
-                    Add another
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </SettingsPanel>
     </div>
   );
 }
@@ -4671,7 +4224,7 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
             <SettingsSection
               id="settings-desktop"
               label="Desktop"
-              description="App behavior, remote connections, and keyboard shortcuts for the desktop app."
+              description="App behavior and keyboard shortcuts for the desktop app."
             >
               <DesktopConnectionsSettingsPanel />
 

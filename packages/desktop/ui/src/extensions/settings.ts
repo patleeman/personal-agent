@@ -1,7 +1,7 @@
 export { api } from '../client/api';
 export { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, cx, Pill, ToolbarButton } from '../components/ui';
 export { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
-export { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktop/desktopBridge';
+export { getDesktopBridge, isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
 export { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
 export { subscribeDesktopProviderOAuthLogin } from '../desktop/desktopProviderOAuth';
 export { useApi } from '../hooks/useApi';
@@ -20,10 +20,7 @@ export {
 } from '../model/modelProviderEditorDrafts';
 export type {
   DesktopAppPreferencesState,
-  DesktopConnectionsState,
   DesktopEnvironmentState,
-  DesktopHostRecord,
-  DesktopSshConnectionTestResult,
   ModelProviderApi,
   ModelProviderConfig,
   ModelProviderModelConfig,

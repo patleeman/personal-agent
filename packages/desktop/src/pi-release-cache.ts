@@ -7,7 +7,13 @@ import { fileURLToPath } from 'node:url';
 
 import { resolveDesktopAboutVersionsForPaths } from './about.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
-import type { RemotePlatformInfo } from './remote-platform.js';
+type RemotePlatformKey = 'darwin-arm64' | 'darwin-x64' | 'linux-arm64' | 'linux-x64';
+
+export interface RemotePlatformInfo {
+  key: RemotePlatformKey;
+  os: 'darwin' | 'linux';
+  arch: 'arm64' | 'x64';
+}
 
 const PI_RELEASE_OWNER = 'badlogic';
 const PI_RELEASE_REPO = 'pi-mono';

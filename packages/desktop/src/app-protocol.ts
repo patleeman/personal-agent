@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getDaemonClientTransportOverride, loadDaemonConfig } from '@personal-agent/daemon';
+
 import { app, protocol, type Session as ElectronSession, session } from 'electron';
 
 import type { HostManager } from './hosts/host-manager.js';
@@ -116,54 +116,7 @@ async function readDesktopProtocolRequestBody(request: Request): Promise<unknown
   return bodyText;
 }
 
-function normalizeCompanionProxyHost(host: string): string {
-  const normalized = host.trim().toLowerCase();
-  if (normalized === '0.0.0.0' || normalized === '::' || normalized === '::0' || normalized === '::ffff:0.0.0.0') {
-    return '127.0.0.1';
-  }
 
-  return host;
-}
-
-async function resolveCompanionProxyBaseUrl(): Promise<string> {
-  const transport = getDaemonClientTransportOverride();
-  if (transport?.getCompanionUrl) {
-    try {
-      const runtimeUrl = await transport.getCompanionUrl();
-      if (runtimeUrl) {
-        const targetUrl = new URL(runtimeUrl);
-        targetUrl.hostname = normalizeCompanionProxyHost(targetUrl.hostname);
-        return targetUrl.toString();
-      }
-    } catch {
-      // Fall back to config-based routing when the in-process runtime cannot expose a live companion URL.
-    }
-  }
-
-  const config = loadDaemonConfig();
-  const host = normalizeCompanionProxyHost(config.companion?.host ?? '127.0.0.1');
-  const port = config.companion?.port ?? 3843;
-  return `http://${host.includes(':') ? `[${host}]` : host}:${String(port)}`;
-}
-
-async function proxyCompanionRequest(request: Request): Promise<Response> {
-  const sourceUrl = new URL(request.url);
-  const targetBase = await resolveCompanionProxyBaseUrl();
-  const targetUrl = new URL(`${sourceUrl.pathname}${sourceUrl.search}`, targetBase);
-  const headers = new Headers(request.headers);
-  headers.delete('host');
-
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : Buffer.from(await request.arrayBuffer()),
-  });
-
-  return new Response(response.body, {
-    status: response.status,
-    headers: response.headers,
-  });
-}
 
 function buildDesktopProtocolErrorResponse(error: unknown): Response {
   const message = error instanceof Error ? error.message : String(error);
@@ -277,14 +230,6 @@ function createDesktopProtocolHandler(options?: {
     const url = new URL(request.url);
     if (url.host !== DESKTOP_APP_HOST) {
       return new Response('Not found', { status: 404 });
-    }
-
-    if (url.pathname.startsWith('/companion/')) {
-      try {
-        return await proxyCompanionRequest(request);
-      } catch (error) {
-        return buildDesktopProtocolErrorResponse(error);
-      }
     }
 
     if (url.pathname.startsWith('/api/')) {

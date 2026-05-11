@@ -5,8 +5,6 @@ import { getDefaultStateRoot, getPiAgentRuntimeDir } from '@personal-agent/core'
 
 import { resolveDesktopLaunchPresentation } from './launch-mode.js';
 
-export const TESTING_DESKTOP_COMPANION_PORT = 3844;
-
 function resolveDefaultStateRootForEnv(env: NodeJS.ProcessEnv): string {
   const xdgStateHome = env.XDG_STATE_HOME?.trim();
   return xdgStateHome ? join(xdgStateHome, 'personal-agent') : getDefaultStateRoot();
@@ -21,7 +19,6 @@ export function resolveDesktopRuntimeEnvironmentOverrides(
   options: { defaultStateRoot?: string } = {},
 ): {
   stateRoot?: string;
-  companionPort?: string;
 } {
   const launchPresentation = resolveDesktopLaunchPresentation(env);
 
@@ -33,7 +30,6 @@ export function resolveDesktopRuntimeEnvironmentOverrides(
     ...(env.PERSONAL_AGENT_STATE_ROOT?.trim()
       ? {}
       : { stateRoot: resolveTestingStateRoot(options.defaultStateRoot ?? resolveDefaultStateRootForEnv(env)) }),
-    ...(env.PERSONAL_AGENT_COMPANION_PORT?.trim() ? {} : { companionPort: String(TESTING_DESKTOP_COMPANION_PORT) }),
   };
 }
 
@@ -113,10 +109,6 @@ export function applyDesktopRuntimeEnvironmentOverrides(env: NodeJS.ProcessEnv =
 
   if (overrides.stateRoot) {
     env.PERSONAL_AGENT_STATE_ROOT = overrides.stateRoot;
-  }
-
-  if (overrides.companionPort) {
-    env.PERSONAL_AGENT_COMPANION_PORT = overrides.companionPort;
   }
 
   seedTestingRuntimeState(env);

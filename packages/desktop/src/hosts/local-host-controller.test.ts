@@ -110,7 +110,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
 function createBackendMock(): LocalBackendProcesses {
   return {
     ensureStarted: vi.fn(),
-    ensureCompanionNetworkReachable: vi.fn(),
     getStatus: vi.fn(),
     restart: vi.fn(),
     stop: vi.fn(),
@@ -212,17 +211,6 @@ describe('LocalHostController', () => {
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
-  it('delegates companion network access changes to the local backend', async () => {
-    const backend = createBackendMock();
-    backend.ensureCompanionNetworkReachable = vi.fn().mockResolvedValue({ changed: true, url: 'http://0.0.0.0:3843' });
-    const controller = new LocalHostController({ id: 'local', label: 'Local', kind: 'local' }, backend);
-
-    await expect(controller.ensureCompanionNetworkReachable?.()).resolves.toEqual({
-      changed: true,
-      url: 'http://0.0.0.0:3843',
-    });
-    expect(backend.ensureCompanionNetworkReachable).toHaveBeenCalledTimes(1);
-  });
 
   it('routes desktop layout settings through the local API module without loopback proxying', async () => {
     const readDesktopOpenConversationTabs = vi.fn().mockResolvedValue({

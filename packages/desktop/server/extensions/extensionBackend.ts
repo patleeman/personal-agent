@@ -66,6 +66,7 @@ export interface ExtensionBackendContext {
   };
   automations: ReturnType<typeof createExtensionAutomationsCapability>;
   runs: ReturnType<typeof createExtensionRunsCapability>;
+  models: ReturnType<typeof createExtensionModelsCapability>;
   vault: ReturnType<typeof createExtensionVaultCapability>;
   conversations: ReturnType<typeof createExtensionConversationsCapability>;
   workspace: ReturnType<typeof createExtensionWorkspaceCapability>;
@@ -194,6 +195,7 @@ function createBackendContext(
     storage: createStorage(extensionId),
     automations: createExtensionAutomationsCapability(serverContext),
     runs: createExtensionRunsCapability(extensionId),
+    models: createExtensionModelsCapability(),
     vault: createExtensionVaultCapability(),
     conversations: createExtensionConversationsCapability(serverContext),
     workspace: createExtensionWorkspaceCapability(),
@@ -529,6 +531,41 @@ export async function invokeExtensionAction(
     createBackendContext(extensionId, serverContext, toolContext, agentToolContext),
   );
   return { ok: true, result };
+}
+
+/**
+ * Call the startupAction for every enabled extension that declares one.
+ * Startup actions receive an empty object as input and run with the default
+ * server context (no tool context). Errors are logged per-extension but do
+ * not block other extensions from starting.
+ */
+export async function startExtensionStartupActions(
+  serverContext?: ExtensionBackendServerContext,
+): Promise<Array<{ extensionId: string; ok: boolean; error?: string }>> {
+  const results: Array<{ extensionId: string; ok: boolean; error?: string }> = [];
+
+  for (const summary of listExtensionInstallSummaries()) {
+    if (summary.status !== 'enabled') {
+      continue;
+    }
+
+    const entry = findExtensionEntry(summary.id);
+    const startupActionId = entry?.manifest.backend?.startupAction;
+    if (!startupActionId) {
+      continue;
+    }
+
+    try {
+      await invokeExtensionAction(summary.id, startupActionId, {}, serverContext);
+      results.push({ extensionId: summary.id, ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[extension:${summary.id}] startup action "${startupActionId}" failed: ${message}`);
+      results.push({ extensionId: summary.id, ok: false, error: message });
+    }
+  }
+
+  return results;
 }
 
 export async function reloadExtensionBackend(extensionId: string): Promise<{ ok: true; extensionId: string; rebuilt: boolean }> {

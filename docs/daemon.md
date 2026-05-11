@@ -11,7 +11,6 @@ The daemon is a long-lived background process that owns durable runtime behavior
 | Wakeups               | Conversation callbacks triggered by completed runs and tasks              |
 | Companion API         | HTTP/WebSocket endpoint for iOS app and remote clients                    |
 | Reminders             | Tell-me-later wakeups that resume a specific conversation                 |
-| SSH target management | CRUD for remote SSH connections                                           |
 
 ## Lifecycle
 
@@ -51,7 +50,7 @@ The daemon exposes an HTTP/WebSocket API for external clients. Configured in dae
 - **Host** — bind address (default: `127.0.0.1`)
 - **Port** — listen port (default: auto-assigned)
 
-The companion API serves the iOS app and SSH remote management endpoints.
+The companion API serves the iOS app.
 
 ## State Storage
 

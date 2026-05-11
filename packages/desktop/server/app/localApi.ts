@@ -134,6 +134,7 @@ import {
   renameStoredSession,
 } from '../conversations/sessions.js';
 import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserToolHost.js';
+import { startExtensionStartupActions } from '../extensions/extensionBackend.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import { readModelState } from '../models/modelState.js';
@@ -555,6 +556,13 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
   registerServerRoutes({
     app: appRouter as never,
     context,
+  });
+
+  // Fire startup actions for extensions that declare one (e.g. companion
+  // servers, background services). Errors are logged per-extension but
+  // don't block routes from being returned.
+  startExtensionStartupActions(context).catch((error) => {
+    console.error(`[extensions] startup action dispatch failed: ${(error as Error).message}`);
   });
 
   return routes;

@@ -335,25 +335,6 @@ async function restartActiveHost(): Promise<void> {
   }
 }
 
-async function ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }> {
-  if (!hostManager) {
-    throw new Error('Desktop runtime is still starting.');
-  }
-
-  if (!(await ensureDesktopBackendAvailable())) {
-    throw new Error('Desktop runtime is unavailable.');
-  }
-
-  const controller = hostManager.getActiveHostController();
-  if (!controller.ensureCompanionNetworkReachable) {
-    throw new Error('Companion network access is only available for the local desktop host.');
-  }
-
-  const result = await controller.ensureCompanionNetworkReachable();
-  trayController?.refresh();
-  return result;
-}
-
 async function checkForDesktopUpdates(): Promise<void> {
   try {
     await updateManager?.checkForUpdates({ userInitiated: true });
@@ -499,7 +480,6 @@ async function bootstrapDesktopApp(): Promise<void> {
       installDesktopApplicationMenu(shellActions);
       return state;
     },
-    ensureCompanionNetworkReachable: () => ensureCompanionNetworkReachable(),
   });
 
   updateManager.start();
@@ -519,7 +499,6 @@ async function prepareForQuit(): Promise<void> {
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
-  setCompanionRuntimeProvider(undefined);
   await hostManager?.dispose();
 }
 

@@ -21,7 +21,6 @@ export function registerDesktopIpc(options: {
     startOnSystemStart?: boolean;
     keyboardShortcuts?: Record<string, string>;
   }) => Promise<unknown> | unknown;
-  ensureCompanionNetworkReachable?: () => Promise<unknown> | unknown;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
   const conversationStateSubscriptions = new Map<string, () => void>();
@@ -91,34 +90,8 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getDesktopEnvironmentForHost(hostId);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:get-connections`, async () => {
-    return options.hostManager.getConnectionsState();
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:get-navigation-state`, async (event) => {
     return options.windowController.getNavigationStateForWebContents(event.sender.id);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:save-host`, async (_event, host) => {
-    await options.hostManager.saveHost(host);
-    options.onHostStateChanged?.();
-    return options.hostManager.getConnectionsState();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:delete-host`, async (_event, hostId: string) => {
-    await options.hostManager.deleteHost(hostId);
-    options.onHostStateChanged?.();
-    await options.windowController.openMainWindow('/settings');
-    return options.hostManager.getConnectionsState();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:test-ssh-connection`, async (_event, input) => {
-    const sshTarget = typeof input?.sshTarget === 'string' ? input.sshTarget.trim() : '';
-    if (!sshTarget) {
-      throw new Error('SSH target is required.');
-    }
-
-    return options.hostManager.testSshConnection({ sshTarget });
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async (event) => {
@@ -189,14 +162,6 @@ export function registerDesktopIpc(options: {
     }
 
     return options.updateDesktopAppPreferences(input ?? {});
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:ensure-companion-network-reachable`, async () => {
-    if (!options.ensureCompanionNetworkReachable) {
-      throw new Error('Companion network access is unavailable.');
-    }
-
-    return options.ensureCompanionNetworkReachable();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {

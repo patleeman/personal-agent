@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach } from 'vitest';
+
 import { closeActivityDbs } from './packages/core/src/activity.js';
-import { closeAutomationDbs } from './packages/daemon/src/automation-store.js';
+import { closeAutomationDbs } from './packages/desktop/server/daemon/automation-store.js';
 const GLOBAL_KEY = '__PERSONAL_AGENT_VITEST_STATE_ROOT__' as const;
 
 const globalForTestStateRoot = globalThis as typeof globalThis & {

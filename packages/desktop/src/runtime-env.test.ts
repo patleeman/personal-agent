@@ -8,7 +8,6 @@ import {
   applyDesktopRuntimeEnvironmentOverrides,
   resolveDesktopRuntimeEnvironmentOverrides,
   seedTestingRuntimeState,
-  TESTING_DESKTOP_COMPANION_PORT,
 } from './runtime-env.js';
 
 describe('desktop runtime environment overrides', () => {
@@ -26,7 +25,6 @@ describe('desktop runtime environment overrides', () => {
       ),
     ).toEqual({
       stateRoot: '/state/personal-agent-testing',
-      companionPort: String(TESTING_DESKTOP_COMPANION_PORT),
     });
   });
 
@@ -36,7 +34,6 @@ describe('desktop runtime environment overrides', () => {
         {
           PERSONAL_AGENT_DESKTOP_VARIANT: 'testing',
           PERSONAL_AGENT_STATE_ROOT: '/custom/state',
-          PERSONAL_AGENT_COMPANION_PORT: '4949',
         },
         { defaultStateRoot: '/state/personal-agent' },
       ),
@@ -52,7 +49,6 @@ describe('desktop runtime environment overrides', () => {
 
     expect(env.PERSONAL_AGENT_STATE_ROOT).toBeTruthy();
     expect(env.PERSONAL_AGENT_STATE_ROOT).toMatch(/personal-agent-testing$/);
-    expect(env.PERSONAL_AGENT_COMPANION_PORT).toBe(String(TESTING_DESKTOP_COMPANION_PORT));
   });
 
   it('seeds testing auth from the stable runtime when the testing auth file is empty', () => {

@@ -86,10 +86,6 @@ const electronBuilderConfig = {
       from: 'prompt-catalog',
       to: 'prompt-catalog',
     },
-    {
-      from: 'packages/desktop/vendor/remote-helper',
-      to: 'vendor/remote-helper',
-    },
   ],
   mac: {
     category: 'public.app-category.developer-tools',

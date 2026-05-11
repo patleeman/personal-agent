@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
-import type { DesktopAppPreferences, DesktopConfig, DesktopHostRecord } from '../hosts/types.js';
+import type { DesktopAppPreferences, DesktopConfig } from '../hosts/types.js';
 import { normalizeDesktopKeyboardShortcuts, validateDesktopKeyboardShortcuts } from '../keyboard-shortcuts.js';
 
 const DEFAULT_WINDOW_STATE = {
@@ -26,35 +26,7 @@ function readPositiveSafeNumber(value: unknown): number | undefined {
   return number !== undefined && number > 0 ? number : undefined;
 }
 
-function normalizeSshHostRecord(host: unknown): Extract<DesktopHostRecord, { kind: 'ssh' }> | null {
-  if (!host || typeof host !== 'object') {
-    return null;
-  }
 
-  const candidate = host as Record<string, unknown>;
-  const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
-  const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
-  if (!id || !label) {
-    return null;
-  }
-
-  const kind = candidate.kind;
-  if (kind !== 'ssh') {
-    return null;
-  }
-
-  const sshTarget = typeof candidate.sshTarget === 'string' ? candidate.sshTarget.trim() : '';
-  if (!sshTarget) {
-    return null;
-  }
-
-  return {
-    id,
-    label,
-    kind: 'ssh',
-    sshTarget,
-  };
-}
 
 function normalizeDesktopAppPreferences(value: unknown): DesktopAppPreferences {
   if (!value || typeof value !== 'object') {
@@ -81,12 +53,6 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
     openWindowOnLaunch?: boolean;
   };
 
-  const hosts = Array.isArray(input.hosts)
-    ? input.hosts
-        .map((host) => normalizeSshHostRecord(host))
-        .filter((host): host is Extract<DesktopHostRecord, { kind: 'ssh' }> => host !== null)
-    : [];
-
   return {
     version: 2,
     openWindowOnLaunch: input.openWindowOnLaunch !== false,
@@ -99,7 +65,6 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
             height: readPositiveSafeNumber(input.windowState.height) ?? DEFAULT_WINDOW_STATE.height,
           }
         : { ...DEFAULT_WINDOW_STATE },
-    hosts,
     appPreferences: normalizeDesktopAppPreferences(input.appPreferences),
   };
 }
@@ -109,7 +74,6 @@ function createDefaultDesktopConfig(): DesktopConfig {
     version: 2,
     openWindowOnLaunch: true,
     windowState: { ...DEFAULT_WINDOW_STATE },
-    hosts: [],
     appPreferences: createDefaultDesktopAppPreferences(),
   };
 }

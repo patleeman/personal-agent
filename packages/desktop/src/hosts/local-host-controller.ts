@@ -627,10 +627,6 @@ export class LocalHostController implements HostController {
     return module.subscribeDesktopAppEvents(onEvent);
   }
 
-  async ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }> {
-    return this.backend.ensureCompanionNetworkReachable();
-  }
-
   async restart(): Promise<void> {
     await this.backend.restart();
   }

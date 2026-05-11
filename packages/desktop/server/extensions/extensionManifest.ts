@@ -53,6 +53,7 @@ export const EXTENSION_PERMISSIONS = [
   'conversations:read',
   'conversations:write',
   'conversations:readwrite',
+  'network:listen',
   'ui:notify',
 ] as const;
 export type ExtensionPermission = (typeof EXTENSION_PERMISSIONS)[number] | `${string}:${string}`;
@@ -416,6 +417,13 @@ export interface ExtensionSlashCommandSurface extends ExtensionSurfaceBase {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  /**
+   * Action id to call when the extension is enabled and the server starts.
+   * The handler receives `(input, ctx)` and can start long-lived services
+   * (e.g. an HTTP or WebSocket server). The handler must not reject after
+   * startup; all errors should be caught and logged internally.
+   */
+  startupAction?: string;
   /** Optional export for backend-only agent lifecycle extensions. */
   agentExtension?: string;
 }

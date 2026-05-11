@@ -140,12 +140,7 @@ export function shouldOpenNavigationExternally(currentUrl: string, targetUrl: st
 
 export function buildWindowTitle(host: DesktopHostRecord): string {
   const appName = typeof app.name === 'string' && app.name.trim().length > 0 ? app.name.trim() : 'Personal Agent';
-
-  if (host.kind === 'local') {
-    return appName;
-  }
-
-  return `${appName} — ${host.label} (SSH remote)`;
+  return appName;
 }
 
 function intersectRectangleArea(left: DesktopRectangle, right: DesktopRectangle): number {

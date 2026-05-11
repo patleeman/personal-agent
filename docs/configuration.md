@@ -117,7 +117,7 @@ Not every Settings-page control writes to the same JSON file:
 | Desktop update/startup/keyboard preferences             | `<state-root>/desktop/config.json`                                  |
 | Extension enablement and extension keybinding overrides | `<state-root>/extensions/registry.json`                             |
 | Extension scalar settings                               | `<state-root>/settings.json`                                        |
-| SSH remotes                                             | Daemon/companion runtime state                                      |
+| Automations, reminders, durable runs                    | Daemon runtime database                                             |
 | Automations, reminders, durable runs                    | Daemon runtime database                                             |
 
 ## Rule of thumb

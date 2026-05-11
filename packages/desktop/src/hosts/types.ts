@@ -1,26 +1,7 @@
-export type DesktopHostRecord =
-  | {
-      id: string;
-      label: string;
-      kind: 'local';
-    }
-  | {
-      id: string;
-      label: string;
-      kind: 'ssh';
-      sshTarget: string;
-    };
-
-export interface DesktopSshConnectionTestResult {
-  ok: true;
-  sshTarget: string;
-  os: string;
-  arch: string;
-  platformKey: string;
-  homeDirectory: string;
-  tempDirectory: string;
-  cacheDirectory: string;
-  message: string;
+export interface DesktopHostRecord {
+  id: string;
+  label: string;
+  kind: 'local';
 }
 
 export interface DesktopAppPreferences {
@@ -57,13 +38,12 @@ export interface DesktopConfig {
     width: number;
     height: number;
   };
-  hosts: DesktopHostRecord[];
   appPreferences?: DesktopAppPreferences;
 }
 
 export interface HostStatus {
   reachable: boolean;
-  mode: 'local-app-runtime' | 'ssh-tunnel';
+  mode: 'local-app-runtime';
   summary: string;
   webUrl?: string;
   daemonHealthy?: boolean;
@@ -478,7 +458,6 @@ export interface HostController {
   ): Promise<() => void>;
   subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;
   subscribeDesktopAppEvents?(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void>;
-  ensureCompanionNetworkReachable?(): Promise<{ changed: boolean; url: string | null }>;
   restart(): Promise<void>;
   stop(): Promise<void>;
   dispose(): Promise<void>;
@@ -494,6 +473,4 @@ export interface DesktopEnvironmentState {
   launchLabel?: string;
 }
 
-export interface DesktopConnectionsState {
-  hosts: Array<Extract<DesktopHostRecord, { kind: 'ssh' }>>;
-}
+

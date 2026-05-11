@@ -118,16 +118,7 @@ describe('buildWindowTitle', () => {
     expect(title).toBe('Personal Agent');
   });
 
-  it('includes host label and SSH remote suffix for remote hosts', () => {
-    const title = buildWindowTitle({
-      kind: 'ssh',
-      id: 'bender',
-      label: 'Bender',
-      sshTarget: 'bender@futurama',
-    } as unknown as Parameters<typeof buildWindowTitle>[0]);
-    expect(title).toContain('Bender');
-    expect(title).toContain('SSH remote');
-  });
+
 });
 
 describe('constrainDesktopWindowBounds', () => {

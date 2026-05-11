@@ -9,7 +9,9 @@ export {
   CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
 } from '../../conversations/conversationInspectCapability.js';
 export { executeConversationInspect } from '../../conversations/conversationInspectWorkerClient.js';
-export { renameSession, requestConversationWorkingDirectoryChange } from '../../conversations/liveSessions.js';
+export { createSession, renameSession, requestConversationWorkingDirectoryChange, resumeSession, subscribe as subscribeLiveSession } from '../../conversations/liveSessions.js';
 export { persistTraceContextPointerInspect } from '../../traces/tracePersistence.js';
 export { buildLiveSessionExtensionFactoriesForRuntime, buildLiveSessionResourceOptionsForRuntime } from '../runtimeAgentHooks.js';
 export { querySessionSuggestedPointerIds } from '@personal-agent/core';
+export { readSessionDetailForRoute } from '../../conversations/conversationService.js';
+export { readConversationSessionsCapability, readConversationSessionMetaCapability, readConversationSessionSearchIndexCapability } from '../../conversations/conversationSessionCapability.js';

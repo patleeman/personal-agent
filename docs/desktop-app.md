@@ -50,7 +50,7 @@ Electron main process
 
 - Electron owns the UI surface through the `personal-agent://app/` protocol
 - Freeze-prone local API work runs behind worker-thread RPC; do not import or execute heavy desktop server capabilities directly on the Electron main thread
-- SSH remote setup uses async child processes; avoid `spawnSync`/`execSync` in desktop main-process flows
+- Avoid `spawnSync`/`execSync` in desktop main-process flows
 - The daemon owns durable background behavior
 - The desktop app consumes server-pushed events for sessions, runs, tasks, and daemon status
 - API snapshots serve as the fallback when the event stream is unavailable

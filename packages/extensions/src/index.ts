@@ -50,6 +50,7 @@ export type ExtensionPermission =
   | 'conversations:read'
   | 'conversations:write'
   | 'conversations:readwrite'
+  | 'network:listen'
   | 'ui:notify'
   | `${string}:${string}`;
 

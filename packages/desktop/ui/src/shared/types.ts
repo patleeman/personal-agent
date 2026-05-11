@@ -816,43 +816,20 @@ export interface LiveSessionExportResult {
   path: string;
 }
 
-export type DesktopHostRecord =
-  | {
-      id: string;
-      label: string;
-      kind: 'local';
-    }
-  | {
-      id: string;
-      label: string;
-      kind: 'ssh';
-      sshTarget: string;
-    };
+export interface DesktopHostRecord {
+  id: string;
+  label: string;
+  kind: 'local';
+}
 
 export interface DesktopEnvironmentState {
   isElectron: true;
   activeHostId: string;
   activeHostLabel: string;
-  activeHostKind: DesktopHostRecord['kind'];
+  activeHostKind: 'local';
   activeHostSummary: string;
   launchMode?: 'stable' | 'testing';
   launchLabel?: string;
-}
-
-export interface DesktopConnectionsState {
-  hosts: Array<Extract<DesktopHostRecord, { kind: 'ssh' }>>;
-}
-
-export interface DesktopSshConnectionTestResult {
-  ok: true;
-  sshTarget: string;
-  os: string;
-  arch: string;
-  platformKey: string;
-  homeDirectory: string;
-  tempDirectory: string;
-  cacheDirectory: string;
-  message: string;
 }
 
 type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';

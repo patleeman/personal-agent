@@ -15,11 +15,8 @@ import type {
   DefaultCwdState,
   DeferredResumeSummary,
   DesktopAppPreferencesState,
-  DesktopConnectionsState,
   DesktopEnvironmentState,
-  DesktopHostRecord,
   DesktopNavigationState,
-  DesktopSshConnectionTestResult,
   DisplayBlock,
   DurableRunDetailResult,
   DurableRunListResult,
@@ -107,11 +104,7 @@ export interface DesktopWorkbenchBrowserCommentTarget {
 
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
-  getConnections(): Promise<DesktopConnectionsState>;
   getNavigationState(): Promise<DesktopNavigationState>;
-  saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
-  deleteHost(hostId: string): Promise<DesktopConnectionsState>;
-  testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult>;
   openNewConversation(): Promise<void>;
   openConversationPopout(input: { conversationId: string }): Promise<void>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
@@ -518,11 +511,4 @@ export async function readDesktopEnvironment(): Promise<DesktopEnvironmentState 
   return request;
 }
 
-export async function readDesktopConnections(): Promise<DesktopConnectionsState | null> {
-  const bridge = getDesktopBridge();
-  if (!bridge) {
-    return null;
-  }
 
-  return bridge.getConnections();
-}

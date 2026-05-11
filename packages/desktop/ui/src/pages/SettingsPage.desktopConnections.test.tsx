@@ -35,23 +35,15 @@ const DEFAULT_KEYBOARD_SHORTCUTS = {
 const mountedRoots: Root[] = [];
 const mocks = vi.hoisted(() => ({
   getEnvironment: vi.fn(),
-  getConnections: vi.fn(),
   readDesktopAppPreferences: vi.fn(),
   updateDesktopAppPreferences: vi.fn(),
-  saveHost: vi.fn(),
-  deleteHost: vi.fn(),
-  testSshConnection: vi.fn(),
 }));
 
 function installDesktopBridge() {
   window.personalAgentDesktop = {
     getEnvironment: mocks.getEnvironment,
-    getConnections: mocks.getConnections,
     readDesktopAppPreferences: mocks.readDesktopAppPreferences,
     updateDesktopAppPreferences: mocks.updateDesktopAppPreferences,
-    saveHost: mocks.saveHost,
-    deleteHost: mocks.deleteHost,
-    testSshConnection: mocks.testSshConnection,
   } as unknown as PersonalAgentDesktopBridge;
   document.documentElement.dataset.personalAgentDesktop = '1';
 }
@@ -77,50 +69,10 @@ async function flushAsyncWork() {
   });
 }
 
-function queryInput(container: HTMLElement, selector: string): HTMLInputElement {
-  const input = container.querySelector(selector);
-  if (!(input instanceof HTMLInputElement)) {
-    throw new Error(`Expected input for selector ${selector}`);
-  }
-  return input;
-}
-
-function queryButton(container: HTMLElement, label: string): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll('button')).find((node) => node.textContent?.trim() === label);
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error(`Expected button ${label}`);
-  }
-  return button;
-}
-
-function updateInputValue(input: HTMLInputElement, value: string) {
-  act(() => {
-    input.value = value;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-}
-
-function click(button: HTMLButtonElement) {
-  act(() => {
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  });
-}
-
 describe('DesktopConnectionsSettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     installDesktopBridge();
-    mocks.getEnvironment.mockResolvedValue({
-      isElectron: true,
-      activeHostId: 'local',
-      activeHostLabel: 'Local',
-      activeHostKind: 'local',
-      activeHostSummary: 'Local runtime is healthy.',
-    });
-    mocks.getConnections.mockResolvedValue({
-      hosts: [{ id: 'bender', label: 'Bender', kind: 'ssh', sshTarget: 'user@bender' }],
-    });
     mocks.readDesktopAppPreferences.mockResolvedValue({
       available: true,
       supportsStartOnSystemStart: true,
@@ -145,21 +97,6 @@ describe('DesktopConnectionsSettingsPanel', () => {
         currentVersion: '0.3.7',
       },
     });
-    mocks.saveHost.mockResolvedValue({
-      hosts: [{ id: 'bender', label: 'Bender', kind: 'ssh', sshTarget: 'user@bender' }],
-    });
-    mocks.deleteHost.mockResolvedValue({ hosts: [] });
-    mocks.testSshConnection.mockResolvedValue({
-      ok: true,
-      sshTarget: 'user@bender',
-      os: 'darwin',
-      arch: 'arm64',
-      platformKey: 'darwin-arm64',
-      homeDirectory: '/Users/patrick',
-      tempDirectory: '/var/folders/example/T/',
-      cacheDirectory: '/Users/patrick/.cache/personal-agent/ssh-runtime',
-      message: 'user@bender is reachable · macOS arm64',
-    });
   });
 
   afterEach(() => {
@@ -173,20 +110,12 @@ describe('DesktopConnectionsSettingsPanel', () => {
     delete window.personalAgentDesktop;
   });
 
-  it('tests the current SSH target and renders the probe details', async () => {
+  it('renders app behavior settings and companion panel', async () => {
     const { container } = renderPanel();
     await flushAsyncWork();
 
-    const sshTargetInput = queryInput(container, '#desktop-host-ssh-target');
-    updateInputValue(sshTargetInput, 'user@bender   ');
-    click(queryButton(container, 'Test SSH'));
-    await flushAsyncWork();
-
-    expect(mocks.testSshConnection).toHaveBeenCalledWith({ sshTarget: 'user@bender' });
-    expect(container.textContent).toContain('SSH connection works.');
-    expect(container.textContent).toContain('macOS arm64');
-    expect(container.textContent).toContain('cache /Users/patrick/.cache/personal-agent/ssh-runtime');
-    expect(container.textContent).toContain('home /Users/patrick');
+    expect(container.textContent).toContain('Install downloaded updates automatically');
+    expect(container.textContent).toContain('Start Personal Agent when you sign in');
   });
 });
 

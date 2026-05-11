@@ -2,34 +2,8 @@
   "name": "@personal-agent/daemon",
   "version": "0.7.9-rc.2",
   "license": "MIT",
-  "description": "personal-agent background daemon",
-  "repository": "github:user/personal-agent",
-  "bugs": "https://github.com/user/personal-agent/issues",
-  "homepage": "https://github.com/user/personal-agent",
+  "description": "personal-agent background daemon (re-export shim)",
   "type": "module",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "bin": {
-    "personal-agentd": "./dist/index.js"
-  },
-  "scripts": {
-    "build": "tsc --build --force && chmod +x dist/index.js",
-    "lint": "eslint src --ext .ts",
-    "test": "vitest run",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
-  },
-  "dependencies": {
-    "@personal-agent/core": "*",
-    "ws": "^8.18.3",
-    "yaml": "^2.8.2"
-  },
-  "devDependencies": {
-    "vitest": "4.0.18"
-  }
+  "main": "./index.js",
+  "types": "./index.d.ts"
 }

@@ -1,9 +1,6 @@
 export type HostComponent = (...args: never[]) => unknown;
 export type DesktopAppPreferencesState = unknown;
-export type DesktopConnectionsState = unknown;
 export type DesktopEnvironmentState = unknown;
-export type DesktopHostRecord = unknown;
-export type DesktopSshConnectionTestResult = unknown;
 export type ModelEditorDraft = unknown;
 export type ModelProviderApi = unknown;
 export type ModelProviderConfig = unknown;
@@ -27,7 +24,7 @@ export type TranscriptionProviderId = unknown;
 export type UnifiedSettingsEntry = unknown;
 
 export declare const DesktopCompanionSettingsPanel: HostComponent;
-export declare const DesktopConnectionsSettingsPanel: HostComponent;
+export declare const DesktopConnectionsSettingsPanel: HostComponent;  // App behavior panel
 export declare const DesktopKeyboardShortcutsSettingsSection: HostComponent;
 export declare const SettingsPage: HostComponent;
 export declare const AppPageIntro: HostComponent;
@@ -53,7 +50,6 @@ export declare function parseOptionalJsonObject(...args: never[]): unknown;
 export declare function parseOptionalNonNegativeNumber(...args: never[]): unknown;
 export declare function parseOptionalPositiveInteger(...args: never[]): unknown;
 export declare function parseOptionalStringRecord(...args: never[]): unknown;
-export declare function readDesktopConnections(...args: never[]): unknown;
 export declare function readDesktopEnvironment(...args: never[]): unknown;
 export declare function resetStoredConversationUiState(...args: never[]): unknown;
 export declare function resetStoredLayoutPreferences(...args: never[]): unknown;
