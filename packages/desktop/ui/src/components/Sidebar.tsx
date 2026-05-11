@@ -52,6 +52,7 @@ import { type ConversationShelf, type OpenConversationDropPosition, replaceConve
 import type { GatewayState, SessionMeta } from '../shared/types';
 import { timeAgoCompact } from '../shared/utils';
 import { ConversationStatusText } from './ConversationStatusText';
+import { addNotification } from './notifications/notificationStore';
 
 const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
@@ -1892,6 +1893,11 @@ export function Sidebar() {
   }, []);
 
   const showSidebarNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
+    if (tone === 'danger') {
+      addNotification({ type: 'error', message: text, source: 'sidebar' });
+      return;
+    }
+
     setSidebarNotice({ tone, text });
     if (sidebarNoticeTimeoutRef.current !== null) {
       window.clearTimeout(sidebarNoticeTimeoutRef.current);
@@ -3432,10 +3438,7 @@ export function Sidebar() {
 
         <div className="shrink-0">
           {sidebarNotice ? (
-            <div
-              aria-live="polite"
-              className={['px-4 pb-2 text-[11px]', sidebarNotice.tone === 'danger' ? 'text-danger/90' : 'text-accent/80'].join(' ')}
-            >
+            <div aria-live="polite" className="px-4 pb-2 text-[11px] text-accent/80">
               {sidebarNotice.text}
             </div>
           ) : null}
