@@ -1,4 +1,3 @@
-import { appendFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +7,7 @@ import { app, BrowserWindow, screen, shell, type WebContents } from 'electron';
 import { syncDesktopShellAppModeForWindows } from './app-mode.js';
 import { ensureDesktopAppProtocolForHost } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
+import { writeDesktopMainLogLine } from './desktop-main-log.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopHostRecord } from './hosts/types.js';
 import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
@@ -16,16 +16,9 @@ import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-con
 import { normalizeWorkbenchBrowserBounds, WorkbenchBrowserViewController } from './workbench-browser.js';
 
 function logDesktopEvent(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
-  try {
-    const { desktopLogsDir } = resolveDesktopRuntimePaths();
-    appendFileSync(desktopLogsDir + '/main.log', `[${new Date().toISOString()}] [desktop] [${level}] ${message}\n`, 'utf-8');
-  } catch {
-    // Best-effort logging. Fall back to stdout when the desktop log path is unavailable.
-    if (level === 'error') {
-      console.error(message);
-    } else {
-      console.warn(message);
-    }
+  writeDesktopMainLogLine(`[${new Date().toISOString()}] [desktop] [${level}] ${message}`);
+  if (level === 'error') {
+    console.error(message);
   }
 }
 
@@ -712,11 +705,15 @@ export class DesktopWindowController {
       });
 
       window.on('moved', () => {
-        this.persistWindowBounds(window);
+        this.scheduleWindowBoundsPersist(window);
       });
 
       window.on('resized', () => {
-        this.persistWindowBounds(window);
+        this.scheduleWindowBoundsPersist(window);
+      });
+
+      window.on('close', () => {
+        this.flushWindowBoundsPersist(window);
       });
     }
 
@@ -906,7 +903,9 @@ export class DesktopWindowController {
     }
 
     if (currentUrl !== targetUrl) {
-      await window.loadURL(targetUrl);
+      void window.loadURL(targetUrl).catch((error) => {
+        logDesktopEvent(`Window failed to load ${targetUrl}: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      });
     }
 
     this.focusWindow(window);
@@ -966,6 +965,28 @@ export class DesktopWindowController {
       }
     }
     return count;
+  }
+
+  private windowBoundsPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleWindowBoundsPersist(window: BrowserWindow): void {
+    if (this.windowBoundsPersistTimer) {
+      clearTimeout(this.windowBoundsPersistTimer);
+    }
+
+    this.windowBoundsPersistTimer = setTimeout(() => {
+      this.windowBoundsPersistTimer = null;
+      this.persistWindowBounds(window);
+    }, 500);
+  }
+
+  private flushWindowBoundsPersist(window: BrowserWindow): void {
+    if (this.windowBoundsPersistTimer) {
+      clearTimeout(this.windowBoundsPersistTimer);
+      this.windowBoundsPersistTimer = null;
+    }
+
+    this.persistWindowBounds(window);
   }
 
   private persistWindowBounds(window: BrowserWindow): void {

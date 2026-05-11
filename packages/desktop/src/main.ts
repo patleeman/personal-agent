@@ -1,7 +1,5 @@
-import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { getStateRoot } from '@personal-agent/core';
 import { setCompanionRuntimeProvider } from '@personal-agent/daemon';
 import { app, clipboard, dialog, Notification, shell } from 'electron';
 
@@ -11,6 +9,7 @@ import { applyDesktopShellAppMode } from './app-mode.js';
 import { registerDesktopAppProtocol } from './app-protocol.js';
 import { createDesktopCompanionRuntime } from './companion/runtime.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
+import { closeDesktopMainLog, writeDesktopMainLogLine } from './desktop-main-log.js';
 import { HostManager } from './hosts/host-manager.js';
 import { registerDesktopIpc } from './ipc.js';
 import { type DesktopKeyboardShortcuts, validateDesktopKeyboardShortcuts } from './keyboard-shortcuts.js';
@@ -146,12 +145,7 @@ function renderDesktopErrorMessage(error: unknown): string {
 }
 
 function logDesktopMainMessage(level: 'info' | 'error', message: string): void {
-  try {
-    const mainLogPath = resolve(getStateRoot(), 'desktop', 'logs', 'main.log');
-    appendFileSync(mainLogPath, `[${new Date().toISOString()}] [${level}] ${message}\n`, 'utf-8');
-  } catch {
-    // Fall back to stderr only when the desktop log path is unavailable.
-  }
+  writeDesktopMainLogLine(`[${new Date().toISOString()}] [${level}] ${message}`);
 }
 
 function logBootstrapError(error: unknown): void {
@@ -526,6 +520,7 @@ async function prepareForQuit(): Promise<void> {
   updateManager?.dispose();
   trayController?.destroy();
   await hostManager?.dispose();
+  await closeDesktopMainLog();
 }
 
 async function shutdownAndQuit(): Promise<void> {

@@ -63,10 +63,17 @@ function getMimeType(filePath: string): string {
   }
 }
 
+let cachedDesktopWebDistDir: string | null = null;
+
 function resolveDesktopWebDistDir(): string {
+  if (cachedDesktopWebDistDir) {
+    return cachedDesktopWebDistDir;
+  }
+
   if (app.isPackaged) {
     const packagedDistDir = resolve(app.getAppPath(), 'ui', 'dist');
     if (existsSync(packagedDistDir)) {
+      cachedDesktopWebDistDir = packagedDistDir;
       return packagedDistDir;
     }
   }
@@ -79,10 +86,12 @@ function resolveDesktopWebDistDir(): string {
 
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
+      cachedDesktopWebDistDir = candidate;
       return candidate;
     }
   }
 
+  cachedDesktopWebDistDir = candidates[0];
   return candidates[0];
 }
 

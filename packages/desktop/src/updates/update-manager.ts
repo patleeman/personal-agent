@@ -1,9 +1,7 @@
-import { appendFileSync } from 'node:fs';
-
 import { app, dialog } from 'electron';
 import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater';
 
-import { resolveDesktopRuntimePaths } from '../desktop-env.js';
+import { writeDesktopMainLogLine } from '../desktop-main-log.js';
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
@@ -21,12 +19,7 @@ interface DesktopAppUpdateState {
 }
 
 function logUpdateMessage(message: string): void {
-  try {
-    const runtime = resolveDesktopRuntimePaths();
-    appendFileSync(runtime.desktopLogsDir + '/main.log', `[${new Date().toISOString()}] [updates] ${message}\n`, 'utf-8');
-  } catch {
-    // Best-effort logging only.
-  }
+  writeDesktopMainLogLine(`[${new Date().toISOString()}] [updates] ${message}`);
 }
 
 function createDesktopUpdater(currentVersion: string): AppUpdater {
