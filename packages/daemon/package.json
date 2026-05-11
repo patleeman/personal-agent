@@ -1,9 +1,0 @@
-{
-  "name": "@personal-agent/daemon",
-  "version": "0.7.9-rc.2",
-  "license": "MIT",
-  "description": "personal-agent background daemon (re-export shim)",
-  "type": "module",
-  "main": "./index.js",
-  "types": "./index.d.ts"
-}

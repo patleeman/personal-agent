@@ -51,14 +51,12 @@
     "fix": "npm run fmt:fix && npm run lint:fix",
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
-    "daemon": "node packages/daemon/dist/index.js",
     "ab:run": "node scripts/agent-browser-session.mjs run",
     "ab:cleanup": "node scripts/agent-browser-session.mjs cleanup",
     "extension:build": "node scripts/extension-build.mjs"
   },
   "devDependencies": {
     "@personal-agent/core": "*",
-    "@personal-agent/daemon": "*",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.18.1",

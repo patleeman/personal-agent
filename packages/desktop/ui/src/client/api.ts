@@ -390,8 +390,7 @@ export const api = {
     post<ConversationContentSearchResult>('/sessions/search', { query, limit: normalizeConversationContentSearchLimit(limit) }),
   conversationSummaries: async (sessionIds: string[]) =>
     post<{ summaries: Record<string, ConversationSummaryRecord> }>('/conversation-summaries', { sessionIds }),
-  warmRelatedConversationPointers: async (input: { prompt: string; currentConversationId?: string; currentCwd?: string | null }) =>
-    post<{ ok: boolean; pointerCount: number }>('/related-conversation-pointers/warm', input),
+
   skillFolders: async () => get<SkillFoldersState>('/skill-folders'),
   updateSkillFolders: async (skillDirs: string[]) => patch<SkillFoldersState>('/skill-folders', { skillDirs }),
   instructions: async () => get<InstructionFilesState>('/instructions'),

@@ -1,14 +1,18 @@
 import { eng, removeStopwords } from 'stopword';
 
+import type { ExtensionBackendContext } from '@personal-agent/extensions/backend';
 import {
-  type IndexedConversationSearchCandidate,
-  scheduleConversationSearchIndexing,
   searchIndexedConversationDocuments,
-} from './conversationSearchIndex.js';
-import { readConversationSummary } from './conversationSummaries.js';
-import { readSessionMeta, type SessionMeta } from './sessions.js';
+  scheduleConversationSearchIndexing,
+  type IndexedConversationSearchCandidate,
+} from '../../../packages/desktop/server/conversations/conversationSearchIndex.js';
+import { readConversationSummary } from '../../../packages/desktop/server/conversations/conversationSummaries.js';
+import { readSessionBlocks, readSessionMeta, type SessionMeta } from '../../../packages/desktop/server/conversations/sessions.js';
+import { persistTraceSuggestedContext } from '../../../packages/desktop/server/traces/tracePersistence.js';
 
-export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
 const AUTO_POINTER_MIN_SCORE = 6;
 const AUTO_POINTER_RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -57,7 +61,9 @@ const PRODUCT_STOPWORDS = new Set([
   'yeah',
 ]);
 
-export interface RelatedConversationPointer {
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface RelatedConversationPointer {
   sessionId: string;
   title: string;
   cwd: string;
@@ -70,7 +76,7 @@ export interface RelatedConversationPointer {
   preview?: string;
 }
 
-export interface RelatedConversationPointersResult {
+interface RelatedConversationPointersResult {
   contextMessages: Array<{
     customType: string;
     content: string;
@@ -84,29 +90,23 @@ interface CachedPointerResult {
   result: RelatedConversationPointersResult;
 }
 
+// ── Module-level cache ───────────────────────────────────────────────────────
+
 const pointerCache = new Map<string, CachedPointerResult>();
 
-function normalizeSessionIds(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
+function normalizeSessionIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const candidate of value) {
-    if (typeof candidate !== 'string') {
-      continue;
-    }
-
+    if (typeof candidate !== 'string') continue;
     const normalized = candidate.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-
+    if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     ids.push(normalized);
   }
-
   return ids;
 }
 
@@ -136,7 +136,6 @@ function tokenize(value: string): string[] {
     .map((term) => term.trim())
     .filter((term) => term.length >= 3);
   const terms = removeStopwords(tokens, eng).filter((term) => !PRODUCT_STOPWORDS.has(term));
-
   return Array.from(new Set(terms)).slice(0, 32);
 }
 
@@ -147,18 +146,12 @@ function includesAnyTerm(text: string, terms: string[]): string[] {
 
 function normalizePreview(value: string | undefined, maxLength = 220): string | undefined {
   const normalized = value?.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return undefined;
-  }
-
+  if (!normalized) return undefined;
   return normalized.length > maxLength ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…` : normalized;
 }
 
 function parsePointerTimestamp(value: string | undefined): number {
-  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
-    return Number.NaN;
-  }
-
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return Number.NaN;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
 }
@@ -178,24 +171,20 @@ function scoreCandidate(input: {
     score += Math.min(12, titleMatches.length * 5);
     reasons.push(`title matches ${titleMatches.slice(0, 4).join(', ')}`);
   }
-
   if (input.currentCwd && input.meta.cwd === input.currentCwd) {
     score += 3;
     reasons.push('same workspace');
   }
-
   const previewMatches = includesAnyTerm(input.preview ?? '', input.terms);
   if (previewMatches.length > 0) {
     score += Math.min(8, previewMatches.length * 2);
     reasons.push(`cached preview matches ${previewMatches.slice(0, 4).join(', ')}`);
   }
-
   const searchMatches = includesAnyTerm(input.searchText ?? '', input.terms);
   if (searchMatches.length > 0) {
     score += Math.min(6, searchMatches.length);
     reasons.push(`transcript index matches ${searchMatches.slice(0, 4).join(', ')}`);
   }
-
   const lastActivity = parsePointerTimestamp(input.meta.lastActivityAt ?? input.meta.timestamp);
   if (Number.isFinite(lastActivity)) {
     const ageDays = ((input.nowMs ?? Date.now()) - lastActivity) / 86_400_000;
@@ -207,7 +196,6 @@ function scoreCandidate(input: {
       reasons.push('recent-ish activity');
     }
   }
-
   return { score, reasons };
 }
 
@@ -233,7 +221,6 @@ function buildPointer(input: {
     searchText,
     nowMs: input.nowMs,
   });
-
   return {
     sessionId: input.meta.id,
     title: input.meta.title,
@@ -268,7 +255,6 @@ function buildIndexedPointer(input: {
     searchText: input.candidate.searchText,
     nowMs: input.nowMs,
   });
-
   return {
     sessionId: input.candidate.sessionId,
     title: input.candidate.title,
@@ -292,7 +278,6 @@ function formatPointerContext(pointers: RelatedConversationPointer[]): string {
     'Do not treat these pointer previews as factual source context. If details matter, call conversation_inspect before relying on them.',
     'Use only conversations that help with the current prompt; ignore stale or weak matches.',
   ];
-
   pointers.forEach((pointer, index) => {
     lines.push(
       '',
@@ -306,11 +291,14 @@ function formatPointerContext(pointers: RelatedConversationPointer[]): string {
       ...(pointer.preview ? [`   cached preview: ${pointer.preview}`] : []),
     );
   });
-
   return lines.join('\n');
 }
 
-export function buildRelatedConversationPointers(input: {
+function hasConversationTranscriptContent(conversationId: string): boolean {
+  return (readSessionBlocks(conversationId, { tailBlocks: 1 })?.totalBlocks ?? 0) > 0;
+}
+
+function buildRelatedConversationPointers(input: {
   prompt: string;
   currentConversationId?: string;
   currentCwd?: string;
@@ -333,16 +321,12 @@ export function buildRelatedConversationPointers(input: {
   const used = new Set<string>();
 
   for (const sessionId of selectedIds) {
-    if (pointers.length >= limit) {
-      break;
-    }
-
+    if (pointers.length >= limit) break;
     const meta = resolveSessionMetaWithRetry(sessionId);
     if (!meta) {
       warnings.push(`Selected related conversation ${sessionId} could not be read and was omitted.`);
       continue;
     }
-
     const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', nowMs });
     pointers.push(pointer);
     used.add(pointer.sessionId);
@@ -362,9 +346,7 @@ export function buildRelatedConversationPointers(input: {
       .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
 
     for (const pointer of indexedCandidates) {
-      if (pointers.length >= limit) {
-        break;
-      }
+      if (pointers.length >= limit) break;
       pointers.push(pointer);
     }
   }
@@ -385,7 +367,7 @@ export function buildRelatedConversationPointers(input: {
   };
 }
 
-export function readCachedRelatedConversationPointers(input: {
+function readCachedRelatedConversationPointers(input: {
   prompt: string;
   currentConversationId?: string;
   currentCwd?: string;
@@ -399,11 +381,10 @@ export function readCachedRelatedConversationPointers(input: {
     pointerCache.delete(key);
     return null;
   }
-
   return cached.result;
 }
 
-export function warmRelatedConversationPointerCache(input: {
+function warmRelatedConversationPointerCache(input: {
   prompt: string;
   currentConversationId?: string;
   currentCwd?: string;
@@ -419,7 +400,6 @@ export function warmRelatedConversationPointerCache(input: {
     pointerCache.set(key, { cachedAtMs: nowMs, result: empty });
     return empty;
   }
-
   const result = buildRelatedConversationPointers({
     ...input,
     selectedSessionIds: [],
@@ -431,11 +411,73 @@ export function warmRelatedConversationPointerCache(input: {
     pointerCache.set(key, { cachedAtMs: nowMs, result: empty });
     return empty;
   }
-
   pointerCache.set(key, { cachedAtMs: nowMs, result });
   return result;
 }
 
-export function clearRelatedConversationPointerCache(): void {
-  pointerCache.clear();
+// ── Backend action: warm pointers during typing ──────────────────────────────
+
+export async function warmPointers(
+  input: { prompt: string; currentConversationId?: string; currentCwd?: string },
+  _ctx: ExtensionBackendContext,
+): Promise<{ ok: boolean; pointerCount: number }> {
+  const result = warmRelatedConversationPointerCache({
+    prompt: input.prompt,
+    currentConversationId: input.currentConversationId,
+    currentCwd: input.currentCwd,
+  });
+  return { ok: true, pointerCount: result.pointers.length };
+}
+
+// ── Prompt context provider: inject pointers on submit ──────────────────────
+
+export async function providePromptContext(
+  input: {
+    prompt: string;
+    conversationId: string;
+    currentCwd?: string;
+    relatedConversationIds?: unknown;
+  },
+  _ctx: ExtensionBackendContext,
+): Promise<{ contextMessages: Array<{ customType: string; content: string }>; warnings?: string[] }> {
+  // Only inject pointers for brand-new conversations with no existing content
+  if (hasConversationTranscriptContent(input.conversationId)) {
+    return { contextMessages: [], warnings: [] };
+  }
+
+  const hasSelectedIds =
+    Array.isArray(input.relatedConversationIds) &&
+    input.relatedConversationIds.some((id) => typeof id === 'string' && id.trim().length > 0);
+
+  try {
+    const pointers = hasSelectedIds
+      ? buildRelatedConversationPointers({
+          prompt: input.prompt,
+          currentConversationId: input.conversationId,
+          currentCwd: input.currentCwd,
+          selectedSessionIds: input.relatedConversationIds,
+          includeAuto: false,
+        })
+      : (readCachedRelatedConversationPointers({
+          prompt: input.prompt,
+          currentConversationId: input.conversationId,
+          currentCwd: input.currentCwd,
+        }) ?? { contextMessages: [], pointers: [], warnings: [] });
+
+    if (pointers.pointers.length > 0) {
+      // Fire-and-forget telemetry: persist which pointer IDs were used
+      const pointerIds = pointers.pointers.map((p) => p.sessionId);
+      persistTraceSuggestedContext({ sessionId: input.conversationId, pointerIds });
+    }
+
+    return {
+      contextMessages: pointers.contextMessages,
+      warnings: pointers.warnings.length > 0 ? pointers.warnings : undefined,
+    };
+  } catch (error) {
+    return {
+      contextMessages: [],
+      warnings: ['Related conversation pointers failed; sent without them.'],
+    };
+  }
 }

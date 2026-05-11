@@ -2180,7 +2180,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     api
-      .warmRelatedConversationPointers({
+      .invokeExtensionAction('system-suggested-context', 'warmPointers', {
         prompt: debouncedRelatedThreadsQuery,
         currentConversationId: id,
         currentCwd: draftCwdValue || null,

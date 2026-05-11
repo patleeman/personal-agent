@@ -30,8 +30,6 @@ const {
   readGitStatusSummaryWithTelemetryMock,
   readSessionBlocksMock,
   readSessionMetaMock,
-  buildRelatedConversationPointersMock,
-  readCachedRelatedConversationPointersMock,
   reloadSessionResourcesMock,
   resolveConversationAttachmentPromptFilesMock,
   resolveConversationCwdMock,
@@ -85,8 +83,6 @@ const {
   readGitStatusSummaryWithTelemetryMock: vi.fn(),
   readSessionBlocksMock: vi.fn(),
   readSessionMetaMock: vi.fn(),
-  buildRelatedConversationPointersMock: vi.fn(),
-  readCachedRelatedConversationPointersMock: vi.fn(),
   reloadSessionResourcesMock: vi.fn(),
   resolveConversationAttachmentPromptFilesMock: vi.fn(),
   resolveConversationCwdMock: vi.fn(),
@@ -171,10 +167,12 @@ vi.mock('../conversations/sessions.js', () => ({
   readSessionMeta: readSessionMetaMock,
 }));
 
-vi.mock('../conversations/relatedConversationPointers.js', () => ({
-  RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE: 'related_conversation_pointers',
-  buildRelatedConversationPointers: buildRelatedConversationPointersMock,
-  readCachedRelatedConversationPointers: readCachedRelatedConversationPointersMock,
+vi.mock('../extensions/extensionBackend.js', () => ({
+  invokeExtensionAction: vi.fn(),
+}));
+
+vi.mock('../extensions/extensionRegistry.js', () => ({
+  listExtensionPromptContextProviderRegistrations: vi.fn(() => []),
 }));
 
 vi.mock('../conversations/conversationCwd.js', () => ({
@@ -337,8 +335,6 @@ describe('live session routes', () => {
     readGitStatusSummaryWithTelemetryMock.mockReset();
     readSessionBlocksMock.mockReset();
     readSessionMetaMock.mockReset();
-    buildRelatedConversationPointersMock.mockReset();
-    readCachedRelatedConversationPointersMock.mockReset();
     reloadSessionResourcesMock.mockReset();
     resolveConversationAttachmentPromptFilesMock.mockReset();
     resolveConversationCwdMock.mockReset();
@@ -397,8 +393,6 @@ describe('live session routes', () => {
     });
     readSessionBlocksMock.mockReturnValue(null);
     readSessionMetaMock.mockReturnValue(null);
-    buildRelatedConversationPointersMock.mockReturnValue({ contextMessages: [], pointers: [], warnings: [] });
-    readCachedRelatedConversationPointersMock.mockReturnValue(null);
     resolveConversationAttachmentPromptFilesMock.mockReturnValue([]);
     resolveConversationCwdMock.mockReturnValue('/repo/worktree');
     resolveDaemonPathsMock.mockReturnValue({ root: '/daemon' });
@@ -453,14 +447,18 @@ describe('live session routes', () => {
     });
   });
 
-  it('injects related conversation pointers only while seeding an empty conversation', async () => {
+  it('passes relatedConversationIds through to submit (context injection delegated to extension)', async () => {
     createDesktopHarness();
     isLiveMock.mockReturnValue(true);
-    readSessionBlocksMock.mockReturnValue({ totalBlocks: 0 });
-    buildRelatedConversationPointersMock.mockReturnValue({
-      contextMessages: [{ customType: 'related_conversation_pointers', content: 'Pointer list.' }],
-      pointers: [{ sessionId: 'related-1' }],
-      warnings: [],
+    readSessionBlocksMock.mockReturnValue(null);
+    liveRegistry.set('live-empty', {
+      cwd: '/repo/worktree',
+      session: {
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        state: { messages: [] },
+      },
     });
 
     const promptRes = createResponse();
@@ -475,74 +473,9 @@ describe('live session routes', () => {
       promptRes,
     );
 
-    expect(buildRelatedConversationPointersMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        currentConversationId: 'live-empty',
-        selectedSessionIds: ['related-1'],
-      }),
-    );
-    expect(queuePromptContextMock).toHaveBeenCalledWith('live-empty', 'related_conversation_pointers', 'Pointer list.');
-    expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
-  });
-
-  it('does not inject related conversation pointers once the conversation already has a queued turn', async () => {
-    createDesktopHarness();
-    isLiveMock.mockReturnValue(true);
-    readSessionBlocksMock.mockReturnValue({ totalBlocks: 0 });
-    liveRegistry.set('live-empty', {
-      activeHiddenTurnCustomType: null,
-      pendingHiddenTurnCustomTypes: [],
-      session: {
-        getFollowUpMessages: () => ['Start from this context.'],
-        isStreaming: false,
-        state: { messages: [] },
-      },
-    });
-
-    const promptRes = createResponse();
-    await handleLiveSessionPrompt(
-      createRequest({
-        params: { id: 'live-empty' },
-        body: {
-          relatedConversationIds: ['related-1'],
-          text: 'Second turn.',
-        },
-      }),
-      promptRes,
-    );
-
-    expect(buildRelatedConversationPointersMock).not.toHaveBeenCalled();
-    expect(queuePromptContextMock).not.toHaveBeenCalled();
-    expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
-  });
-
-  it('does not inject related conversation pointers on a second turn once the conversation is already running', async () => {
-    createDesktopHarness();
-    isLiveMock.mockReturnValue(true);
-    readSessionBlocksMock.mockReturnValue({ totalBlocks: 0 });
-    liveRegistry.set('live-running', {
-      cwd: '/repo/worktree',
-      title: 'Live running',
-      session: {
-        isStreaming: true,
-        state: { messages: [] },
-      },
-    });
-
-    const promptRes = createResponse();
-    await handleLiveSessionPrompt(
-      createRequest({
-        params: { id: 'live-running' },
-        body: {
-          relatedConversationIds: ['related-1'],
-          text: 'One more thing.',
-        },
-      }),
-      promptRes,
-    );
-
-    expect(buildRelatedConversationPointersMock).not.toHaveBeenCalled();
-    expect(queuePromptContextMock).not.toHaveBeenCalled();
+    // Extension prompt context providers handle pointer injection in the
+    // extension's backend. No provider is registered in test config, so
+    // no pointer context messages are queued by core.
     expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
   });
 

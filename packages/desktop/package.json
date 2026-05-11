@@ -12,7 +12,7 @@
   "scripts": {
     "build:ui": "cd ui && vite build",
     "build:server": "node scripts/build-server-bundle.mjs",
-    "build:deps": "npm --prefix ../core run build && npm --prefix ../daemon run build && npm run build:ui && npm run build:server && node ../../scripts/build-system-extensions.mjs",
+    "build:deps": "npm --prefix ../core run build && npm run build:ui && npm run build:server && node ../../scripts/build-system-extensions.mjs",
     "build": "npm run clean && npm run build:deps && tsc --build --force",
     "launch": "node scripts/launch-dev-app.mjs",
     "start": "npm run build && npm run launch",
@@ -22,7 +22,6 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@personal-agent/core": "*",
-    "@personal-agent/daemon": "*",
     "electron-updater": "^6.8.3",
     "esbuild": "^0.21.5",
     "jsdom": "^24.1.3",

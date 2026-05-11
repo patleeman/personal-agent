@@ -22,7 +22,6 @@ import {
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import type { MemoryDocSummary } from '../routes/context.js';
 import { persistAppTelemetryEvent } from '../traces/appTelemetry.js';
-import { persistTraceSuggestedContext } from '../traces/tracePersistence.js';
 import { buildAttachedConversationContextDocsContext, readConversationContextDocs } from './conversationContextDocs.js';
 import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
@@ -46,7 +45,8 @@ import {
   submitPromptSession as submitLocalPromptSession,
   takeOverSessionControl,
 } from './liveSessions.js';
-import { buildRelatedConversationPointers, readCachedRelatedConversationPointers } from './relatedConversationPointers.js';
+import { invokeExtensionAction } from '../extensions/extensionBackend.js';
+import { listExtensionPromptContextProviderRegistrations } from '../extensions/extensionRegistry.js';
 import { readSessionBlocks, readSessionMeta } from './sessions.js';
 import { appendConversationWorkspaceMetadata } from './sessions.js';
 
@@ -527,40 +527,6 @@ interface PreparedLiveSessionPrompt {
   sourceSessionFile?: string;
 }
 
-function hasConversationTranscriptContent(conversationId: string): boolean {
-  const liveEntry = liveRegistry.get(conversationId);
-  const liveSession = liveEntry?.session as
-    | {
-        isStreaming?: boolean;
-        state?: { messages?: unknown[] };
-        getSteeringMessages?: () => unknown[];
-        getFollowUpMessages?: () => unknown[];
-      }
-    | undefined;
-  if (liveSession?.isStreaming) {
-    return true;
-  }
-
-  const liveStateMessages = liveSession?.state?.messages;
-  if ((liveStateMessages?.length ?? 0) > 0) {
-    return true;
-  }
-
-  if (liveEntry?.activeHiddenTurnCustomType || (liveEntry?.pendingHiddenTurnCustomTypes?.length ?? 0) > 0) {
-    return true;
-  }
-
-  if ((liveSession?.getSteeringMessages?.().length ?? 0) > 0) {
-    return true;
-  }
-
-  if ((liveSession?.getFollowUpMessages?.().length ?? 0) > 0) {
-    return true;
-  }
-
-  return (readSessionBlocks(conversationId, { tailBlocks: 1 })?.totalBlocks ?? 0) > 0;
-}
-
 const LEGACY_RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
 
 function withoutLegacyRelatedThreadSummaries(
@@ -569,56 +535,50 @@ function withoutLegacyRelatedThreadSummaries(
   return contextMessages.filter((message) => message.customType !== LEGACY_RELATED_THREADS_CONTEXT_CUSTOM_TYPE);
 }
 
-function buildPromptContextMessagesForSubmit(input: {
+async function buildPromptContextMessagesForSubmit(input: {
   conversationId: string;
   prompt: string;
   currentCwd?: string;
   selectedSessionIds?: unknown;
   contextMessages: Array<{ customType: string; content: string }>;
-}): { contextMessages: Array<{ customType: string; content: string }>; warnings: string[] } {
+}): Promise<{ contextMessages: Array<{ customType: string; content: string }>; warnings: string[] }> {
   const contextMessages = withoutLegacyRelatedThreadSummaries(input.contextMessages);
-  if (hasConversationTranscriptContent(input.conversationId)) {
-    return { contextMessages, warnings: [] };
-  }
+  const allWarnings: string[] = [];
 
-  try {
-    const hasSelectedRelatedConversations =
-      Array.isArray(input.selectedSessionIds) &&
-      input.selectedSessionIds.some((value) => typeof value === 'string' && value.trim().length > 0);
-    const pointers = hasSelectedRelatedConversations
-      ? buildRelatedConversationPointers({
+  const providers = listExtensionPromptContextProviderRegistrations();
+  await Promise.allSettled(
+    providers.map(async (provider) => {
+      try {
+        const result = await invokeExtensionAction(provider.extensionId, provider.handler, {
           prompt: input.prompt,
-          currentConversationId: input.conversationId,
+          conversationId: input.conversationId,
           currentCwd: input.currentCwd,
-          selectedSessionIds: input.selectedSessionIds,
-          includeAuto: false,
-        })
-      : (readCachedRelatedConversationPointers({
-          prompt: input.prompt,
-          currentConversationId: input.conversationId,
-          currentCwd: input.currentCwd,
-        }) ?? { contextMessages: [], pointers: [], warnings: [] });
+          relatedConversationIds: input.selectedSessionIds,
+        });
+        const { contextMessages: providerMessages, warnings: providerWarnings } = result.result as {
+          contextMessages: Array<{ customType: string; content: string }>;
+          warnings?: string[];
+        };
+        if (Array.isArray(providerMessages) && providerMessages.length > 0) {
+          contextMessages.push(...providerMessages);
+        }
+        if (Array.isArray(providerWarnings) && providerWarnings.length > 0) {
+          allWarnings.push(...providerWarnings);
+        }
+      } catch (error) {
+        logWarn(`prompt context provider ${provider.extensionId}/${provider.id} failed`, {
+          conversationId: input.conversationId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        allWarnings.push(`${provider.title ?? provider.id} context failed; sent without it.`);
+      }
+    }),
+  );
 
-    if (pointers.pointers.length > 0) {
-      const pointerIds = pointers.pointers.map((p) => p.sessionId);
-      persistTraceSuggestedContext({ sessionId: input.conversationId, pointerIds });
-    }
-
-    return {
-      contextMessages: [...contextMessages, ...pointers.contextMessages],
-      warnings: pointers.warnings,
-    };
-  } catch (error) {
-    logWarn('related conversation pointer generation failed', {
-      conversationId: input.conversationId,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-    return {
-      contextMessages,
-      warnings: ['Related conversation pointers failed; sent without them.'],
-    };
-  }
+  return {
+    contextMessages,
+    warnings: allWarnings,
+  };
 }
 
 async function prepareLiveSessionPrompt(
@@ -778,7 +738,7 @@ export async function submitLiveSessionPromptCapability(
   const behavior = normalizePromptBehavior(input.behavior);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
-  const promptContext = buildPromptContextMessagesForSubmit({
+  const promptContext = await buildPromptContextMessagesForSubmit({
     conversationId: liveConversationId,
     prompt: prepared.text,
     currentCwd: recoveredLiveEntry?.cwd,
@@ -919,7 +879,7 @@ export async function submitLiveSessionParallelPromptCapability(
   const prepared = await prepareLiveSessionPrompt(input, context);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
-  const promptContext = buildPromptContextMessagesForSubmit({
+  const promptContext = await buildPromptContextMessagesForSubmit({
     conversationId: liveConversationId,
     prompt: prepared.text,
     currentCwd: recoveredLiveEntry?.cwd,

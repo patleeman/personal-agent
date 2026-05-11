@@ -88,6 +88,7 @@ export interface ExtensionContributions {
   tools?: ExtensionToolContribution[];
   transcriptRenderers?: ExtensionTranscriptRendererContribution[];
   promptReferences?: ExtensionPromptReferenceContribution[];
+  promptContextProviders?: ExtensionPromptContextProviderContribution[];
   quickOpen?: ExtensionQuickOpenContribution[];
   themes?: ExtensionThemeContribution[];
   topBarElements?: ExtensionTopBarElementContribution[];
@@ -231,6 +232,12 @@ export interface ExtensionThemeContribution {
   label: string;
   appearance: 'light' | 'dark';
   tokens: Record<string, string>;
+}
+
+export interface ExtensionPromptContextProviderContribution {
+  id: string;
+  handler: string;
+  title?: string;
 }
 
 export interface ExtensionPromptReferenceContribution {

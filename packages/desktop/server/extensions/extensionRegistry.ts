@@ -161,6 +161,14 @@ export interface ExtensionSlashCommandRegistration {
   action: string;
 }
 
+export interface ExtensionPromptContextProviderRegistration {
+  extensionId: string;
+  id: string;
+  packageType: ExtensionManifest['packageType'];
+  handler: string;
+  title?: string;
+}
+
 export interface ExtensionPromptReferenceRegistration {
   extensionId: string;
   id: string;
@@ -1293,6 +1301,7 @@ export function readExtensionSchema() {
       'skills',
       'tools',
       'promptReferences',
+      'promptContextProviders',
       'quickOpen',
       'themes',
       'topBarElements',
@@ -1432,6 +1441,27 @@ export function listExtensionSlashCommandRegistrations(): ExtensionSlashCommandR
     })),
   );
   return [...legacy, ...native];
+}
+
+export function listExtensionPromptContextProviderRegistrations(
+  stateRoot: string = getStateRoot(),
+): ExtensionPromptContextProviderRegistration[] {
+  return listEnabledExtensionEntries(stateRoot).flatMap((entry) =>
+    (entry.manifest.contributes?.promptContextProviders ?? []).flatMap((provider): ExtensionPromptContextProviderRegistration[] => {
+      const id = provider.id.trim();
+      const handler = provider.handler.trim();
+      if (!id || !handler) return [];
+      return [
+        {
+          extensionId: entry.manifest.id,
+          id,
+          packageType: entry.manifest.packageType ?? 'user',
+          handler,
+          ...(provider.title ? { title: provider.title } : {}),
+        },
+      ];
+    }),
+  );
 }
 
 export function listExtensionPromptReferenceRegistrations(stateRoot: string = getStateRoot()): ExtensionPromptReferenceRegistration[] {

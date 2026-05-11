@@ -468,9 +468,22 @@ export async function loadExtensionBackend(extensionId: string): Promise<Extensi
   const packageRoot = resolve(entry.packageRoot);
   const entryPath = resolve(packageRoot, backendEntry);
   assertInside(packageRoot, entryPath);
-  const compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: true });
-  if (compiled.stale) {
-    console.warn(`[extension:${extensionId}] backend build failed; using previous compiled backend`);
+  let compiled: ExtensionBackendBuildResult;
+  try {
+    compiled = await buildExtensionBackend(extensionId, packageRoot, entryPath, { allowStaleOnFailure: true });
+    if (compiled.stale) {
+      console.warn(`[extension:${extensionId}] backend build failed; using previous compiled backend`);
+    }
+  } catch (buildError) {
+    // Rebuild from source failed and no stale cache available.
+    // Fall back to pre-built dist file if one exists (system extensions).
+    const preBuiltEntry = resolve(packageRoot, 'dist', 'backend.mjs');
+    if (existsSync(preBuiltEntry)) {
+      console.warn(`[extension:${extensionId}] backend rebuild failed; falling back to pre-built dist/backend.mjs`);
+      compiled = { path: preBuiltEntry, hash: `prebuilt-${Date.now()}`, rebuilt: false, stale: false };
+    } else {
+      throw buildError;
+    }
   }
 
   const cacheKey = `${compiled.path}:${compiled.hash}`;

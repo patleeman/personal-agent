@@ -8,6 +8,16 @@
   "frontend": {
     "entry": "dist/frontend.js"
   },
+  "backend": {
+    "entry": "src/backend.ts",
+    "actions": [
+      {
+        "id": "warmPointers",
+        "handler": "warmPointers",
+        "title": "Warm suggested context pointer cache"
+      }
+    ]
+  },
   "contributes": {
     "newConversationPanels": [
       {
@@ -15,6 +25,13 @@
         "component": "SuggestedContextPanel",
         "title": "Suggested Context",
         "priority": 100
+      }
+    ],
+    "promptContextProviders": [
+      {
+        "id": "provide-prompt-context",
+        "handler": "providePromptContext",
+        "title": "Suggested Context pointers"
       }
     ]
   }
