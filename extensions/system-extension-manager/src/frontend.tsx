@@ -571,6 +571,10 @@ export function ExtensionManagerPage() {
             setExtensions((items) => items.map((item) => (item.id === result.extension?.id ? result.extension : item)));
           }
           notifyExtensionRegistryChanged();
+          const actionResult = result.actionResult?.result as { conversationId?: string } | undefined;
+          if (nextEnabled && actionResult?.conversationId) {
+            navigate(`/conversations/${encodeURIComponent(actionResult.conversationId)}`);
+          }
           if (
             !nextEnabled &&
             extension.routes.some((route) => location.pathname === route.route || location.pathname.startsWith(`${route.route}/`))

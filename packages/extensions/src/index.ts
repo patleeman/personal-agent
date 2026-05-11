@@ -356,6 +356,8 @@ export interface ExtensionManifest {
 export interface ExtensionBackend {
   entry: string;
   actions?: ExtensionBackendAction[];
+  startupAction?: string;
+  onEnableAction?: string;
   agentExtension?: string;
 }
 

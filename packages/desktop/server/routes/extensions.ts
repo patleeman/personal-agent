@@ -447,7 +447,13 @@ export function registerExtensionRoutes(
         return;
       }
       setExtensionEnabled(entry.manifest.id, enabled);
-      res.json({ ok: true, extension: listExtensionInstallSummaries().find((extension) => extension.id === entry.manifest.id) });
+      const onEnableAction = enabled ? entry.manifest.backend?.onEnableAction : undefined;
+      const actionResult = onEnableAction ? await invokeExtensionAction(entry.manifest.id, onEnableAction, {}, context) : undefined;
+      res.json({
+        ok: true,
+        extension: listExtensionInstallSummaries().find((extension) => extension.id === entry.manifest.id),
+        ...(actionResult ? { actionResult } : {}),
+      });
     } catch (err) {
       sendRouteError(res, 'extension update error', err);
     }

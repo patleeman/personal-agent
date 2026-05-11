@@ -32,8 +32,7 @@ export async function ensure(
 ): Promise<{ created: boolean; conversationId?: string; skipped?: string }> {
   const existingState = await ctx.storage.get<OnboardingState>(ONBOARDING_STATE_KEY);
   if (existingState?.completed) {
-    disableOnboarding(ctx);
-    return { created: false, conversationId: existingState.conversationId, skipped: 'already-completed' };
+    await ctx.storage.delete(ONBOARDING_STATE_KEY);
   }
 
   const created = (await ctx.conversations.create({ cwd: ctx.runtime.getRepoRoot() })) as { id: string };

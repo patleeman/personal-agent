@@ -11,6 +11,7 @@
   },
   "backend": {
     "entry": "src/backend.ts",
+    "onEnableAction": "ensure",
     "actions": [
       {
         "id": "ensure",

@@ -433,6 +433,8 @@ export interface ExtensionBackend {
    * startup; all errors should be caught and logged internally.
    */
   startupAction?: string;
+  /** Action id to call immediately after the extension is enabled from the Extensions page. */
+  onEnableAction?: string;
   /** Optional export for backend-only agent lifecycle extensions. */
   agentExtension?: string;
 }

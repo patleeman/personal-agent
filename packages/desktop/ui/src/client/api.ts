@@ -313,7 +313,10 @@ export const api = {
     get<{ enabled: boolean; healthy: boolean; errors?: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/status`),
   reloadExtensions: async () => post<{ ok: boolean; reloaded: boolean; message: string }>('/extensions/reload'),
   updateExtension: async (extensionId: string, input: { enabled: boolean }) =>
-    patch<{ ok: true; extension?: ExtensionInstallSummary }>(`/extensions/${encodeURIComponent(extensionId)}`, input),
+    patch<{ ok: true; extension?: ExtensionInstallSummary; actionResult?: { ok: boolean; result?: unknown; error?: string } }>(
+      `/extensions/${encodeURIComponent(extensionId)}`,
+      input,
+    ),
   buildExtension: async (extensionId: string) =>
     post<{ ok: true; extensionId: string; outputs: string[] }>(`/extensions/${encodeURIComponent(extensionId)}/build`),
   reloadExtension: async (extensionId: string) =>

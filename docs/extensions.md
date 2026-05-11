@@ -528,7 +528,7 @@ If a page needs a style that fights these defaults, first ask whether it should 
 ## Backend (Server-side)
 
 The backend runs in the Node.js server process. It exposes actions
-that the frontend can call via `pa.extension.invoke()`.
+that the frontend can call via `pa.extension.invoke()`. A backend can also declare `onEnableAction` in `extension.json` to run an action immediately after the user enables the extension.
 
 ```typescript
 import type { ExtensionBackendContext } from '@personal-agent/extensions';
