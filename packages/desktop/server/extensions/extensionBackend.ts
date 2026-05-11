@@ -210,7 +210,7 @@ function createBackendContext(
       toast: (message, type = 'info') => {
         console.log(`[extension:${extensionId}] [${type}] ${message}`);
         invalidateAppTopics('notifications');
-        publishAppEvent({ type: 'notification', extensionId, message, type });
+        publishAppEvent({ type: 'notification', extensionId, message, severity: type });
       },
       system: (input) => sendNotifyAsSystemNotification(extensionId, input),
       setBadge: (count) => setExtensionBadge(extensionId, count),
@@ -632,7 +632,7 @@ export async function startExtensionStartupActions(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[extension:${summary.id}] startup action "${startupActionId}" failed: ${message}`);
-      publishAppEvent({ type: 'notification', extensionId: summary.id, message: `Startup action failed: ${message}`, type: 'error' });
+      publishAppEvent({ type: 'notification', extensionId: summary.id, message: `Startup action failed: ${message}`, severity: 'error' });
       results.push({ extensionId: summary.id, ok: false, error: message });
     }
   }

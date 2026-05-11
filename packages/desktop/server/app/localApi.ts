@@ -567,7 +567,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
       type: 'notification',
       extensionId: 'core',
       message: `Startup action dispatch failed: ${(error as Error).message}`,
-      type: 'error',
+      severity: 'error',
     });
   });
 

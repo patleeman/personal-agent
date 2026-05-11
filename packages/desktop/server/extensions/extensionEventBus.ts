@@ -103,7 +103,7 @@ export async function publishExtensionEvent(sourceExtensionId: string, event: st
             type: 'notification',
             extensionId: entry.extensionId,
             message: `Event handler error: ${(error as Error).message}`,
-            type: 'error',
+            severity: 'error',
           });
         }),
       ),

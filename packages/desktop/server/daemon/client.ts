@@ -384,7 +384,7 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
     const accepted = await emitDaemonEvent(input, config);
     if (!accepted) {
       console.warn(`daemon queue is full; dropped event type=${input.type}`);
-      publishAppEvent({ type: 'notification', extensionId: 'core', message: `Daemon queue dropped event: ${input.type}`, type: 'warning' });
+      publishAppEvent({ type: 'notification', extensionId: 'core', message: `Daemon queue dropped event: ${input.type}`, severity: 'warning' });
     }
   } catch (error) {
     console.warn(formatDaemonUnavailableWarning(error, config));
@@ -392,7 +392,7 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
       type: 'notification',
       extensionId: 'core',
       message: `Daemon unavailable: ${error instanceof Error ? error.message : String(error)}`,
-      type: 'warning',
+      severity: 'warning',
     });
   }
 }

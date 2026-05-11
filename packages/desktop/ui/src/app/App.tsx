@@ -273,7 +273,7 @@ export function App() {
             new CustomEvent('pa-notification', {
               detail: {
                 message: payload.message,
-                type: payload.type ?? 'info',
+                type: (payload as { severity?: string }).severity ?? 'info',
                 details: payload.details,
                 source: payload.extensionId,
               },
