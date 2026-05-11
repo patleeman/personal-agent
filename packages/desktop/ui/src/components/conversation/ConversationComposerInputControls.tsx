@@ -196,11 +196,6 @@ export function ConversationComposerInputControls({
                 }}
               />
             ))}
-            {streamIsStreaming && (
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center" aria-label="Working">
-                <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent/70" />
-              </span>
-            )}
             <ConversationPreferencesRow
               models={models}
               currentModel={currentModel}
