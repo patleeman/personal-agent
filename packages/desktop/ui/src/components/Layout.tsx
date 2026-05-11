@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-r
 
 import { useAppData } from '../app/contexts';
 import { api } from '../client/api';
-import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
+import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
@@ -32,7 +32,6 @@ import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { useRouteTelemetry } from '../telemetry/appTelemetry';
 import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, writeAppLayoutMode } from '../ui-state/appLayoutMode';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
-import { CommandPalette } from './CommandPalette';
 import {
   ConversationArtifactRailContent,
   ConversationArtifactWorkbenchPane,
@@ -57,6 +56,9 @@ import { cx } from './ui';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
+const CommandPalette = lazyRouteWithRecovery('layout-command-palette', () =>
+  import('./CommandPalette').then((module) => ({ default: module.CommandPalette })),
+);
 const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
 const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
   import('./ContextRail').then((module) => ({ default: module.ContextRail })),
@@ -1258,6 +1260,8 @@ export function Layout() {
     );
   }, [activeWorkbenchTool, extensionRightToolPanels, extensionWorkbenchSurfaces]);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const [commandPaletteMounted, setCommandPaletteMounted] = useState(false);
+  const [pendingCommandPaletteOpen, setPendingCommandPaletteOpen] = useState<OpenCommandPaletteDetail | null>(null);
 
   const setActiveConversationTool = useCallback(
     (tool: WorkbenchRailMode) => {
@@ -1539,6 +1543,35 @@ export function Layout() {
     clearActiveConversationCheckpoint,
     setSearchParams,
   ]);
+
+  useEffect(() => {
+    if (commandPaletteMounted) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setCommandPaletteMounted(true), 750);
+    const mountImmediately = (event: Event) => {
+      setPendingCommandPaletteOpen((event as CustomEvent<OpenCommandPaletteDetail>).detail ?? {});
+      setCommandPaletteMounted(true);
+    };
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, mountImmediately, { once: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, mountImmediately);
+    };
+  }, [commandPaletteMounted]);
+
+  useEffect(() => {
+    if (!commandPaletteMounted || pendingCommandPaletteOpen === null) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: pendingCommandPaletteOpen }));
+      setPendingCommandPaletteOpen(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [commandPaletteMounted, pendingCommandPaletteOpen]);
 
   const toggleWorkbenchExplorer = useCallback(() => {
     setWorkbenchExplorerOpen((current) => {
@@ -1834,7 +1867,11 @@ export function Layout() {
       {notificationCenterOpen && <NotificationCenter onClose={() => setNotificationCenterOpen(false)} />}
       <ExtensionModalHost />
       <PageSearchBar rootRef={pageSearchRootRef} desktopShell={desktopEnvironment?.isElectron ?? isDesktopShell()} />
-      <CommandPalette />
+      {commandPaletteMounted ? (
+        <Suspense fallback={null}>
+          <CommandPalette />
+        </Suspense>
+      ) : null}
     </NotificationProvider>
   );
 }
