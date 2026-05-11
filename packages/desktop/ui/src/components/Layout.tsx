@@ -32,19 +32,9 @@ import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { useRouteTelemetry } from '../telemetry/appTelemetry';
 import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, writeAppLayoutMode } from '../ui-state/appLayoutMode';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
-import {
-  ConversationArtifactRailContent,
-  ConversationArtifactWorkbenchPane,
-  useConversationArtifactSummaries,
-} from './ConversationArtifactWorkbench';
-import {
-  ConversationCheckpointWorkbenchPane,
-  ConversationDiffRailContent,
-  UNCOMMITTED_SENTINEL,
-  useConversationCheckpointSummaries,
-  useUncommittedDiff,
-} from './ConversationCheckpointWorkbench';
-import { ConversationRunsRailContent, ConversationRunWorkbenchPane, useConversationRunList } from './ConversationRunsWorkbench';
+import { useConversationArtifactSummaries } from './conversationArtifactHooks';
+import { UNCOMMITTED_SENTINEL, useConversationCheckpointSummaries, useUncommittedDiff } from './conversationCheckpointHooks';
+import { useConversationRunList } from './conversationRunHooks';
 import { DesktopTopBar } from './DesktopTopBar';
 import { NotificationBell } from './notifications/NotificationBell';
 import { NotificationCenter } from './notifications/NotificationCenter';
@@ -65,6 +55,24 @@ const ContextRail = lazyRouteWithRecovery('layout-context-rail', () =>
 );
 const WorkspaceExplorer = lazyRouteWithRecovery('layout-workspace-explorer', () =>
   import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })),
+);
+const ConversationArtifactRailContent = lazyRouteWithRecovery('layout-artifact-rail', () =>
+  import('./ConversationArtifactWorkbench').then((module) => ({ default: module.ConversationArtifactRailContent })),
+);
+const ConversationArtifactWorkbenchPane = lazyRouteWithRecovery('layout-artifact-workbench', () =>
+  import('./ConversationArtifactWorkbench').then((module) => ({ default: module.ConversationArtifactWorkbenchPane })),
+);
+const ConversationDiffRailContent = lazyRouteWithRecovery('layout-diff-rail', () =>
+  import('./ConversationCheckpointWorkbench').then((module) => ({ default: module.ConversationDiffRailContent })),
+);
+const ConversationCheckpointWorkbenchPane = lazyRouteWithRecovery('layout-checkpoint-workbench', () =>
+  import('./ConversationCheckpointWorkbench').then((module) => ({ default: module.ConversationCheckpointWorkbenchPane })),
+);
+const ConversationRunsRailContent = lazyRouteWithRecovery('layout-runs-rail', () =>
+  import('./ConversationRunsWorkbench').then((module) => ({ default: module.ConversationRunsRailContent })),
+);
+const ConversationRunWorkbenchPane = lazyRouteWithRecovery('layout-run-workbench', () =>
+  import('./ConversationRunsWorkbench').then((module) => ({ default: module.ConversationRunWorkbenchPane })),
 );
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
@@ -510,23 +518,33 @@ function WorkbenchDocumentPane({
   const { sessions, tasks } = useAppData();
 
   if (activeTool === 'artifacts' && conversationId && artifactId) {
-    return <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />;
+    return (
+      <Suspense fallback={<div className="px-4 py-3 text-[12px] text-dim">Loading artifact…</div>}>
+        <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />
+      </Suspense>
+    );
   }
 
   if (activeTool === 'diffs' && conversationId) {
     return (
-      <ConversationCheckpointWorkbenchPane
-        conversationId={conversationId}
-        checkpointId={checkpointId}
-        onMissingCheckpoint={onMissingCheckpoint}
-        scrollToFile={scrollToCheckpointFile}
-        workspaceCwd={workspaceCwd}
-      />
+      <Suspense fallback={<div className="px-4 py-3 text-[12px] text-dim">Loading diff…</div>}>
+        <ConversationCheckpointWorkbenchPane
+          conversationId={conversationId}
+          checkpointId={checkpointId}
+          onMissingCheckpoint={onMissingCheckpoint}
+          scrollToFile={scrollToCheckpointFile}
+          workspaceCwd={workspaceCwd}
+        />
+      </Suspense>
     );
   }
 
   if (activeTool === 'runs') {
-    return <ConversationRunWorkbenchPane conversationId={conversationId} runId={runId} lookups={{ sessions, tasks }} />;
+    return (
+      <Suspense fallback={<div className="px-4 py-3 text-[12px] text-dim">Loading run…</div>}>
+        <ConversationRunWorkbenchPane conversationId={conversationId} runId={runId} lookups={{ sessions, tasks }} />
+      </Suspense>
+    );
   }
 
   if (extensionWorkbenchSurface) {
@@ -1029,25 +1047,29 @@ function WorkbenchKnowledgeRail({
         </div>
       ) : activeTool === 'artifacts' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          <ConversationArtifactRailContent
-            artifacts={artifacts}
-            activeArtifactId={activeArtifactId}
-            loading={artifactsLoading}
-            error={artifactsError}
-            onOpenArtifact={handleArtifactSelect}
-          />
+          <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading artifacts…</div>}>
+            <ConversationArtifactRailContent
+              artifacts={artifacts}
+              activeArtifactId={activeArtifactId}
+              loading={artifactsLoading}
+              error={artifactsError}
+              onOpenArtifact={handleArtifactSelect}
+            />
+          </Suspense>
         </div>
       ) : activeTool === 'diffs' && !systemDiffsExtensionSurface ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          <ConversationDiffRailContent
-            checkpoints={checkpoints}
-            activeCheckpointId={activeCheckpointId}
-            loading={checkpointsLoading}
-            error={checkpointsError}
-            onOpenCheckpoint={handleCheckpointSelect}
-            onScrollToFile={onScrollToCheckpointFile}
-            workspaceCwd={workspaceCwd}
-          />
+          <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading diffs…</div>}>
+            <ConversationDiffRailContent
+              checkpoints={checkpoints}
+              activeCheckpointId={activeCheckpointId}
+              loading={checkpointsLoading}
+              error={checkpointsError}
+              onOpenCheckpoint={handleCheckpointSelect}
+              onScrollToFile={onScrollToCheckpointFile}
+              workspaceCwd={workspaceCwd}
+            />
+          </Suspense>
         </div>
       ) : activeTool === 'runs' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -1061,13 +1083,15 @@ function WorkbenchKnowledgeRail({
               cwd={workspaceCwd}
             />
           ) : (
-            <ConversationRunsRailContent
-              conversationId={conversationId}
-              runs={runs}
-              activeRunId={activeRunId}
-              lookups={runLookups}
-              onOpenRun={handleRunSelect}
-            />
+            <Suspense fallback={<div className="px-3 py-2 text-[12px] text-dim">Loading runs…</div>}>
+              <ConversationRunsRailContent
+                conversationId={conversationId}
+                runs={runs}
+                activeRunId={activeRunId}
+                lookups={runLookups}
+                onOpenRun={handleRunSelect}
+              />
+            </Suspense>
           )}
         </div>
       ) : activeExtensionToolPanel ? (
