@@ -14,6 +14,13 @@ describe('shouldDispatchReadonlyLocalApiInWorker', () => {
     expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/conversations/session-1/bootstrap', hostId: 'local' })).toBe(
       true,
     );
+    expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/workspace/tree?cwd=/repo', hostId: 'local' })).toBe(true);
+    expect(
+      shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/workspace/file?cwd=/repo&path=a.ts', hostId: 'local' }),
+    ).toBe(true);
+    expect(
+      shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/workspace/diff?cwd=/repo&path=a.ts', hostId: 'local' }),
+    ).toBe(true);
   });
 
   it('keeps live-registry-only reads on the main thread', () => {

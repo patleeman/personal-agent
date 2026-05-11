@@ -55,6 +55,10 @@ const WORKER_SAFE_LOCAL_API_ROUTES: Array<{
   { methods: new Set(['GET']), pattern: /^\/api\/vault\/search$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/vault\/note-search$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/vault\/asset$/ },
+  { methods: new Set(['GET']), pattern: /^\/api\/workspace\/tree$/ },
+  { methods: new Set(['GET']), pattern: /^\/api\/workspace\/file$/ },
+  { methods: new Set(['GET']), pattern: /^\/api\/workspace\/diff$/ },
+  { methods: new Set(['GET']), pattern: /^\/api\/workspace\/uncommitted-diff$/ },
 ];
 
 interface ReadonlyLocalApiRequest {
