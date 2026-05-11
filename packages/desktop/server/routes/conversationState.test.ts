@@ -570,6 +570,55 @@ describe('registerConversationStateRoutes', () => {
     expect(storedRes.json).toHaveBeenCalledWith({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:12:00.000Z' });
   });
 
+  it('validates and updates conversation goal state', async () => {
+    const { patchHandler } = createHarness();
+    const handler = patchHandler('/api/conversations/:id/goal');
+
+    const invalidRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: { objective: 42 } }, invalidRes);
+    expect(invalidRes.status).toHaveBeenCalledWith(400);
+    expect(invalidRes.json).toHaveBeenCalledWith({ error: 'objective must be a string' });
+
+    resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
+    existsSyncMock.mockReturnValueOnce(true);
+    const clearedSessionManager = { appendCustomEntry: vi.fn() };
+    SessionManagerOpenMock.mockReturnValueOnce(clearedSessionManager);
+    const clearedRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: { objective: '   ' } }, clearedRes);
+    expect(clearedSessionManager.appendCustomEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({
+        objective: '',
+        status: 'complete',
+        stopReason: 'cleared',
+      }),
+    );
+    expect(clearedRes.json).toHaveBeenCalledWith({ cleared: true });
+    expect(publishAppEventMock).toHaveBeenCalledWith({ type: 'session_file_changed', sessionId: 'conversation-1' });
+
+    resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-2.json');
+    existsSyncMock.mockReturnValueOnce(true);
+    const activeSessionManager = { appendCustomEntry: vi.fn() };
+    SessionManagerOpenMock.mockReturnValueOnce(activeSessionManager);
+    const activeRes = createResponse();
+    await handler({ params: { id: 'conversation-2' }, body: { objective: ' ship it ' } }, activeRes);
+    expect(activeSessionManager.appendCustomEntry).toHaveBeenCalledWith(
+      'conversation-goal',
+      expect.objectContaining({
+        objective: 'ship it',
+        status: 'active',
+        stopReason: null,
+      }),
+    );
+    expect(activeRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        objective: 'ship it',
+        status: 'active',
+        stopReason: null,
+      }),
+    );
+  });
+
   it('validates model preference patch input', async () => {
     const { patchHandler } = createHarness();
     const handler = patchHandler('/api/conversations/:id/model-preferences');

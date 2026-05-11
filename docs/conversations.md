@@ -98,6 +98,10 @@ Queued steer and follow-up prompts appear in the queue shelf above the composer.
 
 Parallel prompts appear in the Parallel shelf. A running parallel prompt can be cancelled. A completed or failed parallel prompt can be imported into the main thread, skipped, or opened as its own conversation.
 
+## Goal Mode
+
+Goal mode stores one active objective on the conversation and can queue hidden continuation turns until that objective is done. Clearing the goal removes the active objective; blank or whitespace-only goal updates are treated as clears instead of creating an empty active goal.
+
 ## Slash Commands
 
 Type `/` in the composer to open the command menu. Commands execute immediately — they don't get sent to the agent. Some trigger UI actions, others inject text into the composer.

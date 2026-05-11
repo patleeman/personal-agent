@@ -261,13 +261,20 @@ export function registerConversationStateRoutes(
 
   router.patch('/api/conversations/:id/goal', async (req, res) => {
     try {
-      const { objective } = req.body as { objective?: string };
-      const hasObjective = 'objective' in req.body;
+      const body = typeof req.body === 'object' && req.body !== null ? (req.body as { objective?: unknown }) : {};
+      const hasObjective = Object.prototype.hasOwnProperty.call(body, 'objective');
+      const objective = body.objective;
+      if (hasObjective && typeof objective !== 'string') {
+        res.status(400).json({ error: 'objective must be a string' });
+        return;
+      }
+
+      const trimmedObjective = typeof objective === 'string' ? objective.trim() : '';
+      const shouldSetGoal = hasObjective && trimmedObjective.length > 0;
 
       const setGoal = (sessionManager: SessionManager) => {
-        const trimmed = (objective ?? '').trim();
         const goalState = {
-          objective: trimmed || '',
+          objective: trimmedObjective,
           status: 'active' as const,
           tasks: [] as Array<{ id: string; description: string; status: string }>,
           stopReason: null,
@@ -295,7 +302,7 @@ export function registerConversationStateRoutes(
           return;
         }
         const sessionManager = entry.session.sessionManager;
-        const result = hasObjective ? setGoal(sessionManager) : clearGoal(sessionManager);
+        const result = shouldSetGoal ? setGoal(sessionManager) : clearGoal(sessionManager);
         publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
         res.json(result);
         return;
@@ -308,7 +315,7 @@ export function registerConversationStateRoutes(
       }
 
       const sessionManager = SessionManager.open(sessionFile);
-      const result = hasObjective ? setGoal(sessionManager) : clearGoal(sessionManager);
+      const result = shouldSetGoal ? setGoal(sessionManager) : clearGoal(sessionManager);
       publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
       res.json(result);
     } catch (err) {
