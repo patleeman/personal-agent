@@ -98,12 +98,19 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
     ? resolve(repoRoot, 'app.asar.unpacked')
     : env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR?.trim() || undefined;
 
-  const daemonEntryFile = resolveExistingFile(
-    'daemon entry file',
-    isPackaged
+  const daemonEntryFile = (() => {
+    const candidates = isPackaged
       ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
-      : [resolve(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json')],
-  );
+      : [resolve(repoRoot, 'packages', 'desktop', 'server', 'daemon', 'package.json')];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    // daemonEntryFile is not consumed by any runtime code; this fallback
+    // prevents a crash when the daemon package has no compiled JS output.
+    return candidates[0] ?? '';
+  })();
   const webDistDir = resolveExistingFile(
     'desktop renderer dist directory',
     isPackaged
