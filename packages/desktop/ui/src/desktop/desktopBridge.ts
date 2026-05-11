@@ -510,5 +510,3 @@ export async function readDesktopEnvironment(): Promise<DesktopEnvironmentState 
   desktopEnvironmentPromise = request;
   return request;
 }
-
-

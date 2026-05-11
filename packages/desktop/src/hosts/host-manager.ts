@@ -1,12 +1,7 @@
 import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 import { loadDesktopConfig } from '../state/desktop-config.js';
 import { LocalHostController } from './local-host-controller.js';
-import type {
-  DesktopConfig,
-  DesktopEnvironmentState,
-  DesktopHostRecord,
-  HostController,
-} from './types.js';
+import type { DesktopConfig, DesktopEnvironmentState, DesktopHostRecord, HostController } from './types.js';
 
 export class HostManager {
   private config: DesktopConfig;
@@ -55,8 +50,6 @@ export class HostManager {
   async restartHost(hostId: string): Promise<void> {
     await this.getHostController(hostId).restart();
   }
-
-
 
   getHostRecord(hostId: string): DesktopHostRecord {
     if (hostId === 'local') {

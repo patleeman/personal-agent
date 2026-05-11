@@ -26,8 +26,6 @@ function readPositiveSafeNumber(value: unknown): number | undefined {
   return number !== undefined && number > 0 ? number : undefined;
 }
 
-
-
 function normalizeDesktopAppPreferences(value: unknown): DesktopAppPreferences {
   if (!value || typeof value !== 'object') {
     return createDefaultDesktopAppPreferences();

@@ -472,5 +472,3 @@ export interface DesktopEnvironmentState {
   launchMode?: 'stable' | 'testing';
   launchLabel?: string;
 }
-
-

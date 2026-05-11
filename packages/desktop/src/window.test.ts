@@ -117,8 +117,6 @@ describe('buildWindowTitle', () => {
     const title = buildWindowTitle({ kind: 'local', id: 'local' } as unknown as Parameters<typeof buildWindowTitle>[0]);
     expect(title).toBe('Personal Agent');
   });
-
-
 });
 
 describe('constrainDesktopWindowBounds', () => {

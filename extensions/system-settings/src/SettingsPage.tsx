@@ -1213,7 +1213,6 @@ export function DesktopConnectionsSettingsPanel() {
   const [appPreferencesState, setAppPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
   const [action, setAction] = useState<'save-app-preferences' | null>(null);
   const [appPreferencesError, setAppPreferencesError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -1267,7 +1266,6 @@ export function DesktopConnectionsSettingsPanel() {
     try {
       await bridge.updateDesktopAppPreferences(nextPreferences);
       await refreshDesktopAppPreferences();
-      setNotice('Desktop app settings saved.');
     } catch (nextError) {
       setAppPreferencesError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -4221,11 +4219,7 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
               </div>
             </SettingsSection>
 
-            <SettingsSection
-              id="settings-desktop"
-              label="Desktop"
-              description="App behavior and keyboard shortcuts for the desktop app."
-            >
+            <SettingsSection id="settings-desktop" label="Desktop" description="App behavior and keyboard shortcuts for the desktop app.">
               <DesktopConnectionsSettingsPanel />
 
               {desktopEnvironment?.isElectron || isDesktopShell() ? <DesktopKeyboardShortcutsSettingsSection /> : null}

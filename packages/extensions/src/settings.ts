@@ -24,7 +24,7 @@ export type TranscriptionProviderId = unknown;
 export type UnifiedSettingsEntry = unknown;
 
 export declare const DesktopCompanionSettingsPanel: HostComponent;
-export declare const DesktopConnectionsSettingsPanel: HostComponent;  // App behavior panel
+export declare const DesktopConnectionsSettingsPanel: HostComponent; // App behavior panel
 export declare const DesktopKeyboardShortcutsSettingsSection: HostComponent;
 export declare const SettingsPage: HostComponent;
 export declare const AppPageIntro: HostComponent;
