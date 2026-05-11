@@ -3,7 +3,7 @@ import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInf
 
 import { writeDesktopMainLogLine } from '../desktop-main-log.js';
 
-const INITIAL_CHECK_DELAY_MS = 10_000;
+const INITIAL_CHECK_DELAY_MS = 60_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 
 type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
