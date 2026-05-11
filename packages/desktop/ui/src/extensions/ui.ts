@@ -18,6 +18,7 @@ export {
   ToolbarButton,
 } from '../components/ui';
 export { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge, shouldUseNativeAppContextMenus } from '../desktop/desktopBridge';
+export { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
 export { useApi } from '../hooks/useApi';
 export { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 export {

@@ -21,6 +21,7 @@ export declare const KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY: string;
 export declare const KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY: string;
 export declare function addOpenFileId(...args: never[]): unknown;
 export declare function buildApiPath(...args: never[]): string;
+export declare function createDesktopAwareEventSource(...args: never[]): unknown;
 export declare function canDropAllPaths(...args: never[]): unknown;
 export declare function collapseExpandedFolderIds(...args: never[]): unknown;
 export declare function cx(...values: Array<unknown>): string;

@@ -46,7 +46,7 @@ export function onKBEvent<T = unknown>(type: KBEventType, handler: (detail: T) =
 
 // ── Vault file system watcher ─────────────────────────────────────────────
 
-import { buildApiPath } from '@personal-agent/extensions/ui';
+import { createDesktopAwareEventSource } from '@personal-agent/extensions/ui';
 import { useEffect, useRef } from 'react';
 
 const VAULT_WATCH_DEBOUNCE_MS = 180;
@@ -70,11 +70,15 @@ export function useVaultWatcher(
   useEffect(() => {
     if (!enabled || typeof window === 'undefined' || typeof EventSource === 'undefined') return;
     let timer: number | null = null;
-    let source: EventSource | null = null;
+    let source: {
+      onmessage: ((event: MessageEvent<string>) => void) | null;
+      onerror: ((event: Event) => void) | null;
+      close: () => void;
+    } | null = null;
     /** Paths that changed during the current debounce window. */
     const changedPaths = new Set<string>();
 
-    source = new EventSource(buildApiPath('/vault/events'));
+    source = createDesktopAwareEventSource('/api/vault/events') as typeof source;
 
     const schedule = () => {
       if (timer !== null) window.clearTimeout(timer);
@@ -85,7 +89,7 @@ export function useVaultWatcher(
       }, VAULT_WATCH_DEBOUNCE_MS);
     };
 
-    source.addEventListener('message', (event: MessageEvent<string>) => {
+    source.onmessage = (event: MessageEvent<string>) => {
       try {
         const payload = JSON.parse(event.data) as Record<string, unknown>;
         if (payload.type === 'ready' && typeof payload.root === 'string') {
@@ -101,7 +105,7 @@ export function useVaultWatcher(
         // ignore parse errors
       }
       schedule();
-    });
+    };
 
     source.onerror = () => {
       source?.close();

@@ -19,8 +19,8 @@ import CodeMirror from '@uiw/react-codemirror';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../client/api';
-import { buildApiPath } from '../../client/apiBase';
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
+import { createDesktopAwareEventSource } from '../../desktop/desktopEventSource';
 import type {
   WorkspaceDiffOverlay,
   WorkspaceDirectoryListing,
@@ -302,12 +302,20 @@ function useWorkspaceWatcher(cwd: string | null, enabled: boolean, onEvent: () =
   useEffect(() => {
     if (!cwd || !enabled || typeof window === 'undefined') return;
     let timer: number | null = null;
-    const source = new EventSource(buildApiPath(`/workspace/events?cwd=${encodeURIComponent(cwd)}`));
+    const source = createDesktopAwareEventSource(`/api/workspace/events?cwd=${encodeURIComponent(cwd)}`);
     const schedule = () => {
       if (timer !== null) window.clearTimeout(timer);
       timer = window.setTimeout(() => onEventRef.current(), WATCH_DEBOUNCE_MS);
     };
-    source.addEventListener('workspace', schedule);
+    source.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { type?: string };
+        if (payload.type !== 'workspace') return;
+      } catch {
+        return;
+      }
+      schedule();
+    };
     source.onerror = () => {
       source.close();
       schedule();

@@ -7,6 +7,7 @@ import { inlineConversationSessionSnapshotAssetsCapability } from '../conversati
 import { subscribe as subscribeLiveSession } from '../conversations/liveSessions.js';
 import type { DisplayBlock } from '../conversations/sessions.js';
 import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
+import { readWorkspaceRootSnapshot } from '../workspace/workspaceExplorer.js';
 
 const MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS = 1000;
 
@@ -330,6 +331,47 @@ async function subscribeDesktopProviderOAuthStream(url: URL, onEvent: (event: De
   return close;
 }
 
+async function subscribeDesktopWorkspaceEventsStream(url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
+  const cwd = url.searchParams.get('cwd')?.trim();
+  if (!cwd) {
+    throw new Error('Workspace cwd is required');
+  }
+
+  const snapshot = readWorkspaceRootSnapshot(cwd);
+  let watcher: ReturnType<typeof watch> | null = null;
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    watcher?.close();
+    watcher = null;
+    onEvent({ type: 'close' });
+  };
+
+  onEvent({ type: 'open' });
+  emitStreamMessage(onEvent, { type: 'ready', root: snapshot.root });
+
+  try {
+    watcher = watch(snapshot.root, { recursive: true }, (eventType, filename) => {
+      if (closed) return;
+      emitStreamMessage(onEvent, {
+        type: 'workspace',
+        eventType,
+        path: typeof filename === 'string' ? filename : null,
+      });
+    });
+  } catch (error) {
+    watcher?.close();
+    watcher = null;
+    const message = error instanceof Error ? error.message : String(error);
+    onEvent({ type: 'error', message });
+    close();
+    return close;
+  }
+
+  return close;
+}
+
 async function subscribeDesktopVaultEventsStream(_url: URL, onEvent: (event: DesktopLocalApiStreamEvent) => void): Promise<() => void> {
   const vaultRoot = getVaultRoot().trim();
   if (!vaultRoot) {
@@ -387,6 +429,10 @@ export async function subscribeDesktopLocalApiStreamByUrl(
 
   if (url.pathname === '/api/vault/events') {
     return subscribeDesktopVaultEventsStream(url, onEvent);
+  }
+
+  if (url.pathname === '/api/workspace/events') {
+    return subscribeDesktopWorkspaceEventsStream(url, onEvent);
   }
 
   throw new Error(`No local API stream for ${url.pathname}`);
