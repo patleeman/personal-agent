@@ -59,6 +59,15 @@ if (manifest.backend?.entry && existsSync(backendSource)) {
     target: 'node20',
     sourcemap: true,
     logLevel: 'info',
-    external: ['@personal-agent/*', 'electron'],
+    external: [
+      '@personal-agent/extensions',
+      '@personal-agent/extensions/host',
+      '@personal-agent/extensions/ui',
+      '@personal-agent/extensions/workbench',
+      '@personal-agent/extensions/settings',
+      '@personal-agent/extensions/data',
+      '@personal-agent/extensions/excalidraw',
+      'electron',
+    ],
   });
 }

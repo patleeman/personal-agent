@@ -1,10 +1,19 @@
-#!/usr/bin/env node
+// Barrel file for @personal-agent/daemon
+// Source files have been moved to their natural homes within the desktop server.
+// The tsconfig path mapping (@personal-agent/daemon → ./packages/desktop/server/daemon)
+// means consumers can keep importing from '@personal-agent/daemon' and this barrel
+// re-exports from the new locations.
 
-import { resolve } from 'path';
-import { fileURLToPath } from 'url';
+// Config / paths — now at packages/desktop/server/
+export {
+  type DaemonConfig,
+  getDaemonConfigFilePath,
+  getDefaultDaemonConfig,
+  loadDaemonConfig,
+} from '../config.js';
+export { resolveDaemonPaths } from '../paths.js';
 
-import { runDaemonProcess } from './server.js';
-
+// Automation — now at packages/desktop/server/automation/
 export type {
   AutomationActivityEntry,
   AutomationActivityKind,
@@ -16,7 +25,7 @@ export type {
   AutomationThreadMode,
   LegacyAutomationImportIssue,
   StoredAutomation,
-} from './automation-store.js';
+} from '../automation/store.js';
 export {
   appendAutomationActivityEntry,
   closeAutomationDbs,
@@ -29,53 +38,29 @@ export {
   listStoredAutomations,
   loadAutomationRuntimeStateMap,
   loadAutomationSchedulerState,
+  normalizeAutomationTargetTypeForSelection,
   saveAutomationRuntimeStateMap,
   saveAutomationSchedulerState,
   setStoredAutomationThreadBinding,
   updateStoredAutomation,
-} from './automation-store.js';
-export { normalizeAutomationTargetTypeForSelection } from './automation-store.js';
-export { ensureAutomationThread, normalizeAutomationThreadModeForSelection, resolveAutomationThreadTitle } from './automation-threads.js';
-export { type BackgroundRunAgentSpec, buildBackgroundAgentArgv, looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
+} from '../automation/store.js';
 export {
-  cancelDurableRun,
-  emitDaemonEvent,
-  emitDaemonEventNonFatal,
-  followUpDurableRun,
-  getDaemonStatus,
-  getDurableRun,
-  listDurableRuns,
-  listRecoverableWebLiveConversationRunsFromDaemon,
-  pingDaemon,
-  rerunDurableRun,
-  startBackgroundRun,
-  startScheduledTaskRun,
-  stopDaemon,
-  syncWebLiveConversationRunState,
-} from './client.js';
-export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from './companion/runtime.js';
-export type { CompanionRuntime, CompanionRuntimeProvider } from './companion/types.js';
+  ensureAutomationThread,
+  normalizeAutomationThreadModeForSelection,
+  resolveAutomationThreadTitle,
+} from '../automation/threads.js';
 
-export { type DaemonConfig, getDaemonConfigFilePath, getDefaultDaemonConfig, loadDaemonConfig } from './config.js';
-export { buildDeferredResumeActivityId, buildDeferredResumeAlertId, surfaceReadyDeferredResume } from './conversation-wakeups.js';
-export { createDaemonEvent, DAEMON_EVENT_VERSION, isDaemonEvent } from './events.js';
-export {
-  bindInProcessDaemonClient,
-  clearDaemonClientTransportOverride,
-  createInProcessDaemonClient,
-  type DaemonClientTransport,
-  getDaemonClientTransportOverride,
-  setDaemonClientTransportOverride,
-} from './in-process-client.js';
-export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
-export { parseTaskDefinition } from './modules/tasks-parser.js';
-export { resolveDaemonPaths } from './paths.js';
+// Tasks (previously daemon/modules/) — now at packages/desktop/server/automation/tasks/
+export type { ParsedTaskDefinition } from '../automation/tasks/tasks-parser.js';
+export { parseTaskDefinition } from '../automation/tasks/tasks-parser.js';
+
+// Runs — now at packages/desktop/server/runs/
 export {
   type BackgroundRunResultSummary,
   listPendingBackgroundRunResults,
   markBackgroundRunResultsDelivered,
   surfaceBackgroundRunResultsIfReady,
-} from './runs/background-run-deferred-resumes.js';
+} from '../runs/background-run-deferred-resumes.js';
 export {
   createBackgroundRunId,
   createBackgroundRunRecord,
@@ -84,7 +69,7 @@ export {
   markBackgroundRunStarted,
   type StartBackgroundRunInput,
   type StartBackgroundRunRecord,
-} from './runs/background-runs.js';
+} from '../runs/background-runs.js';
 export {
   cancelDeferredResumeConversationRun,
   completeDeferredResumeConversationRun,
@@ -93,7 +78,7 @@ export {
   markDeferredResumeConversationRunRetryScheduled,
   markDeferredResumeConversationRunSnoozed,
   scheduleDeferredResumeConversationRun,
-} from './runs/deferred-resume-conversations.js';
+} from '../runs/deferred-resume-conversations.js';
 export type {
   DurableRunCheckpointFile,
   DurableRunEvent,
@@ -106,7 +91,7 @@ export type {
   DurableRunStatusFile,
   ScannedDurableRun,
   ScannedDurableRunsSummary,
-} from './runs/store.js';
+} from '../runs/store.js';
 export {
   appendDurableRunEvent,
   createDurableRunManifest,
@@ -124,29 +109,51 @@ export {
   scanDurableRun,
   scanDurableRunsForRecovery,
   summarizeScannedDurableRuns,
-} from './runs/store.js';
+} from '../runs/store.js';
 export type {
   RecoverableWebLiveConversationRun,
   WebLiveConversationPendingOperation,
   WebLiveConversationPreludeMessage,
   WebLiveConversationPromptImage,
   WebLiveConversationRunState,
-} from './runs/web-live-conversations.js';
+} from '../runs/web-live-conversations.js';
 export {
   createWebLiveConversationRunId,
   listRecoverableWebLiveConversationRuns,
   parsePendingOperation,
   saveWebLiveConversationRunState,
-} from './runs/web-live-conversations.js';
-export { type DaemonStopRequestBehavior, PersonalAgentDaemon, type PersonalAgentDaemonOptions } from './server.js';
+} from '../runs/web-live-conversations.js';
+
+// Still in daemon/ (process infrastructure that hasn't been moved)
+export { buildBackgroundAgentArgv, type BackgroundRunAgentSpec, looksLikePersonalAgentCliEntryPath } from '../daemon/background-run-agent.js';
+export { surfaceReadyDeferredResume } from '../daemon/conversation-wakeups.js';
 export {
-  readTailscaleServeProxyState,
-  resolveTailscaleServeBaseUrl,
-  syncTailscaleServeProxy,
-  type SyncTailscaleServeProxyInput,
-  type TailscaleServeProxyState,
-  type TailscaleServeProxyStatus,
-} from './tailscale-serve.js';
+  cancelDurableRun,
+  emitDaemonEvent,
+  emitDaemonEventNonFatal,
+  followUpDurableRun,
+  getDaemonStatus,
+  getDurableRun,
+  listDurableRuns,
+  listRecoverableWebLiveConversationRunsFromDaemon,
+  pingDaemon,
+  rerunDurableRun,
+  startBackgroundRun,
+  startScheduledTaskRun,
+  stopDaemon,
+  syncWebLiveConversationRunState,
+} from '../daemon/client.js';
+export {
+  bindInProcessDaemonClient,
+  clearDaemonClientTransportOverride,
+  createInProcessDaemonClient,
+  type DaemonClientTransport,
+  getDaemonClientTransportOverride,
+  setDaemonClientTransportOverride,
+} from '../daemon/in-process-client.js';
+export { type DaemonStopRequestBehavior, PersonalAgentDaemon, type PersonalAgentDaemonOptions } from '../daemon/server.js';
+export { getCompanionRuntimeProvider, resolveCompanionRuntime, setCompanionRuntimeProvider } from '../daemon/companion/runtime.js';
+export type { CompanionRuntime, CompanionRuntimeProvider } from '../daemon/companion/types.js';
 export type {
   CancelDurableRunResult,
   DaemonEvent,
@@ -163,24 +170,4 @@ export type {
   StartScheduledTaskRunResult,
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
-} from './types.js';
-
-export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {
-  if (argv.includes('--help') || argv.includes('-h')) {
-    console.log('personal-agentd\n\nRuns the personal-agent daemon in the foreground.');
-    return 0;
-  }
-
-  await runDaemonProcess();
-  return 0;
-}
-
-const entryFile = process.argv[1] ? resolve(process.argv[1]) : undefined;
-const moduleFile = resolve(fileURLToPath(import.meta.url));
-
-if (entryFile === moduleFile) {
-  runDaemonCli().catch((error) => {
-    console.error((error as Error).message);
-    process.exit(1);
-  });
-}
+} from '../daemon/types.js';

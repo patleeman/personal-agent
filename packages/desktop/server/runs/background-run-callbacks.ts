@@ -7,7 +7,7 @@ import {
 } from '@personal-agent/core';
 import { existsSync, readFileSync } from 'fs';
 
-import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
+import { surfaceReadyDeferredResume } from '../daemon/conversation-wakeups.js';
 import { markDeferredResumeConversationRunReady } from './deferred-resume-conversations.js';
 import {
   loadDurableRunCheckpoint,

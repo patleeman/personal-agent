@@ -7,8 +7,8 @@ import {
 } from '@personal-agent/core';
 import { join, resolve, sep } from 'path';
 
-import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
-import { markDeferredResumeConversationRunReady } from '../runs/deferred-resume-conversations.js';
+import { surfaceReadyDeferredResume } from '../../daemon/conversation-wakeups.js';
+import { markDeferredResumeConversationRunReady } from '../../runs/deferred-resume-conversations.js';
 import type { DaemonModule } from './types.js';
 
 const DEFERRED_RESUME_TICK_MS = 10_000;

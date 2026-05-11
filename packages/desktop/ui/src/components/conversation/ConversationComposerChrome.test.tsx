@@ -78,4 +78,64 @@ describe('ConversationComposerChrome', () => {
       }),
     ).toBe('border-border-subtle');
   });
+
+  it('applies streaming shell class when streaming', () => {
+    const result = resolveConversationComposerShellStateClassName({
+      dragOver: false,
+      hasInteractiveOverlay: false,
+      streamIsStreaming: true,
+    });
+
+    expect(result).toContain('ui-input-shell-streaming');
+    expect(result).toContain('border-accent/20');
+    expect(result).toContain('ring-1');
+    expect(result).toContain('ring-accent/8');
+  });
+
+  it('streaming shell class takes priority over auto-mode', () => {
+    const result = resolveConversationComposerShellStateClassName({
+      dragOver: false,
+      hasInteractiveOverlay: false,
+      streamIsStreaming: true,
+      autoModeEnabled: true,
+      runMode: 'mission',
+    });
+
+    // Streaming takes priority — no auto-mode/mission classes
+    expect(result).toContain('ui-input-shell-streaming');
+    expect(result).not.toContain('ui-input-shell-auto-mode');
+    expect(result).not.toContain('ui-input-shell-mission');
+  });
+
+  it('respects priority: dragOver > interactiveOverlay > streaming > auto-mode > default', () => {
+    // drag takes priority over everything
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: true,
+        hasInteractiveOverlay: true,
+        streamIsStreaming: true,
+        autoModeEnabled: true,
+      }),
+    ).toContain('border-accent/50');
+
+    // interactive overlay yields when drag is false
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: true,
+        streamIsStreaming: true,
+        autoModeEnabled: true,
+      }),
+    ).toContain('border-accent/40');
+
+    // streaming yields when both drag and overlay are false
+    expect(
+      resolveConversationComposerShellStateClassName({
+        dragOver: false,
+        hasInteractiveOverlay: false,
+        streamIsStreaming: true,
+        autoModeEnabled: true,
+      }),
+    ).toContain('ui-input-shell-streaming');
+  });
 });

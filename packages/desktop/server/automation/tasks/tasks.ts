@@ -21,11 +21,11 @@ import {
   saveAutomationRuntimeStateMap,
   saveAutomationSchedulerState,
   type StoredAutomation,
-} from '../automation-store.js';
-import { ensureAutomationThread } from '../automation-threads.js';
-import type { TasksModuleConfig } from '../config.js';
-import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
-import { markDeferredResumeConversationRunReady } from '../runs/deferred-resume-conversations.js';
+} from '../store.js';
+import { ensureAutomationThread } from '../threads.js';
+import type { TasksModuleConfig } from '../../config.js';
+import { surfaceReadyDeferredResume } from '../../daemon/conversation-wakeups.js';
+import { markDeferredResumeConversationRunReady } from '../../runs/deferred-resume-conversations.js';
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
@@ -37,11 +37,11 @@ import {
   saveDurableRunManifest,
   saveDurableRunStatus,
   scanDurableRun,
-} from '../runs/store.js';
+} from '../../runs/store.js';
 import { cronMatches, type ParsedCronExpression, type ParsedTaskDefinition } from './tasks-parser.js';
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
 import { createEmptyTaskState, type TaskRuntimeState, type TaskStateFile } from './tasks-store.js';
-import type { DaemonModule } from './types.js';
+import type { DaemonModule } from '../daemon/types.js';
 
 const MISSED_RUN_EXAMPLE_LIMIT = 5;
 interface MissedTaskRunSummary {

@@ -13,11 +13,11 @@ import {
   tableExists,
 } from '@personal-agent/core';
 
-import { loadDaemonConfig } from './config.js';
-import { parseCronExpression, type ParsedTaskDefinition, type ParsedTaskSchedule, parseTaskDefinition } from './modules/tasks-parser.js';
-import { loadTaskState, type TaskRuntimeState } from './modules/tasks-store.js';
-import { resolveDaemonPaths } from './paths.js';
-import { resolveRuntimeDbPath } from './runs/store.js';
+import { loadDaemonConfig } from '../config.js';
+import { parseCronExpression, type ParsedTaskDefinition, type ParsedTaskSchedule, parseTaskDefinition } from './tasks/tasks-parser.js';
+import { loadTaskState, type TaskRuntimeState } from './tasks/tasks-store.js';
+import { resolveDaemonPaths } from '../paths.js';
+import { resolveRuntimeDbPath } from '../runs/store.js';
 
 export type AutomationThreadMode = 'dedicated' | 'existing' | 'none';
 export type AutomationTargetType = 'background-agent' | 'conversation';

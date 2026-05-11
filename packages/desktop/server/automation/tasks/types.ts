@@ -1,5 +1,5 @@
-import type { DaemonConfig } from '../config.js';
-import type { DaemonEvent, DaemonPaths, EventPayload, TimerDefinition } from '../types.js';
+import type { DaemonConfig } from '../../config.js';
+import type { DaemonEvent, DaemonPaths, EventPayload, TimerDefinition } from '../../daemon/types.js';
 
 interface ModuleLogger {
   debug: (message: string) => void;

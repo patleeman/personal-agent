@@ -3,7 +3,7 @@ import { mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 
-import type { DaemonPaths } from './types.js';
+import type { DaemonPaths } from './daemon/types.js';
 
 function expandHome(path: string): string {
   if (path === '~') {

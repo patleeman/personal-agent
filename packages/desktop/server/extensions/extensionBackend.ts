@@ -125,7 +125,7 @@ type ExtensionBackendModule = Record<string, unknown>;
 const EXTENSION_BACKEND_BUILD_CACHE_VERSION = 'bundle-host-runtime-externals-v3';
 const backendModuleCache = new Map<string, { cacheKey: string; module: Promise<ExtensionBackendModule> }>();
 const HOST_RUNTIME_EXTERNAL_IMPORT_RE =
-  /^(@personal-agent\/(core|daemon)|@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom)(\/.*)?$/;
+  /^(@personal-agent\/(core|daemon)|@earendil-works\/pi-coding-agent|@xenova\/transformers|better-sqlite3|esbuild|jsdom|@sinclair\/typebox)(\/.*)?$/;
 
 interface ExtensionBackendBuildResult {
   path: string;
@@ -341,6 +341,11 @@ function resolveExtensionBackendApiPath(): string {
     resolve(currentDir, 'backendApi.ts'),
     resolve(currentDir, '../../extensions/backendApi.ts'),
     resolve(currentDir, '../extensions/backendApi.ts'),
+    // When running from the development repo, resolve relative to CWD
+    ...(process.env.PERSONAL_AGENT_REPO_ROOT
+      ? [resolve(process.env.PERSONAL_AGENT_REPO_ROOT, 'packages/desktop/server/extensions/backendApi.ts')]
+      : []),
+    resolve(process.cwd(), 'packages/desktop/server/extensions/backendApi.ts'),
   ];
 
   // Check flat .ts files

@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 
-import { type BackgroundRunAgentSpec, buildBackgroundAgentArgv } from '../background-run-agent.js';
+import { type BackgroundRunAgentSpec, buildBackgroundAgentArgv } from '../daemon/background-run-agent.js';
 import { scheduleRun, type ScheduleRunInput, type TargetAgent, type TargetShell, type TriggerNow } from './schedule-run.js';
 import {
   appendDurableRunEvent,

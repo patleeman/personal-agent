@@ -110,4 +110,36 @@ describe('resolveConversationComposerSubmitState', () => {
       action: 'parallel',
     });
   });
+
+  it('Alt takes priority over parallel modifier while streaming', () => {
+    // When both Alt and Ctrl are held, Alt (follow-up) wins
+    expect(resolveConversationComposerSubmitState(true, true, false, true)).toEqual({
+      label: 'Follow up',
+      action: 'submit',
+      behavior: 'followUp',
+    });
+  });
+
+  it('hidden turn does not affect the default submit while streaming', () => {
+    // isStreaming=true always shows Steer by default regardless of queuesFollowUpsWhenIdle
+    expect(resolveConversationComposerSubmitState(true, false, true)).toEqual({
+      label: 'Steer',
+      action: 'submit',
+    });
+  });
+
+  it('hidden turn does not affect alt/parallel modifiers while streaming', () => {
+    // Even with hidden turn, Alt produces follow-up when streaming
+    expect(resolveConversationComposerSubmitState(true, true, true)).toEqual({
+      label: 'Follow up',
+      action: 'submit',
+      behavior: 'followUp',
+    });
+
+    // Even with hidden turn, Ctrl produces parallel when streaming
+    expect(resolveConversationComposerSubmitState(true, false, true, true)).toEqual({
+      label: 'Parallel',
+      action: 'parallel',
+    });
+  });
 });

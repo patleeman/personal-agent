@@ -8,7 +8,7 @@ import {
   getStoredAutomation,
   setStoredAutomationThreadBinding,
   type StoredAutomation,
-} from './automation-store.js';
+} from './store.js';
 
 function readOptionalString(value: string | undefined | null): string | undefined {
   const normalized = value?.trim();

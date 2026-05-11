@@ -53,6 +53,53 @@ describe('ConversationComposerActions', () => {
     expect(html).toContain('aria-label="Stop"');
   });
 
+  it('renders stop button only when streaming with no content', () => {
+    const html = renderActions({
+      streamIsStreaming: true,
+      composerHasContent: false,
+      composerSubmitLabel: 'Steer',
+    });
+
+    // Stop button is still shown
+    expect(html).toContain('aria-label="Stop"');
+    // No submit button when there's no content
+    expect(html).not.toContain('steer');
+    expect(html).not.toContain('followup');
+    expect(html).not.toContain('Parallel');
+  });
+
+  it('renders follow-up button while streaming when alt is held', () => {
+    const html = renderActions({
+      streamIsStreaming: true,
+      composerHasContent: true,
+      composerSubmitLabel: 'Follow up',
+    });
+
+    expect(html).toContain('followup');
+    expect(html).toContain('aria-label="Stop"');
+  });
+
+  it('renders parallel button while streaming when modifier is held', () => {
+    const html = renderActions({
+      streamIsStreaming: true,
+      composerHasContent: true,
+      composerSubmitLabel: 'Parallel',
+    });
+
+    expect(html).toContain('Parallel (Ctrl/⌘+Enter)');
+    expect(html).toContain('aria-label="Stop"');
+  });
+
+  it('does not render stop button when not streaming', () => {
+    const html = renderActions({
+      streamIsStreaming: false,
+      composerHasContent: true,
+      composerSubmitLabel: 'Send',
+    });
+
+    expect(html).not.toContain('aria-label="Stop"');
+  });
+
   it('renders question submit busy state', () => {
     const html = renderActions({
       composerShowsQuestionSubmit: true,
