@@ -571,6 +571,16 @@ export function ExtensionManagerPage() {
             setExtensions((items) => items.map((item) => (item.id === result.extension?.id ? result.extension : item)));
           }
           notifyExtensionRegistryChanged();
+          if (nextEnabled && extension.id === 'system-onboarding') {
+            return api.invokeExtensionAction(extension.id, 'ensure', undefined).then((actionResult) => {
+              const result = actionResult.result as { conversationId?: string } | undefined;
+              if (result?.conversationId) {
+                navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
+              }
+              notifyExtensionRegistryChanged();
+              return load({ showLoading: false });
+            });
+          }
           if (
             !nextEnabled &&
             extension.routes.some((route) => location.pathname === route.route || location.pathname.startsWith(`${route.route}/`))
