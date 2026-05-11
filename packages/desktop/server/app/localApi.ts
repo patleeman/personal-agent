@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 
 import { installProcessLogging } from '../middleware/index.js';
 installProcessLogging();
@@ -452,10 +453,12 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     publishConversationSessionMetaChanged,
   });
 
-  startDeferredResumeLoop({
-    flushLiveDeferredResumes,
-    pollMs: LOCAL_API_DEFERRED_RESUME_POLL_MS,
-  });
+  if (isMainThread) {
+    startDeferredResumeLoop({
+      flushLiveDeferredResumes,
+      pollMs: LOCAL_API_DEFERRED_RESUME_POLL_MS,
+    });
+  }
 
   const context = createServerRouteContext({
     repoRoot,
@@ -522,15 +525,17 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   });
 
-  startConversationRecovery({
-    flushLiveDeferredResumes,
-    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
-    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
-    isLive: isLiveSession,
-    resumeSession,
-    queuePromptContext,
-    promptSession,
-  });
+  if (isMainThread) {
+    startConversationRecovery({
+      flushLiveDeferredResumes,
+      buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
+      buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
+      isLive: isLiveSession,
+      resumeSession,
+      queuePromptContext,
+      promptSession,
+    });
+  }
 
   localServerRouteContext = context;
 
@@ -558,18 +563,20 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     context,
   });
 
-  // Fire startup actions for extensions that declare one (e.g. companion
-  // servers, background services). Errors are logged per-extension but
-  // don't block routes from being returned.
-  startExtensionStartupActions(context).catch((error) => {
-    console.error(`[extensions] startup action dispatch failed: ${(error as Error).message}`);
-    publishAppEvent({
-      type: 'notification',
-      extensionId: 'core',
-      message: `Startup action dispatch failed: ${(error as Error).message}`,
-      severity: 'error',
+  if (isMainThread) {
+    // Fire startup actions for extensions that declare one (e.g. companion
+    // servers, background services). Errors are logged per-extension but
+    // don't block routes from being returned.
+    startExtensionStartupActions(context).catch((error) => {
+      console.error(`[extensions] startup action dispatch failed: ${(error as Error).message}`);
+      publishAppEvent({
+        type: 'notification',
+        extensionId: 'core',
+        message: `Startup action dispatch failed: ${(error as Error).message}`,
+        severity: 'error',
+      });
     });
-  });
+  }
 
   return routes;
 }

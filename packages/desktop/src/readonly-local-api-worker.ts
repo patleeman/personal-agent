@@ -1,6 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 
 import { type DesktopLocalApiDispatchResult, loadRawLocalApiModule } from './local-api-module.js';
+import { prepareTransferableResultBody } from './worker-transfer.js';
 
 interface ReadonlyLocalApiWorkerRequest {
   id: number;
@@ -42,11 +43,15 @@ parentPort.on('message', async (message: ReadonlyLocalApiWorkerRequest) => {
   try {
     const module = await localApiModulePromise;
     const result = await module.dispatchDesktopLocalApiRequest(message.input);
-    parentPort?.postMessage({
-      id: message.id,
-      ok: true,
-      result,
-    } satisfies ReadonlyLocalApiWorkerSuccess);
+    const prepared = prepareTransferableResultBody(result);
+    parentPort?.postMessage(
+      {
+        id: message.id,
+        ok: true,
+        result: prepared.result,
+      } satisfies ReadonlyLocalApiWorkerSuccess,
+      prepared.transferList,
+    );
   } catch (error) {
     parentPort?.postMessage({
       id: message.id,
