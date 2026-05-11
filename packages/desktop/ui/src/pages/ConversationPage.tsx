@@ -862,6 +862,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   });
   const allowQueuedPrompts = composerRunState.allowQueuedPrompts;
   const defaultComposerBehavior = composerRunState.defaultComposerBehavior;
+  const conversationRunningForPage = composerRunState.streamControlsActive || liveSessionHasPendingHiddenTurn;
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
@@ -5239,10 +5240,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerShelfContext = useMemo(
     () => ({
       conversationId: id ?? '',
-      isStreaming: stream.isStreaming,
+      isStreaming: conversationRunningForPage,
       isLive: isLiveSession,
     }),
-    [id, isLiveSession, stream.isStreaming],
+    [conversationRunningForPage, id, isLiveSession],
   );
   const newConversationPanelContext = useMemo(
     () => ({
@@ -5461,7 +5462,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 messageIndexOffset={visibleTranscriptMessageIndexOffset}
                 scrollContainerRef={scrollRef}
                 focusMessageIndex={renderingStaleTranscript ? null : requestedFocusMessageIndex}
-                isStreaming={renderingStaleTranscript ? false : stream.isStreaming}
+                isStreaming={renderingStaleTranscript ? false : conversationRunningForPage}
                 isCompacting={renderingStaleTranscript ? false : stream.isCompacting}
                 pendingStatusLabel={renderingStaleTranscript ? null : displayedPendingAssistantStatusLabel}
                 performanceMode={conversationPerformanceMode}
@@ -5470,7 +5471,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     ? forkConversationFromMessage
                     : undefined
                 }
-                onRewindMessage={!renderingStaleTranscript && id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
+                onRewindMessage={!renderingStaleTranscript && id && !conversationRunningForPage ? rewindConversationFromMessage : undefined}
                 onReplyToSelection={renderingStaleTranscript ? undefined : handleReplyToSelection}
                 onHydrateMessage={renderingStaleTranscript ? undefined : hydrateHistoricalBlock}
                 hydratingMessageBlockIds={renderingStaleTranscript ? undefined : hydratingHistoricalBlockIdSet}
@@ -5629,7 +5630,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       showInlineConversationLoadingState,
       showScrollToBottomControl,
       stream.isCompacting,
-      stream.isStreaming,
+      conversationRunningForPage,
       conversationPerformanceMode,
       submitAskUserQuestion,
       historicalTotalBlocks,
@@ -5801,7 +5802,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     ? { objective: input.trim(), status: 'active', tasks: [], stopReason: null, updatedAt: null }
                     : stream.goalState
                 }
-                workingLabel={goalEnabled && stream.isStreaming ? 'Working…' : null}
+                workingLabel={goalEnabled && conversationRunningForPage ? 'Working…' : null}
               />
 
               {hasComposerShelfContent && (
