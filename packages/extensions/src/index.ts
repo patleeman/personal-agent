@@ -441,6 +441,8 @@ export interface PersonalAgentClient {
   };
   ui: {
     toast(message: string, type?: 'info' | 'warning' | 'error'): void;
+    /** Post a richer notification with optional details and source attribution. */
+    notify(options: { message: string; type?: 'info' | 'warning' | 'error'; details?: string; source?: string }): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
     openModal(options: {
       title?: string;

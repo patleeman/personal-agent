@@ -1,7 +1,7 @@
 import { Component, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useAppData, useAppEvents } from '../app/contexts';
+import { useAppData } from '../app/contexts';
 import { api } from '../client/api';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../commands/commandPaletteEvents';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
@@ -25,19 +25,13 @@ import {
   type NativeExtensionViewSummary,
 } from '../extensions/types';
 import { useExtensionRegistry } from '../extensions/useExtensionRegistry';
-import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
-import { primeSessionDetailCache } from '../hooks/useSessions';
-import { useSessionStream } from '../hooks/useSessionStream';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { routeIsKnowledge, routeMatchesPrefix, routeSupportsContextRail, routeSupportsWorkbench } from '../navigation/routeRegistry';
-import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { useRouteTelemetry } from '../telemetry/appTelemetry';
 import { APP_LAYOUT_MODE_CHANGED_EVENT, type AppLayoutMode, readAppLayoutMode, writeAppLayoutMode } from '../ui-state/appLayoutMode';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
-import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-state/liveSessionWarmth';
-import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
 import {
   ConversationArtifactRailContent,
@@ -53,6 +47,10 @@ import {
 } from './ConversationCheckpointWorkbench';
 import { ConversationRunsRailContent, ConversationRunWorkbenchPane, useConversationRunList } from './ConversationRunsWorkbench';
 import { DesktopTopBar } from './DesktopTopBar';
+import { NotificationBell } from './notifications/NotificationBell';
+import { NotificationCenter } from './notifications/NotificationCenter';
+import { NotificationProvider } from './notifications/notificationStore';
+import { NotificationToaster } from './notifications/NotificationToaster';
 import { PageSearchBar } from './PageSearchBar';
 import { Sidebar } from './Sidebar';
 import { cx } from './ui';
@@ -404,6 +402,19 @@ class RouteContentBoundary extends Component<
     };
   }
 
+  componentDidCatch(error: unknown, _errorInfo: { componentStack?: string }) {
+    window.dispatchEvent(
+      new CustomEvent('pa-notification', {
+        detail: {
+          message: 'A page error was recovered',
+          type: 'error',
+          details: error instanceof Error ? (error.stack ?? error.message) : String(error ?? ''),
+          source: 'core',
+        },
+      }),
+    );
+  }
+
   componentDidUpdate(prevProps: Readonly<{ resetKey: string }>) {
     if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
       this.setState({
@@ -465,175 +476,9 @@ function useViewportWidth() {
   return viewportWidth;
 }
 
-const ENABLE_OPEN_CONVERSATION_WARMING = true;
-const OPEN_TAB_WARM_TAIL_BLOCKS = 120;
-const OPEN_TAB_WARM_IDLE_TIMEOUT_MS = 1500;
-const OPEN_TAB_WARM_START_DELAY_MS = 3000;
-const OPEN_TAB_WARM_INTERLEAVE_MS = 300;
-
-type IdleCallbackHandle = number;
-type IdleCallbackLike = (deadline: { didTimeout: boolean; timeRemaining(): number }) => void;
-
-type IdleWindow = Window &
-  typeof globalThis & {
-    requestIdleCallback?: (callback: IdleCallbackLike, options?: { timeout: number }) => IdleCallbackHandle;
-    cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
-  };
-
-function scheduleIdleWarmup(callback: () => void, timeoutMs: number): () => void {
-  const idleWindow = window as IdleWindow;
-  if (typeof idleWindow.requestIdleCallback === 'function') {
-    const handle = idleWindow.requestIdleCallback(
-      () => {
-        callback();
-      },
-      { timeout: timeoutMs },
-    );
-
-    return () => {
-      idleWindow.cancelIdleCallback?.(handle);
-    };
-  }
-
-  const timer = window.setTimeout(callback, timeoutMs);
-  return () => {
-    window.clearTimeout(timer);
-  };
-}
-
 function getActiveConversationId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);
   return parts[0] === 'conversations' && parts[1] && parts[1] !== 'new' ? parts[1] : null;
-}
-
-function WarmLiveConversationSubscription({ sessionId }: { sessionId: string }) {
-  useSessionStream(sessionId, {
-    tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS,
-    registerSurface: false,
-  });
-
-  return null;
-}
-
-function useWarmOpenConversationTabs(pathname: string): string[] {
-  const { versions } = useAppEvents();
-  const { sessions } = useAppData();
-  const [layout, setLayout] = useState(() => readConversationLayout());
-  const [warmingEnabled, setWarmingEnabled] = useState(false);
-  const activeConversationId = getActiveConversationId(pathname);
-
-  useEffect(() => {
-    if (!ENABLE_OPEN_CONVERSATION_WARMING) {
-      setWarmingEnabled(false);
-      return;
-    }
-
-    return scheduleIdleWarmup(() => {
-      setWarmingEnabled(true);
-    }, OPEN_TAB_WARM_IDLE_TIMEOUT_MS);
-  }, []);
-
-  useEffect(() => {
-    function handleConversationLayoutChanged() {
-      setLayout(readConversationLayout());
-    }
-
-    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
-    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
-  }, []);
-
-  const openConversationIds = useMemo(() => {
-    const seen = new Set<string>();
-    const ids: string[] = [];
-
-    for (const id of [...layout.pinnedSessionIds, ...layout.sessionIds]) {
-      if (!id || seen.has(id)) {
-        continue;
-      }
-
-      seen.add(id);
-      ids.push(id);
-    }
-
-    return ids;
-  }, [layout.pinnedSessionIds, layout.sessionIds]);
-
-  const sessionsById = useMemo(() => new Map((sessions ?? []).map((session) => [session.id, session] as const)), [sessions]);
-
-  useEffect(() => {
-    const openConversationIdSet = new Set(openConversationIds);
-    for (const sessionId of listWarmLiveSessionStateIds()) {
-      if (
-        !ENABLE_OPEN_CONVERSATION_WARMING ||
-        !openConversationIdSet.has(sessionId) ||
-        (sessions !== null && sessionsById.get(sessionId)?.isLive !== true)
-      ) {
-        clearWarmLiveSessionState(sessionId);
-      }
-    }
-  }, [openConversationIds, sessions, sessionsById]);
-
-  useEffect(() => {
-    const idsToWarm = openConversationIds
-      .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => (sessions !== null ? sessionsById.has(conversationId) : true));
-
-    if (!warmingEnabled || idsToWarm.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        const bootstrapVersionKey = buildConversationBootstrapVersionKey({
-          sessionsVersion: versions.sessions,
-          sessionFilesVersion: versions.sessionFiles,
-        });
-
-        for (const conversationId of idsToWarm) {
-          if (cancelled) {
-            return;
-          }
-
-          const bootstrapResult = await fetchConversationBootstrapCached(
-            conversationId,
-            { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
-            bootstrapVersionKey,
-          ).catch(() => null);
-
-          if (bootstrapResult?.sessionDetail) {
-            primeSessionDetailCache(
-              conversationId,
-              bootstrapResult.sessionDetail,
-              { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
-              versions.sessionFiles,
-            );
-          }
-
-          if (cancelled) {
-            return;
-          }
-
-          await new Promise((resolve) => window.setTimeout(resolve, OPEN_TAB_WARM_INTERLEAVE_MS));
-        }
-      })();
-    }, OPEN_TAB_WARM_START_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.sessionFiles, versions.sessions, warmingEnabled]);
-
-  if (!ENABLE_OPEN_CONVERSATION_WARMING) {
-    return [];
-  }
-
-  return warmingEnabled
-    ? openConversationIds
-        .filter((conversationId) => conversationId !== activeConversationId)
-        .filter((conversationId) => sessions === null || sessionsById.get(conversationId)?.isLive === true)
-    : [];
 }
 
 function WorkbenchDocumentPane({
@@ -1240,7 +1085,6 @@ export function Layout() {
   const [selectedFileByConversation, setSelectedFileByConversation] = useState<Record<string, string | null>>({});
   const [selectedArtifactByConversation, setSelectedArtifactByConversation] = useState<Record<string, string | null>>({});
   const [selectedRunByConversation, setSelectedRunByConversation] = useState<Record<string, string | null>>({});
-  const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left' });
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1409,6 +1253,8 @@ export function Layout() {
       ) ?? null
     );
   }, [activeWorkbenchTool, extensionRightToolPanels, extensionWorkbenchSurfaces]);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+
   const setActiveConversationTool = useCallback(
     (tool: WorkbenchRailMode) => {
       if (activeConversationId && tool !== 'browser') {
@@ -1848,7 +1694,7 @@ export function Layout() {
   ]);
 
   return (
-    <>
+    <NotificationProvider>
       <DesktopChromeContext.Provider value={{ setRightRailControl: setRegisteredRightRailControl }}>
         <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
           <DesktopTopBar
@@ -1860,6 +1706,7 @@ export function Layout() {
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
             onLayoutModeChange={handleAppLayoutModeChange}
+            trailingExtra={<NotificationBell onClick={() => setNotificationCenterOpen(true)} />}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
             {effectiveSidebarOpen ? (
@@ -1979,14 +1826,11 @@ export function Layout() {
         </div>
       </DesktopChromeContext.Provider>
 
-      {warmLiveConversationIds.map((conversationId) => (
-        <WarmLiveConversationSubscription key={conversationId} sessionId={conversationId} />
-      ))}
-
-      <AlertToaster />
+      <NotificationToaster />
+      {notificationCenterOpen && <NotificationCenter onClose={() => setNotificationCenterOpen(false)} />}
       <ExtensionModalHost />
       <PageSearchBar rootRef={pageSearchRootRef} desktopShell={desktopEnvironment?.isElectron ?? isDesktopShell()} />
       <CommandPalette />
-    </>
+    </NotificationProvider>
   );
 }

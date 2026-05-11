@@ -68,7 +68,8 @@ export interface NativeExtensionClient {
     getStatus(extensionId: string): Promise<{ enabled: boolean; healthy: boolean; errors?: string[] }>;
   };
   ui: {
-    toast(message: string): void;
+    toast(message: string, type?: 'info' | 'warning' | 'error'): void;
+    notify(options: { message: string; type?: 'info' | 'warning' | 'error'; details?: string; source?: string }): void;
     confirm(options: { title?: string; message: string }): Promise<boolean>;
     openModal(options: { title?: string; component: string; props?: Record<string, unknown> }): Promise<unknown>;
   };
@@ -239,8 +240,20 @@ export function createNativeExtensionClient(extensionId: string): NativeExtensio
       },
     },
     ui: {
-      toast(message) {
-        window.dispatchEvent(new CustomEvent('pa-extension-toast', { detail: { extensionId, message } }));
+      toast(message, type) {
+        window.dispatchEvent(new CustomEvent('pa-extension-toast', { detail: { extensionId, message, type: type ?? 'info' } }));
+      },
+      notify(options) {
+        window.dispatchEvent(
+          new CustomEvent('pa-notification', {
+            detail: {
+              message: options.message,
+              type: options.type ?? 'info',
+              details: options.details,
+              source: options.source ?? extensionId,
+            },
+          }),
+        );
       },
       async confirm(options) {
         return window.confirm(options.title ? `${options.title}\n\n${options.message}` : options.message);

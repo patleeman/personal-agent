@@ -52,6 +52,19 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
     };
   }
 
+  componentDidCatch(error: unknown, _errorInfo: { componentStack?: string }) {
+    window.dispatchEvent(
+      new CustomEvent('pa-notification', {
+        detail: {
+          message: 'Application crash recovered',
+          type: 'error',
+          details: error instanceof Error ? (error.stack ?? error.message) : String(error ?? ''),
+          source: 'core',
+        },
+      }),
+    );
+  }
+
   componentDidUpdate(_prevProps: { children: ReactNode }, prevState: AppErrorBoundaryState) {
     // If we recovered (e.g., hot reload), clear the error state.
     if (prevState.hasError && !this.state.hasError) {
@@ -254,6 +267,18 @@ export function App() {
           return;
         case 'daemon':
           setDaemon(payload.state);
+          return;
+        case 'notification':
+          window.dispatchEvent(
+            new CustomEvent('pa-notification', {
+              detail: {
+                message: payload.message,
+                type: payload.type ?? 'info',
+                details: payload.details,
+                source: payload.extensionId,
+              },
+            }),
+          );
           return;
         case 'invalidate':
           if (payload.topics.includes('runs')) {

@@ -1440,3 +1440,16 @@ body {
      previously replaced it caused persistent scroll-position jumps. */
   overflow-anchor: auto;
 }
+
+@keyframes notification-slide-in-from-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-from-right {
+  animation: notification-slide-in-from-right 0.2s ease-out;
+}

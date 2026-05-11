@@ -99,6 +99,7 @@ export function DesktopTopBar({
   onToggleRail,
   layoutMode,
   onLayoutModeChange,
+  trailingExtra,
 }: {
   environment: DesktopEnvironmentState | null;
   sidebarOpen: boolean;
@@ -108,6 +109,7 @@ export function DesktopTopBar({
   onToggleRail: () => void;
   layoutMode: AppLayoutMode;
   onLayoutModeChange: (mode: AppLayoutMode) => void;
+  trailingExtra?: React.ReactNode;
 }) {
   const location = useLocation();
   const { topBarElements } = useExtensionRegistry();
@@ -227,6 +229,7 @@ export function DesktopTopBar({
         {topBarElements.map((element) => (
           <TopBarElementHost key={`${element.extensionId}:${element.id}`} registration={element} />
         ))}
+        {trailingExtra}
         <div className="ui-desktop-layout-switcher" role="radiogroup" aria-label="View mode">
           <button
             type="button"

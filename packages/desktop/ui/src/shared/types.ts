@@ -686,6 +686,7 @@ export type AppEvent =
 export type DesktopAppEvent =
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
+  | { type: 'notification'; extensionId: string; message: string; type?: string; details?: string }
   | { type: 'session_meta_changed'; sessionId: string; running?: boolean }
   | { type: 'session_file_changed'; sessionId: string }
   | { type: 'open_session'; sessionId: string }
@@ -943,7 +944,14 @@ export interface DesktopConversationState {
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =
-  | { type: 'snapshot'; blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; isStreaming: boolean; goalState?: ThreadGoal | null }
+  | {
+      type: 'snapshot';
+      blocks: DisplayBlock[];
+      blockOffset: number;
+      totalBlocks: number;
+      isStreaming: boolean;
+      goalState?: ThreadGoal | null;
+    }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }

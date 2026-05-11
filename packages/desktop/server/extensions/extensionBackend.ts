@@ -9,7 +9,7 @@ import { getStateRoot } from '@personal-agent/core';
 import { build, type Plugin } from 'esbuild';
 
 import type { LiveSessionResourceOptions, ServerRouteContext } from '../routes/context.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import { createExtensionAutomationsCapability } from './extensionAutomations.js';
 import { createExtensionConversationsCapability } from './extensionConversations.js';
 import { publishExtensionEvent, subscribeExtensionEvents } from './extensionEventBus.js';
@@ -210,6 +210,7 @@ function createBackendContext(
       toast: (message, type = 'info') => {
         console.log(`[extension:${extensionId}] [${type}] ${message}`);
         invalidateAppTopics('notifications');
+        publishAppEvent({ type: 'notification', extensionId, message, type });
       },
       system: (input) => sendNotifyAsSystemNotification(extensionId, input),
       setBadge: (count) => setExtensionBadge(extensionId, count),
