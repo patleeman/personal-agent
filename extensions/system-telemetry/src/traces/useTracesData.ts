@@ -88,6 +88,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         cacheEff,
         sysPrompt,
         contextPointers,
+        sessionIntegrity,
       ] = await Promise.all([
         api.tracesSummary(range),
         api.tracesModelUsage(range),
@@ -101,6 +102,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         api.tracesCacheEfficiency(range),
         api.tracesSystemPrompt(range),
         api.tracesContextPointers(range),
+        api.tracesSessionIntegrity(range),
       ]);
 
       setData({
@@ -119,6 +121,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         cacheEfficiency: cacheEff.aggregate,
         systemPrompt: sysPrompt.aggregate,
         contextPointers,
+        sessionIntegrity: sessionIntegrity as AppTelemetryEventRow[],
         loading: false,
         error: null,
       });

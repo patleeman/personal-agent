@@ -24,6 +24,7 @@ import { TracesContextPointers } from './traces/TracesContextPointers';
 import { TracesContextPressure } from './traces/TracesContextPressure';
 import { TracesHeatmap } from './traces/TracesHeatmap';
 import { TracesModelUsage } from './traces/TracesModelUsage';
+import { TracesSessionIntegrity } from './traces/TracesSessionIntegrity';
 import { TracesToolFlow } from './traces/TracesToolFlow';
 import { TracesToolHealth } from './traces/TracesToolHealth';
 import type { TraceRange } from './traces/useTracesData';
@@ -46,6 +47,7 @@ export function TelemetryPage() {
     cacheEfficiency,
     systemPrompt,
     contextPointers,
+    sessionIntegrity,
     loading,
     error,
     refetch,
@@ -117,6 +119,7 @@ export function TelemetryPage() {
         <section className="space-y-4 border-t border-border-subtle pt-6">
           <TracesContextPointers data={contextPointers} />
           <TracesAutoMode data={autoMode} />
+          <TracesSessionIntegrity events={sessionIntegrity ?? []} />
           <TracesCacheAndSystemPrompt cacheEfficiency={cacheEfficiency} systemPrompt={systemPrompt} />
           <TracesContextPressure sessions={contextSessions ?? []} compactions={compactions ?? []} compactionAggs={compactionAggs} />
           <TracesAgentLoop loop={agentLoop} />
