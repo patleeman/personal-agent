@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { addNotification } from './notifications/notificationStore';
 import { useAppEvents } from '../app/contexts';
 import { api } from '../client/api';
 import type { ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, UncommittedDiffResult } from '../shared/types';
 import { formatDate } from '../shared/utils';
 import { CheckpointDiffSection, fileDisplayPath } from './checkpoints/CheckpointDiffView';
+import { addNotification } from './notifications/notificationStore';
 import { cx, ErrorState, LoadingState } from './ui';
 
 type DiffViewMode = 'unified' | 'split';

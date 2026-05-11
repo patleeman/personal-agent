@@ -1,9 +1,9 @@
 import katex from 'katex';
 import { useEffect, useMemo, useState } from 'react';
 
-import { addNotification } from './notifications/notificationStore';
 import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from '../content/latexArtifacts';
 import type { ConversationArtifactRecord } from '../shared/types';
+import { addNotification } from './notifications/notificationStore';
 import { ErrorState, LoadingState } from './ui';
 
 function buildArtifactDocument(content: string): string {

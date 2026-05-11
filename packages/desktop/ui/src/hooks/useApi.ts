@@ -1,5 +1,6 @@
-import { addNotification } from '../components/notifications/notificationStore';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { addNotification } from '../components/notifications/notificationStore';
 
 export interface RefetchOptions {
   resetLoading?: boolean;
