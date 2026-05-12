@@ -29,7 +29,6 @@ export const cancelQueuedPrompt = (..._args: any[]): any => hostResolved();
 export const listQueuedPromptPreviews = (..._args: any[]): any => hostResolved();
 export const promptSession = (..._args: any[]): any => hostResolved();
 export const invalidateAppTopics = (..._args: any[]): any => hostResolved();
-export const persistAppTelemetryEvent = (..._args: any[]): any => hostResolved();
 export const clearTaskCallbackBinding = (..._args: any[]): any => hostResolved();
 export const getSessionDeferredResumeEntries = (..._args: any[]): any => hostResolved();
 export const getTaskCallbackBinding = (..._args: any[]): any => hostResolved();

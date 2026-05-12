@@ -10,7 +10,6 @@ export const listDurableRuns = (..._args: any[]): any => hostResolved();
 export const rerunDurableRun = (..._args: any[]): any => hostResolved();
 export const applyScheduledTaskThreadBinding = (..._args: any[]): any => hostResolved();
 export const invalidateAppTopics = (..._args: any[]): any => hostResolved();
-export const persistAppTelemetryEvent = (..._args: any[]): any => hostResolved();
 export const startBackgroundRun = (..._args: any[]): any => hostResolved();
 export const createStoredAutomation = (..._args: any[]): any => hostResolved();
 export const parseDeferredResumeDelayMs = (..._args: any[]): any => hostResolved();

@@ -19,6 +19,3 @@ export interface ExtensionTelemetryEventInput {
 }
 
 export const recordTelemetryEvent = (..._args: any[]): any => hostResolved();
-
-/** @deprecated Use recordTelemetryEvent from @personal-agent/extensions/backend/telemetry. */
-export const persistAppTelemetryEvent = recordTelemetryEvent;

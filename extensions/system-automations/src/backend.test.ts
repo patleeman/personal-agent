@@ -27,7 +27,6 @@ vi.mock('@personal-agent/extensions/backend', () => ({
   invalidateAppTopics: (...args: unknown[]) => mockInvalidateTopics(...args),
   pingDaemon: vi.fn().mockResolvedValue(true),
   parseDeferredResumeDelayMs: (...args: unknown[]) => mockParseDeferredResumeDelayMs(...args),
-  persistAppTelemetryEvent: vi.fn(),
   promptSession: vi.fn(),
   readSessionConversationId: vi.fn(),
   resolveScheduledTaskForProfile: vi.fn(),

@@ -9,6 +9,3 @@ export interface ExtensionTelemetryEventInput extends Omit<AppTelemetryEventInpu
 export function recordTelemetryEvent(event: ExtensionTelemetryEventInput): void {
   persistAppTelemetryEvent({ ...event, source: event.source ?? 'server' });
 }
-
-/** @deprecated Use recordTelemetryEvent from @personal-agent/extensions/backend/telemetry. */
-export { persistAppTelemetryEvent };

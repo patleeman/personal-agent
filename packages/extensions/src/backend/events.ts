@@ -4,4 +4,3 @@ function hostResolved(): never {
 
 export const invalidateAppTopics = (..._args: any[]): any => hostResolved();
 export const publishAppEvent = (..._args: any[]): any => hostResolved();
-export const persistAppTelemetryEvent = (..._args: any[]): any => hostResolved();

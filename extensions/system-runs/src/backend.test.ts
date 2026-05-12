@@ -21,7 +21,6 @@ vi.mock('@personal-agent/extensions/backend', () => ({
   applyScheduledTaskThreadBinding: vi.fn(),
   setTaskCallbackBinding: vi.fn(),
   invalidateAppTopics: vi.fn(),
-  persistAppTelemetryEvent: vi.fn(),
   parseDeferredResumeDelayMs: vi.fn(),
 }));
 
