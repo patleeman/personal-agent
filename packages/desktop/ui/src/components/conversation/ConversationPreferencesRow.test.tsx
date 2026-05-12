@@ -84,18 +84,19 @@ describe('ConversationPreferencesRow', () => {
 
     try {
       expect(container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]')).toBeNull();
-      expect(container.textContent).toContain('Fast mode');
+      expect(container.textContent).toContain('Fast');
+      expect(container.textContent.indexOf('Fast')).toBeGreaterThan(container.textContent.indexOf('Model A'));
     } finally {
       unmount();
     }
   });
 
   it('progressively moves overflowing controls into the settings menu', () => {
-    const { container, unmount } = renderInteractive({ inlineLimit: 1 });
+    const { container, unmount } = renderInteractive({ inlineLimit: 2 });
 
     try {
       expect(container.textContent).not.toContain('Thinking');
-      expect(container.textContent).not.toContain('Fast mode');
+      expect(container.textContent).toContain('Fast');
 
       const moreButton = container.querySelector<HTMLButtonElement>('button[aria-label="More composer settings"]');
       expect(moreButton).not.toBeNull();
@@ -105,7 +106,7 @@ describe('ConversationPreferencesRow', () => {
 
       expect(container.textContent).toContain('Model A');
       expect(container.textContent).toContain('Thinking');
-      expect(container.textContent).toContain('Fast mode');
+      expect(container.textContent).toContain('Fast');
     } finally {
       unmount();
     }

@@ -232,9 +232,9 @@ export function ConversationPreferencesRow({
   const preferenceItems = useMemo(
     () => [
       { id: 'model' as const },
+      ...(supportsFastMode ? [{ id: 'fastMode' as const }] : []),
       ...composerButtons.map((button, index) => ({ id: `composer:${index}` as const, button })),
       { id: 'thinking' as const },
-      ...(supportsFastMode ? [{ id: 'fastMode' as const }] : []),
     ],
     [composerButtons, supportsFastMode],
   );
@@ -296,7 +296,7 @@ export function ConversationPreferencesRow({
       return (
         <ConversationPreferenceToggle
           key="fastMode"
-          label="Fast mode"
+          label="Fast"
           enabled={fastModeEnabled}
           disabled={savingPreference !== null}
           tone="accent"
@@ -357,7 +357,7 @@ export function ConversationPreferencesRow({
       return (
         <ConversationPreferenceToggle
           key="fastMode"
-          label="Fast mode"
+          label="Fast"
           enabled={fastModeEnabled}
           disabled={savingPreference !== null}
           tone="accent"
