@@ -5,23 +5,23 @@ import {
   compactLiveSessionCapability,
   createLiveSessionCapability,
   submitLiveSessionPromptCapability,
-} from '../../../packages/desktop/server/conversations/liveSessionCapability.js';
-import { registerLiveSessionLifecycleHandler } from '../../../packages/desktop/server/conversations/liveSessionLifecycle.js';
+} from '../../../../packages/desktop/server/conversations/liveSessionCapability.js';
+import { registerLiveSessionLifecycleHandler } from '../../../../packages/desktop/server/conversations/liveSessionLifecycle.js';
 import {
   getAvailableModelObjects,
   getLiveSessions,
   renameSession,
   updateLiveSessionModelPreferences,
-} from '../../../packages/desktop/server/conversations/liveSessions.js';
-import { readSessionBlocks } from '../../../packages/desktop/server/conversations/sessions.js';
-import type { ExtensionBackendContext } from '../../../packages/desktop/server/extensions/extensionBackend.js';
+} from '../../../../packages/desktop/server/conversations/liveSessions.js';
+import { readSessionBlocks } from '../../../../packages/desktop/server/conversations/sessions.js';
+import type { ExtensionBackendContext } from '../../../../packages/desktop/server/extensions/extensionBackend.js';
 import {
   ensureGatewayConnection,
   readGatewayState,
   updateGatewayConnectionStatus,
-} from '../../../packages/desktop/server/gateways/gatewayState.js';
-import { SLACK_MCP_SERVER_CONFIG, SlackMcpGatewayRuntime } from '../../../packages/desktop/server/gateways/slackMcpGateway.js';
-import { invalidateAppTopics, publishAppEvent } from '../../../packages/desktop/server/shared/appEvents.js';
+} from '../../../../packages/desktop/server/gateways/gatewayState.js';
+import { SLACK_MCP_SERVER_CONFIG, SlackMcpGatewayRuntime } from '../../../../packages/desktop/server/gateways/slackMcpGateway.js';
+import { invalidateAppTopics, publishAppEvent } from '../../../../packages/desktop/server/shared/appEvents.js';
 
 let runtime: SlackMcpGatewayRuntime | null = null;
 let lifecycleRegistered = false;

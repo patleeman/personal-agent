@@ -1,0 +1,11 @@
+{
+  "name": "@personal-agent/experimental-extensions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-extension.mjs",
+    "install": "node scripts/install-extension.mjs"
+  },
+  "devDependencies": {}
+}

@@ -56,7 +56,7 @@ export function SlackMcpGatewayPage({ pa }: SlackMcpGatewayPageProps) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      pa.ui.notify({ type: 'error', message, source: 'system-slack-mcp-gateway' });
+      pa.ui.notify({ type: 'error', message, source: 'slack-mcp-gateway' });
     } finally {
       setBusy(null);
     }

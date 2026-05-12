@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "id": "qwen-mlx",
+  "name": "Qwen MLX",
+  "description": "Set up, start, stop, and register a local Qwen3.6 35B A3B MLX model.",
+  "version": "0.1.0",
+  "packageType": "user",
+  "defaultEnabled": false,
+  "frontend": {
+    "entry": "dist/frontend.js"
+  },
+  "backend": {
+    "entry": "dist/backend.mjs",
+    "actions": [
+      { "id": "status", "handler": "status", "title": "Status" },
+      { "id": "setup", "handler": "setup", "title": "Setup" },
+      { "id": "start", "handler": "start", "title": "Start" },
+      { "id": "stop", "handler": "stop", "title": "Stop" }
+    ]
+  },
+  "contributes": {
+    "views": [
+      {
+        "id": "page",
+        "title": "Qwen MLX",
+        "location": "main",
+        "route": "/ext/qwen-mlx",
+        "component": "QwenMlxPage"
+      }
+    ],
+    "nav": [
+      {
+        "id": "nav",
+        "label": "Qwen MLX",
+        "icon": "sparkle",
+        "route": "/ext/qwen-mlx"
+      }
+    ],
+    "tools": [
+      {
+        "id": "qwen_mlx_status",
+        "name": "qwen_mlx_status",
+        "description": "Check whether the local Qwen MLX model server is installed and running.",
+        "action": "status",
+        "inputSchema": { "type": "object", "properties": {} }
+      }
+    ]
+  },
+  "permissions": ["network:listen"]
+}

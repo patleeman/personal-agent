@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "id": "system-slack-mcp-gateway",
+  "id": "slack-mcp-gateway",
   "name": "Slack MCP Gateway",
-  "packageType": "system",
+  "packageType": "user",
   "defaultEnabled": false,
   "description": "Experimental Slack MCP gateway for connecting Slack channels to PA conversations.",
   "version": "0.1.0",
@@ -11,7 +11,7 @@
     "styles": []
   },
   "backend": {
-    "entry": "src/backend.ts",
+    "entry": "dist/backend.mjs",
     "startupAction": "start",
     "actions": [
       { "id": "state", "handler": "state", "title": "Read Slack gateway state" },
@@ -30,7 +30,7 @@
         "id": "page",
         "title": "Slack MCP Gateway",
         "location": "main",
-        "route": "/slack-mcp-gateway",
+        "route": "/ext/slack-mcp-gateway",
         "component": "SlackMcpGatewayPage",
         "placement": "primary",
         "scope": "global",
@@ -41,7 +41,7 @@
       {
         "id": "nav",
         "label": "Slack MCP Gateway",
-        "route": "/slack-mcp-gateway",
+        "route": "/ext/slack-mcp-gateway",
         "icon": "database"
       }
     ]

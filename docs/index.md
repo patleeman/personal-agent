@@ -24,6 +24,7 @@ See [Getting Started](getting-started.md) for the full setup.
 - [Extension authoring](extensions.md) — build native extensions with manifests, frontend/backend entries, tools, skills, agent hooks, event bus, notifications, stable SDK imports, and integration testing
 - [Extension API types](../packages/extensions/README.md) — SDK package with exported types for frontend and backend code
 - [System extensions](../extensions) — feature-owned docs and implementation packages
+- [Experimental extensions](../experimental-extensions) — rough user extensions that are not bundled with the app
 
 ## Extension docs
 
@@ -50,7 +51,6 @@ Feature-specific documentation lives beside the owning extension package:
 - [OpenAI Native Compaction](../extensions/system-openai-native-compaction/README.md)
 - [Runs](../extensions/system-runs/README.md)
 - [Settings](../extensions/system-settings/README.md)
-- [Slack MCP Gateway](../extensions/system-slack-mcp-gateway/README.md)
 - [Telemetry](../extensions/system-telemetry/README.md)
 - [Web Tools](../extensions/system-web-tools/README.md)
 
