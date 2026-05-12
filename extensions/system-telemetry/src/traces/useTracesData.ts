@@ -105,7 +105,7 @@ export function useTracesData(range: TraceRange): TracesData & { refetch: () => 
         api.tracesCacheEfficiency(range),
         api.tracesSystemPrompt(range),
         api.tracesContextPointers(range),
-        api.tracesSessionIntegrity(range),
+        typeof api.tracesSessionIntegrity === 'function' ? api.tracesSessionIntegrity(range) : Promise.resolve([]),
       ]);
 
       setData({
