@@ -777,8 +777,9 @@ private struct KnowledgeDirectoryScreen: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: entry.isDirectory ? "folder" : "doc.text")
+                                .font(.system(size: 24, weight: .regular))
                                 .foregroundStyle(entry.isDirectory ? .accentColor : CompanionTheme.textSecondary)
-                                .frame(width: 20)
+                                .frame(width: 32)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(editableKnowledgeName(for: entry))
                                     .foregroundStyle(CompanionTheme.textPrimary)
