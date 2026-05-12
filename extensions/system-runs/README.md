@@ -21,8 +21,8 @@ Created -> Queued -> Running -> Completed
 
 ## Tool guidance
 
-- Prefer `bash` with background execution for background commands when that tool surface is available.
-- Prefer a dedicated `subagent` tool for delegated agent work when that tool surface is available.
+- Use `bash` for shell commands. Set `background: true` when the command should run durably outside the current turn.
+- Prefer the dedicated `subagent` tool for delegated agent work.
 - Keep `scheduled_task` separate for persistent automations.
 - Use this extension's legacy `run` tool only for compatibility and low-level inspection (`list`, `get`, `logs`, `rerun`, `follow_up`, `cancel`).
 

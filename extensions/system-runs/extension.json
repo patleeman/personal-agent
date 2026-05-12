@@ -13,6 +13,11 @@
     "entry": "src/backend.ts",
     "actions": [
       {
+        "id": "bash",
+        "handler": "bash",
+        "title": "Bash"
+      },
+      {
         "id": "run",
         "handler": "run",
         "title": "Run (legacy)"
@@ -31,6 +36,39 @@
   },
   "contributes": {
     "tools": [
+      {
+        "id": "bash-background",
+        "name": "background_bash",
+        "title": "Bash",
+        "description": "Execute a bash command. Set background=true to start it as a durable background command.",
+        "action": "bash",
+        "replaces": "bash",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "timeout": {
+              "type": "number"
+            },
+            "background": {
+              "type": "boolean"
+            },
+            "taskSlug": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "deliverResultToConversation": {
+              "type": "boolean"
+            }
+          },
+          "required": ["command"],
+          "additionalProperties": false
+        }
+      },
       {
         "id": "run",
         "name": "run",

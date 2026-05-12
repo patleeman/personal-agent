@@ -7,6 +7,7 @@ metadata:
   summary: Built-in guidance for detached background commands, subagents, inspection, and follow-up behavior.
   status: active
 tools:
+  - bash
   - background_command
   - subagent
   - run
@@ -20,20 +21,21 @@ Use intent-shaped tools first. The old generic `run` tool is compatibility plumb
 
 | Tool                              | Use case                                                                 |
 | --------------------------------- | ------------------------------------------------------------------------ |
-| `background_command`              | A shell command that should run durably outside the current turn.        |
+| `bash`                            | Shell commands; set `background: true` for durable background commands.  |
+| `background_command`              | Compatibility lifecycle tool for background command records.             |
 | `subagent`                        | A delegated agent task that should run durably outside the current turn. |
 | `scheduled_task`                  | A persistent automation with a cron/time trigger and delivery policy.    |
 | `conversation_queue` / `reminder` | Attention or follow-up without background execution.                     |
 
 ## Background commands
 
-Start a detached command:
+Start a detached command with bash:
 
 ```json
 {
-  "action": "start",
-  "taskSlug": "tests",
   "command": "npm test",
+  "background": true,
+  "taskSlug": "tests",
   "cwd": "/path/to/repo"
 }
 ```
