@@ -885,6 +885,39 @@ POST /api/extensions/my-ext/reload
 Note: the frontend is re-evaluated on page load. Use the extension
 manager UI's "Reload" button or restart the app.
 
+### Testing Integration
+
+Run the extension integration smoke tests to catch cross-extension issues
+before starting the app (manifest validation, route conflicts, missing
+backend/frontend entries, handler export mismatches):
+
+```bash
+# Run the full extension integration suite
+npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts
+
+# Run alongside the server endpoint smoke tests
+npx vitest run packages/desktop/server/extensions/extensionIntegration.smoke.test.ts \
+  packages/desktop/server/routes/registerAll.smoke.test.ts
+
+# Or include in the full test suite
+npm test
+```
+
+The integration suite covers 62 tests across 10 categories:
+
+| Category                  | What it validates                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| Manifest structure        | JSON parses, schemaVersion, required fields, permissions format, routes             |
+| Tool schema               | `inputSchema` has `type:object` + `properties`, `replaces` targets valid built-ins  |
+| Frontend components       | Every component field in views/buttons/shelves/panels exists in the frontend bundle |
+| Cross-extension conflicts | Duplicate IDs, routes, tool names, commands, keybindings, settings, secrets         |
+| Registry sanity           | All 25 system extensions registered, routes point to real extensions                |
+| Backend files             | `dist/backend.mjs` exists, source files present, handler names match                |
+| Frontend files            | `dist/frontend.js` exists, style files present                                      |
+| Agent extensions          | Registration listing, export names, backend entry references                        |
+| Skills                    | File existence, valid Agent Skills frontmatter                                      |
+| Summary report            | Printed overview with counts across all registration types                          |
+
 ### Debugging
 
 - Backend logs appear in the server console with `[extension:my-ext]` prefix.
