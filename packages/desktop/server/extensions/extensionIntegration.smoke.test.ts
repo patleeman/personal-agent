@@ -338,6 +338,21 @@ describe('extension manifests - structural validation', () => {
         const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
         expect(pattern.test(content), `${s.id}: new conversation panel component "${cmp}" not exported`).toBe(true);
       }
+
+      // Status bar items with component fields
+      for (const item of s.manifest.contributes?.statusBarItems ?? []) {
+        if (!item.component) continue;
+        const cmp = item.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: status bar item component "${cmp}" not exported`).toBe(true);
+      }
+
+      // Transcript renderers - verify components are exported
+      for (const renderer of s.manifest.contributes?.transcriptRenderers ?? []) {
+        const cmp = renderer.component;
+        const pattern = new RegExp(`(export\\s+(async\\s+)?function\\s+${cmp}|export\\s*\\{[^}]*\\b${cmp}\\b)`);
+        expect(pattern.test(content), `${s.id}: transcript renderer component "${cmp}" not exported`).toBe(true);
+      }
     }
   });
 
