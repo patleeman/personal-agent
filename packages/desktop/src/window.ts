@@ -148,6 +148,12 @@ export function shouldGrantDesktopMediaPermission(requestingUrl: string, permiss
   }
 }
 
+function getDesktopMediaPermissionTypes(details: unknown): string[] {
+  if (details === null || typeof details !== 'object' || !('mediaTypes' in details)) return [];
+  const mediaTypes = (details as { mediaTypes?: unknown }).mediaTypes;
+  return Array.isArray(mediaTypes) ? mediaTypes.filter((mediaType): mediaType is string => typeof mediaType === 'string') : [];
+}
+
 function configureDesktopMediaPermissions(partition: string): void {
   if (configuredMediaPermissionPartitions.has(partition)) return;
   configuredMediaPermissionPartitions.add(partition);
@@ -162,7 +168,7 @@ function configureDesktopMediaPermissions(partition: string): void {
     ) => void;
   };
   partitionSession.setPermissionRequestHandler?.((_webContents, permission, callback, details) => {
-    callback(shouldGrantDesktopMediaPermission(details.requestingUrl ?? '', permission, details.mediaTypes ?? []));
+    callback(shouldGrantDesktopMediaPermission(details.requestingUrl ?? '', permission, getDesktopMediaPermissionTypes(details)));
   });
 }
 
