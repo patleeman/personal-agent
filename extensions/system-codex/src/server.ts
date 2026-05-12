@@ -163,7 +163,7 @@ function forwardConversationEvent(threadId: string, ev: Record<string, unknown>)
     case 'cwd_changed':
       broadcastToThread(threadId, 'thread/metadata/updated', {
         threadId,
-        cwd: ev.newConversationId as string,
+        cwd: ev.cwd as string,
       });
       break;
     case 'error':
