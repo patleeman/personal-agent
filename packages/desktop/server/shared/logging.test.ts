@@ -178,6 +178,9 @@ describe('web logging', () => {
     expect(processOnSpy).toHaveBeenCalledTimes(4);
     expect([...handlers.keys()]).toEqual(['uncaughtExceptionMonitor', 'unhandledRejection', 'SIGTERM', 'SIGINT']);
 
+    const brokenPipe = new Error('write EPIPE') as NodeJS.ErrnoException;
+    brokenPipe.code = 'EPIPE';
+    handlers.get('uncaughtExceptionMonitor')?.(brokenPipe);
     handlers.get('uncaughtExceptionMonitor')?.(new Error('boom'));
     handlers.get('unhandledRejection')?.(new Error('reject'));
     handlers.get('unhandledRejection')?.('plain rejection');

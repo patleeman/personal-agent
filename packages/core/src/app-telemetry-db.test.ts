@@ -6,10 +6,12 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeAppTelemetryDbs, queryAppTelemetryEvents, writeAppTelemetryEvent } from './app-telemetry-db.js';
+import { openSqliteDatabase } from './sqlite.js';
 
 describe('app-telemetry-db', () => {
   const testDir = join(tmpdir(), `app-telemetry-db-test-${randomUUID()}`);
   const originalRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
+  const originalTelemetryMaxEvents = process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
 
   beforeAll(() => {
     if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true });
@@ -23,11 +25,17 @@ describe('app-telemetry-db', () => {
     } else {
       delete process.env.PERSONAL_AGENT_STATE_ROOT;
     }
+    if (originalTelemetryMaxEvents) {
+      process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS = originalTelemetryMaxEvents;
+    } else {
+      delete process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
+    }
     rmSync(testDir, { recursive: true, force: true });
   });
 
   beforeEach(() => {
     closeAppTelemetryDbs();
+    delete process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
     rmSync(join(testDir, 'pi-agent'), { recursive: true, force: true });
   });
 
@@ -54,5 +62,20 @@ describe('app-telemetry-db', () => {
     writeAppTelemetryEvent({ source: 'server', category: 'api', name: '' });
 
     expect(queryAppTelemetryEvents({ since: new Date(Date.now() - 60_000).toISOString() })).toHaveLength(0);
+  });
+
+  it('caps stored telemetry events', () => {
+    process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS = '1000';
+
+    for (let index = 0; index < 1250; index += 1) {
+      writeAppTelemetryEvent({ source: 'server', category: 'test', name: `event-${index}` });
+    }
+    closeAppTelemetryDbs();
+
+    const db = openSqliteDatabase(join(testDir, 'pi-agent', 'state', 'trace', 'app-telemetry.db'));
+    const row = db.prepare('SELECT COUNT(*) AS count FROM app_telemetry_events').get() as { count: number };
+    db.close();
+
+    expect(row.count).toBe(1000);
   });
 });

@@ -34,12 +34,16 @@ CREATE INDEX IF NOT EXISTS idx_app_telemetry_session ON app_telemetry_events(ses
 CREATE INDEX IF NOT EXISTS idx_app_telemetry_route ON app_telemetry_events(route);
 `;
 const APP_TELEMETRY_MIGRATIONS = [];
+const DEFAULT_MAX_EVENTS = 50_000;
+const PRUNE_EVERY_WRITES = 250;
 const dbCache = new Map();
+const writeCounts = new Map();
 export function closeAppTelemetryDbs() {
   for (const db of dbCache.values()) {
     db.close();
   }
   dbCache.clear();
+  writeCounts.clear();
 }
 function resolveAppTelemetryDbDir(stateRoot) {
   return join(stateRoot ?? getStateRoot(), 'pi-agent', 'state', 'trace');
@@ -80,34 +84,57 @@ function stringifyMetadata(metadata) {
     return null;
   }
 }
+function resolveMaxEvents() {
+  const raw = process.env.PERSONAL_AGENT_APP_TELEMETRY_MAX_EVENTS;
+  if (!raw) return DEFAULT_MAX_EVENTS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) && parsed >= 1_000 ? parsed : DEFAULT_MAX_EVENTS;
+}
+function maybePruneAppTelemetryEvents(db, dbPath) {
+  const count = (writeCounts.get(dbPath) ?? 0) + 1;
+  writeCounts.set(dbPath, count);
+  if (count % PRUNE_EVERY_WRITES !== 0) return;
+  const maxEvents = resolveMaxEvents();
+  db.prepare(
+    `
+    DELETE FROM app_telemetry_events
+    WHERE id IN (
+      SELECT id FROM app_telemetry_events
+      ORDER BY ts DESC
+      LIMIT -1 OFFSET ?
+    )
+  `,
+  ).run(maxEvents);
+}
 export function writeAppTelemetryEvent(input) {
   try {
     const category = normalizeString(input.category, 120);
     const name = normalizeString(input.name, 160);
     if (!category || !name) return;
-    getAppTelemetryDb(input.stateRoot)
-      .prepare(
-        `
+    const dbPath = resolveAppTelemetryDbPath(input.stateRoot);
+    const db = getAppTelemetryDb(input.stateRoot);
+    db.prepare(
+      `
       INSERT INTO app_telemetry_events (
         id, ts, source, category, name, session_id, run_id, route, status, duration_ms, count, value, metadata_json
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-      )
-      .run(
-        randomUUID(),
-        nowIso(),
-        input.source,
-        category,
-        name,
-        normalizeString(input.sessionId, 160),
-        normalizeString(input.runId, 200),
-        normalizeString(input.route, 500),
-        Number.isInteger(input.status) ? input.status : null,
-        normalizeFiniteNumber(input.durationMs),
-        Number.isInteger(input.count) ? input.count : null,
-        normalizeFiniteNumber(input.value),
-        stringifyMetadata(input.metadata),
-      );
+    ).run(
+      randomUUID(),
+      nowIso(),
+      input.source,
+      category,
+      name,
+      normalizeString(input.sessionId, 160),
+      normalizeString(input.runId, 200),
+      normalizeString(input.route, 500),
+      Number.isInteger(input.status) ? input.status : null,
+      normalizeFiniteNumber(input.durationMs),
+      Number.isInteger(input.count) ? input.count : null,
+      normalizeFiniteNumber(input.value),
+      stringifyMetadata(input.metadata),
+    );
+    maybePruneAppTelemetryEvents(db, dbPath);
   } catch {
     // Telemetry must never affect app behavior.
   }

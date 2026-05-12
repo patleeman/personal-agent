@@ -36,10 +36,19 @@ function formatFields(fields: Record<string, unknown> | undefined): string {
   return entries.length > 0 ? ` ${entries.join(' ')}` : '';
 }
 
+function isBrokenPipeError(error: unknown): boolean {
+  const candidate = error as NodeJS.ErrnoException | undefined;
+  return candidate?.code === 'EPIPE' || candidate?.code === 'ECONNRESET' || candidate?.message === 'write EPIPE';
+}
+
+function isBrokenPipeLog(message: string, fields?: Record<string, unknown>): boolean {
+  return message === 'uncaught exception' && isBrokenPipeError(fields?.message);
+}
+
 function emit(level: WebLogLevel, message: string, fields?: Record<string, unknown>): void {
   const line = `[${new Date().toISOString()}] [web] [${level}] ${message}${formatFields(fields)}`;
 
-  if (level !== 'info') {
+  if (level !== 'info' && !isBrokenPipeLog(message, fields)) {
     persistAppTelemetryEvent({
       source: 'server',
       category: 'log',
@@ -48,17 +57,23 @@ function emit(level: WebLogLevel, message: string, fields?: Record<string, unkno
     });
   }
 
-  if (level === 'error') {
-    console.error(line);
-    return;
-  }
+  try {
+    if (level === 'error') {
+      console.error(line);
+      return;
+    }
 
-  if (level === 'warn') {
-    console.warn(line);
-    return;
-  }
+    if (level === 'warn') {
+      console.warn(line);
+      return;
+    }
 
-  console.log(line);
+    console.log(line);
+  } catch (error) {
+    if (!isBrokenPipeError(error)) {
+      throw error;
+    }
+  }
 }
 
 export function logInfo(message: string, fields?: Record<string, unknown>): void {
@@ -140,7 +155,19 @@ export function installProcessLogging(): void {
 
   processLoggingInstalled = true;
 
+  const ignoreBrokenPipe = (error: Error) => {
+    if (!isBrokenPipeError(error)) {
+      throw error;
+    }
+  };
+  process.stdout.on('error', ignoreBrokenPipe);
+  process.stderr.on('error', ignoreBrokenPipe);
+
   process.on('uncaughtExceptionMonitor', (error) => {
+    if (isBrokenPipeError(error)) {
+      return;
+    }
+
     logError('uncaught exception', {
       message: error.message,
       stack: error.stack,
