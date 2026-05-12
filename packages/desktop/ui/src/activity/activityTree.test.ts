@@ -48,6 +48,7 @@ describe('buildActivityTreeItems', () => {
         title: 'Build the thing',
         status: 'running',
         route: '/conversations/conv-1',
+        metadata: expect.objectContaining({ isRunning: true, needsAttention: false }),
       }),
     ]);
   });

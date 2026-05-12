@@ -40,7 +40,12 @@ export function buildActivityTreeItems({ conversations, runs = [] }: BuildActivi
     status: session.isRunning ? 'running' : 'idle',
     route: `/conversations/${encodeURIComponent(session.id)}`,
     updatedAt: session.updatedAt ?? session.createdAt,
-    metadata: { conversationId: session.id, cwd: session.cwd },
+    metadata: {
+      conversationId: session.id,
+      cwd: session.cwd,
+      isRunning: Boolean(session.isRunning),
+      needsAttention: Boolean(session.needsAttention),
+    },
   }));
 
   for (const run of runs) {

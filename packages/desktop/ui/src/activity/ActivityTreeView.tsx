@@ -2,6 +2,7 @@ import type { FileTreeContextMenuOpenContext } from '@pierre/trees';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 
+import { ConversationStatusText } from '../components/ConversationStatusText';
 import type { ActivityTreeItem } from './activityTree';
 import { buildActivityTreePathModel } from './activityTreePaths';
 
@@ -98,6 +99,9 @@ export function ActivityTreeView({
           const expanded = item.kind === 'group' ? !collapsedGroupIds.has(item.id) : expandedIds.has(item.id);
           const canArchive = item.kind === 'conversation' && onArchiveItem;
           const canCreateChild = item.kind === 'group' && onCreateChildItem;
+          const conversationIsRunning = item.kind === 'conversation' && item.metadata?.isRunning === true;
+          const conversationNeedsAttention = item.kind === 'conversation' && item.metadata?.needsAttention === true;
+          const showConversationStatus = conversationIsRunning || conversationNeedsAttention;
           return (
             <button
               key={item.id}
@@ -125,7 +129,11 @@ export function ActivityTreeView({
                 setContextMenu({ item, x: event.clientX, y: event.clientY });
               }}
             >
-              {item.kind === 'group' ? (
+              {showConversationStatus ? (
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
+                  <ConversationStatusText isRunning={conversationIsRunning} needsAttention={conversationNeedsAttention} />
+                </span>
+              ) : item.kind === 'group' ? (
                 <span
                   role="button"
                   tabIndex={-1}
@@ -153,13 +161,13 @@ export function ActivityTreeView({
                 >
                   {expanded ? '▾' : '▸'}
                 </span>
-              ) : depth > 0 ? (
+              ) : depth > 0 && item.kind !== 'conversation' ? (
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-subtle" aria-hidden="true" />
               ) : (
                 <span className="h-4 w-4 shrink-0" aria-hidden="true" />
               )}
               <span className="min-w-0 flex-1 truncate text-[12px] leading-[1.15] text-primary">{item.title}</span>
-              {item.status !== 'idle' ? (
+              {item.status !== 'idle' && item.kind !== 'conversation' ? (
                 <span className="shrink-0 text-[10px] text-dim">{formatActivityTreeStatus(item.status)}</span>
               ) : null}
               {item.kind === 'group' && renderContextMenu ? (
