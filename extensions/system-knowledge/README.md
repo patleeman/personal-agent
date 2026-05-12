@@ -10,6 +10,7 @@ This extension owns the Knowledge workbench surfaces and knowledge-file mention 
 - A `knowledge-files` mention provider that adds notes, folders, and files to the conversation `@` menu.
 - A quick-open provider for command-palette file open/search.
 - A prompt-reference resolver that turns `@knowledge-file.md` mentions into hidden prompt context.
+- A Settings page component for connecting or updating the git-backed knowledge repository.
 
 ## Runtime behavior
 
@@ -26,6 +27,8 @@ The extension also owns backend actions for knowledge state, managed sync, vault
 - `sync` runs a git-backed knowledge-base sync and invalidates knowledge UI state.
 - `vault*` actions list, read, write, search, move, rename, delete, import, and upload knowledge files.
 - `resolvePromptReferences` resolves knowledge file mentions during prompt submission.
+
+The same repository controls are available from **Settings → Capabilities → Knowledge Base** for users who want to edit sync configuration after onboarding.
 
 Knowledge UI should stay in this extension. Host code may render contributed surfaces, but it should not add shell-specific Knowledge pages or file-search paths.
 

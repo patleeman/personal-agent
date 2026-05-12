@@ -80,8 +80,9 @@ await api.updateSettings({ 'myExt.timeout': 60 }); // updates + returns merged
 | Desktop      | Built-in (updates, app behavior)          |
 | Keyboard     | Built-in (shortcut editor)                |
 
-Knowledge setup lives in the Knowledge extension. Manifest-declared
-extension settings render in the Settings page's Extension Settings section.
+Knowledge setup lives in the Knowledge extension and is surfaced in Settings
+through its component-backed Knowledge Base panel. Manifest-declared extension
+settings render in the Settings page's Extension Settings section.
 
 ## Usage
 

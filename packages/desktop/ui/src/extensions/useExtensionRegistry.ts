@@ -136,6 +136,7 @@ export interface ExtensionRegistryState {
   composerShelves: ExtensionComposerShelfRegistration[];
   newConversationPanels: ExtensionNewConversationPanelRegistration[];
   settingsComponent: ExtensionSettingsComponentRegistration | null;
+  settingsComponents: ExtensionSettingsComponentRegistration[];
   composerButtons: ExtensionComposerButtonRegistration[];
   composerInputTools: ExtensionComposerInputToolRegistration[];
   toolbarActions: ExtensionToolbarActionRegistration[];
@@ -225,11 +226,12 @@ function normalizeNewConversationPanels(extensions: ExtensionManifest[]): Extens
   return result;
 }
 
-function normalizeSettingsComponent(extensions: ExtensionManifest[]): ExtensionSettingsComponentRegistration | null {
+function normalizeSettingsComponents(extensions: ExtensionManifest[]): ExtensionSettingsComponentRegistration[] {
+  const result: ExtensionSettingsComponentRegistration[] = [];
   for (const extension of extensions) {
     const panel = extension.contributes?.settingsComponent;
     if (!panel) continue;
-    return {
+    result.push({
       extensionId: extension.id,
       id: panel.id,
       component: panel.component,
@@ -238,9 +240,10 @@ function normalizeSettingsComponent(extensions: ExtensionManifest[]): ExtensionS
       ...(panel.description ? { description: panel.description } : {}),
       ...(typeof panel.order === 'number' ? { order: panel.order } : {}),
       frontendEntry: extension.frontend?.entry,
-    };
+    });
   }
-  return null;
+  result.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return result;
 }
 
 function normalizeComposerButtons(extensions: ExtensionManifest[]): ExtensionComposerButtonRegistration[] {
@@ -416,6 +419,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
     composerShelves: [],
     newConversationPanels: [],
     settingsComponent: null,
+    settingsComponents: [],
     composerButtons: [],
     composerInputTools: [],
     toolbarActions: [],
@@ -449,6 +453,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
           composerShelves: [],
           newConversationPanels: [],
           settingsComponent: null,
+          settingsComponents: [],
           composerButtons: [],
           composerInputTools: [],
           toolbarActions: [],
@@ -466,6 +471,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
       Promise.all([api.extensions(), api.extensionRoutes(), api.extensionSurfaces()])
         .then(([extensions, routes, surfaces]) => {
           if (cancelled) return;
+          const settingsComponents = normalizeSettingsComponents(extensions);
           setState({
             extensions,
             routes,
@@ -474,7 +480,8 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             messageActions: normalizeMessageActions(extensions),
             composerShelves: normalizeComposerShelves(extensions),
             newConversationPanels: normalizeNewConversationPanels(extensions),
-            settingsComponent: normalizeSettingsComponent(extensions),
+            settingsComponents,
+            settingsComponent: settingsComponents[0] ?? null,
             composerButtons: normalizeComposerButtons(extensions),
             composerInputTools: normalizeComposerInputTools(extensions),
             toolbarActions: normalizeToolbarActions(extensions),
@@ -498,6 +505,7 @@ export function useExtensionRegistry(): ExtensionRegistryState {
             composerShelves: [],
             newConversationPanels: [],
             settingsComponent: null,
+            settingsComponents: [],
             composerButtons: [],
             composerInputTools: [],
             toolbarActions: [],

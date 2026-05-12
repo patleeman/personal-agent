@@ -12,7 +12,7 @@ import {
 import { Suspense, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { KnowledgeSettingsPanel } from './components/KnowledgeSettingsPanel';
+import { KnowledgeSettingsPanel as KnowledgeSettingsPanelComponent } from './components/KnowledgeSettingsPanel';
 import { VaultEditor } from './components/VaultEditor';
 import { VaultFileTree } from './components/VaultFileTree';
 import { knowledgeApi } from './lib/knowledgeApi';
@@ -22,6 +22,10 @@ const LazyVaultFileTree = lazyRouteWithRecovery('system-knowledge-vault-file-tre
 
 function getKnowledgeFileId(search: string): string | null {
   return new URLSearchParams(search).get('file');
+}
+
+export function KnowledgeSettingsPanel() {
+  return <KnowledgeSettingsPanelComponent />;
 }
 
 export function KnowledgeTreePanel({ pa }: ExtensionSurfaceProps) {
@@ -104,7 +108,7 @@ export function KnowledgePageSurface() {
 
             <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
               <div className="rounded-2xl border border-border-subtle bg-elevated/60 p-5 shadow-sm">
-                <KnowledgeSettingsPanel variant="onboarding" />
+                <KnowledgeSettingsPanelComponent variant="onboarding" />
               </div>
               <div className="space-y-4 py-1 text-[13px] leading-6 text-secondary">
                 <div>

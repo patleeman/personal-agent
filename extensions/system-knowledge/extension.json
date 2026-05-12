@@ -110,6 +110,14 @@
         "section": "files"
       }
     ],
+    "settingsComponent": {
+      "id": "knowledge-base",
+      "component": "KnowledgeSettingsPanel",
+      "sectionId": "settings-knowledge-base",
+      "label": "Knowledge Base",
+      "description": "Connect or update the git repository used for durable knowledge sync.",
+      "order": 25
+    },
     "mentions": [
       {
         "id": "knowledge-files",

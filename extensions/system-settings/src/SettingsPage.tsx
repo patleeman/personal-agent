@@ -1671,7 +1671,7 @@ function ExtensionSecretsSection() {
 }
 
 export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[] } = {}) {
-  const { settingsComponent } = useExtensionRegistry();
+  const { settingsComponents } = useExtensionRegistry();
   const { theme, themePreference, lightTheme, darkTheme, availableThemes, setThemePreference, setLightTheme, setDarkTheme } = useTheme();
   const {
     data: skillFoldersState,
@@ -3262,13 +3262,17 @@ export function SettingsPage({ sectionIds }: { sectionIds?: SettingsQuickLinkId[
                 </SettingsPanel>
               </div>
 
-              {settingsComponent ? (
-                <div className="space-y-0">
-                  <SettingsPanel title={settingsComponent.label} description={settingsComponent.description}>
+              {settingsComponents.map((settingsComponent) => (
+                <div key={`${settingsComponent.extensionId}:${settingsComponent.id}`} className="space-y-0">
+                  <SettingsPanel
+                    id={settingsComponent.sectionId}
+                    title={settingsComponent.label}
+                    description={settingsComponent.description}
+                  >
                     <SettingsPanelHost registration={settingsComponent} />
                   </SettingsPanel>
                 </div>
-              ) : null}
+              ))}
 
               <ExtensionSettingsSection />
             </SettingsSection>

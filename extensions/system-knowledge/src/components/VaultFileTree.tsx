@@ -1568,10 +1568,10 @@ export function VaultFileTree({ activeFileId, onFileSelect, onSyncKnowledgeBase 
               <p className="font-medium text-primary">Connect a git repo to use Knowledge.</p>
               <p>
                 PA needs a git repo to store and sync durable docs. Add a repo URL in{' '}
-                <Link to="/settings#settings-general" className="text-accent hover:underline">
+                <Link to="/settings#settings-knowledge-base" className="text-accent hover:underline">
                   Settings
                 </Link>{' '}
-                - any git remote works, empty or existing.
+                — any git remote works, empty or existing.
               </p>
             </div>
           </div>
